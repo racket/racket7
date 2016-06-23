@@ -182,9 +182,6 @@ typedef struct Thread_Local_Variables {
   mz_long_double scheme_jit_save_extfp2_;
 #endif
   struct Scheme_Bucket_Table *starts_table_;
-  struct Scheme_Bucket_Table *submodule_empty_modidx_table_;
-  struct Scheme_Modidx *modidx_caching_chain_;
-  struct Scheme_Object *global_shift_cache_;
   struct mz_proc_thread *proc_thread_self_;
   struct Scheme_Object *scheme_orig_stdout_port_;
   struct Scheme_Object *scheme_orig_stderr_port_;
@@ -376,17 +373,6 @@ typedef struct Thread_Local_Variables {
   struct Scheme_Object *configuration_callback_cache_[2];
   struct FFI_Orig_Place_Call *cached_orig_place_todo_;
   struct Scheme_Hash_Table *ffi_lock_ht_;
-  struct Scheme_Object *scheme_sys_wraps0_;
-  struct Scheme_Object *scheme_sys_wraps1_;
-  struct Scheme_Object *scheme_module_stx_;
-  struct Scheme_Object *scheme_modulestar_stx_;
-  struct Scheme_Object *scheme_module_begin_stx_;
-  struct Scheme_Object *scheme_begin_stx_;
-  struct Scheme_Object *scheme_define_values_stx_;
-  struct Scheme_Object *scheme_define_syntaxes_stx_;
-  struct Scheme_Object *scheme_top_stx_;
-  struct Scheme_Object *scheme_begin_for_syntax_stx_;
-  struct Scheme_Object *more_constant_stxes_[NUM_MORE_CONSTANT_STXES];
 } Thread_Local_Variables;
 
 #if defined(IMPLEMENT_THREAD_LOCAL_VIA_PTHREADS)
@@ -582,9 +568,6 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define scheme_jit_save_extfp2 XOA (scheme_get_thread_local_variables()->scheme_jit_save_extfp2_)
 #endif
 #define starts_table XOA (scheme_get_thread_local_variables()->starts_table_)
-#define submodule_empty_modidx_table XOA (scheme_get_thread_local_variables()->submodule_empty_modidx_table_)
-#define modidx_caching_chain XOA (scheme_get_thread_local_variables()->modidx_caching_chain_)
-#define global_shift_cache XOA (scheme_get_thread_local_variables()->global_shift_cache_)
 #define proc_thread_self XOA (scheme_get_thread_local_variables()->proc_thread_self_)
 #define scheme_orig_stdout_port XOA (scheme_get_thread_local_variables()->scheme_orig_stdout_port_)
 #define scheme_orig_stderr_port XOA (scheme_get_thread_local_variables()->scheme_orig_stderr_port_)
@@ -772,17 +755,6 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define configuration_callback_cache XOA (scheme_get_thread_local_variables()->configuration_callback_cache_)
 #define cached_orig_place_todo XOA (scheme_get_thread_local_variables()->cached_orig_place_todo_)
 #define ffi_lock_ht XOA (scheme_get_thread_local_variables()->ffi_lock_ht_)
-#define scheme_sys_wraps0 XOA (scheme_get_thread_local_variables()->scheme_sys_wraps0_)
-#define scheme_sys_wraps1 XOA (scheme_get_thread_local_variables()->scheme_sys_wraps1_)
-#define scheme_module_stx XOA (scheme_get_thread_local_variables()->scheme_module_stx_)
-#define scheme_modulestar_stx XOA (scheme_get_thread_local_variables()->scheme_modulestar_stx_)
-#define scheme_module_begin_stx XOA (scheme_get_thread_local_variables()->scheme_module_begin_stx_)
-#define scheme_begin_stx XOA (scheme_get_thread_local_variables()->scheme_begin_stx_)
-#define scheme_define_values_stx XOA (scheme_get_thread_local_variables()->scheme_define_values_stx_)
-#define scheme_define_syntaxes_stx XOA (scheme_get_thread_local_variables()->scheme_define_syntaxes_stx_)
-#define scheme_top_stx XOA (scheme_get_thread_local_variables()->scheme_top_stx_)
-#define scheme_begin_for_syntax_stx XOA (scheme_get_thread_local_variables()->scheme_begin_for_syntax_stx_)
-#define more_constant_stxes XOA (scheme_get_thread_local_variables()->more_constant_stxes_)
 
 /* **************************************** */
 
