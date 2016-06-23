@@ -577,10 +577,6 @@ extern Scheme_Object *scheme_unsafe_fx_gt_eq_proc;
 extern Scheme_Object *scheme_unsafe_fx_min_proc;
 extern Scheme_Object *scheme_unsafe_fx_max_proc;
 
-extern Scheme_Object *scheme_define_values_syntax, *scheme_define_syntaxes_syntax;
-extern Scheme_Object *scheme_lambda_syntax;
-extern Scheme_Object *scheme_begin_syntax;
-
 extern Scheme_Object *scheme_not_proc;
 extern Scheme_Object *scheme_eq_proc;
 extern Scheme_Object *scheme_eqv_proc;
@@ -3092,9 +3088,6 @@ Scheme_Logger *scheme_optimize_info_logger(Optimize_Info *);
 Scheme_Object *scheme_toplevel_to_flagged_toplevel(Scheme_Object *tl, int flags);
 
 int scheme_expr_produces_local_type(Scheme_Object *expr, int *_involves_k_cross);
-
-Scheme_Object *scheme_make_primitive_syntax(Scheme_Syntax *syntax,
-                                            Scheme_Syntax_Expander *exp);
 
 Scheme_Object *scheme_compile_expr(Scheme_Object *form, Scheme_Comp_Env *env,
 				   Scheme_Compile_Info *rec, int drec);

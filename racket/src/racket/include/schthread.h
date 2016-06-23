@@ -156,7 +156,6 @@ typedef struct Thread_Local_Variables {
   void *jit_buffer_cache_;
   intptr_t jit_buffer_cache_size_;
   int jit_buffer_cache_registered_;
-  struct Scheme_Object *quick_stx_;
   int scheme_continuation_application_count_;
   int scheme_cont_capture_count_;
   int scheme_prompt_capture_count_;
@@ -165,8 +164,6 @@ typedef struct Thread_Local_Variables {
   struct Scheme_Prompt *available_regular_prompt_;
   struct Scheme_Dynamic_Wind *available_prompt_dw_;
   struct Scheme_Meta_Continuation *available_prompt_mc_;
-  struct Scheme_Object *cwv_stx_;
-  int cwv_stx_phase_;
   struct Scheme_Cont *offstack_cont_;
   struct Scheme_Overflow *offstack_overflow_;
   struct Scheme_Overflow_Jmp *scheme_overflow_jmp_;
@@ -558,7 +555,6 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define jit_buffer_cache XOA (scheme_get_thread_local_variables()->jit_buffer_cache_)
 #define jit_buffer_cache_size XOA (scheme_get_thread_local_variables()->jit_buffer_cache_size_)
 #define jit_buffer_cache_registered XOA (scheme_get_thread_local_variables()->jit_buffer_cache_registered_)
-#define quick_stx XOA (scheme_get_thread_local_variables()->quick_stx_)
 #define scheme_continuation_application_count XOA (scheme_get_thread_local_variables()->scheme_continuation_application_count_)
 #define scheme_cont_capture_count XOA (scheme_get_thread_local_variables()->scheme_cont_capture_count_)
 #define scheme_prompt_capture_count XOA (scheme_get_thread_local_variables()->scheme_prompt_capture_count_)
@@ -567,8 +563,6 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define available_regular_prompt XOA (scheme_get_thread_local_variables()->available_regular_prompt_)
 #define available_prompt_dw XOA (scheme_get_thread_local_variables()->available_prompt_dw_)
 #define available_prompt_mc XOA (scheme_get_thread_local_variables()->available_prompt_mc_)
-#define cwv_stx XOA (scheme_get_thread_local_variables()->cwv_stx_)
-#define cwv_stx_phase XOA (scheme_get_thread_local_variables()->cwv_stx_phase_)
 #define offstack_cont XOA (scheme_get_thread_local_variables()->offstack_cont_)
 #define offstack_overflow XOA (scheme_get_thread_local_variables()->offstack_overflow_)
 #define scheme_overflow_jmp XOA (scheme_get_thread_local_variables()->scheme_overflow_jmp_)
