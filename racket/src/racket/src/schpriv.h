@@ -1202,7 +1202,8 @@ Scheme_Object *scheme_apply_impersonator_of(int for_chaperone, Scheme_Object *pr
 /*                         syntax objects                                 */
 /*========================================================================*/
 
-#define MZ_LABEL_PHASE 30000
+/* The internal variant of a syntax object just has a source location
+   and other properties. */
 
 typedef struct Scheme_Stx_Srcloc {
   MZTAG_IF_REQUIRED
@@ -1210,39 +1211,12 @@ typedef struct Scheme_Stx_Srcloc {
   Scheme_Object *src;
 } Scheme_Stx_Srcloc;
 
-#define STX_SUBSTX_FLAG   0x1
-#define STX_ARMED_FLAG    0x2
-
-typedef struct Scheme_Scope_Set Scheme_Scope_Set;
-
-typedef struct Scheme_Scope_Table {
-  Scheme_Object so; /* scheme_scope_table_type or scheme_propagate_table_type */
-  Scheme_Scope_Set *simple_scopes; /* scopes that span all phases */
-  Scheme_Object *multi_scopes; /* list of (cons multi-scope phase-shift) or fallback chain */
-} Scheme_Scope_Table;
-
 typedef struct Scheme_Stx {
-  Scheme_Inclhash_Object iso; /* 0x1 and 0x2 of keyex used */
+  Scheme_Object so;
   Scheme_Object *val;
   Scheme_Stx_Srcloc *srcloc;
-  Scheme_Scope_Table *scopes;
-  union {
-    Scheme_Scope_Table *to_propagate;
-    Scheme_Object *cache;
-  } u;
-  Scheme_Object *shifts; /* <all-shifts> or (vector <all-shifts> <shifts-to-propagate> <base-shifts>) */
-  Scheme_Object *taints; /* taint or taint-arming */
   Scheme_Hash_Tree *props;
 } Scheme_Stx;
-
-typedef struct Scheme_Stx_Offset {
-  Scheme_Object so;
-  intptr_t line, col, pos;
-  Scheme_Object *src;
-} Scheme_Stx_Offset;
-
-struct Scheme_Marshal_Tables;
-struct Scheme_Unmarshal_Tables;
 
 Scheme_Object *scheme_make_stx(Scheme_Object *val,
 			       Scheme_Stx_Srcloc *srcloc,
@@ -1253,184 +1227,12 @@ Scheme_Object *scheme_make_stx_w_offset(Scheme_Object *val,
 					Scheme_Hash_Tree *props);
 
 Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o, Scheme_Object *stx_src,
-				      Scheme_Object *stx_wraps,
 				      int cangraph, int copyprops);
-Scheme_Object *scheme_syntax_to_datum(Scheme_Object *stx, int with_scopes,
-				      struct Scheme_Marshal_Tables *mt);
-Scheme_Object *scheme_unmarshal_datum_to_syntax(Scheme_Object *o,
-                                                struct Scheme_Unmarshal_Tables *ut,
-                                                int can_graph);
-
-Scheme_Object *scheme_stx_track(Scheme_Object *naya,
-				Scheme_Object *old,
-				Scheme_Object *origin);
-
-int scheme_stx_has_empty_wraps(Scheme_Object *stx, Scheme_Object *phase);
-
-XFORM_NONGCING Scheme_Object *scheme_stx_root_scope();
-Scheme_Object *scheme_new_scope(int kind);
-Scheme_Object *scheme_scope_printed_form(Scheme_Object *m);
-Scheme_Object *scheme_stx_scope(Scheme_Object *o, Scheme_Object *m, int mode);
-
-#define SCHEME_STX_MODULE_SCOPE       0
-#define SCHEME_STX_MODULE_MULTI_SCOPE 1
-#define SCHEME_STX_MACRO_SCOPE        2
-#define SCHEME_STX_LOCAL_BIND_SCOPE   3
-#define SCHEME_STX_INTDEF_SCOPE       4
-#define SCHEME_STX_USE_SITE_SCOPE     5
-
-#define SCHEME_STX_SCOPE_KIND_SHIFT 3
-#define SCHEME_STX_SCOPE_KIND_MASK  ((1 << SCHEME_STX_SCOPE_KIND_SHIFT) - 1)
-
-#define SCHEME_STX_ADD      0
-#define SCHEME_STX_REMOVE   1
-#define SCHEME_STX_FLIP     2
-#define SCHEME_STX_PUSH     4
-#define SCHEME_STX_MUTATE   16 /* or'ed */
-#define SCHEME_STX_PROPONLY 32 /* or'ed, internal */
-Scheme_Object *scheme_stx_adjust_scope(Scheme_Object *o, Scheme_Object *m, Scheme_Object *phase, int mode);
-Scheme_Object *scheme_stx_add_scope(Scheme_Object *o, Scheme_Object *m, Scheme_Object *phase);
-Scheme_Object *scheme_stx_remove_scope(Scheme_Object *o, Scheme_Object *m, Scheme_Object *phase);
-Scheme_Object *scheme_stx_flip_scope(Scheme_Object *o, Scheme_Object *m, Scheme_Object *phase);
-Scheme_Object *scheme_stx_adjust_scopes(Scheme_Object *o, Scheme_Scope_Set *scopes, Scheme_Object *phase, int mode);
-
-Scheme_Scope_Set *scheme_module_context_scopes(Scheme_Object *mc);
-Scheme_Object *scheme_module_context_frame_scopes(Scheme_Object *mc, Scheme_Object *keep_intdef_scopes);
-void scheme_module_context_add_use_site_scope(Scheme_Object *mc, Scheme_Object *use_site_scope);
-Scheme_Object *scheme_stx_adjust_frame_scopes(Scheme_Object *o, Scheme_Object *scope, Scheme_Object *phase, int mode);
-Scheme_Object *scheme_stx_adjust_frame_bind_scopes(Scheme_Object *o, Scheme_Object *scope, Scheme_Object *phase, int mode);
-Scheme_Object *scheme_stx_adjust_frame_use_site_scopes(Scheme_Object *o, Scheme_Object *scope, Scheme_Object *phase, int mode);
-
-Scheme_Object *scheme_make_frame_scopes(Scheme_Object *scope);
-Scheme_Object *scheme_add_frame_use_site_scope(Scheme_Object *frame_scopes, Scheme_Object *use_site_scope);
-Scheme_Object *scheme_add_frame_intdef_scope(Scheme_Object *frame_scopes, Scheme_Object *intdef_scope);
-
-Scheme_Object *scheme_make_shift(Scheme_Object *phase_delta,
-                                 Scheme_Object *old_midx, Scheme_Object *new_midx,
-                                 Scheme_Hash_Table *export_registry,
-                                 Scheme_Object *src_insp_desc, Scheme_Object *insp);
-Scheme_Object *scheme_stx_add_shift(Scheme_Object *o, Scheme_Object *shift);
-Scheme_Object *scheme_stx_add_shifts(Scheme_Object *o, Scheme_Object *shift);
-Scheme_Object *scheme_stx_shift(Scheme_Object *stx,
-                                Scheme_Object *phase_delta,
-                                Scheme_Object *old_midx, Scheme_Object *new_midx,
-                                Scheme_Hash_Table *export_registry,
-                                Scheme_Object *src_insp_desc, Scheme_Object *insp);
-
-Scheme_Object *scheme_syntax_make_transfer_intro(int argc, Scheme_Object **argv);
-int scheme_get_introducer_mode(const char *who, int which, int argc, Scheme_Object **argv);
-
-struct Scheme_Module_Phase_Exports; /* forward declaration */
-
-Scheme_Object *scheme_make_module_context(Scheme_Object *insp,
-                                          Scheme_Object *shift_or_shifts,
-                                          Scheme_Object *name);
-Scheme_Object *scheme_module_context_at_phase(Scheme_Object *mc, Scheme_Object *phase);
-
-Scheme_Object *scheme_stx_add_module_context(Scheme_Object *stx, Scheme_Object *mc);
-Scheme_Object *scheme_stx_remove_module_context(Scheme_Object *stx, Scheme_Object *mc);
-Scheme_Object *scheme_stx_add_module_frame_context(Scheme_Object *stx, Scheme_Object *mc);
-Scheme_Object *scheme_stx_adjust_module_use_site_context(Scheme_Object *stx, Scheme_Object *mc, int mode);
-Scheme_Object *scheme_stx_introduce_to_module_context(Scheme_Object *stx, Scheme_Object *mc);
-Scheme_Object *scheme_stx_unintroduce_from_module_context(Scheme_Object *stx, Scheme_Object *mc);
-Scheme_Object *scheme_stx_push_module_context(Scheme_Object *stx, Scheme_Object *mc);
-Scheme_Object *scheme_stx_push_introduce_module_context(Scheme_Object *stx, Scheme_Object *mc);
-
-Scheme_Object *scheme_stx_from_module_context_to_generic(Scheme_Object *stx, Scheme_Object *mc);
-Scheme_Object *scheme_stx_from_generic_to_module_context(Scheme_Object *stx, Scheme_Object *mc);
-
-Scheme_Object *scheme_module_context_to_stx(Scheme_Object *mc, Scheme_Object *orig_src);
-Scheme_Object *scheme_stx_to_module_context(Scheme_Object *stx);
-
-Scheme_Object *scheme_module_context_use_site_frame_scopes(Scheme_Object *mc);
-Scheme_Object *scheme_module_context_inspector(Scheme_Object *mc);
-
-void scheme_module_context_add_mapped_symbols(Scheme_Object *mc, Scheme_Hash_Table *mapped);
-
-XFORM_NONGCING void scheme_stx_set(Scheme_Object *q_stx, Scheme_Object *val, Scheme_Object *context);
-
-void scheme_extend_module_context(Scheme_Object *mc, Scheme_Object *ctx, Scheme_Object *modidx,
-                                  Scheme_Object *locname, Scheme_Object *exname,
-                                  Scheme_Object *nominal_src, Scheme_Object *nominal_ex,
-                                  intptr_t mod_phase, Scheme_Object *src_phase_index, 
-                                  Scheme_Object *nom_export_phase);
-void scheme_extend_module_context_with_shared(Scheme_Object *mc, Scheme_Object *modidx, 
-                                              struct Scheme_Module_Phase_Exports *pt, 
-                                              Scheme_Object *prefix,
-                                              Scheme_Hash_Tree *excepts,
-                                              Scheme_Object *src_phase_index, 
-                                              Scheme_Object *context,
-                                              Scheme_Object *replace_at);
-
-void scheme_do_module_context_unmarshal(Scheme_Object *modidx, Scheme_Object *req_modidx,
-                                        Scheme_Object *context,
-                                        Scheme_Object *bind_phase, Scheme_Object *pt_phase, Scheme_Object *src_phase,
-                                        Scheme_Object *prefix,
-                                        Scheme_Hash_Tree *excepts,
-                                        Scheme_Hash_Table *export_registry,
-                                        Scheme_Object *insp, Scheme_Object *req_insp,
-                                        Scheme_Object *replace_at);
-
-int scheme_stx_equal_module_context(Scheme_Object *stx, Scheme_Object *mc_as_stx);
-
-Scheme_Object *scheme_stx_content(Scheme_Object *o);
-Scheme_Object *scheme_flatten_syntax_list(Scheme_Object *lst, int *islist);
-
-int scheme_stx_could_bind(Scheme_Object *bind_id, Scheme_Object *ref_id, Scheme_Object *phase);
-
-int scheme_stx_free_eq(Scheme_Object *a, Scheme_Object *b, intptr_t phase);
-int scheme_stx_free_eq_x(Scheme_Object *a, Scheme_Object *b, intptr_t b_phase);
-int scheme_stx_free_eq2(Scheme_Object *a, Scheme_Object *b, Scheme_Object *phase);
-int scheme_stx_free_eq3(Scheme_Object *a, Scheme_Object *b, 
-                        Scheme_Object *a_phase, Scheme_Object *b_phase);
-Scheme_Object *scheme_stx_get_module_eq_sym(Scheme_Object *a, Scheme_Object *phase);
-
-void scheme_add_local_binding(Scheme_Object *o, Scheme_Object *phase, Scheme_Object *binding_sym);
-void scheme_add_module_binding(Scheme_Object *o, Scheme_Object *phase, 
-                               Scheme_Object *modidx, Scheme_Object *inspector,
-                               Scheme_Object *sym, Scheme_Object *defn_phase);
-void scheme_add_module_binding_w_nominal(Scheme_Object *o, Scheme_Object *phase,
-                                         Scheme_Object *modidx, Scheme_Object *defn_name, Scheme_Object *defn_phase,
-                                         Scheme_Object *inspector,
-                                         Scheme_Object *nominal_mod, Scheme_Object *nominal_name,
-                                         Scheme_Object *nominal_import_phase, 
-                                         Scheme_Object *nominal_export_phase,
-                                         struct Scheme_Module_Phase_Exports *from_pt,
-                                         Scheme_Hash_Table *collapse_table);
-void scheme_add_binding_copy(Scheme_Object *o, Scheme_Object *from_o, Scheme_Object *phase);
-
-Scheme_Object *scheme_stx_lookup(Scheme_Object *o, Scheme_Object *phase);
-Scheme_Object *scheme_stx_lookup_stop_at_free_eq(Scheme_Object *o, Scheme_Object *phase, int *_exact_match);
-Scheme_Object *scheme_stx_lookup_exact(Scheme_Object *o, Scheme_Object *phase);
-Scheme_Object *scheme_stx_lookup_w_nominal(Scheme_Object *o, Scheme_Object *phase,
-                                           int stop_at_free_eq,
-                                           int *_exact_match, int *_ambiguous,
-                                           Scheme_Scope_Set **_binding_scopes,
-                                           Scheme_Object **insp,              /* access-granting inspector */
-                                           Scheme_Object **nominal_modidx,    /* how it was imported */
-                                           Scheme_Object **nominal_name,      /* imported as name */
-                                           Scheme_Object **src_phase,         /* phase level of import from nominal modidx */ 
-                                           Scheme_Object **nominal_src_phase); /* phase level of export from nominal modidx */
-
-int scheme_stx_bound_eq(Scheme_Object *a, Scheme_Object *b, Scheme_Object *phase);
-int scheme_stx_env_bound_eq(Scheme_Object *a, Scheme_Object *b, Scheme_Object *phase);
-int scheme_stx_env_bound_eq2(Scheme_Object *a, Scheme_Object *b,
-                             Scheme_Object *a_phase, Scheme_Object *b_phase);
-
-Scheme_Object *scheme_stx_binding_union(Scheme_Object *o, Scheme_Object *b, Scheme_Object *phase);
-Scheme_Object *scheme_stx_binding_subtract(Scheme_Object *o, Scheme_Object *b, Scheme_Object *phase);
-
-Scheme_Object *scheme_stx_source_module(Scheme_Object *stx, int resolve, int source);
-
-char *scheme_stx_describe_context(Scheme_Object *stx, Scheme_Object *phase, int always);
+Scheme_Object *scheme_syntax_to_datum(Scheme_Object *stx);
 
 Scheme_Object *scheme_stx_property(Scheme_Object *_stx,
 				   Scheme_Object *key,
 				   Scheme_Object *val);
-Scheme_Object *scheme_stx_property2(Scheme_Object *_stx,
-                                    Scheme_Object *key,
-                                    Scheme_Object *val,
-                                    int preserve);
 
 int scheme_stx_list_length(Scheme_Object *list);
 int scheme_stx_proper_list_length(Scheme_Object *list);
@@ -1443,51 +1245,19 @@ Scheme_Object *scheme_resolve_placeholders(Scheme_Object *obj);
 #define SCHEME_STX_SYMBOLP(o) (SCHEME_SYMBOLP(o) || (SCHEME_STXP(o) && SCHEME_SYMBOLP(SCHEME_STX_VAL(o))))
 #define SCHEME_STX_NULLP(o) (SCHEME_NULLP(o) || (SCHEME_STXP(o) && SCHEME_NULLP(SCHEME_STX_VAL(o))))
 
-#define SCHEME_STX_CAR(o) (SCHEME_PAIRP(o) ? SCHEME_CAR(o) : SCHEME_CAR(scheme_stx_content(o)))
-#define SCHEME_STX_CDR(o) (SCHEME_PAIRP(o) ? SCHEME_CDR(o) : SCHEME_CDR(scheme_stx_content(o)))
+#define SCHEME_STX_CAR(o) (SCHEME_PAIRP(o) ? SCHEME_CAR(o) : SCHEME_CAR(SCHEME_STX_VAL(o)))
+#define SCHEME_STX_CDR(o) (SCHEME_PAIRP(o) ? SCHEME_CDR(o) : SCHEME_CDR(SCHEME_STX_VAL(o)))
 #define SCHEME_STX_SYM(o) (SCHEME_STXP(o) ? SCHEME_STX_VAL(o) : o)
 
 Scheme_Object *scheme_source_to_name(Scheme_Object *code);
 
 #define STX_SRCTAG scheme_source_stx_props
 
-Scheme_Object *scheme_stx_taint(Scheme_Object *o);
-Scheme_Object *scheme_stx_taint_arm(Scheme_Object *o, Scheme_Object *insp);
-Scheme_Object *scheme_stx_taint_rearm(Scheme_Object *o, Scheme_Object *arm_from);
-int scheme_stx_is_tainted(Scheme_Object *id);
-int scheme_stx_is_clean(Scheme_Object *id);
-int scheme_module_protected_wrt(Scheme_Object *home_insp, Scheme_Object *insp);
-Scheme_Object *scheme_stx_taint_disarm(Scheme_Object *o, Scheme_Object *insp);
-
-/* variants that use 'taint-mode and look up inspector: */
-Scheme_Object *scheme_syntax_taint_arm(Scheme_Object *stx, Scheme_Object *insp, int use_mode);
-Scheme_Object *scheme_syntax_taint_rearm(Scheme_Object *o, Scheme_Object *arm_from);
-Scheme_Object *scheme_syntax_taint_disarm(Scheme_Object *o, Scheme_Object *insp);
-
-Scheme_Object *scheme_delayed_shift(Scheme_Object **o, intptr_t i);
-
-struct Resolve_Prefix;
-void scheme_load_delayed_syntax(struct Resolve_Prefix *rp, intptr_t i);
-
-Scheme_Object *scheme_stx_force_delayed(Scheme_Object *stx);
-
-Scheme_Object *scheme_explode_syntax(Scheme_Object *stx, Scheme_Hash_Table *ht);
-void scheme_populate_pt_ht(struct Scheme_Module_Phase_Exports * pt);
-
 Scheme_Object *scheme_transfer_srcloc(Scheme_Object *to, Scheme_Object *from);
 
 int scheme_is_predefined_module_p(Scheme_Object *name);
 
 Scheme_Object *scheme_get_kernel_modidx(void);
-
-Scheme_Object *scheme_scope_marshal_content(Scheme_Object *m, struct Scheme_Marshal_Tables *mt);
-void scheme_iterate_reachable_scopes(struct Scheme_Marshal_Tables *mt);
-
-void scheme_stx_debug_print(Scheme_Object *stx, Scheme_Object *phase, int level);
-
-Scheme_Object *scheme_revert_use_site_scopes(Scheme_Object *o, struct Scheme_Comp_Env *env);
-
-Scheme_Object *scheme_top_introduce(Scheme_Object *form, Scheme_Env *genv);
 
 /*========================================================================*/
 /*                   syntax run-time structures                           */
@@ -3465,7 +3235,6 @@ Scheme_Env *scheme_make_empty_env(void);
 void scheme_prepare_exp_env(Scheme_Env *env);
 void scheme_prepare_template_env(Scheme_Env *env);
 void scheme_prepare_label_env(Scheme_Env *env);
-void scheme_prepare_env_stx_context(Scheme_Env *env);
 
 XFORM_NONGCING Scheme_Object *scheme_env_phase(Scheme_Env *env);
 Scheme_Env *scheme_find_env_at_phase(Scheme_Env *env, Scheme_Object *phase);

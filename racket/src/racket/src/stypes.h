@@ -108,8 +108,6 @@ enum {
   scheme_macro_type,                    /* 77 */
   scheme_box_type,                      /* 78 */
   scheme_thread_type,                   /* 79 */
-  scheme_scope_type,                    /* 80 */
-  scheme_stx_offset_type,               /* 81 */
   scheme_cont_mark_set_type,            /* 82 */
   scheme_sema_type,                     /* 83 */
   scheme_hash_table_type,               /* 84 */

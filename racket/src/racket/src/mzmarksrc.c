@@ -1071,14 +1071,6 @@ stx_val {
   gcBYTES_TO_WORDS(sizeof(Scheme_Stx));
 }
 
-stx_off_val {
- mark:
-  Scheme_Stx_Offset *o = (Scheme_Stx_Offset *)p;
-  gcMARK2(o->src, gc);
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Stx_Offset));
-}
-
 module_val {
  mark:
   Scheme_Module *m = (Scheme_Module *)p;
@@ -2428,40 +2420,6 @@ mark_srcloc {
   gcMARK2(s->src, gc);
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Stx_Srcloc));
-}
-
-mark_scope {
-  Scheme_Scope *m = (Scheme_Scope *)p;
-  int for_multi = SCHEME_SCOPE_HAS_OWNER(m);
- mark:
-  gcMARK2(m->bindings, gc);
-  if (for_multi) {
-    gcMARK2(((Scheme_Scope_With_Owner *)m)->owner_multi_scope, gc);
-    gcMARK2(((Scheme_Scope_With_Owner *)m)->phase, gc);
-  }
- size:
- (for_multi
-  ? gcBYTES_TO_WORDS(sizeof(Scheme_Scope_With_Owner))
-  : gcBYTES_TO_WORDS(sizeof(Scheme_Scope)));
-}
-
-mark_scope_table {
- mark:
-  Scheme_Scope_Table *m = (Scheme_Scope_Table *)p;
-  gcMARK2(m->simple_scopes, gc);
-  gcMARK2(m->multi_scopes, gc);
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Scope_Table));
-}
-
-mark_propagate_table {
- mark:
-  Scheme_Propagate_Table *m = (Scheme_Propagate_Table *)p;
-  mark_scope_table_MARK(&m->st, gc);
-  gcMARK2(m->prev, gc);
-  gcMARK2(m->phase_shift, gc);
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Propagate_Table));
 }
 
 END syntax;
