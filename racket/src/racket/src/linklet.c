@@ -26,6 +26,11 @@
 #include "schpriv.h"
 #include "schrunst.h"
 
+static Scheme_Object *variable_p(int, Scheme_Object *[]);
+static Scheme_Object *variable_instance(int, Scheme_Object *[]);
+static Scheme_Object *variable_const_p(int, Scheme_Object *[]);
+
+
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
 #endif
@@ -41,7 +46,39 @@ scheme_init_linklet(Scheme_Env *env)
   register_traversers();
 #endif
 
+  GLOBAL_PRIM_W_ARITY("get-primitive-instance", get_primitive_instance, 1, 1, env);
+
+  GLOBAL_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, env);
+  GLOBAL_PRIM_W_ARITY("eval-linklet", compile_linklet, 1, 1, env);
   GLOBAL_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, env);
+
+  GLOBAL_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
+  GLOBAL_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
+  GLOBAL_PRIM_W_ARITY("compiled-linklet-import-variables", compiled_linklet_import_variables, 1, 1, env);
+  GLOBAL_PRIM_W_ARITY("compiled-linklet-export-variables", compiled_linklet_export_variables, 1, 1, env);
+
+  make-instance
+    instance-name
+    instance-variable-names
+    instance-variable-value
+    instance-set-variable-value!
+    instance-unset-variable!
+
+    linklet-directory?
+    hash->linklet-directory
+    linklet-directory->hash
+    
+    linklet-bundle?
+    hash->linklet-bundle
+    linklet-bundle->hash
+    
+    GLOBAL_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, env);
+  GLOBAL_PRIM_W_ARITY("variable-reference->instance", variable_top_level_namespace, 1, 1, env);
+  REGISTER_SO(scheme_varref_const_p_proc);
+  scheme_varref_const_p_proc = scheme_make_prim_w_arity(variable_const_p, 
+                                                        "variable-reference-constant?", 
+                                                        1, 1);
+  scheme_add_global_constant("variable-reference-constant?", scheme_varref_const_p_proc, env);
 }
 
 /*========================================================================*/

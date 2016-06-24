@@ -878,33 +878,6 @@ static Scheme_Object *letrec_check_set(Scheme_Object *o, Letrec_Check_Frame *fra
   return o;
 }
 
-static Scheme_Object *letrec_check_define_syntaxes(Scheme_Object *lam, Letrec_Check_Frame *frame, Scheme_Object *pos)
-{
-  Scheme_Object *val;
-  val = SCHEME_VEC_ELS(lam)[3];
-
-  val = letrec_check_expr(val, frame, pos);
-  SCHEME_VEC_ELS(lam)[3] = val;
-
-  return lam;
-}
-
-static Scheme_Object *letrec_check_begin_for_syntax(Scheme_Object *lam, Letrec_Check_Frame *frame, Scheme_Object *pos)
-{
-  Scheme_Object *l, *a, *val;
-    
-  l = SCHEME_VEC_ELS(lam)[2];
-    
-  while (!SCHEME_NULLP(l)) {
-    a = SCHEME_CAR(l);
-    val = letrec_check_expr(a, frame, pos);
-    SCHEME_CAR(l) = val;
-    l = SCHEME_CDR(l);
-  }
-    
-  return lam;
-}
-
 static Scheme_Object *letrec_check_case_lambda(Scheme_Object *o, Letrec_Check_Frame *frame, Scheme_Object *pos)
 {
   Scheme_Case_Lambda *cl;
@@ -953,43 +926,6 @@ static Scheme_Object *letrec_check_apply_values(Scheme_Object *lam, Letrec_Check
   SCHEME_PTR2_VAL(lam) = e;
     
   return lam;
-}
-
-static Scheme_Object *letrec_check_module(Scheme_Object *o, Letrec_Check_Frame *frame, Scheme_Object *pos)
-{
-  int i, cnt;
-  Scheme_Module *m;
-  Scheme_Object *val;
-  m = (Scheme_Module *)o;
-
-  if (!m->comp_prefix) {
-    /* already resolved */
-    return (Scheme_Object *)m;
-  }
-    
-  cnt = SCHEME_VEC_SIZE(m->bodies[0]);
-  for(i = 0; i < cnt; i++) {
-    val = SCHEME_VEC_ELS(m->bodies[0])[i];
-    val = letrec_check_expr(val, frame, pos);
-    SCHEME_VEC_ELS(m->bodies[0])[i] = val;
-  }
-
-  {
-    /* check submodules */
-    int k;
-    Scheme_Object *p;
-    for (k = 0; k < 2; k++) {
-      p = (k ? m->post_submodules : m->pre_submodules);
-      if (p) {
-        while (!SCHEME_NULLP(p)) {
-          letrec_check_expr(SCHEME_CAR(p), frame, pos);
-          p = SCHEME_CDR(p);
-        }
-      }
-    }
-  }
-
-  return o;
 }
 
 static Scheme_Object *letrec_check_k(void)
@@ -1049,8 +985,6 @@ static Scheme_Object *letrec_check_expr(Scheme_Object *expr, Letrec_Check_Frame 
     return letrec_check_lets(expr, frame, pos);
   case scheme_ir_toplevel_type: /* var ref to a top level */
     return expr;
-  case scheme_ir_quote_syntax_type:
-    return expr;
   case scheme_variable_type:
   case scheme_module_variable_type:
     scheme_signal_error("got top-level in wrong place");
@@ -1061,10 +995,6 @@ static Scheme_Object *letrec_check_expr(Scheme_Object *expr, Letrec_Check_Frame 
     return letrec_check_ref(expr, frame, pos);
   case scheme_set_bang_type:
     return letrec_check_set(expr, frame, pos);
-  case scheme_define_syntaxes_type:
-    return letrec_check_define_syntaxes(expr, frame, pos);
-  case scheme_begin_for_syntax_type:
-    return letrec_check_begin_for_syntax(expr, frame, pos);
   case scheme_case_lambda_sequence_type:
     return letrec_check_case_lambda(expr, frame, pos);
   case scheme_begin0_sequence_type:
@@ -1074,17 +1004,14 @@ static Scheme_Object *letrec_check_expr(Scheme_Object *expr, Letrec_Check_Frame 
   case scheme_with_immed_mark_type:
     scheme_signal_error("internal error: with-immediate-mark not expected before optimization");
     return NULL;
-  case scheme_require_form_type:
-    return expr;
-  case scheme_module_type:
-    return letrec_check_module(expr, frame, pos);
   default:
     return expr;
   }
 }
 
-Scheme_Object *scheme_letrec_check_expr(Scheme_Object *expr)
+Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linket *linklet)
 {
+  int i, cnt;
   Scheme_Object *val;
   Scheme_Object *init_pos = scheme_false;
   Letrec_Check_Frame *frame;
@@ -1101,11 +1028,16 @@ Scheme_Object *scheme_letrec_check_expr(Scheme_Object *expr)
      positions. We use a list of numbers for the RHS of a
      `let[rec]-values` form with multiple variables. */
 
-  val = letrec_check_expr(expr, NULL, init_pos);
-
+  cnt = linklet->num_bodies;
+  for(i = 0; i < cnt; i++) {
+    val = m->bodies[i];
+    val = letrec_check_expr(val, frame, pos);
+    m->bodies[i] = val;
+  }
+  
   clean_dead_deferred_expr(*frame->deferred_chain);
 
-  return val;
+  return linklet;
 }
 
 /*========================================================================*/

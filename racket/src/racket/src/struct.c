@@ -46,7 +46,6 @@ READ_ONLY Scheme_Object *scheme_recur_symbol;
 READ_ONLY Scheme_Object *scheme_display_symbol;
 READ_ONLY Scheme_Object *scheme_write_special_symbol;
 READ_ONLY Scheme_Object *scheme_app_mark_impersonator_property;
-READ_ONLY Scheme_Object *scheme_liberal_def_ctx_type;;
 READ_ONLY Scheme_Object *scheme_object_name_property;
 READ_ONLY Scheme_Object *scheme_struct_to_vector_proc;
 
@@ -56,10 +55,6 @@ READ_ONLY static Scheme_Object *print_attribute_property;
 READ_ONLY static Scheme_Object *evt_property;
 READ_ONLY static Scheme_Object *proc_property;
 READ_ONLY static Scheme_Object *method_property;
-READ_ONLY static Scheme_Object *rename_transformer_property;
-READ_ONLY static Scheme_Object *set_transformer_property;
-READ_ONLY static Scheme_Object *expansion_contexts_property;
-READ_ONLY static Scheme_Object *not_free_id_symbol;
 READ_ONLY static Scheme_Object *scheme_checked_proc_property;
 READ_ONLY static Scheme_Object *struct_info_proc;
 ROSYM static Scheme_Object *ellipses_symbol;
@@ -117,9 +112,6 @@ static Scheme_Object *check_print_attribute_property_value_ok(int argc, Scheme_O
 static Scheme_Object *check_input_port_property_value_ok(int argc, Scheme_Object *argv[]);
 static Scheme_Object *check_output_port_property_value_ok(int argc, Scheme_Object *argv[]);
 static Scheme_Object *check_cpointer_property_value_ok(int argc, Scheme_Object *argv[]);
-static Scheme_Object *check_rename_transformer_property_value_ok(int argc, Scheme_Object *argv[]);
-static Scheme_Object *check_set_transformer_property_value_ok(int argc, Scheme_Object *argv[]);
-static Scheme_Object *check_expansion_contexts_property_value_ok(int argc, Scheme_Object *argv[]);
 static Scheme_Object *check_checked_proc_property_value_ok(int argc, Scheme_Object *argv[]);
 
 static Scheme_Object *unary_acc(int argc, Scheme_Object **argv, Scheme_Object *self);
@@ -205,8 +197,6 @@ static Scheme_Object *chaperone_struct_type(int argc, Scheme_Object **argv);
 static Scheme_Object *make_chaperone_property(int argc, Scheme_Object *argv[]);
 
 static Scheme_Object *make_chaperone_property_from_c(Scheme_Object *name);
-
-static Scheme_Object *is_liberal_def_ctx(int argc, Scheme_Object **argv, Scheme_Object *self);
 
 /* This needs to be even, so that structure chaperones are
    distingiushed from procedure chaperones: */
@@ -462,43 +452,6 @@ scheme_init_struct (Scheme_Env *env)
   }
 
   {
-    REGISTER_SO(rename_transformer_property);
-
-    guard = scheme_make_prim_w_arity(check_rename_transformer_property_value_ok,
-				     "guard-for-prop:rename-transformer",
-				     2, 2);
-    rename_transformer_property = scheme_make_struct_type_property_w_guard(scheme_intern_symbol("rename-transformer"),
-                                                                           guard);
-    
-    scheme_add_global_constant("prop:rename-transformer", rename_transformer_property, env);
-  }
-
-  {
-    REGISTER_SO(set_transformer_property);
-
-    guard = scheme_make_prim_w_arity(check_set_transformer_property_value_ok,
-				     "guard-for-prop:set!-transformer",
-				     2, 2);
-    set_transformer_property = scheme_make_struct_type_property_w_guard(scheme_intern_symbol("set!-transformer"),
-                                                                        guard);
-    
-    scheme_add_global_constant("prop:set!-transformer", set_transformer_property, env);
-  }
-
-  {
-    REGISTER_SO(expansion_contexts_property);
-
-    guard = scheme_make_prim_w_arity(check_expansion_contexts_property_value_ok,
-				     "guard-for-prop:expansion-contexts",
-				     2, 2);
-    expansion_contexts_property = scheme_make_struct_type_property_w_guard(scheme_intern_symbol("expansion-contexts"),
-                                                                           guard);
-    
-    scheme_add_global_constant("prop:expansion-contexts", expansion_contexts_property, env);
-  }
-
-
-  {
     guard = scheme_make_prim_w_arity(check_checked_proc_property_value_ok,
 				     "guard-for-prop:checked-procedure",
 				     2, 2);
@@ -508,35 +461,11 @@ scheme_init_struct (Scheme_Env *env)
     scheme_add_global_constant("prop:checked-procedure", scheme_checked_proc_property, env);
   }
 
-  REGISTER_SO(scheme_liberal_def_ctx_type);
-  {
-    Scheme_Object *a[1], *prop, *pred, *access;
-    
-    a[0] = scheme_intern_symbol("liberal-define-context");
-    prop = make_struct_type_property_from_c(1, a, &pred, &access,
-                                            scheme_struct_property_type);
-    scheme_add_global_constant("prop:liberal-define-context", prop, env);
-
-    a[0] = prop;
-    scheme_add_global_constant("liberal-define-context?", 
-                               scheme_make_prim_closure_w_arity(is_liberal_def_ctx, 1, a, 
-                                                                "liberal-define-context?",
-                                                                1, 1),
-                               env);
-
-    scheme_liberal_def_ctx_type = scheme_make_struct_type_from_string("liberal-define-context", NULL, 0, 
-                                                                      cons(cons(prop, scheme_true), scheme_null),
-                                                                      NULL, 1);
-  }
-
   {
     REGISTER_SO(method_property);
     method_property = scheme_make_struct_type_property(scheme_intern_symbol("method-arity-error"));
     scheme_add_global_constant("prop:method-arity-error", method_property, env);
   }
-
-  REGISTER_SO(not_free_id_symbol);
-  not_free_id_symbol = scheme_intern_symbol("not-free-identifier=?");
 
   REGISTER_SO(scheme_recur_symbol);
   REGISTER_SO(scheme_display_symbol);
@@ -1866,178 +1795,6 @@ static Scheme_Object *unary_acc(int argc, Scheme_Object **argv, Scheme_Object *s
 }
 
 /*========================================================================*/
-/*                  rename and set! transformer properties                */
-/*========================================================================*/
-
-int scheme_is_rename_transformer(Scheme_Object *o)
-{
-  if (SAME_TYPE(SCHEME_TYPE(o), scheme_id_macro_type))
-    return 1;
-  if (SCHEME_CHAPERONE_STRUCTP(o)
-      && scheme_struct_type_property_ref(rename_transformer_property, o))
-    return 1;
-  return 0;
-}
-
-int scheme_is_binding_rename_transformer(Scheme_Object *o)
-{
-  if (scheme_is_rename_transformer(o)) {
-    o = scheme_rename_transformer_id(o);
-    o = scheme_stx_property(o, not_free_id_symbol, NULL);
-    if (o && SCHEME_TRUEP(o))
-      return 0;
-    return 1;
-  }
-  return 0;
-}
-
-static int is_stx_id(Scheme_Object *o) { return (SCHEME_STXP(o) && SCHEME_SYMBOLP(SCHEME_STX_VAL(o))); }
-
-static int is_stx_id_or_proc_1(Scheme_Object *o) { return (is_stx_id(o) || is_proc_1(o)); }
-
-Scheme_Object *scheme_rename_transformer_id(Scheme_Object *o)
-{
-  Scheme_Object *a[1];
-
-  if (SAME_TYPE(SCHEME_TYPE(o), scheme_id_macro_type))
-    return SCHEME_PTR1_VAL(o);
-  if (SCHEME_CHAPERONE_STRUCTP(o)) {
-    Scheme_Object *v;
-    v = scheme_struct_type_property_ref(rename_transformer_property, o);
-    if (SCHEME_PROCP(v)) {
-      a[0] = o;
-      /* apply a continuation barrier here to prevent a capture in
-       * the property access */
-      v = scheme_apply(v, 1, a);
-      if (!is_stx_id(v)) {
-        scheme_contract_error("prop:rename-transformer",
-                              "contract violation for given value",
-                              "expected", 0, "identifier?",
-                              "given", 1, v,
-                              NULL);
-      }
-    } else if (SCHEME_INTP(v)) {
-      v = scheme_struct_ref(o, SCHEME_INT_VAL(v));
-      if (!is_stx_id(v)) {
-        v = scheme_datum_to_syntax(scheme_intern_symbol("?"), scheme_false, scheme_false, 0, 0);
-      }
-    }
-    return v;
-  }
-  return NULL;
-}
-
-static Scheme_Object *check_rename_transformer_property_value_ok(int argc, Scheme_Object *argv[])
-{
-  return check_indirect_property_value_ok("guard-for-prop:rename-transformer", 
-                                          is_stx_id_or_proc_1, 0,
-                                          "(or/c exact-nonnegative-integer? identifier? (-> any/c identifier?))",
-                                          argc, argv);
-}
-
-int scheme_is_set_transformer(Scheme_Object *o)
-{
-  if (SAME_TYPE(SCHEME_TYPE(o), scheme_set_macro_type))
-    return 1;
-  if (SCHEME_CHAPERONE_STRUCTP(o)
-      && scheme_struct_type_property_ref(set_transformer_property, o))
-    return 1;
-  return 0;
-}
-
-Scheme_Object *signal_bad_syntax(int argc, Scheme_Object **argv)
-{
-  scheme_wrong_syntax(NULL, NULL, argv[0], "bad syntax");
-  return NULL;
-}
-
-static Scheme_Object *chain_transformer(void *data, int argc, Scheme_Object *argv[])
-{
-  Scheme_Object *a[2], *v = (Scheme_Object *)data;
-  a[0] = SCHEME_CAR(v);
-  a[1] = argv[0];
-  return _scheme_tail_apply(SCHEME_CDR(v), 2, a);
-}
-
-Scheme_Object *scheme_set_transformer_proc(Scheme_Object *o)
-{
-  if (SAME_TYPE(SCHEME_TYPE(o), scheme_set_macro_type))
-    return SCHEME_PTR_VAL(o);
-  if (SCHEME_CHAPERONE_STRUCTP(o)) {
-    Scheme_Object *v;
-    v = scheme_struct_type_property_ref(set_transformer_property, o);
-    if (SCHEME_INTP(v)) {
-      v = ((Scheme_Structure *)o)->slots[SCHEME_INT_VAL(v)];
-      if (!is_proc_1(v)) {
-        v = scheme_make_prim_w_arity(signal_bad_syntax,
-                                     "bad-syntax-set!-transformer",
-                                     1, 1);
-      }
-    } else if (!scheme_check_proc_arity(NULL, 1, -1, 0, &v)) {
-      /* Must be a procedure of 2 arguments. Reduce to a procedure of 1. */
-      o = scheme_make_pair(o, v);
-      v = scheme_make_closed_prim_w_arity(chain_transformer, (void *)o,
-                                          "set!-transformer", 1, 1);
-    }
-    return v;
-  }
-  return NULL;
-}
-
-static Scheme_Object *check_set_transformer_property_value_ok(int argc, Scheme_Object *argv[])
-{
-  return check_indirect_property_value_ok("guard-for-prop:set!-transformer", 
-                                          is_proc_1_or_2, 0,
-                                          "(or/c  (any/c . -> . any) (any/c any/c . -> . any) exact-nonnegative-integer?)",
-                                          argc, argv);
-}
-
-/*========================================================================*/
-/*                        expansion-contexts property                     */
-/*========================================================================*/
-
-static Scheme_Object *check_expansion_contexts_property_value_ok(int argc, Scheme_Object *argv[])
-{
-  Scheme_Object *v;
-  
-  v = argv[0];
-
-  while (SCHEME_PAIRP(v)) {
-    if (!scheme_is_expansion_context_symbol(SCHEME_CAR(v)))
-      break;
-    v = SCHEME_CDR(v);
-  }
-
-  if (SCHEME_NULLP(v))
-    return argv[0];
-
-  wrong_property_contract("guard-for-prop:expression-contexts",
-                          "(lisrof (or/c 'expression 'top-level 'module 'module-begin 'definition-context)",
-                          v);
-
-  return NULL;
-}
-
-int scheme_expansion_contexts_include(Scheme_Object *o, Scheme_Object *ctx)
-{
-  Scheme_Object *v;
-
-  if (SCHEME_CHAPERONE_STRUCTP(o)) {
-    v = scheme_chaperone_struct_type_property_ref(expansion_contexts_property, o);
-    if (v) {
-      while (!SCHEME_NULLP(v)) {
-        if (SAME_OBJ(SCHEME_CAR(v), ctx))
-          return 1;
-        v = SCHEME_CDR(v);
-      }
-      return 0;
-    }
-  }
-  
-  return 1;
-}
-
-/*========================================================================*/
 /*                           checked-proc property                        */
 /*========================================================================*/
 
@@ -2107,22 +1864,6 @@ Scheme_Object *scheme_extract_checked_procedure(int argc, Scheme_Object **argv)
   a[1] = argv[3];
   a[2] = argv[4];
   return _scheme_apply(argv[2], 3, a);
-}
-
-/*========================================================================*/
-/*                             liberal-define                             */
-/*========================================================================*/
-
-static Scheme_Object *is_liberal_def_ctx(int argc, Scheme_Object **argv, Scheme_Object *self)
-{
-  Scheme_Object *prop = SCHEME_PRIM_CLOSURE_ELS(self)[0], *val;
-  
-  val = scheme_struct_type_property_ref(prop, argv[0]);
-
-  if (!val || SCHEME_FALSEP(val))
-    return scheme_false;
-  else
-    return scheme_true;
 }
 
 /*========================================================================*/
