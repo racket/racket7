@@ -651,7 +651,7 @@ static Scheme_Object *get_local_name(Scheme_Object *id)
     return SCHEME_STX_VAL(id);
 }
 
-static Scheme_IR_Local *scheme_make_variable(Scheme_Object *id)
+Scheme_IR_Local *scheme_make_ir_local(Scheme_Object *id)
 {
   Scheme_IR_Local *var;
 
@@ -663,6 +663,10 @@ static Scheme_IR_Local *scheme_make_variable(Scheme_Object *id)
   }
 
   return var;
+}
+
+Scheme_IR_Toplevel *scheme_make_ir_toplevel(Scheme_Object *id, int instance_pos, int variable_pos)
+{
 }
 
 static void record_local_use(Scheme_IR_Local *var, int flags)
@@ -677,8 +681,7 @@ static void record_local_use(Scheme_IR_Local *var, int flags)
 }
 
 Scheme_Object *
-scheme_compile_lookup(Scheme_Object *find_id, Scheme_Comp_Env *env, int flags,
-                      Scheme_Object **_inline_variant)
+scheme_compile_lookup(Scheme_Object *find_id, Scheme_Comp_Env *env, int flags)
 {
   Scheme_Object *v;
 

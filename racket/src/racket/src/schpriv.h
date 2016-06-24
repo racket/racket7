@@ -2532,20 +2532,11 @@ intptr_t scheme_get_print_width(void);
 /*                          compile and link                              */
 /*========================================================================*/
 
-typedef struct Comp_Prefix
-{
-  MZTAG_IF_REQUIRED
-  int num_toplevels;
-  Scheme_Hash_Table *toplevels; /* buckets for toplevel/module variables */
-  Scheme_Hash_Table *inline_variants; /* position -> inline_variant */
-} Comp_Prefix;
-
 typedef struct Scheme_Comp_Env
 {
   MZTAG_IF_REQUIRED
   int flags;
   Scheme_Hash_Tree *vars; /* symbol -> Scheme_IR_Local */
-  Comp_Prefix *prefix;  /* stack base info: globals */
   Scheme_Object *value_name; /* propagated down */
 } Scheme_Comp_Env;
 
@@ -2575,7 +2566,6 @@ typedef struct Resolve_Prefix
   Scheme_Object so;
   int num_toplevels, num_lifts;
   Scheme_Object **toplevels;
-  Scheme_Object *delay_info_rpair; /* (rcons refcount Scheme_Load_Delay*) */
 } Resolve_Prefix;
 
 typedef struct Resolve_Info Resolve_Info;
@@ -2765,16 +2755,24 @@ Scheme_Object *scheme_make_toplevel(mzshort depth, int position, int resolved, i
 
 #define ASSERT_IS_VARIABLE_BUCKET(b) /* if (((Scheme_Object *)b)->type != scheme_variable_type) abort() */
 
-Scheme_Comp_Env *scheme_new_comp_env(Scheme_Env *genv, int flags);
-Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *sym, Scheme_Object *var, int mutate);
+Scheme_Comp_Env *scheme_new_comp_env(int flags);
+Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var, int mutate);
 Scheme_Comp_Env *scheme_set_comp_env_flags(Scheme_Comp_Env *env, int flags);
 Scheme_Comp_Env *scheme_set_comp_env_name(Scheme_Comp_Env *env, Scheme_Object *name);
 
-Scheme_IR_Local *scheme_make_variable(Scheme_Object *id);
+Scheme_IR_Local *scheme_make_ir_local(Scheme_Object *id);
+Scheme_IR_Toplevel *scheme_make_ir_toplevel(Scheme_Object *id, int instance_pos, int variable_pos, int identity_pos);
+Scheme_Object *scheme_ir_toplevel_to_flagged_toplevel(Scheme_Object *tl, int flags);
 
 Scheme_Object *scheme_namespace_lookup_value(Scheme_Object *sym, Scheme_Env *genv, 
                                              Scheme_Object **_id, int *_use_map);
 
+
+/* Flags used with scheme_compile_lookup */
+#define SCHEME_APP_POS 2
+#define SCHEME_SETTING 4
+#define SCHEME_NULL_FOR_UNBOUND 512
+#define SCHEME_REFERENCING 4096
 
 Scheme_Object *scheme_compile_lookup(Scheme_Object *symbol, Scheme_Comp_Env *env, int flags);
 int scheme_is_imported(Scheme_Object *var, Scheme_Comp_Env *env);
@@ -2804,9 +2802,6 @@ void scheme_delay_load_closure(Scheme_Lambda *data);
 
 Scheme_Object *scheme_compiled_void(void);
 
-Scheme_Object *scheme_register_toplevel_in_prefix(Scheme_Object *var, Scheme_Comp_Env *env);
-Scheme_Object *scheme_register_toplevel_in_comp_prefix(Scheme_Object *var, Comp_Prefix *cp,
-                                                       Scheme_Object *inline_variant);
 void scheme_register_unsafe_in_prefix(Scheme_Comp_Env *env,
                                       Scheme_Compile_Info *rec, int drec,
                                       Scheme_Env *menv);
@@ -2938,19 +2933,6 @@ Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *e
 #define SCHEME_INFO_BOXED 0x1
 #define SCHEME_INFO_TYPED_VAL_SHIFT 4
 #define SCHEME_INFO_TYPED_VAL_MASK (SCHEME_MAX_LOCAL_TYPE_MASK << SCHEME_INFO_TYPED_VAL_SHIFT)
-
-/* Flags used with scheme_static_distance */
-#define SCHEME_ELIM_CONST 1
-#define SCHEME_APP_POS 2
-#define SCHEME_SETTING 4
-#define SCHEME_ENV_CONSTANTS_OK 8
-#define SCHEME_GLOB_ALWAYS_REFERENCE 16
-#define SCHEME_MUST_INDRECT 32
-#define SCHEME_LINKING_REF 64
-#define SCHEME_DONT_MARK_USE 128
-#define SCHEME_NULL_FOR_UNBOUND 512
-#define SCHEME_RESOLVE_MODIDS 1024
-#define SCHEME_REFERENCING 4096
 
 Scheme_Hash_Table *scheme_map_constants_to_globals(void);
 const char *scheme_look_for_primitive(void *code);
@@ -3145,27 +3127,47 @@ typedef struct Scheme_Linklet
 {
   Scheme_Object so; /* scheme_linklet_type */
 
-  Scheme_Object *name;
+  Scheme_Object *name; /* for error-reporting purposes */
 
   Scheme_Hash_Table *accessible; /* (symbol -> ...) */
 
   int num_importss;
   int *num_imports;
-  Scheme_Object ***imports; /* array of symbols (extenal names) */
+  Scheme_Object ***importss; /* array of array of symbols (extenal names) */
   int **import_flags;
 
   int num_exports;
   Scheme_Object **exports; /* symbols (extenal names) */
+
+  int num_defns; /* >= num_exports */
+  Scheme_Object **defns; /* symbols (internal names); prefix is parallel to `exports` */
+
+  int num_bodies;
+  Scheme_Object **bodies;
 } Scheme_Linklet;
 
-typedef struct Scheme_Import_Variable
+typedef struct Scheme_IR_Toplevel
 {
-  /* ... position ... */
-}
+  Scheme_Object iso; /* scheme_import_export_variable_type; not hashable */
+  Scheme_Object *name;
+  int instance_pos; /* import instance position, or -1 for exported and internal */
+  int variable_pos; /* position within import instance */
+  int identity_pos; /* a convenience: unique to a combination of instance_pos and variable_pos */
+  /* ??? */
+  Scheme_Object *shape; /* for optimization */
+  Scheme_Object *inline_variant;
+} Scheme_IR_Toplevel;
 
-/* See SCHEME_TOPLEVEL_...: */
-#define SCHEME_IMPVAR_CONST 0x1
-#define SCHEME_IMPVAR_FIXED 0x2
+/* See also SCHEME_TOPLEVEL_... */
+#define SCHEME_IR_TOPLEVEL_MUTATED 0x4
+
+#define SCHEME_IR_TOPLEVEL_FLAGS(var) MZ_OPT_HASH_KEY(&(var)->iso)
+#define SCHEME_IR_TOPLEVEL_POS(var) (((Scheme_IR_Toplevel *)var)->identity_pos)
+
+#define SCHEME_DEFN_VAR_COUNT(d) (SCHEME_VEC_SIZE(d)-1)
+#define SCHEME_DEFN_RHS(d, pos) (SCHEME_VEC_ELS(d)[0])
+#define SCHEME_DEFN_VAR(d, pos) ((Scheme_Import_Export_Variable *)(SCHEME_VEC_ELS(d)[(pos)+1]))
+                                    
 
 #define SCHEME_VARREF_FLAGS(pr) MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)pr)->iso)
 
