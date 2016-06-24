@@ -53,7 +53,7 @@ struct Resolve_Info
                             for sorting */
   int max_let_depth; /* filled in by sub-expressions to track the maximum
                         stack depth experienced so far */
-  Resolve_Prefix *prefix;
+  Scheme_Linklet *linklet;
   Scheme_Hash_Table *stx_map; /* compile offset => resolve offset; prunes prefix-recored stxes */
   mzshort toplevel_pos; /* tracks where the run-time prefix will be, relative
                            to the current stack depth */
@@ -81,8 +81,6 @@ static void resolve_info_set_toplevel_pos(Resolve_Info *info, int pos);
 static void merge_resolve(Resolve_Info *info, Resolve_Info *new_info);
 static Scheme_Object *resolve_generate_stub_lift(void);
 static int resolve_toplevel_pos(Resolve_Info *info);
-static int resolve_quote_syntax_offset(int i, Resolve_Info *info);
-static int resolve_quote_syntax_pos(Resolve_Info *info);
 static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, int keep_ready);
 static Scheme_Object *resolve_invent_toplevel(Resolve_Info *info);
 static Scheme_Object *resolve_invented_toplevel_to_defn(Resolve_Info *info, Scheme_Object *tl);
@@ -92,6 +90,8 @@ static int is_nonconstant_procedure(Scheme_Object *lam, Resolve_Info *info, Sche
 static int resolve_is_inside_proc(Resolve_Info *info);
 static int resolve_has_toplevel(Resolve_Info *info);
 static void set_tl_pos_used(Resolve_Info *info, int pos);
+static Scheme_Object *generate_name(Scheme_Object *base_sym, Scheme_Hash_Tree *used_names, int search_start);
+static void enable_expression_resolve_lifts(Resolve_Info *ri);
 
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
@@ -555,50 +555,37 @@ static Scheme_Object *resolve_sequence(Scheme_Object *o, Resolve_Info *info)
 static Scheme_Object *
 define_values_resolve(Scheme_Object *data, Resolve_Info *rslv)
 {
-  intptr_t cnt = 0;
-  Scheme_Object *vars = SCHEME_VEC_ELS(data)[0], *l, *a;
-  Scheme_Object *val = SCHEME_VEC_ELS(data)[1], *vec;
+  intptr_t i, cnt = SCHEME_DEFN_VAR_COUNT(data);
+  Scheme_Object *val;
+  Scheme_IR_variable *var;
 
-  /* If this is a module-level definition: for each variable, if the
-     defined variable doesn't have SCHEME_TOPLEVEL_MUTATED, then
+  /* If a defined variable doesn't have SCHEME_TOPLEVEL_MUTATED, then
      resolve to a top-level reference with SCHEME_TOPLEVEL_SEAL, so
-     that we know to set GLOS_IS_IMMUTATED at run time. */
-  for (l = vars; !SCHEME_NULLP(l); l = SCHEME_CDR(l)) {
-    a = SCHEME_CAR(l);
-    if (rslv->in_module
-	&& rslv->enforce_const
-	&& (!(SCHEME_TOPLEVEL_FLAGS(a) & SCHEME_TOPLEVEL_MUTATED))) {
+     that we know to set GLOB_IS_IMMUTATED at run time. */
+
+  for (i = 0; i < cnt; i++) {
+    var = SCHEME_DEFN_VAR(data, i);
+    a = resolve_toplevel(rslv, (Scheme_Object *)var, 0);
+    if (rslv->enforce_const
+	&& (!(SCHEME_IR_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_MUTATED)))
       a = scheme_toplevel_to_flagged_toplevel(a, SCHEME_TOPLEVEL_SEAL);
-    }
-    a = resolve_toplevel(rslv, a, 0);
-    SCHEME_CAR(l) = a;
-    cnt++;
+    SCHEME_DEFN_VAR_(data, i) = a;
   }
 
-  vec = scheme_make_vector(cnt + 1, NULL);
-  cnt = 1;
-  for (l = vars; !SCHEME_NULLP(l); l = SCHEME_CDR(l)) {
-    SCHEME_VEC_ELS(vec)[cnt++] = SCHEME_CAR(l);
-  }
+  val = scheme_resolve_expr(SCHEME_DEFN_RHS(data), rslv);
+  SCHEME_DEFN_RHS(data) = val;
 
-  val = scheme_resolve_expr(val, rslv);
-  SCHEME_VEC_ELS(vec)[0] = val;
-
-  vec->type = scheme_define_values_type;
-  return vec;
+  return data;
 }
 
 static void resolve_lift_definition(Resolve_Info *info, Scheme_Object *var, Scheme_Object *rhs)
 {
   Scheme_Object *decl, *vec, *pr;
 
-  vec = scheme_make_vector(2, NULL);
-  SCHEME_VEC_ELS(vec)[0] = rhs;
-  SCHEME_VEC_ELS(vec)[1] = var;
-
-  vec->type = scheme_define_values_type;
-
-  decl = vec;
+  decl = scheme_make_vector(2, NULL);
+  decl->type = scheme_define_values_type;
+  SCHEME_DEFN_RHS(decl) = rhs;
+  SCHEME_DEFN_VAR_(decl, 0) = var;
 
   vec = info->lifts;
   pr = cons(decl, SCHEME_VEC_ELS(vec)[0]);
@@ -768,95 +755,6 @@ case_lambda_resolve(Scheme_Object *expr, Resolve_Info *rslv)
   }
 
   return expr;
-}
-
-static Scheme_Object *do_define_syntaxes_resolve(Scheme_Object *data, Resolve_Info *info)
-{
-  Comp_Prefix *cp;
-  Resolve_Prefix *rp;
-  Scheme_Object *names, *val, *base_stack_depth, *dummy, *vec;
-  Resolve_Info *einfo;
-  int len;
-
-  cp = (Comp_Prefix *)SCHEME_VEC_ELS(data)[0];
-  dummy = SCHEME_VEC_ELS(data)[1];
-  names = SCHEME_VEC_ELS(data)[2];
-  val = SCHEME_VEC_ELS(data)[3];
-
-  rp = scheme_resolve_prefix(1, cp, info->prefix->src_insp_desc);
-
-  dummy = scheme_resolve_expr(dummy, info);
-
-  einfo = scheme_resolve_info_create(rp);
-
-  val = scheme_resolve_expr(val, einfo);
-
-  rp = scheme_remap_prefix(rp, einfo);
-
-  base_stack_depth = scheme_make_integer(einfo->max_let_depth);
-
-  len = scheme_list_length(names);
-  
-  vec = scheme_make_vector(len + 4, NULL);
-  SCHEME_VEC_ELS(vec)[0] = val;
-  SCHEME_VEC_ELS(vec)[1] = (Scheme_Object *)rp;
-  SCHEME_VEC_ELS(vec)[2] = base_stack_depth;
-  SCHEME_VEC_ELS(vec)[3] = dummy;
-
-  len = 4;
-  while (SCHEME_PAIRP(names)) {
-    SCHEME_VEC_ELS(vec)[len++] = SCHEME_CAR(names);
-    names = SCHEME_CDR(names);
-  }
-
-  vec->type = scheme_define_syntaxes_type;
-
-  return vec;
-}
-
-static Scheme_Object *define_syntaxes_resolve(Scheme_Object *data, Resolve_Info *info)
-{
-  return do_define_syntaxes_resolve(data, info);
-}
-
-static Scheme_Object *begin_for_syntax_resolve(Scheme_Object *data, Resolve_Info *info)
-{
-  Comp_Prefix *cp;
-  Resolve_Prefix *rp;
-  Scheme_Object *l, *p, *a, *base_stack_depth, *dummy, *vec;
-  Resolve_Info *einfo;
-
-  cp = (Comp_Prefix *)SCHEME_VEC_ELS(data)[0];
-  dummy = SCHEME_VEC_ELS(data)[1];
-  l = SCHEME_VEC_ELS(data)[2];
-
-  rp = scheme_resolve_prefix(1, cp, info->prefix->src_insp_desc);
-
-  dummy = scheme_resolve_expr(dummy, info);
-
-  einfo = scheme_resolve_info_create(rp);
-
-  p = scheme_null;
-  while (!SCHEME_NULLP(l)) {
-    a = SCHEME_CAR(l);
-    a = scheme_resolve_expr(a, einfo);
-    p = scheme_make_pair(a, p);
-    l = SCHEME_CDR(l);
-  }
-  l = scheme_reverse(p);
-  
-  rp = scheme_remap_prefix(rp, einfo);
-
-  base_stack_depth = scheme_make_integer(einfo->max_let_depth);
-  
-  vec = scheme_make_vector(4, NULL);
-  SCHEME_VEC_ELS(vec)[0] = l;
-  SCHEME_VEC_ELS(vec)[1] = (Scheme_Object *)rp;
-  SCHEME_VEC_ELS(vec)[2] = base_stack_depth;
-  SCHEME_VEC_ELS(vec)[3] = dummy;
-  vec->type = scheme_begin_for_syntax_type;
-
-  return vec;
 }
 
 /*========================================================================*/
@@ -2053,59 +1951,24 @@ resolve_lambda(Scheme_Object *_lam, Resolve_Info *info,
 }
 
 /*========================================================================*/
-/*                                module                                 */
+/*                                linklet                                 */
 /*========================================================================*/
 
-static int has_syntax_constants(Scheme_Module *m)
-{
-  int i, j;
-  Scheme_Object *e;
-  Resolve_Prefix *rp;
-  
-  if (m->prefix->num_stxes)
-    return 1;
-
-  for (j = m->num_phases; j-- > 1; ) {
-    for (i = SCHEME_VEC_SIZE(m->bodies[j]); i--; ) {
-      e = SCHEME_VEC_ELS(m->bodies[j])[i];
-      rp = (Resolve_Prefix *)SCHEME_VEC_ELS(e)[3];
-      if (rp->num_stxes)
-        return 1;
-    }
-  }
-
-  return 0;
-}
-
-static Scheme_Object *
-module_expr_resolve(Scheme_Object *data, Resolve_Info *old_rslv)
+static Scheme_Object *scheme_resolve_linklet(Scheme_Object *data, int enforce_const)
 {
   Scheme_Module *m = (Scheme_Module *)data;
   Scheme_Object *b, *lift_vec, *body = scheme_null;
-  Resolve_Prefix *rp;
+  Scheme_Hash_Table *names;
   Resolve_Info *rslv;
   int i, cnt;
 
-  if (!m->comp_prefix) {
-    /* already resolved */
-    return (Scheme_Object *)m;
-  }
+  rslv = scheme_resolve_info_create(linklet, enforce_const);
+  enable_expression_resolve_lifts(rslv);
 
-  rp = scheme_resolve_prefix(0, m->comp_prefix, m->insp);
-  m->comp_prefix = NULL;
-
-  b = scheme_resolve_expr(m->dummy, old_rslv);
-  m->dummy = b;
-
-  rslv = scheme_resolve_info_create(rp);
-  rslv->enforce_const = old_rslv->enforce_const;
-  rslv->in_module = 1;
-  scheme_enable_expression_resolve_lifts(rslv);
-
-  cnt = SCHEME_VEC_SIZE(m->bodies[0]);
+  cnt = linklet->num_bodies;
   for (i = 0; i < cnt; i++) {
     Scheme_Object *e;
-    e = scheme_resolve_expr(SCHEME_VEC_ELS(m->bodies[0])[i], rslv);
+    e = scheme_resolve_expr(linklet->bodies[i], rslv);
     
     /* add lift just before the expression that introduced it;
        this ordering is needed for bytecode validation of
@@ -2122,88 +1985,64 @@ module_expr_resolve(Scheme_Object *data, Resolve_Info *old_rslv)
   m->max_let_depth = rslv->max_let_depth;
 
   lift_vec = rslv->lifts;
-  rp->num_lifts = SCHEME_INT_VAL(SCHEME_VEC_ELS(lift_vec)[1]);
+  num_lifts = SCHEME_INT_VAL(SCHEME_VEC_ELS(lift_vec)[1]);
 
-  body = scheme_list_to_vector(scheme_reverse(body));
-  m->bodies[0] = body;
-
-  rp = scheme_remap_prefix(rp, rslv);
-
-  m->prefix = rp;
-
-  /* Exp-time body was resolved during compilation */
-
-  /* If there are no syntax objects in the module, then there are no
-     macros that can reach bindings in the bindings table whose marks
-     are not a subset of the module context. */
-  if (m->rn_stx && SCHEME_STXP(m->rn_stx) && !has_syntax_constants(m)) {
-    if (m->binding_names) {
-      b = scheme_prune_bindings_table(m->binding_names, m->rn_stx, scheme_make_integer(0));
-      m->binding_names = b;
-    }
-    if (m->et_binding_names) {
-      b = scheme_prune_bindings_table(m->et_binding_names, m->rn_stx, scheme_make_integer(1));
-      m->et_binding_names = b;
-    }
-    if (m->other_binding_names) {
-      intptr_t i;
-      Scheme_Object *k, *val;
-      Scheme_Hash_Tree *ht;
-
-      ht = scheme_make_hash_tree(1);
-
-      if (SCHEME_HASHTRP(m->other_binding_names)) {
-        Scheme_Hash_Tree *t = (Scheme_Hash_Tree *)m->other_binding_names;
-        for (i = scheme_hash_tree_next(t, -1); i != -1; i = scheme_hash_tree_next(t, i)) {
-          scheme_hash_tree_index(t, i, &k, &val);
-          val = scheme_prune_bindings_table(val, m->rn_stx, k);
-          ht = scheme_hash_tree_set(ht, k, val);
-        }
-      } else {
-        Scheme_Hash_Table *t = (Scheme_Hash_Table *)m->other_binding_names;
-        for (i = t->size; i--; ) {
-          if (t->vals[i]) {
-            k = t->keys[i];
-            val = t->vals[i];
-            val = scheme_prune_bindings_table(val, m->rn_stx, k);
-            ht = scheme_hash_tree_set(ht, k, val);
-          }
-        }
-      }
-
-      m->other_binding_names = (Scheme_Object *)ht;
-    }
+  /* Recompute body array: */
+  body = scheme_reverse(body);
+  cnt = scheme_length(body);
+  new_bodies = MALLOC_N(Scheme_Object*, cnt);
+  for (i = 0; i < cnt; i++, body = SCHEME_CDR(body)) {
+    new_bodies[i] = SCHEME_CAR(body);
   }
+  
+  m->bodies = new_bodies;
 
-
-  {
-    /* resolve submodules */
-    int k;
-    Scheme_Object *p;
-    for (k = 0; k < 2; k++) {
-      p = (k ? m->post_submodules : m->pre_submodules);
-      if (p) {
-        while (!SCHEME_NULLP(p)) {
-          scheme_resolve_expr(SCHEME_CAR(p), old_rslv);
-          p = SCHEME_CDR(p);
-        }
-      }
-    }
+  /* Adjust the `defns` and exports` arrays to reduce identifier to
+     symbols and to take into account unexported and lifted
+     definitions */
+  
+  cnt = linklet->num_defns + num_lifts;
+  new_exports = MALLOC_N(Scheme_Object**, cnt);
+  new_defns = MALLOC_N(Scheme_Object**, cnt);
+  names = scheme_make_hash_table(SCHEME_hash_ptr);
+  
+  for (i = 0; i < linklet->num_exports; i++) {
+    new_exports[i] = SCHEME_STX_VAL(linklet->exports[i]);
+    new_defns[i] = SCHEME_STX_VAL(linklet->defns[i]);
+    scheme_hash_set(names, new_exports[i], scheme_true);
+    scheme_hash_set(names, new_defns[i], scheme_true);
+  }
+  for (; i < linklet->num_defns; i++) {
+    b = generate_name(linklet->defns[i], names, 0);
+    scheme_hash_set(names, b, scheme_true);
+    new_exports[i] = b;
+  }
+  for (; i < cnt; i++) {
+    b = generate_name(NULL, names, i - linket->num_defns);
+    new_defns[i] = b;
+    new_exports[i] = b;
   }
 
   return data;
 }
 
-static Scheme_Object *
-top_level_require_resolve(Scheme_Object *data, Resolve_Info *rslv)
+static Scheme_Object *generate_name(Scheme_Object *base_sym, Scheme_Hash_Table *used_names, int search_start)
 {
-  Scheme_Object *dummy = SCHEME_PTR1_VAL(data);
+  char buf[32];
+  Scheme_Object *n;
+  
+  if (!base_sym)
+    base_sym = scheme_intern_exact_parallel_symbol("?lifted", 7);
 
-  dummy = scheme_resolve_expr(dummy, rslv);
-
-  SCHEME_PTR1_VAL(data) = dummy;
-
-  return data;
+  while (1) {
+    sprintf(buf, ".%d", search_start);
+    n = scheme_intern_exact_parallel_symbol(buf, strlen(buf));
+    n = scheme_symbol_append(base_sym, n);
+    if (!scheme_hash_get(used_names, n)) {
+      scheme_hash_set(used_names, n, scheme_true);
+      return n;
+    }
+  }
 }
 
 /*========================================================================*/
@@ -2279,26 +2118,6 @@ Scheme_Object *scheme_resolve_expr(Scheme_Object *expr, Resolve_Info *info)
     return scheme_resolve_lets(expr, info);
   case scheme_ir_toplevel_type:
     return resolve_toplevel(info, expr, 1);
-  case scheme_ir_quote_syntax_type:
-    {
-      Scheme_Quote_Syntax *qs;
-      int i, c, p;
-
-      i = SCHEME_LOCAL_POS(expr);
-      i = resolve_quote_syntax_offset(i, info);
-      c = resolve_toplevel_pos(info);
-      p = resolve_quote_syntax_pos(info);
-
-      set_tl_pos_used(info, i+p+1);
-
-      qs = MALLOC_ONE_TAGGED(Scheme_Quote_Syntax);
-      qs->so.type = scheme_quote_syntax_type;
-      qs->depth = c;
-      qs->position = i;
-      qs->midpoint = p;
-
-      return (Scheme_Object *)qs;
-    }
   case scheme_variable_type:
   case scheme_module_variable_type:
     scheme_signal_error("got top-level in wrong place");
@@ -2403,97 +2222,7 @@ static Scheme_Object *shift_lifted_reference(Scheme_Object *tl, Resolve_Info *in
 /*                    compile-time env for resolve                        */
 /*========================================================================*/
 
-Resolve_Prefix *scheme_resolve_prefix(int phase, Comp_Prefix *cp, Scheme_Object *insp_desc)
-{
-  Resolve_Prefix *rp;
-  Scheme_Object **tls, **stxes, *m;
-  Scheme_Hash_Table *ht;
-  int i;
-
-  rp = MALLOC_ONE_TAGGED(Resolve_Prefix);
-  rp->so.type = scheme_resolve_prefix_type;
-  rp->num_toplevels = cp->num_toplevels;
-  rp->num_stxes = cp->num_stxes;
-  
-  if (rp->num_toplevels)
-    tls = MALLOC_N(Scheme_Object*, rp->num_toplevels);
-  else
-    tls = NULL;
-  if (rp->num_stxes)
-    stxes = MALLOC_N(Scheme_Object*, rp->num_stxes);
-  else
-    stxes = NULL;
-
-  rp->toplevels = tls;
-  rp->stxes = stxes;
-
-  ht = cp->toplevels;
-  if (ht) {
-    for (i = 0; i < ht->size; i++) {
-      if (ht->vals[i]) {
-        m = ht->keys[i];
-        if (SAME_TYPE(SCHEME_TYPE(m), scheme_module_variable_type)) {
-          if (SCHEME_FALSEP(((Scheme_Modidx *)((Module_Variable *)m)->modidx)->base)
-              && SCHEME_FALSEP(((Scheme_Modidx *)((Module_Variable *)m)->modidx)->path)) {
-            /* Reduce self-referece to just a symbol: */
-            m = ((Module_Variable *)m)->sym;
-          }
-        }
-        tls[SCHEME_TOPLEVEL_POS(ht->vals[i])] = m;
-      }
-    }
-  }
-
-  ht = cp->stxes;
-  if (ht) {
-    for (i = 0; i < ht->size; i++) {
-      if (ht->vals[i]) {
-	stxes[SCHEME_LOCAL_POS(ht->vals[i])] = ht->keys[i];
-      }
-    }
-  }
-
-  rp->src_insp_desc = insp_desc;
-
-  return rp;
-}
-
-Resolve_Prefix *scheme_remap_prefix(Resolve_Prefix *rp, Resolve_Info *ri)
-{
-  /* Rewrite stxes list based on actual uses at resolve pass.
-     If we have no lifts, we can just drop unused stxes.
-     Otherwise, if any stxes go unused, we just have to replace them
-     with NULL. */
-  int i, cnt;
-  Scheme_Object **new_stxes, *v;
-
-  if (!rp->num_stxes)
-    return rp;
-
-  if (rp->num_lifts)
-    cnt = rp->num_stxes;
-  else
-    cnt = (int)ri->stx_map->count;
-
-  new_stxes = MALLOC_N(Scheme_Object *, cnt);
-
-  for (i = 0; i < rp->num_stxes; i++) {
-    if (ri->stx_map)
-      v = scheme_hash_get(ri->stx_map, scheme_make_integer(i));
-    else
-      v = NULL;
-    if (v) {
-      new_stxes[SCHEME_INT_VAL(v)]  = rp->stxes[i];
-    }
-  }
-
-  rp->stxes = new_stxes;
-  rp->num_stxes = cnt;
-
-  return rp;
-}
-
-Resolve_Info *scheme_resolve_info_create(Resolve_Prefix *rp)
+Resolve_Info *scheme_resolve_info_create(Scheme_Linklet *linklet)
 {
   Resolve_Info *naya;
   Scheme_Object *b;
@@ -2518,7 +2247,7 @@ Resolve_Info *scheme_resolve_info_create(Resolve_Prefix *rp)
   return naya;
 }
 
-void scheme_enable_expression_resolve_lifts(Resolve_Info *ri)
+static void enable_expression_resolve_lifts(Resolve_Info *ri)
 {
   Scheme_Object *lift_vec;
 
@@ -2526,31 +2255,6 @@ void scheme_enable_expression_resolve_lifts(Resolve_Info *ri)
   SCHEME_VEC_ELS(lift_vec)[0] = scheme_null;
   SCHEME_VEC_ELS(lift_vec)[1] = scheme_make_integer(0);
   ri->lifts = lift_vec;
-}
-
-Scheme_Object *scheme_merge_expression_resolve_lifts(Scheme_Object *expr, Resolve_Prefix *rp, Resolve_Info *ri)
-{
-  Scheme_Object *lift_vec, *lifts;
-  Scheme_Sequence *s;
-  int n, i;
-
-  lift_vec = ri->lifts;
-  n = SCHEME_INT_VAL(SCHEME_VEC_ELS(lift_vec)[1]);
-  if (n) {
-    rp->num_lifts = n;
-    lifts = SCHEME_VEC_ELS(lift_vec)[0];
-
-    s = scheme_malloc_sequence(n + 1);
-    s->so.type = scheme_sequence_type;
-    s->count = n + 1;
-    for (i = 0; i < n; i++, lifts = SCHEME_CDR(lifts)) {
-      s->array[i] = SCHEME_CAR(lifts);
-    }
-    s->array[i] = expr;
-
-    return (Scheme_Object *)s;
-  } else
-    return expr;
 }
 
 void scheme_resolve_info_enforce_const(Resolve_Info *ri, int enforce_const)
@@ -2774,49 +2478,24 @@ static int resolve_has_toplevel(Resolve_Info *info)
   return info->toplevel_pos >= 0;
 }
  
-static int resolve_quote_syntax_offset(int i, Resolve_Info *info)
-{
-  Scheme_Hash_Table *ht;
-  Scheme_Object *v;
-
-  ht = info->stx_map;
-
-  v = scheme_hash_get(ht, scheme_make_integer(i));
-  if (!v) {
-    v = scheme_make_integer(ht->count);
-    scheme_hash_set(ht, scheme_make_integer(i), v);
-  }
-
-  return (int)SCHEME_INT_VAL(v);
-}
-
-static int resolve_quote_syntax_pos(Resolve_Info *info)
-{
-  return info->prefix->num_toplevels;
-}
-
 static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, int as_reference)
 {
   int skip, pos;
 
   skip = resolve_toplevel_pos(info);
 
-  pos = SCHEME_TOPLEVEL_POS(expr);
+  pos = SCHEME_IR_TOPLEVEL_POS(expr);
 
   set_tl_pos_used(info, pos);
 
-  return scheme_make_toplevel(skip + SCHEME_TOPLEVEL_DEPTH(expr), /* depth is 0 (normal) or 1 (exp-time) */
-                              pos,
-                              1,
-                              SCHEME_TOPLEVEL_FLAGS(expr) & SCHEME_TOPLEVEL_FLAGS_MASK);
+  return scheme_make_toplevel(skip, pos, 1,
+                              SCHEME_IR_TOPLEVEL_FLAGS((Scheme_IR_Toplevel *)expr) & SCHEME_TOPLEVEL_FLAGS_MASK);
 }
 
 static Scheme_Object *shift_toplevel(Scheme_Object *expr, int delta)
 {
-  return scheme_make_toplevel(SCHEME_TOPLEVEL_DEPTH(expr) + delta,
-                              SCHEME_TOPLEVEL_POS(expr),
-                              1,
-                              SCHEME_TOPLEVEL_FLAGS(expr) & SCHEME_TOPLEVEL_FLAGS_MASK);
+  return scheme_make_toplevel(delta, SCHEME_TOPLEVEL_POS(expr), 1,
+                              SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_FLAGS_MASK);
 }
 
 static Scheme_Object *resolve_invent_toplevel(Resolve_Info *info)
@@ -2828,9 +2507,7 @@ static Scheme_Object *resolve_invent_toplevel(Resolve_Info *info)
 
   count = SCHEME_VEC_ELS(info->lifts)[1];
   pos = (int)(SCHEME_INT_VAL(count)
-              + info->prefix->num_toplevels 
-              + info->prefix->num_stxes
-              + (info->prefix->num_stxes ? 1 : 0));
+              + info->prefix->num_toplevels);
   count = scheme_make_integer(SCHEME_INT_VAL(count) + 1);
   SCHEME_VEC_ELS(info->lifts)[1] = count;
 
@@ -2872,7 +2549,7 @@ typedef struct Unresolve_Info {
   int depth;     /* stack in unresolved coordinates */
   int stack_size;
   Scheme_IR_Local **vars;
-  Resolve_Prefix *prefix;
+  Scheme_Linklet *linklet;
   Scheme_Hash_Table *closures; /* handle cycles */
   int has_non_leaf, has_tl, body_size;
   int comp_flags;
@@ -4554,32 +4231,6 @@ static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int a
       
       return unresolve_let_value(lv, ui, val, body);
     }
-  case scheme_quote_syntax_type:
-    {
-      Scheme_Quote_Syntax *qs = (Scheme_Quote_Syntax *)e;
-      Scheme_Local *cqs;
-
-      if (ui->inlining) return_NULL;
-
-      cqs = (Scheme_Local *)scheme_malloc_atomic_tagged(sizeof(Scheme_Local));
-      cqs->iso.so.type = scheme_ir_quote_syntax_type;
-      cqs->position = qs->position;
-      return (Scheme_Object *)cqs;
-    }
-  case scheme_require_form_type:
-    {
-      Scheme_Object *dummy = SCHEME_PTR1_VAL(e), *req;
-
-      dummy = unresolve_expr(dummy, ui, 0);
-
-      req = scheme_alloc_object();
-      req->type = scheme_require_form_type;
-      SCHEME_PTR1_VAL(req) = dummy;
-      SCHEME_PTR2_VAL(req) = SCHEME_PTR2_VAL(e);
-      
-      return req;
-    }
-    break;
   default:
     if (SCHEME_TYPE(e) > _scheme_values_types_) {
       if (scheme_ir_duplicate_ok(e, 1) || !ui->inlining)

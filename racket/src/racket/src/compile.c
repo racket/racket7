@@ -2100,11 +2100,11 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
         v = scheme_compile_lookup(SCHEME_STX_CAR(a), env, 0);
         MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_import_export_variable_type));
         MZ_ASSERT(((Scheme_IR_Toplevel *)v)->instance_pos == -1);
-        SCHEME_VEC_ELS(vec)[j+1] = scheme_make_integer(((Scheme_IR_Toplevel *)v)->variable_pos);
+        SCHEME_DEFN_VAR_(vec, j) = v;
       }
       
       a = scheme_compile_expr(SCHEME_STX_CADR(SCHEME_STX_CDR(e)), env);
-      SCHEME_VEC_ELS(vec)[0] = a;
+      SCHEME_DEFN_RHS(vec) = a;
  
       e = vec;
       e->so.type = scheme_define_values_type;

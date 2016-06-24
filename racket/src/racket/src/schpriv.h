@@ -1418,15 +1418,6 @@ typedef struct {
   Scheme_Object *fbranch;
 } Scheme_Branch_Rec;
 
-typedef struct {
-  Scheme_Inclhash_Object iso; /* keyex used to disable module table */
-  mzshort max_let_depth;
-  Scheme_Object *code;
-  struct Resolve_Prefix *prefix; /* NULL => a wrapper for a JITted module in `code' */
-  Scheme_Object *binding_namess; /* list of <phase> to hash of <symbol> to <id>;
-                                    additions to the top-level bindings table */
-} Scheme_Compilation_Top;
-
 /* A `let' or `letrec' form is compiled to the intermediate
    format (used during the optimization pass) as a Scheme_IR_Let_Header
    with a chain of Scheme_IR_Let_Value records as its body,
@@ -2561,13 +2552,6 @@ typedef struct Scheme_Comp_Env
 #define COMP_TESTING_CONSTANTNESS 0x8
 #define RESOLVE_MODULE_IDS        0x10
 
-typedef struct Resolve_Prefix
-{
-  Scheme_Object so;
-  int num_toplevels, num_lifts;
-  Scheme_Object **toplevels;
-} Resolve_Prefix;
-
 typedef struct Resolve_Info Resolve_Info;
 
 /* Scheme_IR_Lambda_Info is used to store extra closure information
@@ -2873,10 +2857,7 @@ int scheme_is_ir_lambda(Scheme_Object *o, int can_be_closed, int can_be_liftable
 
 Scheme_Object *scheme_resolve_lets(Scheme_Object *form, Resolve_Info *info);
 
-Resolve_Prefix *scheme_resolve_prefix(int phase, Comp_Prefix *cp, Scheme_Object *insp_desc);
-Resolve_Prefix *scheme_remap_prefix(Resolve_Prefix *rp, Resolve_Info *ri);
-
-Resolve_Info *scheme_resolve_info_create(Resolve_Prefix *rp);
+Resolve_Info *scheme_resolve_info_create(Scheme_Linklet *rp);
 void scheme_resolve_info_enforce_const(Resolve_Info *, int enforce_const);
 int scheme_resolve_info_max_let_depth(Resolve_Info *ri);
 int scheme_resolve_info_use_jit(Resolve_Info *ri);
@@ -3131,21 +3112,28 @@ typedef struct Scheme_Linklet
 
   Scheme_Hash_Table *accessible; /* (symbol -> ...) */
 
+  /* Import, export, and definition names are kept as identifiers up
+     to `resolve`, so that we have source locations, and then symbols
+     afterward. */
+  
   int num_importss;
   int *num_imports;
-  Scheme_Object ***importss; /* array of array of symbols (extenal names) */
+  Scheme_Object ***importss; /* array of array of id-or-symbol (extenal names) */
   int **import_flags;
 
   int num_exports;
-  Scheme_Object **exports; /* symbols (extenal names) */
-
-  int num_defns; /* >= num_exports */
-  Scheme_Object **defns; /* symbols (internal names); prefix is parallel to `exports` */
+  Scheme_Object **exports; /* array of id-or-symbol (extenal names); unreadable starting "?" was generated */
+  int num_defns; /* can be < num_exports until after resolve */
+  Scheme_Object **defns; /* array of id-or-symbol (internal names); parallel to `exports` */
 
   int num_bodies;
   Scheme_Object **bodies;
 } Scheme_Linklet;
 
+/* Definition and references share the same object during the
+   "compile" pass, and SCHEME_IR_TOPLEVEL_MUTATED is set in that pass.
+   During the "optimize" pass, references may be cloned to set
+   SCHEME_TOPLEVEL_CONST, etc. */
 typedef struct Scheme_IR_Toplevel
 {
   Scheme_Object iso; /* scheme_import_export_variable_type; not hashable */
@@ -3166,8 +3154,8 @@ typedef struct Scheme_IR_Toplevel
 
 #define SCHEME_DEFN_VAR_COUNT(d) (SCHEME_VEC_SIZE(d)-1)
 #define SCHEME_DEFN_RHS(d, pos) (SCHEME_VEC_ELS(d)[0])
-#define SCHEME_DEFN_VAR(d, pos) ((Scheme_Import_Export_Variable *)(SCHEME_VEC_ELS(d)[(pos)+1]))
-                                    
+#define SCHEME_DEFN_VAR_(d, pos) (SCHEME_VEC_ELS(d)[(pos)+1])
+#define SCHEME_DEFN_VAR(d, pos) ((Scheme_Import_Export_Variable *)SCHEME_DEFN_VAR_(d, pos))
 
 #define SCHEME_VARREF_FLAGS(pr) MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)pr)->iso)
 

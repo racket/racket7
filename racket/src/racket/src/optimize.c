@@ -447,9 +447,7 @@ int scheme_omittable_expr(Scheme_Object *o, int vals, int fuel, int flags,
       || (vtype == scheme_ir_lambda_type)
       || (vtype == scheme_inline_variant_type)
       || (vtype == scheme_case_lambda_sequence_type)
-      || (vtype == scheme_quote_syntax_type)
-      || (vtype == scheme_varref_form_type)
-      || (vtype == scheme_ir_quote_syntax_type)) {
+      || (vtype == scheme_varref_form_type)) {
     note_match(1, vals, warn_info);
     return ((vals == 1) || (vals < 0));
   }
@@ -1570,8 +1568,6 @@ static int movable_expression(Scheme_Object *expr, Optimize_Info *info,
   switch (SCHEME_TYPE(expr)) {
   case scheme_toplevel_type:
     return ((SCHEME_TOPLEVEL_FLAGS(expr) & SCHEME_TOPLEVEL_FLAGS_MASK) >= SCHEME_TOPLEVEL_FIXED);
-  case scheme_ir_quote_syntax_type:
-    return 1;
   case scheme_ir_local_type:
     {
       /* Ok if not mutable */
@@ -1874,7 +1870,6 @@ static int estimate_expr_size(Scheme_Object *expr, int sz, int fuel)
       break;
     }
   case scheme_ir_toplevel_type:
-  case scheme_ir_quote_syntax_type:
     /* FIXME: other syntax types not covered */
   default:
     sz += 1;
@@ -2782,9 +2777,6 @@ static Scheme_Object *do_expr_implies_predicate(Scheme_Object *expr, Optimize_In
     break;
   case scheme_case_lambda_sequence_type:
     return scheme_procedure_p_proc;
-    break;
-  case scheme_ir_quote_syntax_type:
-    return scheme_syntax_p_proc;
     break;
   case scheme_branch_type:
     {
@@ -7566,7 +7558,7 @@ void install_definition(Scheme_Object **bodies, int pos, Scheme_Object *old_defn
   var = scheme_make_pair(var, scheme_null);
   def = scheme_make_vector(2, NULL);
   SCHEME_DEFN_RHS(def) = rhs;
-  SCHEME_DEFN_VARS(def, 0) = SCHEME_DEFN_VARS(old_def)[name_pos];
+  SCHEME_DEFN_VAR_(def, 0) = SCHEME_DEFN_VAR(old_def)[name_pos];
   def->type = scheme_define_values_type;
 
   bodies[pos] = def;
@@ -7824,7 +7816,7 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
 	  Scheme_IR_Toplevel *var;
           int i;
           for (i = 0; i < n; i++) {
-            var = (Scheme_IR_Toplevel *)SCHEME_DEFN_VAR(defn, i);
+            var = SCHEME_DEFN_VAR(defn, i);
 
             if (!(SCHEME_IR_TOPLEVEL_FLAGS(var) & SCHEME_IR_TOPLEVEL_MUTATED)) {
               Scheme_Object *e2;
@@ -8276,14 +8268,6 @@ Scheme_Object *scheme_optimize_expr(Scheme_Object *expr, Optimize_Info *info, in
     }
     optimize_info_used_top(info);
     return expr;
-  case scheme_ir_quote_syntax_type:
-    if (context & OPT_CONTEXT_BOOLEAN)
-      return scheme_true;
-    else {
-      info->size += 1;
-      optimize_info_used_top(info);
-    }
-    return expr;
   case scheme_variable_type:
     scheme_signal_error("got toplevel in wrong place");
     return 0;
@@ -8543,7 +8527,6 @@ Scheme_Object *optimize_clone(int single_use, Scheme_Object *expr, Optimize_Info
   case scheme_ir_lambda_type:
     return clone_lambda(single_use, expr, info, var_map);
   case scheme_ir_toplevel_type:
-  case scheme_ir_quote_syntax_type:
     return expr;
   case scheme_define_values_type:
   case scheme_define_syntaxes_type:
