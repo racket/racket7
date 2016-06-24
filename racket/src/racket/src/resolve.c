@@ -2000,7 +2000,8 @@ static Scheme_Object *scheme_resolve_linklet(Scheme_Object *data, int enforce_co
   /* Adjust the `defns` and exports` arrays to reduce identifier to
      symbols and to take into account unexported and lifted
      definitions */
-  
+
+  linklet->num_lifts = num_lifts;
   cnt = linklet->num_defns + num_lifts;
   new_exports = MALLOC_N(Scheme_Object**, cnt);
   new_defns = MALLOC_N(Scheme_Object**, cnt);

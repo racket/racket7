@@ -68,23 +68,21 @@
    Bytecodes are not linear. They're actually trees of expression
    nodes.
 
-   Top-level variables (global or module) are referenced through the
-   Scheme stack, so that the variables can be "re-linked" each time a
-   module is instantiated. Syntax constants are similarly accessed
-   through the Scheme stack. The global variables and syntax objects
-   are sometimes called the "prefix", and scheme_push_prefix()
-   initializes the prefix portion of the stack. This prefix is
-   captured in a continuation that refers to global or module-level
-   variables (which is why the closure is not entirely flat). Special
-   GC support allows a prefix to be pruned to just the globals that
-   are used by live closures.
+   Top-level variables (imported or defined in a linklet) are
+   referenced through the Scheme stack, so that the variables can be
+   re-linked each time a linklet is instantiated. The top-level are
+   sometimes called the "prefix", and push_prefix() initializes the
+   prefix portion of the stack. This prefix is captured in a
+   continuation that refers to top-level variables (which is why the
+   closure is not entirely flat). Special GC support allows a prefix
+   to be pruned to just the globals that are used by live closures.
 
    Bytecode compilation:
 
    Compilation works in five passes.
 
    The first pass, called "compile", is the expander and compiler
-   front-end. See "compile.c", along with "compenv.c" and "module.c".
+   front-end. See "compile.c" along with "compenv.c".
 
    The second pass, called "letrec_check", determines which references
    to `letrec'-bound variables need to be guarded with a run-time
@@ -304,19 +302,6 @@ scheme_init_eval (Scheme_Env *env)
   GLOBAL_PRIM_W_ARITY("compiled-expression-recompile",           recompile,                             1, 1, env);
   GLOBAL_PRIM_W_ARITY("compile-syntax",                          compile_stx,                           1, 1, env);
   GLOBAL_PRIM_W_ARITY("compiled-expression?",                    compiled_p,                            1, 1, env);
-  GLOBAL_PRIM_W_ARITY("expand",                                  expand,                                1, 1, env);
-  GLOBAL_PRIM_W_ARITY("expand-syntax",                           expand_stx,                            1, 1, env);
-  GLOBAL_PRIM_W_ARITY("local-expand",                            local_expand,                          3, 4, env);
-  GLOBAL_PRIM_W_ARITY2("syntax-local-expand-expression",         local_expand_expr,                     1, 1, 2, 2, env);
-  GLOBAL_PRIM_W_ARITY("syntax-local-bind-syntaxes",              local_eval,                            3, 3, env);
-  GLOBAL_PRIM_W_ARITY("local-expand/capture-lifts",              local_expand_catch_lifts,              3, 5, env);
-  GLOBAL_PRIM_W_ARITY("local-transformer-expand",                local_transformer_expand,              3, 4, env);
-  GLOBAL_PRIM_W_ARITY("local-transformer-expand/capture-lifts",  local_transformer_expand_catch_lifts,  3, 5, env);
-  GLOBAL_PRIM_W_ARITY("expand-once",                             expand_once,                           1, 1, env);
-  GLOBAL_PRIM_W_ARITY("expand-syntax-once",                      expand_stx_once,                       1, 1, env);
-  GLOBAL_PRIM_W_ARITY("expand-to-top-form",                      expand_to_top_form,                    1, 1, env);
-  GLOBAL_PRIM_W_ARITY("expand-syntax-to-top-form",               expand_stx_to_top_form,                1, 1, env);
-  GLOBAL_PRIM_W_ARITY("namespace-syntax-introduce",              top_introduce_stx,                     1, 1, env);
   GLOBAL_PRIM_W_ARITY("break-enabled",                           enable_break,                          0, 1, env);
 
   GLOBAL_PARAMETER("current-eval",                      current_eval,             MZCONFIG_EVAL_HANDLER,          env);
@@ -794,227 +779,6 @@ void *scheme_enlarge_runstack(intptr_t size, void *(*k)())
   }
 
   return v;
-}
-
-/*========================================================================*/
-/*                           linking variables                            */
-/*========================================================================*/
-
-static Scheme_Object *link_module_variable(Scheme_Object *modidx,
-					   Scheme_Object *varname,
-					   int check_access, Scheme_Object *insp,
-					   int pos, int mod_phase,
-					   Scheme_Env *env, 
-                                           Scheme_Object **exprs, int which,
-                                           int flags, Scheme_Object *shape)
-{
-  Scheme_Object *modname;
-  Scheme_Env *menv;
-  Scheme_Bucket *bkt;
-  int self = 0;
-
-  /* If it's a name id, resolve the name. */
-  modname = scheme_module_resolve(modidx, 1);
-
-  if (env->module && SAME_OBJ(env->module->modname, modname)
-      && (env->mod_phase == mod_phase)) {
-    self = 1;
-    menv = env;
-  } else {
-    menv = scheme_module_access(modname, env, mod_phase);
-    
-    if (!menv) {
-      Scheme_Object *modsrc;
-      modsrc = (env->module
-                ? scheme_get_modsrc(env->module)
-                : scheme_false);
-      scheme_wrong_syntax("link", NULL, varname,
-			  "namespace mismatch;\n"
-                          " reference to a module that is not available\n"
-                          "  reference phase: %d\n"
-                          "  referenced module: %D\n"
-                          "  referenced phase level: %d\n"
-                          "  reference in module: %D",
-			  env->phase,
-                          modname,
-                          mod_phase,
-                          modsrc);
-      return NULL;
-    }
-
-    if (check_access && !SAME_OBJ(menv, env)) {
-      varname = scheme_check_accessible_in_module_instance(menv, varname, NULL,
-                                                           NULL, insp,
-                                                           pos, 0,
-                                                           NULL, NULL,
-                                                           env, NULL, NULL);
-    }
-  }
-
-  if (exprs) {
-    Scheme_Object *simplified;
-    if (self) {
-      simplified = varname;
-    } else {
-      if (flags & SCHEME_MODVAR_CONST) {
-        Scheme_Object *v;
-        v = scheme_make_vector((mod_phase != 0) ? 4 : 3, modname);
-        SCHEME_VEC_ELS(v)[1] = varname;
-        SCHEME_VEC_ELS(v)[2] = (shape ? shape : scheme_false);
-        if (mod_phase != 0)
-          SCHEME_VEC_ELS(v)[3] = scheme_make_integer(mod_phase);
-        simplified = v;
-      } else {
-        Scheme_Object *v = modname;
-        if (mod_phase != 0)
-          v = scheme_make_pair(v, scheme_make_integer(mod_phase));
-        v = scheme_make_pair(varname, v);
-        simplified = v;
-      }
-      simplified = scheme_make_mutable_pair(simplified, exprs[which]);
-    }
-    exprs[which] = simplified;
-  }
-
-  bkt = scheme_global_bucket(varname, menv);
-  if (!self) {
-    const char *bad_reason = NULL;
-
-    if (!bkt->val) {
-      bad_reason = "is uninitialized";
-    } else if (flags) {
-      if (flags & SCHEME_MODVAR_CONST) {
-        if (!(((Scheme_Bucket_With_Flags *)bkt)->flags & GLOB_IS_CONSISTENT))
-          bad_reason = "is not a procedure or structure-type constant across all instantiations";
-        else if (shape && SCHEME_TRUEP(shape)) {
-          if (!scheme_get_or_check_procedure_shape(bkt->val, shape))
-            bad_reason = "has the wrong procedure or structure-type shape";
-        }
-      } else {
-        if (!(((Scheme_Bucket_With_Flags *)bkt)->flags & (GLOB_IS_CONST | GLOB_IS_IMMUTATED)))
-          bad_reason = "is not constant";
-      }
-    }
-
-    if (bad_reason) {
-      Scheme_Object *modsrc;
-      modsrc = (env->module
-                ? scheme_get_modsrc(env->module)
-                : scheme_false);
-      scheme_wrong_syntax("link", NULL, varname,
-                          "bad variable linkage;\n"
-                          " reference to a variable that %s\n"
-                          "  reference phase level: %d\n"
-                          "  variable module: %D\n"
-                          "  variable phase: %d\n"
-                          "  reference in module: %D",
-                          bad_reason,
-                          env->phase,
-                          modname,
-                          mod_phase,
-                          modsrc);
-    }
-
-    if (!(((Scheme_Bucket_With_Flags *)bkt)->flags & (GLOB_IS_IMMUTATED | GLOB_IS_LINKED)))
-      ((Scheme_Bucket_With_Flags *)bkt)->flags |= GLOB_IS_LINKED;
-  }
-
-  return (Scheme_Object *)bkt;
-}
-
-static Scheme_Object *link_toplevel(Scheme_Object **exprs, int which, Scheme_Env *env,
-                                    Scheme_Object *src_modidx, 
-                                    Scheme_Object *dest_modidx,
-                                    Scheme_Object *insp)
-{
-  Scheme_Object *expr = exprs[which];
-
-  if (SCHEME_MPAIRP(expr)) {
-    /* Simplified reference was installed by link_module_variable;
-       simplified is in CAR, and original is in CDR */
-    expr = SCHEME_CAR(expr);
-  }
-
-  if (SCHEME_FALSEP(expr)) {
-    /* See scheme_make_environment_dummy */
-    Scheme_Bucket *b;
-    b = scheme_global_bucket(scheme_stack_dump_key, env);
-    if (!(((Scheme_Bucket_With_Flags *)b)->flags & GLOB_STRONG_HOME_LINK)) {
-      ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_STRONG_HOME_LINK;
-      ((Scheme_Bucket_With_Home *)b)->home_link = (Scheme_Object *)env;
-    }
-    return (Scheme_Object *)b;
-  } else if (SCHEME_PAIRP(expr) || SCHEME_SYMBOLP(expr) || SCHEME_VECTORP(expr)) {
-    /* Simplified module reference (as installed by link_module_variable) */
-    Scheme_Object *modname, *varname, *shape;
-    int mod_phase = 0, flags = 0;
-    if (SCHEME_SYMBOLP(expr)) {
-      if (!env->module) {
-        /* compiled as a module variable, but instantiated in a non-module
-           namespace; grab a bucket */
-        return (Scheme_Object *)scheme_global_bucket(expr, env);
-      } else {
-        varname = expr;
-        modname = env->module->modname;
-        mod_phase = env->mod_phase;
-      }
-      shape = NULL;
-    } else if (SCHEME_PAIRP(expr)) {
-      varname = SCHEME_CAR(expr);
-      modname = SCHEME_CDR(expr);
-      if (SCHEME_PAIRP(modname)) {
-        mod_phase = SCHEME_INT_VAL(SCHEME_CDR(modname));
-        modname = SCHEME_CAR(modname);
-      }
-      shape = NULL;
-    } else {
-      modname = SCHEME_VEC_ELS(expr)[0];
-      varname = SCHEME_VEC_ELS(expr)[1];
-      flags = SCHEME_MODVAR_CONST;
-      shape = SCHEME_VEC_ELS(expr)[2];
-      if (SCHEME_VEC_SIZE(expr) > 3)
-        mod_phase = SCHEME_INT_VAL(SCHEME_VEC_ELS(expr)[3]);
-    }
-    return link_module_variable(modname,
-                                varname,
-                                0, NULL,
-                                -1, mod_phase,
-                                env, 
-                                NULL, 0,
-                                flags, shape);
-  } else if (SAME_TYPE(SCHEME_TYPE(expr), scheme_variable_type)) {
-    Scheme_Bucket *b = (Scheme_Bucket *)expr;
-    Scheme_Env *home;
-
-    home = scheme_get_bucket_home(b);
-    
-    if (!env)
-      return (Scheme_Object *)b;
-    else if (!home || !home->module)
-      return (Scheme_Object *)scheme_global_bucket((Scheme_Object *)b->key, env);
-    else
-      return link_module_variable(home->module->modname,
-				  (Scheme_Object *)b->key,
-				  1, home->access_insp,
-				  -1, home->mod_phase,
-				  env, 
-                                  exprs, which,
-                                  0, NULL);
-  } else {
-    Module_Variable *mv = (Module_Variable *)expr;
-
-    if ((!insp || SCHEME_FALSEP(insp)) && !mv->insp)
-      insp = scheme_get_param(scheme_current_config(), MZCONFIG_CODE_INSPECTOR);
-
-    return link_module_variable(scheme_modidx_shift(mv->modidx,
-                                                    src_modidx,
-                                                    dest_modidx),
-				mv->sym, 1, (mv->insp ? mv->insp : insp),
-				mv->pos, mv->mod_phase,
-				env,
-                                exprs, which,
-                                SCHEME_MODVAR_FLAGS(mv) & 0x3, mv->shape);
-  }
 }
 
 /*========================================================================*/
@@ -1935,28 +1699,17 @@ void scheme_install_macro(Scheme_Bucket *b, Scheme_Object *v)
   b->val = macro;
 }
 
-static Scheme_Object *
-define_execute_with_dynamic_state(Scheme_Object *vec, int delta, int defmacro,
-                                  Resolve_Prefix *rp, Scheme_Env *dm_env, 
-                                  Scheme_Dynamic_State *dyn_state)
+static Scheme_Object *define_values_execute(Scheme_Object *data)
 {
   Scheme_Object *name, *macro, *vals_expr, *vals, *var;
+  int delta = 1;
   int i, g, show_any;
   Scheme_Bucket *b;
   Scheme_Object **save_runstack = NULL;
 
   vals_expr = SCHEME_VEC_ELS(vec)[0];
 
-  if (dm_env) {
-    scheme_prepare_exp_env(dm_env);
-
-    save_runstack = scheme_push_prefix(dm_env->exp_env, 0, rp, NULL, NULL, 1, 1, NULL, scheme_false);
-    vals = scheme_eval_linked_expr_multi_with_dynamic_state(vals_expr, dyn_state);
-    scheme_pop_prefix(save_runstack);
-  } else {
-    vals = _scheme_eval_linked_expr_multi(vals_expr);
-    dm_env = NULL;
-  }
+  vals = _scheme_eval_linked_expr_multi(vals_expr);
 
   if (SAME_OBJ(vals, SCHEME_MULTIPLE_VALUES)) {
     Scheme_Object **values;
@@ -1972,43 +1725,28 @@ define_execute_with_dynamic_state(Scheme_Object *vec, int delta, int defmacro,
 	scheme_current_thread->values_buffer = NULL;
       scheme_current_thread->ku.multiple.array = NULL;
 
-      if (dm_env)
-        is_st = 0;
-      else
-        is_st = !!scheme_is_simple_make_struct_type(vals_expr, g, 1, 0, 1, 
-                                                    NULL, NULL,
-                                                    NULL, NULL, MZ_RUNSTACK, 0, 
-                                                    NULL, NULL, 5);
+      is_st = !!scheme_is_simple_make_struct_type(vals_expr, g, 1, 0, 1, 
+                                                  NULL, NULL,
+                                                  NULL, NULL, MZ_RUNSTACK, 0, 
+                                                  NULL, NULL, 5);
       
       for (i = 0; i < g; i++) {
+	Scheme_Prefix *toplevels;
+
         var = SCHEME_VEC_ELS(vec)[i+delta];
-	if (dm_env) {
-	  b = scheme_global_keyword_bucket(var, dm_env);
-
-	  macro = scheme_alloc_small_object();
-	  macro->type = scheme_macro_type;
-	  SCHEME_PTR_VAL(macro) = values[i];
-
-	  scheme_set_global_bucket("define-syntaxes", b, macro, 1);
-	  scheme_shadow(dm_env, (Scheme_Object *)b->key, macro, 0);
-	} else {
-	  Scheme_Prefix *toplevels;
-	  toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
-	  b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
+        toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
+        b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
 	
-	  scheme_set_global_bucket("define-values", b, values[i], 1);
-	  scheme_shadow(scheme_get_bucket_home(b), (Scheme_Object *)b->key, values[i], 1);
-
-	  if (SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL) {
-            if (is_st)
-              ((Scheme_Bucket_With_Flags *)b)->flags |= (GLOB_IS_IMMUTATED | GLOB_IS_CONSISTENT);
-            else
-              ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_IS_IMMUTATED;
-	  }
+        scheme_set_global_bucket("define-values", b, values[i], 1);
+        scheme_shadow(scheme_get_bucket_home(b), (Scheme_Object *)b->key, values[i], 1);
+        
+        if (SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL) {
+          if (is_st)
+            ((Scheme_Bucket_With_Flags *)b)->flags |= (GLOB_IS_IMMUTATED | GLOB_IS_CONSISTENT);
+          else
+            ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_IS_IMMUTATED;
 	}
       }
-      if (defmacro)
-	scheme_pop_prefix(save_runstack);
 	
       return scheme_void;
     } else {
@@ -2016,66 +1754,36 @@ define_execute_with_dynamic_state(Scheme_Object *vec, int delta, int defmacro,
         scheme_current_thread->values_buffer = NULL;
     }
   } else if (SCHEME_VEC_SIZE(vec) == delta + 1) { /* => single var */
+    Scheme_Prefix *toplevels;
+
     var = SCHEME_VEC_ELS(vec)[delta];
-    if (dm_env) {
-      b = scheme_global_keyword_bucket(var, dm_env);
+    toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
+    b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
 
-      macro = scheme_alloc_small_object();
-      macro->type = scheme_macro_type;
-      SCHEME_PTR_VAL(macro) = vals;
+    scheme_set_global_bucket("define-values", b, vals, 1);
+    scheme_shadow(scheme_get_bucket_home(b), (Scheme_Object *)b->key, vals, 1);
       
-      scheme_set_global_bucket("define-syntaxes", b, macro, 1);
-      scheme_shadow(dm_env, (Scheme_Object *)b->key, macro, 0);
-    } else {
-      Scheme_Prefix *toplevels;
-      toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
-      b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
-
-      scheme_set_global_bucket("define-values", b, vals, 1);
-      scheme_shadow(scheme_get_bucket_home(b), (Scheme_Object *)b->key, vals, 1);
-      
-      if (SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL) {
-        int flags = GLOB_IS_IMMUTATED;
-        if (scheme_is_statically_proc(vals_expr, NULL, OMITTABLE_RESOLVED))
-          flags |= GLOB_IS_CONSISTENT;
-        ((Scheme_Bucket_With_Flags *)b)->flags |= flags;
-      }
-      
-      if (defmacro)
-	scheme_pop_prefix(save_runstack);
+    if (SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL) {
+      int flags = GLOB_IS_IMMUTATED;
+      if (scheme_is_statically_proc(vals_expr, NULL, OMITTABLE_RESOLVED))
+        flags |= GLOB_IS_CONSISTENT;
+      ((Scheme_Bucket_With_Flags *)b)->flags |= flags;
     }
 
     return scheme_void;
   } else
     g = 1;
-
-  /* Special handling of 0 values for define-syntaxes:
-     just create binding. This makes (define-values (a b c) (values))
-     a kind of declaration form, which is useful is
-     a, b, or c is introduced by a macro. */
-  if (dm_env && !g) {
-    for (i = SCHEME_VEC_SIZE(vec) - delta; i--; ) {
-      b = scheme_global_keyword_bucket(SCHEME_VEC_ELS(vec)[i+delta], dm_env);
-      scheme_shadow(dm_env, (Scheme_Object *)b->key, scheme_false, 1);
-    }
-    return scheme_void;
-  }
   
   i = SCHEME_VEC_SIZE(vec) - delta;
 
   show_any = i;
 
   if (show_any) {
+    Scheme_Prefix *toplevels;
     var = SCHEME_VEC_ELS(vec)[delta];
-    if (dm_env) {
-      b = scheme_global_keyword_bucket(var, dm_env);
-      name = (Scheme_Object *)b->key;
-    } else {
-      Scheme_Prefix *toplevels;
-      toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
-      b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
-      name = (Scheme_Object *)b->key;
-    }
+    toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
+    b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
+    name = (Scheme_Object *)b->key;
   } else
     name = NULL;
   
@@ -2084,9 +1792,7 @@ define_execute_with_dynamic_state(Scheme_Object *vec, int delta, int defmacro,
 
     symname = (show_any ? scheme_symbol_name(name) : "");
 
-    scheme_wrong_return_arity((defmacro 
-			       ? "define-syntaxes"
-			       : "define-values"),
+    scheme_wrong_return_arity("define-values",
 			      i, g,
 			      (g == 1) ? (Scheme_Object **)vals : scheme_current_thread->ku.multiple.array,
 			      "\n  in: %s%s%s",
@@ -2096,11 +1802,6 @@ define_execute_with_dynamic_state(Scheme_Object *vec, int delta, int defmacro,
   }
 
   return NULL;
-}
-
-static Scheme_Object *define_values_execute(Scheme_Object *data)
-{
-  return define_execute_with_dynamic_state(data, 1, 0, NULL, NULL, NULL);
 }
 
 static Scheme_Object *set_execute (Scheme_Object *data)
@@ -2303,28 +2004,6 @@ static Scheme_Object *begin0_execute(Scheme_Object *obj)
   }
 
   return v;
-}
-
-static Scheme_Object *splice_one_expr(void *expr, int argc, Scheme_Object **argv)
-{
-  return _scheme_eval_linked_expr_multi((Scheme_Object *)expr);
-}
-
-static Scheme_Object *splice_execute(Scheme_Object *data)
-{
-  if (SAME_TYPE(SCHEME_TYPE(data), scheme_splice_sequence_type)) {
-    Scheme_Sequence *seq = (Scheme_Sequence *)data;
-    int i, cnt = seq->count - 1;
-    
-    for (i = 0; i < cnt; i++) {
-      ignore_result(_scheme_call_with_prompt_multi(splice_one_expr, seq->array[i]));
-    }
-    
-    return _scheme_eval_linked_expr_multi(seq->array[cnt]);
-  } else {
-    /* sequence was optimized on read? */
-    return _scheme_eval_linked_expr_multi(data);
-  }
 }
 
 /*========================================================================*/
@@ -4153,174 +3832,93 @@ Scheme_Object *scheme_eval_multi_with_prompt(Scheme_Object *obj, Scheme_Env *env
                                        scheme_make_pair(expr, (Scheme_Object *)env));
 }
 
-static void *eval_k(void)
+static void *instantiate_linklet_k(void)
 {
   Scheme_Thread *p = scheme_current_thread;
-  Scheme_Object *v, **save_runstack;
+  Scheme_Linklet *linklet = (Scheme_Linklet *)p->ku.k.p1;
+  Scheme_Env *instances = (Scheme_Env *)p->ku.k.p2;
+  Scheme_Env **instances = (Scheme_Env **)p->ku.k.p3;
+  int multi = p->ku.k.i1;
+  int num_instances = p->ku.k.i2;
+  Scheme_Object *b;
+  Scheme_Object **save_runstack;
   Resolve_Prefix *rp;
   Scheme_Env *env;
-  int isexpr, multi, use_jit, as_tail;
 
-  v = (Scheme_Object *)p->ku.k.p1;
-  env = (Scheme_Env *)p->ku.k.p2;
   p->ku.k.p1 = NULL;
   p->ku.k.p2 = NULL;
-  multi = p->ku.k.i1;
-  isexpr = p->ku.k.i2;
-  as_tail = p->ku.k.i3;
+  p->ku.k.p3 = NULL;
 
-  {
-    Scheme_Object *b;
-    b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
-    use_jit = SCHEME_TRUEP(b);
+  depth = linklet->max_let_depth;  
+  if (!scheme_check_runstack(depth)) {
+    p->ku.k.p1 = top;
+    p->ku.k.p2 = instance;
+    p->ku.k.p3 = instances;
+    p->ku.k.i1 = multi;
+    p->ku.k.i2 = num_instances;
+    return (Scheme_Object *)scheme_enlarge_runstack(depth, instantiate_linklet_k);
   }
 
-  if (isexpr) {
-    if (multi)
-      v = _scheme_eval_linked_expr_multi_wp(v, p);
-    else
-      v = _scheme_eval_linked_expr_wp(v, p);
-  } else if (SAME_TYPE(SCHEME_TYPE(v), scheme_compilation_top_type)) {
-    Scheme_Compilation_Top *top = (Scheme_Compilation_Top *)v;
-    int depth;
+  b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
 
-    if (!top->prefix)
-      depth = 0;
-    else
-      depth = top->max_let_depth + scheme_prefix_depth(top->prefix);
+  if (SCHEME_TRUEP(b))
+    linklet = scheme_jit_linklet(linklet);
+  else
+    linklet = scheme_eval_clone(linklet);
 
-    if (!scheme_check_runstack(depth)) {
-      p->ku.k.p1 = top;
-      p->ku.k.p2 = env;
-      p->ku.k.i1 = multi;
-      p->ku.k.i2 = 0;
-      return (Scheme_Object *)scheme_enlarge_runstack(depth, eval_k);
-    }
-
-    v = top->code;
-
-    if (!top->prefix) {
-      /* top->code is shared module code */
-      scheme_module_execute(top->code, env);
-      v = scheme_void;
-    } else {
-      if (use_jit)
-        v = scheme_jit_expr(v);
-      else
-        v = scheme_eval_clone(v);
-      rp = scheme_prefix_eval_clone(top->prefix);
-
-      scheme_install_binding_names(top->binding_namess, env);
-
-      save_runstack = scheme_push_prefix(env, 0, rp, NULL, NULL, 0, env->phase, NULL, scheme_false);
-
-      if (as_tail) {
-        /* Cons up a closure to capture the prefix */
-        Scheme_Lambda *data;
-        mzshort *map;
-        int i, sz;
-
-        sz = (save_runstack XFORM_OK_MINUS MZ_RUNSTACK);
-        map = (mzshort *)scheme_malloc_atomic(sizeof(mzshort) * sz);
-        for (i = 0; i < sz; i++) {
-          map[i] = i;
-        }
-
-        data = MALLOC_ONE_TAGGED(Scheme_Lambda);
-        data->iso.so.type = scheme_ir_lambda_type;
-        data->num_params = 0;
-        data->max_let_depth = top->max_let_depth + sz;
-        data->closure_size = sz;
-        data->closure_map = map;
-        data->body = v;
-
-        v = scheme_make_closure(p, (Scheme_Object *)data, 1);
-
-        v = _scheme_tail_apply(v, 0, NULL);
-      } else if (multi)
-        v = _scheme_eval_linked_expr_multi_wp(v, p);
-      else
-        v = _scheme_eval_linked_expr_wp(v, p);
-
-      scheme_pop_prefix(save_runstack);
-    }
-  } else {
-    v = scheme_void;
+  for (i = linklet->num_exports; i--; ) {
+    scheme_hash_set(instance->exports, linklet->exports[i], linklet->defns[i]);
   }
 
+  save_runstack = push_prefix(linklet, instance, num_instances, instances);
+
+  if (multi)
+    v = _scheme_eval_linked_expr_multi_wp(v, p);
+  else
+    v = _scheme_eval_linked_expr_wp(v, p);
+
+  pop_prefix(save_runstack);
+  
   return (void *)v;
 }
 
-static Scheme_Object *_eval(Scheme_Object *obj, Scheme_Env *env, 
-			    int isexpr, int multi, int top, int as_tail)
+static Scheme_Object *instantiate_linklet(Scheme_Linklet *linket, Scheme_Env *instance, Scheme_Env *env,
+                                          int num_instances, Scheme_Env **instances,
+                                          int multi, int top)
 {
   Scheme_Thread *p = scheme_current_thread;
   
-  p->ku.k.p1 = obj;
-  p->ku.k.p2 = env;
+  p->ku.k.p1 = linklet;
+  p->ku.k.p2 = instance;
+  p->ku.k.p3 = instances;
+  
   p->ku.k.i1 = multi;
-  p->ku.k.i2 = isexpr;
-  p->ku.k.i3 = as_tail;
+  p->ku.k.i2 = num_instances;
 
   if (top)
-    return (Scheme_Object *)scheme_top_level_do(eval_k, 1);
+    return (Scheme_Object *)scheme_top_level_do(instantiate_linklet_k, 1);
   else
-    return (Scheme_Object *)eval_k();
+    return (Scheme_Object *)instantiate_linklet_k();
 }
 
-Scheme_Object *scheme_eval_compiled(Scheme_Object *obj, Scheme_Env *env)
+Scheme_Object *scheme_instiantate_linklet(Scheme_Linklet *linklet, Scheme_Env *instance, int num_instances, Scheme_Env **instances)
 {
-  return _eval(obj, env, 0, 0, 1, 0);
+  return _eval(linklet, instance, num_instances, instances, 0, 1);
 }
 
-Scheme_Object *scheme_eval_compiled_multi(Scheme_Object *obj, Scheme_Env *env)
+Scheme_Object *scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme_Env *instance, int num_instances, Scheme_Env **instances)
 {
-  return _eval(obj, env, 0, 1, 1, 0);
+  return _eval(linklet, instance, num_instances, instances, 1, 1);
 }
 
-Scheme_Object *_scheme_eval_compiled(Scheme_Object *obj, Scheme_Env *env)
+Scheme_Object *_scheme_instiantate_linklet(Scheme_Linklet *linklet, Scheme_Env *instance, int num_instances, Scheme_Env **instances)
 {
-  return _eval(obj, env, 0, 0, 0, 0);
+  return _eval(linklet, instance, num_instances, instances, 0, 0);
 }
 
-Scheme_Object *_scheme_eval_compiled_multi(Scheme_Object *obj, Scheme_Env *env)
+Scheme_Object *_scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme_Env *instance, int num_instances, Scheme_Env **instances)
 {
-  return _eval(obj, env, 0, 1, 0, 0);
-}
-
-static Scheme_Object *finish_compiled_multi_with_prompt(void *_data, int argc, Scheme_Object **argv)
-{
-  Scheme_Object *data = (Scheme_Object *)_data;
-  return _eval(SCHEME_CAR(data), (Scheme_Env *)SCHEME_CDR(data), 0, 1, 0, 0);
-}
-
-Scheme_Object *_eval_compiled_multi_with_prompt(Scheme_Object *obj, Scheme_Env *env)
-{
-  return _scheme_call_with_prompt_multi(finish_compiled_multi_with_prompt,
-                                        scheme_make_pair(obj, (Scheme_Object *)env));
-}
-
-Scheme_Object *scheme_eval_linked_expr(Scheme_Object *obj)
-{
-  return _eval(obj, NULL, 1, 0, 1, 0);
-}
-
-Scheme_Object *scheme_eval_linked_expr_multi(Scheme_Object *obj)
-{
-  return _eval(obj, NULL, 1, 1, 1, 0);
-}
-
-Scheme_Object *scheme_eval_linked_expr_multi_with_dynamic_state(Scheme_Object *obj, Scheme_Dynamic_State *dyn_state)
-{
-  Scheme_Thread *p = scheme_current_thread;
-  
-  p->ku.k.p1 = obj;
-  p->ku.k.p2 = NULL;
-  p->ku.k.i1 = 1;
-  p->ku.k.i2 = 1;
-  p->ku.k.i3 = 0;
-
-    return (Scheme_Object *)scheme_top_level_do_worker(eval_k, 1, 0, dyn_state);
+  return _eval(linklet, instance, num_instances, instances, 1, 0);
 }
 
 Scheme_Object *scheme_tail_eval_expr(Scheme_Object *obj)
@@ -4816,102 +4414,66 @@ int scheme_prefix_depth(Resolve_Prefix *rp)
     return 0;
 }
 
-Scheme_Object **scheme_push_prefix(Scheme_Env *genv, int already_linked, Resolve_Prefix *rp,
-				   Scheme_Object *src_modidx, Scheme_Object *now_modidx,
-				   int src_phase, int now_phase,
-                                   Scheme_Env *dummy_env, Scheme_Object *insp)
+static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *instance,
+                                   int num_instances, Scheme_Object **instances)
 {
   Scheme_Object **rs_save, **rs, *v;
   Scheme_Prefix *pf;
-  int i, j, tl_map_len;
+  int i, j, pos, tl_map_len;
 
   rs_save = rs = MZ_RUNSTACK;
 
-  if (rp->num_toplevels || rp->num_stxes || rp->num_lifts) {
-    i = rp->num_toplevels;
-    if (rp->num_stxes) {
-      i += rp->num_stxes + 1;
-    }
-    i += rp->num_lifts;
+  i = 0;
+  for (j = linklet->num_importss; j--; ) {
+    i += linklet->num_imports[j];
+  }
+  i += linklet->num_exports;
+  tl_map_len = (i + 31) / 32;
 
-    tl_map_len = ((rp->num_toplevels + rp->num_lifts + (rp->num_stxes ? 1 : 0)) + 31) / 32;
+  pf = scheme_malloc_tagged(sizeof(Scheme_Prefix) 
+                            + ((i-mzFLEX_DELTA) * sizeof(Scheme_Object *))
+                            + (tl_map_len * sizeof(int)));
+  pf->iso.so.type = scheme_prefix_type;
+  pf->num_slots = i;
+  --rs;
+  MZ_RUNSTACK = rs;
+  rs[0] = (Scheme_Object *)pf;
 
-    pf = scheme_malloc_tagged(sizeof(Scheme_Prefix) 
-                              + ((i-mzFLEX_DELTA) * sizeof(Scheme_Object *))
-                              + (tl_map_len * sizeof(int)));
-    pf->iso.so.type = scheme_prefix_type;
-    pf->num_slots = i;
-    pf->num_toplevels = rp->num_toplevels;
-    pf->num_stxes = rp->num_stxes;
-    --rs;
-    MZ_RUNSTACK = rs;
-    rs[0] = (Scheme_Object *)pf;
-   
-    for (i = 0; i < rp->num_toplevels; i++) {
-      v = rp->toplevels[i];
-      if (!already_linked || SCHEME_FALSEP(v))
-	v = link_toplevel(rp->toplevels, i, genv ? genv : dummy_env, src_modidx, now_modidx, insp);
-      else if (SAME_TYPE(SCHEME_TYPE(v), scheme_module_variable_type)) {
-        /* not already linked, after all */
-        v = link_toplevel(rp->toplevels, i, genv, src_modidx, now_modidx, insp);
+  pos = 0;
+  for (j = 0; j < linklet->num_importss; j++) {
+    for (i = 0; i < linklet->num_imports[j]; i++) {
+      v = scheme_hash_ref(instances[j], linklet->importss[j][i]);
+      if (!v) {
+        scheme_signal_error("instantiate-linklet: mismatch;\n"
+                            " possibly, bytecode file needs re-compile because dependencies changed\n"
+                            "  name: %V\n"
+                            "  exporting instance: %V\n"
+                            "  importing instance: %V",
+                            linklet->importss[j][i],
+                            instances[j]->name,
+                            instance->name);
       }
-      pf->a[i] = v;
+      v = scheme_global_bucket(v, (Scheme_Env *)instances[j]);
+      pf->a[pos++] = v;
     }
+  }
 
-    if (rp->num_stxes) {
-      if (insp && SCHEME_FALSEP(insp))
-        insp = scheme_get_current_inspector();
-      i = rp->num_toplevels;
-      v = scheme_make_shift(scheme_make_integer(now_phase - src_phase), 
-                            src_modidx, now_modidx, 
-                            !already_linked ? genv->module_registry->exports : NULL,
-                            rp->src_insp_desc, insp);
-      if (v || (rp->delay_info_rpair && SCHEME_CDR(rp->delay_info_rpair))) {
-	/* Put lazy-shift info in pf->a[i]: */
-        Scheme_Object **ls;
-        ls = MALLOC_N(Scheme_Object *, 2);
-        ls[0] = v;
-        ls[1] = (Scheme_Object *)rp;
-	pf->a[i] = (Scheme_Object *)ls;
-	/* Rest of a left zeroed, to be filled in lazily by quote-syntax evaluation */
-      } else {
-        /* No shift, so fill in stxes immediately */
-	i++;
-	for (j = 0; j < rp->num_stxes; j++) {
-	  pf->a[i + j] = rp->stxes[j];
-	}
-      }
-      j = rp->num_stxes + 1;
-    } else
-      j = 0;
-
-    if (rp->num_lifts) {
-      Scheme_Object *sym, *home;
-      sym = scheme_make_symbol("<lifted>"); /* uninterned! */
-      j += rp->num_toplevels;
-      home = (Scheme_Object *)scheme_get_home_weak_link(genv);
-      for (i = 0; i < rp->num_lifts; i++, j++) {
-        v = (Scheme_Object *)MALLOC_ONE_TAGGED(Scheme_Bucket_With_Home);
-        v->type = scheme_variable_type;
-        ((Scheme_Bucket_With_Flags *)v)->flags = GLOB_HAS_HOME_PTR;
-        ((Scheme_Bucket_With_Home *)v)->home_link = home;
-        ((Scheme_Bucket *)v)->key = (char *)sym;
-        pf->a[j] = v;
-      }
-    }
+  for (i = 0; i < linklet->num_exports; i++) {
+    v = get_instance_variable_bucket(instance, linklet->exports[i], 1);
+    pf->a[pos++] = v;
   }
 
   return rs_save;
 }
 
-void scheme_pop_prefix(Scheme_Object **rs)
+static void pop_prefix(Scheme_Object **rs)
 {
   /* This function must not allocate, since a relevant multiple-values
      result may be in the thread record (and we don't want it zerod) */
   MZ_RUNSTACK = rs;
 }
 
-Scheme_Object *scheme_suspend_prefix(Scheme_Object **rs)
+static Scheme_Object *suspend_prefix(Scheme_Object **rs)
 {
   if (rs != MZ_RUNSTACK) {
     Scheme_Object *v;
@@ -4922,7 +4484,7 @@ Scheme_Object *scheme_suspend_prefix(Scheme_Object **rs)
     return NULL;
 }
 
-Scheme_Object **scheme_resume_prefix(Scheme_Object *v)
+static Scheme_Object **resume_prefix(Scheme_Object *v)
 {
   if (v) {
     --MZ_RUNSTACK;
@@ -4957,7 +4519,7 @@ static void mark_pruned_prefixes(struct NewGC *gc) XFORM_SKIP_PROC
       /* If not marked, only references are through closures: */
       if (!GC_is_marked2(pf, gc)) {
         /* Clear slots that are not use in map */
-        maxpos = (pf->num_slots - pf->num_stxes);
+        maxpos = pf->num_slots;
         use_bits = PREFIX_TO_USE_BITS(pf);
         for (i = (maxpos + 31) / 32; i--; ) {
           int j;
@@ -4965,21 +4527,7 @@ static void mark_pruned_prefixes(struct NewGC *gc) XFORM_SKIP_PROC
             if (!(use_bits[i] & ((unsigned)1 << j))) {
               int pos;
               pos = (i * 32) + j;
-              if (pos < pf->num_toplevels)
-                pf->a[pos] = NULL; /* top level */
-              else if (pos < maxpos) {
-                if (pf->num_stxes) {
-                  if (pos == pf->num_toplevels) {
-                    /* any syntax object */
-                    int k;
-                    for (k = pf->num_stxes+1; k--;) {
-                      pf->a[k + pf->num_toplevels] = NULL;
-                    }
-                  } else
-                    pf->a[pos + pf->num_stxes] = NULL; /* lifted */
-                } else
-                  pf->a[pos] = NULL; /* lifted */
-              }
+              pf->a[pos] = NULL;
             }
           }
           use_bits[i] = 0;
@@ -4998,7 +4546,7 @@ static void mark_pruned_prefixes(struct NewGC *gc) XFORM_SKIP_PROC
 
       /* Clear use map */
       use_bits = PREFIX_TO_USE_BITS(pf);
-      maxpos = (pf->num_slots - pf->num_stxes);
+      maxpos = pf->num_slots;
       for (i = (maxpos + 31) / 32; i--; )
         use_bits[i] = 0;
 

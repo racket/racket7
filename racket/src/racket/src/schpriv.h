@@ -3088,20 +3088,17 @@ Scheme_Object *scheme_case_lambda_jit(Scheme_Object *expr);
 /*                   linklet instance and environment                     */
 /*========================================================================*/
 
-struct Scheme_Linklet_Instance {
-  Scheme_Object so; /* scheme_linklet_instance_type */
-
-  signed char disallow_unbound;
-
-  Scheme_Bucket_Table *variables;
-
-  Scheme_Object *weak_self_link; /* for Scheme_Bucket_With_Home */
-};
-
+/* A Scheme_Env is a linklet instance */
 struct Scheme_Env {
   Scheme_Object so; /* scheme_env_type */
 
-  Scheme_Linklet_Instance *toplevel;
+  Scheme_Object *name;
+  Scheme_Object *data;
+
+  Scheme_Hash_Table *exports; /* (symbol -> symbol) */
+
+  Scheme_Bucket_Table *variables;
+  Scheme_Object *weak_self_link; /* for Scheme_Bucket_With_Home */
 };
 
 typedef struct Scheme_Linklet
@@ -3125,9 +3122,12 @@ typedef struct Scheme_Linklet
   Scheme_Object **exports; /* array of id-or-symbol (extenal names); unreadable starting "?" was generated */
   int num_defns; /* can be < num_exports until after resolve */
   Scheme_Object **defns; /* array of id-or-symbol (internal names); parallel to `exports` */
-
+  in num_lifts; /* this many at the tail of `defns` are from resolve lifts */
+  
   int num_bodies;
   Scheme_Object **bodies;
+
+  int max_let_depth;
 } Scheme_Linklet;
 
 /* Definition and references share the same object during the
