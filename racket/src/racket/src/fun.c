@@ -1188,38 +1188,6 @@ static Scheme_Prompt *allocate_prompt(Scheme_Prompt **cached_prompt) {
   return prompt;
 }
 
-static void save_dynamic_state(Scheme_Thread *thread, Scheme_Dynamic_State *state) {
-    state->current_local_env = thread->current_local_env;
-    state->scope             = thread->current_local_scope;
-    state->use_scope         = thread->current_local_use_scope;
-    state->name              = thread->current_local_name;
-    state->modidx            = thread->current_local_modidx;
-    state->menv              = thread->current_local_menv;
-}
-
-static void restore_dynamic_state(Scheme_Dynamic_State *state, Scheme_Thread *thread) {
-    thread->current_local_env     = state->current_local_env;
-    thread->current_local_scope   = state->scope;
-    thread->current_local_use_scope = state->use_scope;
-    thread->current_local_name    = state->name;
-    thread->current_local_modidx  = state->modidx;
-    thread->current_local_menv    = state->menv;
-}
-
-void scheme_set_dynamic_state(Scheme_Dynamic_State *state, Scheme_Comp_Env *env,
-                              Scheme_Object *scope, Scheme_Object *use_scope,
-                              Scheme_Object *name, 
-                              Scheme_Env *menv,
-                              Scheme_Object *modidx)
-{
-  state->current_local_env = env;
-  state->scope             = scope;
-  state->use_scope         = use_scope;
-  state->name              = name;
-  state->modidx            = modidx;
-  state->menv              = menv;
-}
-
 static void *apply_again_k(void)
 {
   Scheme_Thread *p = scheme_current_thread;
@@ -1242,7 +1210,7 @@ void *scheme_top_level_do(void *(*k)(void), int eb) {
     return scheme_top_level_do_worker(k, eb, 0, NULL);
 }
 
-void *scheme_top_level_do_worker(void *(*k)(void), int eb, int new_thread, Scheme_Dynamic_State *dyn_state)
+void *scheme_top_level_do_worker(void *(*k)(void), int eb, int new_thread)
 {
   /* Wraps a function `k' with a handler for stack overflows and
      barriers to full-continuation jumps. No barrier if !eb. */
@@ -1251,7 +1219,6 @@ void *scheme_top_level_do_worker(void *(*k)(void), int eb, int new_thread, Schem
   mz_jmp_buf *save;
   mz_jmp_buf newbuf;
   Scheme_Stack_State envss;
-  Scheme_Dynamic_State save_dyn_state;
   Scheme_Thread * volatile p = scheme_current_thread;
   volatile int old_pcc = scheme_prompt_capture_count;
   Scheme_Cont_Frame_Data cframe;
@@ -1288,12 +1255,6 @@ void *scheme_top_level_do_worker(void *(*k)(void), int eb, int new_thread, Schem
   while (1) {
 
     scheme_save_env_stack_w_thread(envss, p);
-    save_dynamic_state(p, &save_dyn_state);
-    
-    if (dyn_state) {
-      restore_dynamic_state(dyn_state, p);
-      dyn_state = NULL;
-    }
     
     if (prompt) {
       scheme_push_continuation_frame(&cframe);
@@ -1337,7 +1298,6 @@ void *scheme_top_level_do_worker(void *(*k)(void), int eb, int new_thread, Schem
             }
           }
         }
-        restore_dynamic_state(&save_dyn_state, p);
       }
 
       if (!again)
@@ -1363,8 +1323,6 @@ void *scheme_top_level_do_worker(void *(*k)(void), int eb, int new_thread, Schem
 
   if (!new_thread) {
     p = scheme_current_thread;
-
-    restore_dynamic_state(&save_dyn_state, p);
 
     p->error_buf = save;
   }
@@ -1571,32 +1529,6 @@ scheme_apply_thread_thunk(Scheme_Object *rator)
 }
 
 Scheme_Object *
-scheme_apply_with_dynamic_state(Scheme_Object *rator, int num_rands, Scheme_Object **rands, Scheme_Dynamic_State *dyn_state)
-{
-  Scheme_Thread *p = scheme_current_thread;
-
-  p->ku.k.p1 = rator;
-  p->ku.k.p2 = rands;
-  p->ku.k.i1 = num_rands;
-  p->ku.k.i2 = 0;
-
-  return (Scheme_Object *)scheme_top_level_do_worker(apply_k, 1, 0, dyn_state);
-}
-
-Scheme_Object *
-scheme_apply_multi_with_dynamic_state(Scheme_Object *rator, int num_rands, Scheme_Object **rands, Scheme_Dynamic_State *dyn_state)
-{
-  Scheme_Thread *p = scheme_current_thread;
-
-  p->ku.k.p1 = rator;
-  p->ku.k.p2 = rands;
-  p->ku.k.i1 = num_rands;
-  p->ku.k.i2 = 1;
-
-  return (Scheme_Object *)scheme_top_level_do_worker(apply_k, 1, 0, dyn_state);
-}
-
-Scheme_Object *
 scheme_apply_no_eb(Scheme_Object *rator, int num_rands, Scheme_Object **rands)
 {
   return _apply(rator, num_rands, rands, 0, 0);
@@ -1779,293 +1711,6 @@ Scheme_Object *
 _scheme_tail_apply_to_list (Scheme_Object *rator, Scheme_Object *rands)
 {
   return X_scheme_apply_to_list(rator, rands, 0, 0);
-}
-
-static Scheme_Object *cert_with_specials_k(void);
-
-static Scheme_Object *
-cert_with_specials(Scheme_Object *code, 
-                   Scheme_Object *insp,
-                   Scheme_Object *old_stx,
-                   intptr_t phase, 
-		   int deflt, int cadr_deflt)
-/* Arms (insp) or re-arms (old_stx) taints. */
-{
-  Scheme_Object *prop;
-  int next_cadr_deflt = 0, phase_delta = 0;
-
-#ifdef DO_STACK_CHECK
-  {
-# include "mzstkchk.h"
-    {
-      Scheme_Thread *p = scheme_current_thread;
-      Scheme_Object **args;
-      args = MALLOC_N(Scheme_Object*, 3);
-      args[0] = code;
-      args[1] = insp;
-      args[2] = old_stx;
-      p->ku.k.p1 = (void *)args;
-      p->ku.k.i1 = phase;
-      p->ku.k.i2 = deflt;
-      p->ku.k.i3 = cadr_deflt;
-      return scheme_handle_stack_overflow(cert_with_specials_k);
-    }
-  }
-#endif
-
-  if (SCHEME_STXP(code)) {
-    if (scheme_stx_is_tainted(code))
-       /* nothing happens to already-tainted syntax objects */
-      return code;
-
-    prop = scheme_stx_property(code, taint_mode_symbol, NULL);
-    if (SCHEME_FALSEP(prop))
-      prop = scheme_stx_property(code, certify_mode_symbol, NULL);
-    if (SAME_OBJ(prop, none_symbol))
-      return code;
-    else if (SAME_OBJ(prop, opaque_symbol)) {
-      if (old_stx)
-        return scheme_stx_taint_rearm(code, old_stx);
-      else
-        return scheme_stx_taint_arm(code, insp);
-    } else if (SAME_OBJ(prop, transparent_symbol)) {
-      cadr_deflt = 0;
-      /* fall through */
-    } else if (SAME_OBJ(prop, transparent_binding_symbol)) {
-      cadr_deflt = 0;
-      next_cadr_deflt = 1;
-      /* fall through */
-    } else {
-      /* Default transparency depends on module-identifier=? comparison
-	 to `begin', `define-values', and `define-syntaxes'. */
-      int trans = deflt;
-      if (SCHEME_TRUEP(prop))
-        scheme_log(NULL,
-                   SCHEME_LOG_WARNING,
-                   0,
-                   "warning: unrecognized 'taint-mode property value: %V",
-                   prop);
-      if (SCHEME_STX_PAIRP(code)) {
-	Scheme_Object *name;
-	/* name = SCHEME_STX_CAR(code); */
-        name = scheme_stx_taint_disarm(code, NULL);
-        name = SCHEME_STX_CAR(name);
-	if (SCHEME_STX_SYMBOLP(name)) {
-	  if (scheme_stx_free_eq_x(scheme_begin_stx, name, phase)
-              || scheme_stx_free_eq_x(scheme_module_begin_stx, name, phase)) {
-	    trans = 1;
-	    next_cadr_deflt = 0;
-	  } else if (scheme_stx_free_eq_x(scheme_begin_for_syntax_stx, name, phase)) {
-	    trans = 1;
-	    next_cadr_deflt = 0;
-            phase_delta = 1;
-	  } else if (scheme_stx_free_eq_x(scheme_define_values_stx, name, phase)
-		     || scheme_stx_free_eq_x(scheme_define_syntaxes_stx, name, phase)) {
-	    trans = 1;
-	    next_cadr_deflt = 1;
-	  }
-	}
-      }
-
-      if (!trans) {
-        if (old_stx)
-          return scheme_stx_taint_rearm(code, old_stx);
-        else
-          return scheme_stx_taint_arm(code, insp);
-      }
-    }
-  }
-
-  if (SCHEME_STX_PAIRP(code)) {
-    Scheme_Object *a, *d, *v;
-    
-    a = SCHEME_STX_CAR(code);
-    a = cert_with_specials(a, insp, old_stx, phase + phase_delta, cadr_deflt, 0);
-    d = SCHEME_STX_CDR(code);
-    d = cert_with_specials(d, insp, old_stx, phase + phase_delta, 1, next_cadr_deflt);
-
-    v = scheme_make_pair(a, d);
-
-    if (SCHEME_PAIRP(code))
-      return v;
-
-    return scheme_datum_to_syntax(v, code, scheme_false, 0, 1);
-  } else if (SCHEME_STX_NULLP(code))
-    return code;
-
-  if (old_stx)
-    return scheme_stx_taint_rearm(code, old_stx);
-  else
-    return scheme_stx_taint_arm(code, insp);
-}
-
-static Scheme_Object *cert_with_specials_k(void)
-{
-  Scheme_Thread *p = scheme_current_thread;
-  Scheme_Object **args = (Scheme_Object **)p->ku.k.p1;
-
-  p->ku.k.p1 = NULL;
-
-  return cert_with_specials(args[0], args[1], args[2],
-                            p->ku.k.i1,
-                            p->ku.k.i2, p->ku.k.i3);
-}
-
-Scheme_Object *
-scheme_apply_macro(Scheme_Object *name, Scheme_Env *menv,
-		   Scheme_Object *rator, Scheme_Object *code,
-		   Scheme_Comp_Env *env, Scheme_Object *boundname,
-                   Scheme_Compile_Expand_Info *rec, int drec,
-		   int for_set,
-                   int scope_macro_use)
-{
-  Scheme_Object *orig_code = code;
-
-  if (scheme_is_rename_transformer(rator)) {
-    Scheme_Object *scope;
-   
-    rator = scheme_rename_transformer_id(rator);
-    /* rator is now an identifier */
-
-    /* and it's introduced by this expression: */
-    scope = scheme_new_scope(SCHEME_STX_MACRO_SCOPE);
-    rator = scheme_stx_flip_scope(rator, scope, scheme_true);
-
-    if (for_set) {
-      Scheme_Object *tail, *setkw;
-
-      tail = SCHEME_STX_CDR(code);
-      setkw = SCHEME_STX_CAR(code);
-      tail = SCHEME_STX_CDR(tail);
-      code = scheme_make_pair(setkw, scheme_make_pair(rator, tail));
-      code = scheme_datum_to_syntax(code, orig_code, orig_code, 0, 0);
-    } else if (SCHEME_SYMBOLP(SCHEME_STX_VAL(code)))
-      code = rator;
-    else {
-      code = SCHEME_STX_CDR(code);
-      code = scheme_make_pair(rator, code);
-      code = scheme_datum_to_syntax(code, orig_code, scheme_sys_wraps(env), 0, 0);
-    }
-
-    code = scheme_stx_track(code, orig_code, name);
-
-    /* Restore old dye packs: */
-    code = cert_with_specials(code, NULL, orig_code, env->genv->phase, 0, 0);
-
-    return code;
-  } else {
-    Scheme_Object *scope, *use_scope, *rands_vec[1], *track_code, *pre_code;
-
-    if (scheme_is_set_transformer(rator))
-      rator = scheme_set_transformer_proc(rator);
-
-    {
-      /* Ensure that source doesn't already have 'taint-mode or 'certify-mode, 
-         in case argument properties are used for result properties. */
-      Scheme_Object *prop;
-      prop = scheme_stx_property(code, taint_mode_symbol, NULL);
-      if (SCHEME_TRUEP(prop))
-        code = scheme_stx_property(code, taint_mode_symbol, scheme_false);
-      prop = scheme_stx_property(code, certify_mode_symbol, NULL);
-      if (SCHEME_TRUEP(prop))
-        code = scheme_stx_property(code, certify_mode_symbol, scheme_false);
-    }
-    track_code = code;  /* after mode properties are removed */
-
-    scope = scheme_new_scope(SCHEME_STX_MACRO_SCOPE);
-    code = scheme_stx_flip_scope(code, scope, scheme_true);
-
-    if (scope_macro_use) {
-      use_scope = scheme_new_scope(SCHEME_STX_USE_SITE_SCOPE);
-      scheme_add_compilation_frame_use_site_scope(env, use_scope);
-      code = scheme_stx_add_scope(code, use_scope, scheme_true);
-    } else
-      use_scope = NULL;
-    
-    code = scheme_stx_taint_disarm(code, NULL);
-
-    pre_code = code;
-    SCHEME_EXPAND_OBSERVE_MACRO_PRE_X(env->observer, code);
-
-    {
-      Scheme_Dynamic_State dyn_state;
-      Scheme_Cont_Frame_Data cframe;
-      Scheme_Config *config;
-
-      scheme_prepare_exp_env(env->genv);
-      config = scheme_extend_config(scheme_current_config(),
-                                    MZCONFIG_ENV,
-                                    (Scheme_Object *)env->genv->exp_env);
-      scheme_push_continuation_frame(&cframe);
-      scheme_set_cont_mark(scheme_parameterization_key, (Scheme_Object *)config);
-
-      scheme_set_dynamic_state(&dyn_state, env, scope, use_scope, boundname, 
-                               menv, menv ? menv->link_midx : env->genv->link_midx);
-
-      rands_vec[0] = code;
-      code = scheme_apply_with_dynamic_state(rator, 1, rands_vec, &dyn_state);
-
-      scheme_pop_continuation_frame(&cframe);
-    }
-
-    SCHEME_EXPAND_OBSERVE_MACRO_POST_X(env->observer, code, pre_code);
-
-    if (!SCHEME_STXP(code)) {
-      scheme_raise_exn(MZEXN_FAIL_CONTRACT,
-                       "%S: received value from syntax expander was not syntax\n"
-                       "  received: %V",
-                       SCHEME_STX_SYM(name),
-                       code);
-    }
-
-    code = scheme_stx_flip_scope(code, scope, scheme_true);
-
-    code = scheme_stx_track(code, track_code, name);
-    
-    /* Restore old dye packs: */
-    code = cert_with_specials(code, NULL, orig_code, env->genv->phase, 0, 0);
-
-    return code;
-  }
-}
-
-Scheme_Object *scheme_syntax_taint_arm(Scheme_Object *stx, Scheme_Object *insp, int use_mode)
-{
-  intptr_t phase;
-
-  if (SCHEME_FALSEP(insp)) {
-    insp = scheme_get_local_inspector();
-  }
-
-  if (use_mode) {
-    Scheme_Thread *p = scheme_current_thread;
-    phase = (p->current_local_env
-             ? p->current_local_env->genv->phase
-             : p->current_phase_shift);
-    return cert_with_specials(stx, insp, NULL, phase, 0, 0);
-  } else
-    return scheme_stx_taint_arm(stx, insp);
-}
-
-Scheme_Object *scheme_syntax_taint_disarm(Scheme_Object *o, Scheme_Object *insp)
-{
-  if (SCHEME_FALSEP(insp)) {
-    insp = scheme_get_local_inspector();
-  }
-
-  return scheme_stx_taint_disarm(o, insp);
-}
-
-Scheme_Object *scheme_syntax_taint_rearm(Scheme_Object *stx, Scheme_Object *from_stx)
-{
-  Scheme_Thread *p = scheme_current_thread;
-  intptr_t phase;
-  
-  phase = (p->current_local_env
-           ? p->current_local_env->genv->phase
-           : p->current_phase_shift);
-  
-  return cert_with_specials(stx, NULL, from_stx, phase, 0, 0);
 }
 
 /*========================================================================*/

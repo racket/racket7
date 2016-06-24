@@ -4323,56 +4323,6 @@ Scheme_Object *scheme_eval_linked_expr_multi_with_dynamic_state(Scheme_Object *o
     return (Scheme_Object *)scheme_top_level_do_worker(eval_k, 1, 0, dyn_state);
 }
 
-/* for mzc: */
-Scheme_Object *scheme_load_compiled_stx_string(const char *str, intptr_t len)
-{
-  Scheme_Object *port, *expr;
-
-  port = scheme_make_sized_byte_string_input_port(str, -len);
-
-  expr = scheme_internal_read(port, NULL, 1, 0, 0, 0, -1, NULL, NULL, NULL, NULL);
-
-  expr = _scheme_eval_compiled(expr, scheme_get_env(NULL));
-
-  /* Unwrap syntax once; */
-  expr = SCHEME_STX_VAL(expr);
-
-  return expr;
-}
-
-/* for mzc: */
-Scheme_Object *scheme_compiled_stx_symbol(Scheme_Object *stx)
-{
-  return SCHEME_STX_VAL(stx);
-}
-
-/* for mzc: */
-Scheme_Object *scheme_eval_compiled_stx_string(Scheme_Object *expr, Scheme_Env *env,
-					       intptr_t shift, Scheme_Object *modidx)
-{
-  /* If modidx, then last element is a module index; shift the rest. */
-  if (modidx) {
-    int i, len = SCHEME_VEC_SIZE(expr);
-    Scheme_Object *orig = SCHEME_VEC_ELS(expr)[len - 1], *s, *result;
-
-    orig = SCHEME_STX_VAL(orig);
-    result = scheme_make_vector(len - 1, NULL);
-
-    for (i = 0; i < len - 1; i++) {
-      s = SCHEME_VEC_ELS(expr)[i];
-      s = scheme_stx_shift(s,
-                           scheme_make_integer(shift),
-                           orig, modidx, 
-                           env->module_registry->exports,
-                           NULL, NULL);
-      SCHEME_VEC_ELS(result)[i] = s;
-    }
-    
-    return result;
-  } else
-    return expr;
-}
-
 Scheme_Object *scheme_tail_eval_expr(Scheme_Object *obj)
 {
   return scheme_tail_eval(obj);

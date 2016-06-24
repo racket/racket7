@@ -385,11 +385,6 @@ MZ_EXTERN Scheme_Object *scheme_extract_one_cc_mark_to_tag(Scheme_Object *mark_s
 /* Internal */
 MZ_EXTERN Scheme_Object *scheme_do_eval(Scheme_Object *obj, int _num_rands, Scheme_Object **rands, int val);
 
-MZ_EXTERN Scheme_Object *scheme_eval_compiled_stx_string(Scheme_Object *expr, Scheme_Env *env,
-							 intptr_t shift, Scheme_Object *modidx);
-MZ_EXTERN Scheme_Object *scheme_load_compiled_stx_string(const char *str, intptr_t len);
-MZ_EXTERN Scheme_Object *scheme_compiled_stx_symbol(Scheme_Object *stx);
-
 MZ_EXTERN Scheme_Object *scheme_eval_compiled_sized_string(const char *str, int len, Scheme_Env *env);
 MZ_EXTERN Scheme_Object *scheme_eval_compiled_sized_string_with_magic(const char *str, int len, Scheme_Env *env, 
 								      Scheme_Object *magic_symbol, Scheme_Object *magic_val,
@@ -1027,7 +1022,7 @@ MZ_EXTERN Scheme_Object *scheme_make_namespace(int argc, Scheme_Object *argv[]);
 
 MZ_EXTERN void scheme_add_global(const char *name, Scheme_Object *val, Scheme_Env *env);
 MZ_EXTERN void scheme_add_global_symbol(Scheme_Object *name, Scheme_Object *val,
-			      Scheme_Env *env);
+                                        Scheme_Env *env);
 
 MZ_EXTERN Scheme_Object *scheme_make_envunbox(Scheme_Object *value);
 
@@ -1043,7 +1038,6 @@ MZ_EXTERN void scheme_set_global_bucket(char *proc, Scheme_Bucket *var, Scheme_O
                                         int set_undef);
 MZ_EXTERN void scheme_install_macro(Scheme_Bucket *b, Scheme_Object *v);
 
-
 MZ_EXTERN void scheme_save_initial_module_set(Scheme_Env *env);
 MZ_EXTERN Scheme_Env *scheme_primitive_module(Scheme_Object *name, Scheme_Env *for_env);
 MZ_EXTERN void scheme_finish_primitive_module(Scheme_Env *env);
@@ -1051,8 +1045,8 @@ MZ_EXTERN void scheme_set_primitive_module_phaseless(Scheme_Env *env, int phasel
 MZ_EXTERN void scheme_protect_primitive_provide(Scheme_Env *env, Scheme_Object *name);
 
 MZ_EXTERN Scheme_Object *scheme_make_modidx(Scheme_Object *path,
-				  Scheme_Object *base,
-				  Scheme_Object *resolved);
+                                            Scheme_Object *base,
+                                            Scheme_Object *resolved);
 
 MZ_EXTERN Scheme_Object *scheme_apply_for_syntax_in_env(Scheme_Object *proc, Scheme_Env *env);
 

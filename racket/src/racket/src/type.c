@@ -245,7 +245,6 @@ scheme_init_type ()
   set_name(scheme_inspector_type, "<inspector>");
   
   set_name(scheme_stx_type, "<syntax>");
-  set_name(scheme_stx_offset_type, "<internal-syntax-offset>");
   set_name(scheme_expanded_syntax_type, "<expanded-syntax>");
   set_name(scheme_set_macro_type, "<set!-transformer>");
   set_name(scheme_id_macro_type, "<rename-transformer>");
@@ -691,11 +690,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_id_macro_type, twoptr_obj);
 
   GC_REG_TRAV(scheme_stx_type, stx_val);
-  GC_REG_TRAV(scheme_stx_offset_type, stx_off_val);
-  GC_REG_TRAV(scheme_expanded_syntax_type, twoptr_obj);
-  GC_REG_TRAV(scheme_rt_module_exports, module_exports_val);
-  GC_REG_TRAV(scheme_module_phase_exports_type, module_phase_exports_val);
-  GC_REG_TRAV(scheme_module_index_type, modidx_val);
 
   GC_REG_TRAV(scheme_security_guard_type, guard_val);
 

@@ -1176,17 +1176,6 @@ typedef struct Scheme_Thread {
 
   struct Scheme_Overflow *overflow;
 
-  struct Scheme_Comp_Env *current_local_env;
-  Scheme_Object *current_local_scope;
-  Scheme_Object *current_local_use_scope;
-  Scheme_Object *current_local_name;
-  Scheme_Object *current_local_modidx;
-  Scheme_Env *current_local_menv;
-  Scheme_Object *current_local_bindings;
-  intptr_t current_phase_shift;
-
-  struct Scheme_Marshal_Tables *current_mt;
-
   struct Optimize_Info *constant_folding; /* compiler hack */
   Scheme_Object *reading_delayed; /* reader hack */
 
@@ -1446,8 +1435,6 @@ enum {
   MZCONFIG_LOAD_DELAY_ENABLED,
   MZCONFIG_DELAY_LOAD_INFO,
 
-  MZCONFIG_EXPAND_OBSERVE,
-
   MZCONFIG_LOGGER,
 
   __MZCONFIG_BUILTIN_COUNT__
@@ -1590,13 +1577,6 @@ typedef struct Scheme_Logger Scheme_Logger;
 #define SCHEME_GUARD_FILE_EXECUTE 0x4
 #define SCHEME_GUARD_FILE_DELETE  0x8
 #define SCHEME_GUARD_FILE_EXISTS  0x10
-
-/*========================================================================*/
-/*                               modules                                  */
-/*========================================================================*/
-
-typedef void (*Scheme_Invoke_Proc)(Scheme_Env *env, intptr_t phase_shift,
-				   Scheme_Object *self_modidx, void *data);
 
 /*========================================================================*/
 /*                               evaluation                               */
@@ -1930,7 +1910,6 @@ MZ_EXTERN void (*scheme_sleep)(float seconds, void *fds);
 MZ_EXTERN void (*scheme_notify_multithread)(int on);
 MZ_EXTERN void (*scheme_wakeup_on_input)(void *fds);
 MZ_EXTERN int (*scheme_check_for_break)(void);
-MZ_EXTERN Scheme_Object *(*scheme_module_demand_hook)(int c, Scheme_Object **a);
 #ifdef MZ_PRECISE_GC
 MZ_EXTERN void *(*scheme_get_external_stack_val)(void);
 MZ_EXTERN void (*scheme_set_external_stack_val)(void *);
