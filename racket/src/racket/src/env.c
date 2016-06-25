@@ -42,13 +42,10 @@ THREAD_LOCAL_DECL(int scheme_starting_up);
 
 /* globals READ-ONLY SHARED */
 Scheme_Object *scheme_varref_const_p_proc;
-READ_ONLY static Scheme_Env    *kernel_env;
-READ_ONLY static Scheme_Env    *unsafe_env;
-READ_ONLY static Scheme_Env    *flfxnum_env;
-READ_ONLY static Scheme_Env    *extfl_env;
-READ_ONLY static Scheme_Env    *futures_env;
 
 READ_ONLY static Scheme_Object *kernel_symbol;
+
+READ_ONLY static Scheme_Startup_Env *startup_env;
 
 static int builtin_ref_counter;
 static int builtin_unsafe_start;
@@ -57,15 +54,11 @@ THREAD_LOCAL_DECL(static Scheme_Bucket_Table *literal_string_table);
 THREAD_LOCAL_DECL(static Scheme_Bucket_Table *literal_number_table);
 
 /* local functions */
-static void make_kernel_env(void);
-
-static Scheme_Env *make_env(Scheme_Env *base, int toplevel_size);
-static Scheme_Env *make_empty_inited_env(int toplevel_size);
-static Scheme_Env *make_empty_not_inited_env(int toplevel_size);
+static void init_startup_env(void);
+static Scheme_Startup_Env make_startup_env();
 
 static void skip_certain_things(Scheme_Object *o, Scheme_Close_Custodian_Client *f, void *data);
 
-Scheme_Env *scheme_engine_instance_init();
 static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thread);
 
 #ifdef MZ_PRECISE_GC
@@ -119,7 +112,8 @@ void os_platform_init() {
 #endif
 }
 
-Scheme_Env *scheme_restart_instance() {
+Scheme_Env *scheme_restart_instance()
+{
   Scheme_Env *env;
   void *stack_base;
   stack_base = (void *) scheme_get_current_os_thread_stack_base();
@@ -140,7 +134,6 @@ Scheme_Env *scheme_restart_instance() {
   scheme_init_module_resolver();
 
   env = scheme_make_empty_env();
-  scheme_install_initial_module_set(env);
   scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 
 
   scheme_init_port_config();
@@ -156,22 +149,13 @@ Scheme_Env *scheme_restart_instance() {
 
 Scheme_Env *scheme_basic_env()
 {
-  Scheme_Env *env;
+  Scheme_Startup_Env *env;
+  void *stack_base;
 
   if (scheme_main_thread) {
     return scheme_restart_instance();
   }
   
-  env = scheme_engine_instance_init();
-  
-  return env;
-}
-
-Scheme_Env *scheme_engine_instance_init() 
-/* READ-ONLY GLOBAL structures, ONE-TIME initialization */
-{
-  Scheme_Env *env;
-  void *stack_base;
   stack_base = (void *) scheme_get_current_os_thread_stack_base();
 
   os_platform_init();
@@ -225,7 +209,7 @@ Scheme_Env *scheme_engine_instance_init()
 #ifndef DONT_USE_FOREIGN
   scheme_init_foreign_globals();
 #endif
-  make_kernel_env();
+  init_startup_env();
 
   scheme_init_logging_once();
 
@@ -240,6 +224,8 @@ Scheme_Env *scheme_engine_instance_init()
 
   scheme_spawn_master_place();
 #endif
+
+  /* Create the initial place with its initial namespace */
 
   env = place_instance_init(stack_base, 1);
 
@@ -257,30 +243,142 @@ Scheme_Env *scheme_engine_instance_init()
   return env;
 }
 
-static void init_unsafe(Scheme_Env *env)
+static void init_startup_env(void)
 {
-  Scheme_Module_Phase_Exports *pt;
-  REGISTER_SO(unsafe_env);
+  Scheme_Startup_Env *env;
+#ifdef TIME_STARTUP_PROCESS
+  intptr_t startt;
+#endif
 
-  unsafe_env = scheme_primitive_module(scheme_intern_symbol("#%unsafe"), env);
+  REGISTER_SO(kernel_symbol);
+  kernel_symbol = scheme_intern_symbol("#%kernel");
 
-  scheme_init_unsafe_number(unsafe_env);
-  scheme_init_unsafe_numarith(unsafe_env);
-  scheme_init_unsafe_numcomp(unsafe_env);
-  scheme_init_unsafe_list(unsafe_env);
-  scheme_init_unsafe_hash(unsafe_env);
-  scheme_init_unsafe_vector(unsafe_env);
-  scheme_init_unsafe_fun(unsafe_env);
+  env = make_startup_env();
 
-  scheme_init_extfl_unsafe_number(unsafe_env);
-  scheme_init_extfl_unsafe_numarith(unsafe_env);
-  scheme_init_extfl_unsafe_numcomp(unsafe_env);
+  startup_env = env;
+  REGISTER_SO(startup_env);
+    
+  scheme_defining_primitives = 1;
+  builtin_ref_counter = 0;
 
-  scheme_finish_primitive_module(unsafe_env);
-  pt = unsafe_env->module->me->rt;
-  scheme_populate_pt_ht(pt);
-  scheme_protect_primitive_provide(unsafe_env, NULL);
-  unsafe_env->attached = 1;
+#ifdef TIME_STARTUP_PROCESS
+   printf("init @ %" PRIdPTR "\n", scheme_get_process_milliseconds());
+# define MZTIMEIT(n, f) (MARK_START_TIME(), f, DONE_TIME(n))
+# define MARK_START_TIME() startt = scheme_get_process_milliseconds()
+# define DONE_TIME(n) (printf(#n ": %" PRIdPTR "\n", (intptr_t)(scheme_get_process_milliseconds() - startt)))
+#else
+# define MZTIMEIT(n, f) f
+# define MARK_START_TIME() /**/
+# define DONE_TIME(n) /**/
+#endif
+
+  /* The ordering of the first few init calls is important, so add to
+     the end of the list, not the beginning. */
+  MZTIMEIT(symbol-type, scheme_init_symbol_type(env));
+  MZTIMEIT(fun, scheme_init_fun(env));
+  MZTIMEIT(symbol, scheme_init_symbol(env));
+  MZTIMEIT(list, scheme_init_list(env));
+  MZTIMEIT(number, scheme_init_number(env));
+  MZTIMEIT(numarith, scheme_init_numarith(env));
+  MZTIMEIT(numcomp, scheme_init_numcomp(env));
+  MZTIMEIT(numstr, scheme_init_numstr(env));
+  MZTIMEIT(bignum, scheme_init_bignum());
+  MZTIMEIT(char-const, scheme_init_char_constants());
+  MZTIMEIT(stx, scheme_init_stx(env));
+  MZTIMEIT(module, scheme_init_module(env));
+  MZTIMEIT(port, scheme_init_port(env));
+  MZTIMEIT(portfun, scheme_init_port_fun(env));
+  MZTIMEIT(string, scheme_init_string(env));
+  MZTIMEIT(vector, scheme_init_vector(env));
+  MZTIMEIT(char, scheme_init_char(env));
+  MZTIMEIT(bool, scheme_init_bool(env));
+  MZTIMEIT(syntax, scheme_init_compile(env));
+  MZTIMEIT(eval, scheme_init_eval(env));
+  MZTIMEIT(struct, scheme_init_struct(env));
+  MZTIMEIT(error, scheme_init_error(env));
+#ifndef NO_SCHEME_EXNS
+  MZTIMEIT(exn, scheme_init_exn(env));
+#endif
+  MZTIMEIT(process, scheme_init_thread(env));
+  scheme_init_port_wait();
+  scheme_init_inspector();
+  scheme_init_logger_wait();
+  scheme_init_struct_wait();
+  MZTIMEIT(reduced, scheme_init_reduced_proc_struct(env));
+#ifndef NO_SCHEME_THREADS
+  MZTIMEIT(sema, scheme_init_sema(env));
+#endif
+  MZTIMEIT(read, scheme_init_read(env));
+  MZTIMEIT(print, scheme_init_print(env));
+  MZTIMEIT(file, scheme_init_file(env));
+  MZTIMEIT(dynamic-extension, scheme_init_dynamic_extension(env));
+#ifndef NO_REGEXP_UTILS
+  MZTIMEIT(regexp, scheme_regexp_initialize(env));
+#endif
+  MZTIMEIT(params, scheme_init_parameterization());
+  MZTIMEIT(futures, scheme_init_futures_once());
+  MZTIMEIT(places, scheme_init_places_once());
+
+  MARK_START_TIME();
+
+  DONE_TIME(env);
+
+  scheme_register_network_evts();
+
+  MARK_START_TIME();
+
+  scheme_finish_kernel(env);
+
+#if USE_COMPILED_STARTUP
+  if (builtin_ref_counter != EXPECTED_PRIM_COUNT) {
+    printf("Primitive count %d doesn't match expected count %d\n"
+	   "Turn off USE_COMPILED_STARTUP in src/schminc.h\n",
+	   builtin_ref_counter, EXPECTED_PRIM_COUNT);
+    abort();
+  }
+#endif
+
+  init_flfxnum(env);
+  init_extfl(env);
+  init_futures(env);
+
+  builtin_unsafe_start = builtin_ref_counter;
+  init_unsafe(env);
+  init_foreign(env);
+  
+  scheme_init_print_global_constants();
+  scheme_init_variable_references_constants();
+
+  scheme_init_longdouble_fixup();
+
+  scheme_defining_primitives = 0;
+
+  scheme_init_linklet(env);
+#ifndef NO_TCP_SUPPORT
+  scheme_init_network(env);
+#endif
+  scheme_init_paramz(env);
+  scheme_init_expand_observe(env);
+  scheme_init_place(env);
+}
+
+static void init_unsafe(Scheme_Startup_Env *env)
+{
+  scheme_switch_prim_instance(env, "#%unsafe");
+
+  scheme_init_unsafe_number(env);
+  scheme_init_unsafe_numarith(env);
+  scheme_init_unsafe_numcomp(env);
+  scheme_init_unsafe_list(env);
+  scheme_init_unsafe_hash(env);
+  scheme_init_unsafe_vector(env);
+  scheme_init_unsafe_fun(env);
+
+  scheme_init_extfl_unsafe_number(env);
+  scheme_init_extfl_unsafe_numarith(env);
+  scheme_init_extfl_unsafe_numcomp(env);
+
+  scheme_restore_prim_instance(env);
 
 #if USE_COMPILED_STARTUP
   if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT
@@ -295,22 +393,15 @@ static void init_unsafe(Scheme_Env *env)
 #endif
 }
 
-static void init_flfxnum(Scheme_Env *env)
+static void init_flfxnum(Scheme_Startup_Env *env)
 {
-  Scheme_Module_Phase_Exports *pt;
-  REGISTER_SO(flfxnum_env);
+  scheme_switch_prim_instance(env, "#%flfxnum");
+ 
+  scheme_init_flfxnum_number(env);
+  scheme_init_flfxnum_numarith(env);
+  scheme_init_flfxnum_numcomp(env);
 
-  flfxnum_env = scheme_primitive_module(scheme_intern_symbol("#%flfxnum"), env);
-
-  scheme_init_flfxnum_number(flfxnum_env);
-  scheme_init_flfxnum_numarith(flfxnum_env);
-  scheme_init_flfxnum_numcomp(flfxnum_env);
-
-  scheme_finish_primitive_module(flfxnum_env);
-  pt = flfxnum_env->module->me->rt;
-  scheme_populate_pt_ht(pt);
-  scheme_protect_primitive_provide(flfxnum_env, NULL);
-  flfxnum_env->attached = 1;
+  scheme_restore_prim_instance(env);
 
 #if USE_COMPILED_STARTUP
   if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT)) {
@@ -322,23 +413,16 @@ static void init_flfxnum(Scheme_Env *env)
 #endif
 }
 
-static void init_extfl(Scheme_Env *env)
+static void init_extfl(Scheme_Startup_Env *env)
 {
-  Scheme_Module_Phase_Exports *pt;
-  REGISTER_SO(extfl_env);
+  scheme_switch_prim_instance(env, "#%extfl");
 
-  extfl_env = scheme_primitive_module(scheme_intern_symbol("#%extfl"), env);
+  scheme_init_extfl_number(env);
+  scheme_init_extfl_numarith(env);
+  scheme_init_extfl_numcomp(env);
+  scheme_init_extfl_numstr(env);
 
-  scheme_init_extfl_number(extfl_env);
-  scheme_init_extfl_numarith(extfl_env);
-  scheme_init_extfl_numcomp(extfl_env);
-  scheme_init_extfl_numstr(extfl_env);
-
-  scheme_finish_primitive_module(extfl_env);
-  pt = extfl_env->module->me->rt;
-  scheme_populate_pt_ht(pt);
-  scheme_protect_primitive_provide(extfl_env, NULL);
-  extfl_env->attached = 1;
+  scheme_restore_prim_instance(env);
 
 #if USE_COMPILED_STARTUP
   if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT
@@ -351,20 +435,19 @@ static void init_extfl(Scheme_Env *env)
 #endif
 }
 
-static void init_futures(Scheme_Env *env)
+static void init_unsafe(Scheme_Startup_Env *env);
+static void init_flfxnum(Scheme_Startup_Env *env);
+static void init_extfl(Scheme_Startup_Env *env);
+static void init_futures(Scheme_Startup_Env *env);
+static void init_foreign(Scheme_Startup_Env *env);
+
+static void init_futures(Scheme_Startup_Env *env)
 {
-  Scheme_Module_Phase_Exports *pt;
-  REGISTER_SO(futures_env);
+  scheme_switch_prim_instance(env, "#%futures");
 
-  futures_env = scheme_primitive_module(scheme_intern_symbol("#%futures"), env);
+  scheme_init_futures(env);
 
-  scheme_init_futures(futures_env);
-
-  scheme_finish_primitive_module(futures_env);
-  pt = futures_env->module->me->rt;
-  scheme_populate_pt_ht(pt);
-  scheme_protect_primitive_provide(futures_env, NULL);
-  futures_env->attached = 1;
+  scheme_restore_prim_instance(env);
 
 #if USE_COMPILED_STARTUP
   if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT
@@ -378,15 +461,9 @@ static void init_futures(Scheme_Env *env)
 #endif
 }
 
-static void init_foreign(Scheme_Env *env)
+static void init_foreign(Scheme_Startup_Env *env)
 {
-  Scheme_Env *ffi_env;
-
   scheme_init_foreign(env);
-
-  ffi_env = scheme_get_foreign_env();
-  scheme_populate_pt_ht(ffi_env->module->me->rt);
-  ffi_env->attached = 1;
 
 #if USE_COMPILED_STARTUP
   if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT
@@ -402,24 +479,12 @@ static void init_foreign(Scheme_Env *env)
 #endif
 }
 
-Scheme_Env *scheme_get_unsafe_env() {
-  return unsafe_env;
-}
+/*========================================================================*/
+/*                     place-specific intialization                       */
+/*========================================================================*/
 
-Scheme_Env *scheme_get_flfxnum_env() {
-  return flfxnum_env;
-}
-
-Scheme_Env *scheme_get_extfl_env() {
-  return extfl_env;
-}
-
-Scheme_Env *scheme_get_futures_env() {
-  return futures_env;
-}
-
-
-static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thread) {
+static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thread)
+{
   Scheme_Env *env;
 
 #ifdef TIME_STARTUP_PROCESS
@@ -500,20 +565,13 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   scheme_init_exn_config();
 #endif
   scheme_init_error_config();
-
-/* BEGIN PRIMITIVE MODULES */
-  scheme_init_linklet(env);
-#ifndef NO_TCP_SUPPORT
-  scheme_init_network(env);
-#endif
-  scheme_init_paramz(env);
-  scheme_init_expand_observe(env);
-  scheme_init_place(env);
-/* END PRIMITIVE MODULES */
+  scheme_init_place_per_place();
+  
 #if defined(MZ_USE_PLACES) && defined(MZ_USE_JIT)
   scheme_jit_fill_threadlocal_table();
 #endif
   scheme_init_futures_per_place();
+
 
   REGISTER_SO(literal_string_table);
   REGISTER_SO(literal_number_table);
@@ -529,8 +587,6 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   scheme_add_embedded_builtins(env);
 
   boot_module_resolver();
-
-  scheme_save_initial_module_set(env);
 
   scheme_starting_up = 0;
 
@@ -548,7 +604,8 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
 }
 
 #ifdef MZ_USE_PLACES
-Scheme_Env *scheme_place_instance_init(void *stack_base, struct NewGC *parent_gc, intptr_t memory_limit) {
+Scheme_Startup_Env *scheme_place_instance_init(void *stack_base, struct NewGC *parent_gc, intptr_t memory_limit)
+{
   Scheme_Env *env;
 # if defined(MZ_PRECISE_GC)
   int *signal_fd;
@@ -608,125 +665,6 @@ void scheme_place_instance_destroy(int force)
   scheme_release_inotify();
 }
 
-static void make_kernel_env(void)
-{
-  Scheme_Env *env;
-#ifdef TIME_STARTUP_PROCESS
-  intptr_t startt;
-#endif
-
-  env = make_empty_inited_env(GLOBAL_TABLE_SIZE);
-
-  REGISTER_SO(kernel_env);
-  kernel_env = env;
-
-  scheme_defining_primitives = 1;
-  builtin_ref_counter = 0;
-
-#ifdef TIME_STARTUP_PROCESS
-   printf("init @ %" PRIdPTR "\n", scheme_get_process_milliseconds());
-# define MZTIMEIT(n, f) (MARK_START_TIME(), f, DONE_TIME(n))
-# define MARK_START_TIME() startt = scheme_get_process_milliseconds()
-# define DONE_TIME(n) (printf(#n ": %" PRIdPTR "\n", (intptr_t)(scheme_get_process_milliseconds() - startt)))
-#else
-# define MZTIMEIT(n, f) f
-# define MARK_START_TIME() /**/
-# define DONE_TIME(n) /**/
-#endif
-
-  /* The ordering of the first few init calls is important, so add to
-     the end of the list, not the beginning. */
-  MZTIMEIT(symbol-type, scheme_init_symbol_type(env));
-  MZTIMEIT(fun, scheme_init_fun(env));
-  MZTIMEIT(symbol, scheme_init_symbol(env));
-  MZTIMEIT(list, scheme_init_list(env));
-  MZTIMEIT(number, scheme_init_number(env));
-  MZTIMEIT(numarith, scheme_init_numarith(env));
-  MZTIMEIT(numcomp, scheme_init_numcomp(env));
-  MZTIMEIT(numstr, scheme_init_numstr(env));
-  MZTIMEIT(bignum, scheme_init_bignum());
-  MZTIMEIT(char-const, scheme_init_char_constants());
-  MZTIMEIT(stx, scheme_init_stx(env));
-  MZTIMEIT(module, scheme_init_module(env));
-  MZTIMEIT(port, scheme_init_port(env));
-  MZTIMEIT(portfun, scheme_init_port_fun(env));
-  MZTIMEIT(string, scheme_init_string(env));
-  MZTIMEIT(vector, scheme_init_vector(env));
-  MZTIMEIT(char, scheme_init_char(env));
-  MZTIMEIT(bool, scheme_init_bool(env));
-  MZTIMEIT(syntax, scheme_init_compile(env));
-  MZTIMEIT(eval, scheme_init_eval(env));
-  MZTIMEIT(struct, scheme_init_struct(env));
-  MZTIMEIT(error, scheme_init_error(env));
-#ifndef NO_SCHEME_EXNS
-  MZTIMEIT(exn, scheme_init_exn(env));
-#endif
-  MZTIMEIT(process, scheme_init_thread(env));
-  scheme_init_port_wait();
-  scheme_init_inspector();
-  scheme_init_logger_wait();
-  scheme_init_struct_wait();
-  MZTIMEIT(reduced, scheme_init_reduced_proc_struct(env));
-#ifndef NO_SCHEME_THREADS
-  MZTIMEIT(sema, scheme_init_sema(env));
-#endif
-  MZTIMEIT(read, scheme_init_read(env));
-  MZTIMEIT(print, scheme_init_print(env));
-  MZTIMEIT(file, scheme_init_file(env));
-  MZTIMEIT(dynamic-extension, scheme_init_dynamic_extension(env));
-#ifndef NO_REGEXP_UTILS
-  MZTIMEIT(regexp, scheme_regexp_initialize(env));
-#endif
-  MZTIMEIT(params, scheme_init_parameterization());
-  MZTIMEIT(futures, scheme_init_futures_once());
-  MZTIMEIT(places, scheme_init_places_once());
-
-  MARK_START_TIME();
-
-  DONE_TIME(env);
-
-  scheme_register_network_evts();
-
-  REGISTER_SO(kernel_symbol);
-  kernel_symbol = scheme_intern_symbol("#%kernel");
-
-  MARK_START_TIME();
-
-  scheme_finish_kernel(env);
-
-#if USE_COMPILED_STARTUP
-  if (builtin_ref_counter != EXPECTED_PRIM_COUNT) {
-    printf("Primitive count %d doesn't match expected count %d\n"
-	   "Turn off USE_COMPILED_STARTUP in src/schminc.h\n",
-	   builtin_ref_counter, EXPECTED_PRIM_COUNT);
-    abort();
-  }
-#endif
-
-  init_flfxnum(env);
-  init_extfl(env);
-  init_futures(env);
-
-  builtin_unsafe_start = builtin_ref_counter;
-  init_unsafe(env);
-  init_foreign(env);
-  
-  scheme_init_print_global_constants();
-  scheme_init_variable_references_constants();
-
-  scheme_init_longdouble_fixup();
-
-  scheme_defining_primitives = 0;
-}
-
-int scheme_is_kernel_env(Scheme_Env *env) {
-  return (env == kernel_env);
-}
-
-Scheme_Env *scheme_get_kernel_env() {
-  return kernel_env;
-}
-
 /* Shutdown procedure for resetting a namespace: */
 static void skip_certain_things(Scheme_Object *o, Scheme_Close_Custodian_Client *f, void *data)
 {
@@ -743,114 +681,6 @@ static void skip_certain_things(Scheme_Object *o, Scheme_Close_Custodian_Client 
 /*========================================================================*/
 /*                        namespace constructors                          */
 /*========================================================================*/
-
-void scheme_prepare_env_stx_context(Scheme_Env *env)
-{
-  Scheme_Object *mc, *shift, *insp;
-
-  if (env->stx_context) return;
-
-  insp = env->access_insp;
-  if (!insp)
-    insp = scheme_get_param(scheme_current_config(), MZCONFIG_CODE_INSPECTOR);
-
-  if (env->module) {
-    shift = scheme_make_shift(scheme_make_integer(0),
-                              NULL, NULL,
-                              env->module_registry->exports,
-                              (env->module->prefix
-                               ? env->module->prefix->src_insp_desc
-                               : env->module->insp),
-                              insp);
-
-    mc = scheme_make_module_context(insp, shift, env->module->modname);
-  } else
-    mc = scheme_make_module_context(insp, NULL, scheme_false);
-
-  env->stx_context = mc;
-}
-
-Scheme_Env *scheme_make_empty_env(void)
-{
-  Scheme_Env *e;
-
-  e = make_empty_inited_env(7);
-
-  return e;
-}
-
-Scheme_Env *make_empty_inited_env(int toplevel_size)
-{
-  Scheme_Env *env;
-  Scheme_Object *vector;
-  Scheme_Hash_Table* hash_table;
-  Scheme_Module_Registry *reg;
-
-  env = make_env(NULL, toplevel_size);
-
-  vector = scheme_make_vector(5, scheme_false);
-  hash_table = scheme_make_hash_table(SCHEME_hash_ptr);
-  SCHEME_VEC_ELS(vector)[0] = (Scheme_Object *)hash_table;
-  env->modchain = vector;
-
-  reg = MALLOC_ONE_TAGGED(Scheme_Module_Registry);
-  reg->so.type = scheme_module_registry_type;
-  env->module_registry = reg;
-
-  hash_table = scheme_make_hash_table(SCHEME_hash_ptr);
-  reg->loaded = hash_table;
-  hash_table = scheme_make_hash_table(SCHEME_hash_ptr);
-  MZ_OPT_HASH_KEY(&(hash_table->iso)) |= 0x1; /* print (for debugging) as opqaue */
-  reg->exports = hash_table;
-
-  env->label_env = NULL;
-
-  return env;
-}
-
-Scheme_Env *make_empty_not_inited_env(int toplevel_size)
-{
-  Scheme_Env *e;
-
-  e = make_env(NULL, toplevel_size);
-
-  return e;
-}
-
-static Scheme_Env *make_env(Scheme_Env *base, int toplevel_size)
-{
-  Scheme_Env *env;
-  Scheme_Bucket_Table *bucket_table;
-
-  env = MALLOC_ONE_TAGGED(Scheme_Env);
-  env->so.type = scheme_namespace_type;
-
-  bucket_table = scheme_make_bucket_table(toplevel_size, SCHEME_hash_ptr);
-  env->toplevel = bucket_table;
-  env->toplevel->with_home = 1;
-
-  bucket_table = scheme_make_bucket_table(7, SCHEME_hash_ptr);
-  env->syntax = bucket_table;
-
-  if (base) {
-    env->modchain = base->modchain;
-    env->module_registry = base->module_registry;
-    env->module_pre_registry = base->module_pre_registry;
-    env->label_env = base->label_env;
-  } else {
-    env->modchain = NULL;
-    env->module_registry = NULL;
-    env->module_pre_registry = NULL;
-    env->label_env = NULL;
-  }
-
-  return env;
-}
-
-Scheme_Env *scheme_make_env_like(Scheme_Env *base)
-{
-  return make_env(base, 10);
-}
 
 Scheme_Object *scheme_get_home_weak_link(Scheme_Env *e)
 {
@@ -894,8 +724,77 @@ void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Env *e)
 }
 
 /*========================================================================*/
-/*                            startup instances                           */
+/*                     instances and startup env                          */
 /*========================================================================*/
+
+Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
+{
+  Scheme_Instance *inst;
+  Scheme_Bucket_Table *variables;
+
+  inst = MALLOC_ONE_TAGGED(Scheme_Instance);
+  inst->so.type = scheme_instance_type;
+
+  inst->name = name;
+  inst->data = data;
+
+  variables = scheme_make_bucket_table(7, SCHEME_hash_ptr);
+  inst->variables = variables;
+
+  return inst;
+}
+
+Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Instance *inst)
+{
+  Scheme_Bucket *b;
+    
+  b = scheme_bucket_from_table(inst->variables, (char *)symbol);
+  ASSERT_IS_VARIABLE_BUCKET(b);
+  scheme_set_bucket_home(b, env);
+
+  return b;
+}
+
+static Scheme_Startup_Env *make_setup_env(void)
+{
+  Scheme_Startup_Env *e;
+  Scheme_Hash_Table *primitive_instances;
+  Scheme_Instance *inst;
+
+  e = MALLOC_ONE_TAGGED(Scheme_Startup_Env);
+  e->so.type = scheme_startup_env_type;
+
+  primitive_instances = scheme_make_hash_table(SCHEME_hash_ptr);
+  e->primitive_instances = primitive_instances;
+
+  inst = scheme_make_instance(kernel_symbol, scheme_false);
+  e->current_instance = inst;
+  scheme_hash_set(e->primitive_instances, kernel_symbol, (Scheme_Object *)inst);
+
+  return e;
+}
+
+void scheme_switch_prim_instance(Scheme_Startup_Env *env, const char *name)
+{
+  Scheme_Instance *inst;
+  Scheme_Object *sym;
+
+  sym = scheme_intern_symbol(name);
+  
+  inst = (Scheme_Instance *)scheme_hash_get(env->primitive_instances, sym);
+  if (!inst) {
+    inst = scheme_make_instance(sym, scheme_false);
+    scheme_hash_set(e->primitive_instances, sym, (Scheme_Object *)inst);
+  }
+
+  e->current_instance = inst;
+}
+
+void scheme_restore_prim_instance(Scheme_Startup_Env *env)
+{
+  inst = (Scheme_Instance *)scheme_hash_get(env->primitive_instances, kernel_symbol);
+  e->current_instance = inst;
+}
 
 void scheme_add_to_primitive_instance(const char *name, Scheme_Object *obj,
                                       Scheme_Startup_Env *env)

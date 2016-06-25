@@ -64,50 +64,47 @@ static void register_traversers(void);
 void
 scheme_init_linklet(Scheme_Startup_Env *env)
 {
-  Scheme_Env *lenv;
-  
 #ifdef MZ_PRECISE_GC
   register_traversers();
 #endif
 
-  lenv = scheme_primitive_module(scheme_intern_symbol("#%linklet"), env);
+  scheme_switch_prim_instance(env, "#%linklet");
 
-  ADD_PRIM_W_ARITY("get-primitive-instance", get_primitive_instance, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("get-primitive-instance", get_primitive_instance, 1, 1, env);
 
-  ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, lenv);
-  ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, lenv);
-  ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, lenv);
+  ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
+  ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, env);
+  ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, env);
+  ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
+  ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
 
-  ADD_FOLDING_PRIM("instance?", instance_p, 1, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("make-instance", make_instance, 2, 2, lenv);
-  ADD_PRIM_W_ARITY("instance-name", instance_name, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("instance-data", instance_data, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("instance-variable-value", instance_variable_value, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 1, 1, lenv);
+  ADD_FOLDING_PRIM("instance?", instance_p, 1, 1, 1, env);
+  ADD_PRIM_W_ARITY("make-instance", make_instance, 2, 2, env);
+  ADD_PRIM_W_ARITY("instance-name", instance_name, 1, 1, env);
+  ADD_PRIM_W_ARITY("instance-data", instance_data, 1, 1, env);
+  ADD_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, env);
+  ADD_PRIM_W_ARITY("instance-variable-value", instance_variable_value, 1, 1, env);
+  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 1, 1, env);
+  ADD_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 1, 1, env);
 
-  ADD_FOLDING_PRIM("linklet_directory?", linklet_directory_p, 1, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("hash->linklet-directory", hash_to_linklet_directory, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("linklet-directory->hash", linklet_directory_to_hash, 1, 1, lenv);
+  ADD_FOLDING_PRIM("linklet_directory?", linklet_directory_p, 1, 1, 1, env);
+  ADD_PRIM_W_ARITY("hash->linklet-directory", hash_to_linklet_directory, 1, 1, env);
+  ADD_PRIM_W_ARITY("linklet-directory->hash", linklet_directory_to_hash, 1, 1, env);
 
-  ADD_FOLDING_PRIM("linklet_bundle?", linklet_bundle_p, 1, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("hash->linklet-bundle", hash_to_linklet_bundle, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, lenv);
+  ADD_FOLDING_PRIM("linklet_bundle?", linklet_bundle_p, 1, 1, 1, env);
+  ADD_PRIM_W_ARITY("hash->linklet-bundle", hash_to_linklet_bundle, 1, 1, env);
+  ADD_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, env);
 
-  ADD_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, lenv);
-  ADD_PRIM_W_ARITY("variable-reference->instance", variable_top_level_namespace, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, env);
+  ADD_PRIM_W_ARITY("variable-reference->instance", variable_top_level_namespace, 1, 1, env);
 
   REGISTER_SO(scheme_varref_const_p_proc);
   scheme_varref_const_p_proc = scheme_make_prim_w_arity(variable_const_p, 
                                                         "variable-reference-constant?", 
                                                         1, 1);
-  scheme_addto_prim_instance("variable-reference-constant?", scheme_varref_const_p_proc, lenv);
+  scheme_addto_prim_instance("variable-reference-constant?", scheme_varref_const_p_proc, env);
 
-  scheme_finish_primitive_module(lenv);
-  scheme_protect_primitive_provide(lenv, NULL);
+  scheme_restore_prim_instance(env);
 }
 
 /*========================================================================*/
@@ -130,7 +127,7 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
 {
   Scheme_Linklet *linklet;
   Scheme_Object *l;
-  Scheme_Env *inst, **instances;
+  Scheme_Instance *inst, **instances;
   int len = 0;
 
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
@@ -158,15 +155,15 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
   if (argc > 2) {
     if (!SAME_TYPE(SCHEME_TYPE(argv[2]), scheme_instance_type))
       scheme_wrong_contract("instantiate-linklet", "instance?", 2, argc, argv);
-    inst = (Scheme_Env *)argv[2];
+    inst = (Scheme_Instance *)argv[2];
   } else
-    inst = make_instance();
+    inst = scheme_make_instance(linklet->name, scheme_false);
 
-  instances = MALLOC_N(Scheme_Env*, len);
+  instances = MALLOC_N(Scheme_Instance*, len);
   l = argv[1];
   len = 0;
   while (!SCHEME_NULLP(l)) {
-    instances[len++] = (Scheme_Env *)SCHEME_CAR(l);
+    instances[len++] = (Scheme_Instance *)SCHEME_CAR(l);
     l = SCHEME_CDR(l);
     len++;
   }
@@ -520,14 +517,12 @@ static void *instantiate_linklet_k(void)
 {
   Scheme_Thread *p = scheme_current_thread;
   Scheme_Linklet *linklet = (Scheme_Linklet *)p->ku.k.p1;
-  Scheme_Env *instances = (Scheme_Env *)p->ku.k.p2;
-  Scheme_Env **instances = (Scheme_Env **)p->ku.k.p3;
+  Scheme_Instance *instances = (Scheme_Instance *)p->ku.k.p2;
+  Scheme_Instance **instances = (Scheme_Instance **)p->ku.k.p3;
   int multi = p->ku.k.i1;
   int num_instances = p->ku.k.i2;
   Scheme_Object *b;
   Scheme_Object **save_runstack;
-  Resolve_Prefix *rp;
-  Scheme_Env *env;
 
   p->ku.k.p1 = NULL;
   p->ku.k.p2 = NULL;
@@ -562,9 +557,9 @@ static void *instantiate_linklet_k(void)
   return (void *)v;
 }
 
-static Scheme_Object *instantiate_linklet(Scheme_Linklet *linket, Scheme_Env *instance, Scheme_Env *env,
-                                          int num_instances, Scheme_Env **instances,
-                                          int multi, int top)
+static Scheme_Object *do_instantiate_linklet(Scheme_Linklet *linket, Scheme_Instance *instance,
+                                             int num_instances, Scheme_Instance **instances,
+                                             int multi, int top)
 {
   Scheme_Thread *p = scheme_current_thread;
   
@@ -581,24 +576,24 @@ static Scheme_Object *instantiate_linklet(Scheme_Linklet *linket, Scheme_Env *in
     return (Scheme_Object *)instantiate_linklet_k();
 }
 
-Scheme_Object *scheme_instiantate_linklet(Scheme_Linklet *linklet, Scheme_Env *instance, int num_instances, Scheme_Env **instances)
+Scheme_Object *scheme_instiantate_linklet(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
 {
-  return _eval(linklet, instance, num_instances, instances, 0, 1);
+  return do_instantiate_linklet(linklet, instance, num_instances, instances, 0, 1);
 }
 
-Scheme_Object *scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme_Env *instance, int num_instances, Scheme_Env **instances)
+Scheme_Object *scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
 {
-  return _eval(linklet, instance, num_instances, instances, 1, 1);
+  return do_instantiate_linklet(linklet, instance, num_instances, instances, 1, 1);
 }
 
-Scheme_Object *_scheme_instiantate_linklet(Scheme_Linklet *linklet, Scheme_Env *instance, int num_instances, Scheme_Env **instances)
+Scheme_Object *_scheme_instiantate_linklet(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
 {
-  return _eval(linklet, instance, num_instances, instances, 0, 0);
+  return do_instantiate_linklet(linklet, instance, num_instances, instances, 0, 0);
 }
 
-Scheme_Object *_scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme_Env *instance, int num_instances, Scheme_Env **instances)
+Scheme_Object *_scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
 {
-  return _eval(linklet, instance, num_instances, instances, 1, 0);
+  return do_instantiate_linklet(linklet, instance, num_instances, instances, 1, 0);
 }
 
 /*========================================================================*/
@@ -644,7 +639,7 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
                             instances[j]->name,
                             instance->name);
       }
-      v = scheme_global_bucket(v, (Scheme_Env *)instances[j]);
+      v = scheme_instance_variable_bucket(v, (Scheme_Instance *)instances[j]);
       pf->a[pos++] = v;
     }
   }

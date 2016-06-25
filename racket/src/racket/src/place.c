@@ -129,37 +129,38 @@ static void register_traversers(void) { }
 
 void scheme_init_place(Scheme_Startup_Env *env)
 {
-  Scheme_Env *plenv;
-
 #ifdef MZ_PRECISE_GC
   register_traversers();
 #endif
-  
-  plenv = scheme_primitive_module(scheme_intern_symbol("#%place"), env);
 
-  GLOBAL_PRIM_W_ARITY("place-enabled?",       scheme_place_enabled,   0, 0, plenv);
-  GLOBAL_PRIM_W_ARITY("place-shared?",        scheme_place_shared,    1, 1, plenv);
-  PLACE_PRIM_W_ARITY("dynamic-place",         scheme_place,           5, 5, plenv);
-  PLACE_PRIM_W_ARITY("place-pumper-threads",  place_pumper_threads,   1, 2, plenv);
-  PLACE_PRIM_W_ARITY("place-sleep",           place_sleep,     1, 1, plenv);
-  PLACE_PRIM_W_ARITY("place-wait",            place_wait,      1, 1, plenv);
-  PLACE_PRIM_W_ARITY("place-kill",            place_kill,      1, 1, plenv);
-  PLACE_PRIM_W_ARITY("place-break",           place_break,     1, 2, plenv);
-  PLACE_PRIM_W_ARITY("place?",                place_p,         1, 1, plenv);
-  PLACE_PRIM_W_ARITY("place-channel",         place_channel,   0, 0, plenv);
-  PLACE_PRIM_W_ARITY("place-channel-put",     place_send,      2, 2, plenv);
-  PLACE_PRIM_W_ARITY("place-channel-get",     place_receive,   1, 1, plenv);
-  PLACE_PRIM_W_ARITY("place-channel?",        place_channel_p, 1, 1, plenv);
-  PLACE_PRIM_W_ARITY("place-message-allowed?", place_allowed_p, 1, 1, plenv);
-  PLACE_PRIM_W_ARITY("place-dead-evt",        make_place_dead, 1, 1, plenv);
+  scheme_switch_prim_instance(env, "#%place");
 
-  scheme_finish_primitive_module(plenv);
+  GLOBAL_PRIM_W_ARITY("place-enabled?",       scheme_place_enabled,   0, 0, env);
+  GLOBAL_PRIM_W_ARITY("place-shared?",        scheme_place_shared,    1, 1, env);
+  PLACE_PRIM_W_ARITY("dynamic-place",         scheme_place,           5, 5, env);
+  PLACE_PRIM_W_ARITY("place-pumper-threads",  place_pumper_threads,   1, 2, env);
+  PLACE_PRIM_W_ARITY("place-sleep",           place_sleep,     1, 1, env);
+  PLACE_PRIM_W_ARITY("place-wait",            place_wait,      1, 1, env);
+  PLACE_PRIM_W_ARITY("place-kill",            place_kill,      1, 1, env);
+  PLACE_PRIM_W_ARITY("place-break",           place_break,     1, 2, env);
+  PLACE_PRIM_W_ARITY("place?",                place_p,         1, 1, env);
+  PLACE_PRIM_W_ARITY("place-channel",         place_channel,   0, 0, env);
+  PLACE_PRIM_W_ARITY("place-channel-put",     place_send,      2, 2, env);
+  PLACE_PRIM_W_ARITY("place-channel-get",     place_receive,   1, 1, env);
+  PLACE_PRIM_W_ARITY("place-channel?",        place_channel_p, 1, 1, env);
+  PLACE_PRIM_W_ARITY("place-message-allowed?", place_allowed_p, 1, 1, env);
+  PLACE_PRIM_W_ARITY("place-dead-evt",        make_place_dead, 1, 1, env);
+
+  scheme_restore_prim_instance(env);
 
   /* Treat place creation as "unsafe", since the new place starts with
      permissive guards that can access unsafe features that affect
      existing places. */
   scheme_protect_primitive_provide(plenv, scheme_intern_symbol("dynamic-place"));
+}
 
+void scheme_init_place_per_place()
+{
 #ifdef MZ_USE_PLACES
   REGISTER_SO(all_child_places);
   

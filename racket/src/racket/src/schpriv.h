@@ -394,6 +394,7 @@ void scheme_init_foreign_globals();
 #endif
 void scheme_init_foreign(Scheme_Startup_Env *env);
 void scheme_init_place(Scheme_Startup_Env *env);
+void scheme_init_place_per_place();
 void scheme_init_places_once();
 void scheme_init_futures(Scheme_Startup_Env *env);
 void scheme_init_futures_once();
@@ -3094,10 +3095,8 @@ struct Scheme_Env {
 
 /* A Scheme_Starup_Env */
 struct Scheme_Startup_Env {
-  Scheme_Object so; /* scheme_env_type */
-
+    Scheme_Object so; /* scheme_startup_env_type */
   struct Scheme_Instance *current_instance;
-  
   Scheme_Hash_Table *primitive_instances; /* symbol -> instance */
 };
 
@@ -3174,6 +3173,8 @@ typedef struct Scheme_IR_Toplevel
 
 void scheme_addto_prim_instance(const char *name, Scheme_Object *obj, Scheme_Startup_Env *env);
 void scheme_addto_primitive_instance_by_symbol(Scheme_Object *name, Scheme_Object *obj, Scheme_Startup_Env *env);
+void scheme_switch_prim_instance(Scheme_Startup_Env *env, const char *name);
+void scheme_restore_prim_instance(Scheme_Startup_Env *env);
 
 #define ADD_FOLDING_PRIM(name, func, a1, a2, a3, env)      scheme_addto_prim_instance(name, scheme_make_folding_prim(func, name, a1, a2, a3), env)
 #define ADD_IMMED_PRIM(name, func, a1, a2, env)            scheme_addto_prim_instance(name, scheme_make_immed_prim(func, name, a1, a2), env)

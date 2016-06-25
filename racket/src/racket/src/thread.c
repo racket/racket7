@@ -674,25 +674,20 @@ void scheme_init_parameterization()
 
 void scheme_init_paramz(Scheme_Startup_Env *env)
 {
-  Scheme_Object *v;
-  Scheme_Env *newenv;
-
-  v = scheme_intern_symbol("#%paramz");
-  newenv = scheme_primitive_module(v, env);
+  scheme_switch_prim_instance(env, "#%paramz");
   
-  scheme_addto_prim_instance("exception-handler-key", scheme_exn_handler_key     , newenv);
-  scheme_addto_prim_instance("parameterization-key" , scheme_parameterization_key, newenv);
-  scheme_addto_prim_instance("break-enabled-key"    , scheme_break_enabled_key   , newenv);
+  scheme_addto_prim_instance("exception-handler-key", scheme_exn_handler_key     , env);
+  scheme_addto_prim_instance("parameterization-key" , scheme_parameterization_key, env);
+  scheme_addto_prim_instance("break-enabled-key"    , scheme_break_enabled_key   , env);
 
-  GLOBAL_PRIM_W_ARITY("extend-parameterization" , scheme_extend_parameterization , 1, -1, newenv);
-  GLOBAL_PRIM_W_ARITY("check-for-break"         , check_break_now         , 0,  0, newenv);
-  GLOBAL_PRIM_W_ARITY("reparameterize"          , reparameterize          , 1,  1, newenv);
-  GLOBAL_PRIM_W_ARITY("make-custodian-from-main", make_custodian_from_main, 0,  0, newenv);
+  GLOBAL_PRIM_W_ARITY("extend-parameterization" , scheme_extend_parameterization , 1, -1, env);
+  GLOBAL_PRIM_W_ARITY("check-for-break"         , check_break_now         , 0,  0, env);
+  GLOBAL_PRIM_W_ARITY("reparameterize"          , reparameterize          , 1,  1, env);
+  GLOBAL_PRIM_W_ARITY("make-custodian-from-main", make_custodian_from_main, 0,  0, env);
 
-  GLOBAL_PRIM_W_ARITY("cache-configuration"     , cache_configuration, 2,  2, newenv);
+  GLOBAL_PRIM_W_ARITY("cache-configuration"     , cache_configuration, 2,  2, env);
 
-  scheme_finish_primitive_module(newenv);
-  scheme_protect_primitive_provide(newenv, NULL);
+  scheme_restore_prim_instance(env);
 }
 
 static Scheme_Object *collect_garbage(int argc, Scheme_Object *argv[])
