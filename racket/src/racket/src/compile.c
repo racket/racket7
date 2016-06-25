@@ -34,7 +34,6 @@
 
 #include "schpriv.h"
 #include "schmach.h"
-#include "schexpobs.h"
 
 /* symbols */
 ROSYM static Scheme_Object *lambda_symbol;

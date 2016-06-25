@@ -30,7 +30,6 @@
    overflow and continuation-jump limits. */
 
 #include "schpriv.h"
-#include "schexpobs.h"
 #include "schmach.h"
 
 /* The implementations of the time primitives, such as

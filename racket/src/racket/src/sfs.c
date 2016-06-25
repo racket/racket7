@@ -29,7 +29,6 @@
 
 #include "schpriv.h"
 #include "schrunst.h"
-#include "schexpobs.h"
 
 struct SFS_Info {
   MZTAG_IF_REQUIRED  

@@ -24,7 +24,6 @@
 */
 
 #include "schpriv.h"
-#include "schexpobs.h"
 
 #define TABLE_CACHE_MAX_SIZE 2048
 

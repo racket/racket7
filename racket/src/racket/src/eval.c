@@ -139,7 +139,6 @@
 
 #include "schpriv.h"
 #include "schrunst.h"
-#include "schexpobs.h"
 #ifdef MZ_USE_FUTURES
 # include "future.h"
 #endif

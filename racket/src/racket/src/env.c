@@ -26,7 +26,6 @@
 #include "schpriv.h"
 #include "schminc.h"
 #include "schmach.h"
-#include "schexpobs.h"
 #ifdef MZ_USE_FUTURES
 # include "future.h"
 #endif
