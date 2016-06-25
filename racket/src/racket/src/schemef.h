@@ -1029,7 +1029,6 @@ MZ_EXTERN Scheme_Object *scheme_make_envunbox(Scheme_Object *value);
 MZ_EXTERN Scheme_Object *scheme_lookup_global(Scheme_Object *symbol, Scheme_Env *env);
 
 MZ_EXTERN Scheme_Bucket *scheme_global_bucket(Scheme_Object *symbol, Scheme_Env *env);
-MZ_EXTERN Scheme_Bucket *scheme_global_keyword_bucket(Scheme_Object *symbol, Scheme_Env *env);
 MZ_EXTERN Scheme_Bucket *scheme_module_bucket(Scheme_Object *mod, Scheme_Object *var, int pos, Scheme_Env *env);
 
 MZ_EXTERN Scheme_Object *scheme_builtin_value(const char *name); /* convenience */

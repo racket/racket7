@@ -87,7 +87,7 @@ READ_ONLY static Scheme_Object *foreign_modname;
 /*                           initialization                           */
 /**********************************************************************/
 
-void scheme_init_module(Scheme_Env *env)
+void scheme_init_module(Scheme_Startup_Env *env)
 {
   REGISTER_SO(kernel_symbol);
   REGISTER_SO(kernel_modname);
@@ -301,7 +301,7 @@ static Scheme_Object *get_primitive_instance(int argc, Scheme_Object *argv[]);
 static Scheme_Object *instance_variable_value(int argc, Scheme_Object *argv[]);
 static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object *argv[]);
 
-void scheme_init_linklet(Scheme_Env *env)
+void scheme_init_linklet(Scheme_Startup_Env *env)
 {
   Scheme_Env *newenv;
   Scheme_Object *modname;

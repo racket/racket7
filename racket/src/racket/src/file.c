@@ -275,7 +275,7 @@ typedef BOOL (WINAPI*DeviceIoControlProc_t)(HANDLE hDevice, DWORD dwIoControlCod
 static DeviceIoControlProc_t DeviceIoControlProc;
 #endif
 
-void scheme_init_file(Scheme_Env *env)
+void scheme_init_file(Scheme_Startup_Env *env)
 {
   Scheme_Object *p;
 
@@ -338,214 +338,214 @@ void scheme_init_file(Scheme_Env *env)
   p = scheme_make_immed_prim(path_p, "path?", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("path?", p, env);
+  scheme_addto_prim_instance("path?", p, env);
 
-  scheme_add_global_constant("path-for-some-system?", 
+  scheme_addto_prim_instance("path-for-some-system?", 
 			     scheme_make_folding_prim(general_path_p, 
                                                       "path-for-some-system?", 
                                                       1, 1, 1), 
 			     env);
-  scheme_add_global_constant("path-convention-type", 
+  scheme_addto_prim_instance("path-convention-type", 
 			     scheme_make_folding_prim(path_kind, 
                                                       "path-convention-type", 
                                                       1, 1, 1), 
 			     env);
-  scheme_add_global_constant("system-path-convention-type", 
+  scheme_addto_prim_instance("system-path-convention-type", 
 			     scheme_make_immed_prim(platform_path_kind, 
                                                     "system-path-convention-type", 
                                                     0, 0),
 			     env);
-  scheme_add_global_constant("path->string", 
+  scheme_addto_prim_instance("path->string", 
 			     scheme_make_immed_prim(path_to_string, 
                                                     "path->string", 
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("path->bytes", 
+  scheme_addto_prim_instance("path->bytes", 
 			     scheme_make_immed_prim(path_to_bytes, 
                                                     "path->bytes", 
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("path-element->bytes", 
+  scheme_addto_prim_instance("path-element->bytes", 
 			     scheme_make_immed_prim(path_element_to_bytes, 
                                                     "path-element->bytes", 
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("path-element->string", 
+  scheme_addto_prim_instance("path-element->string", 
 			     scheme_make_immed_prim(path_element_to_string, 
                                                     "path-element->string", 
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("string->path", 
+  scheme_addto_prim_instance("string->path", 
 			     scheme_make_immed_prim(string_to_path, 
                                                     "string->path", 
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("bytes->path", 
+  scheme_addto_prim_instance("bytes->path", 
 			     scheme_make_immed_prim(bytes_to_path, 
                                                     "bytes->path", 
                                                     1, 2), 
 			     env);
-  scheme_add_global_constant("bytes->path-element", 
+  scheme_addto_prim_instance("bytes->path-element", 
 			     scheme_make_immed_prim(bytes_to_path_element, 
                                                     "bytes->path-element", 
                                                     1, 2), 
 			     env);
-  scheme_add_global_constant("string->path-element", 
+  scheme_addto_prim_instance("string->path-element", 
 			     scheme_make_immed_prim(string_to_path_element, 
                                                     "string->path-element", 
                                                     1, 1), 
 			     env);
 
-  scheme_add_global_constant("file-exists?", 
+  scheme_addto_prim_instance("file-exists?", 
 			     scheme_make_prim_w_arity(file_exists, 
 						      "file-exists?", 
 						      1, 1), 
 			     env);
-  scheme_add_global_constant("directory-exists?", 
+  scheme_addto_prim_instance("directory-exists?", 
 			     scheme_make_prim_w_arity(directory_exists, 
 						      "directory-exists?", 
 						      1, 1), 
 			     env);
-  scheme_add_global_constant("link-exists?", 
+  scheme_addto_prim_instance("link-exists?", 
 			     scheme_make_prim_w_arity(link_exists, 
 						      "link-exists?", 
 						      1, 1), 
 			     env);
 #ifndef NO_FILE_SYSTEM_UTILS
-  scheme_add_global_constant("delete-file", 
+  scheme_addto_prim_instance("delete-file", 
 			     scheme_make_prim_w_arity(delete_file, 
 						      "delete-file", 
 						      1, 1), 
 			     env);
-  scheme_add_global_constant("rename-file-or-directory", 
+  scheme_addto_prim_instance("rename-file-or-directory", 
 			     scheme_make_prim_w_arity(rename_file, 
 						      "rename-file-or-directory", 
 						      2, 3), 
 			     env);
-  scheme_add_global_constant("copy-file", 
+  scheme_addto_prim_instance("copy-file", 
 			     scheme_make_prim_w_arity(copy_file, 
 						      "copy-file", 
 						      2, 3), 
 			     env);
-  scheme_add_global_constant("build-path", 
+  scheme_addto_prim_instance("build-path", 
 			     scheme_make_immed_prim(scheme_build_path,
                                                     "build-path", 
                                                     1, -1), 
 			     env);
-  scheme_add_global_constant("build-path/convention-type", 
+  scheme_addto_prim_instance("build-path/convention-type", 
 			     scheme_make_immed_prim(build_path_kind,
                                                     "build-path/convention-type", 
                                                     2, -1), 
 			     env);
-  scheme_add_global_constant("path->directory-path",
+  scheme_addto_prim_instance("path->directory-path",
 			     scheme_make_immed_prim(path_to_directory_path,
                                                     "path->directory-path",
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("split-path", 
+  scheme_addto_prim_instance("split-path", 
 			     scheme_make_prim_w_arity2(split_path,
 						       "split-path",
 						       1, 1,
 						       3, 3), 
 			     env);
-  scheme_add_global_constant("explode-path", 
+  scheme_addto_prim_instance("explode-path", 
 			     scheme_make_immed_prim(explode_path,
                                                     "explode-path",
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("relative-path?", 
+  scheme_addto_prim_instance("relative-path?", 
 			     scheme_make_immed_prim(relative_path_p,
                                                     "relative-path?",
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("absolute-path?", 
+  scheme_addto_prim_instance("absolute-path?", 
 			     scheme_make_immed_prim(absolute_path_p,
                                                     "absolute-path?",
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("complete-path?", 
+  scheme_addto_prim_instance("complete-path?", 
 			     scheme_make_immed_prim(complete_path_p,
                                                     "complete-path?",
                                                     1, 1), 
 			     env);
-  scheme_add_global_constant("path->complete-path",
+  scheme_addto_prim_instance("path->complete-path",
 			     scheme_make_immed_prim(path_to_complete_path,
                                                     "path->complete-path",
                                                     1, 2), 
 			     env);
-  scheme_add_global_constant("resolve-path",
+  scheme_addto_prim_instance("resolve-path",
 			     scheme_make_prim_w_arity(resolve_path,
 						      "resolve-path",
 						      1, 1), 
 			     env);
-  scheme_add_global_constant("simplify-path",
+  scheme_addto_prim_instance("simplify-path",
 			     scheme_make_prim_w_arity(scheme_simplify_path,
 						      "simplify-path",
 						      1, 2), 
 			     env);
-  scheme_add_global_constant("cleanse-path",
+  scheme_addto_prim_instance("cleanse-path",
 			     scheme_make_prim_w_arity(cleanse_path,
 						      "cleanse-path",
 						      1, 1), 
 			     env);
-  scheme_add_global_constant("expand-user-path",
+  scheme_addto_prim_instance("expand-user-path",
 			     scheme_make_prim_w_arity(expand_user_path,
 						      "expand-user-path",
 						      1, 1), 
 			     env);
-  scheme_add_global_constant("directory-list",
+  scheme_addto_prim_instance("directory-list",
 			     scheme_make_prim_w_arity(directory_list,
 						      "directory-list",
 						      0, 1), 
 			     env);
-  scheme_add_global_constant("filesystem-root-list",
+  scheme_addto_prim_instance("filesystem-root-list",
 			     scheme_make_prim_w_arity(filesystem_root_list,
 						      "filesystem-root-list",
 						      0, 0), 
 			     env);
-  scheme_add_global_constant("make-directory",
+  scheme_addto_prim_instance("make-directory",
 			     scheme_make_prim_w_arity(make_directory,
 						      "make-directory",
 						      1, 1), 
 			     env);
-  scheme_add_global_constant("delete-directory",
+  scheme_addto_prim_instance("delete-directory",
 			     scheme_make_prim_w_arity(delete_directory,
 						      "delete-directory",
 						      1, 1), 
 			     env);
-  scheme_add_global_constant("make-file-or-directory-link",
+  scheme_addto_prim_instance("make-file-or-directory-link",
 			     scheme_make_prim_w_arity(make_link,
 						      "make-file-or-directory-link",
 						      2, 2), 
 			     env);
-  scheme_add_global_constant("file-or-directory-modify-seconds",
+  scheme_addto_prim_instance("file-or-directory-modify-seconds",
 			     scheme_make_prim_w_arity(file_modify_seconds,
 						      "file-or-directory-modify-seconds",
 						      1, 3), 
 			     env);
-  scheme_add_global_constant("file-or-directory-permissions",
+  scheme_addto_prim_instance("file-or-directory-permissions",
 			     scheme_make_prim_w_arity(file_or_dir_permissions,
 						      "file-or-directory-permissions",
 						      1, 2), 
 			     env);
-  scheme_add_global_constant("file-or-directory-identity",
+  scheme_addto_prim_instance("file-or-directory-identity",
 			     scheme_make_prim_w_arity(file_identity,
 						      "file-or-directory-identity",
 						      1, 2), 
 			     env);
-  scheme_add_global_constant("file-size",
+  scheme_addto_prim_instance("file-size",
 			     scheme_make_prim_w_arity(file_size,
 						      "file-size",
 						      1, 1), 
 			     env);
 
-  scheme_add_global_constant("current-drive", 
+  scheme_addto_prim_instance("current-drive", 
 			     scheme_make_prim_w_arity(current_drive, 
 						      "current-drive", 
 						      0, 0), 
 			     env);
 
-  scheme_add_global_constant("find-system-path", 
+  scheme_addto_prim_instance("find-system-path", 
 			     scheme_make_prim_w_arity(find_system_path, 
 						      "find-system-path", 
 						      1, 1), 
@@ -554,51 +554,51 @@ void scheme_init_file(Scheme_Env *env)
 #endif
 
 #ifdef DIR_FUNCTION
-  scheme_add_global_constant("current-directory",
+  scheme_addto_prim_instance("current-directory",
 			     scheme_register_parameter(current_directory,
 						       "current-directory", 
 						       MZCONFIG_CURRENT_DIRECTORY),
 			     env);
-  scheme_add_global_constant("current-directory-for-user",
+  scheme_addto_prim_instance("current-directory-for-user",
 			     scheme_register_parameter(current_user_directory,
 						       "current-directory-for-user", 
 						       MZCONFIG_CURRENT_USER_DIRECTORY),
 			     env);
 #endif
-  scheme_add_global_constant("current-force-delete-permissions",
+  scheme_addto_prim_instance("current-force-delete-permissions",
 			     scheme_register_parameter(current_force_delete_perms,
 						       "current-force-delete-permissions",
 						       MZCONFIG_FORCE_DELETE_PERMS),
 			     env);
 
 #ifndef NO_FILE_SYSTEM_UTILS
-  scheme_add_global_constant("current-library-collection-paths",
+  scheme_addto_prim_instance("current-library-collection-paths",
 			     scheme_register_parameter(current_library_collection_paths,
 						       "current-library-collection-paths",
 						       MZCONFIG_COLLECTION_PATHS),
 			     env);
-  scheme_add_global_constant("current-library-collection-links",
+  scheme_addto_prim_instance("current-library-collection-links",
 			     scheme_register_parameter(current_library_collection_links,
 						       "current-library-collection-links",
 						       MZCONFIG_COLLECTION_LINKS),
 			     env);
 #endif
-  scheme_add_global_constant("use-compiled-file-paths",
+  scheme_addto_prim_instance("use-compiled-file-paths",
 			     scheme_register_parameter(use_compiled_kind,
 						       "use-compiled-file-paths",
 						       MZCONFIG_USE_COMPILED_KIND),
 			     env);
-  scheme_add_global_constant("current-compiled-file-roots",
+  scheme_addto_prim_instance("current-compiled-file-roots",
 			     scheme_register_parameter(compiled_file_roots,
 						       "current-compiled-file-roots",
 						       MZCONFIG_USE_COMPILED_ROOTS),
 			     env);
-  scheme_add_global_constant("use-user-specific-search-paths",
+  scheme_addto_prim_instance("use-user-specific-search-paths",
 			     scheme_register_parameter(use_user_paths,
 						       "use-user-specific-search-paths",
 						       MZCONFIG_USE_USER_PATHS),
 			     env);
-  scheme_add_global_constant("use-collection-link-paths",
+  scheme_addto_prim_instance("use-collection-link-paths",
 			     scheme_register_parameter(use_link_paths,
 						       "use-collection-link-paths",
 						       MZCONFIG_USE_LINK_PATHS),

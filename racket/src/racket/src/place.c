@@ -127,7 +127,7 @@ static void register_traversers(void) { }
 /*                             initialization                             */
 /*========================================================================*/
 
-void scheme_init_place(Scheme_Env *env)
+void scheme_init_place(Scheme_Startup_Env *env)
 {
   Scheme_Env *plenv;
 

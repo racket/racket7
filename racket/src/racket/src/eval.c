@@ -270,7 +270,7 @@ static void register_traversers(void);
 /*========================================================================*/
 
 void
-scheme_init_eval (Scheme_Env *env)
+scheme_init_eval (Scheme_Startup_Env *env)
 {
 #ifdef MZ_PRECISE_GC
   register_traversers();
@@ -295,14 +295,14 @@ scheme_init_eval (Scheme_Env *env)
   REGISTER_SO(scheme_stack_dump_key);
   scheme_stack_dump_key = scheme_make_symbol("stk"); /* uninterned! */
 
-  GLOBAL_PRIM_W_ARITY("break-enabled",                           enable_break,                          0, 1, env);
+  ADD_PRIM_W_ARITY("break-enabled",                           enable_break,                          0, 1, env);
 
-  GLOBAL_PARAMETER("current-eval",                      current_eval,             MZCONFIG_EVAL_HANDLER,          env);
-  GLOBAL_PARAMETER("current-compile",                   current_compile,          MZCONFIG_COMPILE_HANDLER,       env);
-  GLOBAL_PARAMETER("compile-allow-set!-undefined",      allow_set_undefined,      MZCONFIG_ALLOW_SET_UNDEFINED,   env);
-  GLOBAL_PARAMETER("compile-enforce-module-constants",  compile_module_constants, MZCONFIG_COMPILE_MODULE_CONSTS, env);
-  GLOBAL_PARAMETER("eval-jit-enabled",                  use_jit,                  MZCONFIG_USE_JIT,               env);
-  GLOBAL_PARAMETER("compile-context-preservation-enabled", disallow_inline,       MZCONFIG_DISALLOW_INLINE,       env);
+  ADD_PARAMETER("current-eval",                      current_eval,             MZCONFIG_EVAL_HANDLER,          env);
+  ADD_PARAMETER("current-compile",                   current_compile,          MZCONFIG_COMPILE_HANDLER,       env);
+  ADD_PARAMETER("compile-allow-set!-undefined",      allow_set_undefined,      MZCONFIG_ALLOW_SET_UNDEFINED,   env);
+  ADD_PARAMETER("compile-enforce-module-constants",  compile_module_constants, MZCONFIG_COMPILE_MODULE_CONSTS, env);
+  ADD_PARAMETER("eval-jit-enabled",                  use_jit,                  MZCONFIG_USE_JIT,               env);
+  ADD_PARAMETER("compile-context-preservation-enabled", disallow_inline,       MZCONFIG_DISALLOW_INLINE,       env);
 
   if (scheme_getenv("PLT_VALIDATE_COMPILE")) {
     /* Enables validation of bytecode as it is generated,
@@ -1629,9 +1629,9 @@ void scheme_set_global_bucket(char *who, Scheme_Bucket *b, Scheme_Object *val,
       && (val || !(((Scheme_Bucket_With_Flags *)b)->flags & GLOB_IS_LINKED)))
     b->val = val;
   else {
-    Scheme_Env *home;
+    Scheme_Instance *home;
     home = scheme_get_bucket_home(b);
-    if (home && home->module) {
+    if (home) {
       const char *msg;
       int is_set;
 
@@ -1663,7 +1663,7 @@ void scheme_set_global_bucket(char *who, Scheme_Bucket *b, Scheme_Object *val,
                            : "constant")
 			: "variable"),
 		       (Scheme_Object *)b->key,
-		       scheme_get_modsrc(home->module));
+                       home->name);
     } else {
       scheme_raise_exn(MZEXN_FAIL_CONTRACT_VARIABLE, b->key,
 		       "%s: " CANNOT_SET_ERROR_STR ";\n"
@@ -1820,7 +1820,7 @@ static Scheme_Object *ref_execute (Scheme_Object *data)
   Scheme_Object *o;
   Scheme_Object *var;
   Scheme_Object *tl = SCHEME_PTR1_VAL(data);
-  Scheme_Env *env;
+  Scheme_Instance *home;
 
   toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(tl)];
   var = toplevels->a[SCHEME_TOPLEVEL_POS(tl)];
@@ -3798,8 +3798,8 @@ void scheme_embedded_load(intptr_t len, const char *desc, int predefined)
     scheme_starting_up = 0;
 }
 
-void scheme_init_collection_paths_post(Scheme_Env *global_env, Scheme_Object *extra_dirs, Scheme_Object *post_dirs)
-{		
+void scheme_init_collection_paths_post(Scheme_Env *env, Scheme_Object *extra_dirs, Scheme_Object *post_dirs)
+{
   mz_jmp_buf * volatile save, newbuf;
   Scheme_Thread * volatile p;
   p = scheme_get_current_thread();
@@ -3831,9 +3831,9 @@ void scheme_init_collection_paths_post(Scheme_Env *global_env, Scheme_Object *ex
   p->error_buf = save;
 }
 
-void scheme_init_collection_paths(Scheme_Env *global_env, Scheme_Object *extra_dirs)
+void scheme_init_collection_paths(Scheme_Env *env, Scheme_Object *extra_dirs)
 {
-  scheme_init_collection_paths_post(global_env, extra_dirs, scheme_null);
+  scheme_init_collection_paths_post(env, extra_dirs, scheme_null);
 }
 
 void scheme_init_compiled_roots(Scheme_Env *global_env, const char *paths)

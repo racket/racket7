@@ -186,7 +186,7 @@ static Scheme_Object *writable_struct_subs(Scheme_Object *s, int for_write, Prin
 
 #define make_hash_table_symtab() scheme_make_hash_table_eqv()
 
-void scheme_init_print(Scheme_Env *env)
+void scheme_init_print(Scheme_Startup_Env *env)
 {
   int i;
 

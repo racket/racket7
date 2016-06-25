@@ -310,7 +310,7 @@ Scheme_Thread *scheme_make_thread(void*);
 void scheme_init_process_globals(void);
 void scheme_init_true_false(void);
 void scheme_init_symbol_table(void);
-void scheme_init_symbol_type(Scheme_Env *env);
+void scheme_init_symbol_type(Scheme_Startup_Env *env);
 void scheme_init_type();
 void scheme_init_custodian_extractors();
 void scheme_init_bignum();
@@ -323,66 +323,66 @@ void scheme_init_validate();
 void scheme_init_port_wait();
 void scheme_init_logger_wait();
 void scheme_init_struct_wait();
-void scheme_init_list(Scheme_Env *env);
-void scheme_init_unsafe_list(Scheme_Env *env);
-void scheme_init_unsafe_hash(Scheme_Env *env);
-void scheme_init_stx(Scheme_Env *env);
-void scheme_init_module(Scheme_Env *env);
+void scheme_init_list(Scheme_Startup_Env *env);
+void scheme_init_unsafe_list(Scheme_Startup_Env *env);
+void scheme_init_unsafe_hash(Scheme_Startup_Env *env);
+void scheme_init_stx(Scheme_Startup_Env *env);
+void scheme_init_module(Scheme_Startup_Env *env);
 void scheme_init_module_path_table(void);
-void scheme_init_port(Scheme_Env *env);
-void scheme_init_port_fun(Scheme_Env *env);
-void scheme_init_network(Scheme_Env *env);
-void scheme_init_file(Scheme_Env *env);
-void scheme_init_proc(Scheme_Env *env);
-void scheme_init_vector(Scheme_Env *env);
-void scheme_init_unsafe_vector(Scheme_Env *env);
-void scheme_init_string(Scheme_Env *env);
-void scheme_init_number(Scheme_Env *env);
-void scheme_init_flfxnum_number(Scheme_Env *env);
-void scheme_init_extfl_number(Scheme_Env *env);
-void scheme_init_unsafe_number(Scheme_Env *env);
-void scheme_init_extfl_unsafe_number(Scheme_Env *env);
-void scheme_init_numarith(Scheme_Env *env);
-void scheme_init_flfxnum_numarith(Scheme_Env *env);
-void scheme_init_extfl_numarith(Scheme_Env *env);
-void scheme_init_unsafe_numarith(Scheme_Env *env);
-void scheme_init_extfl_unsafe_numarith(Scheme_Env *env);
-void scheme_init_numcomp(Scheme_Env *env);
-void scheme_init_flfxnum_numcomp(Scheme_Env *env);
-void scheme_init_extfl_numcomp(Scheme_Env *env);
-void scheme_init_unsafe_numcomp(Scheme_Env *env);
-void scheme_init_extfl_unsafe_numcomp(Scheme_Env *env);
-void scheme_init_numstr(Scheme_Env *env);
-void scheme_init_extfl_numstr(Scheme_Env *env);
-void scheme_init_eval(Scheme_Env *env);
-void scheme_init_promise(Scheme_Env *env);
-void scheme_init_struct(Scheme_Env *env);
-void scheme_init_reduced_proc_struct(Scheme_Env *env);
-void scheme_init_fun(Scheme_Env *env);
-void scheme_init_unsafe_fun(Scheme_Env *env);
-void scheme_init_compile(Scheme_Env *env);
-void scheme_init_symbol(Scheme_Env *env);
+void scheme_init_port(Scheme_Startup_Env *env);
+void scheme_init_port_fun(Scheme_Startup_Env *env);
+void scheme_init_network(Scheme_Startup_Env *env);
+void scheme_init_file(Scheme_Startup_Env *env);
+void scheme_init_proc(Scheme_Startup_Env *env);
+void scheme_init_vector(Scheme_Startup_Env *env);
+void scheme_init_unsafe_vector(Scheme_Startup_Env *env);
+void scheme_init_string(Scheme_Startup_Env *env);
+void scheme_init_number(Scheme_Startup_Env *env);
+void scheme_init_flfxnum_number(Scheme_Startup_Env *env);
+void scheme_init_extfl_number(Scheme_Startup_Env *env);
+void scheme_init_unsafe_number(Scheme_Startup_Env *env);
+void scheme_init_extfl_unsafe_number(Scheme_Startup_Env *env);
+void scheme_init_numarith(Scheme_Startup_Env *env);
+void scheme_init_flfxnum_numarith(Scheme_Startup_Env *env);
+void scheme_init_extfl_numarith(Scheme_Startup_Env *env);
+void scheme_init_unsafe_numarith(Scheme_Startup_Env *env);
+void scheme_init_extfl_unsafe_numarith(Scheme_Startup_Env *env);
+void scheme_init_numcomp(Scheme_Startup_Env *env);
+void scheme_init_flfxnum_numcomp(Scheme_Startup_Env *env);
+void scheme_init_extfl_numcomp(Scheme_Startup_Env *env);
+void scheme_init_unsafe_numcomp(Scheme_Startup_Env *env);
+void scheme_init_extfl_unsafe_numcomp(Scheme_Startup_Env *env);
+void scheme_init_numstr(Scheme_Startup_Env *env);
+void scheme_init_extfl_numstr(Scheme_Startup_Env *env);
+void scheme_init_eval(Scheme_Startup_Env *env);
+void scheme_init_promise(Scheme_Startup_Env *env);
+void scheme_init_struct(Scheme_Startup_Env *env);
+void scheme_init_reduced_proc_struct(Scheme_Startup_Env *env);
+void scheme_init_fun(Scheme_Startup_Env *env);
+void scheme_init_unsafe_fun(Scheme_Startup_Env *env);
+void scheme_init_compile(Scheme_Startup_Env *env);
+void scheme_init_symbol(Scheme_Startup_Env *env);
 void scheme_init_char_constants(void);
-void scheme_init_char(Scheme_Env *env);
-void scheme_init_bool(Scheme_Env *env);
-void scheme_init_syntax(Scheme_Env *env);
-void scheme_init_marshal(Scheme_Env *env);
-void scheme_init_error(Scheme_Env *env);
+void scheme_init_char(Scheme_Startup_Env *env);
+void scheme_init_bool(Scheme_Startup_Env *env);
+void scheme_init_syntax(Scheme_Startup_Env *env);
+void scheme_init_marshal(Scheme_Startup_Env *env);
+void scheme_init_error(Scheme_Startup_Env *env);
 #ifndef NO_SCHEME_EXNS
-void scheme_init_exn(Scheme_Env *env);
+void scheme_init_exn(Scheme_Startup_Env *env);
 #endif
-void scheme_init_debug(Scheme_Env *env);
-void scheme_init_thread(Scheme_Env *env);
-void scheme_init_read(Scheme_Env *env);
-void scheme_init_print(Scheme_Env *env);
+void scheme_init_debug(Scheme_Startup_Env *env);
+void scheme_init_thread(Scheme_Startup_Env *env);
+void scheme_init_read(Scheme_Startup_Env *env);
+void scheme_init_print(Scheme_Startup_Env *env);
 #ifndef NO_SCHEME_THREADS
-void scheme_init_sema(Scheme_Env *env);
+void scheme_init_sema(Scheme_Startup_Env *env);
 #endif
-void scheme_init_dynamic_extension(Scheme_Env *env);
+void scheme_init_dynamic_extension(Scheme_Startup_Env *env);
 #ifndef NO_REGEXP_UTILS
-extern void scheme_regexp_initialize(Scheme_Env *env);
+extern void scheme_regexp_initialize(Scheme_Startup_Env *env);
 #endif
-void scheme_init_paramz(Scheme_Env *env);
+void scheme_init_paramz(Scheme_Startup_Env *env);
 void scheme_init_parameterization();
 void scheme_init_getenv(void);
 void scheme_init_inspector(void);
@@ -392,14 +392,14 @@ void scheme_init_longdouble_fixup(void);
 #ifndef DONT_USE_FOREIGN
 void scheme_init_foreign_globals();
 #endif
-void scheme_init_foreign(Scheme_Env *env);
-void scheme_init_place(Scheme_Env *env);
+void scheme_init_foreign(Scheme_Startup_Env *env);
+void scheme_init_place(Scheme_Startup_Env *env);
 void scheme_init_places_once();
-void scheme_init_futures(Scheme_Env *env);
+void scheme_init_futures(Scheme_Startup_Env *env);
 void scheme_init_futures_once();
 void scheme_init_futures_per_place();
 void scheme_end_futures_per_place();
-void scheme_init_linklet(Scheme_Env *env);
+void scheme_init_linklet(Scheme_Startup_Env *env);
  
 void scheme_init_print_buffers_places(void);
 void scheme_init_string_places(void);
@@ -459,7 +459,7 @@ void scheme_release_process_job_object(void);
 #endif
 void scheme_init_module_resolver(void);
 
-void scheme_finish_kernel(Scheme_Env *env);
+void scheme_finish_kernel(Scheme_Startup_Env *env);
 
 void scheme_init_syntax_bindings(void);
 
@@ -474,10 +474,7 @@ extern int scheme_builtin_ref_counter;
 Scheme_Object **scheme_make_builtin_references_table(int *_unsafe_start);
 Scheme_Object *scheme_make_local(Scheme_Type type, int pos, int flags);
 
-void scheme_add_embedded_builtins(Scheme_Env *env);
-void scheme_do_add_global_symbol(Scheme_Env *env, Scheme_Object *sym,
-				 Scheme_Object *obj, int constant,
-				 int primitive);
+void scheme_add_embedded_builtins(Scheme_Startup_Env *env);
 
 void *scheme_get_os_thread_like();
 void scheme_init_os_thread_like(void *);
@@ -3088,9 +3085,25 @@ Scheme_Object *scheme_case_lambda_jit(Scheme_Object *expr);
 /*                   linklet instance and environment                     */
 /*========================================================================*/
 
-/* A Scheme_Env is a linklet instance */
+/* A Scheme_Env acts as a wrapper for namespaces, which are externally
+   implemented. */
 struct Scheme_Env {
   Scheme_Object so; /* scheme_env_type */
+  Scheme_Object *namespace;
+};
+
+/* A Scheme_Starup_Env */
+struct Scheme_Startup_Env {
+  Scheme_Object so; /* scheme_env_type */
+
+  struct Scheme_Instance *current_instance;
+  
+  Scheme_Hash_Table *primitive_instances; /* symbol -> instance */
+};
+
+/* A Scheme_Instance is a linklet instance */
+struct Scheme_Instance {
+  Scheme_Object so; /* scheme_instance_type */
 
   Scheme_Object *name;
   Scheme_Object *data;
@@ -3099,7 +3112,7 @@ struct Scheme_Env {
 
   Scheme_Bucket_Table *variables;
   Scheme_Object *weak_self_link; /* for Scheme_Bucket_With_Home */
-};
+} Scheme_Instance;
 
 typedef struct Scheme_Linklet
 {
@@ -3159,21 +3172,21 @@ typedef struct Scheme_IR_Toplevel
 
 #define SCHEME_VARREF_FLAGS(pr) MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)pr)->iso)
 
-void scheme_add_global_constant(const char *name, Scheme_Object *v, Scheme_Env *env);
-void scheme_add_global_constant_symbol(Scheme_Object *name, Scheme_Object *v, Scheme_Env *env);
+void scheme_addto_prim_instance(const char *name, Scheme_Object *obj, Scheme_Startup_Env *env);
+void scheme_addto_primitive_instance_by_symbol(Scheme_Object *name, Scheme_Object *obj, Scheme_Startup_Env *env);
 
-#define GLOBAL_FOLDING_PRIM(name, func, a1, a2, a3, env)      scheme_add_global_constant(name, scheme_make_folding_prim(func, name, a1, a2, a3), env)
-#define GLOBAL_IMMED_PRIM(name, func, a1, a2, env)            scheme_add_global_constant(name, scheme_make_immed_prim(func, name, a1, a2), env)
-#define GLOBAL_PARAMETER(name, func, constant, env)           scheme_add_global_constant(name, scheme_register_parameter(func, name, constant), env)
-#define GLOBAL_PRIM_W_ARITY(name, func, a1, a2, env)          scheme_add_global_constant(name, scheme_make_prim_w_arity(func, name, a1, a2), env)
-#define GLOBAL_PRIM_W_ARITY2(name, func, a1, a2, a3, a4, env) scheme_add_global_constant(name, scheme_make_prim_w_arity2(func, name, a1, a2, a3, a4), env)
-#define GLOBAL_NONCM_PRIM(name, func, a1, a2, env)            scheme_add_global_constant(name, scheme_make_noncm_prim(func, name, a1, a2), env)
+#define ADD_FOLDING_PRIM(name, func, a1, a2, a3, env)      scheme_addto_prim_instance(name, scheme_make_folding_prim(func, name, a1, a2, a3), env)
+#define ADD_IMMED_PRIM(name, func, a1, a2, env)            scheme_addto_prim_instance(name, scheme_make_immed_prim(func, name, a1, a2), env)
+#define ADD_PARAMETER(name, func, constant, env)           scheme_addto_prim_instance(name, scheme_register_parameter(func, name, constant), env)
+#define ADD_PRIM_W_ARITY(name, func, a1, a2, env)          scheme_addto_prim_instance(name, scheme_make_prim_w_arity(func, name, a1, a2), env)
+#define ADD_PRIM_W_ARITY2(name, func, a1, a2, a3, a4, env) scheme_addto_prim_instance(name, scheme_make_prim_w_arity2(func, name, a1, a2, a3, a4), env)
+#define ADD_NONCM_PRIM(name, func, a1, a2, env)            scheme_addto_prim_instance(name, scheme_make_noncm_prim(func, name, a1, a2), env)
 
-#define GLOBAL_FOLDING_PRIM_UNARY_INLINED(name, func, a1, a2, a3, env)      do {\
+#define ADD_FOLDING_PRIM_UNARY_INLINED(name, func, a1, a2, a3, env)      do {\
   Scheme_Object *p; \
   p = scheme_make_folding_prim(func, name, a1, a2, a3); \
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED); \
-  scheme_add_global_constant(name, p, env); \
+  scheme_add_to_primitive_instance(name, p, env); \
 } while(0)
 
 

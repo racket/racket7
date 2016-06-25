@@ -697,9 +697,9 @@ static intptr_t scheme_sprintf(char *s, intptr_t maxlen, const char *msg, ...)
 #define ESCAPING_NONCM_PRIM(name, func, a1, a2, env) \
   p = scheme_make_noncm_prim(func, name, a1, a2); \
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_ALWAYS_ESCAPES); \
-  scheme_add_global_constant(name, p, env);
+  scheme_addto_prim_instance(name, p, env);
 
-void scheme_init_error(Scheme_Env *env)
+void scheme_init_error(Scheme_Startup_Env *env)
 {
   Scheme_Object *p;
 
@@ -722,35 +722,35 @@ void scheme_init_error(Scheme_Env *env)
   ESCAPING_NONCM_PRIM("raise-range-error",          raise_range_error,     7, 8, env);
 
   scheme_raise_arity_error_proc =                  scheme_make_noncm_prim(raise_arity_error, "raise-arity-error", 2, -1);
-  scheme_add_global_constant("raise-arity-error",  scheme_raise_arity_error_proc, env);
+  scheme_addto_prim_instance("raise-arity-error",  scheme_raise_arity_error_proc, env);
 
-  GLOBAL_PARAMETER("error-display-handler",       error_display_handler,      MZCONFIG_ERROR_DISPLAY_HANDLER,       env);
-  GLOBAL_PARAMETER("error-value->string-handler", error_value_string_handler, MZCONFIG_ERROR_PRINT_VALUE_HANDLER,   env);
-  GLOBAL_PARAMETER("error-escape-handler",        error_escape_handler,       MZCONFIG_ERROR_ESCAPE_HANDLER,        env);
-  GLOBAL_PARAMETER("exit-handler",                exit_handler,               MZCONFIG_EXIT_HANDLER,                env);
-  GLOBAL_PARAMETER("executable-yield-handler",    exe_yield_handler,          MZCONFIG_EXE_YIELD_HANDLER,           env);
-  GLOBAL_PARAMETER("error-print-width",           error_print_width,          MZCONFIG_ERROR_PRINT_WIDTH,           env);
-  GLOBAL_PARAMETER("error-print-context-length",  error_print_context_length, MZCONFIG_ERROR_PRINT_CONTEXT_LENGTH,  env);
-  GLOBAL_PARAMETER("error-print-source-location", error_print_srcloc,         MZCONFIG_ERROR_PRINT_SRCLOC,          env);
+  ADD_PARAMETER("error-display-handler",       error_display_handler,      MZCONFIG_ERROR_DISPLAY_HANDLER,       env);
+  ADD_PARAMETER("error-value->string-handler", error_value_string_handler, MZCONFIG_ERROR_PRINT_VALUE_HANDLER,   env);
+  ADD_PARAMETER("error-escape-handler",        error_escape_handler,       MZCONFIG_ERROR_ESCAPE_HANDLER,        env);
+  ADD_PARAMETER("exit-handler",                exit_handler,               MZCONFIG_EXIT_HANDLER,                env);
+  ADD_PARAMETER("executable-yield-handler",    exe_yield_handler,          MZCONFIG_EXE_YIELD_HANDLER,           env);
+  ADD_PARAMETER("error-print-width",           error_print_width,          MZCONFIG_ERROR_PRINT_WIDTH,           env);
+  ADD_PARAMETER("error-print-context-length",  error_print_context_length, MZCONFIG_ERROR_PRINT_CONTEXT_LENGTH,  env);
+  ADD_PARAMETER("error-print-source-location", error_print_srcloc,         MZCONFIG_ERROR_PRINT_SRCLOC,          env);
 
-  GLOBAL_NONCM_PRIM("exit",              scheme_do_exit,  0, 1, env);
+  ADD_NONCM_PRIM("exit",              scheme_do_exit,  0, 1, env);
 
   /* logging */
-  GLOBAL_NONCM_PRIM("log-level?",        log_level_p,     2, 3, env);
-  GLOBAL_NONCM_PRIM("log-max-level",     log_max_level,   1, 2, env);
-  GLOBAL_NONCM_PRIM("log-all-levels",    log_all_levels,  1, 1, env);
-  GLOBAL_NONCM_PRIM("log-level-evt",     log_level_evt,   1, 1, env);
-  GLOBAL_NONCM_PRIM("make-logger",       make_logger,     0, -1, env);
-  GLOBAL_NONCM_PRIM("make-log-receiver", make_log_reader, 2, -1, env);
+  ADD_NONCM_PRIM("log-level?",        log_level_p,     2, 3, env);
+  ADD_NONCM_PRIM("log-max-level",     log_max_level,   1, 2, env);
+  ADD_NONCM_PRIM("log-all-levels",    log_all_levels,  1, 1, env);
+  ADD_NONCM_PRIM("log-level-evt",     log_level_evt,   1, 1, env);
+  ADD_NONCM_PRIM("make-logger",       make_logger,     0, -1, env);
+  ADD_NONCM_PRIM("make-log-receiver", make_log_reader, 2, -1, env);
 
-  GLOBAL_PRIM_W_ARITY("log-message",    log_message,   4, 6, env);
-  GLOBAL_FOLDING_PRIM("logger?",        logger_p,      1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("logger-name",    logger_name,   1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("log-receiver?",  log_reader_p,  1, 1, 1, env);
+  ADD_PRIM_W_ARITY("log-message",    log_message,   4, 6, env);
+  ADD_FOLDING_PRIM("logger?",        logger_p,      1, 1, 1, env);
+  ADD_FOLDING_PRIM("logger-name",    logger_name,   1, 1, 1, env);
+  ADD_FOLDING_PRIM("log-receiver?",  log_reader_p,  1, 1, 1, env);
 
-  GLOBAL_PARAMETER("current-logger",    current_logger, MZCONFIG_LOGGER, env);
+  ADD_PARAMETER("current-logger",    current_logger, MZCONFIG_LOGGER, env);
 
-  GLOBAL_NONCM_PRIM("srcloc->string",   srcloc_to_string, 1, 1, env);
+  ADD_NONCM_PRIM("srcloc->string",   srcloc_to_string, 1, 1, env);
 
   REGISTER_SO(scheme_def_exit_proc);
   REGISTER_SO(default_display_handler);
@@ -791,7 +791,7 @@ void scheme_init_error(Scheme_Env *env)
     arity_property = scheme_make_struct_type_property_w_guard(scheme_intern_symbol("arity-string"), guard);
   }
                                                             
-  scheme_add_global_constant("prop:arity-string", arity_property, env);
+  scheme_addto_prim_instance("prop:arity-string", arity_property, env);
 
   REGISTER_SO(def_exe_yield_proc);
   def_exe_yield_proc = scheme_make_prim_w_arity(default_yield_handler,
@@ -4709,7 +4709,7 @@ static Scheme_Object *extract_module_path_3(int argc, Scheme_Object **argv)
                              "exn:fail:syntax:missing-module?");
 }
 
-void scheme_init_exn(Scheme_Env *env)
+void scheme_init_exn(Scheme_Startup_Env *env)
 {
   int i, j;
   Scheme_Object *tmpo, **tmpop;
@@ -4757,20 +4757,20 @@ void scheme_init_exn(Scheme_Env *env)
 					 exn_table[i].count,
 					 EXN_FLAGS);
       for (j = exn_table[i].count - 1; j--; ) {
-	scheme_add_global_constant_symbol(exn_table[i].names[j],
+	scheme_addto_prim_instance_symbol(exn_table[i].names[j],
 					  values[j],
 					  env);
       }
     }
   }
 
-  scheme_add_global_constant("uncaught-exception-handler",
+  scheme_addto_prim_instance("uncaught-exception-handler",
 			     scheme_register_parameter(init_exn_handler,
 						       "uncaught-exception-handler",
 						       MZCONFIG_INIT_EXN_HANDLER),
 			     env);
 
-  scheme_add_global_constant("raise",
+  scheme_addto_prim_instance("raise",
 			     scheme_make_noncm_prim(sch_raise,
                                                     "raise",
                                                     1, 2),

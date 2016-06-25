@@ -23,10 +23,6 @@
   All rights reserved.
 */
 
-/* This file implements environments (both compile-time and top-level
-   envionments, a.k.a. namespaces), and also implements much of the
-   initialization sequence (filling the initial namespace). */
-
 #include "schpriv.h"
 #include "schminc.h"
 #include "schmach.h"
@@ -54,11 +50,6 @@ READ_ONLY static Scheme_Env    *extfl_env;
 READ_ONLY static Scheme_Env    *futures_env;
 
 READ_ONLY static Scheme_Object *kernel_symbol;
-READ_ONLY static Scheme_Object *flip_symbol;
-READ_ONLY static Scheme_Object *add_symbol;
-READ_ONLY static Scheme_Object *remove_symbol;
-
-THREAD_LOCAL_DECL(static int intdef_counter);
 
 static int builtin_ref_counter;
 static int builtin_unsafe_start;
@@ -81,9 +72,6 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
 #endif
-
-typedef Scheme_Object *(*Lazy_Macro_Fun)(Scheme_Object *, int);
-
 
 /*========================================================================*/
 /*                             initialization                             */
@@ -703,13 +691,6 @@ static void make_kernel_env(void)
   REGISTER_SO(kernel_symbol);
   kernel_symbol = scheme_intern_symbol("#%kernel");
 
-  REGISTER_SO(flip_symbol);
-  REGISTER_SO(add_symbol);
-  REGISTER_SO(remove_symbol);
-  flip_symbol = scheme_intern_symbol("flip");
-  add_symbol = scheme_intern_symbol("add");
-  remove_symbol = scheme_intern_symbol("remove");
-
   MARK_START_TIME();
 
   scheme_finish_kernel(env);
@@ -914,8 +895,36 @@ void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Env *e)
 }
 
 /*========================================================================*/
+/*                            startup instances                           */
+/*========================================================================*/
+
+void scheme_add_to_primitive_instance(const char *name, Scheme_Object *obj,
+                                      Scheme_Startup_Env *env)
+{
+  scheme_add_to_primitive_intance_by_symbol(scheme_intern_symbol(name), obj, env->current_instance);
+}
+
+void
+scheme_add_to_primitive_intance_by_symbol(Scheme_Object *name, Scheme_Object *obj,
+                                          Scheme_Startup_Env *env)
+{
+  Scheme_Bucket *b;
+  
+  b = scheme_bucket_from_table(env->current_instance->vaiables, (const char *)sym);
+  b->val = obj;
+  ASSERT_IS_VARIABLE_BUCKET(b);
+  if (constant && scheme_defining_primitives) {
+    ((Scheme_Bucket_With_Flags *)b)->id = builtin_ref_counter++;
+    ((Scheme_Bucket_With_Flags *)b)->flags |= (GLOB_HAS_REF_ID | GLOB_IS_CONST | GLOB_STRONG_HOME_LINK);
+  } else if (constant)
+    ((Scheme_Bucket_With_Flags *)b)->flags |= (GLOB_IS_CONST | GLOB_STRONG_HOME_LINK);
+  scheme_set_bucket_home(b, env);
+}
+
+/*========================================================================*/
 /*                           namespace bindings                           */
 /*========================================================================*/
+
 
 /********** Lookup **********/
 
@@ -946,37 +955,9 @@ scheme_global_bucket(Scheme_Object *symbol, Scheme_Env *env)
   return b;
 }
 
-Scheme_Bucket *
-scheme_global_keyword_bucket(Scheme_Object *symbol, Scheme_Env *env)
-{
-  Scheme_Bucket *b;
-    
-  b = scheme_bucket_from_table(env->syntax, (char *)symbol);
-    
-  return b;
-}
-
 /********** Set **********/
 
-void
-scheme_do_add_global_symbol(Scheme_Env *env, Scheme_Object *sym, 
-			    Scheme_Object *obj, 
-			    int valvar, int constant)
-{
-  if (valvar) {
-    Scheme_Bucket *b;
-    b = scheme_bucket_from_table(env->toplevel, (const char *)sym);
-    b->val = obj;
-    ASSERT_IS_VARIABLE_BUCKET(b);
-    if (constant && scheme_defining_primitives) {
-      ((Scheme_Bucket_With_Flags *)b)->id = builtin_ref_counter++;
-      ((Scheme_Bucket_With_Flags *)b)->flags |= (GLOB_HAS_REF_ID | GLOB_IS_CONST | GLOB_STRONG_HOME_LINK);
-    } else if (constant)
-      ((Scheme_Bucket_With_Flags *)b)->flags |= (GLOB_IS_CONST | GLOB_STRONG_HOME_LINK);
-    scheme_set_bucket_home(b, env);
-  } else
-    scheme_add_to_table(env->syntax, (const char *)sym, obj, constant);
-}
+/*************************************************************/
 
 void
 scheme_add_global(const char *name, Scheme_Object *obj, Scheme_Env *env)
@@ -988,20 +969,6 @@ void
 scheme_add_global_symbol(Scheme_Object *sym, Scheme_Object *obj, Scheme_Env *env)
 {
   scheme_do_add_global_symbol(env, sym, obj, 1, 0);
-}
-
-void
-scheme_add_global_constant(const char *name, Scheme_Object *obj, 
-			   Scheme_Env *env)
-{
-  scheme_do_add_global_symbol(env, scheme_intern_symbol(name), obj, 1, 1);
-}
-
-void
-scheme_add_global_constant_symbol(Scheme_Object *name, Scheme_Object *obj, 
-				  Scheme_Env *env)
-{
-  scheme_do_add_global_symbol(env, name, obj, 1, 1);
 }
 
 void
@@ -1174,351 +1141,6 @@ Scheme_Object *scheme_intern_literal_number(Scheme_Object *num)
     b->val = scheme_true;
 
   return(Scheme_Object *)HT_EXTRACT_WEAK(b->key);
-}
-
-/*========================================================================*/
-/*             run-time and expansion-time Racket interface               */
-/*========================================================================*/
-
-static Scheme_Object *
-namespace_identifier(int argc, Scheme_Object *argv[])
-{
-  Scheme_Object *obj;
-  Scheme_Env *genv;
-
-  if (!SCHEME_SYMBOLP(argv[0]))
-    scheme_wrong_contract("namespace-symbol->identifier", "symbol?", 0, argc, argv);
-  if ((argc > 1) && !SCHEME_NAMESPACEP(argv[1]))
-    scheme_wrong_contract("namespace-symbol->identifier", "namespace?", 1, argc, argv);
-
-  if (argc > 1)
-    genv = (Scheme_Env *)argv[1];
-  else
-    genv = scheme_get_env(NULL);
-
-  obj = argv[0];
-  obj = scheme_datum_to_syntax(obj, scheme_false, scheme_false, 1, 0);
-
-  obj = scheme_stx_add_module_context(obj, genv->stx_context);
-
-  return obj;
-}
-
-static Scheme_Object *
-namespace_module_identifier(int argc, Scheme_Object *argv[])
-{
-  Scheme_Env *genv;
-  Scheme_Object *phase;
-
-  if (argc > 0) {
-    if (SCHEME_NAMESPACEP(argv[0])) {
-      genv = (Scheme_Env *)argv[0];
-      phase = scheme_env_phase(genv);
-    } else if (SCHEME_FALSEP(argv[0])) {
-      phase = scheme_false;
-    } else if (SCHEME_INTP(argv[0]) || SCHEME_BIGNUMP(argv[0])) {
-      phase = argv[0];
-    } else {
-      scheme_wrong_contract("namespace-module-identifier", "(or/c namespace? #f exact-integer?)", 0, argc, argv);
-      return NULL;
-    }
-  } else {
-    genv = scheme_get_env(NULL);
-    phase = scheme_env_phase(genv);
-  }
-
-  return scheme_datum_to_syntax(scheme_intern_symbol("module"), scheme_false, 
-                                scheme_sys_wraps_phase(phase), 0, 0);
-}
-
-static Scheme_Object *
-namespace_base_phase(int argc, Scheme_Object *argv[])
-{
-  Scheme_Env *genv;
-
-  if ((argc > 0) && !SCHEME_NAMESPACEP(argv[0]))
-    scheme_wrong_contract("namespace-base-phase", "namespace?", 0, argc, argv);
-
-  if (argc)
-    genv = (Scheme_Env *)argv[0];
-  else
-    genv = scheme_get_env(NULL);
-
-  return scheme_env_phase(genv);
-}
-
-static Scheme_Object *
-namespace_variable_value(int argc, Scheme_Object *argv[])
-{
-  Scheme_Object *v, *id = NULL;
-  Scheme_Env *genv;
-  int use_map;
-
-  if (!SCHEME_SYMBOLP(argv[0]))
-    scheme_wrong_contract("namespace-variable-value", "symbol?", 0, argc, argv);
-  use_map = ((argc > 1) ? SCHEME_TRUEP(argv[1]) : 1);
-  if ((argc > 2) && SCHEME_TRUEP(argv[2])
-      && !scheme_check_proc_arity(NULL, 0, 2, argc, argv))
-    scheme_wrong_contract("namespace-variable-value", "(or/c (-> any) #f)", 2, argc, argv);
-  if ((argc > 3) && !SCHEME_NAMESPACEP(argv[3]))
-    scheme_wrong_contract("namespace-variable-value", "namespace?", 3, argc, argv);
-
-  if (argc > 3)
-    genv = (Scheme_Env *)argv[3];
-  else
-    genv = scheme_get_env(NULL);
-
-  if (!use_map)
-    v = scheme_lookup_global(argv[0], genv);
-  else
-    v = scheme_namespace_lookup_value(argv[0], genv, &id, &use_map);
-  
-  if (!v) {
-    if ((argc > 2) && SCHEME_TRUEP(argv[2]))
-      return _scheme_tail_apply(argv[2], 0, NULL);
-    else if (use_map == -1) {
-      scheme_wrong_syntax("namespace-variable-value", NULL, id, "bound to syntax");
-      return NULL;
-    } else {
-      scheme_raise_exn(MZEXN_FAIL_CONTRACT_VARIABLE, argv[0],
-		       "namespace-variable-value: given name is not defined\n"
-                       "  name: %S",
-		       argv[0]);
-      return NULL;
-    }
-  }
-
-  return v;
-}
-
-static Scheme_Object *
-namespace_set_variable_value(int argc, Scheme_Object *argv[])
-{
-  Scheme_Env *env;
-  Scheme_Bucket *bucket;
-
-  if (!SCHEME_SYMBOLP(argv[0]))
-    scheme_wrong_contract("namespace-set-variable-value!", "symbol?", 0, argc, argv);
-  if ((argc > 3) && !SCHEME_NAMESPACEP(argv[3]))
-    scheme_wrong_contract("namespace-set-variable-value!", "namespace?", 3, argc, argv);
-
-  if (argc > 3)
-    env = (Scheme_Env *)argv[3];
-  else
-    env = scheme_get_env(NULL);
-
-  bucket = scheme_global_bucket(argv[0], env);
-  
-  scheme_set_global_bucket("namespace-set-variable-value!", bucket, argv[1], 1);
-  
-  if ((argc > 2) && SCHEME_TRUEP(argv[2])) {
-    scheme_binding_names_from_module(env);
-    if (!env->binding_names
-        || (SCHEME_HASHTRP(env->binding_names)
-            && !scheme_hash_tree_get((Scheme_Hash_Tree *)env->binding_names, argv[0]))
-        || (SCHEME_HASHTP(env->binding_names)
-            && !scheme_hash_get((Scheme_Hash_Table *)env->binding_names, argv[0]))) {
-      Scheme_Object *id;
-      id = scheme_datum_to_syntax(argv[0], scheme_false, scheme_false, 0, 0);
-      scheme_prepare_env_stx_context(env);
-      id = scheme_stx_add_module_context(id, env->stx_context);
-      (void)scheme_global_binding(id, env, 0);
-    }
-    scheme_shadow(env, argv[0], argv[1], 1);
-  }
-
-  return scheme_void;
-}
-
-static Scheme_Object *
-namespace_undefine_variable(int argc, Scheme_Object *argv[])
-{
-  Scheme_Env *env;
-  Scheme_Bucket *bucket;
-
-  if (!SCHEME_SYMBOLP(argv[0]))
-    scheme_wrong_contract("namespace-undefine-variable!", "symbol?", 0, argc, argv);
-  if ((argc > 1) && !SCHEME_NAMESPACEP(argv[1]))
-    scheme_wrong_contract("namespace-undefine-variable!", "namespace?", 1, argc, argv);
-
-  if (argc > 1)
-    env = (Scheme_Env *)argv[1];
-  else
-    env = scheme_get_env(NULL);
-
-  if (scheme_lookup_global(argv[0], env)) {
-    bucket = scheme_global_bucket(argv[0], env);
-    scheme_set_global_bucket("namespace-undefine-variable!", 
-                             bucket,
-                             NULL,
-                             0);
-    bucket->val = NULL;
-  } else {
-    scheme_raise_exn(MZEXN_FAIL_CONTRACT_VARIABLE, argv[0],
-		     "namespace-undefine-variable!: given name is not defined\n"
-                     "  name: %S",
-		     argv[0]);
-  }
-
-  return scheme_void;
-}
-
-static Scheme_Object *
-namespace_mapped_symbols(int argc, Scheme_Object *argv[])
-{
-  Scheme_Object *l;
-  Scheme_Env *env;
-  Scheme_Hash_Table *mapped;
-  Scheme_Bucket_Table *ht;
-  Scheme_Bucket **bs;
-  intptr_t i, j;
-
-  if ((argc > 0) && !SCHEME_NAMESPACEP(argv[0]))
-    scheme_wrong_contract("namespace-mapped-symbols", "namespace?", 0, argc, argv);
-
-  if (argc)
-    env = (Scheme_Env *)argv[0];
-  else
-    env = scheme_get_env(NULL);
-  
-  mapped = scheme_make_hash_table(SCHEME_hash_ptr);
-
-  for (j = 0; j < 2; j++) {
-    if (j)
-      ht = env->syntax;
-    else
-      ht = env->toplevel;
-
-    bs = ht->buckets;
-    for (i = ht->size; i--; ) {
-      Scheme_Bucket *b = bs[i];
-      if (b && b->val) {
-	scheme_hash_set(mapped, (Scheme_Object *)b->key, scheme_true);
-      }
-    }
-  }
-
-  if (env->stx_context)
-    scheme_module_context_add_mapped_symbols(env->stx_context, mapped);
-
-  l = scheme_null;
-  for (i = mapped->size; i--; ) {
-    if (mapped->vals[i])
-      l = scheme_make_pair(mapped->keys[i], l);
-  }
-
-  return l;
-}
-
-static Scheme_Object *namespace_module_registry(int argc, Scheme_Object **argv)
-{
-  if (!SCHEME_NAMESPACEP(argv[0]))
-    scheme_wrong_contract("namespace-module-registry", "namespace?", 0, argc, argv);
-
-  return (Scheme_Object *)((Scheme_Env *)argv[0])->module_registry;
-}
-
-static Scheme_Object *do_variable_namespace(const char *who, int tl, int argc, Scheme_Object *argv[])
-{
-  Scheme_Object *v;
-  Scheme_Env *env;
-  intptr_t ph;
-
-  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_global_ref_type)) {
-    v = NULL;
-    env = NULL;
-  }
-  else {
-    v = SCHEME_PTR1_VAL(argv[0]);
-    env = scheme_get_bucket_home((Scheme_Bucket *)v);
-  }
-
-  if (!env)
-    scheme_wrong_contract(who, "variable-reference?", 0, argc, argv);
-
-  ph = env->phase;
-  if (tl == 2) {
-    return scheme_make_integer(ph);
-  } else if (tl == 3) {
-    return scheme_make_integer(ph - env->mod_phase);
-  } else if (tl == 4) {
-    if (((Scheme_Object *)((Scheme_Bucket *)v)->key != scheme_stack_dump_key)
-        || !env->module) {
-      scheme_contract_error(who, 
-                            "variable reference does not refer to an anonymous module variable",
-                            "variable reference", 1, v,
-                            NULL);
-    }
-    return env->access_insp;
-  } else if (tl) {
-    /* return env directly; need to set up  */
-    if (!env->phase && env->module)
-      scheme_prep_namespace_rename(env);
-  } else {
-    /* new namespace: */
-    Scheme_Env *new_env;
-    new_env = make_env(env, 0);
-    new_env->phase = env->phase;
-    env = new_env;
-  }
-
-  return (Scheme_Object *)env;
-}
-
-static Scheme_Object *variable_namespace(int argc, Scheme_Object *argv[])
-{
-  return do_variable_namespace("variable-reference->empty-namespace", 0, argc, argv);
-}
-
-static Scheme_Object *variable_top_level_namespace(int argc, Scheme_Object *argv[])
-{
-  return do_variable_namespace("variable-reference->namespace", 1, argc, argv);
-}
-
-static Scheme_Object *variable_phase(int argc, Scheme_Object *argv[])
-{
-  return do_variable_namespace("variable-reference->phase", 2, argc, argv);
-}
-
-static Scheme_Object *variable_base_phase(int argc, Scheme_Object *argv[])
-{
-  return do_variable_namespace("variable-reference->base-phase", 3, argc, argv);
-}
-
-static Scheme_Object *variable_inspector(int argc, Scheme_Object *argv[])
-{
-  return do_variable_namespace("variable-reference->module-declaration-inspector", 4, argc, argv);
-}
-
-static Scheme_Object *variable_const_p(int argc, Scheme_Object *argv[])
-{
-  Scheme_Object *v;
-
-  v = argv[0];
-
-  if (!SAME_TYPE(SCHEME_TYPE(v), scheme_global_ref_type))
-    scheme_wrong_contract("variable-reference-constant?", "variable-reference?", 0, argc, argv);
-
-  if (SCHEME_VARREF_FLAGS(v) & 0x1)
-    return scheme_true;
-
-  v = SCHEME_PTR1_VAL(v);
-  if (((Scheme_Bucket_With_Flags *)v)->flags & GLOB_IS_IMMUTATED)
-    return scheme_true;
-
-  return scheme_false;
-}
-
-static Scheme_Object *variable_p(int argc, Scheme_Object *argv[])
-{
-  Scheme_Env *env;
-
-  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_global_ref_type))
-    env = NULL;
-  else
-    env = scheme_get_bucket_home((Scheme_Bucket *)SCHEME_PTR1_VAL(argv[0]));
-
-  return env ? scheme_true : scheme_false;
 }
 
 /*========================================================================*/

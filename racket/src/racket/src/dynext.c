@@ -120,7 +120,7 @@ THREAD_LOCAL_DECL(static Scheme_Hash_Table *fullpath_loaded_extensions;) /* hash
 
 #define BAD_VERSION_STR "found version does not match the expected version"
 
-void scheme_init_dynamic_extension(Scheme_Env *env)
+void scheme_init_dynamic_extension(Scheme_Startup_Env *env)
 {
   if (scheme_starting_up) {
 #ifdef LINK_EXTENSIONS_BY_TABLE
@@ -132,8 +132,8 @@ void scheme_init_dynamic_extension(Scheme_Env *env)
 #endif
   }
 
-  GLOBAL_PRIM_W_ARITY2("load-extension", load_extension, 1, 1, 0, -1, env);
-  GLOBAL_PARAMETER("current-load-extension", current_load_extension, MZCONFIG_LOAD_EXTENSION_HANDLER, env);
+  ADD_PRIM_W_ARITY2("load-extension", load_extension, 1, 1, 0, -1, env);
+  ADD_PARAMETER("current-load-extension", current_load_extension, MZCONFIG_LOAD_EXTENSION_HANDLER, env);
 }
 
 static Scheme_Object *

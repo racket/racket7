@@ -95,7 +95,7 @@ XFORM_NONGCING static int prefab_p(Scheme_Object *o)
 /*                           initialization                               */
 /*========================================================================*/
 
-void scheme_init_stx(Scheme_Env *env)
+void scheme_init_stx(Scheme_Startup_Env *env)
 {
   Scheme_Object *o;
 
@@ -110,21 +110,21 @@ void scheme_init_stx(Scheme_Env *env)
   o = scheme_make_folding_prim(syntax_p, "syntax?", 1, 1, 1);
   scheme_syntax_p_proc = o;
   SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
-  scheme_add_global_constant("syntax?", o, env);
+  scheme_addto_prim_instance("syntax?", o, env);
 
-  GLOBAL_FOLDING_PRIM("syntax->datum", syntax_to_datum, 1, 1, 1, env);
-  GLOBAL_IMMED_PRIM("datum->syntax", datum_to_syntax, 2, 5, env);
+  ADD_FOLDING_PRIM("syntax->datum", syntax_to_datum, 1, 1, 1, env);
+  ADD_IMMED_PRIM("datum->syntax", datum_to_syntax, 2, 5, env);
   
-  GLOBAL_FOLDING_PRIM_UNARY_INLINED("syntax-e", scheme_checked_syntax_e, 1, 1, 1, env);
+  ADD_FOLDING_PRIM_UNARY_INLINED("syntax-e", scheme_checked_syntax_e, 1, 1, 1, env);
 
-  GLOBAL_FOLDING_PRIM("syntax-line"    , syntax_line   , 1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("syntax-column"  , syntax_col    , 1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("syntax-position", syntax_pos    , 1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("syntax-span"    , syntax_span   , 1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("syntax-source"  , syntax_src    , 1, 1, 1, env);
+  ADD_FOLDING_PRIM("syntax-line"    , syntax_line   , 1, 1, 1, env);
+  ADD_FOLDING_PRIM("syntax-column"  , syntax_col    , 1, 1, 1, env);
+  ADD_FOLDING_PRIM("syntax-position", syntax_pos    , 1, 1, 1, env);
+  ADD_FOLDING_PRIM("syntax-span"    , syntax_span   , 1, 1, 1, env);
+  ADD_FOLDING_PRIM("syntax-source"  , syntax_src    , 1, 1, 1, env);
 
-  GLOBAL_IMMED_PRIM("syntax-property"                  , syntax_property           , 2, 4, env);
-  GLOBAL_IMMED_PRIM("syntax-property-symbol-keys"      , syntax_property_keys      , 1, 1, env);
+  ADD_IMMED_PRIM("syntax-property"                  , syntax_property           , 2, 4, env);
+  ADD_IMMED_PRIM("syntax-property-symbol-keys"      , syntax_property_keys      , 1, 1, env);
 
   REGISTER_SO(source_symbol);
   source_symbol = scheme_make_symbol("source"); /* not interned! */

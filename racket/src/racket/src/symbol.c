@@ -321,41 +321,41 @@ scheme_init_place_local_symbol_table ()
 #endif
 
 void
-scheme_init_symbol_type (Scheme_Env *env)
+scheme_init_symbol_type (Scheme_Startup_Env *env)
 {
 }
 
 void
-scheme_init_symbol (Scheme_Env *env)
+scheme_init_symbol (Scheme_Startup_Env *env)
 {
   Scheme_Object *p;
 
   p = scheme_make_folding_prim(symbol_p_prim, "symbol?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("symbol?", p, env);
+  scheme_addto_prim_instance("symbol?", p, env);
 
   p = scheme_make_folding_prim(symbol_unreadable_p_prim, "symbol-unreadable?", 1, 1, 1);
-  scheme_add_global_constant("symbol-unreadable?", p, env);
+  scheme_addto_prim_instance("symbol-unreadable?", p, env);
   
   p = scheme_make_folding_prim(symbol_interned_p_prim, "symbol-interned?", 1, 1, 1);
-  scheme_add_global_constant("symbol-interned?", p, env);
+  scheme_addto_prim_instance("symbol-interned?", p, env);
 
-  GLOBAL_FOLDING_PRIM("symbol<?",                 symbol_lt,                       2, -1, 1, env);  
-  GLOBAL_IMMED_PRIM("string->symbol",             string_to_symbol_prim,            1, 1, env);
-  GLOBAL_IMMED_PRIM("string->uninterned-symbol",  string_to_uninterned_symbol_prim, 1, 1, env);
-  GLOBAL_IMMED_PRIM("string->unreadable-symbol",  string_to_unreadable_symbol_prim, 1, 1, env);
-  GLOBAL_IMMED_PRIM("symbol->string",             symbol_to_string_prim,            1, 1, env);
+  ADD_FOLDING_PRIM("symbol<?",                 symbol_lt,                       2, -1, 1, env);  
+  ADD_IMMED_PRIM("string->symbol",             string_to_symbol_prim,            1, 1, env);
+  ADD_IMMED_PRIM("string->uninterned-symbol",  string_to_uninterned_symbol_prim, 1, 1, env);
+  ADD_IMMED_PRIM("string->unreadable-symbol",  string_to_unreadable_symbol_prim, 1, 1, env);
+  ADD_IMMED_PRIM("symbol->string",             symbol_to_string_prim,            1, 1, env);
 
   p = scheme_make_folding_prim(keyword_p_prim, "keyword?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("keyword?", p, env);
+  scheme_addto_prim_instance("keyword?", p, env);
 
-  GLOBAL_FOLDING_PRIM("keyword<?",                keyword_lt,                       2, -1, 1, env);
-  GLOBAL_IMMED_PRIM("string->keyword",            string_to_keyword_prim,           1, 1, env);
-  GLOBAL_IMMED_PRIM("keyword->string",            keyword_to_string_prim,           1, 1, env);
-  GLOBAL_IMMED_PRIM("gensym",                     gensym,                           0, 1, env);
+  ADD_FOLDING_PRIM("keyword<?",                keyword_lt,                       2, -1, 1, env);
+  ADD_IMMED_PRIM("string->keyword",            string_to_keyword_prim,           1, 1, env);
+  ADD_IMMED_PRIM("keyword->string",            keyword_to_string_prim,           1, 1, env);
+  ADD_IMMED_PRIM("gensym",                     gensym,                           0, 1, env);
 }
 
 uintptr_t scheme_get_max_symbol_length() {

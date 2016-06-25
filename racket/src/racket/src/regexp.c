@@ -6046,12 +6046,12 @@ void scheme_regexp_initialize(Scheme_Env *env)
   GLOBAL_PRIM_W_ARITY("regexp-replace",                        replace,                 3, 4, env);
   GLOBAL_PRIM_W_ARITY("regexp-replace*",                       replace_star,            3, 4, env);
 
-  GLOBAL_FOLDING_PRIM("regexp?",                               regexp_p,        1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("byte-regexp?",                          byte_regexp_p,   1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("pregexp?",                              pregexp_p,       1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("byte-pregexp?",                         byte_pregexp_p,  1, 1, 1, env);
+  ADD_FOLDING_PRIM("regexp?",                               regexp_p,        1, 1, 1, env);
+  ADD_FOLDING_PRIM("byte-regexp?",                          byte_regexp_p,   1, 1, 1, env);
+  ADD_FOLDING_PRIM("pregexp?",                              pregexp_p,       1, 1, 1, env);
+  ADD_FOLDING_PRIM("byte-pregexp?",                         byte_pregexp_p,  1, 1, 1, env);
 
-  GLOBAL_FOLDING_PRIM("regexp-max-lookbehind",                 regexp_lookbehind, 1, 1, 1, env);
+  ADD_FOLDING_PRIM("regexp-max-lookbehind",                 regexp_lookbehind, 1, 1, 1, env);
 }
 
 void scheme_init_regexp_places()

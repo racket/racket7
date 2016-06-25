@@ -62,7 +62,7 @@ static void register_traversers(void);
 /*========================================================================*/
 
 void
-scheme_init_linklet(Scheme_Env *env)
+scheme_init_linklet(Scheme_Startup_Env *env)
 {
   Scheme_Env *lenv;
   
@@ -72,39 +72,39 @@ scheme_init_linklet(Scheme_Env *env)
 
   lenv = scheme_primitive_module(scheme_intern_symbol("#%linklet"), env);
 
-  GLOBAL_PRIM_W_ARITY("get-primitive-instance", get_primitive_instance, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("get-primitive-instance", get_primitive_instance, 1, 1, lenv);
 
-  GLOBAL_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, lenv);
-  GLOBAL_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, lenv);
+  ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, lenv);
+  ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, lenv);
+  ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, lenv);
 
-  GLOBAL_FOLDING_PRIM("instance?", instance_p, 1, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("make-instance", make_instance, 2, 2, lenv);
-  GLOBAL_PRIM_W_ARITY("instance-name", instance_name, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("instance-data", instance_data, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("instance-variable-value", instance_variable_value, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 1, 1, lenv);
+  ADD_FOLDING_PRIM("instance?", instance_p, 1, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("make-instance", make_instance, 2, 2, lenv);
+  ADD_PRIM_W_ARITY("instance-name", instance_name, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("instance-data", instance_data, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("instance-variable-value", instance_variable_value, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 1, 1, lenv);
 
-  GLOBAL_FOLDING_PRIM("linklet_directory?", linklet_directory_p, 1, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("hash->linklet-directory", hash_to_linklet_directory, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("linklet-directory->hash", linklet_directory_to_hash, 1, 1, lenv);
+  ADD_FOLDING_PRIM("linklet_directory?", linklet_directory_p, 1, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("hash->linklet-directory", hash_to_linklet_directory, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("linklet-directory->hash", linklet_directory_to_hash, 1, 1, lenv);
 
-  GLOBAL_FOLDING_PRIM("linklet_bundle?", linklet_bundle_p, 1, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("hash->linklet-bundle", hash_to_linklet_bundle, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, lenv);
+  ADD_FOLDING_PRIM("linklet_bundle?", linklet_bundle_p, 1, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("hash->linklet-bundle", hash_to_linklet_bundle, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, lenv);
 
-  GLOBAL_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, lenv);
-  GLOBAL_PRIM_W_ARITY("variable-reference->instance", variable_top_level_namespace, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, lenv);
+  ADD_PRIM_W_ARITY("variable-reference->instance", variable_top_level_namespace, 1, 1, lenv);
 
   REGISTER_SO(scheme_varref_const_p_proc);
   scheme_varref_const_p_proc = scheme_make_prim_w_arity(variable_const_p, 
                                                         "variable-reference-constant?", 
                                                         1, 1);
-  scheme_add_global_constant("variable-reference-constant?", scheme_varref_const_p_proc, lenv);
+  scheme_addto_prim_instance("variable-reference-constant?", scheme_varref_const_p_proc, lenv);
 
   scheme_finish_primitive_module(lenv);
   scheme_protect_primitive_provide(lenv, NULL);

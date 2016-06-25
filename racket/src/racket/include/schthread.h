@@ -296,7 +296,6 @@ typedef struct Thread_Local_Variables {
   struct Scheme_Logger *scheme_gc_logger_;
   struct Scheme_Logger *scheme_future_logger_;
   struct Scheme_Logger *scheme_place_logger_;
-  int intdef_counter_;
   int scheme_overflow_count_;
   struct Scheme_Object *original_pwd_;
   void *file_path_wc_buffer_;
@@ -678,7 +677,6 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define scheme_gc_logger XOA (scheme_get_thread_local_variables()->scheme_gc_logger_)
 #define scheme_future_logger XOA (scheme_get_thread_local_variables()->scheme_future_logger_)
 #define scheme_place_logger XOA (scheme_get_thread_local_variables()->scheme_place_logger_)
-#define intdef_counter XOA (scheme_get_thread_local_variables()->intdef_counter_)
 #define scheme_overflow_count XOA (scheme_get_thread_local_variables()->scheme_overflow_count_)
 #define original_pwd XOA (scheme_get_thread_local_variables()->original_pwd_)
 #define file_path_wc_buffer XOA (scheme_get_thread_local_variables()->file_path_wc_buffer_)

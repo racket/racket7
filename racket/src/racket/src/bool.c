@@ -79,7 +79,7 @@ void scheme_init_true_false(void)
   scheme_void->type = scheme_void_type;
 }
 
-void scheme_init_bool (Scheme_Env *env)
+void scheme_init_bool (Scheme_Startup_Env *env)
 {
   Scheme_Object *p;
 
@@ -92,51 +92,51 @@ void scheme_init_bool (Scheme_Env *env)
   scheme_not_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("not", p, env);
+  scheme_addto_prim_instance("not", p, env);
 
   p = scheme_make_folding_prim(boolean_p_prim, "boolean?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("boolean?", p, env);
+  scheme_addto_prim_instance("boolean?", p, env);
 
   p = scheme_make_folding_prim(eq_prim, "eq?", 2, 2, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
   scheme_eq_proc = p;
-  scheme_add_global_constant("eq?", p, env);
+  scheme_addto_prim_instance("eq?", p, env);
 
   p = scheme_make_folding_prim(eqv_prim, "eqv?", 2, 2, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
   scheme_eqv_proc = p;
-  scheme_add_global_constant("eqv?", scheme_eqv_proc, env);
+  scheme_addto_prim_instance("eqv?", scheme_eqv_proc, env);
   
   p = scheme_make_prim_w_arity(equal_prim, "equal?", 2, 2);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
   scheme_equal_proc = p;
-  scheme_add_global_constant("equal?", scheme_equal_proc, env);
+  scheme_addto_prim_instance("equal?", scheme_equal_proc, env);
 
-  scheme_add_global_constant("equal?/recur", 
+  scheme_addto_prim_instance("equal?/recur", 
                              scheme_make_prim_w_arity(equalish_prim, "equal?/recur", 3, 3), 
                              env);
 
   p = scheme_make_immed_prim(chaperone_p, "chaperone?", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("chaperone?", p, env);
+  scheme_addto_prim_instance("chaperone?", p, env);
 
   p = scheme_make_immed_prim(impersonator_p, "impersonator?", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("impersonator?", p, env);
+  scheme_addto_prim_instance("impersonator?", p, env);
   p = scheme_make_immed_prim(procedure_impersonator_star_p, "procedure-impersonator*?", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("procedure-impersonator*?", p, env);
+  scheme_addto_prim_instance("procedure-impersonator*?", p, env);
 
-  scheme_add_global_constant("chaperone-of?",
+  scheme_addto_prim_instance("chaperone-of?",
                              scheme_make_prim_w_arity(chaperone_of, "chaperone-of?", 2, 2),
                              env);
-  scheme_add_global_constant("impersonator-of?",
+  scheme_addto_prim_instance("impersonator-of?",
                              scheme_make_prim_w_arity(impersonator_of, "impersonator-of?", 2, 2),
                              env);
 }

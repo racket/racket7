@@ -86,7 +86,7 @@ static Scheme_Object *read_module(Scheme_Object *obj);
 
 static Scheme_Object *closure_marshal_name(Scheme_Object *name);
 
-void scheme_init_marshal(Scheme_Env *env) 
+void scheme_init_marshal(Scheme_Startup_Env *env) 
 {
   scheme_install_type_writer(scheme_application_type, write_application);
   scheme_install_type_reader(scheme_application_type, read_application);

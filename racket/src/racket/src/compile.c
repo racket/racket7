@@ -85,7 +85,7 @@ static void register_traversers(void);
 /*                          initialization                            */
 /**********************************************************************/
 
-void scheme_init_compile (Scheme_Env *env)
+void scheme_init_compile (Scheme_Startup_Env *env)
 {
 #ifdef MZ_PRECISE_GC
   register_traversers();
@@ -2114,7 +2114,6 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
     
     bodies[i] = e;
   }
-
 
   return (Scheme_Object *)linklet;
 }

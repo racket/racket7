@@ -19,23 +19,22 @@ enum {
   scheme_quote_syntax_type,             /* 14 */
 
   scheme_define_values_type,            /* 15 */
-  scheme_define_syntaxes_type,          /* 16 */
-  scheme_begin_for_syntax_type,         /* 17 */
   scheme_set_bang_type,                 /* 18 */
   scheme_boxenv_type,                   /* 19 */
   scheme_begin0_sequence_type,          /* 20 */
-  scheme_splice_sequence_type,          /* 21 */
-  scheme_require_form_type,             /* 22 */
   scheme_varref_form_type,              /* 23 */
   scheme_apply_values_type,             /* 24 */
   scheme_with_immed_mark_type,          /* 25 */
   scheme_case_lambda_sequence_type,     /* 26 */
-  scheme_module_type,                   /* 27 */
   scheme_inline_variant_type,           /* 28 */
 
   _scheme_values_types_,                /* 29 */
   /* All following types are values at run time */
   
+  scheme_linklet_type,                  /* 27 */
+  scheme_linklet_bundle_type,           /* 27 */
+  scheme_linklet_directorytype,         /* 27 */
+
   /* Replacements for some of the above as the
      compiler's intermediate representation for
      optimization: */
@@ -44,7 +43,6 @@ enum {
   scheme_ir_let_value_type,             /* 32 */
   scheme_ir_let_header_type,            /* 33 */
   scheme_ir_toplevel_type,              /* 34 */
-  scheme_ir_quote_syntax_type,          /* 35 */
 
   scheme_quote_compilation_type, /* used while writing, only */
 
@@ -52,7 +50,6 @@ enum {
      registered in the prefix table instead of
      used directly as an "expression": */
   scheme_variable_type,                 /* 37 */
-  scheme_module_variable_type, /* link replaces with scheme_variable_type */
 
   _scheme_ir_values_types_,             /* 39 */
   /* All of the following are literal values from the

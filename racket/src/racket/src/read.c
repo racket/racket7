@@ -413,7 +413,7 @@ typedef struct {
 /*                             initialization                             */
 /*========================================================================*/
 
-void scheme_init_read(Scheme_Env *env)
+void scheme_init_read(Scheme_Startup_Env *env)
 {
   REGISTER_SO(quote_symbol);
   REGISTER_SO(quasiquote_symbol);
@@ -528,45 +528,45 @@ void scheme_init_read(Scheme_Env *env)
   register_traversers();
 #endif
 
-  GLOBAL_PARAMETER("current-readtable",             current_readtable,      MZCONFIG_READTABLE,                   env);
-  GLOBAL_PARAMETER("current-reader-guard",          current_reader_guard,   MZCONFIG_READER_GUARD,                env);
-  GLOBAL_PARAMETER("read-case-sensitive",           read_case_sensitive,    MZCONFIG_CASE_SENS,                   env);
-  GLOBAL_PARAMETER("read-square-bracket-as-paren",  read_bracket_as_paren,  MZCONFIG_SQUARE_BRACKETS_ARE_PARENS,  env);
-  GLOBAL_PARAMETER("read-curly-brace-as-paren",     read_brace_as_paren,    MZCONFIG_CURLY_BRACES_ARE_PARENS,     env);
-  GLOBAL_PARAMETER("read-square-bracket-with-tag",  read_bracket_with_tag,  MZCONFIG_SQUARE_BRACKETS_ARE_TAGGED,  env);
-  GLOBAL_PARAMETER("read-curly-brace-with-tag",     read_brace_with_tag,    MZCONFIG_CURLY_BRACES_ARE_TAGGED,     env);
-  GLOBAL_PARAMETER("read-cdot",                     read_cdot,              MZCONFIG_READ_CDOT,                   env);
-  GLOBAL_PARAMETER("read-accept-graph",             read_accept_graph,      MZCONFIG_CAN_READ_GRAPH,              env);
-  GLOBAL_PARAMETER("read-accept-compiled",          read_accept_compiled,   MZCONFIG_CAN_READ_COMPILED,           env);
-  GLOBAL_PARAMETER("read-accept-box",               read_accept_box,        MZCONFIG_CAN_READ_BOX,                env);
-  GLOBAL_PARAMETER("read-accept-bar-quote",         read_accept_pipe_quote, MZCONFIG_CAN_READ_PIPE_QUOTE,         env);
-  GLOBAL_PARAMETER("read-decimal-as-inexact",       read_decimal_as_inexact,MZCONFIG_READ_DECIMAL_INEXACT,        env);
-  GLOBAL_PARAMETER("read-accept-dot",               read_accept_dot,        MZCONFIG_CAN_READ_DOT,                env);
-  GLOBAL_PARAMETER("read-accept-infix-dot",         read_accept_infix_dot,  MZCONFIG_CAN_READ_INFIX_DOT,          env);
-  GLOBAL_PARAMETER("read-accept-quasiquote",        read_accept_quasi,      MZCONFIG_CAN_READ_QUASI,              env);
-  GLOBAL_PARAMETER("read-accept-reader",            read_accept_reader,     MZCONFIG_CAN_READ_READER,             env);
-  GLOBAL_PARAMETER("read-accept-lang",              read_accept_lang,       MZCONFIG_CAN_READ_LANG,               env);
+  ADD_PARAMETER("current-readtable",             current_readtable,      MZCONFIG_READTABLE,                   env);
+  ADD_PARAMETER("current-reader-guard",          current_reader_guard,   MZCONFIG_READER_GUARD,                env);
+  ADD_PARAMETER("read-case-sensitive",           read_case_sensitive,    MZCONFIG_CASE_SENS,                   env);
+  ADD_PARAMETER("read-square-bracket-as-paren",  read_bracket_as_paren,  MZCONFIG_SQUARE_BRACKETS_ARE_PARENS,  env);
+  ADD_PARAMETER("read-curly-brace-as-paren",     read_brace_as_paren,    MZCONFIG_CURLY_BRACES_ARE_PARENS,     env);
+  ADD_PARAMETER("read-square-bracket-with-tag",  read_bracket_with_tag,  MZCONFIG_SQUARE_BRACKETS_ARE_TAGGED,  env);
+  ADD_PARAMETER("read-curly-brace-with-tag",     read_brace_with_tag,    MZCONFIG_CURLY_BRACES_ARE_TAGGED,     env);
+  ADD_PARAMETER("read-cdot",                     read_cdot,              MZCONFIG_READ_CDOT,                   env);
+  ADD_PARAMETER("read-accept-graph",             read_accept_graph,      MZCONFIG_CAN_READ_GRAPH,              env);
+  ADD_PARAMETER("read-accept-compiled",          read_accept_compiled,   MZCONFIG_CAN_READ_COMPILED,           env);
+  ADD_PARAMETER("read-accept-box",               read_accept_box,        MZCONFIG_CAN_READ_BOX,                env);
+  ADD_PARAMETER("read-accept-bar-quote",         read_accept_pipe_quote, MZCONFIG_CAN_READ_PIPE_QUOTE,         env);
+  ADD_PARAMETER("read-decimal-as-inexact",       read_decimal_as_inexact,MZCONFIG_READ_DECIMAL_INEXACT,        env);
+  ADD_PARAMETER("read-accept-dot",               read_accept_dot,        MZCONFIG_CAN_READ_DOT,                env);
+  ADD_PARAMETER("read-accept-infix-dot",         read_accept_infix_dot,  MZCONFIG_CAN_READ_INFIX_DOT,          env);
+  ADD_PARAMETER("read-accept-quasiquote",        read_accept_quasi,      MZCONFIG_CAN_READ_QUASI,              env);
+  ADD_PARAMETER("read-accept-reader",            read_accept_reader,     MZCONFIG_CAN_READ_READER,             env);
+  ADD_PARAMETER("read-accept-lang",              read_accept_lang,       MZCONFIG_CAN_READ_LANG,               env);
 #ifdef LOAD_ON_DEMAND
-  GLOBAL_PARAMETER("read-on-demand-source",         read_delay_load,        MZCONFIG_DELAY_LOAD_INFO,             env);
+  ADD_PARAMETER("read-on-demand-source",         read_delay_load,        MZCONFIG_DELAY_LOAD_INFO,             env);
 #endif
-  GLOBAL_PARAMETER("print-graph",                   print_graph,            MZCONFIG_PRINT_GRAPH,                 env);
-  GLOBAL_PARAMETER("print-struct",                  print_struct,           MZCONFIG_PRINT_STRUCT,                env);
-  GLOBAL_PARAMETER("print-box",                     print_box,              MZCONFIG_PRINT_BOX,                   env);
-  GLOBAL_PARAMETER("print-vector-length",           print_vec_shorthand,    MZCONFIG_PRINT_VEC_SHORTHAND,         env);
-  GLOBAL_PARAMETER("print-hash-table",              print_hash_table,       MZCONFIG_PRINT_HASH_TABLE,            env);
-  GLOBAL_PARAMETER("print-unreadable",              print_unreadable,       MZCONFIG_PRINT_UNREADABLE,            env);
-  GLOBAL_PARAMETER("print-pair-curly-braces",       print_pair_curly,       MZCONFIG_PRINT_PAIR_CURLY,            env);
-  GLOBAL_PARAMETER("print-mpair-curly-braces",      print_mpair_curly,      MZCONFIG_PRINT_MPAIR_CURLY,           env);
-  GLOBAL_PARAMETER("print-syntax-width",            print_syntax_width,     MZCONFIG_PRINT_SYNTAX_WIDTH,          env);
-  GLOBAL_PARAMETER("print-reader-abbreviations",    print_reader,           MZCONFIG_PRINT_READER,                env);
-  GLOBAL_PARAMETER("print-boolean-long-form",       print_long_bool,        MZCONFIG_PRINT_LONG_BOOLEAN,          env);
-  GLOBAL_PARAMETER("print-as-expression",           print_as_qq,            MZCONFIG_PRINT_AS_QQ,                 env);
+  ADD_PARAMETER("print-graph",                   print_graph,            MZCONFIG_PRINT_GRAPH,                 env);
+  ADD_PARAMETER("print-struct",                  print_struct,           MZCONFIG_PRINT_STRUCT,                env);
+  ADD_PARAMETER("print-box",                     print_box,              MZCONFIG_PRINT_BOX,                   env);
+  ADD_PARAMETER("print-vector-length",           print_vec_shorthand,    MZCONFIG_PRINT_VEC_SHORTHAND,         env);
+  ADD_PARAMETER("print-hash-table",              print_hash_table,       MZCONFIG_PRINT_HASH_TABLE,            env);
+  ADD_PARAMETER("print-unreadable",              print_unreadable,       MZCONFIG_PRINT_UNREADABLE,            env);
+  ADD_PARAMETER("print-pair-curly-braces",       print_pair_curly,       MZCONFIG_PRINT_PAIR_CURLY,            env);
+  ADD_PARAMETER("print-mpair-curly-braces",      print_mpair_curly,      MZCONFIG_PRINT_MPAIR_CURLY,           env);
+  ADD_PARAMETER("print-syntax-width",            print_syntax_width,     MZCONFIG_PRINT_SYNTAX_WIDTH,          env);
+  ADD_PARAMETER("print-reader-abbreviations",    print_reader,           MZCONFIG_PRINT_READER,                env);
+  ADD_PARAMETER("print-boolean-long-form",       print_long_bool,        MZCONFIG_PRINT_LONG_BOOLEAN,          env);
+  ADD_PARAMETER("print-as-expression",           print_as_qq,            MZCONFIG_PRINT_AS_QQ,                 env);
 
   GLOBAL_PRIM_W_ARITY("make-readtable",     make_readtable,     1, -1,      env);
-  GLOBAL_FOLDING_PRIM("readtable?",         readtable_p,        1, 1, 1,    env);
+  ADD_FOLDING_PRIM("readtable?",         readtable_p,        1, 1, 1,    env);
   GLOBAL_PRIM_W_ARITY2("readtable-mapping", readtable_mapping,  2, 2, 3, 3, env);
 
-  GLOBAL_NONCM_PRIM("datum-intern-literal", read_intern, 1, 1, env);
+  ADD_NONCM_PRIM("datum-intern-literal", read_intern, 1, 1, env);
 
   if (getenv("PLT_DELAY_FROM_ZO")) {
     use_perma_cache = 0;

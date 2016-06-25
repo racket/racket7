@@ -94,55 +94,55 @@ void scheme_init_char_constants(void)
   }
 }
 
-void scheme_init_char (Scheme_Env *env)
+void scheme_init_char (Scheme_Startup_Env *env)
 {
   Scheme_Object *p;
 
   p = scheme_make_folding_prim(char_p, "char?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("char?", p, env);
+  scheme_addto_prim_instance("char?", p, env);
 
   p = scheme_make_folding_prim(char_eq, "char=?", 2, -1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
-  scheme_add_global_constant("char=?", p, env);
+  scheme_addto_prim_instance("char=?", p, env);
 
-  GLOBAL_FOLDING_PRIM("char<?",                char_lt,               2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char>?",                char_gt,               2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char<=?",               char_lt_eq,            2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char>=?",               char_gt_eq,            2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-ci=?",             char_eq_ci,            2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-ci<?",             char_lt_ci,            2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-ci>?",             char_gt_ci,            2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-ci<=?",            char_lt_eq_ci,         2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-ci>=?",            char_gt_eq_ci,         2, -1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-alphabetic?",      char_alphabetic,       1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-numeric?",         char_numeric,          1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-symbolic?",        char_symbolic,         1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-graphic?",         char_graphic,          1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-whitespace?",      char_whitespace,       1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-blank?",           char_blank,            1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-iso-control?",     char_control,          1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-punctuation?",     char_punctuation,      1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-upper-case?",      char_upper_case,       1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-title-case?",      char_title_case,       1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-lower-case?",      char_lower_case,       1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-title-case?",      char_title_case,       1, 1, 1, env);
+  ADD_FOLDING_PRIM("char<?",                char_lt,               2, -1, 1, env);
+  ADD_FOLDING_PRIM("char>?",                char_gt,               2, -1, 1, env);
+  ADD_FOLDING_PRIM("char<=?",               char_lt_eq,            2, -1, 1, env);
+  ADD_FOLDING_PRIM("char>=?",               char_gt_eq,            2, -1, 1, env);
+  ADD_FOLDING_PRIM("char-ci=?",             char_eq_ci,            2, -1, 1, env);
+  ADD_FOLDING_PRIM("char-ci<?",             char_lt_ci,            2, -1, 1, env);
+  ADD_FOLDING_PRIM("char-ci>?",             char_gt_ci,            2, -1, 1, env);
+  ADD_FOLDING_PRIM("char-ci<=?",            char_lt_eq_ci,         2, -1, 1, env);
+  ADD_FOLDING_PRIM("char-ci>=?",            char_gt_eq_ci,         2, -1, 1, env);
+  ADD_FOLDING_PRIM("char-alphabetic?",      char_alphabetic,       1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-numeric?",         char_numeric,          1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-symbolic?",        char_symbolic,         1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-graphic?",         char_graphic,          1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-whitespace?",      char_whitespace,       1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-blank?",           char_blank,            1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-iso-control?",     char_control,          1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-punctuation?",     char_punctuation,      1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-upper-case?",      char_upper_case,       1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-title-case?",      char_title_case,       1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-lower-case?",      char_lower_case,       1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-title-case?",      char_title_case,       1, 1, 1, env);
 
   p = scheme_make_folding_prim(scheme_checked_char_to_integer, "char->integer", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
-  scheme_add_global_constant("char->integer", p, env);
+  scheme_addto_prim_instance("char->integer", p, env);
   p = scheme_make_folding_prim(scheme_checked_integer_to_char, "integer->char", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
-  scheme_add_global_constant("integer->char", p, env);
+  scheme_addto_prim_instance("integer->char", p, env);
 
-  GLOBAL_FOLDING_PRIM("char-upcase",           char_upcase,           1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-downcase",         char_downcase,         1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-titlecase",        char_titlecase,        1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-foldcase",         char_foldcase,         1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-general-category", char_general_category, 1, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("char-utf-8-length",     char_utf8_length,      1, 1, 1, env);
-  GLOBAL_IMMED_PRIM("make-known-char-range-list", char_map_list, 0, 0, env);
+  ADD_FOLDING_PRIM("char-upcase",           char_upcase,           1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-downcase",         char_downcase,         1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-titlecase",        char_titlecase,        1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-foldcase",         char_foldcase,         1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-general-category", char_general_category, 1, 1, 1, env);
+  ADD_FOLDING_PRIM("char-utf-8-length",     char_utf8_length,      1, 1, 1, env);
+  ADD_IMMED_PRIM("make-known-char-range-list", char_map_list, 0, 0, env);
 }
 
 Scheme_Object *scheme_make_char(mzchar ch)

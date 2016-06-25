@@ -247,7 +247,7 @@ typedef struct Scheme_Dynamic_Wind_List {
 /*========================================================================*/
 
 void
-scheme_init_fun (Scheme_Env *env)
+scheme_init_fun (Scheme_Startup_Env *env)
 {
   Scheme_Object *o;
 
@@ -269,7 +269,7 @@ scheme_init_fun (Scheme_Env *env)
   o = scheme_make_folding_prim(procedure_p, "procedure?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("procedure?", o, env);
+  scheme_addto_prim_instance("procedure?", o, env);
 
   scheme_procedure_p_proc = o;
 
@@ -278,23 +278,23 @@ scheme_init_fun (Scheme_Env *env)
                                                 "apply",
                                                 2, -1,
                                                 0, -1);
-  scheme_add_global_constant("apply", scheme_apply_proc, env);
-  scheme_add_global_constant("map",
+  scheme_addto_prim_instance("apply", scheme_apply_proc, env);
+  scheme_addto_prim_instance("map",
 			     scheme_make_noncm_prim(map,
                                                     "map",
                                                     2, -1),
 			     env);
-  scheme_add_global_constant("for-each",
+  scheme_addto_prim_instance("for-each",
 			     scheme_make_noncm_prim(for_each,
                                                     "for-each",
                                                     2, -1),
 			     env);
-  scheme_add_global_constant("andmap",
+  scheme_addto_prim_instance("andmap",
 			     scheme_make_prim_w_arity(andmap,
 						      "andmap",
 						      2, -1),
 			     env);
-  scheme_add_global_constant("ormap",
+  scheme_addto_prim_instance("ormap",
 			     scheme_make_prim_w_arity(ormap,
 						      "ormap",
 						      2, -1),
@@ -305,7 +305,7 @@ scheme_init_fun (Scheme_Env *env)
                                                            "call-with-values",
                                                            2, 2,
                                                            0, -1);
-  scheme_add_global_constant("call-with-values",
+  scheme_addto_prim_instance("call-with-values",
 			     scheme_call_with_values_proc,
 			     env);
 
@@ -318,7 +318,7 @@ scheme_init_fun (Scheme_Env *env)
                                                                              | SCHEME_PRIM_IS_BINARY_INLINED
                                                                              | SCHEME_PRIM_IS_NARY_INLINED
                                                                              | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("values",
+  scheme_addto_prim_instance("values",
 			     scheme_values_proc,
 			     env);
 
@@ -326,7 +326,7 @@ scheme_init_fun (Scheme_Env *env)
 				"call-with-escape-continuation",
 				1, 1,
 				0, -1);
-  scheme_add_global_constant("call-with-escape-continuation", o, env);
+  scheme_addto_prim_instance("call-with-escape-continuation", o, env);
 
   REGISTER_SO(internal_call_cc_prim);
   internal_call_cc_prim = scheme_make_prim_w_arity2(internal_call_cc,
@@ -345,15 +345,15 @@ scheme_init_fun (Scheme_Env *env)
 				1, MAX_CALL_CC_ARG_COUNT,
 				0, -1);
 
-  scheme_add_global_constant("call-with-current-continuation", o, env);
+  scheme_addto_prim_instance("call-with-current-continuation", o, env);
 
-  scheme_add_global_constant("continuation?",
+  scheme_addto_prim_instance("continuation?",
                              scheme_make_folding_prim(continuation_p,
 						      "continuation?",
 						      1, 1, 1),
                              env);
 
-  scheme_add_global_constant("call-with-continuation-barrier",
+  scheme_addto_prim_instance("call-with-continuation-barrier",
 			     scheme_make_prim_w_arity2(call_with_continuation_barrier,
 						       "call-with-continuation-barrier",
 						       1, 1,
@@ -365,11 +365,11 @@ scheme_init_fun (Scheme_Env *env)
                                                     "call-with-continuation-prompt",
                                                     1, -1,
                                                     0, -1);
-  scheme_add_global_constant("call-with-continuation-prompt",
+  scheme_addto_prim_instance("call-with-continuation-prompt",
 			     call_with_prompt_proc, 
 			     env);
 
-  scheme_add_global_constant("call-with-composable-continuation",
+  scheme_addto_prim_instance("call-with-composable-continuation",
 			     scheme_make_prim_w_arity2(call_with_control,
                                                        "call-with-composable-continuation",
                                                        1, 2,
@@ -380,93 +380,93 @@ scheme_init_fun (Scheme_Env *env)
   abort_continuation_proc = scheme_make_prim_w_arity(abort_continuation,
                                                      "abort-current-continuation",
                                                      1, -1);
-  scheme_add_global_constant("abort-current-continuation",
+  scheme_addto_prim_instance("abort-current-continuation",
 			     abort_continuation_proc, 
 			     env);
 
-  scheme_add_global_constant("continuation-prompt-available?",
+  scheme_addto_prim_instance("continuation-prompt-available?",
 			     scheme_make_prim_w_arity(continuation_prompt_available,
                                                       "continuation-prompt-available?",
                                                       1, 2), 
 			     env);
 
-  scheme_add_global_constant("make-continuation-prompt-tag",
+  scheme_addto_prim_instance("make-continuation-prompt-tag",
 			     scheme_make_prim_w_arity(make_prompt_tag,
                                                       "make-continuation-prompt-tag",
                                                       0, 1), 
 			     env);
 
-  scheme_add_global_constant("default-continuation-prompt-tag",
+  scheme_addto_prim_instance("default-continuation-prompt-tag",
                              scheme_make_prim_w_arity(get_default_prompt_tag,
                                                       "default-continuation-prompt-tag",
                                                       0, 0), 
 			     env);
-  scheme_add_global_constant("continuation-prompt-tag?",
+  scheme_addto_prim_instance("continuation-prompt-tag?",
                              scheme_make_folding_prim(prompt_tag_p,
 						      "continuation-prompt-tag?",
 						      1, 1, 1),
                              env);
-  scheme_add_global_constant("impersonate-prompt-tag",
+  scheme_addto_prim_instance("impersonate-prompt-tag",
                              scheme_make_prim_w_arity(impersonate_prompt_tag,
 						      "impersonate-prompt-tag",
 						      3, -1),
                              env);
-  scheme_add_global_constant("chaperone-prompt-tag",
+  scheme_addto_prim_instance("chaperone-prompt-tag",
                              scheme_make_prim_w_arity(chaperone_prompt_tag,
 						      "chaperone-prompt-tag",
 						      3, -1),
                              env);
 
-  scheme_add_global_constant("call-with-semaphore",
+  scheme_addto_prim_instance("call-with-semaphore",
 			     scheme_make_prim_w_arity2(call_with_sema,
 						       "call-with-semaphore",
 						       2, -1,
 						       0, -1), 
 			     env);
-  scheme_add_global_constant("call-with-semaphore/enable-break",
+  scheme_addto_prim_instance("call-with-semaphore/enable-break",
 			     scheme_make_prim_w_arity2(call_with_sema_enable_break,
 						       "call-with-semaphore/enable-break",
 						       2, -1,
 						       0, -1),
 			     env);
 
-  scheme_add_global_constant("make-continuation-mark-key",
+  scheme_addto_prim_instance("make-continuation-mark-key",
 			     scheme_make_prim_w_arity(make_continuation_mark_key,
 						      "make-continuation-mark-key",
 						      0, 1),
 			     env);
-  scheme_add_global_constant("continuation-mark-key?",
+  scheme_addto_prim_instance("continuation-mark-key?",
 			     scheme_make_prim_w_arity(continuation_mark_key_p,
 						      "continuation-mark-key?",
 						      1, 1),
 			     env);
-  scheme_add_global_constant("impersonate-continuation-mark-key",
+  scheme_addto_prim_instance("impersonate-continuation-mark-key",
                              scheme_make_prim_w_arity(impersonate_continuation_mark_key,
 						      "impersonate-continuation-mark-key",
 						      3, -1),
                              env);
-  scheme_add_global_constant("chaperone-continuation-mark-key",
+  scheme_addto_prim_instance("chaperone-continuation-mark-key",
                              scheme_make_prim_w_arity(chaperone_continuation_mark_key,
 						      "chaperone-continuation-mark-key",
 						      3, -1),
                              env);
 
-  scheme_add_global_constant("current-continuation-marks",
+  scheme_addto_prim_instance("current-continuation-marks",
 			     scheme_make_prim_w_arity(cc_marks,
 						      "current-continuation-marks",
 						      0, 1),
 			     env);
-  scheme_add_global_constant("continuation-marks",
+  scheme_addto_prim_instance("continuation-marks",
 			     scheme_make_prim_w_arity(cont_marks,
 						      "continuation-marks",
 						      1, 2),
 			     env);
-  scheme_add_global_constant("continuation-mark-set->list",
+  scheme_addto_prim_instance("continuation-mark-set->list",
 			     scheme_make_prim_w_arity(extract_cc_marks,
 						      "continuation-mark-set->list",
 						      2, 3),
 			     env);
-  scheme_add_global_constant("continuation-mark-set->list*",
+  scheme_addto_prim_instance("continuation-mark-set->list*",
 			     scheme_make_prim_w_arity(extract_cc_markses,
 						      "continuation-mark-set->list*",
 						      2, 4),
@@ -476,22 +476,22 @@ scheme_init_fun (Scheme_Env *env)
                                "continuation-mark-set-first",
                                2, 4);
   SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
-  scheme_add_global_constant("continuation-mark-set-first", o, env);
+  scheme_addto_prim_instance("continuation-mark-set-first", o, env);
 
   REGISTER_SO(scheme_call_with_immed_mark_proc);
   scheme_call_with_immed_mark_proc = scheme_make_prim_w_arity2(call_with_immediate_cc_mark,
                                                                "call-with-immediate-continuation-mark",
                                                                2, 3,
                                                                0, -1);
-  scheme_add_global_constant("call-with-immediate-continuation-mark",
+  scheme_addto_prim_instance("call-with-immediate-continuation-mark",
 			     scheme_call_with_immed_mark_proc,
 			     env);
-  scheme_add_global_constant("continuation-mark-set?",
+  scheme_addto_prim_instance("continuation-mark-set?",
 			     scheme_make_prim_w_arity(cc_marks_p,
 						      "continuation-mark-set?",
 						      1, 1),
 			     env);
-  scheme_add_global_constant("continuation-mark-set->context",
+  scheme_addto_prim_instance("continuation-mark-set->context",
 			     scheme_make_prim_w_arity(extract_cc_proc_marks,
 						      "continuation-mark-set->context",
 						      1, 1),
@@ -502,70 +502,70 @@ scheme_init_fun (Scheme_Env *env)
 					      "void",
 					      0, -1, 1);
   SCHEME_PRIM_PROC_FLAGS(scheme_void_proc) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("void", scheme_void_proc, env);
+  scheme_addto_prim_instance("void", scheme_void_proc, env);
 
   
   REGISTER_SO(scheme_void_p_proc);
   scheme_void_p_proc = scheme_make_folding_prim(void_p, "void?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(scheme_void_p_proc) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                                              | SCHEME_PRIM_IS_OMITABLE);
-  scheme_add_global_constant("void?", scheme_void_p_proc, env);
+  scheme_addto_prim_instance("void?", scheme_void_p_proc, env);
 
-  scheme_add_global_constant("time-apply",
+  scheme_addto_prim_instance("time-apply",
 			     scheme_make_prim_w_arity2(time_apply,
 						       "time-apply",
 						       2, 2,
 						       4, 4),
 			     env);
-  scheme_add_global_constant("current-milliseconds",
+  scheme_addto_prim_instance("current-milliseconds",
 			     scheme_make_immed_prim(current_milliseconds,
                                                     "current-milliseconds",
                                                     0, 0),
 			     env);
-  scheme_add_global_constant("current-inexact-milliseconds",
+  scheme_addto_prim_instance("current-inexact-milliseconds",
 			     scheme_make_immed_prim(current_inexact_milliseconds,
                                                     "current-inexact-milliseconds",
                                                     0, 0),
 			     env);
-  scheme_add_global_constant("current-process-milliseconds",
+  scheme_addto_prim_instance("current-process-milliseconds",
 			     scheme_make_immed_prim(current_process_milliseconds,
                                                     "current-process-milliseconds",
                                                     0, 1),
 			     env);
-  scheme_add_global_constant("current-gc-milliseconds",
+  scheme_addto_prim_instance("current-gc-milliseconds",
 			     scheme_make_immed_prim(current_gc_milliseconds,
                                                     "current-gc-milliseconds",
                                                     0, 0),
 			     env);
-  scheme_add_global_constant("current-seconds",
+  scheme_addto_prim_instance("current-seconds",
 			     scheme_make_immed_prim(current_seconds,
                                                     "current-seconds",
                                                     0, 0),
 			     env);
-  scheme_add_global_constant("seconds->date",
+  scheme_addto_prim_instance("seconds->date",
 			     scheme_make_immed_prim(seconds_to_date,
                                                     "seconds->date",
                                                     1, 2),
 			     env);
 
-  scheme_add_global_constant("dynamic-wind",
+  scheme_addto_prim_instance("dynamic-wind",
 			     scheme_make_prim_w_arity(dynamic_wind,
 						      "dynamic-wind",
 						      3, 3),
 			     env);
 
-  scheme_add_global_constant("object-name",
+  scheme_addto_prim_instance("object-name",
 			     scheme_make_folding_prim(object_name,
 						      "object-name",
 						      1, 1, 1),
 			     env);
 
-  scheme_add_global_constant("procedure-arity",
+  scheme_addto_prim_instance("procedure-arity",
 			     scheme_make_folding_prim(procedure_arity,
 						      "procedure-arity",
 						      1, 1, 1),
 			     env);
-  scheme_add_global_constant("procedure-arity?",
+  scheme_addto_prim_instance("procedure-arity?",
 			     scheme_make_folding_prim(procedure_arity_p,
 						      "procedure-arity?",
 						      1, 1, 1),
@@ -576,24 +576,24 @@ scheme_init_fun (Scheme_Env *env)
                                2, 3, 1);
   SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
   scheme_procedure_arity_includes_proc = o;
-  scheme_add_global_constant("procedure-arity-includes?", o, env);
+  scheme_addto_prim_instance("procedure-arity-includes?", o, env);
 
-  scheme_add_global_constant("procedure-reduce-arity",
+  scheme_addto_prim_instance("procedure-reduce-arity",
 			     scheme_make_prim_w_arity(procedure_reduce_arity,
 						      "procedure-reduce-arity",
 						      2, 2),
 			     env);
-  scheme_add_global_constant("procedure-rename",
+  scheme_addto_prim_instance("procedure-rename",
 			     scheme_make_prim_w_arity(procedure_rename,
 						      "procedure-rename",
 						      2, 2),
 			     env);
-  scheme_add_global_constant("procedure->method",
+  scheme_addto_prim_instance("procedure->method",
 			     scheme_make_prim_w_arity(procedure_to_method,
 						      "procedure->method",
 						      1, 1),
 			     env);
-  scheme_add_global_constant("procedure-closure-contents-eq?",
+  scheme_addto_prim_instance("procedure-closure-contents-eq?",
 			     scheme_make_folding_prim(procedure_equal_closure_p,
 						      "procedure-closure-contents-eq?",
 						      2, 2, 1),
@@ -604,68 +604,68 @@ scheme_init_fun (Scheme_Env *env)
                                "procedure-specialize",
                                1, 1);
   scheme_procedure_specialize_proc = o;
-  scheme_add_global_constant("procedure-specialize", o, env);
+  scheme_addto_prim_instance("procedure-specialize", o, env);
 
-  scheme_add_global_constant("chaperone-procedure",
+  scheme_addto_prim_instance("chaperone-procedure",
 			     scheme_make_prim_w_arity(chaperone_procedure,
 						      "chaperone-procedure",
 						      2, -1),
 			     env);
-  scheme_add_global_constant("impersonate-procedure",
+  scheme_addto_prim_instance("impersonate-procedure",
 			     scheme_make_prim_w_arity(impersonate_procedure,
 						      "impersonate-procedure",
 						      2, -1),
 			     env);
-  scheme_add_global_constant("chaperone-procedure*",
+  scheme_addto_prim_instance("chaperone-procedure*",
 			     scheme_make_prim_w_arity(chaperone_procedure_star,
 						      "chaperone-procedure*",
 						      2, -1),
 			     env);
-  scheme_add_global_constant("impersonate-procedure*",
+  scheme_addto_prim_instance("impersonate-procedure*",
 			     scheme_make_prim_w_arity(impersonate_procedure_star,
 						      "impersonate-procedure*",
 						      2, -1),
 			     env);
 
-  scheme_add_global_constant("primitive?",
+  scheme_addto_prim_instance("primitive?",
 			     scheme_make_folding_prim(primitive_p,
 						      "primitive?",
 						      1, 1, 1),
 			     env);
-  scheme_add_global_constant("primitive-closure?",
+  scheme_addto_prim_instance("primitive-closure?",
 			     scheme_make_folding_prim(primitive_closure_p,
 						      "primitive-closure?",
 						      1, 1, 1),
 			     env);
 
-  scheme_add_global_constant("primitive-result-arity",
+  scheme_addto_prim_instance("primitive-result-arity",
 			     scheme_make_folding_prim(primitive_result_arity,
 						      "primitive-result-arity",
 						      1, 1, 1),
 			     env);
 
-  scheme_add_global_constant("procedure-result-arity",
+  scheme_addto_prim_instance("procedure-result-arity",
                              scheme_make_folding_prim(procedure_result_arity,
                                                       "procedure-result-arity",
                                                       1, 1, 1),
                              env);
 
-  scheme_add_global_constant("current-print",
+  scheme_addto_prim_instance("current-print",
 			     scheme_register_parameter(current_print,
 						       "current-print",
 						       MZCONFIG_PRINT_HANDLER),
 			     env);
-  scheme_add_global_constant("current-prompt-read",
+  scheme_addto_prim_instance("current-prompt-read",
 			     scheme_register_parameter(current_prompt_read,
 						       "current-prompt-read",
 						       MZCONFIG_PROMPT_READ_HANDLER),
 			     env);
-  scheme_add_global_constant("current-read-interaction",
+  scheme_addto_prim_instance("current-read-interaction",
 			     scheme_register_parameter(current_read,
 						       "current-read-interaction",
 						       MZCONFIG_READ_HANDLER),
 			     env);
-  scheme_add_global_constant("current-get-interaction-input-port",
+  scheme_addto_prim_instance("current-get-interaction-input-port",
 			     scheme_register_parameter(current_get_read_input_port,
 						       "current-get-interaction-input-port",
 						       MZCONFIG_READ_INPUT_PORT_HANDLER),
@@ -728,7 +728,7 @@ scheme_init_fun (Scheme_Env *env)
 }
 
 void
-scheme_init_unsafe_fun (Scheme_Env *env)
+scheme_init_unsafe_fun (Scheme_Startup_Env *env)
 {
   Scheme_Object *o;
 
@@ -737,30 +737,30 @@ scheme_init_unsafe_fun (Scheme_Env *env)
   scheme_check_not_undefined_proc = o;
   SCHEME_PRIM_PROC_FLAGS(o) |= (SCHEME_PRIM_OPT_IMMEDIATE
                                 | scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED));
-  scheme_add_global_constant("check-not-unsafe-undefined", o, env);
+  scheme_addto_prim_instance("check-not-unsafe-undefined", o, env);
 
   REGISTER_SO(scheme_check_assign_not_undefined_proc);
   o = scheme_make_prim_w_arity(scheme_check_assign_not_undefined, "check-not-unsafe-undefined/assign", 2, 2);
   scheme_check_assign_not_undefined_proc = o;
   SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
-  scheme_add_global_constant("check-not-unsafe-undefined/assign", o, env);
+  scheme_addto_prim_instance("check-not-unsafe-undefined/assign", o, env);
 
-  scheme_add_global_constant("unsafe-undefined", scheme_undefined, env);
+  scheme_addto_prim_instance("unsafe-undefined", scheme_undefined, env);
 
   REGISTER_SO(scheme_chaperone_undefined_property);
   o = scheme_make_struct_type_property(scheme_intern_symbol("chaperone-unsafe-undefined"));
   scheme_chaperone_undefined_property = o;
-  scheme_add_global_constant("prop:chaperone-unsafe-undefined", o, env);
+  scheme_addto_prim_instance("prop:chaperone-unsafe-undefined", o, env);
 
   o = scheme_make_prim_w_arity(chaperone_unsafe_undefined, "chaperone-struct-unsafe-undefined", 1, 1);
-  scheme_add_global_constant("chaperone-struct-unsafe-undefined", o, env);
+  scheme_addto_prim_instance("chaperone-struct-unsafe-undefined", o, env);
 
-  scheme_add_global_constant("unsafe-chaperone-procedure",
+  scheme_addto_prim_instance("unsafe-chaperone-procedure",
 			     scheme_make_prim_w_arity(unsafe_chaperone_procedure,
 						      "unsafe-chaperone-procedure",
 						      2, -1),
 			     env);
-  scheme_add_global_constant("unsafe-impersonate-procedure",
+  scheme_addto_prim_instance("unsafe-impersonate-procedure",
 			     scheme_make_prim_w_arity(unsafe_impersonate_procedure,
 						      "unsafe-impersonate-procedure",
 						      2, -1),
@@ -2770,7 +2770,7 @@ static int is_arity(Scheme_Object *a, int at_least_ok, int list_ok)
   return 0;
 }
 
-void scheme_init_reduced_proc_struct(Scheme_Env *env)
+void scheme_init_reduced_proc_struct(Scheme_Startup_Env *env)
 {
   if (!scheme_reduced_procedure_struct) {
     Scheme_Inspector *insp;
