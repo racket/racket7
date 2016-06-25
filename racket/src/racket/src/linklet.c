@@ -26,10 +26,32 @@
 #include "schpriv.h"
 #include "schrunst.h"
 
-static Scheme_Object *variable_p(int, Scheme_Object *[]);
-static Scheme_Object *variable_instance(int, Scheme_Object *[]);
-static Scheme_Object *variable_const_p(int, Scheme_Object *[]);
+static Scheme_Object *linklet_p(int argc, Scheme_Object **argv);
+static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv);
+static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv);
+static Scheme_Object *linklet_import_variables(int argc, Scheme_Object **argv);
+static Scheme_Object *linklet_export_variables(int argc, Scheme_Object **argv);
 
+static Scheme_Object *instance_p(int argc, Scheme_Object **argv);
+static Scheme_Object *make_instance(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_name(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_data(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_variable_names(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_variable_value(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_unset_variable(int argc, Scheme_Object **argv);
+
+static Scheme_Object *linklet_directory_p(int argc, Scheme_Object **argv);
+static Scheme_Object *linklet_directory_to_hash(int argc, Scheme_Object **argv);
+static Scheme_Object *hash_to_linklet_directory(int argc, Scheme_Object **argv);
+
+static Scheme_Object *linklet_bundle_p(int argc, Scheme_Object **argv);
+static Scheme_Object *linklet_bundle_to_hash(int argc, Scheme_Object **argv);
+static Scheme_Object *hash_to_linklet_bundle(int argc, Scheme_Object **argv);
+
+static Scheme_Object *variable_p(int argc, Scheme_Object **argv);
+static Scheme_Object *variable_instance(int argc, Scheme_Object **argv);
+static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv);
 
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
@@ -42,43 +64,320 @@ static void register_traversers(void);
 void
 scheme_init_linklet(Scheme_Env *env)
 {
+  Scheme_Env *lenv;
+  
 #ifdef MZ_PRECISE_GC
   register_traversers();
 #endif
 
-  GLOBAL_PRIM_W_ARITY("get-primitive-instance", get_primitive_instance, 1, 1, env);
+  lenv = scheme_primitive_module(scheme_intern_symbol("#%linklet"), env);
 
-  GLOBAL_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, env);
-  GLOBAL_PRIM_W_ARITY("eval-linklet", compile_linklet, 1, 1, env);
-  GLOBAL_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, env);
+  GLOBAL_PRIM_W_ARITY("get-primitive-instance", get_primitive_instance, 1, 1, lenv);
 
-  GLOBAL_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
-  GLOBAL_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
-  GLOBAL_PRIM_W_ARITY("compiled-linklet-import-variables", compiled_linklet_import_variables, 1, 1, env);
-  GLOBAL_PRIM_W_ARITY("compiled-linklet-export-variables", compiled_linklet_export_variables, 1, 1, env);
+  GLOBAL_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, lenv);
+  GLOBAL_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, lenv);
 
-  make-instance
-    instance-name
-    instance-variable-names
-    instance-variable-value
-    instance-set-variable-value!
-    instance-unset-variable!
+  GLOBAL_FOLDING_PRIM("instance?", instance_p, 1, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("make-instance", make_instance, 2, 2, lenv);
+  GLOBAL_PRIM_W_ARITY("instance-name", instance_name, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("instance-data", instance_data, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("instance-variable-value", instance_variable_value, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 1, 1, lenv);
 
-    linklet-directory?
-    hash->linklet-directory
-    linklet-directory->hash
-    
-    linklet-bundle?
-    hash->linklet-bundle
-    linklet-bundle->hash
-    
-    GLOBAL_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, env);
-  GLOBAL_PRIM_W_ARITY("variable-reference->instance", variable_top_level_namespace, 1, 1, env);
+  GLOBAL_FOLDING_PRIM("linklet_directory?", linklet_directory_p, 1, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("hash->linklet-directory", hash_to_linklet_directory, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("linklet-directory->hash", linklet_directory_to_hash, 1, 1, lenv);
+
+  GLOBAL_FOLDING_PRIM("linklet_bundle?", linklet_bundle_p, 1, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("hash->linklet-bundle", hash_to_linklet_bundle, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, lenv);
+
+  GLOBAL_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, lenv);
+  GLOBAL_PRIM_W_ARITY("variable-reference->instance", variable_top_level_namespace, 1, 1, lenv);
+
   REGISTER_SO(scheme_varref_const_p_proc);
   scheme_varref_const_p_proc = scheme_make_prim_w_arity(variable_const_p, 
                                                         "variable-reference-constant?", 
                                                         1, 1);
-  scheme_add_global_constant("variable-reference-constant?", scheme_varref_const_p_proc, env);
+  scheme_add_global_constant("variable-reference-constant?", scheme_varref_const_p_proc, lenv);
+
+  scheme_finish_primitive_module(lenv);
+  scheme_protect_primitive_provide(lenv, NULL);
+}
+
+/*========================================================================*/
+/*                    linklet and instance functions                      */
+/*========================================================================*/
+
+static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)
+{
+  return (SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type)
+          ? scheme_true
+          : scheme_false);
+}
+
+static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
+{
+  return scheme_linklet_compile_optimize_resolve(argv[0]);
+}
+
+static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
+{
+  Scheme_Linklet *linklet;
+  Scheme_Object *l;
+  Scheme_Env *inst, **instances;
+  int len = 0;
+
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
+    scheme_wrong_contract("instantiate-linklet", "linklet?", 0, argc, argv);
+
+  l = argv[1];
+  while (!SCHEME_NULLP(l)) {
+    if (!SAME_TYPE(SCHEME_TYPE(SCHEME_CAR(l)), scheme_instance_type))
+      break;
+    l = SCHEME_CDR(l);
+    len++;
+  }
+  if (!SCHEME_NULLP(l))
+    scheme_wrong_contract("instantiate-linklet", "(listof instance?)", 1, argc, argv);
+
+  linklet = (Scheme_Linklet *)argv[0];
+  if (len != linket->num_importss)
+    scheme_contract_error("instantiate-linklet",
+                          "given number of instances does not match import count of linklet",
+                          "linklet", 1, linklet,
+                          "expected imports", 1, scheme_make_integer(linket->num_importss),
+                          "given instances", 1, scheme_make_integer(len),
+                          NULL);
+
+  if (argc > 2) {
+    if (!SAME_TYPE(SCHEME_TYPE(argv[2]), scheme_instance_type))
+      scheme_wrong_contract("instantiate-linklet", "instance?", 2, argc, argv);
+    inst = (Scheme_Env *)argv[2];
+  } else
+    inst = make_instance();
+
+  instances = MALLOC_N(Scheme_Env*, len);
+  l = argv[1];
+  len = 0;
+  while (!SCHEME_NULLP(l)) {
+    instances[len++] = (Scheme_Env *)SCHEME_CAR(l);
+    l = SCHEME_CDR(l);
+    len++;
+  }
+
+  if (argc > 2)
+    return instantiate_linklet(linket, inst, count, instances, 1, 0);
+  else {
+    (void)instantiate_linklet(linket, inst, count, instances, 1, 0);
+    return (Scheme_Object *)inst;
+  }
+}
+
+static Scheme_Object *linklet_import_variables(int argc, Scheme_Object **argv)
+{
+  Scheme_Linklet *linklet;
+  int i, j;
+  Scheme_Object *l, *ll = scheme_null;
+  
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
+    scheme_wrong_contract("linklet-import-variables", "linklet?", 0, argc, argv);
+
+  linklet = (Scheme_Linklet *)argv[0];
+
+  for (i = linklet->num_importss; i--; ) {
+    l = scheme_null;
+    for (j = linklet->num_imports[i]; j--; ) {
+      l = scheme_make_pair(linklet->importss[i][j], l);
+    }
+    ll = scheme_make_pair(ll, l);
+  }
+
+  return ll;
+}
+
+static Scheme_Object *linklet_export_variables(int argc, Scheme_Object **argv)
+{
+  Scheme_Linklet *linklet;
+  int i;
+  Scheme_Object *l = scheme_null;
+  
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
+    scheme_wrong_contract("linklet-export-variables", "linklet?", 0, argc, argv);
+
+  linklet = (Scheme_Linklet *)argv[0];
+
+  for (i = linklet->num_exports; i--; ) {
+    l = scheme_make_pair(linklet->exports[i], l);
+  }
+
+  return l;
+}
+
+static Scheme_Object *instance_p(int argc, Scheme_Object **argv)
+{
+  return (SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type)
+          ? scheme_true
+          : scheme_false);
+}
+
+static Scheme_Object *make_instance(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_name(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_data(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_variable_names(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_variable_value(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object **argv);
+static Scheme_Object *instance_unset_variable(int argc, Scheme_Object **argv);
+
+static Scheme_Object *linklet_directory_p(int argc, Scheme_Object **argv)
+{
+  return (SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_directory_type)
+          ? scheme_true
+          : scheme_false);
+}
+
+static Scheme_Object *linklet_directory_to_hash(int argc, Scheme_Object **argv)
+{
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_directory_type))
+    scheme_wrong_contract("linklet-directory->hash", "linklet-directory?", 0, argc, argv);
+
+  return SCHEME_PTR_VAL(argv[0]);
+}
+
+static Scheme_Object *hash_to_linklet_directory(int argc, Scheme_Object **argv)
+{
+  mzlonglong pos;
+  Scheme_Object *k, *v;
+  
+  if (!SCHEME_HASHTRP(SCHEME_TYPE(argv[0]))
+      || !SAME_TYPE(scheme_eq_hash_tree_type, SCHEME_HASHTR_TYPE(o)))
+    scheme_wrong_contract("hash->linklet-directory",
+                          "(and/c hash? hash-eq? immutable? (not/c impersonator?))",
+                          0, argc, argv);
+
+  /* mapping: #f -> bundle, sym -> linklet directory */
+
+  pos = scheme_hash_tree_next(hash, -1);
+  while (pos != -1) {
+    scheme_hash_tree_index(hash, pos, &k, &v);
+    if (SCHEME_FALSEP(k)) {
+      if (!SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_bundle_type))
+        scheme_contract_error("hash->linklet-directory",
+                              "value for #f key is not a linklet bundle",
+                              "value", 1, v,
+                              NULL);
+    } else if (SCHEME_SYMBOLP(k)) {
+      if (!SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_directory_type))
+        scheme_contract_error("hash->linklet-directory",
+                              "value for symbol key is not a linklet directory",
+                              "key", 1, k,
+                              "value", 1, v,
+                              NULL);
+    } else {
+      scheme_contract_error("hash->linklet-directory",
+                            "key in given hash is not #f or a symbol",
+                            "key", 1, k,
+                            NULL);
+    }
+    pos = scheme_hash_tree_next(hash, pos);
+  }
+
+  v = scheme_malloc_one_small();
+  v->type = scheme_linklet_directory_type;
+  SCHEME_PTR_VAL(v) = argv[0];
+  return v;
+}
+
+static Scheme_Object *linklet_bundle_p(int argc, Scheme_Object **argv)
+{
+  return (SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_bundle_type)
+          ? scheme_true
+          : scheme_false);
+}
+
+static Scheme_Object *linklet_bundle_to_hash(int argc, Scheme_Object **argv)
+{
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_directory_type))
+    scheme_wrong_contract("linklet-bundle->hash", "linklet-bundle?", 0, argc, argv);
+
+  return SCHEME_PTR_VAL(argv[0]);
+}
+
+static Scheme_Object *hash_to_linklet_bundle(int argc, Scheme_Object **argv)
+{
+  mzlonglong pos;
+  Scheme_Object *k, *v;
+  
+  if (!SCHEME_HASHTRP(SCHEME_TYPE(argv[0]))
+      || !SAME_TYPE(scheme_eq_hash_tree_type, SCHEME_HASHTR_TYPE(o)))
+    scheme_wrong_contract("hash->linklet-bundle",
+                          "(and/c hash? hash-eq? immutable? (not/c impersonator?))",
+                          0, argc, argv);
+
+  /* mapping: keys must be symbols and fixnums */
+
+  pos = scheme_hash_tree_next(hash, -1);
+  while (pos != -1) {
+    scheme_hash_tree_index(hash, pos, &k, &v);
+    if (!SCHEME_SYMBOLP(k) && !SCHEME_INTP(k)) {
+      scheme_contract_error("hash->linklet-bundle",
+                            "key in given hash is not a symbol or fixnum",
+                            "key", 1, k,
+                            NULL);
+    }
+    pos = scheme_hash_tree_next(hash, pos);
+  }
+
+  v = scheme_malloc_one_small();
+  v->type = scheme_linklet_bundle_type;
+  SCHEME_PTR_VAL(v) = argv[0];
+  return v;
+}
+
+static Scheme_Object *variable_p(int argc, Scheme_Object **argv)
+{
+  return (SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_global_ref_type)
+          ? scheme_true
+          : scheme_false);
+}
+
+static Scheme_Object *variable_instance(int argc, Scheme_Object **argv)
+{
+  Scheme_Object *v;
+
+  v = argv[0];
+
+  if (!SAME_TYPE(SCHEME_TYPE(v), scheme_global_ref_type))
+    scheme_wrong_contract("variable-reference-instance", "variable-reference?", 0, argc, argv);
+
+  v = SCHEME_PTR1_VAL();
+  env = scheme_get_bucket_home((Scheme_Bucket *)v);
+
+  return (Scheme_Object *)env;
+}
+
+static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
+{
+  Scheme_Object *v;
+
+  v = argv[0];
+
+  if (!SAME_TYPE(SCHEME_TYPE(v), scheme_global_ref_type))
+    scheme_wrong_contract("variable-reference-constant?", "variable-reference?", 0, argc, argv);
+
+  if (SCHEME_VARREF_FLAGS(v) & 0x1)
+    return scheme_true;
+
+  v = SCHEME_PTR1_VAL(v);
+  if (((Scheme_Bucket_With_Flags *)v)->flags & GLOB_IS_IMMUTATED)
+    return scheme_true;
+
+  return scheme_false;
 }
 
 /*========================================================================*/
