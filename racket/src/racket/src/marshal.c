@@ -990,36 +990,15 @@ static Scheme_Object *read_local_unbox(Scheme_Object *obj)
 static Scheme_Object *write_linklet(Scheme_Object *obj)
 {
   Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
-  Scheme_Object *l, *v;
-  int i, j;
+  Scheme_Object *l;
 
   l = scheme_null;
 
-  for (j = linklet->num_importss; j--; ) {
-    v = scheme_null;
-    for (i = linklet->num_imports[j]; i--; ) {
-      v = scheme_make_pair(linklet->importss[j][i], v);
-    }
-    l = scheme_make_pair(v, l);
-  }
+  l = scheme_make_pair(linklet->imports, l);
+  l = scheme_make_pair(linklet->exports, l);
+  l = scheme_make_pair(linklet->defns, l);
 
-  v = scheme_null;
-  for (i = linklet->num_exports; i--; ) {
-    v = scheme_make_pair(linklet->exports[i], v);
-  }
-  l = scheme_make_pair(v, l);
-  
-  v = scheme_null;
-  for (i = linklet->num_exports; i--; ) {
-    v = scheme_make_pair(linklet->defns[i], v);
-  }
-  l = scheme_make_pair(v, l);
-
-  v = scheme_null;
-  for (i = linklet->num_bodies; i--; ) {
-    v = scheme_make_pair(linklet->bodies[i], v);
-  }
-  l = scheme_make_pair(v, l);
+  l = scheme_make_pair(linklet->bodies, l);
 
   l = scheme_make_pair(scheme_make_integer(linklet->num_lifts), l);
   l = scheme_make_pair(scheme_make_integer(linklet->max_let_depth), l);
@@ -1033,57 +1012,40 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
 # define return_NULL() return NULL
 #endif
 
-static Scheme_Object **array_from_list(Scheme_Object *l, int must_be_symbols, int *_len)
+static int is_vector_of_symbols(Scheme_Object *v)
 {
   int i;
-  Scheme_Object *e, **a;
+
+  if (!SCHEME_VECTORP(v))
+    return 0;
   
-  i = scheme_proper_list_length(l);
-  if (i < 0) return_NULL();
-  *_len = i;
-
-  a = (Scheme_Object **)scheme_malloc_fail_ok(scheme_malloc, scheme_check_overflow(i, sizeof(Scheme_Object *), 0));
-  if (!a) return_NULL();
-
-  for (i = 0; SCHEME_PAIRP(l); l = SCHEME_CDR(l), i++) {
-    e = SCHEME_CAR(l);
-    if (must_be_symbols && !SCHEME_SYMBOLP(e)) return_NULL();
-    a[i] = e;
+  for (i = SCHEME_VEC_SIZE(v); i--; ) {
+    if (!SCHEME_SYMBOLP(SCHEME_VEC_ELS(v)[i]))
+      return 0;
   }
 
-  return a;
+  return 1;
 }
 
-static Scheme_Object ***array_of_arrays_from_list(Scheme_Object *l, int *_len, int **_lens)
+static int is_vector_of_vector_of_symbols(Scheme_Object *v)
 {
-  int i, *lens, len;
-  Scheme_Object *e, **a, ***as;
+  int i;
+
+  if (!SCHEME_VECTORP(v))
+    return 0;
   
-  i = scheme_proper_list_length(l);
-  if (i < 0) return_NULL();
-  *_len = i;
-
-  as = (Scheme_Object ***)scheme_malloc_fail_ok(scheme_malloc, scheme_check_overflow(i, sizeof(Scheme_Object **), 0));
-  if (!as) return_NULL();
-
-  lens = MALLOC_N_ATOMIC(int, i);
-  *_lens = lens;
-
-  for (i = 0; SCHEME_PAIRP(l); l = SCHEME_CDR(l), i++) {
-    e = SCHEME_CAR(l);
-    a = array_from_list(e, 1, &len);
-    if (!a) return_NULL();
-    lens[i] = len;
-    as[i] = a;
+  for (i = SCHEME_VEC_SIZE(v); i--; ) {
+    if (!is_vector_of_symbols(SCHEME_VEC_ELS(v)[i]))
+      return 0;
   }
 
-  return as;
+  return 1;
 }
 
 static Scheme_Object *read_module(Scheme_Object *obj)
 {
   Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
-  Scheme_Object *e, l, **a;
+  Scheme_Object *e, l, *a;
   int i, j, len;
 
   linklet = MALLOC_ONE_TAGGED(Scheme_Linlet);
@@ -1100,35 +1062,30 @@ static Scheme_Object *read_module(Scheme_Object *obj)
   obj = SCHEME_CDR(obj);
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
-  a = array_from_list(SCHEME_CAR(obj), 0, &len);
-  if (!a) return_NULL();
+  a = SCHEME_CAR(obj);
+  if (!SCHEME_VECTORP(a)) return_NULL();
   linklet->bodies = a;
-  linklet->num_bodies = len;
   obj = SCHEME_CDR(obj);
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
-  a = array_from_list(SCHEME_CAR(obj), 1, &len);
-  if (!a) return_NULL();
+  a = SCHEME_CAR(obj);
+  if (!is_vector_of_symbols(a)) return_NULL();
   linklet->defns = a;
-  linklet->num_defns = len;
   obj = SCHEME_CDR(obj);
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
-  a = array_from_list(SCHEME_CAR(obj), 1, &len);
-  if (!a) return_NULL();
+  a = SCHEME_CAR(obj);
+  if (!is_vector_of_symbols(a)) return_NULL();
   linklet->exports = a;
-  linklet->num_exports = len;
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
-  as = array_of_arrays_from_list(SCHEME_CAR(obj), &lens, &len);
-  if (!as) return_NULL();
-  linklet->imports = a;
-  linklet->num_imports = lens;
-  linklet->num_importss = len;
+  a = SCHEME_CAR(obj);
+  if (!is_vector_of_vector_of_symbols(a)) return_NULL();
+  linklet->importss = a;
 
-  if (linklet->num_exports != linklet->num_defns)
+  if (SCHEME_VEC_SIZE(linklet->exports) != SCHEME_VEC_SIZE(linklet->defns))
     return_NULL();
-  if (linklet->num_lifts > linklet->num_defns)
+  if (linklet->num_lifts > SCHEME_VEC_SIZE(linklet->defns))
     return_NULL();
   
   return (Scheme_Object *)linklet;

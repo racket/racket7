@@ -1966,8 +1966,8 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
 {
   Scheme_Linklet *linklet;
   Scheme_Object *orig_form = form, *imports, *exports, *a, *e, *extra_vars, *vec, *v;
-  Scheme_Object **import_syms, ***import_symss, **bodies;
-  int body_len, len, islen, *ilens, elen, i, j, extra_vars_pos, pos = 0;
+  Scheme_Object *import_syms, *import_symss, *bodies;
+  int body_len, len, islen, elen, i, j, extra_vars_pos, pos = 0;
   Scheme_Env *env;
   DupCheckRecord r;
   
@@ -1990,24 +1990,22 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
   if (islen < 0)
     scheme_wrong_syntax(NULL, imports, orig_form, IMPROPER_LIST_FORM);
   
-  ilens = MALLOC_N_ATOMIC(int*, islen);
-  import_symss = MALLOC_N(Scheme_Object***, islen);
+  import_symss = scheme_make_vector(islen, scheme_false);
 
   for (i = 0; i < islen; i++, imports = SCHEME_STX_CDR(imports)) {
     a = SCHEME_STX_CAR(imports);
     len = scheme_stx_proper_list_length(a);
     
-    ilens[i] = len;
-    import_syms = MALLOC_N(Scheme_Object**, len);
-    import_symss[i] = import_syms;
+    import_syms = scheme_make_vector(len, scheme_false);
+    SCHEME_VEC_ELSE(import_symss)[i] = import_syms;
 
     for (j = 0; j < len; j++, a = SCHEME_STX_CDR(a)) {
       e = SCHEME_STX_CAR(a);
       check_import_export_clause(e, orig_form);
       if (SCHEME_STX_SYMP(e)) {
-        import_syms[j] = SCHEME_STX_VAL(e);
+        SChEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(e);
       } else {
-        import_syms[j] = SCHEME_STX_VAL(SCHEME_STX_CAR(e));
+        SChEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CAR(e));
         e = SCHEME_STX_CADR(e);
       }
       env = scheme_extend_comp_env(env, e,
@@ -2026,19 +2024,19 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
 
   scheme_begin_dup_symbol_check(&r);
 
-  export_syms = MALLOC_N(Scheme_Object**, len);
-  defn_syms = MALLOC_N(Scheme_Object**, len);
+  export_syms = scheme_make_vector(len, scheme_false);
+  defn_syms = scheme_make_vector(len, scheme_false);
 
   for (j = 0; j < len; j++, exports = SCHEME_STX_CDR(exports)) {
     e = SCHEME_STX_CAR(exports);
     check_import_export_clause(e, orig_form);
     if (SCHEME_STX_SYMP(e)) {
-      export_syms[j] = SCHEME_STX_VAL(e);
+      SCHEME_VEC_ELS(export_syms)[j] = SCHEME_STX_VAL(e);
     } else {
-      export_syms[j] = SCHEME_STX_VAL(SCHEME_STX_CADR(e));
+      SCHEME_VEC_ELS(export_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CADR(e));
       e = SCHEME_STX_CAR(e);
     }
-    defn_syms[j] = SCHEME_STX_VAL(e);
+    SCHEM_VEC_ELS(defn_syms)[j] = SCHEME_STX_VAL(e);
     env = scheme_extend_comp_env(env, e,
                                  (Scheme_Object *)make_ir_toplevel_variable(e, -1, j, pos++),
                                  1);
@@ -2070,22 +2068,13 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
   linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
   linklet->so.type = scheme_linklet_type;
 
-  linklet->num_importss = islen;
-  linklet->num_imports = ilens;
   linklet->importss = import_symss;
-
-  linklet->num_exports = len;
   linklet->exports = export_syms;
-
-  linklet->num_defns extra_vars_pos;
   linklet->defns = defn_syms;
 
-  linklet->num_bodies = body_len;
-
   /* Compile body forms */
-  bodies = MALLOC_N(Scheme_Object *, body_len);
+  bodies = scheme_make_vector(body_len, scheme_false);
 
-  linklet->num_bodies = body_len;
   linklet->bodies = bodies;
 
   for (i = 0; i < body_len; i++, form = SCHEME_STX_CDR(form)) {
@@ -2111,7 +2100,7 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
       e = scheme_compile_expr(e, env);
     }
     
-    bodies[i] = e;
+    SCHEME_VEC_ELS(bodies)[i] = e;
   }
 
   return (Scheme_Object *)linklet;

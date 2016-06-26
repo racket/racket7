@@ -3115,20 +3115,15 @@ typedef struct Scheme_Linklet
   /* Import, export, and definition names are kept as identifiers up
      to `resolve`, so that we have source locations, and then symbols
      afterward. */
-  
-  int num_importss;
-  int *num_imports;
-  Scheme_Object ***importss; /* array of array of id-or-symbol (extenal names) */
-  int **import_flags;
 
-  int num_exports;
-  Scheme_Object **exports; /* array of id-or-symbol (extenal names); unreadable starting "?" was generated */
-  int num_defns; /* can be < num_exports until after resolve */
-  Scheme_Object **defns; /* array of id-or-symbol (internal names); parallel to `exports` */
+  Scheme_Object *importss; /* vector of id-or-symbol (extenal names) */
+  int **import_flags; /* records compiler assumptions */
+
+  Scheme_Object *exports; /* vector of id-or-symbol (extenal names); unreadable starting "?" was generated */
+  Scheme_Object *defns; /* vector of id-or-symbol (internal names); parallel to `exports` */
   in num_lifts; /* this many at the tail of `defns` are from resolve lifts */
   
-  int num_bodies;
-  Scheme_Object **bodies;
+  Scheme_Object *bodies; /* vector of definition or expression */
 
   int max_let_depth;
 } Scheme_Linklet;
@@ -3210,8 +3205,8 @@ void scheme_clear_prompt_cache(void);
 
 void scheme_prepare_compile_env(Scheme_Env *env);
 
-Scheme_Object *scheme_string_to_submodule_path(char *_s, intptr_t len);
-char *scheme_submodule_path_to_string(Scheme_Object *p, intptr_t *_len);
+Scheme_Object *scheme_string_to_symbol_path(char *_s, intptr_t len);
+char *scheme_symbol_path_to_string(Scheme_Object *p, intptr_t *_len);
 
 /*========================================================================*/
 /*                         errors and exceptions                          */

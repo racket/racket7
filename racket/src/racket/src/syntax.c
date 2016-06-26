@@ -54,12 +54,6 @@ static Scheme_Object *syntax_tainted_p(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_property(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_property_keys(int argc, Scheme_Object **argv);
 
-static void sort_vector_symbols(Scheme_Object *vec);
-
-static void sort_scope_array(Scheme_Object **a, intptr_t count);
-static void sort_symbol_array(Scheme_Object **a, intptr_t count);
-static void sort_number_array(Scheme_Object **a, intptr_t count);
-
 static Scheme_Object *syntax_to_datum_inner(Scheme_Object *o);
 static Scheme_Object *datum_to_syntax_inner(Scheme_Object *o, 
 					    Scheme_Stx *stx_src,

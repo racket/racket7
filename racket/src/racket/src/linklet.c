@@ -170,7 +170,7 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
   Scheme_Linklet *linklet;
   Scheme_Object *l;
   Scheme_Instance *inst, **instances;
-  int len = 0;
+  int len = 0, num_importss;
 
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
     scheme_wrong_contract("instantiate-linklet", "linklet?", 0, argc, argv);
@@ -186,11 +186,12 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
     scheme_wrong_contract("instantiate-linklet", "(listof instance?)", 1, argc, argv);
 
   linklet = (Scheme_Linklet *)argv[0];
-  if (len != linket->num_importss)
+  num_importss = SCHEME_VEC_SIZE(linklet->importss);
+  if (len != num_importss)
     scheme_contract_error("instantiate-linklet",
                           "given number of instances does not match import count of linklet",
                           "linklet", 1, linklet,
-                          "expected imports", 1, scheme_make_integer(linket->num_importss),
+                          "expected imports", 1, scheme_make_integer(num_importss),
                           "given instances", 1, scheme_make_integer(len),
                           NULL);
 
@@ -229,10 +230,10 @@ static Scheme_Object *linklet_import_variables(int argc, Scheme_Object **argv)
 
   linklet = (Scheme_Linklet *)argv[0];
 
-  for (i = linklet->num_importss; i--; ) {
+  for (i = SCHEME_VEC_SIZE(linklet->importss); i--; ) {
     l = scheme_null;
-    for (j = linklet->num_imports[i]; j--; ) {
-      l = scheme_make_pair(linklet->importss[i][j], l);
+    for (j = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->num_importss)[i]); j--; ) {
+      l = scheme_make_pair(SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j], l);
     }
     ll = scheme_make_pair(ll, l);
   }
@@ -720,15 +721,18 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
 {
   Scheme_Object **rs_save, **rs, *v;
   Scheme_Prefix *pf;
-  int i, j, pos, tl_map_len;
+  int i, j, pos, tl_map_len, num_importss, num_exports;
 
   rs_save = rs = MZ_RUNSTACK;
 
+  num_importss = SCHEME_VEC_SIZE(linklet->importss);
+  num_exports = SCHEME_VEC_SIZE(linklet->exports);
+
   i = 0;
-  for (j = linklet->num_importss; j--; ) {
-    i += linklet->num_imports[j];
+  for (j = num_importss; j--; ) {
+    i += SCHEME_VEC_SIZE(SCHEME_VEC_ELSE(linklet->importss)[j]);
   }
-  i += linklet->num_exports;
+  i += num_exports;
   tl_map_len = (i + 31) / 32;
 
   pf = scheme_malloc_tagged(sizeof(Scheme_Prefix) 
@@ -741,16 +745,17 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
   rs[0] = (Scheme_Object *)pf;
 
   pos = 0;
-  for (j = 0; j < linklet->num_importss; j++) {
-    for (i = 0; i < linklet->num_imports[j]; i++) {
-      v = scheme_hash_ref(instances[j], linklet->importss[j][i]);
+  for (j = 0; j < num_importss; j++) {
+    int num_imports = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[j]);
+    for (i = 0; i < num_imports; i++) {
+      v = scheme_hash_ref(instances[j], SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[j])[i]);
       if (!v) {
         scheme_signal_error("instantiate-linklet: mismatch;\n"
                             " possibly, bytecode file needs re-compile because dependencies changed\n"
                             "  name: %V\n"
                             "  exporting instance: %V\n"
                             "  importing instance: %V",
-                            linklet->importss[j][i],
+                            SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[j])[i],
                             instances[j]->name,
                             instance->name);
       }
@@ -759,8 +764,8 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
     }
   }
 
-  for (i = 0; i < linklet->num_exports; i++) {
-    v = get_instance_variable_bucket(instance, linklet->exports[i], 1);
+  for (i = 0; i < num_exports; i++) {
+    v = get_instance_variable_bucket(instance, SCHEME_VEC_ELS(linklet->exports)[i], 1);
     pf->a[pos++] = v;
   }
 

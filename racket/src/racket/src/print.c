@@ -1746,98 +1746,86 @@ static int is_graph_point(Scheme_Hash_Table *ht, Scheme_Object *obj)
     return 0;
 }
 
-static Scheme_Object *write_modules_to_strings_k(void);
+static Scheme_Object *write_bundles_to_strings_k(void);
 
-static Scheme_Object *write_modules_to_strings(Scheme_Object *l, 
-                                               Scheme_Module *m,
-                                               Resolve_Prefix *prefix)
+/* Bundles are written so that all of the link subdirectories content
+   of a link directory are together and terminated by a bundle or
+   #f (i.e., post-order traversal) */
+static Scheme_Object *write_bundles_to_strings(Scheme_Object *accum_l,
+                                               Scheme_Object *ld,
+                                               Scheme_Object *name_list)
 {
-  Scheme_Compilation_Top *top;
-  char *ns, *s;
-  intptr_t nlen, len;
-  Scheme_Object *pr;
-  Scheme_Module *m2;
+  Scheme_Hash_Tree *ht;
+  Scheme_Object *k, *v, *bundle = scheme_false;
 
 #ifdef DO_STACK_CHECK
 #include "mzstkchk.h"
   {
     Scheme_Thread *p = scheme_current_thread;
     
-    p->ku.k.p1 = l;
-    p->ku.k.p2 = m;
-    p->ku.k.p3 = prefix;
+    p->ku.k.p1 = accum_l;
+    p->ku.k.p2 = ld;
+    p->ku.k.p3 = name_list;
     
     return scheme_handle_stack_overflow(write_modules_to_strings_k);
   }
 #endif
 
-  if ((m->pre_submodules && !SCHEME_NULLP(m->pre_submodules))
-      || (m->post_submodules && !SCHEME_NULLP(m->post_submodules))) {
-    /* clone module to one without submodules: */
-    m2 = MALLOC_ONE_TAGGED(Scheme_Module);
-    memcpy(m2, m, sizeof(Scheme_Module));
-    m2->pre_submodules = scheme_null;
-    m2->post_submodules = scheme_null;
-  } else
-    m2 = m;
+  ht = (Scheme_Has_Tree *)SCHEME_PTR_VAL(ld);
 
-  pr = m->pre_submodules;
-  if (pr) {
-    pr = scheme_reverse(pr);
-    while (!SCHEME_NULLP(pr)) {
-      l = write_modules_to_strings(l, (Scheme_Module *)SCHEME_CAR(pr), prefix);
-      pr = SCHEME_CDR(pr);
+  pos = scheme_hash_tree_next(ht, -1);
+  while (pos != -1) {
+    scheme_hash_tree_index(ht, pos, &k, &v);
+    if (SCHEME_SYMBOLP(k)) {
+      MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_directory_type));
+
+      accum_l = write_bundles_to_strings(accum_l, v, scheme_make_pair(k, name_list));
+    } else {
+      MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_bundle_type));
+      bundle = v;
     }
+    pos = scheme_hash_tree_next(ht, pos);
   }
 
-  top = MALLOC_ONE_TAGGED(Scheme_Compilation_Top);
-  top->iso.so.type = scheme_compilation_top_type;
-  top->code = (Scheme_Object *)m2;
-  top->max_let_depth = m->max_let_depth;
-  top->prefix = prefix;
-
-  ns = scheme_submodule_path_to_string(m->submodule_path, &nlen);
-  s = scheme_write_to_string((Scheme_Object *)top, &len);
-
-  l = scheme_make_pair(scheme_make_pair(scheme_make_sized_byte_string(ns, nlen, 0),
-                                        scheme_make_sized_byte_string(s, len, 0)),
-                       l);
-  
-  pr = m->post_submodules;
-  if (pr) {
-    pr = scheme_reverse(pr);
-    while (!SCHEME_NULLP(pr)) {
-      l = write_modules_to_strings(l, (Scheme_Module *)SCHEME_CAR(pr), prefix);
-      pr = SCHEME_CDR(pr);
-    }
+  /* write root bundle, if any, or #f */
+  {
+    int len, nlen;
+    char *s, *ns;
+    
+    ns = scheme_symbol_path_to_string(scheme_revese(name_list), &nlen);
+    s = scheme_write_to_string(bundle, &len);
+    
+    accum_l = scheme_make_pair(scheme_make_pair(scheme_make_sized_byte_string(ns, nlen, 0),
+                                                scheme_make_sized_byte_string(s, len, 0))
+                               accum_l);
   }
 
-  return l;
+  return accum_l;
 }
 
-static Scheme_Object *write_modules_to_strings_k(void)
+static Scheme_Object *write_bundles_to_strings_k(void)
 {
   Scheme_Thread *p = scheme_current_thread;
-  Scheme_Object *l = (Scheme_Object *)p->ku.k.p1;
-  Scheme_Module *m = (Scheme_Module *)p->ku.k.p2;
-  Resolve_Prefix *pf = (Resolve_Prefix *)p->ku.k.p3;
+  Scheme_Object *accum_l = (Scheme_Object *)p->ku.k.p1;
+  Scheme_Object *ld = (Scheme_Object *)p->ku.k.p2;
+  Scheme_Object *name_list = (Scheme_Object *)p->ku.k.p3;
 
   p->ku.k.p1 = NULL;
   p->ku.k.p2 = NULL;
   p->ku.k.p3 = NULL;
 
-  return write_modules_to_strings(l, m, pf);
+  return write_bundles_to_strings(accum_l, ld, name_list);
 }
 
-typedef struct Module_And_Offset {
-  Scheme_Object *mod;
+typedef struct Bundle_And_Offset {
+  Scheme_Object *bundle;
   Scheme_Object *offset;
-} Module_And_Offset;
+} Bundle_And_Offset;
 
-static int compare_modules(const void *_am, const void *_bm)
+static int compare_bundles(const void *_am, const void *_bm)
 {
-  Scheme_Object *a = ((Module_And_Offset *)_am)->mod;
-  Scheme_Object *b = ((Module_And_Offset *)_bm)->mod;
+  Scheme_Object *a = ((Bundle_And_Offset *)_am)->mod;
+  Scheme_Object *b = ((Bundle_And_Offset *)_bm)->mod;
   intptr_t i, alen, blen;
   unsigned char *as, *bs;
 
@@ -1857,7 +1845,7 @@ static int compare_modules(const void *_am, const void *_bm)
   return (alen - blen);
 }
 
-static intptr_t compute_module_subtrees(Module_And_Offset *a, intptr_t *subtrees, 
+static intptr_t compute_bundle_subtrees(Bundle_And_Offset *a, intptr_t *subtrees, 
                                         int start, int count, intptr_t offset) 
 {
   int midpt = start + (count / 2);
@@ -1868,18 +1856,17 @@ static intptr_t compute_module_subtrees(Module_And_Offset *a, intptr_t *subtrees
   offset += 4 + len + 16;
 
   if (midpt > start)
-    offset = compute_module_subtrees(a, subtrees, start, midpt - start, offset);
+    offset = compute_bundle_subtrees(a, subtrees, start, midpt - start, offset);
   subtrees[midpt] = offset;
 
   count -= (midpt - start + 1);
   if (count)
-    return compute_module_subtrees(a, subtrees, midpt + 1, count, offset);
+    return compute_bundle_subtrees(a, subtrees, midpt + 1, count, offset);
   else
     return offset;
 }
 
-
-static intptr_t write_module_tree(PrintParams *pp, Module_And_Offset *a, 
+static intptr_t write_bundle_tree(PrintParams *pp, Bundle_And_Offset *a, 
                                   intptr_t *subtrees,
                                   int start, int count, intptr_t offset) 
 {
@@ -1905,9 +1892,9 @@ static intptr_t write_module_tree(PrintParams *pp, Module_And_Offset *a,
     print_number(pp, 0);
 
   if (midpt > start)
-    offset = write_module_tree(pp, a, subtrees, start, midpt - start, offset);
+    offset = write_bundle_tree(pp, a, subtrees, start, midpt - start, offset);
   if (count)
-    offset = write_module_tree(pp, a, subtrees, midpt + 1, count, offset);
+    offset = write_bundle_tree(pp, a, subtrees, midpt + 1, count, offset);
 
   return offset;
 }
@@ -2553,44 +2540,6 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
 	}
       }
     }
-  else if (SAME_TYPE(SCHEME_TYPE(obj), scheme_resolved_module_path_type))
-    {
-      if (compact || !pp->print_unreadable) {
-	cannot_print(pp, notdisplay, obj, ht, compact);
-      } else {
-        int is_sym, is_sub;
-        Scheme_Object *rp;
-
-        if (notdisplay)
-          print_utf8_string(pp, "#<resolved-module-path:", 0, 23);
-        rp = SCHEME_PTR_VAL(obj);
-        if (SCHEME_PAIRP(rp)) {
-          is_sub = 1;
-          rp = SCHEME_CAR(rp);
-          print_utf8_string(pp, "(submod ", 0, 8);
-        } else
-          is_sub = 0;
-        is_sym = !SCHEME_PATHP(rp);
-        print_utf8_string(pp, (is_sym ? "'" : "\"") , 0, 1);
-        print(rp, 0, 0, ht, mt, pp);
-	PRINTADDRESS(pp, obj);
-        if (!is_sym)
-          print_utf8_string(pp, "\"" , 0, 1);
-        if (is_sub) {
-          rp = SCHEME_PTR_VAL(obj);
-          rp = SCHEME_CDR(rp);
-          while (SCHEME_PAIRP(rp)) {
-            print_utf8_string(pp, " ", 0, 1);
-            print(SCHEME_CAR(rp), 0, 0, ht, mt, pp);
-            rp = SCHEME_CDR(rp);
-          }
-          print_utf8_string(pp, ")", 0, 1);
-        }
-        if (notdisplay)
-          print_utf8_string(pp, ">", 0, 1);
-      }
-      closed = notdisplay;
-    }
   else if (SCHEME_PRIMP(obj) && ((Scheme_Primitive_Proc *)obj)->name)
     {
       if (compact || !pp->print_unreadable) {
@@ -3080,72 +3029,62 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         set_symtab_shared(mt, obj);
       }
     }
-  else if (!compact
-           && SAME_TYPE(SCHEME_TYPE(obj), scheme_compilation_top_type)
-           && SAME_TYPE(SCHEME_TYPE(((Scheme_Compilation_Top *)obj)->code), scheme_module_type)
-           && ((((Scheme_Module *)((Scheme_Compilation_Top *)obj)->code)->pre_submodules
-                && !SCHEME_NULLP(((Scheme_Module *)((Scheme_Compilation_Top *)obj)->code)->pre_submodules))
-               || (((Scheme_Module *)((Scheme_Compilation_Top *)obj)->code)->post_submodules
-                   && !SCHEME_NULLP(((Scheme_Module *)((Scheme_Compilation_Top *)obj)->code)->post_submodules))))
+  else if (!compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_directory_type))
     {
-      /* Write a module group with an initial directory */
+      /* Write directory content with an index at the beginning */
       Scheme_Compilation_Top *top = (Scheme_Compilation_Top *)obj;
       Scheme_Object *mods, *p;
-      Module_And_Offset *a, *orig_a;
+      Bundle_And_Offset *a;
       intptr_t *subtrees, offset, init_offset;
       int count, i;
 
       init_offset = 2 + 1 + strlen(MZSCHEME_VERSION) + 1 + 4;
 
-      mods = write_modules_to_strings(scheme_null, 
-                                      (Scheme_Module *)top->code,
-                                      top->prefix);
-      mods = scheme_reverse(mods); /* write order == valid declaration order */
+      accum_l = write_bundles_to_strings(scheme_null, obj, scheme_null);
       
-      for (p = mods, count = 0; !SCHEME_NULLP(p); p = SCHEME_CDR(p)) {
+      for (p = accum_l, count = 0; !SCHEME_NULLP(p); p = SCHEME_CDR(p)) {
         count++;
       }
-      a = MALLOC_N(Module_And_Offset, count);
-      orig_a = MALLOC_N(Module_And_Offset, count);
+      a = MALLOC_N(Bundle_And_Offset, count);
+      orig_a = MALLOC_N(Bundle_And_Offset, count);
       for (p = mods, i = 0; !SCHEME_NULLP(p); p = SCHEME_CDR(p), i++) {
-        a[i].mod = SCHEME_CAR(p);
-        orig_a[i].mod = a[i].mod;
+        a[i].bundle = SCHEME_CAR(p);
       }
+      my_qsort(a, count, sizeof(Bundle_And_Offset), compare_bundles);
       offset = init_offset;
       for (i = 0; i < count; i++) {
-        offset += SCHEME_BYTE_STRLEN_VAL(SCHEME_CAR(a[i].mod)) + 20;
+        offset += SCHEME_BYTE_STRLEN_VAL(SCHEME_CAR(a[i].bundle)) + 20;
       }
       for (i = 0; i < count; i++) {
         a[i].offset = scheme_make_integer(offset);
-        offset += SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(a[i].mod));
+        offset += SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(a[i].bundle));
       }
-      my_qsort(a, count, sizeof(Module_And_Offset), compare_modules);
-      /* orig_a is in declaration order, a in sorted (for btree) order */
+      /* a is in sorted (for btree) order */
 
       subtrees = MALLOC_N_ATOMIC(intptr_t, count);
-      (void)compute_module_subtrees(a, subtrees, 0, count, init_offset);
+      (void)compute_bundle_subtrees(a, subtrees, 0, count, init_offset);
 
       print_this_string(pp, "#~", 0, 2);
       print_one_byte(pp, strlen(MZSCHEME_VERSION));
       print_this_string(pp, MZSCHEME_VERSION, 0, -1);
 
-      /* "D" means "directory": */
+      /* "D" means "linklet directory": */
       print_this_string(pp, "D", 0, 1);
       print_number(pp, count);
       
-      /* Write the module directory as a binary search tree. */
-      (void)write_module_tree(pp, a, subtrees, 0, count, init_offset);
+      /* Write the bundle directory as a binary search tree. */
+      (void)write_bundle_tree(pp, a, subtrees, 0, count, init_offset);
 
-      /* Write the modules: */
+      /* Write the bundles: */
       for (i = 0; i < count; i++) {
         print_this_string(pp, 
-                          SCHEME_BYTE_STR_VAL(SCHEME_CDR(orig_a[i].mod)),
+                          SCHEME_BYTE_STR_VAL(SCHEME_CDR(a[i].bundle)),
                           0,
-                          SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(orig_a[i].mod)));
+                          SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(a[i].bundle)));
       }
     }
   else if (SCHEME_TYPE(obj) <= _scheme_last_type_ && scheme_type_writers[SCHEME_TYPE(obj)]
-	   && (compact || SAME_TYPE(SCHEME_TYPE(obj), scheme_compilation_top_type)))
+	   && (compact || SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_bundle_type)))
     {
       Scheme_Type t = SCHEME_TYPE(obj);
       Scheme_Object *v;
@@ -3182,6 +3121,9 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         Scheme_Hash_Table *st_refs, *symtab, *reachable_scopes, *intern_map, *path_cache;
         intptr_t *shared_offsets;
         intptr_t st_len, j, shared_offset, start_offset;
+
+        MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_bundle_type));
+        v = SCHEME_PTR_VAL(v); /* extract hash table from a linklet bundle */
 
         mt = MALLOC_ONE_RT(Scheme_Marshal_Tables);
         SET_REQUIRED_TAG(mt->type = scheme_rt_marshal_info);
@@ -3239,7 +3181,7 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         print_one_byte(pp, strlen(MZSCHEME_VERSION));
 	print_this_string(pp, MZSCHEME_VERSION, 0, -1);
 
-        print_this_string(pp, "T", 0, 1);  /* "T" means "top" */
+        print_this_string(pp, "B", 0, 1);  /* "B" means "bundle" */
 
         /* Leave space for a module hash code */
         print_this_string(pp, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 0, 20);

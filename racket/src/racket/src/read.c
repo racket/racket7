@@ -5492,7 +5492,7 @@ static void install_byecode_hash_code(CPort *rp, char *hash_code)
   rp->bytecode_hash = l;
 }
 
-char *scheme_submodule_path_to_string(Scheme_Object *p, intptr_t *_len)
+char *scheme_symbol_path_to_string(Scheme_Object *p, intptr_t *_len)
 {
   Scheme_Object *pr;
   intptr_t len = 0, l;
@@ -5529,7 +5529,7 @@ char *scheme_submodule_path_to_string(Scheme_Object *p, intptr_t *_len)
   return (char *)s;
 }
 
-Scheme_Object *scheme_string_to_submodule_path(char *_s, intptr_t len)
+Scheme_Object *scheme_string_to_symbol_path(char *_s, intptr_t len)
 {
   unsigned char *s = (unsigned char *)_s;
   char *e, buffer[32];
@@ -5566,7 +5566,8 @@ Scheme_Object *scheme_string_to_submodule_path(char *_s, intptr_t len)
   return first ? first : scheme_null;
 }
 
-static void read_module_directory(Scheme_Object *port, Scheme_Hash_Table *ht, int depth)
+/* Installs into `ht` a mapping of offset -> (listof symbol) */
+static void read_linklet_directory(Scheme_Object *port, Scheme_Hash_Table *ht, int depth)
 {
   char *s;
   Scheme_Object *v, *p;
@@ -5575,12 +5576,12 @@ static void read_module_directory(Scheme_Object *port, Scheme_Hash_Table *ht, in
 
   if (depth > 32)
     scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                    "read (compiled): multi-module directory tree is imbalanced");
+                    "read (compiled): linklet-module directory tree is imbalanced");
   
   len = read_simple_number_from_port(port);
   if (len < 0) 
     scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                    "read (compiled): directory module name read failed");
+                    "read (compiled): linklet-bundle name read failed");
 
   s = scheme_malloc_atomic(len + 1);
   got = scheme_get_bytes(port, len, s, 0);
@@ -5589,7 +5590,7 @@ static void read_module_directory(Scheme_Object *port, Scheme_Hash_Table *ht, in
     v = NULL;
   else {
     s[len] = 0;
-    v = scheme_string_to_submodule_path(s, len);
+    v = scheme_string_to_symbol_path(s, len);
     for (p = v; !SCHEME_NULLP(p); p = SCHEME_CDR(p)) {
       if (!SCHEME_SYMBOLP(SCHEME_CAR(p))) {
         v = NULL;
@@ -5602,20 +5603,77 @@ static void read_module_directory(Scheme_Object *port, Scheme_Hash_Table *ht, in
 
   if (!v)
     scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                    "read (compiled): directory module name read failed");
-
-  scheme_hash_set(ht, v, scheme_null);
+                    "read (compiled): linklet-bundle name read failed");
 
   (void)read_simple_number_from_port(port); /* offset */
   (void)read_simple_number_from_port(port); /* length */
+
+  scheme_hash_set(ht, scheme_make_integer(offset), v);
 
   left = read_simple_number_from_port(port);
   right = read_simple_number_from_port(port);
 
   if (left)
-    read_module_directory(port, ht, depth+1);
+    read_linklet_directory(port, ht, depth+1);
   if (right)
-    read_module_directory(port, ht, depth+1);
+    read_linklet_directory(port, ht, depth+1);
+}
+
+static Scheme_Object *bundle_list_to_hierarchical_directory(Scheme_Object *bundles);
+{
+  Scheme_Hash_Tree *accum, *next;
+  Scheme_Object *p, *v, *path, *stack = scheme_null;
+  int len, prev_len = 0;
+  
+  bundles = scheme_reverse(bundles);
+  accum = scheme_make_hash_tree(0);
+
+  /* The bundles list is in post-order, so we can build directories
+     bottom-up */
+
+  while (1) {
+    p = SCHEME_CAR(bundles);
+    path = SCHEME_CAR(p);
+    v = SCHEME_CDR(p);
+
+    if (SCHEME_NULLP(path))
+      len = 0;
+    else
+      len = scheme_list_length(path) - 1;
+
+    while (len < prev_len) {
+      p = SCHEME_CAR(stack);
+      next = (Scheme_Hash_Tree *)SCHEME_CDR(p);
+      next = scheme_hash_tree_set(next, SCHEME_CAR(p), wrap_as_linklet_directory(accum));
+      accum = next;
+      prev_len--;
+    }
+
+    if (SCHEME_NULLP(path)) {
+      MZ_ASSERT(SCHEME_NULLP(SCHEME_CDR(bundles)));
+      
+      if (!SCHEME_FALSEP(v))
+        accum = scheme_hash_tree_set(accum, scheme_false, v);
+
+      return wrap_as_linklet_directory(accum);
+    }
+    
+    while (len > prev_len) {
+      stack = scheme_make_pair(scheme_make_pair(SCHEME_CAR(path),
+                                                (Scheme_Object *)accum),
+                               stack);
+      accum = scheme_make_hash_tree(0);
+      path = SCHEME_CDR(path);
+      prev_len++;
+    }
+
+    if (!SCHEME_FALSEP(v))
+      accum = scheme_hash_set(accum, SCHEME_CAR(path), v);
+
+    bundles = SCHEME_CDR(bundles);
+  }
+
+  return SCHEME_CAR(stack);
 }
 
 /* "#~" has been read */
@@ -5625,7 +5683,9 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
 				    Scheme_Hash_Table **ht,
 				    ReadParams *params)
 {
-  Scheme_Hash_Table *directory = NULL;
+  Scheme_Hash_Table *directory = NULL; /* position -> symbol-path */
+  Scheme_Object *bundles; /* list of (cons symbol-path bundle-or-#f) */
+  int bundle_pos, bundles_to_read = 0;
   Scheme_Object *result;
   intptr_t size, shared_size, got, offset, directory_count = 0;
   CPort *rp;
@@ -5641,6 +5701,11 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
   char hash_code[20];
 	  
   while (1) {
+    if (directory)
+      bundle_pos = SCHEME_INT_VAL(scheme_file_position(1, &port));
+    else
+      bundle_pos = 0;
+    
     /* Check version: */
     size = scheme_get_byte(port);
     {
@@ -5663,14 +5728,15 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
     
     mode = scheme_get_byte(port);
     if (mode == 'D') {
-      /* a module with submodules, starting with a directory */
+      /* a linklet directory */
       if (directory)
         scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                        "read (compiled): found multi-module directory after directory");
+                        "read (compiled): found unexpected linklet directory nesting");
       (void)read_simple_number_from_port(port); /* count */
       directory = scheme_make_hash_table_equal();
-      read_module_directory(port, directory, 0);
-    } else if (mode == 'T') {
+      read_linklet_directory(port, directory, 0);
+      bundles_to_read = directory->count;
+    } else if (mode == 'B') {
       /* single module or other top-level form */
       
       /* Allow delays? */
@@ -5881,67 +5947,37 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
         scheme_ill_formed_code(rp);
     
       if (directory) {
-        Scheme_Module *m, *m2;
         Scheme_Object *v;
-        m = scheme_extract_compiled_module(result);
-        if (m) {
-          v = scheme_hash_get(directory, m->submodule_path);
-          if (v && (SCHEME_NULLP(v) || SCHEME_PAIRP(v))) {
-            directory_count++;
-            v = scheme_reverse(v);
-            m->pre_submodules = v;
-            scheme_hash_set(directory, m->submodule_path, result);
-            if (!SCHEME_NULLP(m->submodule_path)) {
-              /* find parent: */
-              v = scheme_reverse(m->submodule_path);
-              v = scheme_reverse(SCHEME_CDR(v));
-              result = scheme_hash_get(directory, v);
-              if (!result)
-                scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                                "read (compiled): no parent module found in multi-module stream");
-              if (SCHEME_NULLP(result) || SCHEME_PAIRP(result)) {
-                /* this is a pre-submodule */
-                result = scheme_make_pair((Scheme_Object *)m, result);
-                scheme_hash_set(directory, v, result);
-              } else {
-                /* this is a post-submodule */
-                m2 = scheme_extract_compiled_module(result);
-                v = m2->post_submodules ? m2->post_submodules : scheme_null;
-                v = scheme_make_pair((Scheme_Object *)m, v);
-                m2->post_submodules = v;
-              }
-            }
-            if (directory->count == directory_count) {
-              /* need to reverse post-submodule lists in all modules: */
-              int i;
-              for (i = 0; i < directory->size; i++) {
-                if (directory->vals[i]) {
-                  m = scheme_extract_compiled_module(directory->vals[i]);
-                  if (m->post_submodules) {
-                    v = scheme_reverse(m->post_submodules);
-                    m->post_submodules = v;
-                  }
-                }
-              }
 
-              /* return the root module: */
-              return scheme_hash_get(directory, scheme_null);
-            }
-            /* otherwise, keep reading modules */
-          } else
-            scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                            "read (compiled): found unrecognized or duplicate module after multi-module directory: %V",
-                            m->submodule_path);
-        } else
+        if (!SCHEME_HASHTRP(result))
           scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                          "read (compiled): found non-module code after multi-module directory");
+                          "read (compiled): bundle content is not an immutable hash");
+
+        v = scheme_alloc_small_object();
+        v->type = scheme_linklet_bundle_type;
+        SCHEME_PTR_VAL(v) = result;
+        result = v;
+
+        /* Find bundle's symbol path by it's starting position */
+        v = scheme_hash_get(directory, scheme_make_integer(bundle_pos));
+        if (!v)
+          scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
+                          "read (compiled): cannot match bundle position to linklet-directory path");
+
+        bundles = scheme_make_pair(scheme_make_pair(v, result), bundles);
+        bundles_to_read--;
+
+        if (!bundles_to_read) {
+          /* convert flattened directory into hierarchical form */
+          return bundle_list_to_hierarchical_directory(bundles);
+        }
+        /* otherwise, continue reading bundles */
       } else
         return result;
     } else {
       scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
                       "read (compiled): found bad mode");
-    }
-    
+    }  
     
     if ((scheme_get_byte(port) != '#')
         || (scheme_get_byte(port) != '~'))

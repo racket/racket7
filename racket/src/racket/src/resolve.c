@@ -1957,7 +1957,7 @@ resolve_lambda(Scheme_Object *_lam, Resolve_Info *info,
 static Scheme_Object *scheme_resolve_linklet(Scheme_Object *data, int enforce_const)
 {
   Scheme_Module *m = (Scheme_Module *)data;
-  Scheme_Object *b, *lift_vec, *body = scheme_null;
+  Scheme_Object *b, *lift_vec, *body = scheme_null, *new_bodies, *new_exports, *new_defns;
   Scheme_Hash_Table *names;
   Resolve_Info *rslv;
   int i, cnt;
@@ -1965,10 +1965,10 @@ static Scheme_Object *scheme_resolve_linklet(Scheme_Object *data, int enforce_co
   rslv = scheme_resolve_info_create(linklet, enforce_const);
   enable_expression_resolve_lifts(rslv);
 
-  cnt = linklet->num_bodies;
+  cnt = SCHEME_VEC_SIZE(linklet->bodies);
   for (i = 0; i < cnt; i++) {
     Scheme_Object *e;
-    e = scheme_resolve_expr(linklet->bodies[i], rslv);
+    e = scheme_resolve_expr(SCHEME_VEC_ELS(linklet->bodies)[i], rslv);
     
     /* add lift just before the expression that introduced it;
        this ordering is needed for bytecode validation of
@@ -1990,12 +1990,12 @@ static Scheme_Object *scheme_resolve_linklet(Scheme_Object *data, int enforce_co
   /* Recompute body array: */
   body = scheme_reverse(body);
   cnt = scheme_length(body);
-  new_bodies = MALLOC_N(Scheme_Object*, cnt);
+  new_bodies = scheme_make_vector(cnt, scheme_false);
   for (i = 0; i < cnt; i++, body = SCHEME_CDR(body)) {
-    new_bodies[i] = SCHEME_CAR(body);
+    SCHEME_VEC_ELS(new_bodies)[i] = SCHEME_CAR(body);
   }
   
-  m->bodies = new_bodies;
+  linklet->bodies = new_bodies;
 
   /* Adjust the `defns` and exports` arrays to reduce identifier to
      symbols and to take into account unexported and lifted
@@ -2003,26 +2003,29 @@ static Scheme_Object *scheme_resolve_linklet(Scheme_Object *data, int enforce_co
 
   linklet->num_lifts = num_lifts;
   cnt = linklet->num_defns + num_lifts;
-  new_exports = MALLOC_N(Scheme_Object**, cnt);
-  new_defns = MALLOC_N(Scheme_Object**, cnt);
+  new_exports = scheme_make_vector(cnt, scheme_false);
+  new_defns = scheme_make_vector(cnt, scheme_false);
   names = scheme_make_hash_table(SCHEME_hash_ptr);
   
-  for (i = 0; i < linklet->num_exports; i++) {
-    new_exports[i] = SCHEME_STX_VAL(linklet->exports[i]);
-    new_defns[i] = SCHEME_STX_VAL(linklet->defns[i]);
-    scheme_hash_set(names, new_exports[i], scheme_true);
-    scheme_hash_set(names, new_defns[i], scheme_true);
+  for (i = 0; i < SCHEME_VEC_SIZE(linklet->exports); i++) {
+    SCHEME_VEC_ELS(new_exports)[i] = SCHEME_STX_VAL(SCHEME_VEC_ELS(linklet->exports)[i]);
+    SCHEME_VEC_ELS(new_defns)[i] = SCHEME_STX_VAL(SCHEME_VEC_ELS(linklet->defns)[i]);
+    scheme_hash_set(names, SCHEME_VEC_ELS(new_exports)[i], scheme_true);
+    scheme_hash_set(names, SCHEME_VEC_ELS(new_defns)[i], scheme_true);
   }
-  for (; i < linklet->num_defns; i++) {
-    b = generate_name(linklet->defns[i], names, 0);
+  for (; i < SCHEME_VEC_SIZE(linklet->defns); i++) {
+    b = generate_name(SCHEME_VEC_ELS(linklet->defns)[i], names, 0);
     scheme_hash_set(names, b, scheme_true);
     new_exports[i] = b;
   }
   for (; i < cnt; i++) {
     b = generate_name(NULL, names, i - linket->num_defns);
-    new_defns[i] = b;
-    new_exports[i] = b;
+    SCHEME_VEC_ELS(new_defns)[i] = b;
+    SCHEME_VEC_ELS(new_exports)[i] = b;
   }
+
+  linklet->exports = new_exports;
+  linklet->defns = new_defns;
 
   return data;
 }

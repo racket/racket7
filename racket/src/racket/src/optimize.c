@@ -7680,7 +7680,7 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
   {
     int inc = 0;
     for (i_m = 0; i_m < cnt; i_m++) {
-      e = m->bodies[i_m];
+      e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
       if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type))  {
         int n;
         n = SCHEME_DEFN_VAR_COUNT(e);
@@ -7693,11 +7693,11 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
     }
 
     if (inc > 0) {
-      Scheme_Object **new_bodies;
+      Scheme_Object *new_bodies;
       int j = 0;
-      new_bodies = MALLOC_N(Scheme_Object*, cnt+inc);
+      new_bodies = scheme_make_vector(cnt+inc, scheme_false);
       for (i_m = 0; i_m < cnt; i_m++) {
-        e = m->bodies[im];
+        e = SCHEME_VEC_ELS(linklet->bodies)[im];
         if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
           int n;
           n = SCHEME_DEFN_VAR_COUNT(e);
@@ -7705,15 +7705,14 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
             if (split_define_values(e, n, new_bodies, j)) {
               j += n;
             } else
-              new_bodies[j++] = e;
+              SCHEME_VEC_ELS(new_bodies)[j++] = e;
           } else
-            new_bodies[j++] = e;
+            SCHEME_VEC_ELS(new_bodies)[j++] = e;
         } else
-          new_bodies[j++] = e;
+          SCHEME_VEC_ELS(new_bodies)[j++] = e;
       }
       cnt += inc;
-      m->num_bodies = cnt;
-      m->bodies = new_bodies;
+      linklet->bodies = new_bodies;
     }
   }
 
@@ -7774,7 +7773,7 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
       info->use_psize = 0;
       info->inline_fuel = inline_fuel;
     }
-    m->linklets[i_m] = e;
+    SCHEME_VEC_ELS(linklet->bodies)[i_m] = e;
 
     if (info->enforce_const) {
       /* If this expression/definition can't have any side effect
@@ -7898,7 +7897,7 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
 	  /* Re-optimize this expression. */
           int old_sz, new_sz;
 
-          e = m->bodies[start_simultaneous];
+          e = SCHEME_VEC_ELS(linklet->bodies)[start_simultaneous];
 
           if (OPT_DELAY_GROUP_PROPAGATE || OPT_LIMIT_FUNCTION_RESIZE) {
             if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
@@ -7912,7 +7911,7 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
 
           optimize_info_seq_step(info, &info_seq);
           e = scheme_optimize_expr(e, info, 0);
-	  m->bodies[start_simultaneous] = e;
+	  SCHEME_VEC_ELS(linklet->bodies)[start_simultaneous] = e;
 
           if (re_consts) {
             /* Install optimized closures into constant table ---
@@ -8018,7 +8017,7 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
   if (info->enforce_const) {
     for (i_m = 0; i_m < cnt; i_m++) {
       /* Optimize this expression: */
-      e = m->bodies[i_m];
+      e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
       if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
         int size_override;
         size_override = SCHEME_IMMUTABLEP(e);
@@ -8051,24 +8050,23 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
     int can_omit = 0;
     for (i_m = 0; i_m < cnt; i_m++) {
       /* Optimize this expression: */
-      e = m->bodies[i_m];
+      e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
       if (scheme_omittable_expr(e, -1, -1, 0, info, NULL)) {
         can_omit++;
       }
     }
     if (can_omit) {
-      Scheme_Object **new_bodies;
+      Scheme_Object *new_bodies;
       int j = 0;
-      new_bodies = MALLOC_N(Scheme_Object*, cnt - can_omit);
+      new_bodies = scheme_make_vector(cnt - can_omit, scheme_false);
       for (i_m = 0; i_m < cnt; i_m++) {
         /* Optimize this expression: */
-        e = m->bodies[i_m];
+        e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
         if (!scheme_omittable_expr(e, -1, -1, 0, info, NULL)) {
-          new_bodies[j++] = e;
+          SCHEME_VEC_ELS(new_bodies)[j++] = e;
         }
       }
-      m->bodies = new_bodies;
-      m->num_bodies = j;
+      linklet->bodies = new_bodies;
     }
     cnt -= can_omit;
   }
