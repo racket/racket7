@@ -3120,7 +3120,7 @@ typedef struct Scheme_Linklet
 {
   Scheme_Object so; /* scheme_linklet_type */
 
-  Scheme_Object *name; /* for reporting purposes */
+  Scheme_Object *name; /* for reporting purposes; FIXME: doens't belong here? */
 
   Scheme_Hash_Table *accessible; /* (symbol -> ...) */
 

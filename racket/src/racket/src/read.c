@@ -5189,57 +5189,6 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
 	return scheme_make_branch(test, tbranch, fbranch);
       }
       break;
-    case CPT_MODULE_INDEX:
-	{
-	  Scheme_Object *path, *base;
-
-	  path = read_compact(port, 0);
-	  base = read_compact(port, 0);
-          if (SCHEME_FALSEP(path)
-              && SCHEME_FALSEP(base)) {
-            path = read_compact(port, 0);
-            if (SCHEME_FALSEP(path))
-              return scheme_make_modidx(scheme_false, scheme_false, scheme_false);
-            else
-              return scheme_get_submodule_empty_self_modidx(path, 0);
-          } else
-            return scheme_make_modidx(path, base, scheme_false);
-	}
-	break;
-    case CPT_MODULE_VAR:
-      {
-	Module_Variable *mv;
-	Scheme_Object *mod, *var, *shape;
-	int pos;
-
-	mod = read_compact(port, 0);
-	var = read_compact(port, 0);
-	shape = read_compact(port, 0);
-	pos = read_compact_number(port);
-
-	mv = MALLOC_ONE_TAGGED(Module_Variable);
-	mv->iso.so.type = scheme_module_variable_type;
-        if (SCHEME_SYMBOLP(mod))
-          mod = scheme_intern_resolved_module_path(mod);
-	mv->modidx = mod;
-	mv->sym = var;
-	mv->shape = shape;
-        if (pos < -3) {
-          pos = -(pos + 3);
-          SCHEME_MODVAR_FLAGS(mv) = pos;
-          pos = read_compact_number(port);
-        }
-        if (pos == -2) {
-          pos = read_compact_number(port);
-          mv->mod_phase = pos;
-          pos = read_compact_number(port);
-          mv->pos = pos;
-        } else
-          mv->pos = pos;
-
-	return (Scheme_Object *)mv;
-      }
-      break;
     case CPT_PATH:
       {
 	l = read_compact_number(port);

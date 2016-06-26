@@ -81,8 +81,8 @@ static Scheme_Object *read_resolve_prefix(Scheme_Object *obj);
 static Scheme_Object *write_lambda(Scheme_Object *obj);
 static Scheme_Object *read_lambda(Scheme_Object *obj);
 
-static Scheme_Object *write_module(Scheme_Object *obj);
-static Scheme_Object *read_module(Scheme_Object *obj);
+static Scheme_Object *write_linklet(Scheme_Object *obj);
+static Scheme_Object *read_linklet(Scheme_Object *obj);
 
 static Scheme_Object *closure_marshal_name(Scheme_Object *name);
 
@@ -139,19 +139,13 @@ void scheme_init_marshal(Scheme_Startup_Env *env)
   scheme_install_type_reader(scheme_toplevel_type, read_toplevel);
   scheme_install_type_writer(scheme_variable_type, write_variable);
   scheme_install_type_reader(scheme_variable_type, read_variable);
-  scheme_install_type_writer(scheme_module_variable_type, write_module_variable);
-  scheme_install_type_reader(scheme_module_variable_type, read_module_variable);
   scheme_install_type_writer(scheme_local_type, write_local);
   scheme_install_type_reader(scheme_local_type, read_local);
   scheme_install_type_writer(scheme_local_unbox_type, write_local);
   scheme_install_type_reader(scheme_local_unbox_type, read_local_unbox);
-  scheme_install_type_writer(scheme_resolve_prefix_type, write_resolve_prefix);
-  scheme_install_type_reader(scheme_resolve_prefix_type, read_resolve_prefix);
 
-  scheme_install_type_writer(scheme_module_type, write_module);
-  scheme_install_type_reader(scheme_module_type, read_module);
-  scheme_install_type_writer(scheme_require_form_type, write_top_level_require);
-  scheme_install_type_reader(scheme_require_form_type, read_top_level_require);
+  scheme_install_type_writer(scheme_linklet_type, write_linklet);
+  scheme_install_type_reader(scheme_linklet_type, read_linklet);
 }
 
 
@@ -543,7 +537,7 @@ static Scheme_Object *read_inline_variant(Scheme_Object *obj)
   data->type = scheme_inline_variant_type;
   SCHEME_VEC_ELS(data)[0] = SCHEME_CAR(obj);
   SCHEME_VEC_ELS(data)[1] = SCHEME_CDR(obj);
-  /* third slot is filled when module->accessible table is made */
+  /* third slot is filled when linklet->accessible table is made */
   
   return data;
 }
@@ -962,58 +956,6 @@ static Scheme_Object *read_toplevel(Scheme_Object *obj)
   return scheme_make_toplevel(depth, pos, 1, flags);
 }
 
-static Scheme_Object *write_variable(Scheme_Object *obj)
-  /* #%kernel references are handled in print.c, instead */
-{
-  Scheme_Object *sym;
-  Scheme_Env *home;
-  Scheme_Module *m;
-    
-  sym = (Scheme_Object *)(SCHEME_VAR_BUCKET(obj))->key;
-    
-  home = scheme_get_bucket_home((Scheme_Bucket *)obj);
-  if (home)
-    m = home->module;
-  else
-    m = NULL;
-    
-  /* If we get a writeable variable (instead of a module variable),
-     it must be a reference to a module referenced directly by its
-     a symbolic name (i.e., no path). */
-    
-  if (m) {
-    sym = scheme_make_pair(m->modname, sym);
-    if (home->mod_phase)
-      sym = scheme_make_pair(scheme_make_integer(home->mod_phase), sym);
-  }
-
-  return sym;
-}
-
-static Scheme_Object *read_variable(Scheme_Object *obj)
-  /* #%kernel references are handled in read.c, instead */
-{
-  Scheme_Env *env;
-
-  env = scheme_get_env(NULL);
-
-  if (!SCHEME_SYMBOLP(obj)) return NULL;
-
-  return (Scheme_Object *)scheme_global_bucket(obj, env);
-}
-
-static Scheme_Object *write_module_variable(Scheme_Object *obj)
-{
-  scheme_signal_error("module variables should have been handled in print.c");
-  return NULL;
-}
-
-static Scheme_Object *read_module_variable(Scheme_Object *obj)
-{
-  scheme_signal_error("module variables should have been handled in read.c");
-  return NULL;
-}
-
 static Scheme_Object *write_local(Scheme_Object *obj)
 {
   return scheme_make_integer(SCHEME_LOCAL_POS(obj));
@@ -1045,315 +987,44 @@ static Scheme_Object *read_local_unbox(Scheme_Object *obj)
   return do_read_local(scheme_local_unbox_type, obj);
 }
 
-static Scheme_Object *write_resolve_prefix(Scheme_Object *obj)
+static Scheme_Object *write_linklet(Scheme_Object *obj)
 {
-  Resolve_Prefix *rp = (Resolve_Prefix *)obj;
-  Scheme_Object *tv, *sv, *ds;
-  int i;
-
-  i = rp->num_toplevels;
-  tv = scheme_make_vector(i, NULL);
-  while (i--) {
-    SCHEME_VEC_ELS(tv)[i] = rp->toplevels[i];
-  }
-
-  tv = scheme_make_pair(scheme_make_integer(rp->num_lifts), 
-                        scheme_make_pair(tv, sv));
-
-  tv = scheme_make_pair(rp->src_insp_desc, tv);
-  
-  return tv;
-}
-
-static Scheme_Object *read_resolve_prefix(Scheme_Object *obj)
-{
-  Resolve_Prefix *rp;
-  Scheme_Object *tv, *sv, **a, *stx, *tl, *insp_desc;
-  intptr_t i;
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  insp_desc = SCHEME_CAR(obj);
-  if (!SCHEME_SYMBOLP(insp_desc))
-    return NULL;
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  
-  if (!SCHEME_INTP(SCHEME_CAR(obj))) {
-    obj = SCHEME_CDR(obj);
-  }
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-
-  i = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  if (i < 0) return NULL;
-
-  obj = SCHEME_CDR(obj);
-  if (!SCHEME_PAIRP(obj)) return NULL;
-
-  tv = SCHEME_CAR(obj);
-  sv = SCHEME_CDR(obj);
-
-  if (!SCHEME_VECTORP(tv)) return NULL;
-  if (!SCHEME_VECTORP(sv)) return NULL;
-
-  rp = MALLOC_ONE_TAGGED(Resolve_Prefix);
-  rp->so.type = scheme_resolve_prefix_type;
-  rp->num_toplevels = (int)SCHEME_VEC_SIZE(tv);
-  rp->num_stxes = (int)SCHEME_VEC_SIZE(sv);
-  rp->num_lifts = (int)i;
-
-  i = rp->num_toplevels;
-  a = MALLOC_N(Scheme_Object *, i);
-  while (i--) {
-    tl = SCHEME_VEC_ELS(tv)[i];
-    if (!SCHEME_FALSEP(tl)
-        && !SCHEME_SYMBOLP(tl)
-        && !SAME_TYPE(SCHEME_TYPE(tl), scheme_variable_type)
-        && !SAME_TYPE(SCHEME_TYPE(tl), scheme_module_variable_type))
-      return NULL;
-    a[i] = tl;
-  }
-  rp->toplevels = a;
-  
-  i = rp->num_stxes;
-  a = MALLOC_N(Scheme_Object *, i);
-  while (i--) {
-    stx = SCHEME_VEC_ELS(sv)[i];
-    if (SCHEME_FALSEP(stx)) {
-      stx = NULL;
-    } else if (SCHEME_RPAIRP(stx)) {
-      struct Scheme_Load_Delay *d;
-      Scheme_Object *pr;
-      d = (struct Scheme_Load_Delay *)SCHEME_CDR(stx);
-      stx = SCHEME_CAR(stx);
-      pr = rp->delay_info_rpair;
-      if (!pr) {
-        pr = scheme_make_raw_pair(scheme_make_integer(0), (Scheme_Object *)d);
-        rp->delay_info_rpair = pr;
-      }
-      SCHEME_CAR(pr) = scheme_make_integer(SCHEME_INT_VAL(SCHEME_CAR(pr)) + 1);
-    } else {
-      if (!SCHEME_STXP(stx)) return NULL;
-    }
-    a[i] = stx;
-  }
-  rp->stxes = a;
-
-  rp->src_insp_desc = insp_desc;
-
-  return (Scheme_Object *)rp;
-}
-
-static Scheme_Object *write_module(Scheme_Object *obj)
-{
-  Scheme_Module *m = (Scheme_Module *)obj;
-  Scheme_Module_Phase_Exports *pt;
-  Scheme_Object *l, *v, *phase;
-  int i, j, k, count, cnt;
-  Scheme_Object **sorted_keys;
+  Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
+  Scheme_Object *l, *v;
+  int i, j;
 
   l = scheme_null;
-  cnt = 0;
-  if (m->other_requires) {
-    sorted_keys = scheme_extract_sorted_keys((Scheme_Object *)m->other_requires);
-    cnt = m->other_requires->count;
-    for (i = 0; i < cnt; i++) {
-      l = scheme_make_pair(sorted_keys[i],
-                           scheme_make_pair(scheme_hash_get(m->other_requires,
-                                                            sorted_keys[i]),
-                                            l));
+
+  for (j = linklet->num_importss; j--; ) {
+    v = scheme_null;
+    for (i = linklet->num_imports[j]; i--; ) {
+      v = scheme_make_pair(linklet->importss[j][i], v);
     }
-  }
-  l = cons(scheme_make_integer(cnt), l);
-
-  l = cons(m->dt_requires, l);
-  l = cons(m->tt_requires, l);
-  l = cons(m->et_requires, l);
-  l = cons(m->requires, l);
-
-  for (j = 0; j < m->num_phases; j++) {
-    l = cons(m->bodies[j], l);
+    l = scheme_make_pair(v, l);
   }
 
-  cnt = 0;
-  if (m->me->other_phases)
-    sorted_keys = scheme_extract_sorted_keys((Scheme_Object *)m->me->other_phases);
-  else
-    sorted_keys = NULL;
-  for (k = -3; k < (m->me->other_phases ? m->me->other_phases->count : 0); k++) {
-    switch (k) {
-    case -3:
-      phase = scheme_make_integer(-1);
-      pt = m->me->dt;
-      break;
-    case -2:
-      phase = scheme_make_integer(1);
-      pt = m->me->et;
-      break;
-    case -1:
-      phase = scheme_make_integer(0);
-      pt = m->me->rt;
-      break;
-    default:
-      phase = sorted_keys[k];
-      pt = (Scheme_Module_Phase_Exports *)scheme_hash_get(m->me->other_phases, phase);
-    }
-    
-    if (pt) {
-      l = cons(scheme_make_integer(pt->num_provides), l);
-      l = cons(scheme_make_integer(pt->num_var_provides), l);
-
-      count = pt->num_provides;
-
-      v = scheme_make_vector(count, NULL);
-      for (i = 0; i < count; i++) {
-        SCHEME_VEC_ELS(v)[i] = pt->provides[i];
-      }
-      l = cons(v, l);
+  v = scheme_null;
+  for (i = linklet->num_exports; i--; ) {
+    v = scheme_make_pair(linklet->exports[i], v);
+  }
+  l = scheme_make_pair(v, l);
   
-      v = scheme_make_vector(count, NULL);
-      for (i = 0; i < count; i++) {
-        SCHEME_VEC_ELS(v)[i] = pt->provide_srcs[i];
-      }
-      l = cons(v, l);
-    
-      v = scheme_make_vector(count, NULL);
-      for (i = 0; i < count; i++) {
-        SCHEME_VEC_ELS(v)[i] = pt->provide_src_names[i];
-      }
-      l = cons(v, l);
-
-      if (pt->provide_nominal_srcs) {
-        v = scheme_make_vector(count, NULL);
-        for (i = 0; i < count; i++) {
-          SCHEME_VEC_ELS(v)[i] = pt->provide_nominal_srcs[i];
-        }
-        l = cons(v, l);
-      } else {
-        l = cons(scheme_false, l);
-      }
-
-      if (pt->provide_src_phases) {
-        v = scheme_make_vector(count, NULL);
-        for (i = 0; i < count; i++) {
-          SCHEME_VEC_ELS(v)[i] = scheme_make_integer(pt->provide_src_phases[i]);
-        } 
-      } else
-        v = scheme_false;
-      l = cons(v, l);
-
-      if ((SCHEME_INT_VAL(phase) >= 0) && (SCHEME_INT_VAL(phase) < m->num_phases)) {
-        Scheme_Module_Export_Info *exp_info = m->exp_infos[SCHEME_INT_VAL(phase)];
-
-        if (exp_info) {
-          v = scheme_false;
-
-          if (exp_info->provide_protects) {
-            for (i = 0; i < count; i++) {
-              if (exp_info->provide_protects[i])
-                break;
-            }
-            if (i < count) {
-              v = scheme_make_vector(count, NULL);
-              for (i = 0; i < count; i++) {
-                SCHEME_VEC_ELS(v)[i] = (exp_info->provide_protects[i] ? scheme_true : scheme_false);
-              }
-            }
-          }
-          l = cons(v, l);
-
-          count = exp_info->num_indirect_provides;
-          l = cons(scheme_make_integer(count), l);
-          v = scheme_make_vector(count, NULL);
-          for (i = 0; i < count; i++) {
-            SCHEME_VEC_ELS(v)[i] = exp_info->indirect_provides[i];
-          }
-          l = cons(v, l);
-          
-          count = exp_info->num_indirect_syntax_provides;
-          l = cons(scheme_make_integer(count), l);
-          v = scheme_make_vector(count, NULL);
-          for (i = 0; i < count; i++) {
-            SCHEME_VEC_ELS(v)[i] = exp_info->indirect_syntax_provides[i];
-          }
-          l = cons(v, l);
-        } else
-          l = cons(scheme_void, l);
-      } else
-        l = cons(scheme_void, l);
-      
-      l = cons(pt->phase_index, l);
-      cnt++;
-    }
+  v = scheme_null;
+  for (i = linklet->num_exports; i--; ) {
+    v = scheme_make_pair(linklet->defns[i], v);
   }
-  l = cons(scheme_make_integer(cnt), l);
-  l = cons(scheme_make_integer(m->num_phases), l);
+  l = scheme_make_pair(v, l);
 
-  l = cons((Scheme_Object *)m->prefix, l);
-  l = cons(m->dummy, l);
-
-  l = cons(scheme_make_integer(m->max_let_depth), l);
-
-  v = m->rn_stx;
-  if (!v)
-    v = scheme_false;
-  else if (!SAME_OBJ(v, scheme_true)) {
-    v = scheme_stx_force_delayed(v);
-    if (!SAME_OBJ(v, m->rn_stx))
-      m->rn_stx = v;
-    v = make_delayed_syntax(v);
+  v = scheme_null;
+  for (i = linklet->num_bodies; i--; ) {
+    v = scheme_make_pair(linklet->bodies[i], v);
   }
-  l = cons(v, l);
+  l = scheme_make_pair(v, l);
 
-  /* previously recorded "functional?" info: */
-  l = cons(scheme_false, l);
-  l = cons(scheme_false, l);
-
-  if (m->lang_info)
-    l = cons(scheme_protect_quote(m->lang_info), l);
-  else
-    l = cons(scheme_false, l);
-
-  for (k = 0; k < 2; k++) {
-    v = (k ? m->pre_submodules : m->post_submodules);
-    if (v && !SCHEME_NULLP(v)) {
-      Scheme_Object *l2 = scheme_null;
-      while (!SCHEME_NULLP(v)) {
-        l2 = scheme_make_pair(write_module(SCHEME_CAR(v)),
-                              l2);
-        v = SCHEME_CDR(v);
-      }
-      l = cons(l2, l);
-    } else
-      l = cons(scheme_null, l);
-  }
-
-  l = cons((m->phaseless ? scheme_true : scheme_false), l);
-
-  l = cons(m->me->src_modidx, l);
-  
-  l = cons(scheme_resolved_module_path_value(m->modsrc), l);
-  l = cons(scheme_resolved_module_path_value(m->modname), l);
-
-  if (m->submodule_path)
-    l = cons(m->submodule_path, l);
-  else
-    l = cons(scheme_null, l);
+  l = scheme_make_pair(scheme_make_integer(linklet->num_lifts), l);
+  l = scheme_make_pair(scheme_make_integer(linklet->max_let_depth), l);
 
   return l;
-}
-
-static int check_requires_ok(Scheme_Object *l)
-{
-  Scheme_Object *x;
-  while (!SCHEME_NULLP(l)) {
-    x = SCHEME_CAR(l);
-    if (!SAME_TYPE(SCHEME_TYPE(x), scheme_module_index_type))
-      return 0;
-    l = SCHEME_CDR(l);
-  }
-  return 1;
 }
 
 #if 0
@@ -1362,425 +1033,103 @@ static int check_requires_ok(Scheme_Object *l)
 # define return_NULL() return NULL
 #endif
 
+static Scheme_Object **array_from_list(Scheme_Object *l, int must_be_symbols, int *_len)
+{
+  int i;
+  Scheme_Object *e, **a;
+  
+  i = scheme_proper_list_length(l);
+  if (i < 0) return_NULL();
+  *_len = i;
+
+  a = (Scheme_Object **)scheme_malloc_fail_ok(scheme_malloc, scheme_check_overflow(i, sizeof(Scheme_Object *), 0));
+  if (!a) return_NULL();
+
+  for (i = 0; SCHEME_PAIRP(l); l = SCHEME_CDR(l), i++) {
+    e = SCHEME_CAR(l);
+    if (must_be_symbols && !SCHEME_SYMBOLP(e)) return_NULL();
+    a[i] = e;
+  }
+
+  return a;
+}
+
+static Scheme_Object ***array_of_arrays_from_list(Scheme_Object *l, int *_len, int **_lens)
+{
+  int i, *lens, len;
+  Scheme_Object *e, **a, ***as;
+  
+  i = scheme_proper_list_length(l);
+  if (i < 0) return_NULL();
+  *_len = i;
+
+  as = (Scheme_Object ***)scheme_malloc_fail_ok(scheme_malloc, scheme_check_overflow(i, sizeof(Scheme_Object **), 0));
+  if (!as) return_NULL();
+
+  lens = MALLOC_N_ATOMIC(int, i);
+  *_lens = lens;
+
+  for (i = 0; SCHEME_PAIRP(l); l = SCHEME_CDR(l), i++) {
+    e = SCHEME_CAR(l);
+    a = array_from_list(e, 1, &len);
+    if (!a) return_NULL();
+    lens[i] = len;
+    as[i] = a;
+  }
+
+  return as;
+}
+
 static Scheme_Object *read_module(Scheme_Object *obj)
 {
-  Scheme_Module *m;
-  Scheme_Object *ie, *nie, **bodies, *bns;
-  Scheme_Object *esp, *esn, *esph, *es, *esnom, *e, *nve, *ne, **v;
-  Scheme_Module_Exports *me;
-  Scheme_Module_Phase_Exports *pt;
-  Scheme_Module_Export_Info **exp_infos, *exp_info;
-  char *ps;
-  int *sps;
-  int i, j, count, cnt;
+  Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
+  Scheme_Object *e, l, **a;
+  int i, j, len;
 
-  m = MALLOC_ONE_TAGGED(Scheme_Module);
-  m->so.type = scheme_module_type;
-  m->predefined = scheme_starting_up;
-
-  me = scheme_make_module_exports();
-  m->me = me;
+  linklet = MALLOC_ONE_TAGGED(Scheme_Linlet);
+  linklet->so.type = scheme_linklet_type;
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
   e = SCHEME_CAR(obj);
-  m->submodule_path = e;
-  if (!scheme_is_list(e)) return_NULL();
-  while (!SCHEME_NULLP(e)) {
-    if (!SCHEME_SYMBOLP(SCHEME_CAR(e))) return_NULL();
-    e = SCHEME_CDR(e);
-  }
+  linklet->max_let_depth = SCHEME_INT_VAL(e);
   obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  e = scheme_intern_resolved_module_path(SCHEME_CAR(obj));
-  m->modname = e;
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  e = scheme_intern_resolved_module_path(SCHEME_CAR(obj));
-  m->modsrc = e;
-  m->me->modsrc = e;
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  me->src_modidx = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
-  if (!SAME_TYPE(SCHEME_TYPE(me->src_modidx), scheme_module_index_type))
-    return_NULL();
-  ((Scheme_Modidx *)me->src_modidx)->resolved = m->modname;
-  m->self_modidx = me->src_modidx;
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  bns = SCHEME_CAR(obj);
-  if (!SCHEME_FALSEP(bns)) {
-    if (!SCHEME_VECTORP(bns)) return_NULL();
-    m->binding_names = bns;
-  }
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  bns = SCHEME_CAR(obj);
-  if (!SCHEME_FALSEP(bns)) {
-    if (!SCHEME_VECTORP(bns)) return_NULL();
-    m->et_binding_names = bns;
-  }
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  bns = SCHEME_CAR(obj);
-  if (!SCHEME_FALSEP(bns)) {
-    if (!SCHEME_VECTORP(bns)) return_NULL();
-    m->other_binding_names = bns;
-  }
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  m->phaseless = (SCHEME_TRUEP(SCHEME_CAR(obj)) ? scheme_true : NULL);
-  obj = SCHEME_CDR(obj);
-
-  for (i = 0; i < 2; i++) {
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    e = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-    nve = scheme_null;
-    while (!SCHEME_NULLP(e)) {
-      if (!SCHEME_PAIRP(e)) return_NULL();
-      ne = read_module(SCHEME_CAR(e));
-      nve = scheme_make_pair(ne, nve);
-      e = SCHEME_CDR(e);
-    }
-    if (i)
-      m->post_submodules = nve;
-    else
-      m->pre_submodules = nve;
-  }
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
   e = SCHEME_CAR(obj);
-  if (SCHEME_FALSEP(e))
-    e = NULL;
-  else if (!(SCHEME_VECTORP(e)
-             && (3 == SCHEME_VEC_SIZE(e))
-             && scheme_is_module_path(SCHEME_VEC_ELS(e)[0])
-             && SCHEME_SYMBOLP(SCHEME_VEC_ELS(e)[1])))
+  linklet->num_lifts = SCHEME_INT_VAL(e);
+  obj = SCHEME_CDR(obj);
+
+  if (!SCHEME_PAIRP(obj)) return_NULL();
+  a = array_from_list(SCHEME_CAR(obj), 0, &len);
+  if (!a) return_NULL();
+  linklet->bodies = a;
+  linklet->num_bodies = len;
+  obj = SCHEME_CDR(obj);
+
+  if (!SCHEME_PAIRP(obj)) return_NULL();
+  a = array_from_list(SCHEME_CAR(obj), 1, &len);
+  if (!a) return_NULL();
+  linklet->defns = a;
+  linklet->num_defns = len;
+  obj = SCHEME_CDR(obj);
+
+  if (!SCHEME_PAIRP(obj)) return_NULL();
+  a = array_from_list(SCHEME_CAR(obj), 1, &len);
+  if (!a) return_NULL();
+  linklet->exports = a;
+  linklet->num_exports = len;
+
+  if (!SCHEME_PAIRP(obj)) return_NULL();
+  as = array_of_arrays_from_list(SCHEME_CAR(obj), &lens, &len);
+  if (!as) return_NULL();
+  linklet->imports = a;
+  linklet->num_imports = lens;
+  linklet->num_importss = len;
+
+  if (linklet->num_exports != linklet->num_defns)
     return_NULL();
-  m->lang_info = e;
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  /* "functional?" info ignored */
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  /* "functional?" info ignored */
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  m->rn_stx = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
-  if (SCHEME_FALSEP(m->rn_stx))
-    m->rn_stx = NULL;
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  m->max_let_depth = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  m->dummy = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  m->prefix = (Resolve_Prefix *)SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  cnt = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-
-  if (cnt < 1) return_NULL();
+  if (linklet->num_lifts > linklet->num_defns)
+    return_NULL();
   
-  m->num_phases = cnt;
-  exp_infos = (Scheme_Module_Export_Info **)scheme_malloc_fail_ok(scheme_malloc, scheme_check_overflow(cnt, sizeof(Scheme_Module_Export_Info *), 0));
-  while (cnt--) {
-    exp_info = MALLOC_ONE_RT(Scheme_Module_Export_Info);
-    SET_REQUIRED_TAG(exp_info->type = scheme_rt_export_info);
-    exp_infos[cnt] = exp_info;
-  }
-  m->exp_infos = exp_infos;
-  cnt = m->num_phases;
-  
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  cnt = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-
-  if (cnt < 0) return_NULL();
-  
-  while (cnt--) {
-    Scheme_Object *phase;
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    phase = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-
-    if (!SCHEME_FALSEP(phase)
-        && !SCHEME_INTP(phase)
-        && !SCHEME_BIGNUMP(phase))
-      return_NULL();
-
-    if (SAME_OBJ(phase, scheme_make_integer(0))) {
-      pt = me->rt;
-    } else if (SAME_OBJ(phase, scheme_make_integer(1))) {
-      pt = me->et;
-    } else if (SAME_OBJ(phase, scheme_false)) {
-      pt = me->dt;
-    } else {
-      pt = MALLOC_ONE_RT(Scheme_Module_Phase_Exports);
-      pt->so.type = scheme_module_phase_exports_type;
-      pt->phase_index = phase;
-      if (!me->other_phases) {
-        Scheme_Hash_Table *ht;
-        ht = scheme_make_hash_table_equal();
-        me->other_phases = ht;
-      }
-      scheme_hash_set(me->other_phases, phase, (Scheme_Object *)pt);      
-    }
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    ie = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-    if (SCHEME_VOIDP(ie)) {
-      /* no exp_infos entry */
-      count = -1;
-    } else {
-      if (!SCHEME_INTP(phase) || (SCHEME_INT_VAL(phase) < 0)
-          || (SCHEME_INT_VAL(phase) >= m->num_phases))
-        return_NULL();
-      exp_info = m->exp_infos[SCHEME_INT_VAL(phase)];
-      
-      if (!SCHEME_PAIRP(obj)) return_NULL();
-      nie = SCHEME_CAR(obj);
-      obj = SCHEME_CDR(obj);
-  
-      count = SCHEME_INT_VAL(nie);
-      if (!SCHEME_VECTORP(ie) || (SCHEME_VEC_SIZE(ie) != count)) return_NULL();
-      v = MALLOC_N(Scheme_Object *, count);
-      for (i = 0; i < count; i++) {
-        v[i] = SCHEME_VEC_ELS(ie)[i];
-      }
-      exp_info->indirect_syntax_provides = v;
-      exp_info->num_indirect_syntax_provides = count;
-
-      if (!SCHEME_PAIRP(obj)) return_NULL();
-      ie = SCHEME_CAR(obj);
-      obj = SCHEME_CDR(obj);
-
-      if (!SCHEME_PAIRP(obj)) return_NULL();
-      nie = SCHEME_CAR(obj);
-      obj = SCHEME_CDR(obj);
-  
-      count = SCHEME_INT_VAL(nie);
-
-      if (!SCHEME_VECTORP(ie) || (SCHEME_VEC_SIZE(ie) != count)) return_NULL();
-      v = MALLOC_N(Scheme_Object *, count);
-      for (i = 0; i < count; i++) {
-        v[i] = SCHEME_VEC_ELS(ie)[i];
-      }
-      exp_info->indirect_provides = v;
-      exp_info->num_indirect_provides = count;
-
-      if (!SCHEME_PAIRP(obj)) return_NULL();
-      esp = SCHEME_CAR(obj);
-      obj = SCHEME_CDR(obj);
-
-      if (SCHEME_FALSEP(esp)) {
-        exp_info->provide_protects = NULL;
-        count = -1;
-      } else {
-        if (!SCHEME_VECTORP(esp)) return_NULL();
-        count = SCHEME_VEC_SIZE(esp);
-        ps = MALLOC_N_ATOMIC(char, count);
-        for (i = 0; i < count; i++) {
-          ps[i] = SCHEME_TRUEP(SCHEME_VEC_ELS(esp)[i]);
-        }
-        exp_info->provide_protects = ps;
-      }
-    }
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    esph = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    esnom = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    esn = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    es = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    e = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-  
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    nve = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    ne = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-
-    if ((count != -1) && (SCHEME_INT_VAL(ne) != count)) return_NULL();
-    
-    count = SCHEME_INT_VAL(ne);
-    pt->num_provides = count;
-    pt->num_var_provides = SCHEME_INT_VAL(nve);
-
-    if (!SCHEME_VECTORP(e) || (SCHEME_VEC_SIZE(e) != count)) return_NULL();
-    v = MALLOC_N(Scheme_Object *, count);
-    for (i = 0; i < count; i++) {
-      v[i] = SCHEME_VEC_ELS(e)[i];
-    }
-    pt->provides = v;
-
-    if (!SCHEME_VECTORP(es) || (SCHEME_VEC_SIZE(es) != count)) return_NULL();
-    v = MALLOC_N(Scheme_Object *, count);
-    for (i = 0; i < count; i++) {
-      v[i] = SCHEME_VEC_ELS(es)[i];
-    }
-    pt->provide_srcs = v;
-
-    if (!SCHEME_VECTORP(esn) || (SCHEME_VEC_SIZE(esn) != count)) return_NULL();
-    v = MALLOC_N(Scheme_Object *, count);
-    for (i = 0; i < count; i++) {
-      v[i] = SCHEME_VEC_ELS(esn)[i];
-    }
-    pt->provide_src_names = v;
-
-    if (SCHEME_FALSEP(esnom)) {
-      pt->provide_nominal_srcs = NULL;
-    } else {
-      if (!SCHEME_VECTORP(esnom) || (SCHEME_VEC_SIZE(esnom) != count)) return_NULL();
-      v = MALLOC_N(Scheme_Object *, count);
-      for (i = 0; i < count; i++) {
-        v[i] = SCHEME_VEC_ELS(esnom)[i];
-      }
-      pt->provide_nominal_srcs = v;
-    }
-
-    if (SCHEME_FALSEP(esph))
-      sps = NULL;
-    else {
-      if (!SCHEME_VECTORP(esph) || (SCHEME_VEC_SIZE(esph) != count)) return_NULL();
-      sps = MALLOC_N_ATOMIC(int, count);
-      for (i = 0; i < count; i++) {
-        sps[i] = SCHEME_INT_VAL(SCHEME_VEC_ELS(esph)[i]);
-      }
-    }
-    pt->provide_src_phases = sps;
-  }
-
-  count = me->rt->num_provides;
-
-  bodies = MALLOC_N(Scheme_Object*, m->num_phases);
-  m->bodies = bodies;
-  for (j = m->num_phases; j--; ) {
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    e = SCHEME_CAR(obj);
-    if (!SCHEME_VECTORP(e)) return_NULL();
-    if (j) {
-      bodies[j] = e;
-      for (i = SCHEME_VEC_SIZE(e); i--; ) {
-        e = SCHEME_VEC_ELS(bodies[j])[i];
-        if (!SCHEME_VECTORP(e)) return_NULL();
-        if (SCHEME_VEC_SIZE(e) != 5) return_NULL();
-        /* SCHEME_VEC_ELS(e)[1] should be code */
-        if (!SCHEME_INTP(SCHEME_VEC_ELS(e)[2])) return_NULL();
-        if (!SAME_TYPE(SCHEME_TYPE(SCHEME_VEC_ELS(e)[3]), scheme_resolve_prefix_type))
-          return_NULL();
-        if (SCHEME_FALSEP(SCHEME_VEC_ELS(e)[0])) {
-          if (SCHEME_FALSEP(SCHEME_VEC_ELS(e)[4])) return_NULL();
-        } else {
-          e = SCHEME_VEC_ELS(e)[0];
-          if (!SCHEME_SYMBOLP(e)) {
-            while (SCHEME_PAIRP(e)) {
-              if (!SCHEME_SYMBOLP(SCHEME_CAR(e))) return_NULL();
-              e = SCHEME_CDR(e);
-            }
-            if (!SCHEME_NULLP(e)) return_NULL();
-          }
-        }
-      }
-    } else {
-      bodies[j] = e;
-    }
-    obj = SCHEME_CDR(obj);
-  }
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  if (scheme_proper_list_length(SCHEME_CAR(obj)) < 0) return_NULL();
-  e = scheme_copy_list(SCHEME_CAR(obj));
-  m->requires = e;
-  if (!check_requires_ok(e)) return_NULL();
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  if (scheme_proper_list_length(SCHEME_CAR(obj)) < 0) return_NULL();
-  e = scheme_copy_list(SCHEME_CAR(obj));
-  m->et_requires = e;
-  if (!check_requires_ok(e)) return_NULL();
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  if (scheme_proper_list_length(SCHEME_CAR(obj)) < 0) return_NULL();
-  e = scheme_copy_list(SCHEME_CAR(obj));
-  m->tt_requires = e;
-  if (!check_requires_ok(e)) return_NULL();
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  if (scheme_proper_list_length(SCHEME_CAR(obj)) < 0) return_NULL();
-  e = scheme_copy_list(SCHEME_CAR(obj));
-  m->dt_requires = e;
-  if (!check_requires_ok(e)) return_NULL();
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return_NULL();
-  cnt = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-  while (cnt--) {
-    Scheme_Object *phase;
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    phase = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-
-    if (!SCHEME_INTP(phase)
-        && !SCHEME_BIGNUMP(phase))
-      return_NULL();
-
-    if (SAME_OBJ(phase, scheme_make_integer(0))
-        || SAME_OBJ(phase, scheme_make_integer(1))
-        || SAME_OBJ(phase, scheme_make_integer(-1)))
-      return_NULL();
-
-    if (!SCHEME_PAIRP(obj)) return_NULL();
-    e = scheme_copy_list(SCHEME_CAR(obj));
-    if (!check_requires_ok(e)) return_NULL();
-
-    if (!m->other_requires) {
-      Scheme_Hash_Table *ht;
-      ht = scheme_make_hash_table_equal();
-      m->other_requires = ht;
-    }
-    scheme_hash_set(m->other_requires, phase, e);
-    
-    obj = SCHEME_CDR(obj);
-  }
-  
-  return (Scheme_Object *)m;
+  return (Scheme_Object *)linklet;
 }
