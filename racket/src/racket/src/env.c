@@ -45,7 +45,7 @@ Scheme_Object *scheme_varref_const_p_proc;
 
 READ_ONLY static Scheme_Object *kernel_symbol;
 
-READ_ONLY static Scheme_Startup_Env *startup_env;
+READ_ONLY Scheme_Startup_Env *scheme_startup_env;
 
 static int builtin_ref_counter;
 static int builtin_unsafe_start;
@@ -255,8 +255,8 @@ static void init_startup_env(void)
 
   env = make_startup_env();
 
-  startup_env = env;
-  REGISTER_SO(startup_env);
+  REGISTER_SO(scheme_startup_env);
+  scheme_startup_env = env;
     
   scheme_defining_primitives = 1;
   builtin_ref_counter = 0;
@@ -318,10 +318,12 @@ static void init_startup_env(void)
   MZTIMEIT(params, scheme_init_parameterization());
   MZTIMEIT(futures, scheme_init_futures_once());
   MZTIMEIT(places, scheme_init_places_once());
-
-  MARK_START_TIME();
-
-  DONE_TIME(env);
+  MZTIMEIT(linklet, scheme_init_linklet(env));
+#ifndef NO_TCP_SUPPORT
+  MZTIMEIT(network, scheme_init_network(env));
+#endif
+  MZTIMEIT(paramz, scheme_init_paramz(env));
+  MZTIMEIT(place, scheme_init_place(env));
 
   scheme_register_network_evts();
 
@@ -346,20 +348,11 @@ static void init_startup_env(void)
   init_unsafe(env);
   init_foreign(env);
   
-  scheme_init_print_global_constants();
   scheme_init_variable_references_constants();
 
   scheme_init_longdouble_fixup();
 
   scheme_defining_primitives = 0;
-
-  scheme_init_linklet(env);
-#ifndef NO_TCP_SUPPORT
-  scheme_init_network(env);
-#endif
-  scheme_init_paramz(env);
-  scheme_init_expand_observe(env);
-  scheme_init_place(env);
 }
 
 static void init_unsafe(Scheme_Startup_Env *env)
@@ -679,121 +672,55 @@ static void skip_certain_things(Scheme_Object *o, Scheme_Close_Custodian_Client 
 }
 
 /*========================================================================*/
-/*                        namespace constructors                          */
-/*========================================================================*/
-
-Scheme_Object *scheme_get_home_weak_link(Scheme_Env *e)
-{
-  if (!e->weak_self_link) {
-    Scheme_Object *wb;
-    if (scheme_starting_up)
-      wb = scheme_box((Scheme_Object *)e);
-    else
-      wb = scheme_make_weak_box((Scheme_Object *)e);
-    e->weak_self_link = wb;
-  }
-
-  return e->weak_self_link;
-}
-
-Scheme_Env *scheme_get_bucket_home(Scheme_Bucket *b)
-{
-  Scheme_Object *l;
-
-  l = ((Scheme_Bucket_With_Home *)b)->home_link;
-  if (l) {
-    if (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_STRONG_HOME_LINK)
-      return (Scheme_Env *)l;
-    else
-      return (Scheme_Env *)SCHEME_WEAK_BOX_VAL(l);
-  } else
-    return NULL;
-}
-
-void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Env *e)
-{
-  if (!((Scheme_Bucket_With_Home *)b)->home_link) {
-    if (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_STRONG_HOME_LINK)
-      ((Scheme_Bucket_With_Home *)b)->home_link = (Scheme_Object *)e;
-    else {
-      Scheme_Object *link;
-      link = scheme_get_home_weak_link(e);
-      ((Scheme_Bucket_With_Home *)b)->home_link = link;
-    }
-  }
-}
-
-/*========================================================================*/
 /*                     instances and startup env                          */
 /*========================================================================*/
 
-Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
-{
-  Scheme_Instance *inst;
-  Scheme_Bucket_Table *variables;
-
-  inst = MALLOC_ONE_TAGGED(Scheme_Instance);
-  inst->so.type = scheme_instance_type;
-
-  inst->name = name;
-  inst->data = data;
-
-  variables = scheme_make_bucket_table(7, SCHEME_hash_ptr);
-  inst->variables = variables;
-
-  return inst;
-}
-
-Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Instance *inst)
-{
-  Scheme_Bucket *b;
-    
-  b = scheme_bucket_from_table(inst->variables, (char *)symbol);
-  ASSERT_IS_VARIABLE_BUCKET(b);
-  scheme_set_bucket_home(b, env);
-
-  return b;
-}
-
-static Scheme_Startup_Env *make_setup_env(void)
+static Scheme_Startup_Env *make_startup_env(void)
 {
   Scheme_Startup_Env *e;
-  Scheme_Hash_Table *primitive_instances;
-  Scheme_Instance *inst;
+  Scheme_Hash_Table *table;
+  Scheme_Hash_Table *primitive_tables;
 
   e = MALLOC_ONE_TAGGED(Scheme_Startup_Env);
   e->so.type = scheme_startup_env_type;
 
-  primitive_instances = scheme_make_hash_table(SCHEME_hash_ptr);
-  e->primitive_instances = primitive_instances;
+  primitive_tables = scheme_make_hash_table(SCHEME_hash_ptr);
+  e->primitive_tables = primitive_instances;
 
-  inst = scheme_make_instance(kernel_symbol, scheme_false);
-  e->current_instance = inst;
-  scheme_hash_set(e->primitive_instances, kernel_symbol, (Scheme_Object *)inst);
+  table = scheme_make_hash_table(SCHEME_hash_ptr);
+  e->current_table = table;
+  scheme_hash_set(e->primitive_tables, kernel_symbol, (Scheme_Object *)table);
+
+  table = scheme_make_hash_table(SCHEME_hash_ptr);
+  e->all_primitives_table = table;
+
+  table = scheme_make_hash_table(SCHEME_hash_ptr);
+  e->primitive_ids_table = table;
 
   return e;
 }
 
 void scheme_switch_prim_instance(Scheme_Startup_Env *env, const char *name)
 {
-  Scheme_Instance *inst;
+  Scheme_Hash_Table *table;
   Scheme_Object *sym;
 
   sym = scheme_intern_symbol(name);
   
-  inst = (Scheme_Instance *)scheme_hash_get(env->primitive_instances, sym);
-  if (!inst) {
-    inst = scheme_make_instance(sym, scheme_false);
-    scheme_hash_set(e->primitive_instances, sym, (Scheme_Object *)inst);
+  table = (Scheme_Hash_Table *)scheme_hash_get(env->primitive_tables, sym);
+  if (!table) {
+    table = scheme_make_hash_table(SCHEME_hash_ptr);
+    scheme_hash_set(e->primitive_tables, sym, (Scheme_Object *)table);
   }
 
-  e->current_instance = inst;
+  e->current_table = table;
 }
 
 void scheme_restore_prim_instance(Scheme_Startup_Env *env)
 {
-  inst = (Scheme_Instance *)scheme_hash_get(env->primitive_instances, kernel_symbol);
-  e->current_instance = inst;
+  Scheme_Hash_Table *table;
+  table = (Scheme_Hash_Table *)scheme_hash_get(env->primitive_tables, kernel_symbol);
+  e->current_table = tables;
 }
 
 void scheme_add_to_primitive_instance(const char *name, Scheme_Object *obj,
@@ -806,56 +733,70 @@ void
 scheme_add_to_primitive_intance_by_symbol(Scheme_Object *name, Scheme_Object *obj,
                                           Scheme_Startup_Env *env)
 {
-  Scheme_Bucket *b;
-  
-  b = scheme_bucket_from_table(env->current_instance->vaiables, (const char *)sym);
-  b->val = obj;
-  ASSERT_IS_VARIABLE_BUCKET(b);
-  if (constant && scheme_defining_primitives) {
-    ((Scheme_Bucket_With_Flags *)b)->id = builtin_ref_counter++;
-    ((Scheme_Bucket_With_Flags *)b)->flags |= (GLOB_HAS_REF_ID | GLOB_IS_CONST | GLOB_STRONG_HOME_LINK);
-  } else if (constant)
-    ((Scheme_Bucket_With_Flags *)b)->flags |= (GLOB_IS_CONST | GLOB_STRONG_HOME_LINK);
-  scheme_set_bucket_home(b, env);
+  scheme_hash_set(env->current_table, name, obj);
+  scheme_hash_set(env->all_primitives_table, name, obj);
+
+  scheme_hash_set(env->primitive_ids_table, obj, scheme_make_integer(builtin_ref_counter));
+  builtin_ref_counter++;
+}
+
+Scheme_Object **scheme_make_builtin_references_table(int *_unsafe_start)
+{
+  Scheme_Object **t, v;
+  int i;
+
+  t = MALLOC_N(Scheme_Object *, (builtin_ref_counter + 1));
+#ifdef MEMORY_COUNTING_ON
+  scheme_misc_count += sizeof(Scheme_Object *) * (builtin_ref_counter + 1);
+#endif
+
+  for (j = builtin_ref_counter + 1; j--; ) {
+    t[j] = scheme_false;
+  }
+
+  for (i = scheme_startup_env->primitive_ids_table->size; i--; ) {
+    v = scheme_startup_env->primitive_ids_table->vals[i];
+    if (v) {
+      t[SCHEME_INT_VAL(scheme_startup_env->primitive_ids_table->keys[i])] = v;
+    }
+  }
+
+  *_unsafe_start = builtin_unsafe_start;
+
+  return t;
+}
+
+const char *scheme_look_for_primitive(void *code)
+{
+  intptr_t i;
+  Scheme_Object *val;
+
+  for (i = scheme_startup_env->primitive_ids_table->size; i--; ) {
+    val = scheme_startup_env->primitive_ids_table->vals[i];
+    if (val && SCHEME_PRIMP(val)) {
+      if (SCHEME_PRIM(val) == code)
+        return ((Scheme_Primitive_Proc *)val)->name;
+    }
+  }
+
+  return NULL;
 }
 
 /*========================================================================*/
 /*                           namespace bindings                           */
 /*========================================================================*/
 
-
-/********** Lookup **********/
-
 Scheme_Object *
 scheme_lookup_global(Scheme_Object *symbol, Scheme_Env *env)
 {
-  Scheme_Bucket *b;
-    
-  b = scheme_bucket_or_null_from_table(env->toplevel, (char *)symbol, 0);
-  if (b) {
-    ASSERT_IS_VARIABLE_BUCKET(b);
-    scheme_set_bucket_home(b, env);
-    return (Scheme_Object *)b->val;
-  }
-
-  return NULL;
+  ...
 }
 
 Scheme_Bucket *
 scheme_global_bucket(Scheme_Object *symbol, Scheme_Env *env)
 {
-  Scheme_Bucket *b;
-    
-  b = scheme_bucket_from_table(env->toplevel, (char *)symbol);
-  ASSERT_IS_VARIABLE_BUCKET(b);
-  scheme_set_bucket_home(b, env);
-    
-  return b;
+  ...
 }
-
-/********** Set **********/
-
-/*************************************************************/
 
 void
 scheme_add_global(const char *name, Scheme_Object *obj, Scheme_Env *env)
@@ -881,134 +822,6 @@ scheme_add_global_keyword_symbol(Scheme_Object *name, Scheme_Object *obj,
 				 Scheme_Env *env)
 {
   scheme_do_add_global_symbol(env, name, obj, 0, 0);
-}
-
-/********** Auxilliary tables **********/
-
-Scheme_Object **scheme_make_builtin_references_table(int *_unsafe_start)
-{
-  Scheme_Bucket_Table *ht;
-  Scheme_Object **t;
-  Scheme_Bucket **bs;
-  Scheme_Env *kenv;
-  intptr_t i;
-  int j;
-
-  t = MALLOC_N(Scheme_Object *, (builtin_ref_counter + 1));
-#ifdef MEMORY_COUNTING_ON
-  scheme_misc_count += sizeof(Scheme_Object *) * (builtin_ref_counter + 1);
-#endif
-
-  for (j = builtin_ref_counter + 1; j--; ) {
-    t[j] = scheme_false;
-  }
-
-  for (j = 0; j < 6; j++) {
-    if (!j)
-      kenv = kernel_env;
-    else if (j == 1)
-      kenv = unsafe_env;
-    else if (j == 2)
-      kenv = flfxnum_env;
-    else if (j == 3)
-      kenv = extfl_env;
-    else if (j == 4)
-      kenv = futures_env;
-    else
-      kenv = scheme_get_foreign_env();
-    
-    ht = kenv->toplevel;
-    
-    bs = ht->buckets;
-    
-    for (i = ht->size; i--; ) {
-      Scheme_Bucket *b = bs[i];
-      if (b && (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_HAS_REF_ID))
-        t[((Scheme_Bucket_With_Ref_Id *)b)->id] = (Scheme_Object *)b->val;
-    }
-  }
-
-  *_unsafe_start = builtin_unsafe_start;
-
-  return t;
-}
-
-Scheme_Hash_Table *scheme_map_constants_to_globals(void)
-{
-  Scheme_Bucket_Table *ht;
-  Scheme_Hash_Table*result;
-  Scheme_Bucket **bs;
-  Scheme_Env *kenv;
-  intptr_t i;
-  int j;
-
-  result = scheme_make_hash_table(SCHEME_hash_ptr);
-      
-  for (j = 0; j < 6; j++) {
-    if (!j)
-      kenv = kernel_env;
-    else if (j == 1)
-      kenv = unsafe_env;
-    else if (j == 2)
-      kenv = flfxnum_env;
-    else if (j == 3)
-      kenv = extfl_env;
-    else if (j == 4)
-      kenv = futures_env;
-    else
-      kenv = scheme_get_foreign_env();
-    
-    ht = kenv->toplevel;
-    bs = ht->buckets;
-    
-    for (i = ht->size; i--; ) {
-      Scheme_Bucket *b = bs[i];
-      if (b && (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_IS_CONST)) {
-        scheme_hash_set(result, b->val, (Scheme_Object *)b);
-      }
-    }
-  }
-
-  return result;
-}
-
-const char *scheme_look_for_primitive(void *code)
-{
-  Scheme_Bucket_Table *ht;
-  Scheme_Bucket **bs;
-  Scheme_Env *kenv;
-  intptr_t i;
-  int j;
-
-  for (j = 0; j < 6; j++) {
-    if (!j)
-      kenv = kernel_env;
-    else if (j == 1)
-      kenv = unsafe_env;
-    else if (j == 2)
-      kenv = flfxnum_env;
-    else if (j == 3)
-      kenv = extfl_env;
-    else if (j == 4)
-      kenv = futures_env;
-    else
-      kenv = scheme_get_foreign_env();
-    
-    ht = kenv->toplevel;
-    bs = ht->buckets;
-    
-    for (i = ht->size; i--; ) {
-      Scheme_Bucket *b = bs[i];
-      if (b && b->val) {
-        if (SCHEME_PRIMP(b->val)) {
-          if (SCHEME_PRIM(b->val) == code)
-            return ((Scheme_Primitive_Proc *)b->val)->name;
-        }
-      }
-    }
-  }
-
-  return NULL;
 }
 
 /*========================================================================*/

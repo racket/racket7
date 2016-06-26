@@ -48,7 +48,6 @@ THREAD_LOCAL_DECL(static Scheme_Hash_Table *cache_ht);
 
 /* read-only globals */
 SHARED_OK static char compacts[_CPT_COUNT_];
-SHARED_OK static Scheme_Hash_Table *global_constants_ht;
 
 ROSYM Scheme_Object *quote_symbol;
 ROSYM Scheme_Object *quasiquote_symbol;
@@ -216,12 +215,6 @@ void scheme_init_print(Scheme_Startup_Env *env)
 #ifdef MZ_PRECISE_GC
   register_traversers();
 #endif
-}
-
-void scheme_init_print_global_constants()
-{
-  REGISTER_SO(global_constants_ht);
-  global_constants_ht = scheme_map_constants_to_globals();
 }
 
 void scheme_init_print_buffers_places() 
@@ -2092,10 +2085,11 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
                   || SAME_OBJ(scheme_app_mark_impersonator_property, obj))) {
     /* Check whether this is a global constant */
     Scheme_Object *val;
-    val = scheme_hash_get(global_constants_ht, obj);
+    val = scheme_hash_get(scheme_startup_env->primitive_ids_table, obj);
     if (val) {
-      /* val is a scheme_variable_type object, instead of something else */
-      obj = val;
+      print_compact(pp, CPT_REFERENCE);
+      print_compact_number(pp, SCHEME_INT_VAL(val));
+      return 1;
     }
   }
 
@@ -3118,46 +3112,6 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         print_utf8_string(pp, ">", 0, 1);
       }
     }
-  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_module_variable_type))
-    {
-      Scheme_Object *idx;
-
-      idx = get_symtab_idx(mt, obj);
-      if (idx) {
-        print_symtab_ref(pp, idx);
-      } else {
-	Module_Variable *mv = (Module_Variable *)obj;
-        int flags = SCHEME_MODVAR_FLAGS(mv);
-
-	print_compact(pp, CPT_MODULE_VAR);
-        if (SAME_TYPE(SCHEME_TYPE(mv->modidx), scheme_resolved_module_path_type)
-            && SCHEME_SYMBOLP(SCHEME_PTR_VAL(mv->modidx))) {
-          print(SCHEME_PTR_VAL(mv->modidx), notdisplay, 1, ht, mt, pp);
-        } else {
-          print(mv->modidx, notdisplay, 1, ht, mt, pp);
-        }
-	print(mv->sym, notdisplay, 1, ht, mt, pp);
-        print(mv->shape ? mv->shape : scheme_false, notdisplay, 1, ht, mt, pp);
-        if (flags & 0x3) {
-          print_compact_number(pp, -3-(flags&0x3));
-        }
-        if (mv->mod_phase) {
-          print_compact_number(pp, -2);
-          print_compact_number(pp, mv->mod_phase);
-        }
-        print_compact_number(pp, mv->pos);
-
-        symtab_set(pp, mt, obj);
-      }
-    }
-  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_variable_type)
-	   && (((Scheme_Bucket_With_Flags *)obj)->flags & GLOB_HAS_REF_ID))
-    {
-      int pos;
-      pos = ((Scheme_Bucket_With_Ref_Id *)obj)->id;
-      print_compact(pp, CPT_REFERENCE);
-      print_compact_number(pp, pos);
-    }   
   else if (compact 
 	   && (SAME_TYPE(SCHEME_TYPE(obj), scheme_local_type)
 	       || SAME_TYPE(SCHEME_TYPE(obj), scheme_local_unbox_type)))

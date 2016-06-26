@@ -414,7 +414,6 @@ void scheme_init_stx_places(int initial_main_os_thread);
 void scheme_init_fun_places(void);
 void scheme_init_sema_places(void);
 void scheme_init_gmp_places(void);
-void scheme_init_print_global_constants(void);
 void scheme_init_variable_references_constants(void);
 void scheme_init_logger(void);
 void scheme_init_logging_once(void);
@@ -917,9 +916,9 @@ typedef struct {
   Scheme_Object *home_link; /* weak to Scheme_Linklet_Instance *, except when GLOB_STRONG_HOME_LINK */
 } Scheme_Bucket_With_Home;
 
-Scheme_Linklet_Instance *scheme_get_bucket_home(Scheme_Bucket *b);
-void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Linklet_Instance *e);
-Scheme_Object *scheme_get_home_weak_link(Scheme_Linklet_Instance *e);
+Scheme_Instance *scheme_get_bucket_home(Scheme_Bucket *b);
+void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Instance *e);
+Scheme_Object *scheme_get_home_weak_link(Scheme_Instance *e);
 
 Scheme_Object *
 scheme_get_primitive_global(Scheme_Object *var, Scheme_Env *env,
@@ -3093,31 +3092,35 @@ struct Scheme_Env {
   Scheme_Object *namespace;
 };
 
-/* A Scheme_Starup_Env */
+/* A Scheme_Startup_Env holds tables of primitives */
 struct Scheme_Startup_Env {
-    Scheme_Object so; /* scheme_startup_env_type */
-  struct Scheme_Instance *current_instance;
-  Scheme_Hash_Table *primitive_instances; /* symbol -> instance */
+  Scheme_Object so; /* scheme_startup_env_type */
+  Scheme_Hash_Table *current_table; /* used during startup */
+  Scheme_Hash_Table *primitive_tables; /* symbol -> hash table */
+  Scheme_Hash_Table *all_primitives_table;
+  Scheme_Hash_Table *primitive_ids_table; /* value -> integer */
 };
+
+extern Scheme_Startup_Env * scheme_startup_env;
 
 /* A Scheme_Instance is a linklet instance */
 struct Scheme_Instance {
   Scheme_Object so; /* scheme_instance_type */
 
-  Scheme_Object *name;
-  Scheme_Object *data;
-
-  Scheme_Hash_Table *exports; /* (symbol -> symbol) */
-
   Scheme_Bucket_Table *variables;
   Scheme_Object *weak_self_link; /* for Scheme_Bucket_With_Home */
+
+  Scheme_Hash_Table *exports; /* (symbol -> symbol) */
+  
+  Scheme_Object *name;  /* for reporting purposes */
+  Scheme_Object *data;
 } Scheme_Instance;
 
 typedef struct Scheme_Linklet
 {
   Scheme_Object so; /* scheme_linklet_type */
 
-  Scheme_Object *name; /* for error-reporting purposes */
+  Scheme_Object *name; /* for reporting purposes */
 
   Scheme_Hash_Table *accessible; /* (symbol -> ...) */
 

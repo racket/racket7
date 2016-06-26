@@ -26,6 +26,8 @@
 #include "schpriv.h"
 #include "schrunst.h"
 
+static Scheme_Object *primitive_table(int argc, Scheme_Object **argv);
+
 static Scheme_Object *linklet_p(int argc, Scheme_Object **argv);
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv);
@@ -70,7 +72,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
 
   scheme_switch_prim_instance(env, "#%linklet");
 
-  ADD_PRIM_W_ARITY("get-primitive-instance", get_primitive_instance, 1, 1, env);
+  ADD_PRIM_W_ARITY("primitive-table", primitive_table, 1, 2, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, env);
@@ -110,6 +112,46 @@ scheme_init_linklet(Scheme_Startup_Env *env)
 /*========================================================================*/
 /*                    linklet and instance functions                      */
 /*========================================================================*/
+
+static Scheme_Object *primitive_table(int argc, Scheme_Object *argv[])
+{
+  Scheme_Env *env, *menv;
+  Scheme_Object *name;
+  Scheme_Hash_Tree *ht;
+  Scheme_Hash_Table *table;
+
+  if (!SCHEME_SYMBOLP(argv[0]))
+    scheme_wrong_contract("primitive-table", "symbol?", 0, argc, argv);
+  if ((argc > 1) && !SCHEME_HASHTRP(argv[1]))
+    scheme_wrong_contract("primitive-table", "(and/c hash? immutable?)", 1, argc, argv);
+
+  table = scheme_hash_get(scheme_startup_env->primitive_tables, argv[0]);
+  if (!table) {
+    if (argc > 1) {
+      Scheme_Object *k, *v;
+      mzlonglong pos;
+
+      table = scheme_make_hash_table(SCHEME_hash_ptr);
+      scheme_hash_set(scheme_startup_env->primitive_tables, argv[0], (Scheme_Object *)table);
+
+      ht = (Scheme_Hash_Tree *)argv[1];
+      pos = scheme_hash_tree_next(ht, -1);
+      while (pos != -1) {
+        scheme_hash_tree_index(ht, pos, &k, &v);
+        if (SCHEME_SYMBOLP(k)) {
+          scheme_add_global_symbol(k, v, menv);
+        }
+        pos = scheme_hash_tree_next(ht, pos);
+      }
+    } else
+      return scheme_false;
+  }
+
+  if (argc < 2)
+    return (Scheme_Object *)table;
+  else
+    return scheme_void;
+}
 
 static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)
 {
@@ -375,6 +417,79 @@ static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
     return scheme_true;
 
   return scheme_false;
+}
+
+/*========================================================================*/
+/*                       instance variable buckets                        */
+/*========================================================================*/
+
+Scheme_Object *scheme_get_home_weak_link(Scheme_Env *e)
+{
+  if (!e->weak_self_link) {
+    Scheme_Object *wb;
+    if (scheme_starting_up)
+      wb = scheme_box((Scheme_Object *)e);
+    else
+      wb = scheme_make_weak_box((Scheme_Object *)e);
+    e->weak_self_link = wb;
+  }
+
+  return e->weak_self_link;
+}
+
+Scheme_Env *scheme_get_bucket_home(Scheme_Bucket *b)
+{
+  Scheme_Object *l;
+
+  l = ((Scheme_Bucket_With_Home *)b)->home_link;
+  if (l) {
+    if (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_STRONG_HOME_LINK)
+      return (Scheme_Env *)l;
+    else
+      return (Scheme_Env *)SCHEME_WEAK_BOX_VAL(l);
+  } else
+    return NULL;
+}
+
+void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Env *e)
+{
+  if (!((Scheme_Bucket_With_Home *)b)->home_link) {
+    if (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_STRONG_HOME_LINK)
+      ((Scheme_Bucket_With_Home *)b)->home_link = (Scheme_Object *)e;
+    else {
+      Scheme_Object *link;
+      link = scheme_get_home_weak_link(e);
+      ((Scheme_Bucket_With_Home *)b)->home_link = link;
+    }
+  }
+}
+
+Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
+{
+  Scheme_Instance *inst;
+  Scheme_Bucket_Table *variables;
+
+  inst = MALLOC_ONE_TAGGED(Scheme_Instance);
+  inst->so.type = scheme_instance_type;
+
+  inst->name = name;
+  inst->data = data;
+
+  variables = scheme_make_bucket_table(7, SCHEME_hash_ptr);
+  inst->variables = variables;
+
+  return inst;
+}
+
+Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Instance *inst)
+{
+  Scheme_Bucket *b;
+    
+  b = scheme_bucket_from_table(inst->variables, (char *)symbol);
+  ASSERT_IS_VARIABLE_BUCKET(b);
+  scheme_set_bucket_home(b, env);
+
+  return b;
 }
 
 /*========================================================================*/
