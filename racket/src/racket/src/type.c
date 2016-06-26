@@ -223,12 +223,8 @@ scheme_init_type ()
   set_name(scheme_will_executor_type, "<will-executor>");
   set_name(scheme_random_state_type, "<pseudo-random-generator>");
   set_name(scheme_regexp_type, "<regexp>");
-  set_name(scheme_scope_table_type, "<scope-table>");
-  set_name(scheme_propagate_table_type, "<propagate-table>");
-  set_name(scheme_scope_type, "<scope>");
   set_name(scheme_bucket_type, "<hash-table-bucket>");
   set_name(scheme_prefix_type, "<runtime-prefix>");
-  set_name(scheme_resolve_prefix_type, "<resolve-prefix>");
   set_name(scheme_readtable_type, "<readtable>");
 
   set_name(scheme_compilation_top_type, "<compiled-code>");
@@ -245,17 +241,10 @@ scheme_init_type ()
   set_name(scheme_inspector_type, "<inspector>");
   
   set_name(scheme_stx_type, "<syntax>");
-  set_name(scheme_expanded_syntax_type, "<expanded-syntax>");
-  set_name(scheme_set_macro_type, "<set!-transformer>");
-  set_name(scheme_id_macro_type, "<rename-transformer>");
-
-  set_name(scheme_module_index_type, "<module-path-index>");
 
   set_name(scheme_subprocess_type, "<subprocess>");
 
   set_name(scheme_cpointer_type, "<cpointer>");
-
-  set_name(scheme_wrap_chunk_type, "<wrap-chunk>");
 
   set_name(scheme_security_guard_type, "<security-guard>");
 
@@ -301,11 +290,6 @@ scheme_init_type ()
 
   set_name(scheme_delay_syntax_type, "<on-demand-stub>");
 
-  set_name(scheme_intdef_context_type, "<internal-definition-context>");
-  set_name(scheme_lexical_rib_type, "<internal:lexical-rib>");
-
-  set_name(scheme_already_comp_type, "<internal:already-compiled>");
-
   set_name(scheme_logger_type, "<logger>");
   set_name(scheme_log_reader_type, "<log-receiver>");
 
@@ -319,8 +303,6 @@ scheme_init_type ()
   set_name(scheme_place_async_channel_type, "<place-half-channel>");
   set_name(scheme_place_bi_channel_type, "<place-channel>");
   set_name(scheme_place_dead_type, "<place-dead-evt>");
-
-  set_name(scheme_resolved_module_path_type, "<resolve-module-path>");
 
   set_name(scheme_phantom_bytes_type, "<phantom-bytes>");
 
@@ -568,11 +550,8 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_let_one_type, let_one);
   GC_REG_TRAV(scheme_with_cont_mark_type, with_cont_mark);
   GC_REG_TRAV(scheme_quote_syntax_type, quotesyntax_obj);
-  GC_REG_TRAV(scheme_module_variable_type, module_var);
 
   GC_REG_TRAV(scheme_define_values_type, vector_obj);
-  GC_REG_TRAV(scheme_define_syntaxes_type, vector_obj);
-  GC_REG_TRAV(scheme_begin_for_syntax_type, vector_obj);
   GC_REG_TRAV(scheme_varref_form_type, twoptr_obj);
   GC_REG_TRAV(scheme_apply_values_type, twoptr_obj);
   GC_REG_TRAV(scheme_with_immed_mark_type, with_cont_mark);
@@ -581,9 +560,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_begin0_sequence_type, seq_rec);
   GC_REG_TRAV(scheme_splice_sequence_type, seq_rec);
   GC_REG_TRAV(scheme_set_bang_type, set_bang);
-  GC_REG_TRAV(scheme_module_type, module_val);
-  GC_REG_TRAV(scheme_rt_export_info, exp_info_val);
-  GC_REG_TRAV(scheme_require_form_type, twoptr_obj);
   GC_REG_TRAV(scheme_inline_variant_type, vector_obj);
 
   GC_REG_TRAV(_scheme_values_types_, bad_trav);
@@ -598,10 +574,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_quote_compilation_type, small_object);
 
   GC_REG_TRAV(_scheme_ir_values_types_, bad_trav);
-
-  GC_REG_TRAV(scheme_prefix_type, prefix_val);
-  GC_REG_TRAV(scheme_resolve_prefix_type, resolve_prefix_val);
-  GC_REG_TRAV(scheme_rt_comp_prefix, comp_prefix_val);
 
   GC_REG_TRAV(scheme_prim_type, prim_proc);
   GC_REG_TRAV(scheme_closed_prim_type, closed_prim_proc);
@@ -675,9 +647,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_namespace_type, namespace_val);
   GC_REG_TRAV(scheme_random_state_type, random_state_val);
   
-  GC_REG_TRAV(scheme_compilation_top_type, compilation_top_val);
-  GC_REG_TRAV(scheme_intdef_context_type, twoptr_obj);
-
   GC_REG_TRAV(scheme_eval_waiting_type, bad_trav);
   GC_REG_TRAV(scheme_tail_call_waiting_type, bad_trav);
   GC_REG_TRAV(scheme_undefined_type, small_atomic_obj);
@@ -685,9 +654,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_table_placeholder_type, iptr_obj);
 
   GC_REG_TRAV(scheme_svector_type, svector_val);
-
-  GC_REG_TRAV(scheme_set_macro_type, small_object);
-  GC_REG_TRAV(scheme_id_macro_type, twoptr_obj);
 
   GC_REG_TRAV(scheme_stx_type, stx_val);
 
@@ -710,8 +676,6 @@ void scheme_register_traversers(void)
 
   GC_REG_TRAV(scheme_progress_evt_type, twoptr_obj);
 
-  GC_REG_TRAV(scheme_already_comp_type, iptr_obj);
-
   GC_REG_TRAV(scheme_will_be_lambda_type, iptr_obj);
 
   GC_REG_TRAV(scheme_thread_cell_values_type, small_object);
@@ -719,24 +683,18 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_global_ref_type, twoptr_obj);
 
   GC_REG_TRAV(scheme_delay_syntax_type, small_object);
-  GC_REG_TRAV(scheme_marshal_share_type, small_object);
-
-  GC_REG_TRAV(scheme_resolved_module_path_type, small_object);
 
   GC_REG_TRAV(scheme_logger_type, mark_logger);
   GC_REG_TRAV(scheme_log_reader_type, mark_log_reader);
 
   GC_REG_TRAV(scheme_rt_runstack, runstack_val);
 
-  GC_REG_TRAV(scheme_rib_delimiter_type, small_object);
   GC_REG_TRAV(scheme_noninline_proc_type, small_object);
-  GC_REG_TRAV(scheme_prune_context_type, small_object);
 
   GC_REG_TRAV(scheme_proc_shape_type, small_object);
   GC_REG_TRAV(scheme_struct_proc_shape_type, small_atomic_obj);
 
   GC_REG_TRAV(scheme_environment_variables_type, small_object);
-  GC_REG_TRAV(scheme_syntax_property_preserve_type, small_object);
 
   GC_REG_TRAV(scheme_plumber_handle_type, twoptr_obj);
 }

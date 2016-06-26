@@ -4589,19 +4589,6 @@ static void make_ut(CPort *port)
   ut->decoded = decoded;
 
   ut->bytecode_hash = port->bytecode_hash;
-  
-  rht = scheme_make_hash_table(SCHEME_hash_ptr);
-  port->ut->rns = rht;
-
-  rht = scheme_make_hash_table(SCHEME_hash_ptr);
-  port->ut->multi_scope_pairs = rht;
-}
-
-static void prepare_current_unmarshal(Scheme_Unmarshal_Tables *ut)
-{
-  /* in case a previous unmarshal was interrupted: */
-  ut->current_rns = NULL;
-  ut->current_multi_scope_pairs = NULL;
 }
 
 static void merge_ht(Scheme_Hash_Table *f, Scheme_Hash_Table *t)
@@ -4610,18 +4597,6 @@ static void merge_ht(Scheme_Hash_Table *f, Scheme_Hash_Table *t)
   for (i = f->size; i--; ) {
     if (f->vals[i])
       scheme_hash_set(t, f->keys[i], f->vals[i]);
-  }
-}
-
-static void complete_current_unmarshal(Scheme_Unmarshal_Tables *ut)
-{
-  if (ut->current_rns) {
-    merge_ht(ut->current_rns, ut->rns);
-    ut->current_rns = NULL;
-  }
-  if (ut->current_multi_scope_pairs) {
-    merge_ht(ut->current_multi_scope_pairs, ut->multi_scope_pairs);
-    ut->current_multi_scope_pairs = NULL;
   }
 }
 
@@ -5054,39 +5029,6 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
         SCHEME_IPTR_VAL(v) = l;
       }
       break;
-    case CPT_STX:
-      {
-        Scheme_Hash_Table *save_ht;
-
-	if (!port->ut)
-          make_ut(port);
-
-        save_ht = *port->ht;
-        *port->ht = NULL;
-
-        prepare_current_unmarshal(port->ut);
-	v = read_compact(port, 1);
-
-        if (!SCHEME_NULLP(port->symtab_refs))
-          v = resolve_symtab_refs(v, port);
-        else if (*port->ht) {
-          *port->ht = NULL;
-          v = resolve_references(v, port->orig_port, NULL,
-                                 scheme_make_hash_table(SCHEME_hash_ptr), 
-                                 scheme_make_hash_table(SCHEME_hash_ptr),
-                                 port->symtab_entries,
-                                 0, 0);
-        }
-
-        *port->ht = save_ht;
-
-	v = scheme_unmarshal_datum_to_syntax(v, port->ut, 0);
-	scheme_num_read_syntax_objects++;
-	if (!v)
-	  scheme_ill_formed_code(port);
-        complete_current_unmarshal(port->ut);
-      }
-      break;
     case CPT_MARSHALLED:
       v = read_marshalled(read_compact_number(port), port);
       break;
@@ -5397,32 +5339,6 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
 	return (Scheme_Object *)app;
       }
       break;
-    case CPT_SCOPE:
-      {
-        Scheme_Object *v2;
-
-        if (!port->ut)
-          make_ut(port);
-
-        v = scheme_box(scheme_false);
-        l = read_compact_number(port);
-
-        if (l) {
-          RANGE_POS_CHECK(l, < port->symtab_size);
-          port->symtab[l] = v;
-        }
-
-        l = read_compact_number(port);
-        
-        v2 = read_compact(port, 0);
-        v2 = scheme_make_pair(scheme_make_integer(l), v2);
-        SCHEME_BOX_VAL(v) = v2;
-
-        return v;
-      }
-      break;
-    case CPT_ROOT_SCOPE:
-      return scheme_stx_root_scope();
     case CPT_SHARED:
       {
         Scheme_Object *ph;

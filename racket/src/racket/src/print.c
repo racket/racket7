@@ -1490,7 +1490,7 @@ static void print_table_keys(int notdisplay, int compact, Scheme_Hash_Table *ht,
                              PrintParams *pp)
 {
   intptr_t j, size, offset;
-  Scheme_Object **keys, *key, *obj;
+  Scheme_Object **keys, *key;
 
   size = mt->sorted_keys_count;
   keys = mt->sorted_keys;
@@ -1499,15 +1499,8 @@ static void print_table_keys(int notdisplay, int compact, Scheme_Hash_Table *ht,
     offset = pp->print_offset;
     mt->shared_offsets[j] = offset;
     key = keys[j << 1];
-    if (mt->rn_saved) {
-      obj = scheme_hash_get(mt->rn_saved, key);
-    } else {
-      obj = NULL;
-    }
-    if (!obj)
-      obj = key;
     mt->print_now = j + 1;
-    print(obj ? obj : key, notdisplay, compact, ht, mt, pp);
+    print(key, notdisplay, compact, ht, mt, pp);
     mt->print_now = 0;
   }
 }
@@ -1653,120 +1646,6 @@ static void print_symtab_set(PrintParams *pp, Scheme_Marshal_Tables *mt, Scheme_
   int l;
   l = add_symtab(mt, obj);
   print_compact_number(pp, l);
-}
-
-Scheme_Object *scheme_marshal_wrap_set(Scheme_Marshal_Tables *mt, Scheme_Object *obj, Scheme_Object *val)
-{
-  int l;
-  l = add_symtab(mt, obj);
-  if (l) {
-    if (!mt->rn_saved) {
-      Scheme_Hash_Table *rn_saved;
-      rn_saved = scheme_make_hash_table(SCHEME_hash_ptr);
-      mt->rn_saved = rn_saved;
-    }
-    if (mt->pass >= 2) {
-      /* Done already */
-    } else
-      scheme_hash_set(mt->rn_saved, obj, val);
-
-    if (mt->pass)
-      return scheme_make_integer(l);
-  }
-  return val;
-}
-
-Scheme_Object *scheme_marshal_lookup(Scheme_Marshal_Tables *mt, Scheme_Object *obj)
-{
-  return get_symtab_idx(mt, obj);
-}
-
-void scheme_marshal_using_key(Scheme_Marshal_Tables *mt, Scheme_Object *obj)
-{
-  set_symtab_shared(mt, obj);
-}
-
-void scheme_marshal_push_refs(Scheme_Marshal_Tables *mt)
-{
-  Scheme_Object *p;
-  Scheme_Hash_Table *st_refs;
-
-  if (mt->pass >= 0) {
-    p = scheme_make_pair((Scheme_Object *)mt->st_refs,
-                         mt->st_ref_stack);
-    mt->st_ref_stack = p;
-    
-    st_refs = make_hash_table_symtab();
-    
-    mt->st_refs = st_refs;
-  }
-}
-
-void scheme_marshal_pop_refs(Scheme_Marshal_Tables *mt, int keep)
-{
-  Scheme_Hash_Table *st_refs = mt->st_refs;
-
-  if (mt->pass >= 0) {
-    mt->st_refs = (Scheme_Hash_Table *)SCHEME_CAR(mt->st_ref_stack);
-    mt->st_ref_stack = SCHEME_CDR(mt->st_ref_stack);
-  
-    if (keep) {
-      if (!mt->st_refs->count)
-        mt->st_refs = st_refs;
-      else {
-        intptr_t i;
-        for (i = 0; i < st_refs->size; i++) {
-          if (st_refs->vals[i]) {
-            scheme_hash_set(mt->st_refs, st_refs->keys[i], st_refs->vals[i]);
-          }
-        }
-      }
-    }
-  }
-}
-
-Scheme_Object *scheme_make_marshal_shared(Scheme_Object *v)
-{
-  Scheme_Object *b;
-
-  b = scheme_alloc_small_object();
-  b->type = scheme_marshal_share_type;
-  SCHEME_PTR_VAL(b) = v;
-  
-  return b;
-}
-
-static Scheme_Object *intern_modidx(Scheme_Hash_Table *interned, Scheme_Object *modidx)
-{
-  Scheme_Object *l = scheme_null;
-  Scheme_Modidx *midx;
- 
-  while (SAME_TYPE(SCHEME_TYPE(modidx), scheme_module_index_type)) {
-    midx = (Scheme_Modidx *)modidx;
-    modidx = scheme_hash_get(interned, modidx);
-    if (!modidx) {
-      modidx = (Scheme_Object *)midx;
-      if (SCHEME_FALSEP(midx->path)) {
-        scheme_hash_set(interned, modidx, modidx);
-        break;
-      } else {
-        l = scheme_make_pair(modidx, l);
-        modidx = midx->base;
-      }
-    } else
-      break;
-  }
-
-  while (!SCHEME_NULLP(l)) {
-    midx = (Scheme_Modidx *)SCHEME_CAR(l);
-    modidx = scheme_make_modidx(midx->path, 
-                                modidx,
-                                midx->resolved);
-    scheme_hash_set(interned, modidx, modidx);
-    l = SCHEME_CDR(l);
-  }
-
-  return modidx;
 }
 
 static void print_escaped(PrintParams *pp, int notdisplay, 
@@ -3201,26 +3080,6 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         set_symtab_shared(mt, obj);
       }
     }
-  else if (SAME_TYPE(SCHEME_TYPE(obj), scheme_marshal_share_type))
-    {
-      if (compact) {
-        Scheme_Object *idx;
-
-        idx = get_symtab_idx(mt, obj);
-        if (idx) {
-          print_symtab_ref(pp, idx);
-        } else {
-          int l;
-          l = add_symtab(mt, obj);
-          obj = SCHEME_PTR_VAL(obj);
-          if (l)
-            print_general_symtab_ref(pp, scheme_make_integer(l), CPT_SHARED);
-          print(obj, notdisplay, 1, ht, mt, pp);
-        }
-      } else {
-        print(SCHEME_PTR_VAL(obj), notdisplay, 0, ht, mt, pp);
-      }
-    }
   else if (!compact
            && SAME_TYPE(SCHEME_TYPE(obj), scheme_compilation_top_type)
            && SAME_TYPE(SCHEME_TYPE(((Scheme_Compilation_Top *)obj)->code), scheme_module_type)
@@ -3327,35 +3186,16 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         mt = MALLOC_ONE_RT(Scheme_Marshal_Tables);
         SET_REQUIRED_TAG(mt->type = scheme_rt_marshal_info);
         scheme_current_thread->current_mt = mt;
-        
-        /* We need to compare a modidx using `eq?`, because shifting
-           is based on `eq`ness. */
-        intern_map = scheme_make_hash_table_equal_modix_eq();
+
+        intern_map = scheme_make_hash_table(SCHEME_hash_ptr);
         mt->intern_map = intern_map;
 
-        /* "Print" the string once to find out which scopes are reachable;
-           dropping unreachable scopes drops potentialy large binding tables. */
-        mt->pass = -1;
-        reachable_scopes = scheme_make_hash_table(SCHEME_hash_ptr);
-        mt->conditionally_reachable_scopes = reachable_scopes;
-        reachable_scopes = scheme_make_hash_table(SCHEME_hash_ptr);
-        mt->reachable_scopes = reachable_scopes;
-        mt->reachable_scope_stack = scheme_null;
         symtab = make_hash_table_symtab();
         mt->symtab = symtab;
         path_cache = scheme_make_hash_table_equal();
         mt->path_cache = path_cache;
-	print_substring(v, notdisplay, 1, NULL, mt, pp, NULL, &slen, 0, NULL);
-        scheme_iterate_reachable_scopes(mt);
 
-        mt->pending_reachable_ids = NULL;
-
-        mt = MALLOC_ONE_RT(Scheme_Marshal_Tables);
-        SET_REQUIRED_TAG(mt->type = scheme_rt_marshal_info);
         scheme_current_thread->current_mt = mt;
-        mt->reachable_scopes = reachable_scopes;
-        mt->intern_map = intern_map;
-        mt->path_cache = path_cache;
 
         /* Track which shared values are referenced: */
         st_refs = make_hash_table_symtab();
@@ -3374,7 +3214,6 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
 	print_substring(v, notdisplay, 1, NULL, mt, pp, NULL, &slen, 0, NULL);
 
         sort_referenced_keys(mt);
-        mt->rn_saved = NULL;
 
 	/* "Print" again, now that we know which values are actually
            shared. On this pass, shared values that reference other shared values

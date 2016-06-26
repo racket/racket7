@@ -61,7 +61,6 @@ typedef struct Equal_Info {
   Scheme_Object *next, *next_next;
   Scheme_Object *insp;
   intptr_t for_chaperone; /* 3 => for impersonator */
-  intptr_t eq_for_modidx;
 } Equal_Info;
 
 static int is_equal (Scheme_Object *obj1, Scheme_Object *obj2, Equal_Info *eql);
@@ -175,7 +174,6 @@ XFORM_NONGCING static void init_equal_info(Equal_Info *eql)
   eql->next_next = NULL;
   eql->insp = NULL;
   eql->for_chaperone = 0;
-  eql->eq_for_modidx = 0;
 }
 
 static Scheme_Object *
@@ -324,7 +322,6 @@ XFORM_NONGCING static int is_eqv(Scheme_Object *obj1, Scheme_Object *obj2)
       return SCHEME_CHAR_VAL(obj1) == SCHEME_CHAR_VAL(obj2);
     case scheme_symbol_type:
     case scheme_keyword_type:
-    case scheme_scope_type:
       /* `eqv?` requires `eq?` */
       return 0;
     default:
@@ -442,16 +439,6 @@ int scheme_equal (Scheme_Object *obj1, Scheme_Object *obj2)
     return v;
 
   return is_slow_equal(obj1, obj2);
-}
-
-int scheme_equal_modix_eq (Scheme_Object *obj1, Scheme_Object *obj2)
-{
-  Equal_Info eql;
-
-  init_equal_info(&eql);
-  eql.eq_for_modidx = 1;
-
-  return is_equal(obj1, obj2, &eql);
 }
 
 static Scheme_Object *union_find(Scheme_Object *obj1, Scheme_Hash_Table *ht)
@@ -856,38 +843,6 @@ int is_equal (Scheme_Object *obj1, Scheme_Object *obj2, Equal_Info *eql)
     case scheme_wrap_chunk_type: {
       return vector_equal(obj1, obj1, obj2, obj2, eql);
     }
-    case scheme_resolved_module_path_type:
-      {
-        obj1 = SCHEME_PTR_VAL(obj1);
-        obj2 = SCHEME_PTR_VAL(obj2);
-        goto top;
-      }
-    case scheme_module_index_type:
-      {
-        Scheme_Modidx *midx1, *midx2;
-#   include "mzeqchk.inc"
-        midx1 = (Scheme_Modidx *)obj1;
-        midx2 = (Scheme_Modidx *)obj2;
-        if (eql->eq_for_modidx
-            && (SCHEME_FALSEP(midx1->path)
-                || SCHEME_FALSEP(midx2->path)))
-          return 0;
-        else if (is_equal(midx1->path, midx2->path, eql)) {
-          obj1 = midx1->base;
-          obj2 = midx2->base;
-          goto top;
-        }
-      }
-    case scheme_scope_table_type:
-      {
-        Scheme_Scope_Table *mt1 = (Scheme_Scope_Table *)obj1;
-        Scheme_Scope_Table *mt2 = (Scheme_Scope_Table *)obj2;
-        if (!is_equal((Scheme_Object *)mt1->simple_scopes, (Scheme_Object *)mt2->simple_scopes, eql))
-          return 0;
-        obj1 = mt1->multi_scopes;
-        obj2 = mt2->multi_scopes;
-        goto top;
-      }
     default:
       if (!eql->for_chaperone && ((t1 == scheme_chaperone_type)
                                   || (t1 == scheme_proc_chaperone_type))) {

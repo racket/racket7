@@ -1832,33 +1832,6 @@ static uintptr_t equal_hash_key(Scheme_Object *o, uintptr_t k, Hash_Info *hi)
       o = (Scheme_Object *)((Scheme_Place_Bi_Channel *)o)->link->sendch;
     }
     break;
-  case scheme_resolved_module_path_type:
-    /* Needed for interning */
-    {
-      k += 7;
-      o = SCHEME_PTR_VAL(o);
-    }
-    break;
-  case scheme_module_index_type:
-    {
-      Scheme_Modidx *midx = (Scheme_Modidx *)o;
-#     include "mzhashchk.inc"
-      hi->depth += 2;
-      k++;
-      k = (k << 3) + k;
-      k += equal_hash_key(midx->path, 0, hi);
-      o = midx->base;
-    }
-    break;
-  case scheme_scope_table_type:
-    {
-      Scheme_Scope_Table *mt = (Scheme_Scope_Table *)o;
-      hi->depth += 2;
-      k = (k << 3) + k;
-      k += equal_hash_key((Scheme_Object *)mt->simple_scopes, 0, hi);
-      o = mt->multi_scopes;
-    }
-    break;
   default:
     {
       Scheme_Primary_Hash_Proc h1 = scheme_type_hash1s[t];
@@ -2330,30 +2303,6 @@ static uintptr_t equal_hash_key2(Scheme_Object *o, Hash_Info *hi)
     
       return k;
     }
-  case scheme_resolved_module_path_type:
-    /* Needed for interning */
-    o = SCHEME_PTR_VAL(o);
-    goto top;
-  case scheme_module_index_type:
-    {
-      Scheme_Modidx *midx = (Scheme_Modidx *)o;
-      uintptr_t v1, v2;
-#     include "mzhashchk.inc"
-      hi->depth += 2;
-      v1 = equal_hash_key2(midx->path, hi);
-      v2 = equal_hash_key2(midx->base, hi);
-      return v1 + v2;
-    }
-  case scheme_scope_table_type:
-    {
-      Scheme_Scope_Table *mt = (Scheme_Scope_Table *)o;
-      uintptr_t k;
-      hi->depth += 2;
-      k = equal_hash_key2((Scheme_Object *)mt->simple_scopes, hi);
-      k += equal_hash_key2(mt->multi_scopes, hi);
-      return k;
-    }
-    break;
   case scheme_place_bi_channel_type:
     /* a bi channel has sendch and recvch, but
        sends are the same iff recvs are the same: */

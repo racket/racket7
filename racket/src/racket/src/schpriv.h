@@ -1243,8 +1243,6 @@ Scheme_Object *scheme_transfer_srcloc(Scheme_Object *to, Scheme_Object *from);
 
 int scheme_is_predefined_module_p(Scheme_Object *name);
 
-Scheme_Object *scheme_get_kernel_modidx(void);
-
 /*========================================================================*/
 /*                   syntax run-time structures                           */
 /*========================================================================*/
@@ -3046,25 +3044,15 @@ typedef struct Scheme_Marshal_Tables {
   Scheme_Hash_Table *st_refs;
   Scheme_Object *st_ref_stack;
   Scheme_Hash_Table *intern_map;  /* filled on first pass */
-  Scheme_Hash_Table *identity_map; /* filled on first pass */
-  Scheme_Hash_Table *top_map;     /* used on every pass */
   Scheme_Hash_Table *key_map;     /* set after first pass, used on later passes */
   Scheme_Hash_Table *delay_map;   /* set during first pass, used on later passes */
-  Scheme_Hash_Table *rn_saved;    /* maps each original object to generated marshaling */
   Scheme_Object **cdata_map;      /* for delay-load wrappers */
   int cdata_counter;              /* used with cdata_map */
   intptr_t *shared_offsets;      /* set in second pass */
   Scheme_Hash_Table *path_cache; /* cache for path-to-relative resolution */
   intptr_t sorted_keys_count;
-  intptr_t inspector_counter;    /* for deterministic symbol allocation */
   Scheme_Object **sorted_keys;
 } Scheme_Marshal_Tables;
-
-void scheme_marshal_using_key(Scheme_Marshal_Tables *mt, Scheme_Object *key);
-Scheme_Object *scheme_marshal_lookup(Scheme_Marshal_Tables *mt, Scheme_Object *a);
-Scheme_Object *scheme_marshal_wrap_set(Scheme_Marshal_Tables *mt, Scheme_Object *a, Scheme_Object *v);
-void scheme_marshal_push_refs(Scheme_Marshal_Tables *mt);
-void scheme_marshal_pop_refs(Scheme_Marshal_Tables *mt, int keep);
 
 typedef struct Scheme_Unmarshal_Tables {
   MZTAG_IF_REQUIRED
@@ -3197,12 +3185,6 @@ void scheme_restore_prim_instance(Scheme_Startup_Env *env);
 THREAD_LOCAL_DECL(extern Scheme_Bucket_Table *scheme_module_code_cache);
 Scheme_Object *scheme_module_execute(Scheme_Object *data, Scheme_Env *genv);
 
-Scheme_Object *scheme_hash_module_variable(Scheme_Env *env, Scheme_Object *modidx, 
-					   Scheme_Object *stxsym, Scheme_Object *insp,
-					   int pos, intptr_t mod_phase, int is_constant,
-                                           Scheme_Object *shape);
-
-
 Scheme_Env *scheme_get_kernel_env();
 int scheme_is_kernel_env();
 Scheme_Env *scheme_get_unsafe_env();
@@ -3223,7 +3205,6 @@ int scheme_is_extfl_modname(Scheme_Object *modname);
 int scheme_is_futures_modname(Scheme_Object *modname);
 int scheme_is_foreign_modname(Scheme_Object *modname);
 
-void scheme_clear_modidx_cache(void);
 void scheme_clear_shift_cache(void);
 void scheme_clear_prompt_cache(void);
 

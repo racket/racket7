@@ -132,8 +132,6 @@ enum {
   scheme_bucket_type,                   /* 106 */
   scheme_bucket_table_type,             /* 107 */
   scheme_subprocess_type,               /* 108 */
-  scheme_compilation_top_type,          /* 109 */
-  scheme_wrap_chunk_type,               /* 110 */
   scheme_eval_waiting_type,             /* 111 */
   scheme_tail_call_waiting_type,        /* 112 */
   scheme_undefined_type,                /* 113 */
@@ -142,8 +140,6 @@ enum {
   scheme_multiple_values_type,          /* 116 */
   scheme_placeholder_type,              /* 117 */
   scheme_table_placeholder_type,        /* 118 */
-  scheme_scope_table_type,              /* 119 */
-  scheme_propagate_table_type,          /* 120 */
   scheme_svector_type,                  /* 121 */
   scheme_resolve_prefix_type,           /* 122 */
   scheme_security_guard_type,           /* 123 */
@@ -166,7 +162,6 @@ enum {
   scheme_thread_dead_type,              /* 140 */
   scheme_poll_evt_type,                 /* 141 */
   scheme_nack_evt_type,                 /* 142 */
-  scheme_module_registry_type,          /* 143 */
   scheme_thread_set_type,               /* 144 */
   scheme_string_converter_type,         /* 145 */
   scheme_alarm_type,                    /* 146 */
@@ -181,8 +176,6 @@ enum {
   scheme_place_dead_type,               /* 155 */
   scheme_already_comp_type,             /* 156 */
   scheme_readtable_type,                /* 157 */
-  scheme_intdef_context_type,           /* 158 */
-  scheme_lexical_rib_type,              /* 159 */
   scheme_thread_cell_values_type,       /* 160 */
   scheme_global_ref_type,               /* 161 */
   scheme_cont_mark_chain_type,          /* 162 */
@@ -190,17 +183,11 @@ enum {
   scheme_prompt_type,                   /* 164 */
   scheme_prompt_tag_type,               /* 165 */
   scheme_continuation_mark_key_type,    /* 166 */
-  scheme_expanded_syntax_type,          /* 167 */
   scheme_delay_syntax_type,             /* 168 */
   scheme_cust_box_type,                 /* 169 */
-  scheme_resolved_module_path_type,     /* 170 */
-  scheme_module_phase_exports_type,     /* 171 */
   scheme_logger_type,                   /* 172 */
   scheme_log_reader_type,               /* 173 */
-  scheme_marshal_share_type,            /* 174 */
-  scheme_rib_delimiter_type,            /* 175 */
   scheme_noninline_proc_type,           /* 176 */
-  scheme_prune_context_type,            /* 177 */
   scheme_future_type,                   /* 178 */
   scheme_flvector_type,                 /* 179 */
   scheme_extflvector_type,              /* 180 */
@@ -227,7 +214,6 @@ enum {
   scheme_plumber_handle_type,           /* 201 */
   scheme_deferred_expr_type,            /* 202 */
   scheme_will_be_lambda_type,           /* 203 */
-  scheme_syntax_property_preserve_type, /* 204 */
                                         
 #ifdef MZTAG_REQUIRED                            
   _scheme_last_normal_type_,            /* 205 */
