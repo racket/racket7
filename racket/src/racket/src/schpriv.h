@@ -2841,9 +2841,7 @@ Scheme_Object *scheme_optimize_extract_tail_inside(Scheme_Object *t2);
 
 Scheme_Object *scheme_resolve_expr(Scheme_Object *, Resolve_Info *);
 Scheme_Object *scheme_resolve_list(Scheme_Object *, Resolve_Info *);
-Scheme_Object *scheme_unresolve(Scheme_Object *, int argv, int *_has_cases,
-                                Comp_Prefix *cp, Scheme_Env *env, Scheme_Object *insp, intptr_t ref_phase,
-                                Scheme_Object *from_modidx, Scheme_Object *to_modidx);
+Scheme_Object *scheme_unresolve(Scheme_Object *, int argv, int *_has_cases, Scheme_Linklet *linklet);
 Scheme_Object *scheme_unresolve_top(Scheme_Object *, Comp_Prefix **, int comp_flags);
 
 int scheme_check_leaf_rator(Scheme_Object *le, int *_flags);
@@ -3126,6 +3124,9 @@ typedef struct Scheme_Linklet
   Scheme_Object *bodies; /* vector of definition or expression */
 
   int max_let_depth;
+
+  int num_toplevels;
+  Scheme_IR_Toplevel *toplevels; /* during compilation/optimization, only */
 } Scheme_Linklet;
 
 /* Definition and references share the same object during the

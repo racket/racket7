@@ -135,17 +135,6 @@ static void add_struct_mapping(Scheme_Hash_Table **_st_ht, int pos, int shape)
                   scheme_make_integer(shape));
 }
 
-static int phaseless_expr(Scheme_Object *expr)
-{
-  /* A precise check is a little tricky, since compiler optimizations
-     might change the original program beyond easily recognition of
-     the syntactic pattern that defines "phaseless". For now, let
-     anything through; the result can be weird if state somehow leakes
-     through a "phaseless" module, but I don't think it can be unsafe
-     from the run-time system's perspective. */
-  return 1;
-}
-
 void scheme_validate_code(Mz_CPort *port, Scheme_Object *code,
                           int depth, 
                           int num_toplevels, int num_stxes, int num_lifts, void *tl_use_map,

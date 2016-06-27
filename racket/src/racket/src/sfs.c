@@ -32,7 +32,7 @@
 
 struct SFS_Info {
   MZTAG_IF_REQUIRED  
-  int for_mod, pass;
+  int for_linklet, pass;
   int tail_pos; /* in tail position? */
   int depth, stackpos, tlpos; /* stack shape */
   int selfpos, selfstart, selflen; /* tracks self calls */
@@ -1282,51 +1282,35 @@ static Scheme_Object *sfs_closure(Scheme_Object *expr, SFS_Info *info, int self_
 }
 
 /*========================================================================*/
-/*                              module                                    */
+/*                              linklet                                   */
 /*========================================================================*/
 
 static Scheme_Object *
-module_sfs(Scheme_Object *data, SFS_Info *old_info)
+linklet_sfs(Scheme_Object *data, SFS_Info *old_info)
 {
-  Scheme_Module *m = (Scheme_Module *)data;
+  Scheme_Linklet *linklet = (Scheme_Linket *)data;
   Scheme_Object *e, *ex;
   SFS_Info *info;
   int i, j, cnt, let_depth;
 
-  if (!old_info->for_mod) {
+  if (!old_info->for_linklet) {
     if (old_info->pass)
       return data;
 
-    info = scheme_new_sfs_info(m->max_let_depth);
-    info->for_mod = 1;
-    scheme_sfs(data, info, m->max_let_depth);
+    info = scheme_new_sfs_info(linklet->max_let_depth);
+    info->for_linklet = 1;
+    scheme_sfs(data, info, linklet->max_let_depth);
     return data;
   }
 
   info = old_info;
 
-  cnt = SCHEME_VEC_SIZE(m->bodies[0]);
+  cnt = SCHEME_VEC_SIZE(m->bodies);
   scheme_sfs_start_sequence(info, cnt, 0);
 
   for (i = 0; i < cnt; i++) {
-    e = scheme_sfs_expr(SCHEME_VEC_ELS(m->bodies[0])[i], info, -1);
-    SCHEME_VEC_ELS(m->bodies[0])[i] = e;
-  }
-
-  if (!info->pass) {
-    for (j = m->num_phases; j-- > 1; ) {
-      cnt = SCHEME_VEC_SIZE(m->bodies[j]);
-      for (i = 0; i < cnt; i++) {
-        e = SCHEME_VEC_ELS(m->bodies[j])[i];
-        
-        let_depth = SCHEME_INT_VAL(SCHEME_VEC_ELS(e)[2]);
-        ex = SCHEME_VEC_ELS(e)[1];
-        
-        info = scheme_new_sfs_info(let_depth);
-        ex = scheme_sfs(ex, info, let_depth);
-        SCHEME_VEC_ELS(e)[1] = ex;
-      }
-    }
+    e = scheme_sfs_expr(SCHEME_VEC_ELS(linklet->bodies)[i], info, -1);
+    SCHEME_VEC_ELS(linklet->bodies)[i] = e;
   }
 
   return data;
@@ -1479,8 +1463,8 @@ Scheme_Object *scheme_sfs_expr(Scheme_Object *expr, SFS_Info *info, int closure_
   case scheme_case_lambda_sequence_type:
     expr = case_lambda_sfs(expr, info);
     break;
-  case scheme_module_type:
-    expr = module_sfs(expr, info);
+  case scheme_linklet_type:
+    expr = linklet_sfs(expr, info);
     break;
   case scheme_inline_variant_type:
     expr = inline_variant_sfs(expr, info);

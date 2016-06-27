@@ -112,7 +112,6 @@ scheme_init_type ()
   set_name(scheme_local_unbox_type, "<local-unbox-code>");
   set_name(scheme_variable_type, "<global-variable-code>");
   set_name(scheme_toplevel_type, "<variable-code>");
-  set_name(scheme_module_variable_type, "<module-variable-code>");
   set_name(scheme_application_type, "<application-code>");
   set_name(scheme_application2_type, "<unary-application-code>");
   set_name(scheme_application3_type, "<binary-application-code>");
@@ -128,7 +127,6 @@ scheme_init_type ()
   set_name(scheme_begin_for_syntax_type, "<begin-for-syntax-code>");
   set_name(scheme_begin0_sequence_type, "<begin0-code>");
   set_name(scheme_splice_sequence_type, "<splicing-begin-code>");
-  set_name(scheme_module_type, "<module-code>");
   set_name(scheme_inline_variant_type, "<inline-variant-code>");
   set_name(scheme_set_bang_type, "<set!-code>");
   set_name(scheme_boxenv_type, "<boxenv-code>");
@@ -206,7 +204,6 @@ scheme_init_type ()
   set_name(scheme_hash_tree_subtree_type, "<hash-node>");
   set_name(scheme_hash_tree_collision_type, "<hash-node>");
   set_name(scheme_bucket_table_type, "<hash>");
-  set_name(scheme_module_registry_type, "<module-registry>");
   set_name(scheme_case_closure_type, "<procedure>");
   set_name(scheme_placeholder_type, "<placeholder>");
   set_name(scheme_table_placeholder_type, "<hash-table-placeholder>");
@@ -643,7 +640,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_thread_dead_type, small_object);
   GC_REG_TRAV(scheme_hash_table_type, hash_table_val);
   GC_REG_TRAV(scheme_bucket_table_type, bucket_table_val);
-  GC_REG_TRAV(scheme_module_registry_type, module_reg_val);
   GC_REG_TRAV(scheme_namespace_type, namespace_val);
   GC_REG_TRAV(scheme_random_state_type, random_state_val);
   

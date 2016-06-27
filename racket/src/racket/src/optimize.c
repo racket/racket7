@@ -2106,9 +2106,7 @@ Scheme_Object *optimize_for_inline(Optimize_Info *info, Scheme_Object *le, int a
             Scheme_Object *orig_iv = iv;
             MZ_ASSERT(SAME_TYPE(scheme_inline_variant_type, SCHEME_TYPE(SCHEME_VEC_ELS(iv)[0])));
             /* unresolving may add new top-levels to `info->cp`: */
-            iv = scheme_unresolve(SCHEME_VEC_ELS(iv)[0], argc, &has_cases,
-                                  info->cp, info->env, info->insp, SCHEME_INT_VAL(SCHEME_VEC_ELS(iv)[3]),
-                                  SCHEME_VEC_ELS(iv)[1], SCHEME_VEC_ELS(iv)[2]);
+            iv = scheme_unresolve(SCHEME_VEC_ELS(iv)[0], argc, &has_cases, info->linklet);
             if (has_cases) {
               if (!iv_ht) {
                 iv_ht = scheme_make_hash_table(SCHEME_hash_ptr);

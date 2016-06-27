@@ -2082,23 +2082,6 @@ static void print_tagged_value(const char *prefix,
       memcpy(t2 + len, buffer, len2 + 1);
       len += len2;
       type = t2;      
-    } else if (!scheme_strncmp(type, "#<namespace", 11)) {
-      char *t2;
-      int len2;
-	    
-      sprintf(buffer, "[%ld/%ld:%.100s]",
-	      ((Scheme_Env *)v)->phase,
-              ((Scheme_Env *)v)->mod_phase,
-	      (((Scheme_Env *)v)->module
-	       ? scheme_write_to_string(((Scheme_Env *)v)->module->modname, NULL)
-	       : "(toplevel)"));
-	    
-      len2 = strlen(buffer);
-      t2 = (char *)scheme_malloc_atomic(len + len2 + 1);
-      memcpy(t2, type, len);
-      memcpy(t2 + len, buffer, len2 + 1);
-      len += len2;
-      type = t2;
     } else if (!scheme_strncmp(type, "#<global-variable-code", 22)) {
       Scheme_Bucket *b = (Scheme_Bucket *)v;
       Scheme_Object *bsym = (Scheme_Object *)b->key;

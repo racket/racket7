@@ -1028,9 +1028,9 @@ Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linket *linklet)
      positions. We use a list of numbers for the RHS of a
      `let[rec]-values` form with multiple variables. */
 
-  cnt = linklet->num_bodies;
+  cnt = SCHEME_VEC_SIZE(linklet->bodies);
   for(i = 0; i < cnt; i++) {
-    val = m->bodies[i];
+    val = SCHEME_VEC_ELS(m->bodies)[i];
     val = letrec_check_expr(val, frame, pos);
     m->bodies[i] = val;
   }

@@ -1967,7 +1967,8 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
   Scheme_Linklet *linklet;
   Scheme_Object *orig_form = form, *imports, *exports, *a, *e, *extra_vars, *vec, *v;
   Scheme_Object *import_syms, *import_symss, *bodies;
-  int body_len, len, islen, elen, i, j, extra_vars_pos, pos = 0;
+  Scheme_IR_Toplevel **toplevels, **new_toplevels, *tl;
+  int body_len, len, islen, elen, i, j, extra_vars_pos, pos = 0, num_toplevels;
   Scheme_Env *env;
   DupCheckRecord r;
   
@@ -1983,7 +1984,10 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
   exports = SCHEME_STX_CAR(form);
   form = SCHEME_STX_CDR(form);
   body_len -= 3;
-  
+
+  num_toplevels = 16;
+  toplevels = MALLOC_N(Scheme_IR_Toplevel*, num_toplevels);
+
   /* Parse imports, filling in `ilens` and `import_syms`, and also
      extending `env`. */
   islen = scheme_stx_proper_list_length(imports);
@@ -1996,7 +2000,7 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
     a = SCHEME_STX_CAR(imports);
     len = scheme_stx_proper_list_length(a);
     
-    import_syms = scheme_make_vector(len, scheme_false);
+    import_syms = scheme_make_vector(len, NULL);
     SCHEME_VEC_ELSE(import_symss)[i] = import_syms;
 
     for (j = 0; j < len; j++, a = SCHEME_STX_CDR(a)) {
@@ -2008,9 +2012,15 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
         SChEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CAR(e));
         e = SCHEME_STX_CADR(e);
       }
-      env = scheme_extend_comp_env(env, e,
-                                   (Scheme_Object *)make_ir_toplevel_variable(e, i, j, pos),
-                                   1);
+      if (pos >= num_toplevels) {
+        new_toplevels = MALLOC_N(Scheme_IR_Toplevel*, 2 * num_toplevels);
+        memcpy(new_toplevels, toplevels, sizeof(Scheme_IR_Toplevel*)* num_toplevels);
+        num_toplevels *= 2;
+        toplevels = new_toplevels;
+      }
+      tl = make_ir_toplevel_variable(e, i, j, pos);
+      toplevels[pos] = tl;
+      env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
       pos++;
     }
   }
@@ -2024,8 +2034,8 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
 
   scheme_begin_dup_symbol_check(&r);
 
-  export_syms = scheme_make_vector(len, scheme_false);
-  defn_syms = scheme_make_vector(len, scheme_false);
+  export_syms = scheme_make_vector(len, NULL);
+  defn_syms = scheme_make_vector(len, NULL);
 
   for (j = 0; j < len; j++, exports = SCHEME_STX_CDR(exports)) {
     e = SCHEME_STX_CAR(exports);
@@ -2037,9 +2047,15 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
       e = SCHEME_STX_CAR(e);
     }
     SCHEM_VEC_ELS(defn_syms)[j] = SCHEME_STX_VAL(e);
-    env = scheme_extend_comp_env(env, e,
-                                 (Scheme_Object *)make_ir_toplevel_variable(e, -1, j, pos++),
-                                 1);
+    if (pos >= num_toplevels) {
+      new_toplevels = MALLOC_N(Scheme_IR_Toplevel*, 2 * num_toplevels);
+      memcpy(new_toplevels, toplevels, sizeof(Scheme_IR_Toplevel*)* num_toplevels);
+      num_toplevels *= 2;
+      toplevels = new_toplevels;
+    }
+    tl = make_ir_toplevel_variable(e, -1, j, pos);
+    toplevels[pos] = tl;
+    env = scheme_extend_comp_env(env, e, tl, 1);
     pos++;
   }
 
@@ -2076,6 +2092,9 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
   bodies = scheme_make_vector(body_len, scheme_false);
 
   linklet->bodies = bodies;
+
+  linklet->num_toplevels = pos;
+  linklet->toplevels = toplevels;
 
   for (i = 0; i < body_len; i++, form = SCHEME_STX_CDR(form)) {
     e = SCHEME_STX_CAR(form);
