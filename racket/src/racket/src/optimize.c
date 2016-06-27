@@ -138,6 +138,7 @@ static int env_uses_toplevel(Optimize_Info *frame);
 static Scheme_IR_Local *clone_variable(Scheme_IR_Local *var);
 static void increment_use_count(Scheme_IR_Local *var, int as_rator);
 
+static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_const, int can_inline);
 static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int orig, int current, int flags);
 static void optimize_info_done(Optimize_Info *info, Optimize_Info *parent);
 
@@ -7653,9 +7654,8 @@ int split_define_values(Scheme_Object *defn, int n, Scheme_Object **bodies, int 
   return 0;
 }
 
-static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
+Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline)
 {
-  Scheme_Linklet *linklet = (Scheme_Linklet *)data;
   Scheme_Object *e, *vars;
   int start_simultaneous = 0, i_m, cnt;
   Scheme_Object *cl_first = NULL, *cl_last = NULL;
@@ -7664,7 +7664,8 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
   int cont, inline_fuel, is_proc_def;
   Optimize_Info_Sequence info_seq;
 
-  info = scheme_optimize_info_create(linklet);
+  info = optimize_info_create(linklet, enforce_const, can_inline);
+  info->context = (Scheme_Object *)linklet;
 
   optimize_info_seq_init(info, &info_seq);
 
@@ -8066,7 +8067,7 @@ static Scheme_Object *scheme_optimize_linklet(Scheme_Object *data)
     cnt -= can_omit;
   }
 
-  return data;
+  return linklet;
 }
 
 /*========================================================================*/
@@ -8540,7 +8541,7 @@ Scheme_Object *optimize_clone(int single_use, Scheme_Object *expr, Optimize_Info
 /*                 compile-time env for optimization                      */
 /*========================================================================*/
 
-Optimize_Info *scheme_optimize_info_create(Scheme_Linklet *linklet)
+static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_const, int can_inline)
 {
   Optimize_Info *info;
   Scheme_Logger *logger;
@@ -8556,6 +8557,10 @@ Optimize_Info *scheme_optimize_info_create(Scheme_Linklet *linklet)
   logger = (Scheme_Logger *)scheme_get_param(scheme_current_config(), MZCONFIG_LOGGER);
   logger = scheme_make_logger(logger, scheme_intern_symbol("optimizer"));
   info->logger = logger;
+
+  info->enforce_const = enforce_const;
+  if (!can_inline)
+    oi->inline_fuel = -1;
 
   return info;
 }
@@ -8577,21 +8582,6 @@ static void optimize_info_seq_done(Optimize_Info *info, Optimize_Info_Sequence *
 {
   if (info->flatten_fuel > info_seq->min_flatten_fuel)
     info->flatten_fuel = info_seq->min_flatten_fuel;
-}
-
-void scheme_optimize_info_enforce_const(Optimize_Info *oi, int enforce_const)
-{
-  oi->enforce_const = enforce_const;
-}
-
-void scheme_optimize_info_set_context(Optimize_Info *oi, Scheme_Object *ctx)
-{
-  oi->context = ctx;
-}
-
-void scheme_optimize_info_never_inline(Optimize_Info *oi)
-{
-  oi->inline_fuel = -1;
 }
 
 static void propagate_used_variables(Optimize_Info *info)
@@ -8795,7 +8785,7 @@ static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int orig, int
 {
   Optimize_Info *naya;
 
-  naya = scheme_optimize_info_create(info->linklet);
+  naya = optimize_info_create(info->linklet, 0, 0);
   naya->flags = (short)flags;
   naya->next = info;
   naya->original_frame = orig;

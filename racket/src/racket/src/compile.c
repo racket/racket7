@@ -1962,7 +1962,7 @@ static Scheme_Object *define_parse(Scheme_Object *form,
   return extra_vars;
 }
 
-Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
+Scheme_Object *scheme_compile_linklet(Scheme_Object *form, int set_undef)
 {
   Scheme_Linklet *linklet;
   Scheme_Object *orig_form = form, *imports, *exports, *a, *e, *extra_vars, *vec, *v;
@@ -1977,6 +1977,9 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
     bad_form(form, body_len);
 
   env = scheme_new_comp_env(0);
+
+  if (set_undef)
+    env->flags |= COMP_ENV_ALLOW_SET_UNDEFINED;
 
   form = SCHEME_STX_CDR(form);
   imports = SCHEME_STX_CAR(form);
@@ -2122,7 +2125,7 @@ Scheme_Object *scheme_linklet_compile(Scheme_Object *form)
     SCHEME_VEC_ELS(bodies)[i] = e;
   }
 
-  return (Scheme_Object *)linklet;
+  return linklet;
 }
 
 /**********************************************************************/

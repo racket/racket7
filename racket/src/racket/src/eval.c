@@ -189,9 +189,6 @@
 SHARED_OK int scheme_startup_use_jit = INIT_JIT_ON;
 void scheme_set_startup_use_jit(int v) { scheme_startup_use_jit =  v; }
 
-SHARED_OK static int validate_compile_result = 0;
-SHARED_OK static int recompile_every_compile = 0;
-
 /* THREAD LOCAL SHARED */
 THREAD_LOCAL_DECL(volatile int scheme_fuel_counter);
 #ifdef USE_STACK_BOUNDARY_VAR
@@ -302,30 +299,6 @@ scheme_init_eval (Scheme_Startup_Env *env)
   ADD_PARAMETER("compile-enforce-module-constants",  compile_module_constants, MZCONFIG_COMPILE_MODULE_CONSTS, env);
   ADD_PARAMETER("eval-jit-enabled",                  use_jit,                  MZCONFIG_USE_JIT,               env);
   ADD_PARAMETER("compile-context-preservation-enabled", disallow_inline,       MZCONFIG_DISALLOW_INLINE,       env);
-
-  if (scheme_getenv("PLT_VALIDATE_COMPILE")) {
-    /* Enables validation of bytecode as it is generated,
-       to double-check that the compiler is producing
-       valid bytecode as it should. */
-    validate_compile_result = 1;
-  }
-
-  {
-    /* Enables re-running the optimizer N times on every compilation. */
-    const char *s;
-    s = scheme_getenv("PLT_RECOMPILE_COMPILE");
-    if (s) {
-      int i = 0;
-      while ((s[i] >= '0') && (s[i] <= '9')) {
-        recompile_every_compile = (recompile_every_compile * 10) + (s[i]-'0');
-        i++;
-      }
-      if (recompile_every_compile <= 0)
-        recompile_every_compile = 1;
-      else if (recompile_every_compile > 32)
-        recompile_every_compile = 32;
-    }
-  }
 }
 
 void scheme_init_eval_places()
@@ -3433,51 +3406,6 @@ Scheme_Object **scheme_current_argument_stack()
 /*                  eval/compile/expand starting points                   */
 /*========================================================================*/
 
-static Scheme_Object *optimize_resolve_expr(Scheme_Object* o,
-                                            Comp_Prefix *cp, Scheme_Env *env, Scheme_Object *insp,
-                                            Scheme_Object *src_insp_desc,
-                                            Scheme_Object *binding_namess,
-                                            int comp_flags)
-{
-  Optimize_Info *oi;
-  Resolve_Prefix *rp;
-  Resolve_Info *ri;
-  Scheme_Compilation_Top *top;
-  int enforce_consts, max_let_depth;
-  Scheme_Config *config;
-
-  config = scheme_current_config();
-  enforce_consts = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_COMPILE_MODULE_CONSTS));
-  if (enforce_consts)
-    comp_flags |= COMP_ENFORCE_CONSTS;
-  oi = scheme_optimize_info_create(cp, env, insp, 1);
-  scheme_optimize_info_enforce_const(oi, enforce_consts);
-  if (!(comp_flags & COMP_CAN_INLINE))
-    scheme_optimize_info_never_inline(oi);
-  o = scheme_optimize_expr(o, oi, 0);
-
-  rp = scheme_resolve_prefix(0, cp, src_insp_desc);
-  ri = scheme_resolve_info_create(rp);
-  scheme_resolve_info_enforce_const(ri, enforce_consts);
-  scheme_enable_expression_resolve_lifts(ri);
-
-  o = scheme_resolve_expr(o, ri);
-  max_let_depth = scheme_resolve_info_max_let_depth(ri);
-  o = scheme_sfs(o, NULL, max_let_depth);
-
-  o = scheme_merge_expression_resolve_lifts(o, rp, ri);
-
-  rp = scheme_remap_prefix(rp, ri);
-
-  top = MALLOC_ONE_TAGGED(Scheme_Compilation_Top);
-  top->iso.so.type = scheme_compilation_top_type;
-  top->max_let_depth = max_let_depth;
-  top->code = o;
-  top->prefix = rp;
-  top->binding_namess = binding_namess;
-  return (Scheme_Object *)top;
-}
-
 Scheme_Object *scheme_compile(Scheme_Object *form, Scheme_Env *env, int writeable)
 {
   return _compile(form, env, writeable, 0, 1, 1);
@@ -3563,37 +3491,10 @@ current_compile(int argc, Scheme_Object **argv)
 			     2, NULL, NULL, 0);
 }
 
-static Scheme_Object *recompile_top(Scheme_Object *top, int comp_flags)
-{
-  Comp_Prefix *cp;
-  Scheme_Object *code;
-
-#if 0
-  printf("Resolved Code:\n%s\n\n", scheme_print_to_string(((Scheme_Compilation_Top *)top)->code, NULL));
-#endif
-
-  code = scheme_unresolve_top(top, &cp, comp_flags);
-
-#if 0
-  printf("Unresolved Prefix:\n");
-  printf("%s\n\n", scheme_print_to_string(cp, NULL));
-  printf("Unresolved Code:\n");
-  printf("%s\n\n", scheme_print_to_string(code, NULL));
-#endif
-
-  top = optimize_resolve_expr(code, cp, scheme_get_env(NULL),
-                              scheme_get_param(scheme_current_config(), MZCONFIG_CODE_INSPECTOR),
-                              ((Scheme_Compilation_Top*)top)->prefix->src_insp_desc,
-                              ((Scheme_Compilation_Top*)top)->binding_namess,
-                              comp_flags);
-
-  return top;
-}
-
 static Scheme_Object *
 recompile(int argc, Scheme_Object *argv[])
 {
-  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_compilation_top_type)) {
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type)) {
     scheme_wrong_contract("compiled-expression-recompile", "compiled-expression?", 0, argc, argv);
   }
 

@@ -2788,9 +2788,7 @@ void scheme_merge_undefineds(Scheme_Comp_Env *exp_env, Scheme_Comp_Env *env);
 
 typedef struct SFS_Info SFS_Info;
 
-SFS_Info *scheme_new_sfs_info(int depth);
-Scheme_Object *scheme_sfs(Scheme_Object *expr, SFS_Info *info, int max_let_depth);
-Scheme_Object *scheme_sfs_expr(Scheme_Object *expr, SFS_Info *si, int self_pos);
+Scheme_Linklet *scheme_sfs_linklet(Scheme_Linklet *linklet);
 
 void scheme_sfs_used(SFS_Info *info, int pos);
 void scheme_sfs_push(SFS_Info *info, int count, int track);
@@ -2808,9 +2806,9 @@ typedef struct Scheme_Set_Bang {
 
 Scheme_Object *scheme_protect_quote(Scheme_Object *expr);
 
-Scheme_Object *scheme_letrec_check_expr(Scheme_Object *);
+Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linket *linklet);
 
-Scheme_Object *scheme_optimize_expr(Scheme_Object *, Optimize_Info *, int context);
+Scheme_Linklet *scheme_optimize_expr(Scheme_Linklet *, int can_inline);
 
 /* Context uses result as a boolean: */
 #define OPT_CONTEXT_BOOLEAN    0x1
@@ -2858,11 +2856,6 @@ int scheme_resolve_info_use_jit(Resolve_Info *ri);
 void scheme_enable_expression_resolve_lifts(Resolve_Info *ri);
 Scheme_Object *scheme_merge_expression_resolve_lifts(Scheme_Object *expr, Resolve_Prefix *rp, Resolve_Info *ri);
 
-Optimize_Info *scheme_optimize_info_create(Comp_Prefix *cp, Scheme_Env *env, Scheme_Object *insp, int get_logger);
-void scheme_optimize_info_enforce_const(Optimize_Info *, int enforce_const);
-void scheme_optimize_info_set_context(Optimize_Info *, Scheme_Object *ctx);
-void scheme_optimize_info_never_inline(Optimize_Info *);
-
 char *scheme_optimize_info_context(Optimize_Info *);
 Scheme_Logger *scheme_optimize_info_logger(Optimize_Info *);
 
@@ -2870,8 +2863,8 @@ Scheme_Object *scheme_toplevel_to_flagged_toplevel(Scheme_Object *tl, int flags)
 
 int scheme_expr_produces_local_type(Scheme_Object *expr, int *_involves_k_cross);
 
-Scheme_Object *scheme_compile_expr(Scheme_Object *form, Scheme_Comp_Env *env,
-				   Scheme_Compile_Info *rec, int drec);
+Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form);
+Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef);
 
 Scheme_Object *scheme_make_sequence_compilation(Scheme_Object *compiled_list,
 						int strip_values,
@@ -2882,7 +2875,7 @@ void scheme_finish_application(Scheme_App_Rec *app);
 
 Scheme_Sequence *scheme_malloc_sequence(int count);
 
-Scheme_Object *scheme_jit_expr(Scheme_Object *);
+Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *);
 Scheme_Object *scheme_jit_closure(Scheme_Object *, Scheme_Object *context);
 void scheme_jit_fill_threadlocal_table();
 

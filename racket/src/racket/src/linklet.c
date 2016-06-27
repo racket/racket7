@@ -26,10 +26,14 @@
 #include "schpriv.h"
 #include "schrunst.h"
 
+SHARED_OK static int validate_compile_result = 0;
+SHARED_OK static int recompile_every_compile = 0;
+
 static Scheme_Object *primitive_table(int argc, Scheme_Object **argv);
 
 static Scheme_Object *linklet_p(int argc, Scheme_Object **argv);
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv);
+static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *linklet_import_variables(int argc, Scheme_Object **argv);
 static Scheme_Object *linklet_export_variables(int argc, Scheme_Object **argv);
@@ -55,6 +59,8 @@ static Scheme_Object *variable_p(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_instance(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv);
 
+static Scheme_Linket *compile_and_or_optimize_linklet(Scheme_Linklet *linklet, Scheme_Object *form);
+
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
 #endif
@@ -76,6 +82,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, env);
+  ADD_PRIM_W_ARITY("recompile-linklet", recompile_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
@@ -107,6 +114,30 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   scheme_addto_prim_instance("variable-reference-constant?", scheme_varref_const_p_proc, env);
 
   scheme_restore_prim_instance(env);
+
+  if (scheme_getenv("PLT_VALIDATE_COMPILE")) {
+    /* Enables validation of bytecode as it is generated,
+       to double-check that the compiler is producing
+       valid bytecode as it should. */
+    validate_compile_result = 1;
+  }
+
+  {
+    /* Enables re-running the optimizer N times on every compilation. */
+    const char *s;
+    s = scheme_getenv("PLT_RECOMPILE_COMPILE");
+    if (s) {
+      int i = 0;
+      while ((s[i] >= '0') && (s[i] <= '9')) {
+        recompile_every_compile = (recompile_every_compile * 10) + (s[i]-'0');
+        i++;
+      }
+      if (recompile_every_compile <= 0)
+        recompile_every_compile = 1;
+      else if (recompile_every_compile > 32)
+        recompile_every_compile = 32;
+    }
+  }
 }
 
 /*========================================================================*/
@@ -162,7 +193,15 @@ static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)
 
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
 {
-  return scheme_linklet_compile_optimize_resolve(argv[0]);
+  return compile_and_or_optimize_linklet(argv[0], NULL);
+}
+
+static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
+{
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
+    scheme_wrong_contract("recompile-linklet", "linklet?", 0, argc, argv);
+  
+  return compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0]);
 }
 
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
@@ -494,6 +533,49 @@ Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Ins
 }
 
 /*========================================================================*/
+/*                            compiling linklets                          */
+/*========================================================================*/
+
+static Scheme_Linket *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet)
+{
+  Scheme_Config *config;
+  int enforce_const, set_undef, can_inline;
+ 
+  config = scheme_current_config();
+  enforce_consts = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_COMPILE_MODULE_CONSTS));
+  set_undef = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_ALLOW_SET_UNDEFINED));
+  can_inline = SCHEME_FALSE(scheme_get_param(config, MZCONFIG_DISALLOW_INLINE));
+
+  if (!linklet) {
+    linklet = scheme_frontend_compile_linklet(form, set_undef);
+    linklet = scheme_letrec_check_linklet(linklet);
+  }
+  linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline);
+  linklet = scheme_resolve_linklet(linklet, enforce_const);
+  linklet = scheme_sfs_linklet(linklet);
+  
+  if (recompile_every_compile) {
+    int i;
+    for (i = recompile_every_compile; i--; ) {
+      linklet = scheme_unresolve_linklet(linklet);
+      linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline);
+      linklet = scheme_resolve_linklet(linklet, enforce_const);
+      linklet = scheme_sfs_linklet(linklet);
+    }
+  }
+
+  if (validate_compile_result)
+    scheme_validate_linklet(NULL, linklet);
+
+  return linklet;
+}
+
+Scheme_Linket *scheme_compile_and_optimize_linklet(Scheme_Object *form)
+{
+  return compile_and_or_optimize_linklet(form, NULL);
+}
+  
+/*========================================================================*/
 /*                          instantiating linklets                        */
 /*========================================================================*/
 
@@ -655,7 +737,6 @@ static void *instantiate_linklet_k(void)
   }
 
   b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
-
   if (SCHEME_TRUEP(b))
     linklet = scheme_jit_linklet(linklet);
 

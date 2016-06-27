@@ -1954,9 +1954,8 @@ resolve_lambda(Scheme_Object *_lam, Resolve_Info *info,
 /*                                linklet                                 */
 /*========================================================================*/
 
-static Scheme_Object *scheme_resolve_linklet(Scheme_Object *data, int enforce_const)
+static Scheme_Klinlet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_const)
 {
-  Scheme_Module *m = (Scheme_Module *)data;
   Scheme_Object *b, *lift_vec, *body = scheme_null, *new_bodies;
   Scheme_Hash_Table *names;
   Resolve_Info *rslv;
@@ -2007,7 +2006,7 @@ static Scheme_Object *scheme_resolve_linklet(Scheme_Object *data, int enforce_co
 
   linklet->toplevels = NULL;
 
-  return data;
+  return linklet;
 }
 
 static void convert_linklet_imports(Scheme_Linklet *linklet, int from_stx)
