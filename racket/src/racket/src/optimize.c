@@ -4355,9 +4355,6 @@ static Scheme_Object *flatten_sequence(Scheme_Object *o, Optimize_Info *info, in
   Scheme_Object *o3;
   int i, j, k, count, extra = 0, split = 0, b0, new_count;
 
-  if (SAME_TYPE(SCHEME_TYPE(o), scheme_splice_sequence_type))
-    return o;
-  
   if (!info->flatten_fuel)
     return o;
 
@@ -8205,7 +8202,6 @@ Scheme_Object *scheme_optimize_expr(Scheme_Object *expr, Optimize_Info *info, in
   case scheme_application3_type:
     return optimize_application3(expr, info, context);
   case scheme_sequence_type:
-  case scheme_splice_sequence_type:
     return optimize_sequence(expr, info, context, 1);
   case scheme_branch_type:
     return optimize_branch(expr, info, context);
@@ -8273,10 +8269,6 @@ Scheme_Object *scheme_optimize_expr(Scheme_Object *expr, Optimize_Info *info, in
     return ref_optimize(expr, info, context);
   case scheme_set_bang_type:
     return set_optimize(expr, info, context);
-  case scheme_define_syntaxes_type:
-    return define_syntaxes_optimize(expr, info, context);
-  case scheme_begin_for_syntax_type:
-    return begin_for_syntax_optimize(expr, info, context);
   case scheme_case_lambda_sequence_type:
     if (context & OPT_CONTEXT_BOOLEAN)
       return scheme_true;
@@ -8288,8 +8280,6 @@ Scheme_Object *scheme_optimize_expr(Scheme_Object *expr, Optimize_Info *info, in
     return apply_values_optimize(expr, info, context);
   case scheme_with_immed_mark_type:
     return with_immed_mark_optimize(expr, info, context);
-  case scheme_require_form_type:
-    return top_level_require_optimize(expr, info, context);
   default:
     info->size += 1;
     if ((context & OPT_CONTEXT_BOOLEAN)
@@ -8461,7 +8451,6 @@ Scheme_Object *optimize_clone(int single_use, Scheme_Object *expr, Optimize_Info
     }
   case scheme_sequence_type:
   case scheme_begin0_sequence_type:
-  case scheme_splice_sequence_type:
     {
       Scheme_Sequence *seq = (Scheme_Sequence *)expr, *seq2;
       int i;
@@ -8525,11 +8514,7 @@ Scheme_Object *optimize_clone(int single_use, Scheme_Object *expr, Optimize_Info
   case scheme_ir_toplevel_type:
     return expr;
   case scheme_define_values_type:
-  case scheme_define_syntaxes_type:
-  case scheme_begin_for_syntax_type:
   case scheme_boxenv_type:
-    return NULL;
-  case scheme_require_form_type:
     return NULL;
   case scheme_varref_form_type:
     return ref_clone(single_use, expr, info, var_map);

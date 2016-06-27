@@ -959,9 +959,6 @@ MZ_DO_NOT_INLINE(static Scheme_Object *ref_execute (Scheme_Object *data));
 MZ_DO_NOT_INLINE(static Scheme_Object *apply_values_execute(Scheme_Object *data));
 MZ_DO_NOT_INLINE(static Scheme_Object *bangboxenv_execute(Scheme_Object *data));
 MZ_DO_NOT_INLINE(static Scheme_Object *begin0_execute(Scheme_Object *obj));
-MZ_DO_NOT_INLINE(static Scheme_Object *splice_execute(Scheme_Object *data));
-MZ_DO_NOT_INLINE(static Scheme_Object *define_syntaxes_execute(Scheme_Object *form));
-MZ_DO_NOT_INLINE(static Scheme_Object *begin_for_syntax_execute(Scheme_Object *form));
 
 /* called in schapp.h */
 static Scheme_Object *do_apply_known_k(void)
@@ -3302,27 +3299,6 @@ scheme_do_eval(Scheme_Object *obj, int num_rands, Scheme_Object **rands,
 	  goto eval_top;
 	}
 
-      case scheme_quote_syntax_type:
-	{
-	  GC_CAN_IGNORE Scheme_Quote_Syntax *qs = (Scheme_Quote_Syntax *)obj;
-	  Scheme_Prefix *globs;
-	  int i, c, pos;
-
-	  i = qs->position;
-	  c = qs->depth;
-	  pos = qs->midpoint;
-
-	  globs = (Scheme_Prefix *)RUNSTACK[c];
-	  v = globs->a[i+pos+1];
-	  if (!v) {
-	    v = globs->a[pos];
-	    v = scheme_delayed_shift((Scheme_Object **)v, i);
-	    globs->a[i+pos+1] = v;
-	  }
-
-	  goto returnv_never_multi;
-	}
-
       case scheme_define_values_type:
         {
           UPDATE_THREAD_RSPTR();
@@ -3333,18 +3309,6 @@ scheme_do_eval(Scheme_Object *obj, int num_rands, Scheme_Object **rands,
         {
           obj = SCHEME_VEC_ELS(obj)[0];
           goto eval_top;
-        }
-      case scheme_define_syntaxes_type:
-        {
-          UPDATE_THREAD_RSPTR();
-          v = define_syntaxes_execute(obj);
-          break;
-        }
-      case scheme_begin_for_syntax_type:
-        {
-          UPDATE_THREAD_RSPTR();
-          v = begin_for_syntax_execute(obj);
-          break;
         }
       case scheme_set_bang_type:
         {
@@ -3362,18 +3326,6 @@ scheme_do_eval(Scheme_Object *obj, int num_rands, Scheme_Object **rands,
         {
           UPDATE_THREAD_RSPTR();
           v = begin0_execute(obj);
-          break;
-        }
-      case scheme_splice_sequence_type:
-        {
-          UPDATE_THREAD_RSPTR();
-          v = splice_execute(obj);
-          break;
-        }
-      case scheme_require_form_type:
-        {
-          UPDATE_THREAD_RSPTR();
-          v = scheme_top_level_require_execute(obj);
           break;
         }
       case scheme_varref_form_type:
@@ -3421,12 +3373,6 @@ scheme_do_eval(Scheme_Object *obj, int num_rands, Scheme_Object **rands,
         {
           UPDATE_THREAD_RSPTR();
           v = scheme_case_lambda_execute(obj);
-          break;
-        }
-      case scheme_module_type:
-        {
-          UPDATE_THREAD_RSPTR();
-          v = scheme_module_execute(obj, NULL);
           break;
         }
       default:

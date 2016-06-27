@@ -2181,14 +2181,8 @@ Scheme_Object *scheme_resolve_expr(Scheme_Object *expr, Resolve_Info *info)
     return define_values_resolve(expr, info);
   case scheme_inline_variant_type:
     return inline_variant_resolve(expr, info);
-  case scheme_define_syntaxes_type:
-    return define_syntaxes_resolve(expr, info);
-  case scheme_begin_for_syntax_type:
-    return begin_for_syntax_resolve(expr, info);
   case scheme_set_bang_type:
     return set_resolve(expr, info);
-  case scheme_require_form_type:
-    return top_level_require_resolve(expr, info);
   case scheme_varref_form_type:
     return ref_resolve(expr, info);
   case scheme_apply_values_type:
@@ -2197,8 +2191,6 @@ Scheme_Object *scheme_resolve_expr(Scheme_Object *expr, Resolve_Info *info)
     return with_immed_mark_resolve(expr, info);
   case scheme_case_lambda_sequence_type:
     return case_lambda_resolve(expr, info);
-  case scheme_module_type:
-    return module_expr_resolve(expr, info);
   case scheme_boxenv_type:
     scheme_signal_error("internal error: no boxenv resolve");
   default:
@@ -3595,21 +3587,9 @@ static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int a
       if (!a) return_NULL;
       return a;
     }
-  case scheme_module_type:
-    {
-      return unresolve_module(e, ui);
-    }
   case scheme_define_values_type:
     {
       return unresolve_define_values(e, ui);
-    }
-  case scheme_define_syntaxes_type:
-    {
-      return unresolve_define_or_begin_syntaxes(1, e, ui);
-    }
-  case scheme_begin_for_syntax_type:
-    {
-      return unresolve_define_or_begin_syntaxes(0, e, ui);
     }
   case scheme_set_bang_type:
     {

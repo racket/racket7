@@ -291,7 +291,6 @@ struct scheme_jit_common_record {
 
   void *bad_result_arity_code;
   void *unbound_global_code;
-  void *quote_syntax_code;
   void *call_original_unary_arith_code;
   void *call_original_binary_arith_code;
   void *call_original_binary_rev_arith_code;

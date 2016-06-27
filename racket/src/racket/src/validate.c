@@ -1440,7 +1440,6 @@ static int validate_expr(Mz_CPort *port, Scheme_Object *expr,
     }
     break;
   case scheme_sequence_type:
-  case scheme_splice_sequence_type:
     {
       Scheme_Sequence *seq = (Scheme_Sequence *)expr;
       int cnt;
@@ -1706,20 +1705,6 @@ static int validate_expr(Mz_CPort *port, Scheme_Object *expr,
                                                       result_ignored, vc, tailpos, procs,
                                                       _st_ht));
     break;
-  case scheme_define_syntaxes_type:
-    no_typed(need_local_type, port);
-    define_syntaxes_validate(expr, port, stack, tls, depth, letlimit, delta, 
-                             num_toplevels, num_lifts, tl_use_map, 
-                             tl_state, tl_timestamp,
-                             result_ignored, vc, tailpos, procs);
-    break;
-  case scheme_begin_for_syntax_type:
-    no_typed(need_local_type, port);
-    begin_for_syntaxes_validate(expr, port, stack, tls, depth, letlimit, delta, 
-                                num_toplevels, num_lifts, tl_use_map, 
-                                tl_state, tl_timestamp,
-                                result_ignored, vc, tailpos, procs);
-    break;
   case scheme_set_bang_type:
     no_typed(need_local_type, port);
     result = validate_join_seq(result,
@@ -1743,13 +1728,6 @@ static int validate_expr(Mz_CPort *port, Scheme_Object *expr,
                                                num_toplevels, num_lifts, tl_use_map, 
                                                tl_state, tl_timestamp,
                                                result_ignored, vc, tailpos, procs, expected_results));
-    break;
-  case scheme_require_form_type:
-    no_typed(need_local_type, port);
-    top_level_require_validate(expr, port, stack, tls, depth, letlimit, delta, 
-                               num_toplevels, num_lifts, tl_use_map, 
-                               tl_state, tl_timestamp,
-                               result_ignored, vc, tailpos, procs);
     break;
   case scheme_varref_form_type:
     no_typed(need_local_type, port);

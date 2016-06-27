@@ -529,16 +529,6 @@ static Scheme_Object *begin0_jit(Scheme_Object *data)
   return (Scheme_Object *)seq2;
 }
 
-static Scheme_Object *define_syntaxes_jit(Scheme_Object *expr)
-{
-  return do_define_syntaxes_clone(expr, 1);
-}
-
-static Scheme_Object *begin_for_syntax_jit(Scheme_Object *expr)
-{
-  return do_define_syntaxes_clone(expr, 1);
-}
-
 /*========================================================================*/
 /*                             closures                                   */
 /*========================================================================*/
@@ -632,18 +622,12 @@ Scheme_Object *scheme_jit_expr(Scheme_Object *expr)
     }
   case scheme_define_values_type:
     return define_values_jit(expr);
-  case scheme_define_syntaxes_type:
-    return define_syntaxes_jit(expr);
-  case scheme_begin_for_syntax_type:
-    return begin_for_syntax_jit(expr);
   case scheme_set_bang_type:
     return set_jit(expr);
   case scheme_boxenv_type:
     return bangboxenv_jit(expr);
   case scheme_begin0_sequence_type:
     return begin0_jit(expr);
-  case scheme_require_form_type:
-    return scheme_top_level_require_jit(expr);
   case scheme_varref_form_type:
     return ref_jit(expr);
   case scheme_apply_values_type:
@@ -652,8 +636,6 @@ Scheme_Object *scheme_jit_expr(Scheme_Object *expr)
     return with_immed_mark_jit(expr);
   case scheme_case_lambda_sequence_type:
     return scheme_case_lambda_jit(expr);
-  case scheme_module_type:
-    return scheme_module_jit(expr);
   case scheme_inline_variant_type:
     return inline_variant_jit(expr);
   default:

@@ -32,8 +32,6 @@ enum {
   /* All following types are values at run time */
   
   scheme_linklet_type,                  /* 27 */
-  scheme_linklet_bundle_type,           /* 27 */
-  scheme_linklet_directorytype,         /* 27 */
 
   /* Replacements for some of the above as the
      compiler's intermediate representation for
@@ -54,6 +52,9 @@ enum {
   _scheme_ir_values_types_,             /* 39 */
   /* All of the following are literal values from the
      perspective of the compiler */
+
+  scheme_linklet_bundle_type,           /* 27 */
+  scheme_linklet_directorytype,         /* 27 */
 
   /* procedure types */
   scheme_prim_type,                     /* 40 */

@@ -420,7 +420,6 @@ static int is_short(Scheme_Object *obj, int fuel)
       return is_short(branch->fbranch, fuel);
     }
   case scheme_toplevel_type:
-  case scheme_quote_syntax_type:
   case scheme_local_type:
   case scheme_local_unbox_type:
   case scheme_lambda_type:
@@ -451,29 +450,6 @@ Scheme_Object *scheme_extract_global(Scheme_Object *o, Scheme_Native_Closure *nc
   }
 
   return globs->a[pos];
-}
-
-static Scheme_Object *extract_syntax(Scheme_Quote_Syntax *qs, Scheme_Native_Closure *nc)
-{
-  /* GLOBAL ASSUMPTION: we assume that globals are the last thing
-     in the closure; grep for "GLOBAL ASSUMPTION" in fun.c. */
-  Scheme_Prefix *globs;
-  int i, pos;
-  Scheme_Object *v;
-
-  globs = (Scheme_Prefix *)nc->vals[nc->code->u2.orig_code->closure_size - 1];
-
-  i = qs->position;
-  pos = qs->midpoint;
-
-  v = globs->a[i+pos+1];
-  if (!v) {
-    v = globs->a[pos];
-    v = scheme_delayed_shift((Scheme_Object **)v, i);
-    globs->a[i+pos+1] = v;
-  }
-
-  return v;
 }
 
 static Scheme_Object *extract_closure_local(int pos, mz_jit_state *jitter, int get_constant)
@@ -703,7 +679,6 @@ int scheme_is_simple(Scheme_Object *obj, int depth, int just_markless, mz_jit_st
     break;
     
   case scheme_toplevel_type:
-  case scheme_quote_syntax_type:
   case scheme_local_type:
   case scheme_local_unbox_type:
   case scheme_lambda_type:
@@ -774,7 +749,6 @@ int scheme_is_non_gc(Scheme_Object *obj, int depth)
     return 1;
     break;
     
-  case scheme_quote_syntax_type:
   case scheme_local_unbox_type:
     return 1;
     break;
@@ -2711,12 +2685,7 @@ int scheme_generate(Scheme_Object *obj, mz_jit_state *jitter, int is_tail, int w
       return 1;
     }
     break;
-  case scheme_splice_sequence_type:
   case scheme_define_values_type:
-  case scheme_define_syntaxes_type:
-  case scheme_begin_for_syntax_type:
-  case scheme_require_form_type:
-  case scheme_module_type:
   case scheme_inline_variant_type:
     {
       scheme_signal_error("internal error: cannot JIT a top-level form");
@@ -3291,44 +3260,6 @@ int scheme_generate(Scheme_Object *obj, mz_jit_state *jitter, int is_tail, int w
 	
       return scheme_generate(wcm->body, jitter, is_tail, wcm_may_replace, 
                              multi_ok, orig_target, for_branch, for_values);
-    }
-  case scheme_quote_syntax_type:
-    {
-      Scheme_Quote_Syntax *qs = (Scheme_Quote_Syntax *)obj;
-      int i, c, p;
-      START_JIT_DATA();
-      
-      LOG_IT(("quote-syntax\n"));
-
-      if (for_branch)
-        finish_branch_with_true(jitter, for_branch);
-      else {
-        i = qs->position;
-        c = mz_remap(qs->depth);
-        p = qs->midpoint;
-      
-        mz_rs_sync();
-
-        if (SCHEME_NATIVE_LAMBDA_FLAGS(jitter->nc->code) & NATIVE_SPECIALIZED) {
-          Scheme_Object *stx;
-          stx = extract_syntax(qs, jitter->nc);
-          scheme_mz_load_retained(jitter, target, stx);
-          CHECK_LIMIT();
-        } else {
-          jit_movi_i(JIT_R0, WORDS_TO_BYTES(c));
-          jit_movi_i(JIT_R1, (int)(intptr_t)&(((Scheme_Prefix *)0x0)->a[i + p + 1]));
-          jit_movi_i(JIT_R2, (int)(intptr_t)&(((Scheme_Prefix *)0x0)->a[p]));
-          (void)jit_calli(sjc.quote_syntax_code);
-          CHECK_LIMIT();
-
-          if (target != JIT_R0)
-            jit_movr_p(target, JIT_R0);
-        }
-      }
-      
-      END_JIT_DATA(10);
-
-      return 1;
     }
   default:
     /* Other parts of the JIT rely on this code modifying the target register, only */

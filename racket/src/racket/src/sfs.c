@@ -1124,45 +1124,6 @@ begin0_sfs(Scheme_Object *obj, SFS_Info *info)
   return obj;
 }
 
-static Scheme_Object *do_define_syntaxes_sfs(Scheme_Object *data, SFS_Info *info)
-{
-  Scheme_Object *e;
-
-  if (!info->pass) {
-    int depth;
-    depth = SCHEME_INT_VAL(SCHEME_VEC_ELS(data)[2]);
-    info = scheme_new_sfs_info(depth);
-    e = scheme_sfs(SCHEME_VEC_ELS(data)[0], info, depth);
-    SCHEME_VEC_ELS(data)[0] = e;
-  }
-
-  return data;
-}
-
-static Scheme_Object *define_syntaxes_sfs(Scheme_Object *data, SFS_Info *info)
-{
-  return do_define_syntaxes_sfs(data, info);
-}
-
-static Scheme_Object *begin_for_syntax_sfs(Scheme_Object *data, SFS_Info *info)
-{
-  Scheme_Object *l, *a;
-
-  if (!info->pass) {
-    int depth;
-    depth = SCHEME_INT_VAL(SCHEME_VEC_ELS(data)[2]);
-
-    for (l = SCHEME_VEC_ELS(data)[0]; !SCHEME_NULLP(l); l = SCHEME_CDR(l)) {
-      a = SCHEME_CAR(l);
-      info = scheme_new_sfs_info(depth);
-      a = scheme_sfs(a, info, depth);
-      SCHEME_CAR(l) = a;
-    }
-  }
-
-  return data;
-}
-
 /*========================================================================*/
 /*                             closures                                   */
 /*========================================================================*/
@@ -1433,12 +1394,6 @@ Scheme_Object *scheme_sfs_expr(Scheme_Object *expr, SFS_Info *info, int closure_
   case scheme_define_values_type:
     expr = define_values_sfs(expr, info);
     break;
-  case scheme_define_syntaxes_type:
-    expr = define_syntaxes_sfs(expr, info);
-    break;
-  case scheme_begin_for_syntax_type:
-    expr = begin_for_syntax_sfs(expr, info);
-    break;
   case scheme_set_bang_type:
     expr = set_sfs(expr, info);
     break;
@@ -1447,9 +1402,6 @@ Scheme_Object *scheme_sfs_expr(Scheme_Object *expr, SFS_Info *info, int closure_
     break;
   case scheme_begin0_sequence_type:
     expr = begin0_sfs(expr, info);
-    break;
-  case scheme_require_form_type:
-    expr = top_level_require_sfs(expr, info);
     break;
   case scheme_varref_form_type:
     expr = ref_sfs(expr, info);

@@ -266,56 +266,6 @@ static int common0(mz_jit_state *jitter, void *_data)
   (void)mz_finish_lwe(ts_scheme_unbound_global, ref);
   CHECK_LIMIT();
 
-  /* *** quote_syntax_code *** */
-  /* R0 is WORDS_TO_BYTES(c), R1 is &0->a[i+p+1], R2 is &0->a[p] */
-  sjc.quote_syntax_code = jit_get_ip();
-  mz_prolog(JIT_V1);
-  __START_SHORT_JUMPS__(1);
-  /* Load global array: */
-  jit_ldxr_p(JIT_V1, JIT_RUNSTACK, JIT_R0);
-#ifdef JIT_PRECISE_GC
-  /* Save global-array index before we lose it: */
-  mz_set_local_p(JIT_R0, JIT_LOCAL3);
-#endif
-  /* Load syntax object: */
-  jit_ldxr_p(JIT_R0, JIT_V1, JIT_R1);
-  /* Is it null? */
-  ref = jit_bnei_p(jit_forward(), JIT_R0, 0x0);
-  CHECK_LIMIT();
-  /* Syntax object is NULL, so we need to create it. */
-  jit_ldxr_p(JIT_R0, JIT_V1, JIT_R2); /* put element at p in R0 */
-#ifndef JIT_PRECISE_GC
-  /* Save global array: */
-  mz_set_local_p(JIT_V1, JIT_LOCAL3);
-#endif
-  /* Move R1 to V1 to save it: */
-  jit_movr_p(JIT_V1, JIT_R1);
-  /* Compute i in JIT_R1: */
-  jit_subr_p(JIT_R1, JIT_R1, JIT_R2);
-  jit_subi_p(JIT_R1, JIT_R1, WORDS_TO_BYTES(1));
-  jit_rshi_ul(JIT_R1, JIT_R1, JIT_LOG_WORD_SIZE);
-  CHECK_LIMIT();
-  /* Call scheme_delayed_shift: */
-  JIT_UPDATE_THREAD_RSPTR();
-  CHECK_LIMIT();
-  mz_prepare(2);
-  jit_pusharg_l(JIT_R1);
-  jit_pusharg_p(JIT_R0);
-  (void)mz_finish_lwe(ts_scheme_delayed_shift, ref2);
-  CHECK_LIMIT();
-  jit_retval(JIT_R0);
-  /* Restore global array into JIT_R1, and put computed element at i+p+1: */
-#ifdef JIT_PRECISE_GC
-  mz_get_local_p(JIT_R1, JIT_LOCAL3);
-  jit_ldxr_p(JIT_R1, JIT_RUNSTACK, JIT_R1);
-#else
-  mz_get_local_p(JIT_R1, JIT_LOCAL3);
-#endif
-  jit_stxr_p(JIT_V1, JIT_R1, JIT_R0);
-  mz_patch_branch(ref);
-  __END_SHORT_JUMPS__(1);
-  mz_epilog(JIT_V1);
-
   return 1;
 }
 

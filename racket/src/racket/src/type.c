@@ -120,17 +120,13 @@ scheme_init_type ()
   set_name(scheme_branch_type, "<branch-code>");
   set_name(scheme_sequence_type, "<sequence-code>");
   set_name(scheme_with_cont_mark_type, "<with-continuation-mark-code>");
-  set_name(scheme_quote_syntax_type, "<quote-syntax-code>");
 
   set_name(scheme_define_values_type, "<define-values-code>");
   set_name(scheme_define_syntaxes_type, "<define-syntaxes-code>");
-  set_name(scheme_begin_for_syntax_type, "<begin-for-syntax-code>");
   set_name(scheme_begin0_sequence_type, "<begin0-code>");
-  set_name(scheme_splice_sequence_type, "<splicing-begin-code>");
   set_name(scheme_inline_variant_type, "<inline-variant-code>");
   set_name(scheme_set_bang_type, "<set!-code>");
   set_name(scheme_boxenv_type, "<boxenv-code>");
-  set_name(scheme_require_form_type, "<require-code>");
   set_name(scheme_varref_form_type, "<varref-code>");
   set_name(scheme_apply_values_type, "<apply-values-code>");
   set_name(scheme_with_immed_mark_type, "<with-immediate-mark-code>");
@@ -142,7 +138,6 @@ scheme_init_type ()
   set_name(scheme_ir_let_value_type, "<let-value-semi-code>");
   set_name(scheme_ir_let_header_type, "<let-header-semi-code>");
   set_name(scheme_ir_toplevel_type, "<variable-semi-code>");
-  set_name(scheme_ir_quote_syntax_type, "<quote-syntax-semi-code>");
   set_name(scheme_letrec_type, "<letrec-code>");
   set_name(scheme_let_one_type, "<let-one-code>");
   set_name(scheme_quote_compilation_type, "<quote-code>");
@@ -546,7 +541,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_letrec_type, letrec);
   GC_REG_TRAV(scheme_let_one_type, let_one);
   GC_REG_TRAV(scheme_with_cont_mark_type, with_cont_mark);
-  GC_REG_TRAV(scheme_quote_syntax_type, quotesyntax_obj);
 
   GC_REG_TRAV(scheme_define_values_type, vector_obj);
   GC_REG_TRAV(scheme_varref_form_type, twoptr_obj);
@@ -566,7 +560,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_ir_let_value_type, ir_let_value);
   GC_REG_TRAV(scheme_ir_let_header_type, let_header);
   GC_REG_TRAV(scheme_ir_toplevel_type, toplevel_obj);
-  GC_REG_TRAV(scheme_ir_quote_syntax_type, local_obj);
 
   GC_REG_TRAV(scheme_quote_compilation_type, small_object);
 
