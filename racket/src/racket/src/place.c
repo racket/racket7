@@ -2788,8 +2788,7 @@ static void *place_start_proc_after_stack(void *data_arg, void *stack_base) {
 
       scheme_check_place_port_ok();
 
-      dynamic_require = scheme_builtin_value("dynamic-require");
-      place_main = scheme_apply(dynamic_require, 2, a);
+      place_main = scheme_dynamic_require(2, a);
       a[0] = channel;
       (void)scheme_apply(place_main, 1, a);
       rc = scheme_make_integer(0);

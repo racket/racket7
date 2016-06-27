@@ -187,7 +187,6 @@ typedef struct ReadParams {
   char can_read_quasi;
   char skip_zo_vers_check;
   Readtable *table;
-  Scheme_Object *magic_sym, *magic_val;
   Scheme_Object *delay_load_info;
   Scheme_Object *read_relative_path;
 } ReadParams;
@@ -2387,7 +2386,6 @@ static Scheme_Object *
 _internal_read(Scheme_Object *port, Scheme_Object *stxsrc, int crc, int cant_fail,
                int recur, int expose_comment, int extra_char,
                Scheme_Object *init_readtable,
-               Scheme_Object *magic_sym, Scheme_Object *magic_val,
                Scheme_Object *delay_load_info, int get_info)
 {
   Scheme_Object *v, *v2;
@@ -2462,8 +2460,6 @@ _internal_read(Scheme_Object *port, Scheme_Object *stxsrc, int crc, int cant_fai
   else
     params.delay_load_info = NULL;
   params.skip_zo_vers_check = cant_fail;
-  params.magic_sym = magic_sym;
-  params.magic_val = magic_val;
 
   ht = NULL;
   if (recur) {
@@ -2540,8 +2536,6 @@ static void *scheme_internal_read_k(void)
   Scheme_Object *port = (Scheme_Object *)p->ku.k.p1;
   Scheme_Object *stxsrc = (Scheme_Object *)p->ku.k.p2;
   Scheme_Object *init_readtable = (Scheme_Object *)p->ku.k.p3;
-  Scheme_Object *magic_sym = (Scheme_Object *)p->ku.k.p4;
-  Scheme_Object *magic_val = NULL;
   Scheme_Object *delay_load_info = (Scheme_Object *)p->ku.k.p5;
 
   p->ku.k.p1 = NULL;
@@ -2550,40 +2544,30 @@ static void *scheme_internal_read_k(void)
   p->ku.k.p4 = NULL;
   p->ku.k.p5 = NULL;
 
-  if (magic_sym) {
-    magic_val = SCHEME_CDR(magic_sym);
-    magic_sym = SCHEME_CAR(magic_sym);
-  }
-
   return (void *)_internal_read(port, stxsrc, p->ku.k.i1, 0,
                                 p->ku.k.i3 & 0x2, p->ku.k.i3 & 0x1, 
                                 p->ku.k.i4, init_readtable,
-                                magic_sym, magic_val, delay_load_info, 0);
+                                delay_load_info, 0);
 }
 
 Scheme_Object *
 scheme_internal_read(Scheme_Object *port, Scheme_Object *stxsrc, int crc, int cantfail,
 		     int recur, int expose_comment, int pre_char,
                      Scheme_Object *init_readtable,
-		     Scheme_Object *magic_sym, Scheme_Object *magic_val,
                      Scheme_Object *delay_load_info)
 {
   Scheme_Thread *p = scheme_current_thread;
 
   if (cantfail) {
     return _internal_read(port, stxsrc, crc, cantfail, recur, expose_comment, -1, NULL,
-                          magic_sym, magic_val, delay_load_info, 0);
+                          delay_load_info, 0);
   } else {
-    if (magic_sym)
-      magic_sym = scheme_make_pair(magic_sym, magic_val);
-
     p->ku.k.p1 = (void *)port;
     p->ku.k.p2 = (void *)stxsrc;
     p->ku.k.i1 = crc;
     p->ku.k.i3 = ((recur ? 0x2 : 0) | (expose_comment ? 0x1 : 0));
     p->ku.k.i4 = pre_char;
     p->ku.k.p3 = (void *)init_readtable;
-    p->ku.k.p4 = (void *)magic_sym;
     p->ku.k.p5 = (void *)delay_load_info;
 
     return (Scheme_Object *)scheme_top_level_do(scheme_internal_read_k, 0);
@@ -4540,7 +4524,6 @@ typedef struct CPort {
   Scheme_Unmarshal_Tables *ut;
   Scheme_Object **symtab;
   Scheme_Hash_Table *symtab_entries;
-  Scheme_Object *magic_sym, *magic_val;
   Scheme_Object *relto;
   intptr_t *shared_offsets;
   Scheme_Load_Delay *delay_info;
@@ -4868,9 +4851,6 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
       if (!valid_utf8(s, l))
         scheme_ill_formed_code(port);
       v = scheme_intern_exact_symbol(s, l);
-
-      if (SAME_OBJ(v, port->magic_sym))
-	v = port->magic_val;
       break;
     case CPT_SYMREF:
       l = read_compact_number(port);
@@ -5246,9 +5226,6 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
         if (!valid_utf8(s, l))
           scheme_ill_formed_code(port);
 	v = scheme_intern_exact_symbol(s, l);
-
-	if (SAME_OBJ(v, port->magic_sym))
-	  v = port->magic_val;
       }
       break;
     case CPT_SMALL_NUMBER_START:
@@ -5847,9 +5824,6 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
       if (SCHEME_TRUEP(dir))
         dir = scheme_path_to_directory_path(dir);
       rp->relto = dir;
-
-      rp->magic_sym = params->magic_sym;
-      rp->magic_val = params->magic_val;
 
       install_byecode_hash_code(rp, hash_code);
 

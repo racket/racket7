@@ -532,6 +532,19 @@ Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Ins
   return b;
 }
 
+Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Scheme_Instance *inst)
+{
+  Scheme_Bucket *b;
+    
+  b = scheme_bucket_or_null_from_table(inst->variables, (char *)symbol);
+  if (b) {
+    ASSERT_IS_VARIABLE_BUCKET(b);
+    scheme_set_bucket_home(b, env);
+  }
+
+  return b;
+}
+
 /*========================================================================*/
 /*                            compiling linklets                          */
 /*========================================================================*/
@@ -619,7 +632,7 @@ static int needs_prompt(Scheme_Object *e)
   }
 }
 
-void *scheme_linklet_run_finish(Scheme_Linklet linklet)
+Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet)
 {
   Scheme_Thread *p;
   Scheme_Module *m = menv->module;
@@ -702,12 +715,12 @@ void *scheme_linklet_run_finish(Scheme_Linklet linklet)
   return v;
 }
 
-static void eval_linklet_body(Scheme_Linklet *linklet)
+static Scheme_Object *eval_linklet_body(Scheme_Linklet *linklet)
 {
 #ifdef MZ_USE_JIT
-  (void)scheme_linklet_run_start(linklet, scheme_make_pair(instance->name, scheme_true));
+  scheme_linklet_run_start(linklet, scheme_make_pair(instance->name, scheme_true));
 #else
-  (void)scheme_linklet_run_finish(linklet);
+  scheme_linklet_run_finish(linklet);
 #endif
 }
 
@@ -745,7 +758,7 @@ static void *instantiate_linklet_k(void)
   }
 
   save_runstack = push_prefix(linklet, instance, num_instances, instances);
-  eval_linklet_body(linklet);  
+  v = eval_linklet_body(linklet);  
   pop_prefix(save_runstack);
 
   if (!multi)

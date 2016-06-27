@@ -474,11 +474,14 @@ extern int scheme_builtin_ref_counter;
 Scheme_Object **scheme_make_builtin_references_table(int *_unsafe_start);
 Scheme_Object *scheme_make_local(Scheme_Type type, int pos, int flags);
 
-void scheme_add_embedded_builtins(Scheme_Startup_Env *env);
+typedef struct Scheme_Linklet  Scheme_Linklet;
+Scheme_Linklet *scheme_startup_linklet();
 
 void *scheme_get_os_thread_like();
 void scheme_init_os_thread_like(void *);
 void scheme_done_os_thread();
+
+Scheme_Object *scheme_get_startup_export(const char *s);
 
 /*========================================================================*/
 /*                                constants                               */
@@ -913,8 +916,10 @@ typedef Scheme_Bucket_With_Flags Scheme_Bucket_With_Ref_Id;
 
 typedef struct {
   Scheme_Bucket_With_Ref_Id bucket;
-  Scheme_Object *home_link; /* weak to Scheme_Linklet_Instance *, except when GLOB_STRONG_HOME_LINK */
+  Scheme_Object *home_link; /* weak to Scheme_Instance *, except when GLOB_STRONG_HOME_LINK */
 } Scheme_Bucket_With_Home;
+
+typedef struct Scheme_Instance Scheme_Instance;
 
 Scheme_Instance *scheme_get_bucket_home(Scheme_Bucket *b);
 void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Instance *e);
@@ -2886,13 +2891,9 @@ void scheme_on_demand_generate_lambda(Scheme_Native_Closure *nc, int argc, Schem
 struct Start_Module_Args;
 
 #ifdef MZ_USE_JIT
-void *scheme_module_run_start(Scheme_Env *menv, Scheme_Env *env, Scheme_Object *name);
-void *scheme_module_exprun_start(Scheme_Env *menv, int phase_plus_set_ns, Scheme_Object *name);
-void *scheme_module_start_start(struct Start_Module_Args *a, Scheme_Object *name);
+Scheme_Object *scheme_linklet_run_start(Scheme_Linklet* linklet, Scheme_Object *name);
 #endif
-void *scheme_module_run_finish(Scheme_Env *menv, Scheme_Env *env);
-void *scheme_module_exprun_finish(Scheme_Env *menv, int set_ns);
-void *scheme_module_start_finish(struct Start_Module_Args *a);
+Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet);
 
 Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *env);
 
@@ -3061,20 +3062,21 @@ Scheme_Object *scheme_case_lambda_jit(Scheme_Object *expr);
 /*========================================================================*/
 
 /* A Scheme_Env acts as a wrapper for namespaces, which are externally
-   implemented. */
+   implemented (via `scheme_startup_instance`). */
 struct Scheme_Env {
   Scheme_Object so; /* scheme_env_type */
   Scheme_Object *namespace;
+  Scheme_Instance *instance;
 };
 
 /* A Scheme_Startup_Env holds tables of primitives */
-struct Scheme_Startup_Env {
+typedef struct Scheme_Startup_Env {
   Scheme_Object so; /* scheme_startup_env_type */
   Scheme_Hash_Table *current_table; /* used during startup */
   Scheme_Hash_Table *primitive_tables; /* symbol -> hash table */
   Scheme_Hash_Table *all_primitives_table;
   Scheme_Hash_Table *primitive_ids_table; /* value -> integer */
-};
+} Scheme_Startup_Env;
 
 extern Scheme_Startup_Env * scheme_startup_env;
 
@@ -3089,9 +3091,13 @@ struct Scheme_Instance {
   
   Scheme_Object *name;  /* for reporting purposes */
   Scheme_Object *data;
-} Scheme_Instance;
+};
 
-typedef struct Scheme_Linklet
+Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data);
+Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Instance *inst);
+Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Scheme_Instance *inst);
+
+struct Scheme_Linklet
 {
   Scheme_Object so; /* scheme_linklet_type */
 
@@ -3116,7 +3122,7 @@ typedef struct Scheme_Linklet
 
   int num_toplevels;
   Scheme_IR_Toplevel *toplevels; /* during compilation/optimization, only */
-} Scheme_Linklet;
+};
 
 /* Definition and references share the same object during the
    "compile" pass, and SCHEME_IR_TOPLEVEL_MUTATED is set in that pass.
@@ -3170,30 +3176,8 @@ void scheme_restore_prim_instance(Scheme_Startup_Env *env);
 THREAD_LOCAL_DECL(extern Scheme_Bucket_Table *scheme_module_code_cache);
 Scheme_Object *scheme_module_execute(Scheme_Object *data, Scheme_Env *genv);
 
-Scheme_Env *scheme_get_kernel_env();
-int scheme_is_kernel_env();
-Scheme_Env *scheme_get_unsafe_env();
-Scheme_Env *scheme_get_flfxnum_env();
-Scheme_Env *scheme_get_extfl_env();
-Scheme_Env *scheme_get_futures_env();
-Scheme_Env *scheme_get_foreign_env();
-
 void scheme_install_initial_module_set(Scheme_Env *env);
 Scheme_Bucket_Table *scheme_clone_toplevel(Scheme_Bucket_Table *ht, Scheme_Env *home);
-
-Scheme_Env *scheme_copy_module_env(Scheme_Env *menv, Scheme_Env *ns, Scheme_Object *modchain, int clone);
-
-int scheme_is_kernel_modname(Scheme_Object *modname);
-int scheme_is_unsafe_modname(Scheme_Object *modname);
-int scheme_is_flfxnum_modname(Scheme_Object *modname);
-int scheme_is_extfl_modname(Scheme_Object *modname);
-int scheme_is_futures_modname(Scheme_Object *modname);
-int scheme_is_foreign_modname(Scheme_Object *modname);
-
-void scheme_clear_shift_cache(void);
-void scheme_clear_prompt_cache(void);
-
-void scheme_prepare_compile_env(Scheme_Env *env);
 
 Scheme_Object *scheme_string_to_symbol_path(char *_s, intptr_t len);
 char *scheme_symbol_path_to_string(Scheme_Object *p, intptr_t *_len);

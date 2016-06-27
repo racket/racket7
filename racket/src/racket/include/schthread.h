@@ -237,15 +237,7 @@ typedef struct Thread_Local_Variables {
   void *stack_copy_cache_[STACK_COPY_CACHE_SIZE];
   intptr_t stack_copy_size_cache_[STACK_COPY_CACHE_SIZE];
   int scc_pos_;
-  mzlonglong scope_counter_;
-  struct Scheme_Object *last_phase_shift_;
-  struct Scheme_Object *nominal_ipair_cache_;
-  struct Scheme_Bucket_Table *taint_intern_table_;
-  struct Binding_Cache_Entry *binding_cache_table_;
-  intptr_t binding_cache_pos_;
-  intptr_t binding_cache_len_;
-  struct Scheme_Scope_Set *recent_scope_sets_[2][NUM_RECENT_SCOPE_SETS];
-  int recent_scope_sets_pos_[2];
+  struct Scheme_Instance *scheme_startup_instance_;
   struct Scheme_Thread *scheme_current_thread_;
   struct Scheme_Thread *scheme_main_thread_;
   struct Scheme_Thread *scheme_first_thread_;
@@ -617,15 +609,7 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define stack_copy_cache XOA (scheme_get_thread_local_variables()->stack_copy_cache_)
 #define stack_copy_size_cache XOA (scheme_get_thread_local_variables()->stack_copy_size_cache_)
 #define scc_pos XOA (scheme_get_thread_local_variables()->scc_pos_)
-#define nominal_ipair_cache XOA (scheme_get_thread_local_variables()->nominal_ipair_cache_)
-#define scope_counter XOA (scheme_get_thread_local_variables()->scope_counter_)
-#define last_phase_shift XOA (scheme_get_thread_local_variables()->last_phase_shift_)
-#define taint_intern_table XOA (scheme_get_thread_local_variables()->taint_intern_table_)
-#define binding_cache_table XOA (scheme_get_thread_local_variables()->binding_cache_table_)
-#define binding_cache_pos XOA (scheme_get_thread_local_variables()->binding_cache_pos_)
-#define binding_cache_len XOA (scheme_get_thread_local_variables()->binding_cache_len_)
-#define recent_scope_sets XOA (scheme_get_thread_local_variables()->recent_scope_sets_)
-#define recent_scope_sets_pos XOA (scheme_get_thread_local_variables()->recent_scope_sets_pos_)
+#define scheme_startup_instance XOA (scheme_get_thread_local_variables()->scheme_startup_instance_)
 #define scheme_current_thread XOA (scheme_get_thread_local_variables()->scheme_current_thread_)
 #define scheme_main_thread XOA (scheme_get_thread_local_variables()->scheme_main_thread_)
 #define scheme_first_thread XOA (scheme_get_thread_local_variables()->scheme_first_thread_)

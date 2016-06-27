@@ -12,7 +12,7 @@
    finally, set EXPECTED_PRIM_COUNT to the right value and
    USE_COMPILED_STARTUP to 1 and `make' again. */
 
-#define USE_COMPILED_STARTUP 1
+#define USE_COMPILED_STARTUP 0
 
 #define EXPECTED_PRIM_COUNT 1150
 #define EXPECTED_UNSAFE_COUNT 126
@@ -30,8 +30,4 @@
 #define MZCOMPILED_STRING_FAR far
 #else
 #define MZCOMPILED_STRING_FAR /**/
-#endif
-
-#if USE_COMPILED_STARTUP
-extern Scheme_Object *scheme_eval_compiled_sized_string(const char *str, int len, Scheme_Env *env);
 #endif

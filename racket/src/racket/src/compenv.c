@@ -519,7 +519,7 @@ scheme_compile_lookup(Scheme_Object *find_id, Scheme_Comp_Env *env, int flags)
   v = scheme_hash_tree_get(env->vars, SCHEME_STX_VAL(find_id));
 
   if (!v)
-    v = scheme_hash_get(scheme_primitives, SCHEME_STX_VAL(find_id));
+    v = scheme_hash_get(scheme_startup_env->all_primitives_table, find_id);
 
   if (!v)
     scheme_wrong_syntax(NULL, NULL, find_id, "free identifier");

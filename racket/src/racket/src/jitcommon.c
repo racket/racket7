@@ -3499,7 +3499,7 @@ static int more_common0(mz_jit_state *jitter, void *_data)
     scheme_jit_register_sub_func(jitter, sjc.struct_proc_extract_code, scheme_false);
   }
 
-  /* *** module_run_start_code *** */
+  /* *** linklet_run_start_code *** */
   /* Pushes a module name onto the stack for stack traces. */
   {
     int in;
@@ -3507,69 +3507,7 @@ static int more_common0(mz_jit_state *jitter, void *_data)
     sjc.module_run_start_code = jit_get_ip();
     jit_prolog(3);
     in = jit_arg_p();
-    jit_getarg_p(JIT_R0, in); /* menv */
-    in = jit_arg_p();
-    jit_getarg_p(JIT_R1, in); /* env */
-    in = jit_arg_p();
-    jit_getarg_p(JIT_R2, in); /* &name */
-    CHECK_LIMIT();
-
-    /* Store the name where we can find it */
-    mz_push_locals();
-    mz_set_local_p(JIT_R2, JIT_LOCAL2);
-
-    jit_prepare(2);
-    jit_pusharg_p(JIT_R1);
-    jit_pusharg_p(JIT_R0);
-    (void)mz_finish(scheme_module_run_finish);
-    CHECK_LIMIT();
-    mz_pop_locals();
-    jit_ret();
-    CHECK_LIMIT();
-
-    scheme_jit_register_sub_func(jitter, sjc.module_run_start_code, scheme_eof);
-  }
-
-  /* *** module_exprun_start_code *** */
-  /* Pushes a module name onto the stack for stack traces. */
-  {
-    int in;
-    
-    sjc.module_exprun_start_code = jit_get_ip();
-    jit_prolog(3);
-    in = jit_arg_p();
-    jit_getarg_p(JIT_R0, in); /* menv */
-    in = jit_arg_p();
-    jit_getarg_i(JIT_R1, in); /* set_ns */
-    in = jit_arg_p();
-    jit_getarg_p(JIT_R2, in); /* &name */
-    CHECK_LIMIT();
-
-    /* Store the name where we can find it */
-    mz_push_locals();
-    mz_set_local_p(JIT_R2, JIT_LOCAL2);
-
-    jit_prepare(2);
-    jit_pusharg_i(JIT_R1);
-    jit_pusharg_p(JIT_R0);
-    (void)mz_finish(scheme_module_exprun_finish);
-    CHECK_LIMIT();
-    mz_pop_locals();
-    jit_ret();
-    CHECK_LIMIT();
-
-    scheme_jit_register_sub_func(jitter, sjc.module_exprun_start_code, scheme_eof);
-  }
-
-  /* *** module_start_start_code *** */
-  /* Pushes a module name onto the stack for stack traces. */
-  {
-    int in;
-    
-    sjc.module_start_start_code = jit_get_ip();
-    jit_prolog(2);
-    in = jit_arg_p();
-    jit_getarg_p(JIT_R0, in); /* a */
+    jit_getarg_p(JIT_R0, in); /* linklet */
     in = jit_arg_p();
     jit_getarg_p(JIT_R1, in); /* &name */
     CHECK_LIMIT();
@@ -3580,13 +3518,13 @@ static int more_common0(mz_jit_state *jitter, void *_data)
 
     jit_prepare(1);
     jit_pusharg_p(JIT_R0);
-    (void)mz_finish(scheme_module_start_finish);
+    (void)mz_finish(scheme_module_run_finish);
     CHECK_LIMIT();
     mz_pop_locals();
     jit_ret();
     CHECK_LIMIT();
 
-    scheme_jit_register_sub_func(jitter, sjc.module_start_start_code, scheme_eof);
+    scheme_jit_register_sub_func(jitter, sjc.linklet_run_start_code, scheme_eof);
   }
 
   /* *** thread_start_child_code *** */

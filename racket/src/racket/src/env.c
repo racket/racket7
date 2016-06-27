@@ -50,6 +50,8 @@ READ_ONLY Scheme_Startup_Env *scheme_startup_env;
 static int builtin_ref_counter;
 static int builtin_unsafe_start;
 
+THREAD_LOCAL_DECL(static Scheme_Instance *scheme_startup_instance);
+
 THREAD_LOCAL_DECL(static Scheme_Bucket_Table *literal_string_table);
 THREAD_LOCAL_DECL(static Scheme_Bucket_Table *literal_number_table);
 
@@ -69,25 +71,48 @@ static void register_traversers(void);
 /*                             initialization                             */
 /*========================================================================*/
 
+Scheme_Object *scheme_get_startup_export(const char *s)
+{
+  Scheme_Object *sym;
+  Scheme_Bucket *b;
+  
+  sym = scheme_intern_symbol(name);
+  b = scheme_instance_variable_bucket_or_null(sym, scheme_startup_instance);
+
+  if (b)
+    return (Scheme_Object *)b->val;
+
+  return NULL;
+}
+
 static void boot_module_resolver()
 {
-  Scheme_Object *boot, *a[2];
-  a[0] = scheme_make_pair(scheme_intern_symbol("quote"),
-                          scheme_make_pair(scheme_intern_symbol("#%boot"),
-                                           scheme_null));
-  a[1] = scheme_intern_symbol("boot");
-  boot = scheme_dynamic_require(2, a);
+  Scheme_Object *boot;
+  boot = scheme_get_startup_export("boot");
   scheme_apply(boot, 0, NULL);
+}
+
+static Scheme_Object *current_namespace()
+{
+  Scheme_Object *cn;
+  cn = scheme_get_startup_export(env, "current-namespace");
+  scheme_apply(cn, 0, NULL);
+}
+
+static Scheme_Object *namespace_to_instance(Scheme_Object *ns)
+{
+  Scheme_Object *proc, *a[1];
+  proc = scheme_get_startup_export(env, "namespace->instance");
+  a[0] = ns;
+  scheme_apply(proc, 1, a);
 }
 
 void scheme_seal_parameters()
 {
-  Scheme_Object *seal, *a[2];
-  a[0] = scheme_make_pair(scheme_intern_symbol("quote"),
-                          scheme_make_pair(scheme_intern_symbol("#%boot"),
-                                           scheme_null));
-  a[1] = scheme_intern_symbol("seal");
-  seal = scheme_dynamic_require(2, a);
+  Scheme_Env *env;
+  Scheme_Object *seal;
+  env = scheme_current_env();
+  seal = scheme_get_startup_export(env, "seal");
   scheme_apply(seal, 0, NULL);
 }
 
@@ -577,9 +602,14 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   printf("pre-embedded @ %" PRIdPTR "\n", scheme_get_process_milliseconds());
 #endif
 
-  scheme_add_embedded_builtins(env);
+  REGISTER_SO(scheme_startup_instance);
+  scheme_startup_instance = scheme_make_instance(scheme_intern_symbol("startup"), scheme_false);
 
   boot_module_resolver();
+  v = current_namespace();
+  env->namespace = v;
+  v = namespace_to_instance(v);
+  env->instance = (Scheme_Instance *)v;
 
   scheme_starting_up = 0;
 
@@ -782,46 +812,58 @@ const char *scheme_look_for_primitive(void *code)
   return NULL;
 }
 
+Scheme_Object *scheme_builtin_value(const char *name)
+{
+  Scheme_Object *sym, *v;
+  Scheme_Bucket *b;
+  
+  sym = scheme_intern_symbol(name);
+  v = scheme_hash_get(scheme_startup_env->all_primitives_table, sym);
+  if (!v) {
+    b = scheme_instance_variable_bucket_or_null(sym, scheme_startup_instance);
+    if (b)
+      return b->al;
+  }
+
+  return v;
+}
+
 /*========================================================================*/
 /*                           namespace bindings                           */
 /*========================================================================*/
 
-Scheme_Object *
-scheme_lookup_global(Scheme_Object *symbol, Scheme_Env *env)
+Scheme_Object *scheme_lookup_global(Scheme_Object *symbol, Scheme_Env *env)
 {
-  ...
+  Scheme_Bucket *b;
+  b = scheme_instance_variable_bucket_or_null(symbol, env->instance);
+  if (b)
+    return b->val;
+  else
+    return NULL;
 }
 
-Scheme_Bucket *
-scheme_global_bucket(Scheme_Object *symbol, Scheme_Env *env)
+Scheme_Bucket *scheme_global_bucket(Scheme_Object *symbol, Scheme_Env *env)
 {
-  ...
+  return scheme_instance_variable_bucket(symbol, env->instance);
 }
 
-void
-scheme_add_global(const char *name, Scheme_Object *obj, Scheme_Env *env)
+void scheme_add_global(const char *name, Scheme_Object *obj, Scheme_Env *env)
 {
-  scheme_do_add_global_symbol(env, scheme_intern_symbol(name), obj, 1, 0);
+  scheme_add_global_symbol(scheme_intern_symbol(name), obj, env);
 }
 
-void
-scheme_add_global_symbol(Scheme_Object *sym, Scheme_Object *obj, Scheme_Env *env)
+void scheme_add_global_symbol(Scheme_Object *sym, Scheme_Object *obj, Scheme_Env *env)
 {
-  scheme_do_add_global_symbol(env, sym, obj, 1, 0);
+  Scheme_Bucket *b;
+  b = scheme_global_bucket(sym, env);
+  b->val = obj;
 }
 
-void
-scheme_add_global_keyword(const char *name, Scheme_Object *obj, 
-			  Scheme_Env *env)
+Scheme_Object *scheme_make_namespace(int argc, Scheme_Object *argv[])
 {
-  scheme_do_add_global_symbol(env, scheme_intern_symbol(name), obj, 0, 0);
-}
-
-void
-scheme_add_global_keyword_symbol(Scheme_Object *name, Scheme_Object *obj, 
-				 Scheme_Env *env)
-{
-  scheme_do_add_global_symbol(env, name, obj, 0, 0);
+  Scheme_Object *proc;
+  proc = scheme_get_startup_export("make-namespace");
+  scheme_apply(proc, argc, argv);
 }
 
 /*========================================================================*/

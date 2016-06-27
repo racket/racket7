@@ -3406,24 +3406,52 @@ Scheme_Object **scheme_current_argument_stack()
 /*                  eval/compile/expand starting points                   */
 /*========================================================================*/
 
+Scheme_Object *scheme_dynamic_require(int argc, Scheme_Object *argv[])
+{
+  Scheme_Object *proc;
+  proc = scheme_get_startup_export("dynamic-require");
+  return scheme_apply(proc, argc, argv);
+}
+
+Scheme_Object *scheme_namespace_require(Scheme_Object *mod_path);
+{
+  Scheme_Object *proc, *a[1];
+  proc = scheme_get_startup_export("namespace-require");
+  a[0] = mod_path;
+  return scheme_apply(proc, 1, a);
+}
+
 Scheme_Object *scheme_compile(Scheme_Object *form, Scheme_Env *env, int writeable)
 {
-  return _compile(form, env, writeable, 0, 1, 1);
+  Scheme_Object *compile_proc, *a[3];
+  compile_proc = scheme_get_startup_export("compile");
+  a[0] = form;
+  a[1] = env->namespace;
+  a[2] = (writeable ? scheme_true : scheme_false);
+  return scheme_apply(compile_proc, 3, a);
 }
 
 Scheme_Object *scheme_compile_for_eval(Scheme_Object *form, Scheme_Env *env)
 {
-  return _compile(form, env, 0, 1, 1, 1);
+  return scheme_compile(form, env, 0);
 }
 
 Scheme_Object *scheme_eval(Scheme_Object *obj, Scheme_Env *env)
 {
-  return scheme_eval_compiled(scheme_compile_for_eval(obj, env), env);
+  Scheme_Object *eval_proc, *a[2];
+  eval_proc = scheme_get_startup_export("eval");
+  a[0] = form;
+  a[1] = env->namespace;
+  return scheme_apply(eval_proc, 2, a);
 }
 
 Scheme_Object *scheme_eval_multi(Scheme_Object *obj, Scheme_Env *env)
 {
-  return scheme_eval_compiled_multi(scheme_compile_for_eval(obj, env), env);
+  Scheme_Object *eval_proc, *a[2];
+  eval_proc = scheme_get_startup_export("eval");
+  a[0] = form;
+  a[1] = env->namespace;
+  return scheme_apply_multi(eval_proc, 2, a);
 }
 
 static Scheme_Object *finish_eval_with_prompt(void *_data, int argc, Scheme_Object **argv)
@@ -3491,14 +3519,21 @@ current_compile(int argc, Scheme_Object **argv)
 			     2, NULL, NULL, 0);
 }
 
-static Scheme_Object *
-recompile(int argc, Scheme_Object *argv[])
+static Scheme_Object *read_syntax(Scheme_Object *port, Scheme_Object *src)
 {
-  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type)) {
-    scheme_wrong_contract("compiled-expression-recompile", "compiled-expression?", 0, argc, argv);
-  }
+  Scheme_Object *proc, *a[2];
+  proc = scheme_get_startup_export("read-syntax");
+  a[0] = port;
+  a[1] = src;
+  return scheme_apply(proc, 2, a);
+}
 
-  return recompile_top(argv[0], get_comp_flags(NULL));
+static Scheme_Object *namespace_introduce(Scheme_Object *stx)
+{
+  Scheme_Object *proc, *a[1];
+  proc = scheme_get_startup_export("namespace-introduce");
+  a[0] = stx;
+  return scheme_apply(proc, 1, a);
 }
 
 static Scheme_Object *do_eval_string_all(Scheme_Object *port, const char *str, Scheme_Env *env, 
@@ -3514,21 +3549,10 @@ static Scheme_Object *do_eval_string_all(Scheme_Object *port, const char *str, S
     port = scheme_make_byte_string_input_port(str);
 
   do {
-    expr = scheme_read_syntax(port, scheme_false);
+    expr = read_syntax(port, scheme_false);
 
-    if (cont == -2) {
-      if (SCHEME_STXP(expr)) {
-        Scheme_Object *m;
-        m = SCHEME_STX_VAL(expr);
-        if (SCHEME_PAIRP(m)) {
-          m = scheme_make_pair(scheme_datum_to_syntax(module_symbol, 
-                                                      SCHEME_CAR(m), 
-                                                      scheme_sys_wraps(NULL), 
-                                                      0, 0),
-                               SCHEME_CDR(m));
-          expr = scheme_datum_to_syntax(m, expr, expr, 0, 1);
-        }
-      }
+    if ((cont == -2) && !SAME_OBJ(expr, scheme_eof)) {
+      expr = namespace_introduce(expr);
     }
 
     if (SAME_OBJ(expr, scheme_eof))
@@ -3621,7 +3645,7 @@ Scheme_Object *scheme_eval_string_multi_with_prompt(const char *str, Scheme_Env 
 void scheme_embedded_load(intptr_t len, const char *desc, int predefined)
 {
   Scheme_Object *s, *e, *a[3], *eload;
-  eload = scheme_builtin_value("embedded-load");
+  eload = scheme_get_startup_export("embedded-load");
   if (len < 0) {
     /* description mode */
     s = scheme_make_utf8_string(desc);
@@ -3762,6 +3786,43 @@ enable_break(int argc, Scheme_Object *argv[])
   } else {
     return scheme_can_break(scheme_current_thread) ? scheme_true : scheme_false;
   }
+}
+
+Scheme_Object *scheme_make_modidx(Scheme_Object *path,
+                                  Scheme_Object *base,
+                                  Scheme_Object *resolved)
+{
+  Scheme_Object *proc, *a[2];
+  proc = scheme_get_startup_export("module-path-index-join");
+  a[0] = path;
+  a[1] = base;
+  return scheme_apply(proc, 2, a);
+ 
+}
+
+int scheme_is_module_path(Scheme_Object *v)
+{
+  Scheme_Object *proc, *a[1];
+  proc = scheme_get_startup_export("module-path?");
+  a[0] = v;
+  return SCHEME_TRUEP(scheme_apply(proc, 1, a));
+}
+
+int scheme_module_is_declared(Scheme_Object *name, int try_load)
+{
+  Scheme_Object *proc, *a[2];
+  proc = scheme_get_startup_export("module-declared?");
+  a[0] = name;
+  a[1] = (try_load ? scheme_true : scheme_false);
+  return SCHEME_TRUEP(scheme_apply(proc, 2, a));
+}
+
+Scheme_Object *scheme_datum_to_kernel_stx(Scheme_Object *v)
+{
+  Scheme_Object *proc, *a[1];
+  proc = scheme_get_startup_export("datum->kernel-syntax");
+  a[0] = v;
+  return scheme_apply(proc, 1, a);
 }
 
 /*========================================================================*/
