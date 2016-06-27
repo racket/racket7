@@ -88,6 +88,7 @@ ROSYM static Scheme_Object *dot_symbol;
 ROSYM static Scheme_Object *terminating_macro_symbol;
 ROSYM static Scheme_Object *non_terminating_macro_symbol;
 ROSYM static Scheme_Object *dispatch_macro_symbol;
+ROSYM static Scheme_Object *hash_code_symbol;
 /* For recoginizing unresolved hash tables and commented-out graph introductions: */
 ROSYM static Scheme_Object *unresolved_uninterned_symbol;
 ROSYM static Scheme_Object *tainted_uninterned_symbol;
@@ -433,6 +434,7 @@ void scheme_init_read(Scheme_Startup_Env *env)
   REGISTER_SO(terminating_macro_symbol);
   REGISTER_SO(non_terminating_macro_symbol);
   REGISTER_SO(dispatch_macro_symbol);
+  REGISTER_SO(hash_code_symbol);
   REGISTER_SO(builtin_fast);
 
   quote_symbol                  = scheme_intern_symbol("quote");
@@ -454,6 +456,8 @@ void scheme_init_read(Scheme_Startup_Env *env)
   terminating_macro_symbol     = scheme_intern_symbol("terminating-macro");
   non_terminating_macro_symbol = scheme_intern_symbol("non-terminating-macro");
   dispatch_macro_symbol        = scheme_intern_symbol("dispatch-macro");
+
+  hash_code_symbol             = scheme_intern_symbol("hash-code");
 
   /* initialize builtin_fast */
   {
@@ -5909,17 +5913,23 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
         return NULL;
       }
 
-      if (SAME_TYPE(SCHEME_TYPE(result), scheme_compilation_top_type)) {
-        Scheme_Compilation_Top *top = (Scheme_Compilation_Top *)result;
+      if (!SCHEME_HASHTRP(result))
+        scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
+                        "read (compiled): bundle content is not an immutable hash");
 
-        scheme_validate_code(rp, top->code,
-                             top->max_let_depth,
-                             top->prefix->num_toplevels,
-                             top->prefix->num_stxes,
-                             top->prefix->num_lifts,
-                             NULL,
-                             NULL,
-                             0);
+      {
+        mzlonglong i;
+        Scheme_Hash_Tree *t = (Scheme_Hash_Tree *)result;
+        Scheme_Object *key, *val;
+
+        i = scheme_hash_tree_next(t, -1);
+        while (i != -1) {
+          scheme_hash_tree_index(t, i, &key, &val);
+          if (SAME_TYPE(SCHEME_TYPE(val), scheme_linklet_type))
+            scheme_validate_linklet(rp, (Scheme_Linklet *)val);
+          i = scheme_hash_tree_next(t, i);
+        }
+      
         /* If no exception, the resulting code is ok. */
 
         /* Install module hash code, if any. This code is used to register
@@ -5932,15 +5942,9 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
           }
 
           if (i < 20) {
-            Scheme_Module *m;
-            m = scheme_extract_compiled_module(result);
-            if (m) {
-              Scheme_Object *hc;
-              hc = scheme_make_sized_byte_string(hash_code, 20, 1);
-              hc = scheme_make_pair(hc, dir);
-
-              m->code_key = hc;
-            }
+            result = (Scheme_Object *)scheme_hash_tree_set((Scheme_Hash_Tree *)result,
+                                                           hash_code_symbol,
+                                                           scheme_make_sized_byte_string(hash_code, 20, 1));
           }
         }
       } else
@@ -5948,10 +5952,6 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
     
       if (directory) {
         Scheme_Object *v;
-
-        if (!SCHEME_HASHTRP(result))
-          scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                          "read (compiled): bundle content is not an immutable hash");
 
         v = scheme_alloc_small_object();
         v->type = scheme_linklet_bundle_type;

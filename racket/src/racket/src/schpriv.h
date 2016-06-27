@@ -3007,11 +3007,7 @@ Scheme_Object *scheme_module_eval_clone(Scheme_Object *data);
 Scheme_Object *scheme_make_environment_dummy(Scheme_Comp_Env *env);
 Scheme_Env *scheme_environment_from_dummy(Scheme_Object *dummy);
 
-void scheme_validate_code(Mz_CPort *port, Scheme_Object *code,
-                          int depth,
-			  int num_toplevels, int num_stxes, int num_lifts, void *tl_use_map,
-                          Scheme_Object **toplevels,
-                          int code_vec);
+void scheme_validate_linklet(Mz_CPort *port, Scheme_Linklet *linklet);
 
 typedef mzshort **Validate_TLS;
 struct Validate_Clearing;

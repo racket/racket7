@@ -3921,34 +3921,26 @@ static void generate_toplevels_array(Scheme_Linklet *linklet)
 {
   Scheme_Obejct *v, *e;
   Scheme_IR_Toplevel **toplevels, *tl;
-  int i, j, pos = 0, num_toplevels = 16;
-  
+  int i, j, pos = 0;
+
+  num_toplevels = 0;
+  for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
+    num_toplevels += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
+  }
+  num_toplevels += SCHEME_VEC_SIZE(linklet->exports);
+
   toplevels = MALLOC_N(Scheme_IR_Toplevel*, num_toplevels);
   
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELSE(linklet->importss)[i]); j++) {
-      if (pos >= num_toplevels) {
-        new_toplevels = MALLOC_N(Scheme_IR_Toplevel*, 2 * num_toplevels);
-        memcpy(new_toplevels, toplevels, sizeof(Scheme_IR_Toplevel*)* num_toplevels);
-        num_toplevels *= 2;
-        toplevels = new_toplevels;
-      }
       tl = make_ir_toplevel_variable(e, i, j, pos);
-      toplevels[pos] = tl;
-      pos++;
+      toplevels[pos++] = tl;
     }
   }
 
   for (j = 0; j < SCHEME_VEC_SIZE(linklet->exports); j++) {
-    if (pos >= num_toplevels) {
-      new_toplevels = MALLOC_N(Scheme_IR_Toplevel*, 2 * num_toplevels);
-      memcpy(new_toplevels, toplevels, sizeof(Scheme_IR_Toplevel*)* num_toplevels);
-      num_toplevels *= 2;
-      toplevels = new_toplevels;
-    }
     tl = make_ir_toplevel_variable(e, -1, j, pos);
-    toplevels[pos] = tl;
-    pos++;
+    toplevels[pos++] = tl;
   }
 
   /* Determine which toplevels are mutable by checking all definitions: */

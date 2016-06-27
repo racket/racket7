@@ -2098,7 +2098,6 @@ void scheme_delay_load_closure(Scheme_Lambda *data)
                               (char *)SCHEME_VEC_ELS(vinfo)[1], 
                               (Validate_TLS)SCHEME_VEC_ELS(vinfo)[2], 
                               SCHEME_INT_VAL(SCHEME_VEC_ELS(vinfo)[3]),
-                              SCHEME_INT_VAL(SCHEME_VEC_ELS(vinfo)[4]),
                               SCHEME_INT_VAL(SCHEME_VEC_ELS(vinfo)[5]),
                               (SCHEME_TRUEP(SCHEME_VEC_ELS(vinfo)[8])
                                ? (void *)SCHEME_VEC_ELS(vinfo)[8]
