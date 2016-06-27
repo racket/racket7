@@ -953,7 +953,7 @@ static Scheme_Object *read_toplevel(Scheme_Object *obj)
   if (depth < 0) return NULL;
   if (pos < 0) return NULL;
 
-  return scheme_make_toplevel(depth, pos, 1, flags);
+  return scheme_make_toplevel(depth, pos, flags);
 }
 
 static Scheme_Object *write_local(Scheme_Object *obj)

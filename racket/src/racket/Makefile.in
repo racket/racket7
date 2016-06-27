@@ -96,6 +96,8 @@ cgc-core:
 	$(MAKE) dynlib
 	$(MAKE) mzlibrary
 	$(MAKE) racket@CGC@
+	$(MAKE) cstartup
+	$(MAKE) racket@CGC@
 	$(MAKE) mzcom@CGC@
 
 3m:
@@ -303,17 +305,7 @@ CSTARTUPDEST = cstartup.inc
 startup:
 	$(MAKE) $(srcdir)/src/$(STARTUPDEST)
 cstartup:
-	$(MAKE) $(srcdir)/src/$(CSTARTUPDEST)
-
-total_startup:
-	awk '{ if (match($$0, "#define USE_COMPILED_STARTUP 1")) print "#define USE_COMPILED_STARTUP 0"; else print }' src/schminc.h > src/schminc.newh
-	mv src/schminc.newh src/schminc.h
-	$(MAKE) cgc
-	rm -rf $(srcdir)/src/$(CSTARTUPDEST)
-	$(MAKE) $(srcdir)/src/$(CSTARTUPDEST)
-	awk '{ if (match($$0, "#define USE_COMPILED_STARTUP 0")) print "#define USE_COMPILED_STARTUP 1"; else print }' src/schminc.h > src/schminc.newh
-	mv src/schminc.newh src/schminc.h
-	$(MAKE) cgc
+	$(MAKE) src/$(CSTARTUPDEST)
 
 MZCONFIGDIR@NOT_MINGW@ = .
 MZCONFIGDIR@MINGW@ = "$(srcdir)/../worksp"
@@ -329,14 +321,11 @@ $(collectsdir)/racket/private/kernstruct.rkt: $(srcdir)/src/makeexn
 
 $(srcdir)/src/$(STARTUPDEST): $(srcdir)/src/startup.rktl $(srcdir)/src/sstoinct.rkt
 	$(RACKET) -cu $(srcdir)/src/sstoinct.rkt < $(srcdir)/src/startup.rktl > $(srcdir)/src/$(STARTUPDEST) 
-$(srcdir)/src/$(CSTARTUPDEST): $(srcdir)/src/startup.rktl $(srcdir)/src/schvers.h $(srcdir)/src/schminc.h
-	$(RUN_THIS_RACKET_CGC) -cu $(srcdir)/src/sstoinc.rkt $(CSTARTUPEXTRA) $(srcdir)/src/$(CSTARTUPDEST) < $(srcdir)/src/startup.rktl 
+$(CSTARTUPDEST):
+	$(RUN_RACKET_CGC) -cu $(srcdir)/src/sstoinc.rkt $(CSTARTUPEXTRA) $(srcdir)/src/$(CSTARTUPDEST) $(srcdir)/src/startup.rktl 
 
 mark:
 	racket -cu $(srcdir)/src/mkmark.rkt $(srcdir)/src < $(srcdir)/src/mzmarksrc.c
-
-cstartup.zo:
-	$(MAKE) startup CSTARTUPEXTRA='zo' CSTARTUPDEST="../cstartup.zo"
 
 clean@NOT_OSX@:
 	/bin/rm -rf tmp[123456789] tests/tmp[123456789] tests/sub[123]

@@ -43,7 +43,7 @@ Scheme_Linklet *scheme_startup_linklet()
 {
 #define EVAL_ONE_STR(str) eval_linklet_string(str)
 
-#if defined(USE_COMPILED_STARTUP) && !defined(ALWAYS_USE_SOURCE_STARTUP)
+#if defined(USE_COMPILED_STARTUP)
 # include "cstartup.inc"
 #else
 # include "startup.inc"

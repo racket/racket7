@@ -29,6 +29,9 @@ exec racket "$0" > `echo "$0" | sed 's/rktc$/c/'` "$0"
 }
 
 @@@IF{!defined(WINDOWS_DYNAMIC_LOAD) || defined(__MINGW32__)}{
+   typedef   signed char Tsint8;
+   typedef unsigned char Tuint8;
+
 # if SIZEOF_SHORT == 2
    typedef   signed short Tsint16;
    typedef unsigned short Tuint16;
@@ -3594,7 +3597,7 @@ void scheme_init_foreign(Scheme_Startup_Env *env)
   @(maplines
      (lambda (x)
        (define-values (sname cfun min max kind) (apply values x))
-       @list{scheme_addin_prim_instance("@sname",
+       @list{scheme_addto_prim_instance("@sname",
                scheme_make_@|kind|_prim(@cfun, "@sname", @min, @max), env)})
       (reverse (cfunctions)))
   @(map-types
@@ -3611,7 +3614,7 @@ void scheme_init_foreign(Scheme_Startup_Env *env)
                         scheme_@|stype|_ctype = (Scheme_Object *)t;}
                   '("\n"))
                 null)@;
-           scheme_add_global_constant("_@stype", (Scheme_Object*)t, env)})
+           scheme_addto_prim_instance("_@stype", (Scheme_Object*)t, env)})
   scheme_restore_prim_instance(env);
 }
 
@@ -3664,12 +3667,12 @@ void scheme_init_foreign(Scheme_Env *env)
   @(maplines
      (lambda (x)
        (define-values (sname cfun min max kind) (apply values x))
-       @list{scheme_addin_primitive_instance("@sname",
+       @list{scheme_addto_primitive_instance("@sname",
               scheme_make_@|kind|_prim((Scheme_Prim *)@(lookup cfun), "@sname", @min, @max), env)})
       (reverse (cfunctions)))
   @(map-types
      @list{scheme_add_global_constant("_@stype", scheme_false, env)})
-  scheme_addin_primitive_instance("prop:cpointer", scheme_cpointer_property, env);
+  scheme_addto_primitive_instance("prop:cpointer", scheme_cpointer_property, env);
   scheme_restore_prim_instance(env);
 }
 

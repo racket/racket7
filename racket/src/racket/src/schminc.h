@@ -25,9 +25,3 @@
 # undef USE_COMPILED_STARTUP
 # define USE_COMPILED_STARTUP 0
 #endif
-
-#if defined(__MWERKS__) && !defined(powerc)
-#define MZCOMPILED_STRING_FAR far
-#else
-#define MZCOMPILED_STRING_FAR /**/
-#endif

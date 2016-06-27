@@ -156,7 +156,7 @@ void scheme_validate_linklet(Mz_CPort *port, Scheme_Linklet *linklet)
     
   tls = MALLOC_N(mzshort*, linklet->num_lifts);
 
-  num_toplevels = 0;
+  num_toplevels = 1;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     num_toplevels += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
   }
@@ -166,6 +166,7 @@ void scheme_validate_linklet(Mz_CPort *port, Scheme_Linklet *linklet)
   tl_state = MALLOC_N_ATOMIC(mzshort, num_toplevels);
   memset(tl_state, 0, sizeof(mzshort) * num_toplevels);
 
+  pos = 1;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELSE(linklet->importss)[i]); j++) {
       tl_state[pos++] = SCHEME_TOPLEVEL_READY;
@@ -461,15 +462,27 @@ static void ref_validate(Scheme_Object *data, Mz_CPort *port,
                          struct Validate_Clearing *vc, int tailpos,
                          Scheme_Hash_Tree *procs)
 {
-  validate_toplevel(SCHEME_PTR1_VAL(data), port, stack, tls, depth, delta, 
-                    num_toplevels, num_lifts, tl_use_map,
-                    tl_state, tl_timestamp,
-                    0);
-  if (!SCHEME_FALSEP(SCHEME_PTR2_VAL(data)))
-    validate_toplevel(SCHEME_PTR2_VAL(data), port, stack, tls, depth, delta, 
+  if (!SCHEME_FALSEP(SCHEME_PTR1_VAL(data)))
+    validate_toplevel(SCHEME_PTR1_VAL(data), port, stack, tls, depth, delta, 
                       num_toplevels, num_lifts, tl_use_map,
                       tl_state, tl_timestamp,
                       0);
+  
+  if (!SCHEME_FALSEP(SCHEME_PTR2_VAL(data))) {
+    /* must reference  */
+    int p;
+    data = SCHEME_PTR2_VAL(data);
+    if (!SAME_TYPE(scheme_toplevel_type, SCHEME_TYPE(data)))
+      scheme_ill_formed_code(port);
+    p = SCHEME_TOPLEVEL_POS(expr);
+    if (p != 0)
+      scheme_ill_formed_code(port);
+
+    validate_toplevel(data, port, stack, tls, depth, delta, 
+                      num_toplevels, num_lifts, tl_use_map,
+                      tl_state, tl_timestamp,
+                      0);
+  }
 }
 
 static int apply_values_validate(Scheme_Object *data, Mz_CPort *port, 

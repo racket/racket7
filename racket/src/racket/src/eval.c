@@ -1788,20 +1788,30 @@ static Scheme_Object *ref_execute (Scheme_Object *data)
   Scheme_Prefix *toplevels;
   Scheme_Object *o;
   Scheme_Object *var;
-  Scheme_Object *tl = SCHEME_PTR1_VAL(data);
+  Scheme_Object *tl;
   Scheme_Instance *home;
 
-  toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(tl)];
-  var = toplevels->a[SCHEME_TOPLEVEL_POS(tl)];
-  if (SCHEME_FALSEP(SCHEME_PTR2_VAL(data)))
-    env = NULL;
-  else
-    env = scheme_environment_from_dummy(SCHEME_PTR2_VAL(data));
+  tl = SCHEME_PTR1_VAL(data);
+  if (SCHEME_FALSEP(tl))
+    var = NULL;
+  else {
+    toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(tl)];
+    var = toplevels->a[SCHEME_TOPLEVEL_POS(tl)];
+  }
+
+  tl = SCHEME_PTR2_VAL(data);
+  if (SCHEME_FALSEP(tl))
+    home = NULL;
+  else {
+    toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(tl)];
+    o = toplevels->a[SCHEME_TOPLEVEL_POS(tl)];
+    home = scheme_get_bucket_home((Scheme_Bucket *)o);
+  }
   
   o = scheme_alloc_object();
   o->type = scheme_global_ref_type;
-  SCHEME_PTR1_VAL(o) = var;
-  SCHEME_PTR2_VAL(o) = (env ? (Scheme_Object *)env : scheme_false);
+  SCHEME_PTR1_VAL(o) = (var ? var : scheme_false);
+  SCHEME_PTR2_VAL(o) = (home ? (Scheme_Object *)home : scheme_false);
 
   if (SCHEME_VARREF_FLAGS(data) & 0x1)
     SCHEME_VARREF_FLAGS(o) |= 0x1;

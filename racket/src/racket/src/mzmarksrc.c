@@ -13,19 +13,6 @@ variable_obj {
   gcBYTES_TO_WORDS(sizeof(Scheme_Bucket_With_Home));
 }
 
-module_var {
- mark:
-  Module_Variable *mv = (Module_Variable *)p;
-
-  gcMARK2(mv->modidx, gc);
-  gcMARK2(mv->sym, gc);
-  gcMARK2(mv->insp, gc);
-  gcMARK2(mv->shape, gc);
-
- size:
-  gcBYTES_TO_WORDS(sizeof(Module_Variable));
-}
-
 bucket_obj {
  mark:
   Scheme_Bucket *b = (Scheme_Bucket *)p;
@@ -250,6 +237,14 @@ ir_local {
 
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_IR_Local));
+}
+
+ir_toplevel {
+ mark:
+  Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)p;
+  gcMARK2(tl->name, gc);
+ size:
+  gcBYTES_TO_WORDS(sizeof(Scheme_IR_Toplevel));
 }
 
 ir_let_value {
@@ -690,13 +685,6 @@ output_port {
   gcBYTES_TO_WORDS(sizeof(Scheme_Output_Port));
 }
 
-
-syntax_compiler {
- mark:
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Simple_Object));
-}
-
 thread_val {
  mark:
   Scheme_Thread *pr = (Scheme_Thread *)p;
@@ -936,78 +924,20 @@ bucket_table_val {
   gcBYTES_TO_WORDS(sizeof(Scheme_Bucket_Table));
 }
 
-namespace_val {
+env_val {
  mark:
   Scheme_Env *e = (Scheme_Env *)p;
 
-  gcMARK2(e->module, gc);
-  gcMARK2(e->module_registry, gc);
-  gcMARK2(e->module_pre_registry, gc);
-  gcMARK2(e->guard_insp, gc);
-  gcMARK2(e->access_insp, gc);
-
-  gcMARK2(e->stx_context, gc);
-  gcMARK2(e->tmp_bind_scope, gc);
-
-  gcMARK2(e->syntax, gc);
-  gcMARK2(e->exp_env, gc);
-  gcMARK2(e->template_env, gc);
-  gcMARK2(e->label_env, gc);
-  gcMARK2(e->instance_env, gc);
-  gcMARK2(e->reader_env, gc);
-
-  gcMARK2(e->shadowed_syntax, gc);
-
-  gcMARK2(e->lift_key, gc);
-
-  gcMARK2(e->link_midx, gc);
-  gcMARK2(e->require_names, gc);
-  gcMARK2(e->et_require_names, gc);
-  gcMARK2(e->tt_require_names, gc);
-  gcMARK2(e->dt_require_names, gc);
-  gcMARK2(e->other_require_names, gc);
-  gcMARK2(e->running, gc);
-  gcMARK2(e->did_starts, gc);
-  gcMARK2(e->available_next[0], gc);
-  gcMARK2(e->available_next[1], gc);
-
-  gcMARK2(e->toplevel, gc);
-  gcMARK2(e->modchain, gc);
-
-  gcMARK2(e->modvars, gc);
-
-  gcMARK2(e->weak_self_link, gc);
-
-  gcMARK2(e->binding_names, gc);
-
+  gcMARK2(e->namespace, gc);
+  gcMARK2(e->instance, gc);
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Env));
-}
-
-module_reg_val {
- mark:
-  Scheme_Module_Registry *r = (Scheme_Module_Registry *)p;
-  gcMARK2(r->loaded, gc);
-  gcMARK2(r->exports, gc);
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Module_Registry));
 }
 
 random_state_val {
  mark:
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Random_State));
-}
-
-compilation_top_val {
- mark:
-  Scheme_Compilation_Top *t = (Scheme_Compilation_Top *)p;
-  gcMARK2(t->code, gc);
-  gcMARK2(t->prefix, gc);
-  gcMARK2(t->binding_namess, gc);
-
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Compilation_Top));
 }
 
 prefix_val {
@@ -1021,30 +951,6 @@ prefix_val {
 		    + ((pf->num_slots-mzFLEX_DELTA) * sizeof(Scheme_Object *))
                     + ((((pf->num_slots - pf->num_stxes) + 31) / 32) 
                        * sizeof(int))));
-}
-
-resolve_prefix_val {
- mark:
-  Resolve_Prefix *rp = (Resolve_Prefix *)p;
-  gcMARK2(rp->toplevels, gc);
-  gcMARK2(rp->stxes, gc);
-  gcMARK2(rp->delay_info_rpair, gc);
-  gcMARK2(rp->src_insp_desc, gc);
-
- size:
-  gcBYTES_TO_WORDS(sizeof(Resolve_Prefix));
-}
-
-comp_prefix_val {
- mark:
-  Comp_Prefix *cp = (Comp_Prefix *)p;
-  gcMARK2(cp->toplevels, gc);
-  gcMARK2(cp->inline_variants, gc);
-  gcMARK2(cp->unbound, gc);
-  gcMARK2(cp->stxes, gc);
-
- size:
-  gcBYTES_TO_WORDS(sizeof(Comp_Prefix));
 }
 
 svector_val {
@@ -1062,131 +968,36 @@ stx_val {
   Scheme_Stx *stx = (Scheme_Stx *)p;
   gcMARK2(stx->val, gc);
   gcMARK2(stx->srcloc, gc);
-  gcMARK2(stx->scopes, gc);
-  gcMARK2(stx->u.to_propagate, gc);
-  gcMARK2(stx->shifts, gc);
-  gcMARK2(stx->taints, gc);
   gcMARK2(stx->props, gc);
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Stx));
 }
 
-module_val {
+linklet_val {
  mark:
-  Scheme_Module *m = (Scheme_Module *)p;
+  Scheme_Linklet *l = (Scheme_Module *)p;
 
-  gcMARK2(m->phaseless, gc);
-
-  gcMARK2(m->code_key, gc);
-
-  gcMARK2(m->modname, gc);
-  gcMARK2(m->modsrc, gc);
-
-  gcMARK2(m->et_requires, gc);
-  gcMARK2(m->requires, gc);
-  gcMARK2(m->tt_requires, gc);
-  gcMARK2(m->dt_requires, gc);
-  gcMARK2(m->other_requires, gc);
-
-  gcMARK2(m->bodies, gc);
-
-  gcMARK2(m->me, gc);
-
-  gcMARK2(m->exp_infos, gc);
-
-  gcMARK2(m->self_modidx, gc);
-
-  gcMARK2(m->binding_names, gc);
-  gcMARK2(m->et_binding_names, gc);
-  gcMARK2(m->other_binding_names, gc);
-
-  gcMARK2(m->insp, gc);
-
-  gcMARK2(m->lang_info, gc);
-
-  gcMARK2(m->hints, gc);
-  gcMARK2(m->ii_src, gc);
-  gcMARK2(m->super_bxs_info, gc);
-  gcMARK2(m->sub_iidx_ptrs, gc);
-
-  gcMARK2(m->comp_prefix, gc);
-  gcMARK2(m->prefix, gc);
-  gcMARK2(m->dummy, gc);
-
-  gcMARK2(m->rn_stx, gc);
-
-  gcMARK2(m->submodule_path, gc);
-  gcMARK2(m->pre_submodules, gc);
-  gcMARK2(m->post_submodules, gc);
-  gcMARK2(m->pre_submodule_names, gc);
-  gcMARK2(m->supermodule, gc);
-  gcMARK2(m->submodule_ancestry, gc);
-
-  gcMARK2(m->primitive, gc);
+  gcMARK2(l->name, gc);
+  gcMARK2(l->importss, gc);
+  gcMARK2(l->exports, gc);
+  gcMARK2(l->defns, gc);
+  gcMARK2(l->bodies, gc);
+  gcMARK2(l->toplevels, gc);
  size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Module));
+  gcBYTES_TO_WORDS(sizeof(Scheme_Linklet));
 }
 
-exp_info_val {
+instance_val {
  mark:
-  Scheme_Module_Export_Info *m = (Scheme_Module_Export_Info *)p;
+  Scheme_Instance *i = (Scheme_Instance *)p;
 
-  gcMARK2(m->provide_protects, gc);
-  gcMARK2(m->indirect_provides, gc);
-
-  gcMARK2(m->indirect_syntax_provides, gc);
-
-  gcMARK2(m->accessible, gc);
+  gcMARK2(i->variables, gc);
+  gcMARK2(i->weak_self_link, gc);
+  gcMARK2(i->exports, gc);
+  gcMARK2(i->name, gc);
+  gcMARK2(i->data, gc);
  size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Module_Export_Info));
-}
-
-module_phase_exports_val {
- mark:
-  Scheme_Module_Phase_Exports *m = (Scheme_Module_Phase_Exports *)p;
-
-  gcMARK2(m->phase_index, gc);
-
-  gcMARK2(m->src_modidx, gc);
-
-  gcMARK2(m->provides, gc);
-  gcMARK2(m->provide_srcs, gc);
-  gcMARK2(m->provide_src_names, gc);
-  gcMARK2(m->provide_nominal_srcs, gc);
-  gcMARK2(m->provide_src_phases, gc);
-
-  gcMARK2(m->ht, gc);
-
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Module_Phase_Exports));
-}
-
-module_exports_val {
- mark:
-  Scheme_Module_Exports *m = (Scheme_Module_Exports *)p;
-
-  gcMARK2(m->rt, gc);
-  gcMARK2(m->et, gc);
-  gcMARK2(m->dt, gc);
-  gcMARK2(m->other_phases, gc);
-
-  gcMARK2(m->src_modidx, gc);
-  gcMARK2(m->modsrc, gc);
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Module_Exports));
-}
-
-modidx_val {
- mark:
-  Scheme_Modidx *modidx = (Scheme_Modidx *)p;
-
-  gcMARK2(modidx->path, gc);
-  gcMARK2(modidx->base, gc);
-  gcMARK2(modidx->resolved, gc);
-  gcMARK2(modidx->shift_cache, gc);
-  gcMARK2(modidx->cache_next, gc);
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Modidx));
+  gcBYTES_TO_WORDS(sizeof(Scheme_Instance));
 }
 
 guard_val {
@@ -1273,30 +1084,8 @@ mark_comp_env {
  mark:
   Scheme_Comp_Env *e = (Scheme_Comp_Env *)p;
 
-  gcMARK2(e->genv, gc);
-  gcMARK2(e->insp, gc);
-  gcMARK2(e->prefix, gc);
-  gcMARK2(e->next, gc);
-  gcMARK2(e->scopes, gc);
-  gcMARK2(e->value_name, gc);
-  gcMARK2(e->observer, gc);
-  gcMARK2(e->binders, gc);
-  gcMARK2(e->bindings, gc);
-  gcMARK2(e->vals, gc);
-  gcMARK2(e->shadower_deltas, gc);
   gcMARK2(e->vars, gc);
-  gcMARK2(e->dup_check, gc);
-  gcMARK2(e->intdef_name, gc);
-  gcMARK2(e->in_modidx, gc);
-  gcMARK2(e->skip_table, gc);
-  
-  gcMARK2(e->use, gc);
-  gcMARK2(e->lifts, gc);
-  gcMARK2(e->bindings, gc);
-
-  gcMARK2(e->binding_namess, gc);
-
-  gcMARK2(e->expand_result_adjust_arg, gc);
+  gcMARK2(e->value_name, gc);
 
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Comp_Env));
@@ -1312,7 +1101,7 @@ mark_resolve_info {
  mark:
   Resolve_Info *i = (Resolve_Info *)p;
   
-  gcMARK2(i->prefix, gc);
+  gcMARK2(i->linklet, gc);
   gcMARK2(i->stx_map, gc);
   gcMARK2(i->tl_map, gc);
   gcMARK2(i->redirects, gc);
@@ -1328,15 +1117,10 @@ mark_unresolve_info {
   Unresolve_Info *i = (Unresolve_Info *)p;
   
   gcMARK2(i->vars, gc);
-  gcMARK2(i->prefix, gc);
+  gcMARK2(i->linklet, gc);
   gcMARK2(i->closures, gc);
   gcMARK2(i->module, gc);
-  gcMARK2(i->comp_prefix, gc);
   gcMARK2(i->new_toplevels, gc);
-  gcMARK2(i->from_modidx, gc);
-  gcMARK2(i->to_modidx, gc);
-  gcMARK2(i->opt_env, gc);
-  gcMARK2(i->opt_insp, gc);
   gcMARK2(i->inline_variants, gc);
   gcMARK2(i->toplevels, gc);
   gcMARK2(i->definitions, gc);
@@ -1407,9 +1191,7 @@ mark_optimize_info {
   
   gcMARK2(i->next, gc);
   gcMARK2(i->consts, gc);
-  gcMARK2(i->cp, gc);
-  gcMARK2(i->env, gc);
-  gcMARK2(i->insp, gc);
+  gcMARK2(i->linklet, gc);
   gcMARK2(i->top_level_consts, gc);
   gcMARK2(i->transitive_use_var, gc);
   gcMARK2(i->context, gc);
@@ -1627,20 +1409,6 @@ END place;
 
 START portfun;
 
-mark_load_handler_data {
- mark:
-  LoadHandlerData *d = (LoadHandlerData *)p;
-    
-  gcMARK2(d->config, gc);
-  gcMARK2(d->port, gc);
-  gcMARK2(d->p, gc);
-  gcMARK2(d->stxsrc, gc);
-  gcMARK2(d->expected_module, gc);
-  
- size:
-  gcBYTES_TO_WORDS(sizeof(LoadHandlerData));
-}
-
 mark_indexed_string {
  mark:
   Scheme_Indexed_String *is = (Scheme_Indexed_String *)p;
@@ -1807,13 +1575,8 @@ mark_marshal_tables {
   gcMARK2(mt->symtab, gc);
   gcMARK2(mt->st_refs, gc);
   gcMARK2(mt->st_ref_stack, gc);
-  gcMARK2(mt->reachable_scopes, gc);
-  gcMARK2(mt->reachable_scope_stack, gc);
-  gcMARK2(mt->pending_reachable_ids, gc);
-  gcMARK2(mt->conditionally_reachable_scopes, gc);
   gcMARK2(mt->intern_map, gc);
   gcMARK2(mt->identity_map, gc);
-  gcMARK2(mt->top_map, gc);
   gcMARK2(mt->key_map, gc);
   gcMARK2(mt->delay_map, gc);
   gcMARK2(mt->cdata_map, gc);
@@ -2341,10 +2104,6 @@ mark_delay_load {
 mark_unmarshal_tables {
  mark:
   Scheme_Unmarshal_Tables *ut = (Scheme_Unmarshal_Tables *)p;
-  gcMARK2(ut->rns, gc);
-  gcMARK2(ut->current_rns, gc);
-  gcMARK2(ut->multi_scope_pairs, gc);
-  gcMARK2(ut->current_multi_scope_pairs, gc);
   gcMARK2(ut->rp, gc);
   gcMARK2(ut->decoded, gc);
  size:

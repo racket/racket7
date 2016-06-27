@@ -2250,7 +2250,6 @@ static Scheme_Object *shift_lifted_reference(Scheme_Object *tl, Resolve_Info *in
   depth = resolve_toplevel_pos(info);
   tl = scheme_make_toplevel(depth + delta,
                             pos,
-                            1,
                             SCHEME_TOPLEVEL_CONST);
   
   /* register if non-stub: */
@@ -2493,7 +2492,7 @@ static int resolve_info_lookup(Resolve_Info *info, Scheme_IR_Local *var, Scheme_
 
 static Scheme_Object *resolve_generate_stub_lift()
 {
-  return scheme_make_toplevel(0, 0, 1, SCHEME_TOPLEVEL_CONST);
+  return scheme_make_toplevel(0, 0, SCHEME_TOPLEVEL_CONST);
 }
 
 static int resolve_toplevel_pos(Resolve_Info *info)
@@ -2522,13 +2521,13 @@ static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, 
 
   set_tl_pos_used(info, pos);
 
-  return scheme_make_toplevel(skip, pos, 1,
+  return scheme_make_toplevel(skip, pos,
                               SCHEME_IR_TOPLEVEL_FLAGS((Scheme_IR_Toplevel *)expr) & SCHEME_TOPLEVEL_FLAGS_MASK);
 }
 
 static Scheme_Object *shift_toplevel(Scheme_Object *expr, int delta)
 {
-  return scheme_make_toplevel(delta, SCHEME_TOPLEVEL_POS(expr), 1,
+  return scheme_make_toplevel(delta, SCHEME_TOPLEVEL_POS(expr),
                               SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_FLAGS_MASK);
 }
 
@@ -2549,7 +2548,6 @@ static Scheme_Object *resolve_invent_toplevel(Resolve_Info *info)
 
   return scheme_make_toplevel(skip,
                               pos,
-                              1,
                               SCHEME_TOPLEVEL_CONST);
 }
 
@@ -2557,7 +2555,6 @@ static Scheme_Object *resolve_invented_toplevel_to_defn(Resolve_Info *info, Sche
 {
   return scheme_make_toplevel(0,
                               SCHEME_TOPLEVEL_POS(tl),
-                              1,
                               SCHEME_TOPLEVEL_CONST);
 }
 
@@ -2818,8 +2815,7 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
   
   MZ_ASSERT(pos < ui->linklet->num_toplevels);
   
-  if (ui->inlining
-      && (pos > (ui->linklet->num_imports + ui->linklet->num_exports - ui->linklet->num_lifts))) {
+  if (ui->inlining && (pos > (linklet->num_toplevels - ui->linklet->num_lifts))) {
     /* Must be cross-linklet, since there are no lifts during
        linklet optimization... and generated code cannot refer to a
        lift across a module boundary. */
@@ -3902,13 +3898,17 @@ static void generate_toplevels_array(Scheme_Linklet *linklet)
   Scheme_IR_Toplevel **toplevels, *tl;
   int i, j, pos = 0;
 
-  num_toplevels = 0;
+  num_toplevels = 1;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     num_toplevels += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
   }
   num_toplevels += SCHEME_VEC_SIZE(linklet->exports);
 
   toplevels = MALLOC_N(Scheme_IR_Toplevel*, num_toplevels);
+
+  /* Start with the pseudo-variable with a strong link to the instance: */
+  tl = make_ir_toplevel_variable(e, -1, -1, pos);
+  toplevels[pos++] = tl;
   
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELSE(linklet->importss)[i]); j++) {

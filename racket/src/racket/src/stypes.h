@@ -248,23 +248,18 @@ enum {
   scheme_rt_tested_output_file,         /* 228 */
   scheme_rt_indexed_string,             /* 229 */
   scheme_rt_output_file,                /* 230 */
-  scheme_rt_load_handler_data,          /* 231 */
   scheme_rt_pipe,                       /* 232 */
-  scheme_rt_beos_process,               /* 233 */
   scheme_rt_system_child,               /* 234 */
   scheme_rt_tcp,                        /* 235 */
   scheme_rt_write_data,                 /* 236 */
   scheme_rt_tcp_select_info,            /* 237 */
   scheme_rt_param_data,                 /* 238 */
   scheme_rt_will,                       /* 239 */
-  scheme_rt_linker_name,                /* 240 */
-  scheme_rt_param_map,                  /* 241 */
   scheme_rt_finalization,               /* 242 */
   scheme_rt_finalizations,              /* 243 */
   scheme_rt_cpp_object,                 /* 244 */
   scheme_rt_cpp_array_object,           /* 245 */
   scheme_rt_stack_object,               /* 246 */
-  scheme_rt_preallocated_object,        /* 247 */
   scheme_thread_hop_type,               /* 248 */
   scheme_rt_srcloc,                     /* 249 */
   scheme_rt_evt,                        /* 250 */

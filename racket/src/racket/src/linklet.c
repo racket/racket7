@@ -434,7 +434,9 @@ static Scheme_Object *variable_instance(int argc, Scheme_Object **argv)
   if (!SAME_TYPE(SCHEME_TYPE(v), scheme_global_ref_type))
     scheme_wrong_contract("variable-reference-instance", "variable-reference?", 0, argc, argv);
 
-  v = SCHEME_PTR1_VAL();
+  v = SCHEME_PTR1_VAL(v);
+  if (SCHEME_FALSEP(v))
+    v = SCHEME_PTR2_VAL(argv[0]);
   env = scheme_get_bucket_home((Scheme_Bucket *)v);
 
   return (Scheme_Object *)env;
@@ -527,6 +529,9 @@ Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Ins
     
   b = scheme_bucket_from_table(inst->variables, (char *)symbol);
   ASSERT_IS_VARIABLE_BUCKET(b);
+  if (SCHEME_FALSEP(symbol))
+    ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_STRONG_HOME_LINK;
+
   scheme_set_bucket_home(b, env);
 
   return b;
@@ -822,7 +827,7 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
   num_importss = SCHEME_VEC_SIZE(linklet->importss);
   num_exports = SCHEME_VEC_SIZE(linklet->exports);
 
-  i = 0;
+  i = 1;
   for (j = num_importss; j--; ) {
     i += SCHEME_VEC_SIZE(SCHEME_VEC_ELSE(linklet->importss)[j]);
   }
@@ -839,6 +844,9 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
   rs[0] = (Scheme_Object *)pf;
 
   pos = 0;
+  v = scheme_instance_variable_bucket(v, instance);
+  pf->a[pos++] = v;
+  
   for (j = 0; j < num_importss; j++) {
     int num_imports = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[j]);
     for (i = 0; i < num_imports; i++) {
@@ -859,7 +867,7 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
   }
 
   for (i = 0; i < num_exports; i++) {
-    v = get_instance_variable_bucket(instance, SCHEME_VEC_ELS(linklet->exports)[i], 1);
+    v = scheme_instance_variable_bucket(SCHEME_VEC_ELS(linklet->exports)[i], instance);
     pf->a[pos++] = v;
   }
 

@@ -840,9 +840,6 @@ int is_equal (Scheme_Object *obj1, Scheme_Object *obj2, Equal_Info *eql)
                                              (Scheme_Bucket_Table *)obj2, orig_obj2,
                                              eql);
       }
-    case scheme_wrap_chunk_type: {
-      return vector_equal(obj1, obj1, obj2, obj2, eql);
-    }
     default:
       if (!eql->for_chaperone && ((t1 == scheme_chaperone_type)
                                   || (t1 == scheme_proc_chaperone_type))) {

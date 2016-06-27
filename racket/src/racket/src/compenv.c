@@ -40,8 +40,6 @@ ROSYM static Scheme_Object *undefined_error_name_symbol;
 THREAD_LOCAL_DECL(static Scheme_Hash_Table *toplevels_ht);
 THREAD_LOCAL_DECL(static Scheme_Hash_Table *locals_ht[2]);
 
-static void init_compile_data(Scheme_Comp_Env *env);
-
 static void init_scheme_local();
 static void init_toplevels();
 
@@ -82,172 +80,71 @@ void scheme_init_compenv_symbol(void)
 }
 
 /*========================================================================*/
-/*                       compilation info management                      */
-/*========================================================================*/
-
-void scheme_default_compile_rec(Scheme_Compile_Info *rec, int drec)
-{
-}
-
-void scheme_init_compile_recs(Scheme_Compile_Info *src, int drec, 
-			      Scheme_Compile_Info *dest, int n)
-{
-  int i;
-
-  for (i = 0; i < n; i++) {
-    dest[i].comp = 1;
-    dest[i].dont_mark_local_use = src[drec].dont_mark_local_use;
-    dest[i].resolve_module_ids = src[drec].resolve_module_ids;
-    dest[i].pre_unwrapped = 0;
-    dest[i].testing_constantness = 0;
-    dest[i].env_already = 0;
-    dest[i].comp_flags = src[drec].comp_flags;
-  }
-}
-
-void scheme_merge_compile_recs(Scheme_Compile_Info *src, int drec, 
-			       Scheme_Compile_Info *dest, int n)
-{
-  /* Nothing to do anymore, since we moved max_let_depth to resolve phase */
-}
-
-void scheme_init_lambda_rec(Scheme_Compile_Info *src, int drec,
-			    Scheme_Compile_Info *lam, int dlrec)
-{
-  lam[dlrec].comp = 1;
-  lam[dlrec].dont_mark_local_use = src[drec].dont_mark_local_use;
-  lam[dlrec].resolve_module_ids = src[drec].resolve_module_ids;
-  lam[dlrec].substitute_bindings = src[dlrec].substitute_bindings;
-  lam[dlrec].pre_unwrapped = 0;
-  lam[dlrec].testing_constantness = 0;
-  lam[dlrec].env_already = 0;
-  lam[dlrec].comp_flags = src[drec].comp_flags;
-}
-
-void scheme_merge_lambda_rec(Scheme_Compile_Info *src, int drec,
-			     Scheme_Compile_Info *lam, int dlrec)
-{
-}
-
-void scheme_compile_rec_done_local(Scheme_Compile_Info *rec, int drec)
-{
-}
-
-/*========================================================================*/
 /*        compile-time env, constructors and simple queries               */
 /*========================================================================*/
 
-static void init_compile_data(Scheme_Comp_Env *env)
-{
-  env->max_use = -1;
-}
-
-
-Scheme_Object *scheme_make_toplevel(mzshort depth, int position, int resolved, int flags)
+Scheme_Object *scheme_make_toplevel(mzshort depth, int position, int flags)
 {
   Scheme_Toplevel *tl;
   Scheme_Object *v, *pr;
 
-  /* Important: non-resolved can't be cached, because the ISCONST
-     field is modified to track mutated module-level variables. But
-     the value for a specific toplevel is cached in the environment
-     layer. */
+  if ((depth < MAX_CONST_TOPLEVEL_DEPTH)
+      && (position < MAX_CONST_TOPLEVEL_POS))
+    return toplevels[depth][position][flags];
 
-  if (resolved) {
-    if ((depth < MAX_CONST_TOPLEVEL_DEPTH)
-	&& (position < MAX_CONST_TOPLEVEL_POS))
-      return toplevels[depth][position][flags];
-
-    if ((position < 0xFFFF) && (depth < 0xFF)) {
-      int ep = position | (depth << 16) | (flags << 24);
-      pr = scheme_make_integer(ep);
-    } else {
-      pr = scheme_make_vector(3, NULL);
-      SCHEME_VEC_ELS(pr)[0] = scheme_make_integer(position);
-      SCHEME_VEC_ELS(pr)[1] = scheme_make_integer(flags);
-      SCHEME_VEC_ELS(pr)[2] = scheme_make_integer(depth);
-    }
-    v = scheme_hash_get_atomic(toplevels_ht, pr);
-    if (v)
-      return v;
-  } else
-    pr = NULL;
+  if ((position < 0xFFFF) && (depth < 0xFF)) {
+    int ep = position | (depth << 16) | (flags << 24);
+    pr = scheme_make_integer(ep);
+  } else {
+    pr = scheme_make_vector(3, NULL);
+    SCHEME_VEC_ELS(pr)[0] = scheme_make_integer(position);
+    SCHEME_VEC_ELS(pr)[1] = scheme_make_integer(flags);
+    SCHEME_VEC_ELS(pr)[2] = scheme_make_integer(depth);
+  }
+  v = scheme_hash_get_atomic(toplevels_ht, pr);
+  if (v)
+    return v;
 
   tl = (Scheme_Toplevel *)scheme_malloc_atomic_tagged(sizeof(Scheme_Toplevel));
-  tl->iso.so.type = (resolved ? scheme_toplevel_type : scheme_ir_toplevel_type);
+  tl->iso.so.type = scheme_toplevel_type;
   tl->depth = depth;
   tl->position = position;
   SCHEME_TOPLEVEL_FLAGS(tl) = flags | HIGH_BIT_TO_DISABLE_HASHING;
 
-  if (resolved) {
-    if (toplevels_ht->count > TABLE_CACHE_MAX_SIZE) {
-      toplevels_ht = scheme_make_hash_table_equal();
-    }
-    scheme_hash_set_atomic(toplevels_ht, pr, (Scheme_Object *)tl);
+  if (toplevels_ht->count > TABLE_CACHE_MAX_SIZE) {
+    toplevels_ht = scheme_make_hash_table_equal();
   }
+  scheme_hash_set_atomic(toplevels_ht, pr, (Scheme_Object *)tl);
 
   return (Scheme_Object *)tl;
-}
-
-Scheme_Object *scheme_register_toplevel_in_comp_prefix(Scheme_Object *var, Comp_Prefix *cp,
-                                                       int imported, Scheme_Object *inline_variant)
-{
-  Scheme_Hash_Table *ht;
-  Scheme_Object *o;
-
-  ht = cp->toplevels;
-  if (!ht) {
-    ht = scheme_make_hash_table(SCHEME_hash_ptr);
-    cp->toplevels = ht;
-  }
-
-  o = scheme_hash_get(ht, var);
-  if (o)
-    return o;
-
-  o = scheme_make_toplevel(0, cp->num_toplevels, 0, 
-                           (imported 
-                            ? ((SCHEME_MODVAR_FLAGS(var) & SCHEME_MODVAR_CONST)
-                               ? SCHEME_TOPLEVEL_CONST
-                               : ((SCHEME_MODVAR_FLAGS(var) & SCHEME_MODVAR_FIXED)
-                                  ? SCHEME_TOPLEVEL_FIXED
-                                  : SCHEME_TOPLEVEL_READY))
-                            : 0));
-
-  scheme_hash_set(ht, var, o);
-
-  if (inline_variant) {
-    ht = cp->inline_variants;
-    if (!ht) {
-      ht = scheme_make_hash_table(SCHEME_hash_ptr);
-      cp->inline_variants = ht;
-    }
-    scheme_hash_set(ht, scheme_make_integer(cp->num_toplevels), inline_variant);
-  }
-  
-  cp->num_toplevels++;
-
-  return o;
-}
-
-Scheme_Object *scheme_register_toplevel_in_prefix(Scheme_Object *var, Scheme_Comp_Env *env,
-						  Scheme_Compile_Info *rec, int drec,
-                                                  int imported, Scheme_Object *inline_variant)
-{
-  Comp_Prefix *cp = env->prefix;
-
-  if (rec && rec[drec].dont_mark_local_use) {
-    /* Make up anything; it's going to be ignored. */
-    return scheme_make_toplevel(0, 0, 0, 0);
-  }
-
-  return scheme_register_toplevel_in_comp_prefix(var, cp, imported, inline_variant);
 }
 
 Scheme_Object *scheme_toplevel_to_flagged_toplevel(Scheme_Object *_tl, int flags)
 {
   Scheme_Toplevel *tl = (Scheme_Toplevel *)_tl;
-  return scheme_make_toplevel(tl->depth, tl->position, 0, flags);
+  return scheme_make_toplevel(tl->depth, tl->position, flags);
+}
+
+Scheme_IR_Toplevel *scheme_make_ir_toplevel(Scheme_Object *id, int instance_pos, int variable_pos, int identity_pos, int flags)
+{
+  Scheme_IR_Toplevel *tl;
+  
+  tl = MALLOC_ONE_TAGGED(Scheme_IR_Toplevel);
+  tl->iso.so.type = scheme_ir_toplevel_type;
+  SCHEME_TOPLEVEL_FLAGS(tl) = flags | HIGH_BIT_TO_DISABLE_HASHING;
+
+  tl->name = id;
+  tl->instance_pos = instance_pos;
+  tl->variable_pos = variable_pos;
+  tl->identity_pos = identity_pos;
+
+  return tl;
+}
+
+Scheme_IR_Toplevel *scheme_ir_toplevel_to_flagged_toplevel(Scheme_IR_Toplevel *tl, int flags)
+{
+  return scheme_make_ir_toplevel(tl->name, tl->instance_pos, tl->variable_pos, tl->identity_pos,
+                                 SCHEME_TOPLEVEL_FLAGS(tl) | flags);
 }
 
 /*========================================================================*/
@@ -385,81 +282,6 @@ Scheme_Object *scheme_make_local(Scheme_Type type, int pos, int flags)
   return v;
 }
 
-Scheme_Object *scheme_hash_module_variable(Scheme_Env *env, Scheme_Object *modidx, 
-					   Scheme_Object *stxsym, Scheme_Object *insp,
-					   int pos, intptr_t mod_phase, int is_constant,
-                                           Scheme_Object *shape)
-/* is_constant == 2 => constant over all instantiations and phases */
-{
-  Scheme_Object *val;
-  Scheme_Hash_Table *ht;
-
-  if (!env->modvars) {
-    ht = scheme_make_hash_table_equal_modix_eq();
-    env->modvars = ht;
-  }
-
-  stxsym = SCHEME_STX_SYM(stxsym);
-
-  ht = (Scheme_Hash_Table *)scheme_hash_get(env->modvars, modidx);
-
-  if (!ht) {
-    ht = scheme_make_hash_table(SCHEME_hash_ptr);
-    scheme_hash_set(env->modvars, modidx, (Scheme_Object *)ht);
-  }
-
-  /* Loop for inspector-specific hash table, maybe: */
-  while (1) {
-    
-    val = scheme_hash_get(ht, stxsym);
-    
-    if (!val) {
-      Module_Variable *mv;
-      
-      mv = MALLOC_ONE_TAGGED(Module_Variable);
-      mv->iso.so.type = scheme_module_variable_type;
-      
-      mv->modidx = modidx;
-      mv->sym = stxsym;
-      mv->insp = insp;
-      mv->pos = pos;
-      mv->mod_phase = (int)mod_phase;
-      mv->shape = shape;
-
-      if (is_constant > 1)
-        SCHEME_MODVAR_FLAGS(mv) |= SCHEME_MODVAR_CONST;
-      else if (is_constant)
-        SCHEME_MODVAR_FLAGS(mv) |= SCHEME_MODVAR_FIXED;
-      
-      val = (Scheme_Object *)mv;
-      
-      scheme_hash_set(ht, stxsym, val);
-      
-      break;
-    } else {
-      /* Check that inspector is the same. */
-      Module_Variable *mv = (Module_Variable *)val;
-      
-      if (!SAME_OBJ(mv->insp, insp)) {
-	/* Need binding for a different inspector. Try again. */
-	val = scheme_hash_get(ht, insp);
-	if (!val) {
-	  Scheme_Hash_Table *ht2;
-	  /* Make a table for this specific inspector */
-	  ht2 = scheme_make_hash_table(SCHEME_hash_ptr);
-	  scheme_hash_set(ht, insp, (Scheme_Object *)ht2);
-	  ht = ht2;
-	  /* loop... */
-	} else
-	  ht = (Scheme_Hash_Table *)val;
-      } else
-	break;
-    }
-  }
-
-  return val;
-}
-
 /*********************************************************************/
 
 Scheme_Object *scheme_intern_struct_proc_shape(int shape)
@@ -496,10 +318,6 @@ Scheme_IR_Local *scheme_make_ir_local(Scheme_Object *id)
   return var;
 }
 
-Scheme_IR_Toplevel *scheme_make_ir_toplevel(Scheme_Object *id, int instance_pos, int variable_pos)
-{
-}
-
 static void record_local_use(Scheme_IR_Local *var, int flags)
 {
   if (var->use_count < SCHEME_USE_COUNT_INF)
@@ -530,81 +348,6 @@ scheme_compile_lookup(Scheme_Object *find_id, Scheme_Comp_Env *env, int flags)
   }
   
   return v;
-}
-
-Scheme_Object *scheme_extract_unsafe(Scheme_Object *o)
-{
-  Scheme_Env *home;
-  home = scheme_get_bucket_home((Scheme_Bucket *)o);
-  if (home && home->module && scheme_is_unsafe_modname(home->module->modname))
-    return (Scheme_Object *)((Scheme_Bucket *)o)->val;
-  else
-    return NULL;
-}
-
-Scheme_Object *scheme_extract_flfxnum(Scheme_Object *o)
-{
-  Scheme_Env *home;
-  home = scheme_get_bucket_home((Scheme_Bucket *)o);
-  if (home && home->module && scheme_is_flfxnum_modname(home->module->modname))
-    return (Scheme_Object *)((Scheme_Bucket *)o)->val;
-  else
-    return NULL;
-}
-
-Scheme_Object *scheme_extract_extfl(Scheme_Object *o)
-{
-  Scheme_Env *home;
-  home = scheme_get_bucket_home((Scheme_Bucket *)o);
-  if (home && home->module && scheme_is_extfl_modname(home->module->modname))
-    return (Scheme_Object *)((Scheme_Bucket *)o)->val;
-  else
-    return NULL;
-}
-
-Scheme_Object *scheme_extract_futures(Scheme_Object *o)
-{
-  Scheme_Env *home;
-  home = scheme_get_bucket_home((Scheme_Bucket *)o);
-  if (home && home->module && scheme_is_futures_modname(home->module->modname))
-    return (Scheme_Object *)((Scheme_Bucket *)o)->val;
-  else
-    return NULL;
-}
-
-Scheme_Object *scheme_extract_foreign(Scheme_Object *o)
-{
-  Scheme_Env *home;
-  home = scheme_get_bucket_home((Scheme_Bucket *)o);
-  if (home && home->module && scheme_is_foreign_modname(home->module->modname))
-    return (Scheme_Object *)((Scheme_Bucket *)o)->val;
-  else
-    return NULL;
-}
-
-int scheme_env_check_reset_any_use(Scheme_Comp_Env *frame)
-{
-  int any_use;
-
-  any_use = frame->any_use;
-  frame->any_use = 0;
-
-  return any_use;
-}
-
-int scheme_env_max_use_above(Scheme_Comp_Env *frame, int pos)
-{
-  return frame->max_use >= pos;
-}
-
-void scheme_mark_all_use(Scheme_Comp_Env *frame)
-{
-  /* Mark all variables as used for the purposes of `letrec-syntaxes+values`
-     splitting */
-  while (frame && (frame->max_use < frame->num_bindings)) {
-    frame->max_use = frame->num_bindings;
-    frame = frame->next;
-  }
 }
 
 /*========================================================================*/
