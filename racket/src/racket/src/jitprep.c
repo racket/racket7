@@ -300,16 +300,16 @@ static Scheme_Object *clone_inline_variant(Scheme_Object *obj, Scheme_Object *na
 
 static Scheme_Object *define_values_jit(Scheme_Object *data)
 {
-  Scheme_Object *orig = SCHEME_VEC_ELS(data)[0], *naya;
+  Scheme_Object *orig = SCHEME_DEFN_RHS(data), *naya;
 
   if (SAME_TYPE(SCHEME_TYPE(orig), scheme_lambda_type)
-      && (SCHEME_VEC_SIZE(data) == 2))
-    naya = scheme_jit_closure(orig, SCHEME_VEC_ELS(data)[1]);
+      && (SCHEME_DEFN_VAR_COUNT(data) == 1))
+    naya = scheme_jit_closure(orig, SCHEME_DEFN_VAR_(data, 0));
   else if (SAME_TYPE(SCHEME_TYPE(orig), scheme_inline_variant_type)
            && SAME_TYPE(SCHEME_TYPE(SCHEME_VEC_ELS(orig)[0]), scheme_lambda_type)
-           && (SCHEME_VEC_SIZE(data) == 2)) {
-    naya = scheme_jit_closure(SCHEME_VEC_ELS(orig)[0], SCHEME_VEC_ELS(data)[1]);
-    if (!SAME_OBJ(naya, SCHEME_VEC_ELS(orig)[0]))
+           && (SCHEME_DEFN_VAR_COUNT(data) == 1)) {
+    naya = scheme_jit_closure(SCHEME_VEC_ELS(orig)[0], SCHEME_DEFN_VAR_(data, 0));
+    if (!SAME_OBJ(naya, SCHEME_DEFN_RHS(orig)))
       naya = clone_inline_variant(orig, naya);
   } else
     naya = jit_expr(orig);
@@ -319,7 +319,7 @@ static Scheme_Object *define_values_jit(Scheme_Object *data)
   else {
     orig = naya;
     naya = scheme_clone_vector(data, 0, 1);
-    SCHEME_VEC_ELS(naya)[0] = orig;
+    SCHEME_DEFN_RHS(naya) = orig;
     return naya;
   }
 }

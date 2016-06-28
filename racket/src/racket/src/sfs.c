@@ -126,7 +126,7 @@ static Scheme_Object *sfs_passes(Scheme_Object *o, SFS_Info *info)
   if (SAME_TYPE(SCHEME_TYPE(o), scheme_linklet_type))
     linklet_sfs((Scheme_Linklet *)o, info);
   else
-    o = sfs_expr(0, info, -1);
+    o = sfs_expr(o, info, -1);
 
   return o;
 }
@@ -913,8 +913,8 @@ define_values_sfs(Scheme_Object *data, SFS_Info *info)
 {
   Scheme_Object *e;
   sfs_start_sequence(info, 1, 0);
-  e = sfs_expr(SCHEME_VEC_ELS(data)[0], info, -1);
-  SCHEME_VEC_ELS(data)[0] = e;
+  e = sfs_expr(SCHEME_DEFN_RHS(data), info, -1);
+  SCHEME_DEFN_RHS(data) = e;
   return data;
 }
 

@@ -59,7 +59,8 @@ static Scheme_Object *variable_p(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_instance(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv);
 
-static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet);
+static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet, Scheme_Object *name);
+static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet);
 
 static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
                                                  int num_instances, Scheme_Instance **instances);
@@ -90,7 +91,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("primitive-table", primitive_table, 1, 2, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
-  ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 1, env);
+  ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 2, env);
   ADD_PRIM_W_ARITY("recompile-linklet", recompile_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
@@ -186,15 +187,26 @@ static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)
 
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
 {
-  return (Scheme_Object *)compile_and_or_optimize_linklet(argv[0], NULL);
+  Scheme_Object *name;
+
+  if (argc > 1)
+    name = argv[1];
+  else
+    name = scheme_intern_symbol("anonymous-linklet");
+  
+  return (Scheme_Object *)compile_and_or_optimize_linklet(argv[0], NULL, name);
 }
 
 static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
 {
+  Scheme_Object *name;
+    
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
     scheme_wrong_contract("recompile-linklet", "linklet?", 0, argc, argv);
+
+  name = ((Scheme_Linklet *)argv[0])->name;
   
-  return (Scheme_Object *)compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0]);
+  return (Scheme_Object *)compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0], name);
 }
 
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
@@ -603,6 +615,7 @@ Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
 {
   Scheme_Instance *inst;
   Scheme_Bucket_Table *variables;
+  Scheme_Hash_Tree *ht;
 
   inst = MALLOC_ONE_TAGGED(Scheme_Instance);
   inst->so.type = scheme_instance_type;
@@ -612,6 +625,9 @@ Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
 
   variables = scheme_make_bucket_table(7, SCHEME_hash_ptr);
   inst->variables = variables;
+
+  ht = scheme_make_hash_tree(0);
+  inst->source_names = ht;
 
   return inst;
 }
@@ -647,7 +663,8 @@ Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Sc
 /*                            compiling linklets                          */
 /*========================================================================*/
 
-static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet)
+static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet,
+                                                       Scheme_Object *name)
 {
   Scheme_Config *config;
   int enforce_const, set_undef, can_inline;
@@ -660,7 +677,10 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
   if (!linklet) {
     linklet = scheme_compile_linklet(form, set_undef);
     linklet = scheme_letrec_check_linklet(linklet);
+  } else {
+    linklet = clone_linklet(linklet);
   }
+  linklet->name = name;
   linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline);
   linklet = scheme_resolve_linklet(linklet, enforce_const);
   linklet = scheme_sfs_linklet(linklet);
@@ -681,9 +701,19 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
   return linklet;
 }
 
-Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form)
+Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form, Scheme_Object *name)
 {
-  return compile_and_or_optimize_linklet(form, NULL);
+  return compile_and_or_optimize_linklet(form, NULL, name);
+}
+
+static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet)
+{
+  Scheme_Linklet *linklet2;
+
+  linklet2 = MALLOC_ONE_TAGGED(Scheme_Linklet);
+  memcpy(linklet2, linklet, sizeof(Scheme_Linklet));
+
+  return linklet2;
 }
   
 /*========================================================================*/
@@ -755,9 +785,7 @@ Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instanc
            restore the runstack and then add the prefix back. */
         save_prefix = suspend_prefix(save_runstack);
         v = _scheme_call_with_prompt_multi(body_one_expr, 
-                                           scheme_make_raw_pair(save_prefix,
-                                                                scheme_make_raw_pair(body,
-                                                                                     (Scheme_Object *)instance)));
+                                           scheme_make_raw_pair(save_prefix, body));
         resume_prefix(save_prefix);
 
         /* Double-check that the definition-installing part of the

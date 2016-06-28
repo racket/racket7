@@ -54,7 +54,6 @@ struct Resolve_Info
   int max_let_depth; /* filled in by sub-expressions to track the maximum
                         stack depth experienced so far */
   Scheme_Linklet *linklet;
-  Scheme_Hash_Table *stx_map; /* compile offset => resolve offset; prunes prefix-recored stxes */
   mzshort toplevel_pos; /* tracks where the run-time prefix will be, relative
                            to the current stack depth */
   void *tl_map; /* fixnum or bit array (as array of `int's) indicating which
@@ -2195,7 +2194,6 @@ static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_co
 {
   Resolve_Info *naya;
   Scheme_Object *b;
-  Scheme_Hash_Table *ht;
 
   naya = MALLOC_ONE_RT(Resolve_Info);
 #ifdef MZTAG_REQUIRED
@@ -2206,9 +2204,7 @@ static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_co
   naya->current_lex_depth = 0;
   naya->next = NULL;
   naya->enforce_const = enforce_const;
-
-  ht = scheme_make_hash_table(SCHEME_hash_ptr);
-  naya->stx_map = ht;
+  naya->linklet = linklet;
 
   b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
   naya->use_jit = SCHEME_TRUEP(b);
@@ -2236,7 +2232,6 @@ static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambd
   naya->type = scheme_rt_resolve_info;
 #endif
   naya->linklet = info->linklet;
-  naya->stx_map = info->stx_map;
   naya->next = (lambda ? NULL : info);
   naya->use_jit = info->use_jit;
   naya->enforce_const = info->enforce_const;

@@ -36,7 +36,8 @@ static Scheme_Linklet *eval_linklet_string(const char *str)
 
   expr = scheme_internal_read(port, NULL, 1, 1, 0, 0, -1, NULL, NULL);
 
-  return scheme_compile_and_optimize_linklet(scheme_datum_to_syntax(expr, scheme_false, 0));
+  return scheme_compile_and_optimize_linklet(scheme_datum_to_syntax(expr, scheme_false, 0),
+                                             scheme_intern_symbol("startup"));
 }
 
 Scheme_Linklet *scheme_startup_linklet()

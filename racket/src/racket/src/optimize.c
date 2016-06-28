@@ -1119,7 +1119,7 @@ static int is_constant_super(Scheme_Object *arg,
       }
     }
   } else if (SAME_TYPE(SCHEME_TYPE(arg), scheme_toplevel_type)) {
-    pos = SCHEME_IR_TOPLEVEL_POS(arg);
+    pos = SCHEME_TOPLEVEL_POS(arg);
     if (runstack) {
       /* This is eval mode; conceptually, this code belongs in 
          define_execute_with_dynamic_state() */
@@ -5204,14 +5204,12 @@ static Scheme_Object *optimize_wcm(Scheme_Object *o, Optimize_Info *info, int co
 static Scheme_Object *
 define_values_optimize(Scheme_Object *data, Optimize_Info *info, int context)
 {
-  Scheme_Object *vars = SCHEME_VEC_ELS(data)[0];
-  Scheme_Object *val = SCHEME_VEC_ELS(data)[1];
+  Scheme_Object *val = SCHEME_DEFN_RHS(data);
 
   optimize_info_used_top(info);
   val = optimize_expr(val, info, 0);
 
-  SCHEME_VEC_ELS(data)[0] = vars;
-  SCHEME_VEC_ELS(data)[1] = val;
+  SCHEME_DEFN_RHS(data) = val;
 
   return data;
 }
@@ -7733,7 +7731,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
 
           n = SCHEME_DEFN_VAR_COUNT(e);
           if ((n == 1) && SCHEME_LAMBDAP(SCHEME_DEFN_RHS(e)))  {
-            Scheme_IR_Toplevel *var = SCHEME_DEFN_VAR(e, 1);
+            Scheme_IR_Toplevel *var = SCHEME_DEFN_VAR(e, 0);
 
             if (!(SCHEME_IR_TOPLEVEL_FLAGS(var) & SCHEME_IR_TOPLEVEL_MUTATED)) {
               if (!consts)
@@ -7858,7 +7856,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
                 } else {
                   if (!re_consts)
                     re_consts = scheme_make_hash_table(SCHEME_hash_ptr);
-                  scheme_hash_set(re_consts, scheme_make_integer(i_m), (Scheme_Object *)var);
+                  scheme_hash_set(re_consts, scheme_make_integer(i_m), scheme_make_integer(var->identity_pos));
                 }
               } else {
                 /* At least mark it as fixed */

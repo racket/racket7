@@ -380,6 +380,8 @@ Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *e
       name = combine_name_with_srcloc(name, code, 1);
   } else {
     name = env->value_name;
+    if (name && SCHEME_STXP(name))
+      name = SCHEME_STX_VAL(name);
     if (!name || SCHEME_FALSEP(name)) {
       name = scheme_source_to_name(code);
       if (name)
@@ -580,8 +582,7 @@ static Scheme_Object *if_compile (Scheme_Object *form, Scheme_Comp_Env *env)
     
     if (SCHEME_FALSEP(test)) {
       /* compile other branch only to get syntax checking: */
-      env = scheme_set_comp_env_flags(env, COMP_ENV_DONT_COUNT_AS_USE);
-      compile_expr(thenp, env, 0);
+      compile_expr(thenp, scheme_set_comp_env_flags(env, COMP_ENV_DONT_COUNT_AS_USE), 0);
   
       if (len == 4)
 	test = compile_expr(elsep, env, 0);
@@ -590,8 +591,7 @@ static Scheme_Object *if_compile (Scheme_Object *form, Scheme_Comp_Env *env)
     } else {
       if (len == 4) {
 	/* compile other branch only to get syntax checking: */
-        env = scheme_set_comp_env_flags(env, COMP_ENV_DONT_COUNT_AS_USE);
-        compile_expr(elsep, env, 0);
+        compile_expr(elsep, scheme_set_comp_env_flags(env, COMP_ENV_DONT_COUNT_AS_USE), 0);
       }
 
       test = compile_expr(thenp, env, 0);

@@ -2871,7 +2871,7 @@ Scheme_Object *scheme_toplevel_to_flagged_toplevel(Scheme_Object *tl, int flags)
 
 int scheme_expr_produces_local_type(Scheme_Object *expr, int *_involves_k_cross);
 
-Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form);
+Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form, Scheme_Object *name);
 Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef);
 
 Scheme_Object *scheme_make_sequence_compilation(Scheme_Object *compiled_list,

@@ -1106,7 +1106,6 @@ mark_resolve_info {
   Resolve_Info *i = (Resolve_Info *)p;
   
   gcMARK2(i->linklet, gc);
-  gcMARK2(i->stx_map, gc);
   gcMARK2(i->tl_map, gc);
   gcMARK2(i->redirects, gc);
   gcMARK2(i->lifts, gc);
