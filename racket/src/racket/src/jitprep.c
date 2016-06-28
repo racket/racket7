@@ -591,7 +591,6 @@ static Scheme_Object *jit_expr(Scheme_Object *expr)
   case scheme_application3_type:
     return jit_application3(expr);
   case scheme_sequence_type:
-  case scheme_splice_sequence_type:
     return jit_sequence(expr);
   case scheme_branch_type:
     return jit_branch(expr);
@@ -643,7 +642,7 @@ static Scheme_Object *jit_expr(Scheme_Object *expr)
   }
 }
 
-static Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet)
+Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet)
 {
   Scheme_Linklet *new_linklet;
   Scheme_Object *bodies;

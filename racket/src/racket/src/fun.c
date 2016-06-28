@@ -1206,7 +1206,7 @@ static void *apply_again_k(void)
 }
 
 void *scheme_top_level_do(void *(*k)(void), int eb) {
-    return scheme_top_level_do_worker(k, eb, 0, NULL);
+    return scheme_top_level_do_worker(k, eb, 0);
 }
 
 void *scheme_top_level_do_worker(void *(*k)(void), int eb, int new_thread)
@@ -1524,7 +1524,7 @@ scheme_apply_thread_thunk(Scheme_Object *rator)
   p->ku.k.i1 = 0;
   p->ku.k.i2 = 1;
 
-  return (Scheme_Object *)scheme_top_level_do_worker(apply_k, 1, 1, NULL);
+  return (Scheme_Object *)scheme_top_level_do_worker(apply_k, 1, 1);
 }
 
 Scheme_Object *
@@ -8035,23 +8035,14 @@ scheme_get_stack_trace(Scheme_Object *mark_set)
 	name = scheme_make_pair(scheme_false, loc);
       else
 	name = scheme_make_pair(SCHEME_VEC_ELS(name)[0], loc);
-    } else if (SCHEME_PAIRP(name) && SCHEME_RMPP(SCHEME_CAR(name))) {
-      /* a resolved module path means that we're running a module body */
+    } else if (SCHEME_PAIRP(name) && SAME_OBJ(SCHEME_CDR(name), scheme_true)) {
+      /* a pair with #t we're running a module body */
       const char *what;
 
-      if (SCHEME_FALSEP(SCHEME_CDR(name)))
-        what = "[traversing imports]";
-      else if (SCHEME_VOIDP(SCHEME_CDR(name)))
-        what = "[running expand-time body]";
-      else
-        what = "[running body]";
+      what = "[running body]";
 
       name = SCHEME_CAR(name);
-      name = SCHEME_PTR_VAL(name);
-      if (SCHEME_PAIRP(name))
-        name = scheme_make_pair(scheme_intern_symbol("submod"), name);
-      loc = scheme_make_location(name, scheme_false, 
-                                 scheme_false, scheme_false, scheme_false);
+      loc = scheme_make_location(name, scheme_false, scheme_false, scheme_false, scheme_false);
 
       name = scheme_intern_symbol(what);
       name = scheme_make_pair(name, loc);

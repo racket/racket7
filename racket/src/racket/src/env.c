@@ -57,7 +57,13 @@ THREAD_LOCAL_DECL(static Scheme_Bucket_Table *literal_number_table);
 
 /* local functions */
 static void init_startup_env(void);
-static Scheme_Startup_Env make_startup_env();
+static Scheme_Startup_Env *make_startup_env();
+
+static void init_unsafe(Scheme_Startup_Env *env);
+static void init_flfxnum(Scheme_Startup_Env *env);
+static void init_extfl(Scheme_Startup_Env *env);
+static void init_futures(Scheme_Startup_Env *env);
+static void init_foreign(Scheme_Startup_Env *env);
 
 static void skip_certain_things(Scheme_Object *o, Scheme_Close_Custodian_Client *f, void *data);
 
@@ -76,7 +82,7 @@ Scheme_Object *scheme_get_startup_export(const char *s)
   Scheme_Object *sym;
   Scheme_Bucket *b;
   
-  sym = scheme_intern_symbol(name);
+  sym = scheme_intern_symbol(s);
   b = scheme_instance_variable_bucket_or_null(sym, scheme_startup_instance);
 
   if (b)
@@ -95,25 +101,23 @@ static void boot_module_resolver()
 static Scheme_Object *current_namespace()
 {
   Scheme_Object *cn;
-  cn = scheme_get_startup_export(env, "current-namespace");
-  scheme_apply(cn, 0, NULL);
+  cn = scheme_get_startup_export("current-namespace");
+  return scheme_apply(cn, 0, NULL);
 }
 
 static Scheme_Object *namespace_to_instance(Scheme_Object *ns)
 {
   Scheme_Object *proc, *a[1];
-  proc = scheme_get_startup_export(env, "namespace->instance");
+  proc = scheme_get_startup_export("namespace->instance");
   a[0] = ns;
-  scheme_apply(proc, 1, a);
+  return scheme_apply(proc, 1, a);
 }
 
 void scheme_seal_parameters()
 {
-  Scheme_Env *env;
   Scheme_Object *seal;
-  env = scheme_current_env();
-  seal = scheme_get_startup_export(env, "seal");
-  scheme_apply(seal, 0, NULL);
+  seal = scheme_get_startup_export("seal");
+  (void)scheme_apply_multi(seal, 0, NULL);
 }
 
 void os_platform_init() {
@@ -174,7 +178,7 @@ Scheme_Env *scheme_restart_instance()
 
 Scheme_Env *scheme_basic_env()
 {
-  Scheme_Startup_Env *env;
+  Scheme_Env *env;
   void *stack_base;
 
   if (scheme_main_thread) {
@@ -453,12 +457,6 @@ static void init_extfl(Scheme_Startup_Env *env)
 #endif
 }
 
-static void init_unsafe(Scheme_Startup_Env *env);
-static void init_flfxnum(Scheme_Startup_Env *env);
-static void init_extfl(Scheme_Startup_Env *env);
-static void init_futures(Scheme_Startup_Env *env);
-static void init_foreign(Scheme_Startup_Env *env);
-
 static void init_futures(Scheme_Startup_Env *env)
 {
   scheme_switch_prim_instance(env, "#%futures");
@@ -504,6 +502,7 @@ static void init_foreign(Scheme_Startup_Env *env)
 static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thread)
 {
   Scheme_Env *env;
+  Scheme_Object *v;
 
 #ifdef TIME_STARTUP_PROCESS
   printf("place_init @ %" PRIdPTR "\n", scheme_get_process_milliseconds());
@@ -715,7 +714,7 @@ static Scheme_Startup_Env *make_startup_env(void)
   e->so.type = scheme_startup_env_type;
 
   primitive_tables = scheme_make_hash_table(SCHEME_hash_ptr);
-  e->primitive_tables = primitive_instances;
+  e->primitive_tables = primitive_tables;
 
   table = scheme_make_hash_table(SCHEME_hash_ptr);
   e->current_table = table;
@@ -740,28 +739,26 @@ void scheme_switch_prim_instance(Scheme_Startup_Env *env, const char *name)
   table = (Scheme_Hash_Table *)scheme_hash_get(env->primitive_tables, sym);
   if (!table) {
     table = scheme_make_hash_table(SCHEME_hash_ptr);
-    scheme_hash_set(e->primitive_tables, sym, (Scheme_Object *)table);
+    scheme_hash_set(env->primitive_tables, sym, (Scheme_Object *)table);
   }
 
-  e->current_table = table;
+  env->current_table = table;
 }
 
 void scheme_restore_prim_instance(Scheme_Startup_Env *env)
 {
   Scheme_Hash_Table *table;
   table = (Scheme_Hash_Table *)scheme_hash_get(env->primitive_tables, kernel_symbol);
-  e->current_table = tables;
+  env->current_table = table;
 }
 
-void scheme_add_to_primitive_instance(const char *name, Scheme_Object *obj,
-                                      Scheme_Startup_Env *env)
+void scheme_addto_prim_instance(const char *name, Scheme_Object *obj, Scheme_Startup_Env *env)
 {
-  scheme_add_to_primitive_intance_by_symbol(scheme_intern_symbol(name), obj, env->current_instance);
+  scheme_addto_primitive_instance_by_symbol(scheme_intern_symbol(name), obj, env);
 }
 
 void
-scheme_add_to_primitive_intance_by_symbol(Scheme_Object *name, Scheme_Object *obj,
-                                          Scheme_Startup_Env *env)
+scheme_addto_primitive_instance_by_symbol(Scheme_Object *name, Scheme_Object *obj, Scheme_Startup_Env *env)
 {
   scheme_hash_set(env->current_table, name, obj);
   scheme_hash_set(env->all_primitives_table, name, obj);
@@ -772,7 +769,7 @@ scheme_add_to_primitive_intance_by_symbol(Scheme_Object *name, Scheme_Object *ob
 
 Scheme_Object **scheme_make_builtin_references_table(int *_unsafe_start)
 {
-  Scheme_Object **t, v;
+  Scheme_Object **t, *v;
   int i;
 
   t = MALLOC_N(Scheme_Object *, (builtin_ref_counter + 1));
@@ -780,8 +777,8 @@ Scheme_Object **scheme_make_builtin_references_table(int *_unsafe_start)
   scheme_misc_count += sizeof(Scheme_Object *) * (builtin_ref_counter + 1);
 #endif
 
-  for (j = builtin_ref_counter + 1; j--; ) {
-    t[j] = scheme_false;
+  for (i = builtin_ref_counter + 1; i--; ) {
+    t[i] = scheme_false;
   }
 
   for (i = scheme_startup_env->primitive_ids_table->size; i--; ) {
@@ -822,7 +819,7 @@ Scheme_Object *scheme_builtin_value(const char *name)
   if (!v) {
     b = scheme_instance_variable_bucket_or_null(sym, scheme_startup_instance);
     if (b)
-      return b->al;
+      return b->val;
   }
 
   return v;
@@ -863,7 +860,7 @@ Scheme_Object *scheme_make_namespace(int argc, Scheme_Object *argv[])
 {
   Scheme_Object *proc;
   proc = scheme_get_startup_export("make-namespace");
-  scheme_apply(proc, argc, argv);
+  return scheme_apply(proc, argc, argv);
 }
 
 /*========================================================================*/

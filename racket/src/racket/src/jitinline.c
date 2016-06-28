@@ -1115,7 +1115,7 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
     CHECK_LIMIT();
 
     /* We have a pair. Optimistically check for PAIR_IS_LIST: */
-    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
     ref6 = jit_bmsi_ul(jit_forward(), JIT_R2, PAIR_IS_LIST);
 
     if (for_branch) {
@@ -1187,7 +1187,7 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
     /* Check for positive bignum: */
     __START_SHORT_JUMPS__(branch_short);
     ref2 = mz_bnei_t(jit_forward(), JIT_R0, scheme_bignum_type, JIT_R2);
-    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
     ref3 = jit_bmci_ul(jit_forward(), JIT_R2, 0x1);
     __END_SHORT_JUMPS__(branch_short);
     /* Ok bignum. Instead of jumping, install the fixnum 1: */
@@ -1607,22 +1607,6 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       __START_TINY_JUMPS__(1);
       mz_patch_ucbranch(ref2);
       __END_TINY_JUMPS__(1);
-      
-      return 1;
-    } else if (IS_NAMED_PRIM(rator, "syntax-e")) {
-      LOG_IT(("inlined syntax-e\n"));
-
-      mz_runstack_skipped(jitter, 1);
-
-      scheme_generate_non_tail(app->rand, jitter, 0, 1, 0);
-      CHECK_LIMIT();
-
-      mz_runstack_unskipped(jitter, 1);
-
-      mz_rs_sync();
-
-      (void)jit_calli(sjc.syntax_e_code);
-      jit_movr_p(dest, JIT_R0);
       
       return 1;
     } else if (IS_NAMED_PRIM(rator, "imag-part")

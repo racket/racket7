@@ -973,7 +973,6 @@ static Scheme_Object *letrec_check_expr(Scheme_Object *expr, Letrec_Check_Frame 
   case scheme_application3_type:
     return letrec_check_application3(expr, frame, pos);
   case scheme_sequence_type:
-  case scheme_splice_sequence_type:
     return letrec_check_sequence(expr, frame, pos);
   case scheme_branch_type:
     return letrec_check_branch(expr, frame, pos);
@@ -986,7 +985,6 @@ static Scheme_Object *letrec_check_expr(Scheme_Object *expr, Letrec_Check_Frame 
   case scheme_ir_toplevel_type: /* var ref to a top level */
     return expr;
   case scheme_variable_type:
-  case scheme_module_variable_type:
     scheme_signal_error("got top-level in wrong place");
     return 0;
   case scheme_define_values_type:
@@ -1009,7 +1007,7 @@ static Scheme_Object *letrec_check_expr(Scheme_Object *expr, Letrec_Check_Frame 
   }
 }
 
-Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linket *linklet)
+Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linklet *linklet)
 {
   int i, cnt;
   Scheme_Object *val;
@@ -1030,9 +1028,9 @@ Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linket *linklet)
 
   cnt = SCHEME_VEC_SIZE(linklet->bodies);
   for(i = 0; i < cnt; i++) {
-    val = SCHEME_VEC_ELS(m->bodies)[i];
-    val = letrec_check_expr(val, frame, pos);
-    m->bodies[i] = val;
+    val = SCHEME_VEC_ELS(linklet->bodies)[i];
+    val = letrec_check_expr(val, frame, init_pos);
+    SCHEME_VEC_ELS(linklet->bodies)[i] = val;
   }
   
   clean_dead_deferred_expr(*frame->deferred_chain);

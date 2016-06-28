@@ -14,6 +14,7 @@ static int mark_comp_env_MARK(void *p, struct NewGC *gc) {
 
   gcMARK2(e->vars, gc);
   gcMARK2(e->value_name, gc);
+  gcMARK2(e->linklet, gc);
 
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
@@ -30,6 +31,7 @@ static int mark_comp_env_FIXUP(void *p, struct NewGC *gc) {
 
   gcFIXUP2(e->vars, gc);
   gcFIXUP2(e->value_name, gc);
+  gcFIXUP2(e->linklet, gc);
 
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;

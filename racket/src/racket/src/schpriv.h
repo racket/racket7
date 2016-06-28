@@ -1239,6 +1239,7 @@ Scheme_Object *scheme_resolve_placeholders(Scheme_Object *obj);
 
 #define SCHEME_STX_CAR(o) (SCHEME_PAIRP(o) ? SCHEME_CAR(o) : SCHEME_CAR(SCHEME_STX_VAL(o)))
 #define SCHEME_STX_CDR(o) (SCHEME_PAIRP(o) ? SCHEME_CDR(o) : SCHEME_CDR(SCHEME_STX_VAL(o)))
+#define SCHEME_STX_CADR(o) (SCHEME_PAIRP(o) ? SCHEME_STX_CAR(SCHEME_CDR(o)) : SCHEME_STX_CAR(SCHEME_CDR(SCHEME_STX_VAL(o))))
 #define SCHEME_STX_SYM(o) (SCHEME_STXP(o) ? SCHEME_STX_VAL(o) : o)
 
 Scheme_Object *scheme_source_to_name(Scheme_Object *code);
@@ -2549,11 +2550,16 @@ typedef struct Scheme_Comp_Env
   int flags;
   Scheme_Hash_Tree *vars; /* symbol -> Scheme_IR_Local */
   Scheme_Object *value_name; /* propagated down */
+  Scheme_Linklet *linklet;
 } Scheme_Comp_Env;
 
-#define COMP_ENV_TESTING_CONSTANTNESS 0x1
 #define COMP_ENV_DONT_COUNT_AS_USE    0x2
 #define COMP_ENV_ALLOW_SET_UNDEFINED  0x3
+
+Scheme_Comp_Env *scheme_new_comp_env(Scheme_Linklet *linklet, int flags);
+Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var, int mutate);
+Scheme_Comp_Env *scheme_set_comp_env_flags(Scheme_Comp_Env *env, int flags);
+Scheme_Comp_Env *scheme_set_comp_env_name(Scheme_Comp_Env *env, Scheme_Object *name);
 
 #define LAMBDA_HAS_REST 1
 #define LAMBDA_HAS_TYPED_ARGS 2
@@ -2758,11 +2764,6 @@ Scheme_Object *scheme_make_toplevel(mzshort depth, int position, int flags);
 #define MAX_CONST_TOPLEVEL_POS 16
 
 #define ASSERT_IS_VARIABLE_BUCKET(b) /* if (((Scheme_Object *)b)->type != scheme_variable_type) abort() */
-
-Scheme_Comp_Env *scheme_new_comp_env(int flags);
-Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var, int mutate);
-Scheme_Comp_Env *scheme_set_comp_env_flags(Scheme_Comp_Env *env, int flags);
-Scheme_Comp_Env *scheme_set_comp_env_name(Scheme_Comp_Env *env, Scheme_Object *name);
 
 Scheme_IR_Local *scheme_make_ir_local(Scheme_Object *id);
 
@@ -2999,7 +3000,7 @@ struct Validate_Clearing;
 
 void scheme_validate_closure(Mz_CPort *port, Scheme_Object *expr, 
                              char *closure_stack, Validate_TLS tls,
-                             int num_toplevels, int num_stxes, int num_lifts, void *tl_use_map,
+                             int num_toplevels, int num_lifts, void *tl_use_map,
                              mzshort *tl_state, mzshort tl_timestamp,
                              int self_pos_in_closure, Scheme_Hash_Tree *procs);
 
@@ -3108,13 +3109,13 @@ struct Scheme_Linklet
   int max_let_depth;
 
   int num_toplevels;
-  Scheme_IR_Toplevel *toplevels; /* during compilation/optimization, only */
+  Scheme_IR_Toplevel **toplevels; /* during compilation/optimization, only */
 };
 
 #define SCHEME_DEFN_VAR_COUNT(d) (SCHEME_VEC_SIZE(d)-1)
-#define SCHEME_DEFN_RHS(d, pos) (SCHEME_VEC_ELS(d)[0])
+#define SCHEME_DEFN_RHS(d)       (SCHEME_VEC_ELS(d)[0])
 #define SCHEME_DEFN_VAR_(d, pos) (SCHEME_VEC_ELS(d)[(pos)+1])
-#define SCHEME_DEFN_VAR(d, pos) ((Scheme_Import_Export_Variable *)SCHEME_DEFN_VAR_(d, pos))
+#define SCHEME_DEFN_VAR(d, pos)  ((Scheme_Import_Export_Variable *)SCHEME_DEFN_VAR_(d, pos))
 
 #define SCHEME_VARREF_FLAGS(pr) MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)pr)->iso)
 
@@ -3544,7 +3545,6 @@ Scheme_Object *scheme_byte_string_length(Scheme_Object *v);
 Scheme_Object *scheme_byte_string_eq_2(Scheme_Object *str1, Scheme_Object *str2);
 Scheme_Object *scheme_checked_byte_string_ref(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_byte_string_set(int argc, Scheme_Object *argv[]);
-Scheme_Object *scheme_checked_syntax_e(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_vector_length(Scheme_Object *v);
 Scheme_Object *scheme_checked_flvector_ref(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_checked_flvector_set(int argc, Scheme_Object **argv);

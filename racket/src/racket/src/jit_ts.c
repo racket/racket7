@@ -47,7 +47,6 @@ define_ts_s_v(raise_bad_call_with_values, FSRC_MARKS)
 define_ts_s_s(call_with_values_from_multiple_result_multi, FSRC_MARKS)
 define_ts_s_s(call_with_values_from_multiple_result, FSRC_MARKS)
 define_ts_S_s(apply_checked_fail, FSRC_MARKS)
-define_ts_Sl_s(scheme_delayed_shift, FSRC_OTHER)
 define_ts_b_v(scheme_unbound_global, FSRC_MARKS)
 define_ts_ss_v(scheme_set_box, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_car, FSRC_MARKS)
@@ -82,7 +81,6 @@ define_ts_iS_s(scheme_checked_extflvector_set, FSRC_MARKS)
 #endif
 define_ts_iS_s(scheme_checked_fxvector_ref, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_fxvector_set, FSRC_MARKS)
-define_ts_iS_s(scheme_checked_syntax_e, FSRC_MARKS)
 define_ts_s_s(scheme_vector_length, FSRC_MARKS)
 define_ts_s_s(scheme_flvector_length, FSRC_MARKS)
 #ifdef MZ_LONG_DOUBLE
@@ -184,7 +182,6 @@ define_ts_s_s(scheme_box, FSRC_OTHER)
 # define ts_lexical_binding_wrong_return_arity lexical_binding_wrong_return_arity
 # define ts_call_wrong_return_arity call_wrong_return_arity
 # define ts_scheme_unbound_global scheme_unbound_global
-# define ts_scheme_delayed_shift scheme_delayed_shift
 # define ts_scheme_checked_car scheme_checked_car
 # define ts_scheme_checked_cdr scheme_checked_cdr
 # define ts_scheme_checked_caar scheme_checked_caar
@@ -241,7 +238,6 @@ define_ts_s_s(scheme_box, FSRC_OTHER)
 #endif
 # define ts_scheme_checked_fxvector_ref scheme_checked_fxvector_ref
 # define ts_scheme_checked_fxvector_set scheme_checked_fxvector_set
-# define ts_scheme_checked_syntax_e scheme_checked_syntax_e
 # define ts_scheme_extract_checked_procedure scheme_extract_checked_procedure
 # define ts_scheme_procedure_arity_includes scheme_procedure_arity_includes
 # define ts_apply_checked_fail apply_checked_fail

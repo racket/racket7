@@ -381,9 +381,6 @@ static Scheme_Object *plumber_remove_flush(int argc, Scheme_Object *argv[]);
 static Scheme_Object *plumber_flush_p(int argc, Scheme_Object *argv[]);
 static Scheme_Object *current_plumber(int argc, Scheme_Object *argv[]);
 
-static Scheme_Object *current_namespace(int argc, Scheme_Object *args[]);
-static Scheme_Object *namespace_p(int argc, Scheme_Object *args[]);
-
 static Scheme_Object *parameter_p(int argc, Scheme_Object *args[]);
 static Scheme_Object *parameter_procedure_eq(int argc, Scheme_Object *args[]);
 static Scheme_Object *make_parameter(int argc, Scheme_Object *args[]);
@@ -528,8 +525,6 @@ void scheme_init_thread(Scheme_Startup_Env *env)
   GLOBAL_PRIM_W_ARITY("dump-memory-stats"            , scheme_dump_gc_stats, 0, -1, env);
   GLOBAL_PRIM_W_ARITY("vector-set-performance-stats!", current_stats       , 1, 2, env);
 
-  GLOBAL_PRIM_W_ARITY("make-empty-namespace", scheme_make_namespace, 0, 0, env);
-
   GLOBAL_PRIM_W_ARITY("thread"                , sch_thread         , 1, 1, env);
   GLOBAL_PRIM_W_ARITY("thread/suspend-to-kill", sch_thread_nokill  , 1, 1, env);
   GLOBAL_PRIM_W_ARITY("sleep"                 , sch_sleep          , 0, 1, env);
@@ -570,9 +565,6 @@ void scheme_init_thread(Scheme_Startup_Env *env)
   GLOBAL_PRIM_W_ARITY("plumber-add-flush!"    , plumber_add_flush   , 2, 3, env);
   GLOBAL_PRIM_W_ARITY("plumber-flush-handle-remove!" , plumber_remove_flush, 1, 1, env);
   GLOBAL_PRIM_W_ARITY("plumber-flush-handle?" , plumber_flush_p     , 1, 1, env);
-
-  ADD_PARAMETER("current-namespace"      , current_namespace, MZCONFIG_ENV, env);
-  GLOBAL_PRIM_W_ARITY("namespace?"          , namespace_p          , 1, 1, env);
 
   GLOBAL_PRIM_W_ARITY("security-guard?"    , security_guard_p   , 1, 1, env);
   GLOBAL_PRIM_W_ARITY("make-security-guard", make_security_guard, 3, 4, env);
@@ -8322,7 +8314,7 @@ static Scheme_Object *set_phantom_bytes(int argc, Scheme_Object *argv[])
 }
 
 /*========================================================================*/
-/*                              namespaces                                */
+/*                             environment                                */
 /*========================================================================*/
 
 Scheme_Env *scheme_get_env(Scheme_Config *c)
@@ -8335,37 +8327,6 @@ Scheme_Env *scheme_get_env(Scheme_Config *c)
 
   o = scheme_get_param(c, MZCONFIG_ENV);
   return (Scheme_Env *)o;
-}
-
-Scheme_Object *scheme_make_namespace(int argc, Scheme_Object *argv[])
-{
-  Scheme_Env *genv, *env;
-  intptr_t phase;
-
-  genv = scheme_get_env(NULL);
-  env = scheme_make_empty_env();
-  
-  for (phase = genv->phase; phase--; ) {
-    scheme_prepare_exp_env(env);
-    env = env->exp_env;
-  }
-
-  return (Scheme_Object *)env;
-}
-
-static Scheme_Object *namespace_p(int argc, Scheme_Object **argv)
-{
-  return ((SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_namespace_type)) 
-	  ? scheme_true 
-	  : scheme_false);
-}
-
-static Scheme_Object *current_namespace(int argc, Scheme_Object *argv[])
-{
-  return scheme_param_config2("current-namespace", 
-                              scheme_make_integer(MZCONFIG_ENV),
-                              argc, argv,
-                              -1, namespace_p, "namespace?", 0);
 }
 
 /*========================================================================*/

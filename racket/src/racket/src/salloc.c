@@ -3115,33 +3115,6 @@ intptr_t scheme_count_memory(Scheme_Object *root, Scheme_Hash_Table *ht)
       }
     }
     break;
-  case scheme_namespace_type:
-    {
-      Scheme_Env *env = (Scheme_Env *)root;
-
-      s = sizeof(Scheme_Env);
-#if FORCE_KNOWN_SUBPARTS
-      e = COUNT(env->toplevel);
-#endif
-    }
-    break;
-  case scheme_config_type:
-    {
-      s = sizeof(Scheme_Config) + (sizeof(Scheme_Object *) * __MZCONFIG_BUILTIN_COUNT__);
-#if FORCE_SUBPARTS
-      {
-	Scheme_Config *c = (Scheme_Config *)root;
-	int i;
-
-	e = COUNT(c->extensions) + COUNT(c->base);
-
-	for (i = 0; i < __MZCONFIG_BUILTIN_COUNT__; i++) {
-	  e += COUNT(*c->configs[i]);
-	}
-      }
-#endif
-    }
-    break;
   case scheme_proc_struct_type:
   case scheme_structure_type:
     {

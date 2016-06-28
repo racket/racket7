@@ -63,12 +63,6 @@ THREAD_LOCAL_DECL(static Scheme_Logger *scheme_future_logger);
 THREAD_LOCAL_DECL(static Scheme_Logger *scheme_place_logger);
 
 /* readonly globals */
-READ_ONLY const char *scheme_compile_stx_string = "compile";
-READ_ONLY const char *scheme_expand_stx_string = "expand";
-READ_ONLY const char *scheme_application_stx_string = "application";
-READ_ONLY const char *scheme_set_stx_string = "set!";
-READ_ONLY const char *scheme_var_ref_string = "#%variable-reference";
-READ_ONLY const char *scheme_begin_stx_string = "begin";
 ROSYM static Scheme_Object *none_symbol;
 ROSYM static Scheme_Object *fatal_symbol;
 ROSYM static Scheme_Object *error_symbol; 
@@ -95,7 +89,6 @@ intptr_t scheme_misc_count;
 /* locals */
 static Scheme_Object *error(int argc, Scheme_Object *argv[]);
 static Scheme_Object *raise_user_error(int argc, Scheme_Object *argv[]);
-static Scheme_Object *raise_syntax_error(int argc, Scheme_Object *argv[]);
 static Scheme_Object *raise_type_error(int argc, Scheme_Object *argv[]);
 static Scheme_Object *raise_argument_error(int argc, Scheme_Object *argv[]);
 static Scheme_Object *raise_result_error(int argc, Scheme_Object *argv[]);
@@ -713,7 +706,6 @@ void scheme_init_error(Scheme_Startup_Env *env)
   /* errors */
   ESCAPING_NONCM_PRIM("error",                      error,                 1, -1, env);
   ESCAPING_NONCM_PRIM("raise-user-error",           raise_user_error,      1, -1, env);
-  ESCAPING_NONCM_PRIM("raise-syntax-error",         raise_syntax_error,    2,  5, env);
   ESCAPING_NONCM_PRIM("raise-type-error",           raise_type_error,      3, -1, env);
   ESCAPING_NONCM_PRIM("raise-argument-error",       raise_argument_error,  3, -1, env);
   ESCAPING_NONCM_PRIM("raise-result-error",         raise_result_error,    3, -1, env);
@@ -1000,12 +992,6 @@ scheme_signal_error (const char *msg, ...)
   HIDE_FROM_XFORM(va_start(args, msg));
   len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL);
   HIDE_FROM_XFORM(va_end(args));
-
-  if (scheme_current_thread->current_local_env) {
-    char *s2 = " [during expansion]";
-    strcpy(buffer + len, s2);
-    len += strlen(s2);
-  }
 
   buffer[len] = 0;
 
@@ -2231,9 +2217,7 @@ void scheme_read_err(Scheme_Object *port,
 static void do_wrong_syntax(const char *where,
                             Scheme_Object *detail_form,
                             Scheme_Object *form,
-                            char *s, intptr_t slen,
-                            Scheme_Object *extra_sources,
-                            int exn_kind)
+                            char *s, intptr_t slen)
 {
   intptr_t len, vlen, dvlen, blen, plen;
   char *buffer;
@@ -2248,21 +2232,6 @@ static void do_wrong_syntax(const char *where,
     slen = strlen(s);
   }
 
-  /* Check for special strings that indicate `form' doesn't have a
-     good name: */
-  if ((where == scheme_compile_stx_string)
-      || (where == scheme_expand_stx_string)) {
-    where = NULL;
-  } else if (where == scheme_application_stx_string) {
-    who = scheme_intern_symbol("#%app");
-  } else if ((where == scheme_set_stx_string)
-	     || (where == scheme_var_ref_string)
-	     || (where == scheme_begin_stx_string)) {
-    who = scheme_intern_symbol(where);
-    if (where == scheme_begin_stx_string)
-      where = "begin (possibly implicit)";
-  }
-
   buffer = init_buf(&len, &blen);
 
   p = NULL;
@@ -2274,7 +2243,7 @@ static void do_wrong_syntax(const char *where,
     Scheme_Object *pform;
     if (SCHEME_STXP(form)) {
       p = make_stx_srcloc_string(((Scheme_Stx *)form)->srcloc, &plen);
-      pform = scheme_syntax_to_datum(form, 0, NULL);
+      pform = scheme_syntax_to_datum(form);
 
       /* Try to extract syntax name from syntax */
       if (!who && (SCHEME_SYMBOLP(SCHEME_STX_VAL(form)) || SCHEME_STX_PAIRP(form))) {
@@ -2288,8 +2257,6 @@ static void do_wrong_syntax(const char *where,
       }
     } else {
       pform = form;
-      if (!detail_form)
-	form = scheme_datum_to_syntax(form, scheme_false, scheme_false, 1, 0);
     }
     /* don't use error_write_to_string_w_max since this is code */
     if (show_src)
@@ -2309,17 +2276,9 @@ static void do_wrong_syntax(const char *where,
     if (SCHEME_STXP(detail_form)) {
       if (((Scheme_Stx *)detail_form)->srcloc->line >= 0)
 	p = make_stx_srcloc_string(((Scheme_Stx *)detail_form)->srcloc, &plen);
-      pform = scheme_syntax_to_datum(detail_form, 0, NULL);
-      /* To go in exn record: */
-      form = detail_form;
-    } else {
+      pform = scheme_syntax_to_datum(detail_form);
+    } else
       pform = detail_form;
-      /* To go in exn record: */
-      form = scheme_datum_to_syntax(detail_form,
-				    /* Use source location of `form': */
-				    SCHEME_STXP(form) ? form : scheme_false,
-				    scheme_false, 1, 0);
-    }
 
     /* don't use error_write_to_string_w_max since this is code */
     if (show_src)
@@ -2382,16 +2341,7 @@ static void do_wrong_syntax(const char *where,
                           where,
                           s, slen);
 
-  if (SCHEME_FALSEP(form))
-    form = extra_sources;
-  else {
-    if (SCHEME_STXP(form))
-      form = scheme_stx_taint(form);
-    form = scheme_make_pair(form, extra_sources);
-  }
-
-  scheme_raise_exn(exn_kind, 
-		   form,
+  scheme_raise_exn(MZEXN_FAIL_CONTRACT,
 		   "%t", buffer, blen);
 }
 
@@ -2414,46 +2364,7 @@ void scheme_wrong_syntax(const char *where,
     HIDE_FROM_XFORM(va_end(args));
   }
 
-  do_wrong_syntax(where, detail_form, form, s, slen, scheme_null, MZEXN_FAIL_SYNTAX);
-}
-
-void scheme_unbound_syntax(const char *where,
-                           Scheme_Object *detail_form,
-                           Scheme_Object *form,
-                           const char *detail, ...)
-{
-  char *s;
-  intptr_t slen;
-  GC_CAN_IGNORE va_list args;
-
-  HIDE_FROM_XFORM(va_start(args, detail));
-  slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL);
-  HIDE_FROM_XFORM(va_end(args));
-
-  do_wrong_syntax(where, detail_form, form, s, slen, scheme_null, MZEXN_FAIL_SYNTAX_UNBOUND);
-}
-
-void scheme_wrong_syntax_with_more_sources(const char *where,
-                                           Scheme_Object *detail_form,
-                                           Scheme_Object *form,
-                                           Scheme_Object *extra_sources,
-                                           const char *detail, ...)
-{
-  char *s;
-  intptr_t slen;
-
-  if (!detail) {
-    s = NULL;
-    slen = 0;
-  } else {
-    GC_CAN_IGNORE va_list args;
-
-    HIDE_FROM_XFORM(va_start(args, detail));
-    slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL);
-    HIDE_FROM_XFORM(va_end(args));
-  }
-
-  do_wrong_syntax(where, detail_form, form, s, slen, extra_sources, MZEXN_FAIL_SYNTAX);
+  do_wrong_syntax(where, detail_form, form, s, slen);
 }
 
 void scheme_wrong_rator(Scheme_Object *rator, int argc, Scheme_Object **argv)
@@ -2567,42 +2478,26 @@ void scheme_raise_out_of_memory(const char *where, const char *msg, ...)
 void scheme_unbound_global(Scheme_Bucket *b)
 {
   Scheme_Object *name = (Scheme_Object *)b->key;
-  Scheme_Env *home;
+  Scheme_Instance *home;
 
   home = scheme_get_bucket_home(b);
 
-  if (home && home->module) {
+  if (home && home->name) {
     const char *errmsg;
-    char *phase, phase_buf[20], *phase_note = "";
     
     if (SCHEME_TRUEP(scheme_get_param(scheme_current_config(), MZCONFIG_ERROR_PRINT_SRCLOC)))
       errmsg = ("%S: undefined;\n"
                 " cannot reference an identifier before its definition\n"
-                "  in module: %D%s%s");
+                "  in module: %D");
     else
       errmsg = ("%S: undefined;\n"
-                " cannot reference an identifier before its definition%_%s%s");
-
-    if (home->phase) {
-      sprintf(phase_buf, "\n  phase: %" PRIdPTR "", home->phase);
-      phase = phase_buf;
-      if ((home->phase == 1) && (home->template_env)) {
-        if (scheme_lookup_in_table(home->template_env->toplevel, (const char *)name))
-          phase_note = "\n  explanation: cannot access the run-time definition";
-        else if (home->template_env->syntax
-                 && scheme_lookup_in_table(home->template_env->syntax, (const char *)name))
-          phase_note = "\n  explanation cannot access the syntax binding for run-time expressions";
-      }
-    } else
-      phase = "";
+                " cannot reference an identifier before its definition%_");
 
     scheme_raise_exn(MZEXN_FAIL_CONTRACT_VARIABLE,
 		     name,
 		     errmsg,
 		     name,
-		     scheme_get_modsrc(home->module),
-                     phase,
-                     phase_note);
+		     home->name);
   } else {
     scheme_raise_exn(MZEXN_FAIL_CONTRACT_VARIABLE,
 		     name,
@@ -2753,51 +2648,6 @@ static Scheme_Object *error(int argc, Scheme_Object *argv[])
 static Scheme_Object *raise_user_error(int argc, Scheme_Object *argv[])
 {
   return do_error("raise-user-error", MZEXN_FAIL_USER, argc, argv);
-}
-
-static Scheme_Object *raise_syntax_error(int argc, Scheme_Object *argv[])
-{
-  const char *who;
-  Scheme_Object *str, *extra_sources = scheme_null;
-
-  if (!SCHEME_FALSEP(argv[0]) && !SCHEME_SYMBOLP(argv[0]))
-    scheme_wrong_contract("raise-syntax-error", "(or/c symbol? #f)", 0, argc, argv);
-  if (!SCHEME_CHAR_STRINGP(argv[1]))
-    scheme_wrong_contract("raise-syntax-error", "string?", 1, argc, argv);
-
-  if (SCHEME_SYMBOLP(argv[0]))
-    who = scheme_symbol_val(argv[0]);
-  else
-    who = NULL;
-
-  str = argv[1];
-  if (SCHEME_MUTABLEP(str)) {
-    str = scheme_make_immutable_sized_char_string(SCHEME_CHAR_STR_VAL(str), 
-						  SCHEME_CHAR_STRLEN_VAL(str), 
-						  1);
-  }
-
-  if (argc > 4) {
-    extra_sources = argv[4];
-    while (SCHEME_PAIRP(extra_sources)) {
-      if (!SCHEME_STXP(SCHEME_CAR(extra_sources)))
-        break;
-      extra_sources = SCHEME_CDR(extra_sources);
-    }
-    if (!SCHEME_NULLP(extra_sources)) {
-      scheme_wrong_contract("raise-syntax-error", "(listof syntax?)", 4, argc, argv);
-      return NULL;
-    }
-    extra_sources = argv[4];
-  }
-
-  scheme_wrong_syntax_with_more_sources(who,
-                                        ((argc > 3) && !SCHEME_FALSEP(argv[3])) ? argv[3] : NULL,
-                                        ((argc > 2) && !SCHEME_FALSEP(argv[2])) ? argv[2] : NULL,
-                                        extra_sources,
-                                        "%T", str);
-
-  return NULL;
 }
 
 typedef void (*wrong_proc_t)(const char *name, const char *expected,
@@ -4757,9 +4607,9 @@ void scheme_init_exn(Scheme_Startup_Env *env)
 					 exn_table[i].count,
 					 EXN_FLAGS);
       for (j = exn_table[i].count - 1; j--; ) {
-	scheme_addto_prim_instance_symbol(exn_table[i].names[j],
-					  values[j],
-					  env);
+	scheme_addto_primitive_instance_by_symbol(exn_table[i].names[j],
+                                                  values[j],
+                                                  env);
       }
     }
   }

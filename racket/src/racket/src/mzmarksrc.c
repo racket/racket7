@@ -934,6 +934,18 @@ env_val {
   gcBYTES_TO_WORDS(sizeof(Scheme_Env));
 }
 
+startup_env_val {
+ mark:
+  Scheme_Env *e = (Scheme_Env *)p;
+
+  gcMARK2(e->current_table, gc);
+  gcMARK2(e->primitive_table, gc);
+  gcMARK2(e->all_primitives_table, gc);
+  gcMARK2(e->primitive_ids_table, gc);
+ size:
+  gcBYTES_TO_WORDS(sizeof(Scheme_Startup_Env));
+}
+
 random_state_val {
  mark:
  size:
@@ -1086,6 +1098,7 @@ mark_comp_env {
 
   gcMARK2(e->vars, gc);
   gcMARK2(e->value_name, gc);
+  gcMARK2(e->linklet, gc);
 
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Comp_Env));

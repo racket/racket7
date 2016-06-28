@@ -210,7 +210,7 @@ scheme_init_type ()
   set_name(scheme_listener_type, "<tcp-listener>");
   set_name(scheme_tcp_accept_evt_type, "<tcp-accept-evt>");
   set_name(scheme_filesystem_change_evt_type, "<filesystem-change-evt>");
-  set_name(scheme_namespace_type, "<namespace>");
+  set_name(scheme_env_type, "<env>");
   set_name(scheme_config_type, "<parameterization>");
   set_name(scheme_will_executor_type, "<will-executor>");
   set_name(scheme_random_state_type, "<pseudo-random-generator>");
@@ -633,7 +633,8 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_thread_dead_type, small_object);
   GC_REG_TRAV(scheme_hash_table_type, hash_table_val);
   GC_REG_TRAV(scheme_bucket_table_type, bucket_table_val);
-  GC_REG_TRAV(scheme_namespace_type, namespace_val);
+  GC_REG_TRAV(scheme_env_type, env_val);
+  GC_REG_TRAV(scheme_startup_env_type, startup_env_val);
   GC_REG_TRAV(scheme_random_state_type, random_state_val);
   
   GC_REG_TRAV(scheme_eval_waiting_type, bad_trav);

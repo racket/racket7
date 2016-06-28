@@ -293,6 +293,71 @@ Scheme_Object *scheme_intern_struct_proc_shape(int shape)
 
 /*********************************************************************/
 
+Scheme_Comp_Env *scheme_new_comp_env(Scheme_Linklet *linklet, int flags)
+{
+  Scheme_Comp_Env *env;
+  Scheme_Hash_Tree *vars;
+
+  env = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
+  SET_REQUIRED_TAG(env->type = scheme_rt_comp_env);
+  env->flags = flags;
+
+  vars = scheme_make_hash_tree(0);
+  env->vars = vars;
+
+  env->linklet = linklet;
+
+  return env;
+}
+
+Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var, int mutate)
+{
+  Scheme_Comp_Env *env2;
+  Scheme_Hash_Tree *vars;
+
+  if (mutate)
+    env2 = env;
+  else {
+    env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
+    memcpy(env, env2, sizeof(Scheme_Comp_Env));
+  }
+
+  vars = scheme_hash_tree_set(env2->vars, id, var);
+  env2->vars = vars;
+
+  return env2;
+}
+
+Scheme_Comp_Env *scheme_set_comp_env_flags(Scheme_Comp_Env *env, int flags)
+{
+  Scheme_Comp_Env *env2;
+
+  if ((env->flags & flags) == flags)
+    return env;
+
+  env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
+  memcpy(env, env2, sizeof(Scheme_Comp_Env));
+  env2->flags |= flags;
+
+  return env2;
+}
+
+Scheme_Comp_Env *scheme_set_comp_env_name(Scheme_Comp_Env *env, Scheme_Object *name)
+{
+  Scheme_Comp_Env *env2;
+
+  if (SAME_OBJ(env->value_name, name))
+    return env;
+
+  env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
+  memcpy(env, env2, sizeof(Scheme_Comp_Env));
+  env2->value_name = name;
+
+  return env2;
+}
+
+/*********************************************************************/
+
 static Scheme_Object *get_local_name(Scheme_Object *id)
 {
   Scheme_Object *name;

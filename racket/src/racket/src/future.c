@@ -265,9 +265,6 @@ void scheme_init_futures(Scheme_Startup_Env *newenv)
   ADD_PRIM_W_ARITY("reset-future-logs-for-tracing!", reset_future_logs_for_tracking, 0, 0, newenv);
   ADD_PRIM_W_ARITY("mark-future-trace-end!", mark_future_trace_end, 0, 0, newenv);
 
-  scheme_finish_primitive_module(newenv);
-  scheme_protect_primitive_provide(newenv, NULL);
-
 #ifdef MZ_PRECISE_GC
   register_traversers();
 #endif
@@ -553,9 +550,6 @@ void scheme_init_futures(Scheme_Startup_Env *newenv)
   ADD_PRIM_W_ARITY("futures-enabled?", futures_enabled, 0, 0, newenv);
   ADD_PRIM_W_ARITY("reset-future-logs-for-tracing!", reset_future_logs_for_tracking, 0, 0, newenv);
   ADD_PRIM_W_ARITY("mark-future-trace-end!", mark_future_trace_end, 0, 0, newenv);
-
-  scheme_finish_primitive_module(newenv);
-  scheme_protect_primitive_provide(newenv, NULL);
 }
 
 void scheme_init_futures_once()

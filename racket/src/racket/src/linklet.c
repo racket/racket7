@@ -59,7 +59,7 @@ static Scheme_Object *variable_p(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_instance(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv);
 
-static Scheme_Linket *compile_and_or_optimize_linklet(Scheme_Linklet *linklet, Scheme_Object *form);
+static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Linklet *linklet, Scheme_Object *form);
 
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
@@ -554,7 +554,7 @@ Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Sc
 /*                            compiling linklets                          */
 /*========================================================================*/
 
-static Scheme_Linket *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet)
+static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet)
 {
   Scheme_Config *config;
   int enforce_const, set_undef, can_inline;
@@ -588,7 +588,7 @@ static Scheme_Linket *compile_and_or_optimize_linklet(Scheme_Object *form, Schem
   return linklet;
 }
 
-Scheme_Linket *scheme_compile_and_optimize_linklet(Scheme_Object *form)
+Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form)
 {
   return compile_and_or_optimize_linklet(form, NULL);
 }

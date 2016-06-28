@@ -1554,7 +1554,6 @@ static uintptr_t equal_hash_key(Scheme_Object *o, uintptr_t k, Hash_Info *hi)
     }
   case scheme_vector_type:
   case scheme_fxvector_type:
-  case scheme_wrap_chunk_type:
     {
       int len = SCHEME_VEC_SIZE(o), i, val;
       Scheme_Object *elem;
@@ -2026,7 +2025,6 @@ static uintptr_t equal_hash_key2(Scheme_Object *o, Hash_Info *hi)
     }
   case scheme_vector_type:
   case scheme_fxvector_type:
-  case scheme_wrap_chunk_type:
     {
       int len = SCHEME_VEC_SIZE(o), i;
       uintptr_t k = 0;

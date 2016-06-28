@@ -211,38 +211,14 @@ ROSYM Scheme_Object *scheme_stack_dump_key;
 READ_ONLY static Scheme_Object *zero_rands_ptr; /* &zero_rands_ptr is dummy rands pointer */
 
 /* locals */
-static Scheme_Object *eval(int argc, Scheme_Object *argv[]);
-static Scheme_Object *compile(int argc, Scheme_Object *argv[]);
-static Scheme_Object *compiled_p(int argc, Scheme_Object *argv[]);
-static Scheme_Object *recompile(int argc, Scheme_Object *argv[]);
-static Scheme_Object *expand(int argc, Scheme_Object **argv);
-static Scheme_Object *local_expand(int argc, Scheme_Object **argv);
-static Scheme_Object *local_expand_expr(int argc, Scheme_Object **argv);
-static Scheme_Object *local_expand_catch_lifts(int argc, Scheme_Object **argv);
-static Scheme_Object *local_transformer_expand(int argc, Scheme_Object **argv);
-static Scheme_Object *local_transformer_expand_catch_lifts(int argc, Scheme_Object **argv);
-static Scheme_Object *local_eval(int argc, Scheme_Object **argv);
-static Scheme_Object *expand_once(int argc, Scheme_Object **argv);
-static Scheme_Object *expand_to_top_form(int argc, Scheme_Object **argv);
 static Scheme_Object *enable_break(int, Scheme_Object *[]);
 static Scheme_Object *current_eval(int argc, Scheme_Object *[]);
 static Scheme_Object *current_compile(int argc, Scheme_Object *[]);
-
-static Scheme_Object *eval_stx(int argc, Scheme_Object *argv[]);
-static Scheme_Object *compile_stx(int argc, Scheme_Object *argv[]);
-static Scheme_Object *expand_stx(int argc, Scheme_Object **argv);
-static Scheme_Object *expand_stx_once(int argc, Scheme_Object **argv);
-static Scheme_Object *expand_stx_to_top_form(int argc, Scheme_Object **argv);
-static Scheme_Object *top_introduce_stx(int argc, Scheme_Object **argv);
 
 static Scheme_Object *allow_set_undefined(int argc, Scheme_Object **argv);
 static Scheme_Object *compile_module_constants(int argc, Scheme_Object **argv);
 static Scheme_Object *use_jit(int argc, Scheme_Object **argv);
 static Scheme_Object *disallow_inline(int argc, Scheme_Object **argv);
-
-static Scheme_Object *recompile_top(Scheme_Object *top, int comp_flags);
-
-static Scheme_Object *_eval_compiled_multi_with_prompt(Scheme_Object *obj, Scheme_Env *env);
 
 void scheme_escape_to_continuation(Scheme_Object *obj, int num_rands, Scheme_Object **rands, Scheme_Object *alt_full);
 
@@ -1661,13 +1637,12 @@ void scheme_install_macro(Scheme_Bucket *b, Scheme_Object *v)
   b->val = macro;
 }
 
-static Scheme_Object *define_values_execute(Scheme_Object *data)
+static Scheme_Object *define_values_execute(Scheme_Object *vec)
 {
-  Scheme_Object *name, *macro, *vals_expr, *vals, *var;
+  Scheme_Object *name, *vals_expr, *vals, *var;
   int delta = 1;
   int i, g, show_any;
   Scheme_Bucket *b;
-  Scheme_Object **save_runstack = NULL;
 
   vals_expr = SCHEME_VEC_ELS(vec)[0];
 
@@ -1700,7 +1675,6 @@ static Scheme_Object *define_values_execute(Scheme_Object *data)
         b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
 	
         scheme_set_global_bucket("define-values", b, values[i], 1);
-        scheme_shadow(scheme_get_bucket_home(b), (Scheme_Object *)b->key, values[i], 1);
         
         if (SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL) {
           if (is_st)
@@ -1723,7 +1697,6 @@ static Scheme_Object *define_values_execute(Scheme_Object *data)
     b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
 
     scheme_set_global_bucket("define-values", b, vals, 1);
-    scheme_shadow(scheme_get_bucket_home(b), (Scheme_Object *)b->key, vals, 1);
       
     if (SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL) {
       int flags = GLOB_IS_IMMUTATED;
@@ -3423,7 +3396,7 @@ Scheme_Object *scheme_dynamic_require(int argc, Scheme_Object *argv[])
   return scheme_apply(proc, argc, argv);
 }
 
-Scheme_Object *scheme_namespace_require(Scheme_Object *mod_path);
+Scheme_Object *scheme_namespace_require(Scheme_Object *mod_path)
 {
   Scheme_Object *proc, *a[1];
   proc = scheme_get_startup_export("namespace-require");
@@ -3450,7 +3423,7 @@ Scheme_Object *scheme_eval(Scheme_Object *obj, Scheme_Env *env)
 {
   Scheme_Object *eval_proc, *a[2];
   eval_proc = scheme_get_startup_export("eval");
-  a[0] = form;
+  a[0] = obj;
   a[1] = env->namespace;
   return scheme_apply(eval_proc, 2, a);
 }
@@ -3459,7 +3432,7 @@ Scheme_Object *scheme_eval_multi(Scheme_Object *obj, Scheme_Env *env)
 {
   Scheme_Object *eval_proc, *a[2];
   eval_proc = scheme_get_startup_export("eval");
-  a[0] = form;
+  a[0] = obj;
   a[1] = env->namespace;
   return scheme_apply_multi(eval_proc, 2, a);
 }
@@ -3503,12 +3476,14 @@ Scheme_Object *
 scheme_default_eval_handler(int argc, Scheme_Object **argv)
 {
   scheme_signal_error("default eval handler should be replaced");
+  return scheme_void;
 }
 
 Scheme_Object *
 scheme_default_compile_handler(int argc, Scheme_Object **argv)
 {
   scheme_signal_error("default compile handler should be replaced");
+  return scheme_void;
 }
 
 static Scheme_Object *

@@ -123,7 +123,8 @@ enum {
   scheme_module_index_type,             /* 96 */
   scheme_set_macro_type,                /* 97 */
   scheme_listener_type,                 /* 98 */
-  scheme_namespace_type,                /* 99 */
+  scheme_env_type,                      /* 99 */
+  scheme_startup_env_type,              /* 99 */
   scheme_config_type,                   /* 100 */
   scheme_stx_type,                      /* 101 */
   scheme_will_executor_type,            /* 102 */

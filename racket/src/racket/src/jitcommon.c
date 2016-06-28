@@ -201,7 +201,6 @@ static int common0(mz_jit_state *jitter, void *_data)
 {
   int in;
   GC_CAN_IGNORE jit_insn *ref;
-  GC_CAN_IGNORE jit_insn *ref2 USED_ONLY_FOR_FUTURES;
 
   /* *** check_arity_code *** */
   /* Called as a function: */
@@ -1012,7 +1011,7 @@ static int generate_apply_proxy(mz_jit_state *jitter, int setter)
   }
             
   jit_ldr_p(JIT_R1, JIT_RUNSTACK);
-  jit_ldxi_s(JIT_R2, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+  jit_ldxi_s(JIT_R2, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
   /* if impersonator, no chaperone-of check needed */
   ref1 = jit_bmsi_ul(jit_forward(), JIT_R2, SCHEME_CHAPERONE_IS_IMPERSONATOR);
 
@@ -1772,59 +1771,6 @@ static int common4(mz_jit_state *jitter, void *_data)
     mz_epilog(JIT_R2);
 
     scheme_jit_register_sub_func(jitter, code, scheme_false);
-  }
-
-  /* *** syntax_e_code *** */
-  /* R0 is (potential) syntax object */
-  {
-    GC_CAN_IGNORE jit_insn *ref, *reffail;
-    GC_CAN_IGNORE jit_insn *refrts USED_ONLY_FOR_FUTURES;
-    sjc.syntax_e_code = jit_get_ip();
-    __START_TINY_JUMPS__(1);
-    mz_prolog(JIT_R2);
-
-    ref = jit_bmci_ul(jit_forward(), JIT_R0, 0x1);
-
-    reffail = jit_get_ip();
-    jit_subi_p(JIT_RUNSTACK, JIT_RUNSTACK, WORDS_TO_BYTES(1));
-    CHECK_RUNSTACK_OVERFLOW();
-    jit_str_p(JIT_RUNSTACK, JIT_R0);
-    jit_movi_i(JIT_R1, 1);
-    JIT_UPDATE_THREAD_RSPTR();
-    CHECK_LIMIT();
-    jit_prepare(2);
-    jit_pusharg_p(JIT_RUNSTACK);
-    jit_pusharg_i(JIT_R1);
-    (void)mz_finish_lwe(ts_scheme_checked_syntax_e, refrts);
-    jit_retval(JIT_R0);
-    jit_addi_p(JIT_RUNSTACK, JIT_RUNSTACK, WORDS_TO_BYTES(1));
-    mz_epilog(JIT_R2);
-    CHECK_LIMIT();
-    
-    /* It's not a fixnum... */
-    mz_patch_branch(ref);
-    (void)mz_bnei_t(reffail, JIT_R0, scheme_stx_type, JIT_R2);
-    
-    /* It's a syntax object... needs to propagate? */
-    jit_ldxi_l(JIT_R2, JIT_R0, &((Scheme_Stx *)0x0)->u.to_propagate);
-    ref = jit_beqi_p(jit_forward(), JIT_R2, 0x0);
-    CHECK_LIMIT();
-
-    /* Maybe needs to propagate; check STX_SUBSTX_FLAG flag */
-    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
-    (void)jit_bmsi_ul(reffail, JIT_R2, STX_SUBSTX_FLAG);
-    
-    /* Maybe needs taint handling; check STX_ARMED_FLAG flag */
-    mz_patch_branch(ref);
-    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
-    (void)jit_bmsi_ul(reffail, JIT_R2, STX_ARMED_FLAG);
-    
-    /* No propagations or dye packs. Extract value. */
-    jit_ldxi_p(JIT_R0, JIT_R0, &((Scheme_Stx *)0x0)->val);
-
-    mz_epilog(JIT_R2);
-    CHECK_LIMIT();
-    __END_TINY_JUMPS__(1);
   }
 
   /* *** struct_{pred,get,set}[_branch,_multi,_tail]_code *** */
@@ -2733,7 +2679,7 @@ static int common7(mz_jit_state *jitter, void *_data)
        scheme_is_list(). */
 
     refloop = jit_get_ip();
-    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
     ref1 = jit_bmsi_ul(jit_forward(), JIT_R2, PAIR_FLAG_MASK);
     
     jit_ldxi_p(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CDR(0x0));
@@ -2743,7 +2689,7 @@ static int common7(mz_jit_state *jitter, void *_data)
     ref3 = mz_bnei_t(jit_forward(), JIT_R0, scheme_pair_type, JIT_R2);
     CHECK_LIMIT();
 
-    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
     ref4 = jit_bmsi_ul(jit_forward(), JIT_R2, PAIR_FLAG_MASK);
     
     jit_ldxi_p(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CDR(0x0));
@@ -2765,7 +2711,7 @@ static int common7(mz_jit_state *jitter, void *_data)
     mz_patch_branch(ref2);
     mz_patch_branch(ref5);
 
-    jit_ldxi_s(JIT_R2, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+    jit_ldxi_s(JIT_R2, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
 #ifdef MZ_USE_FUTURES
     if (scheme_is_multithreaded(0)) {
       /* Need an atomic update in case another thread is setting
@@ -2773,7 +2719,7 @@ static int common7(mz_jit_state *jitter, void *_data)
       ref5 = jit_bmsi_i(jit_forward(), JIT_R2, PAIR_IS_LIST);
       jit_movr_i(JIT_R0, JIT_R2);
       jit_ori_i(JIT_R2, JIT_R2, PAIR_IS_LIST);
-      jit_addi_p(JIT_R1, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+      jit_addi_p(JIT_R1, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
       /* In the unlikely case that the compare-and-swap fails, then it's ok to 
          lose the caching of the list bit: */
       jit_lock_cmpxchgr_s(JIT_R1, JIT_R2); /* implicitly uses JIT_R0 */
@@ -2782,7 +2728,7 @@ static int common7(mz_jit_state *jitter, void *_data)
 #endif
       {
         jit_ori_i(JIT_R2, JIT_R2, PAIR_IS_LIST);
-        jit_stxi_s(&MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso), JIT_R1, JIT_R2);
+        jit_stxi_s(&MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso), JIT_R1, JIT_R2);
       }
 
     __END_SHORT_JUMPS__(1);
@@ -2801,21 +2747,21 @@ static int common7(mz_jit_state *jitter, void *_data)
     mz_patch_branch(ref8);
     mz_patch_ucbranch(ref6);
 
-    jit_ldxi_s(JIT_R2, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+    jit_ldxi_s(JIT_R2, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
 #ifdef MZ_USE_FUTURES
     /* As above: */
     if (scheme_is_multithreaded(0)) {
       ref5 = jit_bmsi_i(jit_forward(), JIT_R2, PAIR_IS_NON_LIST);
       jit_movr_i(JIT_R0, JIT_R2);
       jit_ori_i(JIT_R2, JIT_R2, PAIR_IS_NON_LIST);
-      jit_addi_p(JIT_R1, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+      jit_addi_p(JIT_R1, JIT_R1, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
       jit_lock_cmpxchgr_s(JIT_R1, JIT_R2); /* implicitly uses JIT_R0 */
       mz_patch_branch(ref5);
     } else
 #endif
       {
         jit_ori_i(JIT_R2, JIT_R2, PAIR_IS_NON_LIST);
-        jit_stxi_s(&MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso), JIT_R1, JIT_R2);
+        jit_stxi_s(&MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso), JIT_R1, JIT_R2);
       }
     CHECK_LIMIT();
 
@@ -2867,7 +2813,7 @@ static int common8(mz_jit_state *jitter, void *_data)
     ref4 = mz_bnei_t(jit_forward(), JIT_R0, scheme_pair_type, JIT_R2);
     CHECK_LIMIT();
 
-    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Stx *)0x0)->iso));
+    jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)0x0)->iso));
     ref5 = jit_bmsi_ul(jit_forward(), JIT_R2, PAIR_IS_NON_LIST);
 
     jit_ldxi_p(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CDR(0x0));
@@ -3504,7 +3450,7 @@ static int more_common0(mz_jit_state *jitter, void *_data)
   {
     int in;
     
-    sjc.module_run_start_code = jit_get_ip();
+    sjc.linklet_run_start_code = jit_get_ip();
     jit_prolog(3);
     in = jit_arg_p();
     jit_getarg_p(JIT_R0, in); /* linklet */
@@ -3518,7 +3464,7 @@ static int more_common0(mz_jit_state *jitter, void *_data)
 
     jit_prepare(1);
     jit_pusharg_p(JIT_R0);
-    (void)mz_finish(scheme_module_run_finish);
+    (void)mz_finish(scheme_linklet_run_finish);
     CHECK_LIMIT();
     mz_pop_locals();
     jit_ret();
