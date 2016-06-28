@@ -896,9 +896,16 @@ static Scheme_Object *do_instantiate_linklet(Scheme_Linklet *linklet, Scheme_Ins
     return (Scheme_Object *)instantiate_linklet_k();
 }
 
-static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
+static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
+                                                 int num_instances, Scheme_Instance **instances)
 {
   return do_instantiate_linklet(linklet, instance, num_instances, instances, 1, 0);
+}
+
+Scheme_Object *scheme_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
+                                                int num_instances, Scheme_Instance **instances)
+{
+  return do_instantiate_linklet(linklet, instance, num_instances, instances, 1, 1);
 }
 
 /*========================================================================*/

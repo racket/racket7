@@ -29,7 +29,6 @@ READ_ONLY Scheme_Object *scheme_arity_at_least;
 READ_ONLY Scheme_Object *scheme_date;
 READ_ONLY Scheme_Object *scheme_make_arity_at_least;
 READ_ONLY Scheme_Object *scheme_source_property;
-READ_ONLY Scheme_Object *scheme_module_path_property;
 READ_ONLY Scheme_Object *scheme_input_port_property;
 READ_ONLY Scheme_Object *scheme_output_port_property;
 READ_ONLY Scheme_Object *scheme_cpointer_property;

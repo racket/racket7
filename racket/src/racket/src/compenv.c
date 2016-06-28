@@ -323,7 +323,7 @@ Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id,
     env2 = env;
   else {
     env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
-    memcpy(env, env2, sizeof(Scheme_Comp_Env));
+    memcpy(env2, env, sizeof(Scheme_Comp_Env));
   }
 
   vars = scheme_hash_tree_set(env2->vars, id, var);
@@ -340,7 +340,7 @@ Scheme_Comp_Env *scheme_set_comp_env_flags(Scheme_Comp_Env *env, int flags)
     return env;
 
   env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
-  memcpy(env, env2, sizeof(Scheme_Comp_Env));
+  memcpy(env2, env, sizeof(Scheme_Comp_Env));
   env2->flags |= flags;
 
   return env2;
@@ -354,7 +354,7 @@ Scheme_Comp_Env *scheme_set_comp_env_name(Scheme_Comp_Env *env, Scheme_Object *n
     return env;
 
   env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
-  memcpy(env, env2, sizeof(Scheme_Comp_Env));
+  memcpy(env2, env, sizeof(Scheme_Comp_Env));
   env2->value_name = name;
 
   return env2;
@@ -406,10 +406,13 @@ scheme_compile_lookup(Scheme_Object *find_id, Scheme_Comp_Env *env, int flags)
   v = scheme_hash_tree_get(env->vars, SCHEME_STX_VAL(find_id));
 
   if (!v)
-    v = scheme_hash_get(scheme_startup_env->all_primitives_table, find_id);
+    v = scheme_hash_get(scheme_startup_env->all_primitives_table, SCHEME_STX_VAL(find_id));
 
-  if (!v)
-    scheme_wrong_syntax(NULL, NULL, find_id, "free identifier");
+  if (!v) {
+    if (flags & SCHEME_NULL_FOR_UNBOUND)
+      return NULL;
+    scheme_wrong_syntax(NULL, NULL, find_id, "free identifier found in linklet");
+  }
 
   if (SAME_TYPE(SCHEME_TYPE(v), scheme_ir_local_type)) {
     if (!(env->flags & COMP_ENV_DONT_COUNT_AS_USE))

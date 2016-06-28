@@ -2032,6 +2032,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   scheme_begin_dup_symbol_check(&r);
 
   export_syms = scheme_make_vector(len, NULL);
+  source_names = scheme_make_hash_tree(0);
 
   for (j = 0; j < len; j++, exports = SCHEME_STX_CDR(exports)) {
     e = SCHEME_STX_CAR(exports);
@@ -2061,8 +2062,8 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   extra_vars_pos = len;
   all_extra_vars = scheme_null;
   
-  for (i = 0; i < body_len; i++, form = SCHEME_STX_CDR(form)) {
-    e = SCHEME_STX_CAR(form);
+  for (i = 0, a = form; i < body_len; i++, a = SCHEME_STX_CDR(a)) {
+    e = SCHEME_STX_CAR(a);
     if (is_define_values(e)) {
       Scheme_Object *vars, *vals;
       extra_vars = define_parse(e, &vars, &vals, &env, &r, &extra_vars_pos, pos_after_imports);

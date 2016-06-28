@@ -2479,6 +2479,9 @@ Scheme_Object *_scheme_tail_apply_to_list (Scheme_Object *rator, Scheme_Object *
 
 Scheme_Object *_scheme_apply_native(Scheme_Object *obj, int num_rands, Scheme_Object **rands);
 
+Scheme_Object *scheme_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
+                                                int num_instances, Scheme_Instance **instances);
+
 Scheme_Object *scheme_internal_read(Scheme_Object *port, Scheme_Object *stxsrc, int crc, int cantfail, 
 				    int recur, int expose_comment, int pre_char, Scheme_Object *readtable,
                                     Scheme_Object *delay_load_info);
@@ -3141,6 +3144,8 @@ char *scheme_symbol_path_to_string(Scheme_Object *p, intptr_t *_len);
 /*========================================================================*/
 
 #define NOT_SUPPORTED_STR "unsupported on this platform"
+
+intptr_t scheme_sprintf(char *s, intptr_t maxlen, const char *msg, ...);
 
 void scheme_read_err(Scheme_Object *port,
 		     Scheme_Object *stxsrc,

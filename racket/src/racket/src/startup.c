@@ -36,12 +36,12 @@ static Scheme_Linklet *eval_linklet_string(const char *str)
 
   expr = scheme_internal_read(port, NULL, 1, 1, 0, 0, -1, NULL, NULL);
 
-  return scheme_compile_and_optimize_linklet(scheme_datum_to_syntax(expr, scheme_false));
+  return scheme_compile_and_optimize_linklet(scheme_datum_to_syntax(expr, scheme_false, 0));
 }
 
 Scheme_Linklet *scheme_startup_linklet()
 {
-#define EVAL_ONE_STR(str) eval_linklet_string(str)
+#define EVAL_ONE_STR(str) return eval_linklet_string(str)
 
 #if defined(USE_COMPILED_STARTUP)
 # include "cstartup.inc"

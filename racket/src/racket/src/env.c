@@ -482,6 +482,7 @@ static void init_foreign(Scheme_Startup_Env *env)
 static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thread)
 {
   Scheme_Env *env;
+  Scheme_Linklet *startup_linklet;
 
 #ifdef TIME_STARTUP_PROCESS
   printf("place_init @ %" PRIdPTR "\n", scheme_get_process_milliseconds());
@@ -545,9 +546,6 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   scheme_init_foreign_places();
 #endif
 
-  env = scheme_make_empty_env();
-  scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 
- 
   /*initialize config */
   scheme_init_port_config();
   scheme_init_port_fun_config();
@@ -564,7 +562,6 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
 #endif
   scheme_init_futures_per_place();
 
-
   REGISTER_SO(literal_string_table);
   REGISTER_SO(literal_number_table);
   literal_string_table = scheme_make_weak_equal_table();
@@ -578,7 +575,12 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
 
   REGISTER_SO(scheme_startup_instance);
   scheme_startup_instance = scheme_make_instance(scheme_intern_symbol("startup"), scheme_false);
+  startup_linklet = scheme_startup_linklet();
+  scheme_instantiate_linklet_multi(startup_linklet, scheme_startup_instance, 0, NULL);
 
+  env = scheme_make_empty_env();
+  scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 
+ 
   boot_module_resolver();
 
   scheme_starting_up = 0;
@@ -755,7 +757,7 @@ Scheme_Object **scheme_make_builtin_references_table(int *_unsafe_start)
   for (i = scheme_startup_env->primitive_ids_table->size; i--; ) {
     v = scheme_startup_env->primitive_ids_table->vals[i];
     if (v) {
-      t[SCHEME_INT_VAL(scheme_startup_env->primitive_ids_table->keys[i])] = v;
+      t[SCHEME_INT_VAL(v)] = scheme_startup_env->primitive_ids_table->keys[i];
     }
   }
 
@@ -769,8 +771,8 @@ const char *scheme_look_for_primitive(void *code)
   intptr_t i;
   Scheme_Object *val;
 
-  for (i = scheme_startup_env->primitive_ids_table->size; i--; ) {
-    val = scheme_startup_env->primitive_ids_table->vals[i];
+  for (i = scheme_startup_env->all_primitives_table->size; i--; ) {
+    val = scheme_startup_env->all_primitives_table->vals[i];
     if (val && SCHEME_PRIMP(val)) {
       if (SCHEME_PRIM(val) == code)
         return ((Scheme_Primitive_Proc *)val)->name;

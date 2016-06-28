@@ -120,6 +120,7 @@ SRCS =  $(srcdir)/salloc.c \
 	$(srcdir)/setjmpup.c \
 	$(srcdir)/sfs.c \
 	$(srcdir)/sort.c \
+	$(srcdir)/startup.c \
 	$(srcdir)/string.c \
 	$(srcdir)/struct.c \
 	$(srcdir)/symbol.c \
@@ -276,6 +277,8 @@ sfs.@LTO@: $(srcdir)/sfs.c
 	$(CC) $(ALL_CFLAGS) -c $(srcdir)/sfs.c -o sfs.@LTO@
 sort.@LTO@: $(srcdir)/sort.c
 	$(CC) $(ALL_CFLAGS) -c $(srcdir)/sort.c -o sort.@LTO@
+startup.@LTO@: $(srcdir)/startup.c
+	$(CC) $(ALL_CFLAGS) -c $(srcdir)/startup.c -I. -I$(srcdir) -o startup.@LTO@
 string.@LTO@: $(srcdir)/string.c
 	$(CC) $(ALL_CFLAGS) -c $(srcdir)/string.c -I. -o string.@LTO@
 struct.@LTO@: $(srcdir)/struct.c

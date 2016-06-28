@@ -4575,12 +4575,27 @@ Scheme_Object *scheme_terminal_port_p(int argc, Scheme_Object *argv[])
   return is_fd_terminal(fd) ? scheme_true : scheme_false;
 }
 
+static void maybe_raise_missing_module(char *name, char *filename, char *pre, char *rel, char *post, char *errstr)
+{
+  Scheme_Object *proc, *a[6];
+
+  proc = scheme_get_startup_export("maybe-raise-missing-module");
+
+  a[0] = scheme_make_utf8_string(name);
+  a[1] = scheme_make_utf8_string(filename);
+  a[2] = scheme_make_utf8_string(pre);
+  a[3] = scheme_make_utf8_string(rel);
+  a[4] = scheme_make_utf8_string(post);
+  a[5] = scheme_make_utf8_string(errstr);
+
+  scheme_apply_multi(proc, 6, a);
+}
+
 static void filename_exn(char *name, char *msg, char *filename, int err, int maybe_module_errno)
 {
   char *dir, *drive;
   int len;
   char *pre, *rel, *post;
-  Scheme_Object *mod_path, *mp;
 
   len = strlen(filename);
 
@@ -4600,40 +4615,10 @@ static void filename_exn(char *name, char *msg, char *filename, int err, int may
   post = dir ? "" : "";
 
   if (maybe_module_errno && (err == maybe_module_errno)) {
-    mod_path = scheme_get_param(scheme_current_config(), MZCONFIG_CURRENT_MODULE_LOAD_PATH);
-    if (SCHEME_TRUEP(mod_path)) {
-      if (SCHEME_STXP(mod_path)) {
-        char *srcloc;
-        intptr_t srcloc_len;
-        mp = scheme_syntax_to_datum(mod_path);
-        srcloc = scheme_make_srcloc_string(mod_path, &srcloc_len);
-        scheme_raise_exn(MZEXN_FAIL_SYNTAX_MISSING_MODULE,
-                         scheme_make_pair(mod_path, scheme_null),
-                         mp,
-                         "%t%s: %s\n"
-                         "  module path: %W\n"
-                         "  path: %q%s%q%s\n"
-                         "  system error: " FILENAME_EXN_E,
-                         srcloc, srcloc_len,
-                         srcloc_len ? "" : name,
-                         "cannot open module file", 
-                         mp, filename,
-                         pre, rel, post,
-                         err);
-      } else {
-        scheme_raise_exn(MZEXN_FAIL_FILESYSTEM_MISSING_MODULE,
-                         mod_path,
-                         "%s: %s\n"
-                         "  module path: %W\n"
-                         "  path: %q%s%q%s\n"
-                         "  system error: " FILENAME_EXN_E,
-                         name, "cannot open module file", 
-                         mod_path, filename,
-                         pre, rel, post,
-                         err);
-      }
-      return;
-    }
+    char buffer[256];
+    scheme_sprintf(buffer, sizeof(buffer)-1, FILENAME_EXN_E, err);
+    buffer[sizeof(buffer)-1] = 0;
+    maybe_raise_missing_module(name, filename, pre, rel, post, buffer);
   }
 
   scheme_raise_exn(MZEXN_FAIL_FILESYSTEM,

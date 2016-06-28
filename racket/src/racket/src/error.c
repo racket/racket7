@@ -675,7 +675,7 @@ static intptr_t sch_vsprintf(char *s, intptr_t maxlen, const char *msg, va_list 
   return i;
 }
 
-static intptr_t scheme_sprintf(char *s, intptr_t maxlen, const char *msg, ...)
+intptr_t scheme_sprintf(char *s, intptr_t maxlen, const char *msg, ...)
 {
   intptr_t len;
   GC_CAN_IGNORE va_list args;
@@ -4432,23 +4432,6 @@ static Scheme_Object *variable_field_check(int argc, Scheme_Object **argv)
   return scheme_values(3, argv);
 }
 
-static Scheme_Object *syntax_field_check(int argc, Scheme_Object **argv)
-{
-  Scheme_Object *l;
-
-  l = argv[2];
-  while (SCHEME_PAIRP(l)) {
-    if (!SCHEME_STXP(SCHEME_CAR(l)))
-      break;
-    l = SCHEME_CDR(l);
-  }
-
-  if (!SCHEME_NULLP(l))
-    scheme_wrong_field_contract(argv[3], "(listof syntax?)", argv[2]);
-
-  return scheme_values(3, argv);
-}
-
 static Scheme_Object *read_field_check(int argc, Scheme_Object **argv)
 {
   Scheme_Object *l;
@@ -4486,84 +4469,12 @@ static Scheme_Object *errno_field_check(int argc, Scheme_Object **argv)
   return scheme_values (3, argv);
 }
 
-static Scheme_Object *module_path_field_check(int pos, int argc, Scheme_Object **argv)
-{
-  if (!scheme_is_module_path(argv[pos]))
-    scheme_wrong_field_contract(argv[pos+1], "(or/c #f module-path?)", argv[pos]);
-
-  return scheme_values (pos+1, argv);
-}
-
-static Scheme_Object *module_path_field_check_2(int argc, Scheme_Object **argv)
-{
-  return module_path_field_check(2, argc, argv);
-}
-
-static Scheme_Object *module_path_field_check_3(int argc, Scheme_Object **argv)
-{
-  return module_path_field_check(3, argc, argv);
-}
-
-static Scheme_Object *extract_syntax_locations(int argc, Scheme_Object **argv)
-{
-  if (scheme_is_struct_instance(exn_table[MZEXN_FAIL_SYNTAX].type, argv[0])) {
-    Scheme_Object *stxs, *stx, *first = scheme_null, *last = NULL, *loco, *p;
-    Scheme_Stx_Srcloc *loc;
-    stxs = scheme_struct_ref(argv[0], 2);
-    while (SCHEME_PAIRP(stxs)) {
-      stx = SCHEME_CAR(stxs);
-      loc = ((Scheme_Stx *)stx)->srcloc;
-      loco = scheme_make_location(loc->src ? loc->src : scheme_false,
-				  (loc->line >= 0) ? scheme_make_integer(loc->line) : scheme_false,
-				  (loc->col >= 0) ? scheme_make_integer(loc->col-1) : scheme_false,
-				  (loc->pos >= 0) ? scheme_make_integer(loc->pos) : scheme_false,
-				  (loc->span >= 0) ? scheme_make_integer(loc->span) : scheme_false);
-      p = scheme_make_pair(loco, scheme_null);
-      if (last)
-	SCHEME_CDR(last) = p;
-      else
-	first = p;
-      last = p;
-      stxs = SCHEME_CDR(stxs);
-    }
-    return first;
-  }
-  scheme_wrong_contract("exn:fail:syntax-locations-accessor", "exn:fail:syntax?", 0, argc, argv);
-  return NULL;
-}
-
 static Scheme_Object *extract_read_locations(int argc, Scheme_Object **argv)
 {
   if (scheme_is_struct_instance(exn_table[MZEXN_FAIL_READ].type, argv[0]))
     return scheme_struct_ref(argv[0], 2);
   scheme_wrong_contract("exn:fail:read-locations-accessor", "exn:fail:read?", 0, argc, argv);
   return NULL;
-}
-
-static Scheme_Object *extract_module_path(int pos, int argc, Scheme_Object **argv,
-                                          int exn_kind, const 
-                                          char *accessor_name, const char *contract)
-{
-  if (scheme_is_struct_instance(exn_table[exn_kind].type, argv[0]))
-    return scheme_struct_ref(argv[0], pos);
-  scheme_wrong_contract(accessor_name, contract, 0, argc, argv);
-  return NULL;
-}
-
-static Scheme_Object *extract_module_path_2(int argc, Scheme_Object **argv)
-{
-  return extract_module_path(2, argc, argv,
-                             MZEXN_FAIL_FILESYSTEM_MISSING_MODULE,
-                             "exn:fail:filesystem:missing-module:path-accessor", 
-                             "exn:fail:filesystem:missing-module?");
-}
-
-static Scheme_Object *extract_module_path_3(int argc, Scheme_Object **argv)
-{
-  return extract_module_path(3, argc, argv,
-                             MZEXN_FAIL_SYNTAX_MISSING_MODULE,
-                             "exn:fail:syntax:missing-module:path-accessor", 
-                             "exn:fail:syntax:missing-module?");
 }
 
 void scheme_init_exn(Scheme_Startup_Env *env)

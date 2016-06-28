@@ -53,11 +53,6 @@ static int compare_syms(const void *_a, const void *_b)
   return SCHEME_SYM_LEN(a) - SCHEME_SYM_LEN(b);
 }
 
-static void sort_vector_symbols(Scheme_Object *vec)
-{
-  my_qsort(SCHEME_VEC_ELS(vec), SCHEME_VEC_SIZE(vec), sizeof(Scheme_Object *), compare_syms);
-}
-
 static void sort_symbol_array(Scheme_Object **a, intptr_t count)
 {
   my_qsort(a, count, sizeof(Scheme_Object *), compare_syms);
