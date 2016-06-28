@@ -242,7 +242,6 @@ ir_local {
 ir_toplevel {
  mark:
   Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)p;
-  gcMARK2(tl->name, gc);
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_IR_Toplevel));
 }
@@ -740,14 +739,6 @@ thread_val {
   gcMARK2(pr->return_marks_to, gc);
   gcMARK2(pr->returned_marks, gc);
   
-  gcMARK2(pr->current_local_env, gc);
-  gcMARK2(pr->current_local_scope, gc);
-  gcMARK2(pr->current_local_use_scope, gc);
-  gcMARK2(pr->current_local_name, gc);
-  gcMARK2(pr->current_local_modidx, gc);
-  gcMARK2(pr->current_local_menv, gc);
-  gcMARK2(pr->current_local_bindings, gc);
-
   gcMARK2(pr->current_mt, gc);
 
   gcMARK2(pr->constant_folding, gc);
@@ -992,7 +983,7 @@ linklet_val {
   gcMARK2(l->name, gc);
   gcMARK2(l->importss, gc);
   gcMARK2(l->exports, gc);
-  gcMARK2(l->defns, gc);
+  gcMARK2(l->source_names, gc);
   gcMARK2(l->bodies, gc);
   gcMARK2(l->toplevels, gc);
  size:
@@ -1005,7 +996,7 @@ instance_val {
 
   gcMARK2(i->variables, gc);
   gcMARK2(i->weak_self_link, gc);
-  gcMARK2(i->exports, gc);
+  gcMARK2(i->source_names, gc);
   gcMARK2(i->name, gc);
   gcMARK2(i->data, gc);
  size:
@@ -1206,6 +1197,7 @@ mark_optimize_info {
   gcMARK2(i->consts, gc);
   gcMARK2(i->linklet, gc);
   gcMARK2(i->top_level_consts, gc);
+  gcMARK2(i->inline_variants, gc);
   gcMARK2(i->transitive_use_var, gc);
   gcMARK2(i->context, gc);
   gcMARK2(i->logger, gc);

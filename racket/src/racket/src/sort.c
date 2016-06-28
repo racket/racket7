@@ -39,8 +39,8 @@ static int compare_syms(const void *_a, const void *_b)
   Scheme_Object *b = *(Scheme_Object **)_b;
   intptr_t l = SCHEME_SYM_LEN(a), i;
 
-  STX_ASSERT(SCHEME_SYMBOLP(a));
-  STX_ASSERT(SCHEME_SYMBOLP(b));
+  MZ_ASSERT(SCHEME_SYMBOLP(a));
+  MZ_ASSERT(SCHEME_SYMBOLP(b));
 
   if (SCHEME_SYM_LEN(b) < l)
     l = SCHEME_SYM_LEN(b);
@@ -74,8 +74,8 @@ static int compare_nums(const void *_a, const void *_b)
   else if (SCHEME_FALSEP(b))
     return 1;
 
-  STX_ASSERT(SCHEME_REALP(a));
-  STX_ASSERT(SCHEME_REALP(b));
+  MZ_ASSERT(SCHEME_REALP(a));
+  MZ_ASSERT(SCHEME_REALP(b));
 
   if (scheme_bin_lt(a, b))
     return -1;
@@ -143,7 +143,7 @@ Scheme_Object **scheme_extract_sorted_keys(Scheme_Object *tree)
       a[i++] = key;
     }
 
-    STX_ASSERT(i == count);
+    MZ_ASSERT(i == count);
   } else {
     Scheme_Hash_Table *t = (Scheme_Hash_Table *)tree;
 
@@ -161,7 +161,7 @@ Scheme_Object **scheme_extract_sorted_keys(Scheme_Object *tree)
       }
     }
 
-    STX_ASSERT(j == count);
+    MZ_ASSERT(j == count);
   }
 
   if (SCHEME_SYMBOLP(a[0]) && all_symbols(a, count))

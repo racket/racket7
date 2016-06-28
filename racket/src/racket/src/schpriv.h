@@ -1367,7 +1367,6 @@ typedef struct Scheme_IR_Local
 typedef struct Scheme_IR_Toplevel
 {
   Scheme_Inclhash_Object iso; /* scheme_import_export_variable_type; not hashable */
-  Scheme_Object *name;
   int instance_pos; /* import instance position, or -1 for exported and internal */
   int variable_pos; /* position within import instance */
   int identity_pos; /* a convenience: unique to a combination of instance_pos and variable_pos */
@@ -1379,8 +1378,8 @@ typedef struct Scheme_IR_Toplevel
 #define SCHEME_IR_TOPLEVEL_FLAGS(var) MZ_OPT_HASH_KEY(&(var)->iso)
 #define SCHEME_IR_TOPLEVEL_POS(var) (((Scheme_IR_Toplevel *)var)->identity_pos)
 
-Scheme_IR_Toplevel *scheme_make_ir_toplevel(Scheme_Object *id, int instance_pos, int variable_pos, int identity_pos, int flags);
-Scheme_IR_Toplevel *scheme_ir_toplevel_to_flagged_toplevel(Scheme_IR_Toplevel *tl, int flags);
+Scheme_IR_Toplevel *scheme_make_ir_toplevel(int instance_pos, int variable_pos, int identity_pos, int flags);
+Scheme_Object *scheme_ir_toplevel_to_flagged_toplevel(Scheme_Object *tl, int flags);
 
 typedef struct {
   Scheme_Inclhash_Object iso; /* keyex used for flags */
@@ -1907,6 +1906,8 @@ Scheme_Object *scheme_chaperone_do_continuation_mark(const char *name, int is_ge
 
 XFORM_NONGCING Scheme_Object *scheme_get_immediate_cc_mark(Scheme_Object *key, Scheme_Object *def_val);
 Scheme_Object *scheme_chaperone_get_immediate_cc_mark(Scheme_Object *key, Scheme_Object *def_val);
+
+void scheme_clear_prompt_cache(void);
 
 /*========================================================================*/
 /*                         semaphores and locks                           */
@@ -2480,7 +2481,6 @@ Scheme_Object *_scheme_apply_native(Scheme_Object *obj, int num_rands, Scheme_Ob
 
 Scheme_Object *scheme_internal_read(Scheme_Object *port, Scheme_Object *stxsrc, int crc, int cantfail, 
 				    int recur, int expose_comment, int pre_char, Scheme_Object *readtable,
-				    Scheme_Object *magic_sym, Scheme_Object *magic_val,
                                     Scheme_Object *delay_load_info);
 void scheme_internal_display(Scheme_Object *obj, Scheme_Object *port);
 void scheme_internal_write(Scheme_Object *obj, Scheme_Object *port);
@@ -2553,6 +2553,7 @@ typedef struct Scheme_Comp_Env
   Scheme_Linklet *linklet;
 } Scheme_Comp_Env;
 
+#define COMP_ENV_CHECKING_CONSTANT    0x1
 #define COMP_ENV_DONT_COUNT_AS_USE    0x2
 #define COMP_ENV_ALLOW_SET_UNDEFINED  0x3
 
@@ -2811,14 +2812,6 @@ typedef struct SFS_Info SFS_Info;
 
 Scheme_Linklet *scheme_sfs_linklet(Scheme_Linklet *linklet);
 
-void scheme_sfs_used(SFS_Info *info, int pos);
-void scheme_sfs_push(SFS_Info *info, int count, int track);
-void scheme_sfs_start_sequence(SFS_Info *si, int cnt, int last_is_tail);
-
-Scheme_Object *scheme_sfs_add_clears(Scheme_Object *expr, Scheme_Object *clears, int pre);
-
-typedef struct Scheme_Object *(*Scheme_Syntax_SFSer)(Scheme_Object *data, SFS_Info *info);
-
 typedef struct Scheme_Set_Bang {
   Scheme_Object so;
   int set_undef;
@@ -2829,7 +2822,7 @@ Scheme_Object *scheme_protect_quote(Scheme_Object *expr);
 
 Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linklet *linklet);
 
-Scheme_Linklet *scheme_optimize_expr(Scheme_Linklet *, int can_inline);
+Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline);
 
 /* Context uses result as a boolean: */
 #define OPT_CONTEXT_BOOLEAN    0x1
@@ -2858,8 +2851,7 @@ XFORM_NONGCING int scheme_predicate_to_local_type(Scheme_Object *pred);
 Scheme_Object *scheme_make_noninline_proc(Scheme_Object *e);
 Scheme_Object *scheme_optimize_extract_tail_inside(Scheme_Object *t2);
 
-Scheme_Object *scheme_resolve_expr(Scheme_Object *, Resolve_Info *);
-Scheme_Object *scheme_resolve_list(Scheme_Object *, Resolve_Info *);
+Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *, int enforce_const);
 Scheme_Object *scheme_unresolve(Scheme_Object *, int argv, int *_has_cases, Scheme_Linklet *linklet);
 Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *, int comp_flags);
 
@@ -2868,11 +2860,6 @@ int scheme_check_leaf_rator(Scheme_Object *le, int *_flags);
 int scheme_is_ir_lambda(Scheme_Object *o, int can_be_closed, int can_be_liftable);
 
 Scheme_Object *scheme_resolve_lets(Scheme_Object *form, Resolve_Info *info);
-
-Resolve_Info *scheme_resolve_info_create(Scheme_Linklet *rp);
-void scheme_resolve_info_enforce_const(Resolve_Info *, int enforce_const);
-int scheme_resolve_info_max_let_depth(Resolve_Info *ri);
-int scheme_resolve_info_use_jit(Resolve_Info *ri);
 
 char *scheme_optimize_info_context(Optimize_Info *);
 Scheme_Logger *scheme_optimize_info_logger(Optimize_Info *);
@@ -2904,9 +2891,9 @@ void scheme_on_demand_generate_lambda(Scheme_Native_Closure *nc, int argc, Schem
 struct Start_Module_Args;
 
 #ifdef MZ_USE_JIT
-Scheme_Object *scheme_linklet_run_start(Scheme_Linklet* linklet, Scheme_Object *name);
+Scheme_Object *scheme_linklet_run_start(Scheme_Linklet* linklet, Scheme_Instance *instance, Scheme_Object *name);
 #endif
-Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet);
+Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instance *instance);
 
 Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *env);
 
@@ -3077,7 +3064,7 @@ struct Scheme_Instance {
   Scheme_Bucket_Table *variables;
   Scheme_Object *weak_self_link; /* for Scheme_Bucket_With_Home */
 
-  Scheme_Hash_Table *exports; /* (symbol -> symbol) */
+  Scheme_Hash_Tree *source_names; /* bucket symbol -> source symbol; initially copied from linklet */
   
   Scheme_Object *name;  /* for reporting purposes */
   Scheme_Object *data;
@@ -3097,12 +3084,13 @@ struct Scheme_Linklet
      to `resolve`, so that we have source locations, and then symbols
      afterward. */
 
-  Scheme_Object *importss; /* vector of id-or-symbol (extenal names) */
+  Scheme_Object *importss; /* vector of symbol (extenal names) */
   int **import_flags; /* records compiler assumptions */
 
-  Scheme_Object *exports; /* vector of id-or-symbol (extenal names); unreadable starting "?" was generated */
-  Scheme_Object *defns; /* vector of id-or-symbol (internal names); parallel to `exports` */
-  int num_lifts; /* this many at the tail of `defns` are from resolve lifts */
+  Scheme_Object *exports; /* vector of symbol; unreadable starting "?" was generated */
+  int num_lifts; /* this many at the tail of `exports` are from resolve lifts */
+
+  Scheme_Hash_Tree *source_names; /* symbol (external name) -> symbol (source name) */
   
   Scheme_Object *bodies; /* vector of definition or expression */
 
@@ -3115,7 +3103,7 @@ struct Scheme_Linklet
 #define SCHEME_DEFN_VAR_COUNT(d) (SCHEME_VEC_SIZE(d)-1)
 #define SCHEME_DEFN_RHS(d)       (SCHEME_VEC_ELS(d)[0])
 #define SCHEME_DEFN_VAR_(d, pos) (SCHEME_VEC_ELS(d)[(pos)+1])
-#define SCHEME_DEFN_VAR(d, pos)  ((Scheme_Import_Export_Variable *)SCHEME_DEFN_VAR_(d, pos))
+#define SCHEME_DEFN_VAR(d, pos)  ((Scheme_IR_Toplevel *)SCHEME_DEFN_VAR_(d, pos))
 
 #define SCHEME_VARREF_FLAGS(pr) MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)pr)->iso)
 

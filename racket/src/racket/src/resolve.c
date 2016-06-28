@@ -68,10 +68,10 @@ struct Resolve_Info
 
 #define cons(a,b) scheme_make_pair(a,b)
 
-static Scheme_Object *
-resolve_lambda(Scheme_Object *_lam, Resolve_Info *info, 
-               int can_lift, int convert, int just_compute_lift,
-               Scheme_Object *precomputed_lift);
+static Scheme_Object *resolve_expr(Scheme_Object *expr, Resolve_Info *info);
+static Scheme_Object *resolve_lambda(Scheme_Object *_lam, Resolve_Info *info, 
+                                     int can_lift, int convert, int just_compute_lift,
+                                     Scheme_Object *precomputed_lift);
 static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambda);
 static void resolve_info_add_mapping(Resolve_Info *info, Scheme_IR_Local *var, Scheme_Object *v);
 static int resolve_info_lookup(Resolve_Info *resolve, Scheme_IR_Local *var, Scheme_Object **lifted,
@@ -90,8 +90,10 @@ static int is_nonconstant_procedure(Scheme_Object *lam, Resolve_Info *info, Sche
 static int resolve_is_inside_proc(Resolve_Info *info);
 static int resolve_has_toplevel(Resolve_Info *info);
 static void set_tl_pos_used(Resolve_Info *info, int pos);
-static Scheme_Object *generate_name(Scheme_Object *base_sym, Scheme_Hash_Tree *used_names, int search_start);
+static Scheme_Object *generate_name(Scheme_Object *base_sym, Scheme_Hash_Table *used_names, int search_start);
 static void enable_expression_resolve_lifts(Resolve_Info *ri);
+static void extend_linklet_exports(Scheme_Linklet *linklet, int num_lifts);
+static Resolve_Info *resolve_info_create(Scheme_Linklet *rp, int enforce_const);
 
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
@@ -232,7 +234,7 @@ static Scheme_Object *resolve_application(Scheme_Object *o, Resolve_Info *orig_i
     if (already_resolved_arg_count) {
       already_resolved_arg_count--;
     } else {
-      le = scheme_resolve_expr(app->args[i], info);
+      le = resolve_expr(app->args[i], info);
       app->args[i] = le;
     }
   }
@@ -315,13 +317,13 @@ static Scheme_Object *resolve_application2(Scheme_Object *o, Resolve_Info *orig_
   info = resolve_info_extend(orig_info, 1, 0);
 
   if (!already_resolved_arg_count) {
-    le = scheme_resolve_expr(app->rator, info);
+    le = resolve_expr(app->rator, info);
     app->rator = le;
   } else
     already_resolved_arg_count--;
 
   if (!already_resolved_arg_count) {
-    le = scheme_resolve_expr(app->rand, info);
+    le = resolve_expr(app->rand, info);
     app->rand = le;
   } else
     already_resolved_arg_count--;
@@ -401,21 +403,21 @@ static Scheme_Object *resolve_application3(Scheme_Object *o, Resolve_Info *orig_
   if (already_resolved_arg_count) {
     already_resolved_arg_count--;
   } else {
-    le = scheme_resolve_expr(app->rator, info);
+    le = resolve_expr(app->rator, info);
     app->rator = le;
   }
 
   if (already_resolved_arg_count) {
     already_resolved_arg_count--;
   } else {
-    le = scheme_resolve_expr(app->rand1, info);
+    le = resolve_expr(app->rand1, info);
     app->rand1 = le;
   }
 
   if (already_resolved_arg_count) {
     already_resolved_arg_count--;
   } else {
-    le = scheme_resolve_expr(app->rand2, info);
+    le = resolve_expr(app->rand2, info);
     app->rand2 = le;
   }
 
@@ -448,9 +450,9 @@ static Scheme_Object *resolve_branch(Scheme_Object *o, Resolve_Info *info)
 
   b = (Scheme_Branch_Rec *)o;
 
-  t = scheme_resolve_expr(b->test, info);
-  tb = scheme_resolve_expr(b->tbranch, info);
-  fb = scheme_resolve_expr(b->fbranch, info);
+  t = resolve_expr(b->test, info);
+  tb = resolve_expr(b->tbranch, info);
+  fb = resolve_expr(b->fbranch, info);
 
   b->test = t;
   b->tbranch = tb;
@@ -464,9 +466,9 @@ static Scheme_Object *resolve_wcm(Scheme_Object *o, Resolve_Info *info)
   Scheme_With_Continuation_Mark *wcm = (Scheme_With_Continuation_Mark *)o;
   Scheme_Object *k, *v, *b;
 
-  k = scheme_resolve_expr(wcm->key, info);
-  v = scheme_resolve_expr(wcm->val, info);
-  b = scheme_resolve_expr(wcm->body, info);
+  k = resolve_expr(wcm->key, info);
+  v = resolve_expr(wcm->val, info);
+  b = resolve_expr(wcm->body, info);
   wcm->key = k;
   wcm->val = v;
   wcm->body = b;
@@ -541,7 +543,7 @@ static Scheme_Object *resolve_sequence(Scheme_Object *o, Resolve_Info *info)
 
   for (i = s->count; i--; ) {
     Scheme_Object *le;
-    le = scheme_resolve_expr(s->array[i], info);
+    le = resolve_expr(s->array[i], info);
     s->array[i] = le;
   }
   
@@ -556,8 +558,8 @@ static Scheme_Object *
 define_values_resolve(Scheme_Object *data, Resolve_Info *rslv)
 {
   intptr_t i, cnt = SCHEME_DEFN_VAR_COUNT(data);
-  Scheme_Object *val;
-  Scheme_IR_variable *var;
+  Scheme_Object *val, *a;
+  Scheme_IR_Toplevel *var;
 
   /* If a defined variable doesn't have SCHEME_TOPLEVEL_MUTATED, then
      resolve to a top-level reference with SCHEME_TOPLEVEL_SEAL, so
@@ -572,7 +574,7 @@ define_values_resolve(Scheme_Object *data, Resolve_Info *rslv)
     SCHEME_DEFN_VAR_(data, i) = a;
   }
 
-  val = scheme_resolve_expr(SCHEME_DEFN_RHS(data), rslv);
+  val = resolve_expr(SCHEME_DEFN_RHS(data), rslv);
   SCHEME_DEFN_RHS(data) = val;
 
   return data;
@@ -599,7 +601,7 @@ inline_variant_resolve(Scheme_Object *data, Resolve_Info *rslv)
   char no_lift;
 
   a = SCHEME_VEC_ELS(data)[0];
-  a = scheme_resolve_expr(a, rslv);
+  a = resolve_expr(a, rslv);
   SCHEME_VEC_ELS(data)[0] = a;
 
   /* Don't lift closures in the inline variant, since that
@@ -608,7 +610,7 @@ inline_variant_resolve(Scheme_Object *data, Resolve_Info *rslv)
   a = SCHEME_VEC_ELS(data)[1];
   no_lift = rslv->no_lift;
   rslv->no_lift = 1;
-  a = scheme_resolve_expr(a, rslv);
+  a = resolve_expr(a, rslv);
   rslv->no_lift = no_lift;
   SCHEME_VEC_ELS(data)[1] = a;
   
@@ -624,7 +626,7 @@ set_resolve(Scheme_Object *data, Resolve_Info *rslv)
   var = sb->var;
   val = sb->val;
   
-  val = scheme_resolve_expr(val, rslv);
+  val = resolve_expr(val, rslv);
 
   if (SAME_TYPE(SCHEME_TYPE(var), scheme_ir_local_type)) {
     Scheme_Let_Value *lv;
@@ -647,7 +649,7 @@ set_resolve(Scheme_Object *data, Resolve_Info *rslv)
     return (Scheme_Object *)lv;
   }
 
-  var = scheme_resolve_expr(var, rslv);
+  var = resolve_expr(var, rslv);
 
   sb->var = var;
   sb->val = val;
@@ -660,7 +662,7 @@ ref_resolve(Scheme_Object *data, Resolve_Info *rslv)
 {
   Scheme_Object *v;
 
-  v = scheme_resolve_expr(SCHEME_PTR2_VAL(data), rslv);
+  v = resolve_expr(SCHEME_PTR2_VAL(data), rslv);
   SCHEME_PTR2_VAL(data) = v;
   
   v = SCHEME_PTR1_VAL(data);
@@ -670,12 +672,12 @@ ref_resolve(Scheme_Object *data, Resolve_Info *rslv)
       SCHEME_VARREF_FLAGS(data) |= 0x1; /* => constant */
     v = SCHEME_PTR2_VAL(data);
   } else if (SAME_TYPE(SCHEME_TYPE(v), scheme_ir_local_type)) {
-    v = scheme_resolve_expr(v, rslv);
+    v = resolve_expr(v, rslv);
     if (SAME_TYPE(SCHEME_TYPE(v), scheme_local_type))
       SCHEME_VARREF_FLAGS(data) |= 0x1; /* because mutable would be unbox */
     v = SCHEME_PTR2_VAL(data);
   } else
-    v = scheme_resolve_expr(v, rslv);
+    v = resolve_expr(v, rslv);
   SCHEME_PTR1_VAL(data) = v;
 
   return data;
@@ -689,8 +691,8 @@ apply_values_resolve(Scheme_Object *data, Resolve_Info *rslv)
   f = SCHEME_PTR1_VAL(data);
   e = SCHEME_PTR2_VAL(data);
 
-  f = scheme_resolve_expr(f, rslv);
-  e = scheme_resolve_expr(e, rslv);
+  f = resolve_expr(f, rslv);
+  e = resolve_expr(e, rslv);
 
   SCHEME_PTR1_VAL(data) = f;
   SCHEME_PTR2_VAL(data) = e;
@@ -713,10 +715,10 @@ with_immed_mark_resolve(Scheme_Object *data, Resolve_Info *orig_rslv)
   Scheme_IR_Local *var;
   Resolve_Info *rslv = orig_rslv;
 
-  e = scheme_resolve_expr(wcm->key, rslv);
+  e = resolve_expr(wcm->key, rslv);
   wcm->key = e;
 
-  e = scheme_resolve_expr(wcm->val, rslv);
+  e = resolve_expr(wcm->val, rslv);
   wcm->val = e;
 
   rslv = resolve_info_extend(rslv, 1, 0);
@@ -726,7 +728,7 @@ with_immed_mark_resolve(Scheme_Object *data, Resolve_Info *orig_rslv)
   var->resolve.co_depth = rslv->current_depth;
   var->resolve.lex_depth = rslv->current_lex_depth;
   
-  e = scheme_resolve_expr(SCHEME_CDR(wcm->body), rslv);
+  e = resolve_expr(SCHEME_CDR(wcm->body), rslv);
   wcm->body = e;
 
   merge_resolve(orig_rslv, rslv);
@@ -952,7 +954,7 @@ static Scheme_Object *build_let_one_chain(Scheme_IR_Let_Header *head, Scheme_Obj
           && SAME_TYPE(SCHEME_TYPE(irlv->value), scheme_ir_lambda_type))
         le = resolve_lambda(irlv->value, linfo, 1, 1, 0, NULL);
       else
-        le = scheme_resolve_expr(irlv->value, linfo);
+        le = resolve_expr(irlv->value, linfo);
 
       if (is_lifted_reference(le)) {
         MZ_ASSERT(!info->no_lift);
@@ -985,7 +987,7 @@ static Scheme_Object *build_let_one_chain(Scheme_IR_Let_Header *head, Scheme_Obj
     }
   }
 
-  body = scheme_resolve_expr(body, linfo);
+  body = resolve_expr(body, linfo);
   if (last)
     ((Scheme_Let_One *)last)->body = body;
   else
@@ -1267,7 +1269,7 @@ Scheme_Object *scheme_resolve_lets(Scheme_Object *form, Resolve_Info *info)
          `resolve_omittable` fields. */
       if (all_unused_and_omittable(head)) {
         /* All unused and omittable */
-        return scheme_resolve_expr(body, info);
+        return resolve_expr(body, info);
       }
     }
   }
@@ -1350,7 +1352,7 @@ Scheme_Object *scheme_resolve_lets(Scheme_Object *form, Resolve_Info *info)
           /* Change a `[() (begin expr (values))]' clause,
              which can be generated by internal-definition expansion,
              into a `begin' */
-          expr = scheme_resolve_expr(expr, linfo);
+          expr = resolve_expr(expr, linfo);
           expr = scheme_make_sequence_compilation(scheme_make_pair(expr,
                                                                    scheme_make_pair(scheme_false,
                                                                                     scheme_null)),
@@ -1369,7 +1371,7 @@ Scheme_Object *scheme_resolve_lets(Scheme_Object *form, Resolve_Info *info)
           last_body = NULL;
           last_seq = expr;
         } else {
-          expr = scheme_resolve_expr(irlv->value, linfo);
+          expr = resolve_expr(irlv->value, linfo);
 
           lv = MALLOC_ONE_TAGGED(Scheme_Let_Value);
           if (last)
@@ -1430,7 +1432,7 @@ Scheme_Object *scheme_resolve_lets(Scheme_Object *form, Resolve_Info *info)
   }
 
   /* Resolve body: */
-  body = scheme_resolve_expr((Scheme_Object *)irlv, linfo);
+  body = resolve_expr((Scheme_Object *)irlv, linfo);
 
   while (SCHEME_PAIRP(boxes)) {
     /* See bangboxenv... */
@@ -1837,7 +1839,7 @@ resolve_lambda(Scheme_Object *_lam, Resolve_Info *info,
     /* Resolve the closure body: */
     {
       Scheme_Object *code;
-      code = scheme_resolve_expr(lam->body, new_info);
+      code = resolve_expr(lam->body, new_info);
       lam->body = code;
     }
 
@@ -1954,20 +1956,19 @@ resolve_lambda(Scheme_Object *_lam, Resolve_Info *info,
 /*                                linklet                                 */
 /*========================================================================*/
 
-static Scheme_Klinlet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_const)
+Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_const)
 {
-  Scheme_Object *b, *lift_vec, *body = scheme_null, *new_bodies;
-  Scheme_Hash_Table *names;
+  Scheme_Object *lift_vec, *body = scheme_null, *new_bodies;
   Resolve_Info *rslv;
-  int i, cnt;
+  int i, cnt, num_lifts;
 
-  rslv = scheme_resolve_info_create(linklet, enforce_const);
+  rslv = resolve_info_create(linklet, enforce_const);
   enable_expression_resolve_lifts(rslv);
 
   cnt = SCHEME_VEC_SIZE(linklet->bodies);
   for (i = 0; i < cnt; i++) {
     Scheme_Object *e;
-    e = scheme_resolve_expr(SCHEME_VEC_ELS(linklet->bodies)[i], rslv);
+    e = resolve_expr(SCHEME_VEC_ELS(linklet->bodies)[i], rslv);
     
     /* add lift just before the expression that introduced it;
        this ordering is needed for bytecode validation of
@@ -1981,14 +1982,14 @@ static Scheme_Klinlet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enfor
     body = scheme_make_pair(e, body);
   }
 
-  m->max_let_depth = rslv->max_let_depth;
+  linklet->max_let_depth = rslv->max_let_depth;
 
   lift_vec = rslv->lifts;
   num_lifts = SCHEME_INT_VAL(SCHEME_VEC_ELS(lift_vec)[1]);
 
   /* Recompute body array: */
   body = scheme_reverse(body);
-  cnt = scheme_length(body);
+  cnt = scheme_list_length(body);
   new_bodies = scheme_make_vector(cnt, scheme_false);
   for (i = 0; i < cnt; i++, body = SCHEME_CDR(body)) {
     SCHEME_VEC_ELS(new_bodies)[i] = SCHEME_CAR(body);
@@ -1996,88 +1997,39 @@ static Scheme_Klinlet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enfor
   
   linklet->bodies = new_bodies;
 
-  /* Reduce import identifiers to symbols */
-  convert_linklet_imports(linklet, 1);
-    
-  /* Adjust the `defns` and exports` arrays to reduce identifiers to
-     symbols and to take into account unexported and lifted
-     definitions */
-  convert_linklet_exports(linklet, num_lifts, 1);
-
+  if (num_lifts) {
+    /* Adjust the `exports` array to take into account lifted
+       definitions */
+    extend_linklet_exports(linklet, num_lifts);
+  }
+  
   linklet->toplevels = NULL;
 
   return linklet;
 }
 
-static void convert_linklet_imports(Scheme_Linklet *linklet, int from_stx)
-{
-  Scheme_Object *new_importss, *new_imports, v;
-  int i, j;
-
-  i = SCHEME_VEC_SIZE(linket->importss);
-  new_importss = scheme_make_vector(i, NULL);
-  while (i--) {
-    j = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linket->importss)[i]);
-    new_imports = scheme_make_vector(j, NULL);
-    SCHEME_VEC_ELS(new_importss)[j] = new_imports;
-    while (j--) {
-      v = SCHEME_VEC_ELS(SCHEME_VEC_ELS(linket->importss)[i])[j];
-      if (from_stx)
-        v = SCHEME_STX_VAL(v);
-      else
-        v = scheme_datum_to_syntax(v, scheme_false, 0);
-      SCHEME_VEC_ELS(new_imports)[i] = v;
-    }
-  }
-
-  linklet->importss = new_importss;
-}
-
-static void convert_linklet_exports(Scheme_Linklet *linklet, int num_lifts, int from_stx)
+static void extend_linklet_exports(Scheme_Linklet *linklet, int num_lifts)
 {
   int cnt, i;
-  Scheme_Object *new_exports, *new_defns, *v;
+  Scheme_Object *new_exports, *b;
+  Scheme_Hash_Table *names;
   
   linklet->num_lifts = num_lifts;
-  cnt = linklet->num_defns + num_lifts;
+  cnt = SCHEME_VEC_SIZE(linklet->exports) + num_lifts;
   new_exports = scheme_make_vector(cnt, scheme_false);
-  new_defns = scheme_make_vector(cnt, scheme_false);
   names = scheme_make_hash_table(SCHEME_hash_ptr);
   
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->exports); i++) {
-    if (from_stx) {
-      SCHEME_VEC_ELS(new_exports)[i] = SCHEME_STX_VAL(SCHEME_VEC_ELS(linklet->exports)[i]);
-      SCHEME_VEC_ELS(new_defns)[i] = SCHEME_STX_VAL(SCHEME_VEC_ELS(linklet->defns)[i]);
-      scheme_hash_set(names, SCHEME_VEC_ELS(new_exports)[i], scheme_true);
-      scheme_hash_set(names, SCHEME_VEC_ELS(new_defns)[i], scheme_true);
-    } else {
-      scheme_hash_set(names, SCHEME_VEC_ELS(linklet->exports)[i], scheme_true);
-      scheme_hash_set(names, SCHEME_VEC_ELS(linklet->defns)[i], scheme_true);
-      v = scheme_datum_to_syntax(SCHEME_VEC_ELS(linklet->exports)[i], scheme_false, 0);
-      SCHEME_VEC_ELS(new_exports)[i] = v;
-      v = scheme_datum_to_syntax(SCHEME_VEC_ELS(linklet->defns)[i], scheme_false, 0);
-      SCHEME_VEC_ELS(new_defns)[i] = v;
-    }
-  }
-  
-  for (; i < SCHEME_VEC_SIZE(linklet->defns); i++) {
-    b = generate_name(SCHEME_VEC_ELS(linklet->defns)[i], names, 0);
-    if (!from_stx) 
-      b = scheme_datum_to_syntax(b, scheme_false, 0);
-    scheme_hash_set(names, b, scheme_true);
-    new_exports[i] = b;
+    SCHEME_VEC_ELS(new_exports)[i] = SCHEME_VEC_ELS(linklet->exports)[i];
+    scheme_hash_set(names, SCHEME_VEC_ELS(new_exports)[i], scheme_true);
   }
   
   for (; i < cnt; i++) {
-    b = generate_name(NULL, names, i - linket->num_defns);
-    if (!from_stx) 
-      b = scheme_datum_to_syntax(b, scheme_false, 0);
-    SCHEME_VEC_ELS(new_defns)[i] = b;
+    b = generate_name(NULL, names, i - SCHEME_VEC_SIZE(linklet->exports));
     SCHEME_VEC_ELS(new_exports)[i] = b;
   }
 
   linklet->exports = new_exports;
-  linklet->defns = new_defns;
 }
 
 static Scheme_Object *generate_name(Scheme_Object *base_sym, Scheme_Hash_Table *used_names, int search_start)
@@ -2112,10 +2064,10 @@ static Scheme_Object *resolve_k(void)
   p->ku.k.p1 = NULL;
   p->ku.k.p2 = NULL;
 
-  return scheme_resolve_expr(expr, info);
+  return resolve_expr(expr, info);
 }
 
-Scheme_Object *scheme_resolve_expr(Scheme_Object *expr, Resolve_Info *info)
+Scheme_Object *resolve_expr(Scheme_Object *expr, Resolve_Info *info)
 {
   Scheme_Type type = SCHEME_TYPE(expr);
 
@@ -2160,7 +2112,6 @@ Scheme_Object *scheme_resolve_expr(Scheme_Object *expr, Resolve_Info *info)
     return resolve_application3(expr, info, 0);
   case scheme_sequence_type:
   case scheme_begin0_sequence_type:
-  case scheme_splice_sequence_type:
     return resolve_sequence(expr, info);
   case scheme_branch_type:
     return resolve_branch(expr, info);
@@ -2173,7 +2124,6 @@ Scheme_Object *scheme_resolve_expr(Scheme_Object *expr, Resolve_Info *info)
   case scheme_ir_toplevel_type:
     return resolve_toplevel(info, expr, 1);
   case scheme_variable_type:
-  case scheme_module_variable_type:
     scheme_signal_error("got top-level in wrong place");
     return 0;
   case scheme_define_values_type:
@@ -2195,28 +2145,6 @@ Scheme_Object *scheme_resolve_expr(Scheme_Object *expr, Resolve_Info *info)
   default:
     return expr;
   }
-}
-
-Scheme_Object *scheme_resolve_list(Scheme_Object *expr, Resolve_Info *info)
-{
-  Scheme_Object *first = scheme_null, *last = NULL;
-
-  while (SCHEME_PAIRP(expr)) {
-    Scheme_Object *pr;
-
-    pr = scheme_make_pair(scheme_resolve_expr(SCHEME_CAR(expr), info),
-			  scheme_null);
-
-    if (last)
-      SCHEME_CDR(last) = pr;
-    else
-      first = pr;
-    last = pr;
-
-    expr = SCHEME_CDR(expr);
-  }
-
-  return first;
 }
 
 static Scheme_Object *resolve_info_lift_added(Resolve_Info *resolve, Scheme_Object *v, int convert_shift)
@@ -2253,7 +2181,7 @@ static Scheme_Object *shift_lifted_reference(Scheme_Object *tl, Resolve_Info *in
                             SCHEME_TOPLEVEL_CONST);
   
   /* register if non-stub: */
-  if (pos >= info->linklet->num_defns)
+  if (pos >= info->linklet->num_toplevels)
     set_tl_pos_used(info, pos);
 
   return tl;
@@ -2263,7 +2191,7 @@ static Scheme_Object *shift_lifted_reference(Scheme_Object *tl, Resolve_Info *in
 /*                    compile-time env for resolve                        */
 /*========================================================================*/
 
-Resolve_Info *scheme_resolve_info_create(Scheme_Linklet *linklet)
+static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_const)
 {
   Resolve_Info *naya;
   Scheme_Object *b;
@@ -2273,11 +2201,11 @@ Resolve_Info *scheme_resolve_info_create(Scheme_Linklet *linklet)
 #ifdef MZTAG_REQUIRED
   naya->type = scheme_rt_resolve_info;
 #endif
-  naya->prefix = rp;
   naya->current_depth = 1; /* initial slot for prefix */
   naya->max_let_depth = naya->current_depth;
   naya->current_lex_depth = 0;
   naya->next = NULL;
+  naya->enforce_const = enforce_const;
 
   ht = scheme_make_hash_table(SCHEME_hash_ptr);
   naya->stx_map = ht;
@@ -2298,21 +2226,6 @@ static void enable_expression_resolve_lifts(Resolve_Info *ri)
   ri->lifts = lift_vec;
 }
 
-void scheme_resolve_info_enforce_const(Resolve_Info *ri, int enforce_const)
-{
-  ri->enforce_const = enforce_const;
-}
-
-int scheme_resolve_info_use_jit(Resolve_Info *ri)
-{
-  return ri->use_jit;
-}
-
-int scheme_resolve_info_max_let_depth(Resolve_Info *ri)
-{
-  return ri->max_let_depth;
-}
-
 static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambda)
 /* size = number of appended items in run-time frame */
 {
@@ -2322,7 +2235,7 @@ static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambd
 #ifdef MZTAG_REQUIRED
   naya->type = scheme_rt_resolve_info;
 #endif
-  naya->prefix = info->prefix;
+  naya->linklet = info->linklet;
   naya->stx_map = info->stx_map;
   naya->next = (lambda ? NULL : info);
   naya->use_jit = info->use_jit;
@@ -2528,7 +2441,7 @@ static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, 
 static Scheme_Object *shift_toplevel(Scheme_Object *expr, int delta)
 {
   return scheme_make_toplevel(delta, SCHEME_TOPLEVEL_POS(expr),
-                              SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_FLAGS_MASK);
+                              SCHEME_TOPLEVEL_FLAGS(expr) & SCHEME_TOPLEVEL_FLAGS_MASK);
 }
 
 static Scheme_Object *resolve_invent_toplevel(Resolve_Info *info)
@@ -2539,8 +2452,7 @@ static Scheme_Object *resolve_invent_toplevel(Resolve_Info *info)
   skip = resolve_toplevel_pos(info);
 
   count = SCHEME_VEC_ELS(info->lifts)[1];
-  pos = (int)(SCHEME_INT_VAL(count)
-              + info->prefix->num_toplevels);
+  pos = (int)(SCHEME_INT_VAL(count) + info->linklet->num_toplevels);
   count = scheme_make_integer(SCHEME_INT_VAL(count) + 1);
   SCHEME_VEC_ELS(info->lifts)[1] = count;
 
@@ -2576,6 +2488,7 @@ static Scheme_Object *resolve_invented_toplevel_to_defn(Resolve_Info *info, Sche
 
 typedef struct Unresolve_Info {
   MZTAG_IF_REQUIRED
+  int comp_flags;
   int stack_pos; /* stack in resolved coordinates */
   int depth;     /* stack in unresolved coordinates */
   int stack_size;
@@ -2596,7 +2509,6 @@ typedef struct Unresolve_Info {
 } Unresolve_Info;
 
 static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int as_rator);
-static Comp_Prefix *unresolve_prefix(Resolve_Prefix *rp, Unresolve_Info *ui);
 static void locate_cyclic_closures(Scheme_Object *e, Unresolve_Info *ui);
 static Scheme_IR_Let_Header *make_let_header(int count);
 static Scheme_IR_Let_Value *make_ir_let_value(int count);
@@ -2630,7 +2542,7 @@ static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, int comp_flag
 
   count = 0;
   for (i = SCHEME_VEC_SIZE(linklet->importss); i--; ) {
-    count += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->imports)[i]);
+    count += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
   }
   count += SCHEME_VEC_SIZE(linklet->exports);
   ui->num_toplevels = count;
@@ -2797,25 +2709,17 @@ static void check_nonleaf_rator(Scheme_Object *rator, Unresolve_Info *ui)
     ui->has_non_leaf = 1;
 }
 
-static int unresolve_toplevel_pos(int pos, Unresolve_Info *ui)
-{
-  return pos;
-}
-
 static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *ui)
 {
   Scheme_Object *v;
   int pos = SCHEME_TOPLEVEL_POS(rdata);
-  Scheme_Object *hv, *modidx, *mod_constant, *sym, *npos, *shape;
   int flags, is_constant;
-  int sym_pos;
-  intptr_t mod_defn_phase;
   
   /* Create a reference that works for the optimization context. */
   
   MZ_ASSERT(pos < ui->linklet->num_toplevels);
   
-  if (ui->inlining && (pos > (linklet->num_toplevels - ui->linklet->num_lifts))) {
+  if (ui->inlining && (pos > (ui->linklet->num_toplevels - ui->linklet->num_lifts))) {
     /* Must be cross-linklet, since there are no lifts during
        linklet optimization... and generated code cannot refer to a
        lift across a module boundary. */
@@ -2843,7 +2747,7 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
   /* FIXME: get shape information... */
   
   /* Check whether this variable is already known in the optimzation context: */
-  v = ui->linklet->toplevels[pos];
+  v = (Scheme_Object *)ui->linklet->toplevels[pos];
   MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_ir_toplevel_type));
 
   if (flags)
@@ -3350,7 +3254,6 @@ static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int a
     }
   case scheme_sequence_type:
   case scheme_begin0_sequence_type:
-  case scheme_splice_sequence_type:
     {
       Scheme_Sequence *seq = (Scheme_Sequence *)e, *seq2;
       int i;
@@ -3593,8 +3496,7 @@ static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int a
       var = unresolve_expr(sb->var, ui, 0);
       if (!var) return_NULL;
       if (SAME_TYPE(SCHEME_TYPE(var), scheme_ir_toplevel_type)) {
-        if (ui->module)
-          SCHEME_TOPLEVEL_FLAGS(var) |= SCHEME_TOPLEVEL_MUTATED;
+        SCHEME_TOPLEVEL_FLAGS(var) |= SCHEME_TOPLEVEL_MUTATED;
       }
       val = unresolve_expr(sb->val, ui, 0);
       if (!val) return_NULL;
@@ -3703,7 +3605,6 @@ void locate_cyclic_closures(Scheme_Object *e, Unresolve_Info *ui)
   switch(SCHEME_TYPE(e)) {
     case scheme_sequence_type:
     case scheme_begin0_sequence_type:
-    case scheme_splice_sequence_type:
       {
         Scheme_Sequence *seq = (Scheme_Sequence *)e;
 		int i;
@@ -3784,9 +3685,10 @@ void locate_cyclic_closures(Scheme_Object *e, Unresolve_Info *ui)
         if (SAME_OBJ(c, scheme_true)) {
           Scheme_IR_Toplevel *tl;
           
-          tl = make_ir_toplevel_variable(e, -1,
-                                         ui->linklet->num_defns + ui->num_extra_topevels_count,
-                                         ui->num_toplevels + ui->num_extra_topevels);
+          tl = scheme_make_ir_toplevel(-1,
+                                       ui->linklet->num_toplevels + ui->num_extra_toplevels,
+                                       ui->num_toplevels + ui->num_extra_toplevels,
+                                       0);
           ui->num_extra_toplevels++;
           
           scheme_hash_set(ui->closures, e, (Scheme_Object *)tl);
@@ -3894,9 +3796,9 @@ static void convert_closures_to_definitions(Unresolve_Info *ui)
 
 static void generate_toplevels_array(Scheme_Linklet *linklet)
 {
-  Scheme_Obejct *v, *e;
+  Scheme_Object *v, *e;
   Scheme_IR_Toplevel **toplevels, *tl;
-  int i, j, pos = 0;
+  int i, j, pos = 0, num_toplevels;
 
   num_toplevels = 1;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
@@ -3907,29 +3809,29 @@ static void generate_toplevels_array(Scheme_Linklet *linklet)
   toplevels = MALLOC_N(Scheme_IR_Toplevel*, num_toplevels);
 
   /* Start with the pseudo-variable with a strong link to the instance: */
-  tl = make_ir_toplevel_variable(e, -1, -1, pos);
+  tl = scheme_make_ir_toplevel(-1, -1, pos, 0);
   toplevels[pos++] = tl;
   
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
-    for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELSE(linklet->importss)[i]); j++) {
-      tl = make_ir_toplevel_variable(e, i, j, pos);
+    for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
+      tl = scheme_make_ir_toplevel(i, j, pos, 0);
       toplevels[pos++] = tl;
     }
   }
 
   for (j = 0; j < SCHEME_VEC_SIZE(linklet->exports); j++) {
-    tl = make_ir_toplevel_variable(e, -1, j, pos);
+    tl = scheme_make_ir_toplevel(-1, j, pos, 0);
     toplevels[pos++] = tl;
   }
 
   /* Determine which toplevels are mutable by checking all definitions: */
-  for (i = 0; i < SCHEME_VEC_SIZE(linklet->body); i++) {
-    e = SCHEME_VEC_ELS(linket->body)[i];
+  for (i = 0; i < SCHEME_VEC_SIZE(linklet->bodies); i++) {
+    e = SCHEME_VEC_ELS(linklet->bodies)[i];
     if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
       for (j = 1; j < SCHEME_VEC_SIZE(e); j++) {
-        e = SCHEME_VEC_ELS(e)[j];
-        if (!(SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL)) {
-          tl = toplevels[SCHEME_TOPLEVEL_POS(var)];
+        v = SCHEME_VEC_ELS(e)[j];
+        if (!(SCHEME_TOPLEVEL_FLAGS(v) & SCHEME_TOPLEVEL_SEAL)) {
+          tl = toplevels[SCHEME_TOPLEVEL_POS(v)];
           SCHEME_IR_TOPLEVEL_FLAGS(tl) |= SCHEME_IR_TOPLEVEL_MUTATED;
         }
       }
@@ -3940,13 +3842,13 @@ static void generate_toplevels_array(Scheme_Linklet *linklet)
   linklet->toplevels = toplevels;
 }
 
-Scheme_Object *scheme_unresolve_linklet(Scheme_Object *e, int comp_flags)
+Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags)
 /* Convert from "resolved" form back to the intermediate representation used
    by the optimizer. Unresolving generates an intermediate-representation prefix
    (for top levels and syntax literals) in addition to the code. */
 {
-  Scheme_Linklet *linklet = (Scheme_Linket *)e, *new_linklet;
-  Scheme_Object *bs;
+  Scheme_Linklet *new_linklet;
+  Scheme_Object *bs, *bs2, *ds;
   Unresolve_Info *ui;
   int i, cnt, len;
 
@@ -3982,21 +3884,17 @@ Scheme_Object *scheme_unresolve_linklet(Scheme_Object *e, int comp_flags)
     SCHEME_VEC_ELS(bs2)[i + len] = SCHEME_VEC_ELS(bs)[i];
   }
 
-  dummy = unresolve_expr(m->dummy, ui_in, 0);
-
   new_linklet->bodies = bs2;
-  new_linklet->accessible = NULL;
 
-  convert_linklet_imports(new_linklet, 0);
+  if (ui->num_extra_toplevels) {
+    /* Extend export-name array to extra toplevels: */
+    extend_linklet_exports(new_linklet, ui->num_extra_toplevels);
+  }
 
-  /* Convert symbol exports to identifiers and extend export-name
-     array to extra toplevels: */
-  convert_linklet_exports(new_linklet, ui->num_extra_toplevels, 0);
-  
-  return (Scheme_Object *)new_linklet;
+  return new_linklet;
 }
 
-Scheme_Object *scheme_unresolve(Scheme_Object *iv, int argc, int *_has_cases, Scheme_Object *linklet)
+Scheme_Object *scheme_unresolve(Scheme_Object *iv, int argc, int *_has_cases, Scheme_Linklet *linklet)
 /* Convert a single function from "resolved" form back to the
    intermediate representation used by the optimizer. Unresolving can
    add new items to the intermediate-representation prefix for top levels. */
@@ -4042,16 +3940,13 @@ Scheme_Object *scheme_unresolve(Scheme_Object *iv, int argc, int *_has_cases, Sc
 
   ui = new_unresolve_info(linklet, 0);
   ui->inlining = 1;
-  ui->inline_variants = scheme_null;
 
   /* convert an optimized & resolved closure back to compiled form: */
   o = unresolve_lambda(lam, ui);
 
   if (o) {
     /* Added any toplevels? */
-    if (ui->new_toplevels) {
-      scheme_signal_error("new toplevels: not yet implemented");
-    }
+    scheme_signal_error("new toplevels: not yet implemented");
   }
 
   return o;

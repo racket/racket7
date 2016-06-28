@@ -1035,6 +1035,7 @@ MZ_EXTERN Scheme_Object *scheme_make_modidx(Scheme_Object *path,
                                             Scheme_Object *resolved);
 
 MZ_EXTERN Scheme_Object *scheme_dynamic_require(int argc, Scheme_Object *argv[]);
+MZ_EXTERN Scheme_Object *scheme_dynamic_require_reader(int argc, Scheme_Object *argv[]);
 MZ_EXTERN Scheme_Object *scheme_namespace_require(Scheme_Object *);
 
 MZ_EXTERN int scheme_is_module_path(Scheme_Object *);

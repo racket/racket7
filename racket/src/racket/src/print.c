@@ -1756,6 +1756,7 @@ static Scheme_Object *write_bundles_to_strings(Scheme_Object *accum_l,
                                                Scheme_Object *name_list)
 {
   Scheme_Hash_Tree *ht;
+  mzlonglong pos;
   Scheme_Object *k, *v, *bundle = scheme_false;
 
 #ifdef DO_STACK_CHECK
@@ -1767,11 +1768,11 @@ static Scheme_Object *write_bundles_to_strings(Scheme_Object *accum_l,
     p->ku.k.p2 = ld;
     p->ku.k.p3 = name_list;
     
-    return scheme_handle_stack_overflow(write_modules_to_strings_k);
+    return scheme_handle_stack_overflow(write_bundles_to_strings_k);
   }
 #endif
 
-  ht = (Scheme_Has_Tree *)SCHEME_PTR_VAL(ld);
+  ht = (Scheme_Hash_Tree *)SCHEME_PTR_VAL(ld);
 
   pos = scheme_hash_tree_next(ht, -1);
   while (pos != -1) {
@@ -1789,14 +1790,14 @@ static Scheme_Object *write_bundles_to_strings(Scheme_Object *accum_l,
 
   /* write root bundle, if any, or #f */
   {
-    int len, nlen;
+    intptr_t len, nlen;
     char *s, *ns;
     
-    ns = scheme_symbol_path_to_string(scheme_revese(name_list), &nlen);
+    ns = scheme_symbol_path_to_string(scheme_reverse(name_list), &nlen);
     s = scheme_write_to_string(bundle, &len);
     
     accum_l = scheme_make_pair(scheme_make_pair(scheme_make_sized_byte_string(ns, nlen, 0),
-                                                scheme_make_sized_byte_string(s, len, 0))
+                                                scheme_make_sized_byte_string(s, len, 0)),
                                accum_l);
   }
 
@@ -1824,8 +1825,8 @@ typedef struct Bundle_And_Offset {
 
 static int compare_bundles(const void *_am, const void *_bm)
 {
-  Scheme_Object *a = ((Bundle_And_Offset *)_am)->mod;
-  Scheme_Object *b = ((Bundle_And_Offset *)_bm)->mod;
+  Scheme_Object *a = ((Bundle_And_Offset *)_am)->bundle;
+  Scheme_Object *b = ((Bundle_And_Offset *)_bm)->bundle;
   intptr_t i, alen, blen;
   unsigned char *as, *bs;
 
@@ -1849,7 +1850,7 @@ static intptr_t compute_bundle_subtrees(Bundle_And_Offset *a, intptr_t *subtrees
                                         int start, int count, intptr_t offset) 
 {
   int midpt = start + (count / 2);
-  Scheme_Object *o = SCHEME_CAR(a[midpt].mod);
+  Scheme_Object *o = SCHEME_CAR(a[midpt].bundle);
   intptr_t len;
 
   len = SCHEME_BYTE_STRLEN_VAL(o);
@@ -1871,14 +1872,14 @@ static intptr_t write_bundle_tree(PrintParams *pp, Bundle_And_Offset *a,
                                   int start, int count, intptr_t offset) 
 {
   int midpt = start + (count / 2);
-  Scheme_Object *o = SCHEME_CAR(a[midpt].mod);
+  Scheme_Object *o = SCHEME_CAR(a[midpt].bundle);
   intptr_t len;
 
   len = SCHEME_BYTE_STRLEN_VAL(o);
   print_number(pp, len);
   print_this_string(pp, SCHEME_BYTE_STR_VAL(o), 0, len);
   print_number(pp, SCHEME_INT_VAL(a[midpt].offset));
-  print_number(pp, SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(a[midpt].mod)));
+  print_number(pp, SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(a[midpt].bundle)));
   offset += 20 + len;
 
   if (midpt > start)
@@ -2659,34 +2660,6 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
 	print_utf8_string(pp, ">", 0, 1);
       }
     }
-  else if (SCHEME_NAMESPACEP(obj))
-    {
-      if (compact || !pp->print_unreadable) {
-	cannot_print(pp, notdisplay, obj, ht, compact);
-      } else {
-        char s[10];
-        
-        print_utf8_string(pp, "#<namespace:", 0, 12);
-
-        if (((Scheme_Env *)obj)->module) {
-          Scheme_Object *modname;
-          int is_sym;
-          
-          modname = ((Scheme_Env *)obj)->module->modname;
-          is_sym = !SCHEME_PATHP(SCHEME_PTR_VAL(modname));
-          print_utf8_string(pp, (is_sym ? "'" : "\""), 0, 1);
-          print(SCHEME_PTR_VAL(modname), 0, 0, ht, mt, pp);
-          PRINTADDRESS(pp, modname);
-          if (!is_sym)
-            print_utf8_string(pp, "\"" , 0, 1);
-          print_utf8_string(pp, ":", 0, 1);
-        }
-
-        sprintf(s, "%" PRIdPTR "", ((Scheme_Env *)obj)->phase);
-        print_utf8_string(pp, s, 0, -1);
-	print_utf8_string(pp, ">", 0, 1);
-      }
-    }
   else if (SCHEME_INPORTP(obj))
     {
       if (compact || !pp->print_unreadable) {
@@ -2795,16 +2768,10 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
     }
   else if (SCHEME_STXP(obj))
     {
-      if (compact && !pp->printing_quoted) {
-	print_compact(pp, CPT_STX);
-	
-	/* "2" in scheme_syntax_to_datum() call preserves wraps. */
-	closed = print(scheme_syntax_to_datum(obj, 2, mt), 
-		       notdisplay, 1, ht, mt, pp);
-      } else if (pp->print_unreadable) {
+      if (pp->print_unreadable) {
 	Scheme_Stx *stx = (Scheme_Stx *)obj;
 	if (stx->srcloc && ((stx->srcloc->line >= 0) || (stx->srcloc->pos >= 0))) {
-	  print_utf8_string(pp, "#<syntax:", 0, 9);
+	  print_utf8_string(pp, "#<correlated:", 0, 9);
 	  if (stx->srcloc->src && SCHEME_PATHP(stx->srcloc->src)) {
 	    print_utf8_string(pp, SCHEME_BYTE_STR_VAL(stx->srcloc->src), 0, SCHEME_BYTE_STRLEN_VAL(stx->srcloc->src));
 	    print_utf8_string(pp, ":", 0, 1);
@@ -2818,13 +2785,13 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
 		    stx->srcloc->pos);
 	  print_utf8_string(pp, quick_buffer, 0, -1);
 	} else
-	  print_utf8_string(pp, "#<syntax", 0, 8);
+	  print_utf8_string(pp, "#<correlated", 0, 8);
         if (pp->print_syntax) {
           intptr_t slen;
           char *str;
           int rel;
           print_utf8_string(pp, " ", 0, 1);
-          str = print_to_string(scheme_syntax_to_datum((Scheme_Object *)stx, 0, NULL),
+          str = print_to_string(scheme_syntax_to_datum((Scheme_Object *)stx),
                                 &slen, 1, NULL, pp->print_syntax, NULL, &rel);
           print_utf8_string(pp, str, 0, slen);
           if (rel && !quick_print_buffer)
@@ -3032,8 +2999,7 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
   else if (!compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_directory_type))
     {
       /* Write directory content with an index at the beginning */
-      Scheme_Compilation_Top *top = (Scheme_Compilation_Top *)obj;
-      Scheme_Object *mods, *p;
+      Scheme_Object *p, *accum_l;
       Bundle_And_Offset *a;
       intptr_t *subtrees, offset, init_offset;
       int count, i;
@@ -3046,8 +3012,7 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         count++;
       }
       a = MALLOC_N(Bundle_And_Offset, count);
-      orig_a = MALLOC_N(Bundle_And_Offset, count);
-      for (p = mods, i = 0; !SCHEME_NULLP(p); p = SCHEME_CDR(p), i++) {
+      for (p = accum_l, i = 0; !SCHEME_NULLP(p); p = SCHEME_CDR(p), i++) {
         a[i].bundle = SCHEME_CAR(p);
       }
       my_qsort(a, count, sizeof(Bundle_And_Offset), compare_bundles);
@@ -3118,7 +3083,7 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
       if (compact)
 	closed = print(v, notdisplay, 1, NULL, mt, pp);
       else {
-        Scheme_Hash_Table *st_refs, *symtab, *reachable_scopes, *intern_map, *path_cache;
+        Scheme_Hash_Table *st_refs, *symtab, *intern_map, *path_cache;
         intptr_t *shared_offsets;
         intptr_t st_len, j, shared_offset, start_offset;
 
@@ -3164,7 +3129,6 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         mt->shared_offsets = shared_offsets;
 	symtab = make_hash_table_symtab();
         mt->symtab = symtab;
-	mt->top_map = NULL;
         mt->pass = 1;
 	print_substring(v, notdisplay, 1, NULL, mt, pp, NULL, &slen, 
                         1, &st_len);
@@ -3172,7 +3136,6 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
         /* "Print" the string again to get a measurement and symtab size. */
         symtab = make_hash_table_symtab();
         mt->symtab = symtab;
-	mt->top_map = NULL;
         mt->pass = 2;
 	print_substring(v, notdisplay, 1, NULL, mt, pp, NULL, &slen, 
                         -1, &st_len);
@@ -3212,7 +3175,6 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
            for the final print: */
 	symtab = make_hash_table_symtab();
         mt->symtab = symtab;
-	mt->top_map = NULL;
         mt->pass = 3;
 
         start_offset = pp->print_offset;

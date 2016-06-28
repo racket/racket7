@@ -777,8 +777,8 @@ scheme_init_string (Scheme_Startup_Env *env)
 						    0, -1),
 			     env);
 
-  GLOBAL_PRIM_W_ARITY("make-shared-bytes", make_shared_byte_string, 1, 2, env);
-  GLOBAL_PRIM_W_ARITY("shared-bytes", shared_byte_string, 0, -1, env);
+  ADD_PRIM_W_ARITY("make-shared-bytes", make_shared_byte_string, 1, 2, env);
+  ADD_PRIM_W_ARITY("shared-bytes", shared_byte_string, 0, -1, env);
 
   p = scheme_make_folding_prim(byte_string_length, "bytes-length", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED

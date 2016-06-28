@@ -686,16 +686,16 @@ void scheme_jit_now(Scheme_Object *f)
 }
 
 
-typedef Scheme_Object *(*Linklet_Run_Proc)(Scheme_Linklet *linklet, Scheme_Object **name);
+typedef Scheme_Object *(*Linklet_Run_Proc)(Scheme_Linklet *linklet, Scheme_Instance *inst, Scheme_Object **name);
 typedef void (*Thread_Start_Child_Proc)(Scheme_Thread *child, Scheme_Object *child_thunk);
 
-Scheme_Object *scheme_linklet_run_start(Scheme_Linklet *linklet, Scheme_Object *name)
+Scheme_Object *scheme_linklet_run_start(Scheme_Linklet *linklet, Scheme_Instance *inst, Scheme_Object *name)
 {
   Linklet_Run_Proc proc = (Linklet_Run_Proc)sjc.linklet_run_start_code;
   if (proc && !CHECK_RUNSTACK_REGISTER_UPDATE)
-    return proc(linklet, &name);
+    return proc(linklet, inst, &name);
   else
-    return scheme_linklet_run_finish(linklet);
+    return scheme_linklet_run_finish(linklet, inst);
 }
 
 void scheme_thread_start_child(Scheme_Thread *child, Scheme_Object *child_thunk)

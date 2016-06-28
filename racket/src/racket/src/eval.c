@@ -3396,12 +3396,39 @@ Scheme_Object *scheme_dynamic_require(int argc, Scheme_Object *argv[])
   return scheme_apply(proc, argc, argv);
 }
 
+Scheme_Object *scheme_dynamic_require_reader(int argc, Scheme_Object *argv[])
+{
+  Scheme_Object *proc;
+  proc = scheme_get_startup_export("dynamic-require-reader");
+  return scheme_apply(proc, argc, argv);
+}
+
 Scheme_Object *scheme_namespace_require(Scheme_Object *mod_path)
 {
   Scheme_Object *proc, *a[1];
   proc = scheme_get_startup_export("namespace-require");
   a[0] = mod_path;
   return scheme_apply(proc, 1, a);
+}
+
+Scheme_Env *scheme_make_empty_env(void)
+{
+  Scheme_Object *proc, *ns, *inst;
+  Scheme_Env *env;
+  
+  proc = scheme_get_startup_export("current-namespace");
+  ns = scheme_apply(proc, 0, NULL);
+
+  env = MALLOC_ONE_TAGGED(Scheme_Env);
+  env->so.type = scheme_env_type;
+  env->namespace = ns;
+
+  proc = scheme_get_startup_export("namespace->instance");
+  inst = scheme_apply(proc, 0, NULL);
+
+  env->instance = (Scheme_Instance *)inst;
+
+  return env;
 }
 
 Scheme_Object *scheme_compile(Scheme_Object *form, Scheme_Env *env, int writeable)
@@ -3463,6 +3490,16 @@ Scheme_Object *scheme_eval_multi_with_prompt(Scheme_Object *obj, Scheme_Env *env
   expr = scheme_compile_for_eval(obj, env);
   return scheme_call_with_prompt_multi(finish_eval_multi_with_prompt, 
                                        scheme_make_pair(expr, (Scheme_Object *)env));
+}
+
+Scheme_Object *_scheme_eval_compiled(Scheme_Object *obj, Scheme_Env *env)
+{
+  return _scheme_eval_linked_expr(obj);
+}
+
+Scheme_Object *_scheme_eval_compiled_multi(Scheme_Object *obj, Scheme_Env *env)
+{
+  return _scheme_eval_linked_expr_multi(obj);
 }
 
 Scheme_Object *scheme_tail_eval_expr(Scheme_Object *obj)

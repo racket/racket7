@@ -4605,7 +4605,7 @@ static void filename_exn(char *name, char *msg, char *filename, int err, int may
       if (SCHEME_STXP(mod_path)) {
         char *srcloc;
         intptr_t srcloc_len;
-        mp = scheme_syntax_to_datum(mod_path, 0, NULL);
+        mp = scheme_syntax_to_datum(mod_path);
         srcloc = scheme_make_srcloc_string(mod_path, &srcloc_len);
         scheme_raise_exn(MZEXN_FAIL_SYNTAX_MISSING_MODULE,
                          scheme_make_pair(mod_path, scheme_null),

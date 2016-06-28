@@ -125,7 +125,7 @@ Scheme_Object *scheme_toplevel_to_flagged_toplevel(Scheme_Object *_tl, int flags
   return scheme_make_toplevel(tl->depth, tl->position, flags);
 }
 
-Scheme_IR_Toplevel *scheme_make_ir_toplevel(Scheme_Object *id, int instance_pos, int variable_pos, int identity_pos, int flags)
+Scheme_IR_Toplevel *scheme_make_ir_toplevel(int instance_pos, int variable_pos, int identity_pos, int flags)
 {
   Scheme_IR_Toplevel *tl;
   
@@ -133,7 +133,6 @@ Scheme_IR_Toplevel *scheme_make_ir_toplevel(Scheme_Object *id, int instance_pos,
   tl->iso.so.type = scheme_ir_toplevel_type;
   SCHEME_TOPLEVEL_FLAGS(tl) = flags | HIGH_BIT_TO_DISABLE_HASHING;
 
-  tl->name = id;
   tl->instance_pos = instance_pos;
   tl->variable_pos = variable_pos;
   tl->identity_pos = identity_pos;
@@ -141,10 +140,12 @@ Scheme_IR_Toplevel *scheme_make_ir_toplevel(Scheme_Object *id, int instance_pos,
   return tl;
 }
 
-Scheme_IR_Toplevel *scheme_ir_toplevel_to_flagged_toplevel(Scheme_IR_Toplevel *tl, int flags)
+Scheme_Object *scheme_ir_toplevel_to_flagged_toplevel(Scheme_Object *_tl, int flags)
 {
-  return scheme_make_ir_toplevel(tl->name, tl->instance_pos, tl->variable_pos, tl->identity_pos,
-                                 SCHEME_TOPLEVEL_FLAGS(tl) | flags);
+  Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)_tl;
+  tl = scheme_make_ir_toplevel(tl->instance_pos, tl->variable_pos, tl->identity_pos,
+                               SCHEME_TOPLEVEL_FLAGS(tl) | flags);
+  return (Scheme_Object *)tl;
 }
 
 /*========================================================================*/
@@ -314,6 +315,9 @@ Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id,
 {
   Scheme_Comp_Env *env2;
   Scheme_Hash_Tree *vars;
+
+  MZ_ASSERT(SCHEME_STX_SYMBOLP(id));
+  id = SCHEME_STX_VAL(id);
 
   if (mutate)
     env2 = env;

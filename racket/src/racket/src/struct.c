@@ -184,10 +184,6 @@ static Scheme_Object *check_exn_source_property_value_ok(int argc, Scheme_Object
 static Scheme_Object *exn_source_p(int argc, Scheme_Object **argv);
 static Scheme_Object *exn_source_get(int argc, Scheme_Object **argv);
 
-static Scheme_Object *check_exn_module_path_property_value_ok(int argc, Scheme_Object *argv[]);
-static Scheme_Object *exn_module_path_p(int argc, Scheme_Object **argv);
-static Scheme_Object *exn_module_path_get(int argc, Scheme_Object **argv);
-
 static Scheme_Object *procedure_extract_target(int argc, Scheme_Object **argv);
 static Scheme_Struct_Type *hash_prefab(Scheme_Struct_Type *type);
 
@@ -1603,10 +1599,6 @@ static int is_evt_struct(Scheme_Object *o)
 /* This is here so it can use check_indirect_property_value_ok */
 
 static int is_proc_1(Scheme_Object *o) { return (SCHEME_PROCP(o) && scheme_check_proc_arity(NULL, 1, -1, 0, &o)); }
-static int is_proc_1_or_2(Scheme_Object *o) { return (SCHEME_PROCP(o) && (scheme_check_proc_arity(NULL, 1, -1, 0, &o)
-                                                                          || scheme_check_proc_arity(NULL, 2, -1, 0, &o))); }
-
-
 
 static Scheme_Object *check_object_name_property_value_ok(int argc, Scheme_Object *argv[])
 /* This is the guard for prop:object-name */

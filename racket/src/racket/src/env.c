@@ -98,21 +98,6 @@ static void boot_module_resolver()
   scheme_apply(boot, 0, NULL);
 }
 
-static Scheme_Object *current_namespace()
-{
-  Scheme_Object *cn;
-  cn = scheme_get_startup_export("current-namespace");
-  return scheme_apply(cn, 0, NULL);
-}
-
-static Scheme_Object *namespace_to_instance(Scheme_Object *ns)
-{
-  Scheme_Object *proc, *a[1];
-  proc = scheme_get_startup_export("namespace->instance");
-  a[0] = ns;
-  return scheme_apply(proc, 1, a);
-}
-
 void scheme_seal_parameters()
 {
   Scheme_Object *seal;
@@ -160,7 +145,6 @@ Scheme_Env *scheme_restart_instance()
 
   scheme_make_thread(stack_base);
   scheme_init_error_escape_proc(NULL);
-  scheme_init_module_resolver();
 
   env = scheme_make_empty_env();
   scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 
@@ -232,7 +216,6 @@ Scheme_Env *scheme_basic_env()
 
   /* These calls must be made here so that they allocate out of the master GC */
   scheme_init_symbol_table();
-  scheme_init_module_path_table();
   scheme_init_type();
   scheme_init_custodian_extractors();
 #ifndef DONT_USE_FOREIGN
@@ -314,7 +297,6 @@ static void init_startup_env(void)
   MZTIMEIT(bignum, scheme_init_bignum());
   MZTIMEIT(char-const, scheme_init_char_constants());
   MZTIMEIT(stx, scheme_init_stx(env));
-  MZTIMEIT(module, scheme_init_module(env));
   MZTIMEIT(port, scheme_init_port(env));
   MZTIMEIT(portfun, scheme_init_port_fun(env));
   MZTIMEIT(string, scheme_init_string(env));
@@ -357,8 +339,6 @@ static void init_startup_env(void)
   scheme_register_network_evts();
 
   MARK_START_TIME();
-
-  scheme_finish_kernel(env);
 
 #if USE_COMPILED_STARTUP
   if (builtin_ref_counter != EXPECTED_PRIM_COUNT) {
@@ -502,7 +482,6 @@ static void init_foreign(Scheme_Startup_Env *env)
 static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thread)
 {
   Scheme_Env *env;
-  Scheme_Object *v;
 
 #ifdef TIME_STARTUP_PROCESS
   printf("place_init @ %" PRIdPTR "\n", scheme_get_process_milliseconds());
@@ -540,10 +519,6 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   }
 
   scheme_init_stx_places(initial_main_os_thread);
-
-  scheme_init_syntax_bindings();
-
-  scheme_init_module_resolver();
 
 #ifdef TIME_STARTUP_PROCESS
   printf("process @ %" PRIdPTR "\n", scheme_get_process_milliseconds());
@@ -605,10 +580,6 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   scheme_startup_instance = scheme_make_instance(scheme_intern_symbol("startup"), scheme_false);
 
   boot_module_resolver();
-  v = current_namespace();
-  env->namespace = v;
-  v = namespace_to_instance(v);
-  env->instance = (Scheme_Instance *)v;
 
   scheme_starting_up = 0;
 

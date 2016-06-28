@@ -49,6 +49,14 @@ static void linklet_sfs(Scheme_Linklet *linklet, SFS_Info *info);
 static Scheme_Object *sfs_expr(Scheme_Object *expr, SFS_Info *info, int closure_self_pos);
 static SFS_Info *new_sfs_info(int depth);
 
+static void sfs_used(SFS_Info *info, int pos);
+static void sfs_push(SFS_Info *info, int count, int track);
+static void sfs_start_sequence(SFS_Info *si, int cnt, int last_is_tail);
+static Scheme_Object *sfs_add_clears(Scheme_Object *expr, Scheme_Object *clears, int pre);
+
+static Scheme_Object *sfs_passes(Scheme_Object *e, SFS_Info *info);
+static void linklet_sfs(Scheme_Linklet *linklet, SFS_Info *info);
+
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
 #endif
@@ -69,10 +77,16 @@ void scheme_init_sfs()
 
 Scheme_Linklet *scheme_sfs_linklet(Scheme_Linklet *linklet)
 {
-  int init, i;
   SFS_Info *info;
 
   info = new_sfs_info(linklet->max_let_depth);
+
+  return (Scheme_Linklet *)sfs_passes((Scheme_Object *)linklet, info);
+}
+
+static Scheme_Object *sfs_passes(Scheme_Object *o, SFS_Info *info)
+{
+  int init, i;
 
   info->pass = 0;
   info->ip = 1;
@@ -81,7 +95,11 @@ Scheme_Linklet *scheme_sfs_linklet(Scheme_Linklet *linklet)
   info->max_touch = -1;
   info->tail_pos = 1;
   init = info->stackpos;
-  linklet_sfs(linklet, info);
+
+  if (SAME_TYPE(SCHEME_TYPE(o), scheme_linklet_type))
+    linklet_sfs((Scheme_Linklet *)o, info);
+  else
+    o = sfs_expr(o, info, -1);
 
   if (info->seqn)
     scheme_signal_error("ended in the middle of an expression?");
@@ -105,18 +123,21 @@ Scheme_Linklet *scheme_sfs_linklet(Scheme_Linklet *linklet)
   info->ip = 1;
   info->tail_pos = 1;
   info->stackpos = init;
-  linklet_sfs(linklet, info, -1);
+  if (SAME_TYPE(SCHEME_TYPE(o), scheme_linklet_type))
+    linklet_sfs((Scheme_Linklet *)o, info);
+  else
+    o = sfs_expr(0, info, -1);
 
-  return linklet;
+  return o;
 }
 
 static void linklet_sfs(Scheme_Linklet *linklet, SFS_Info *info)
 {
-  Scheme_Object *e, *ex;
-  int i, j, cnt;
+  Scheme_Object *e;
+  int i, cnt;
 
   cnt = SCHEME_VEC_SIZE(linklet->bodies);
-  scheme_sfs_start_sequence(info, cnt, 0);
+  sfs_start_sequence(info, cnt, 0);
 
   for (i = 0; i < cnt; i++) {
     e = sfs_expr(SCHEME_VEC_ELS(linklet->bodies)[i], info, -1);
@@ -170,12 +191,12 @@ static Scheme_Object *scheme_sfs_next_saved(SFS_Info *info)
   return v;
 }
 
-void scheme_sfs_start_sequence(SFS_Info *info, int cnt, int last_is_tail)
+static void sfs_start_sequence(SFS_Info *info, int cnt, int last_is_tail)
 {
   info->seqn += (cnt - (last_is_tail ? 1 : 0));
 }
 
-void scheme_sfs_push(SFS_Info *info, int cnt, int track)
+static void sfs_push(SFS_Info *info, int cnt, int track)
 {
   info->stackpos -= cnt;
 
@@ -184,12 +205,12 @@ void scheme_sfs_push(SFS_Info *info, int cnt, int track)
 
   if (track) {
     while (cnt--) {
-      scheme_sfs_used(info, cnt);
+      sfs_used(info, cnt);
     }
   }
 }
 
-void scheme_sfs_used(SFS_Info *info, int pos)
+static void sfs_used(SFS_Info *info, int pos)
 {
   if (info->pass)
     return;
@@ -218,7 +239,7 @@ void scheme_sfs_used(SFS_Info *info, int pos)
   info->max_used[pos] = info->ip;
 }
 
-Scheme_Object *scheme_sfs_add_clears(Scheme_Object *expr, Scheme_Object *clears, int pre)
+static Scheme_Object *sfs_add_clears(Scheme_Object *expr, Scheme_Object *clears, int pre)
 {
   int len, i;
   Scheme_Object *loc;
@@ -273,7 +294,7 @@ static void sfs_note_app(SFS_Info *info, Scheme_Object *rator, int flags)
           int i;
           for (i = info->selflen; i--; ) {
             if ((info->selfstart + i) != info->tlpos)
-              scheme_sfs_used(info, (info->selfstart - info->stackpos) + i);
+              sfs_used(info, (info->selfstart - info->stackpos) + i);
           }
           tail_ok = 1;
         }
@@ -293,8 +314,8 @@ static Scheme_Object *sfs_application(Scheme_Object *o, SFS_Info *info)
   app = (Scheme_App_Rec *)o;
   n = app->num_args + 1;
 
-  scheme_sfs_start_sequence(info, n, 0);
-  scheme_sfs_push(info, n-1, 0);
+  sfs_start_sequence(info, n, 0);
+  sfs_push(info, n-1, 0);
 
   for (i = 0; i < n; i++) {
     orig = app->args[i];
@@ -316,8 +337,8 @@ static Scheme_Object *sfs_application2(Scheme_Object *o, SFS_Info *info)
 
   app = (Scheme_App2_Rec *)o;
 
-  scheme_sfs_start_sequence(info, 2, 0);
-  scheme_sfs_push(info, 1, 0);
+  sfs_start_sequence(info, 2, 0);
+  sfs_push(info, 1, 0);
 
   nrator = sfs_expr(app->rator, info, -1);
   nrand = sfs_expr(app->rand, info, -1);
@@ -338,8 +359,8 @@ static Scheme_Object *sfs_application3(Scheme_Object *o, SFS_Info *info)
 
   app = (Scheme_App3_Rec *)o;
 
-  scheme_sfs_start_sequence(info, 3, 0);
-  scheme_sfs_push(info, 2, 0);
+  sfs_start_sequence(info, 3, 0);
+  sfs_push(info, 2, 0);
 
   nrator = sfs_expr(app->rator, info, -1);
   nrand1 = sfs_expr(app->rand1, info, -1);
@@ -403,7 +424,7 @@ static Scheme_Object *sfs_sequence(Scheme_Object *o, SFS_Info *info, int can_fla
   seq = (Scheme_Sequence *)o;
   n = seq->count;
 
-  scheme_sfs_start_sequence(info, n, 1);
+  sfs_start_sequence(info, n, 1);
 
   for (i = 0; i < n; i++) {
     orig = seq->array[i];
@@ -513,7 +534,7 @@ static Scheme_Object *sfs_one_branch(SFS_Info *info, int ip,
     info->max_nontail = info->ip;
 # endif
 
-  tbranch = scheme_sfs_add_clears(tbranch, clears, 1);
+  tbranch = sfs_add_clears(tbranch, clears, 1);
 
   if (!info->pass) {
     t_min_t = info->min_touch;
@@ -583,7 +604,7 @@ static Scheme_Object *sfs_branch(Scheme_Object *o, SFS_Info *info)
 
   b = (Scheme_Branch_Rec *)o;
 
-  scheme_sfs_start_sequence(info, 1, 0);
+  sfs_start_sequence(info, 1, 0);
 
   t = sfs_expr(b->test, info, -1);
 
@@ -654,7 +675,7 @@ static Scheme_Object *sfs_let_value(Scheme_Object *o, SFS_Info *info)
   Scheme_Object *body, *rhs, *clears = scheme_null;
   int i, pos;
 
-  scheme_sfs_start_sequence(info, 2, 1);
+  sfs_start_sequence(info, 2, 1);
 
   rhs = sfs_expr(lv->value, info, -1);
 
@@ -663,7 +684,7 @@ static Scheme_Object *sfs_let_value(Scheme_Object *o, SFS_Info *info)
     for (i = 0; i < lv->count; i++) {
       pos = lv->position + i;
       if (!info->pass)
-        scheme_sfs_used(info, pos);
+        sfs_used(info, pos);
       else {
         int spos;
         spos = pos + info->stackpos;
@@ -681,7 +702,7 @@ static Scheme_Object *sfs_let_value(Scheme_Object *o, SFS_Info *info)
 
   body = sfs_expr(lv->body, info, -1);
 
-  body = scheme_sfs_add_clears(body, clears, 1);
+  body = sfs_add_clears(body, clears, 1);
 
   lv->value = rhs;
   lv->body = body;
@@ -696,9 +717,9 @@ static Scheme_Object *sfs_let_one(Scheme_Object *o, SFS_Info *info)
   int pos, save_mnt, ip, et;
   int unused = 0;
 
-  scheme_sfs_start_sequence(info, 2, 1);
+  sfs_start_sequence(info, 2, 1);
 
-  scheme_sfs_push(info, 1, 1);
+  sfs_push(info, 1, 1);
   ip = info->ip;
   pos = info->stackpos;
   save_mnt = info->max_nontail;
@@ -785,7 +806,7 @@ static Scheme_Object *sfs_let_void(Scheme_Object *o, SFS_Info *info)
   int i, pos, save_mnt;
   Scheme_Object *vec;
     
-  scheme_sfs_push(info, lv->count, 1);
+  sfs_push(info, lv->count, 1);
   pos = info->stackpos;
   save_mnt = info->max_nontail;
 
@@ -834,7 +855,7 @@ static Scheme_Object *sfs_letrec(Scheme_Object *o, SFS_Info *info)
 
   count = lr->count;
 
-  scheme_sfs_start_sequence(info, count + 1, 1);
+  sfs_start_sequence(info, count + 1, 1);
 
   procs = lr->procs;
 
@@ -858,7 +879,7 @@ static Scheme_Object *sfs_letrec(Scheme_Object *o, SFS_Info *info)
 
   v = sfs_expr(lr->body, info, -1);
 
-  v = scheme_sfs_add_clears(v, clears, 1);
+  v = sfs_add_clears(v, clears, 1);
 
   lr->body = v;
 
@@ -870,7 +891,7 @@ static Scheme_Object *sfs_wcm(Scheme_Object *o, SFS_Info *info)
   Scheme_With_Continuation_Mark *wcm = (Scheme_With_Continuation_Mark *)o;
   Scheme_Object *k, *v, *b;
 
-  scheme_sfs_start_sequence(info, 3, 1);
+  sfs_start_sequence(info, 3, 1);
 
   k = sfs_expr(wcm->key, info, -1);
   v = sfs_expr(wcm->val, info, -1);
@@ -891,7 +912,7 @@ static Scheme_Object *
 define_values_sfs(Scheme_Object *data, SFS_Info *info)
 {
   Scheme_Object *e;
-  scheme_sfs_start_sequence(info, 1, 0);
+  sfs_start_sequence(info, 1, 0);
   e = sfs_expr(SCHEME_VEC_ELS(data)[0], info, -1);
   SCHEME_VEC_ELS(data)[0] = e;
   return data;
@@ -901,7 +922,7 @@ static Scheme_Object *
 inline_variant_sfs(Scheme_Object *data, SFS_Info *info)
 {
   Scheme_Object *e;
-  scheme_sfs_start_sequence(info, 1, 0);
+  sfs_start_sequence(info, 1, 0);
   e = sfs_expr(SCHEME_VEC_ELS(data)[0], info, -1);
   SCHEME_VEC_ELS(data)[0] = e;
   /* we don't bother with inlinable variant, since it isn't called directly */
@@ -917,7 +938,7 @@ set_sfs(Scheme_Object *data, SFS_Info *info)
   var = sb->var;
   val = sb->val;
   
-  scheme_sfs_start_sequence(info, 2, 0);
+  sfs_start_sequence(info, 2, 0);
 
   val = sfs_expr(val, info, -1);
   var = sfs_expr(var, info, -1);
@@ -934,7 +955,7 @@ ref_sfs(Scheme_Object *data, SFS_Info *info)
   Scheme_Object *a_naya;
   Scheme_Object *b_naya;
 
-  scheme_sfs_start_sequence(info, 1, 0);
+  sfs_start_sequence(info, 1, 0);
   a_naya = sfs_expr(SCHEME_PTR1_VAL(data), info, -1);
   b_naya = sfs_expr(SCHEME_PTR2_VAL(data), info, -1);
   SCHEME_PTR1_VAL(data) = a_naya;
@@ -951,7 +972,7 @@ apply_values_sfs(Scheme_Object *data, SFS_Info *info)
   f = SCHEME_PTR1_VAL(data);
   e = SCHEME_PTR2_VAL(data);
 
-  scheme_sfs_start_sequence(info, 2, 0);
+  sfs_start_sequence(info, 2, 0);
 
   f = sfs_expr(f, info, -1);
   e = sfs_expr(e, info, -1);
@@ -968,12 +989,12 @@ static Scheme_Object *with_immed_mark_sfs(Scheme_Object *o, SFS_Info *info)
   Scheme_Object *k, *v, *b, *vec;
   int pos, save_mnt;
   
-  scheme_sfs_start_sequence(info, 3, 1);
+  sfs_start_sequence(info, 3, 1);
 
   k = sfs_expr(wcm->key, info, -1);
   v = sfs_expr(wcm->val, info, -1);
 
-  scheme_sfs_push(info, 1, 1);
+  sfs_push(info, 1, 1);
 
   pos = info->stackpos;
   save_mnt = info->max_nontail;
@@ -1023,7 +1044,7 @@ case_lambda_sfs(Scheme_Object *expr, SFS_Info *info)
   Scheme_Object *le, *clears = scheme_null;
   int i;
 
-  scheme_sfs_start_sequence(info, seq->count, 0);
+  sfs_start_sequence(info, seq->count, 0);
 
   for (i = 0; i < seq->count; i++) {
     le = seq->array[i];
@@ -1051,7 +1072,7 @@ case_lambda_sfs(Scheme_Object *expr, SFS_Info *info)
   }
 
   if (!SCHEME_NULLP(clears)) {
-    return scheme_sfs_add_clears(expr, clears, 0);
+    return sfs_add_clears(expr, clears, 0);
   } else
     return expr;
 }
@@ -1125,7 +1146,7 @@ begin0_sfs(Scheme_Object *obj, SFS_Info *info)
   
   cnt = ((Scheme_Sequence *)obj)->count;
 
-  scheme_sfs_start_sequence(info, cnt, 0);
+  sfs_start_sequence(info, cnt, 0);
 
   for (i = 0; i < cnt; i++) {
     Scheme_Object *le;
@@ -1159,7 +1180,7 @@ static Scheme_Object *sfs_closure(Scheme_Object *expr, SFS_Info *info, int self_
 
   if (!info->pass) {
     for (i = size; i--; ) {
-      scheme_sfs_used(info, data->closure_map[i]);
+      sfs_used(info, data->closure_map[i]);
     }
   } else {
     /* Check whether we need to zero out any stack positions
@@ -1182,13 +1203,13 @@ static Scheme_Object *sfs_closure(Scheme_Object *expr, SFS_Info *info, int self_
       }
     }
 
-    return scheme_sfs_add_clears(expr, clears, 0);
+    return sfs_add_clears(expr, clears, 0);
   }
 
   if (!(SCHEME_LAMBDA_FLAGS(data) & LAMBDA_SFS)) {
     SCHEME_LAMBDA_FLAGS(data) |= LAMBDA_SFS;
     info = new_sfs_info(data->max_let_depth);
-    scheme_sfs_push(info, data->closure_size + data->num_params, 1);
+    sfs_push(info, data->closure_size + data->num_params, 1);
 
     if (has_tl)
       info->tlpos = info->stackpos + data->closure_size - 1;
@@ -1223,7 +1244,7 @@ static Scheme_Object *sfs_closure(Scheme_Object *expr, SFS_Info *info, int self_
       }
     }
 
-    code = scheme_sfs(data->body, info, data->max_let_depth);
+    code = sfs_passes(data->body, info);
 
     /* If any arguments go unused, and if there's a non-tail,
        non-immediate call in the body, then we flush the
@@ -1245,7 +1266,7 @@ static Scheme_Object *sfs_closure(Scheme_Object *expr, SFS_Info *info, int self_
       }
       
       if (SCHEME_PAIRP(clears))
-        code = scheme_sfs_add_clears(code, clears, 1);
+        code = sfs_add_clears(code, clears, 1);
 
       if (SCHEME_LAMBDA_FLAGS(data) & LAMBDA_HAS_REST)
         SCHEME_LAMBDA_FLAGS(data) |= LAMBDA_NEED_REST_CLEAR;
@@ -1280,7 +1301,7 @@ static Scheme_Object *sfs_expr(Scheme_Object *expr, SFS_Info *info, int closure_
   case scheme_local_type:
   case scheme_local_unbox_type:
     if (!info->pass)
-      scheme_sfs_used(info, SCHEME_LOCAL_POS(expr));
+      sfs_used(info, SCHEME_LOCAL_POS(expr));
     else if (!SCHEME_GET_LOCAL_TYPE(expr)) {
       int pos, at_ip;
       pos = SCHEME_LOCAL_POS(expr);
@@ -1311,9 +1332,6 @@ static Scheme_Object *sfs_expr(Scheme_Object *expr, SFS_Info *info, int closure_
     break;
   case scheme_sequence_type:
     expr = sfs_sequence(expr, info, closure_self_pos != -2);
-    break;
-  case scheme_splice_sequence_type:
-    expr = sfs_sequence(expr, info, 0);
     break;
   case scheme_branch_type:
     expr = sfs_branch(expr, info);
@@ -1388,9 +1406,6 @@ static Scheme_Object *sfs_expr(Scheme_Object *expr, SFS_Info *info, int closure_
     break;
   case scheme_case_lambda_sequence_type:
     expr = case_lambda_sfs(expr, info);
-    break;
-  case scheme_linklet_type:
-    expr = linklet_sfs(expr, info);
     break;
   case scheme_inline_variant_type:
     expr = inline_variant_sfs(expr, info);

@@ -35,6 +35,9 @@
 #include "schpriv.h"
 #include "schmach.h"
 
+/* globals */
+READ_ONLY Scheme_Object scheme_undefined[1];
+
 /* symbols */
 ROSYM static Scheme_Object *lambda_symbol;
 ROSYM static Scheme_Object *case_lambda_symbol;
@@ -54,6 +57,7 @@ ROSYM static Scheme_Object *protected_symbol;
 ROSYM static Scheme_Object *values_symbol;
 ROSYM static Scheme_Object *call_with_values_symbol;
 ROSYM static Scheme_Object *inferred_name_symbol;
+ROSYM static Scheme_Object *source_name_symbol;
 
 /* locals */
 static Scheme_Object *lambda_compile(Scheme_Object *form, Scheme_Comp_Env *env);
@@ -118,12 +122,14 @@ void scheme_init_compile (Scheme_Startup_Env *env)
 
   REGISTER_SO(compiler_inline_hint_symbol);
   REGISTER_SO(inferred_name_symbol);
+  REGISTER_SO(source_name_symbol);
 
   scheme_undefined->type = scheme_undefined_type;
   
   compiler_inline_hint_symbol = scheme_intern_symbol("compiler-hint:cross-module-inline");
 
   inferred_name_symbol = scheme_intern_symbol("inferred-name");
+  source_name_symbol = scheme_intern_symbol("source-name");
 
   REGISTER_SO(protected_symbol);
   REGISTER_SO(values_symbol);
@@ -698,10 +704,14 @@ static Scheme_Object *ref_compile (Scheme_Object *form, Scheme_Comp_Env *env)
 
   /* retaining `pseudo-var' ensures that the environment stays
      linked from the actual variable */
-  if (l == 1)
+  if ((l == 1) || !(env->flags & COMP_ENV_CHECKING_CONSTANT))
     pseudo_var = (Scheme_Object *)env->linklet->toplevels[0];
-  else
+  else {
+    /* If the variable reference will be used only for
+       `variable-reference-constant?`, then we don't want a string
+       reference to the enclsoing instance. */
     pseudo_var = scheme_false;
+  }
 
   if (l == 1) {
     var = scheme_false;
@@ -1514,6 +1524,10 @@ compile_list(Scheme_Object *form,
       else
 	comp_first = p;
       comp_last = p;
+
+      if (!i && start_app_position && (len == 2)
+          && SAME_OBJ(c, scheme_varref_const_p_proc))
+        last_env = scheme_set_comp_env_flags(last_env, COMP_ENV_CHECKING_CONSTANT);
     }
 
     return comp_first;
@@ -1892,7 +1906,7 @@ static Scheme_Object *define_parse(Scheme_Object *form,
     if (!v) {
       int pos = *_extra_vars_pos + pos_after_imports;
       env = scheme_extend_comp_env(*_env, name,
-                                   (Scheme_Object *)scheme_make_ir_toplevel(name, -1, *_extra_vars_pos, pos, 0),
+                                   (Scheme_Object *)scheme_make_ir_toplevel(-1, *_extra_vars_pos, pos, 0),
                                    1);
       *_env = env;
       extra_vars = scheme_make_pair(name, extra_vars);
@@ -1927,12 +1941,24 @@ static void check_import_export_clause(Scheme_Object *e, Scheme_Object *orig_for
   scheme_wrong_syntax(NULL, e, orig_form, "bad import/export clause");
 }
 
+Scheme_Object *extract_source_name(Scheme_Object *e)
+{
+  Scheme_Object *a;
+  
+  a = scheme_stx_property(e, source_name_symbol, NULL);
+  if (!a || !SCHEME_SYMBOLP(a))
+    a = SCHEME_STX_VAL(e);
+
+  return a;
+}
+
 Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
 {
   Scheme_Linklet *linklet;
   Scheme_Object *orig_form = form, *imports, *exports;
-  Scheme_Object *export_syms, *defn_syms, *a, *e, *extra_vars, *vec, *v;
+  Scheme_Object *export_syms, *a, *e, *extra_vars, *vec, *v;
   Scheme_Object *import_syms, *import_symss, *bodies, *all_extra_vars;
+  Scheme_Hash_Tree *source_names;
   Scheme_IR_Toplevel **toplevels, **new_toplevels, *tl;
   int body_len, len, islen, i, j, extra_vars_pos, pos = 0, num_toplevels, pos_after_imports;
   Scheme_Comp_Env *env;
@@ -1958,7 +1984,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   toplevels = MALLOC_N(Scheme_IR_Toplevel*, num_toplevels);
   
   /* first `toplevels` slot holds the instance strongly */
-  tl = scheme_make_ir_toplevel(scheme_false, -1, -1, pos, 0);
+  tl = scheme_make_ir_toplevel(-1, -1, pos, 0);
   toplevels[pos++] = tl;
   
   /* Parse imports, filling in `ilens` and `import_syms`, and also
@@ -1983,7 +2009,6 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
         SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(e);
       } else {
         SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CAR(e));
-        e = SCHEME_STX_CADR(e);
       }
       if (pos >= num_toplevels) {
         new_toplevels = MALLOC_N(Scheme_IR_Toplevel*, 2 * num_toplevels);
@@ -1991,7 +2016,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
         num_toplevels *= 2;
         toplevels = new_toplevels;
       }
-      tl = scheme_make_ir_toplevel(e, i, j, pos, 0);
+      tl = scheme_make_ir_toplevel(i, j, pos, 0);
       toplevels[pos++] = tl;
       env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
     }
@@ -2007,7 +2032,6 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   scheme_begin_dup_symbol_check(&r);
 
   export_syms = scheme_make_vector(len, NULL);
-  defn_syms = scheme_make_vector(len, NULL);
 
   for (j = 0; j < len; j++, exports = SCHEME_STX_CDR(exports)) {
     e = SCHEME_STX_CAR(exports);
@@ -2018,14 +2042,16 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
       SCHEME_VEC_ELS(export_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CADR(e));
       e = SCHEME_STX_CAR(e);
     }
-    SCHEME_VEC_ELS(defn_syms)[j] = SCHEME_STX_VAL(e);
+    a = extract_source_name(e);
+    if (!SAME_OBJ(a, SCHEME_VEC_ELS(export_syms)[j]))
+      source_names = scheme_hash_tree_set(source_names, SCHEME_VEC_ELS(export_syms)[j], a);
     if (pos >= num_toplevels) {
       new_toplevels = MALLOC_N(Scheme_IR_Toplevel*, 2 * num_toplevels);
       memcpy(new_toplevels, toplevels, sizeof(Scheme_IR_Toplevel*) *  2 * num_toplevels);
       num_toplevels *= 2;
       toplevels = new_toplevels;
     }
-    tl = scheme_make_ir_toplevel(e, -1, j, pos, 0);
+    tl = scheme_make_ir_toplevel(-1, j, pos, 0);
     toplevels[pos++] = tl;
     env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
   }
@@ -2046,16 +2072,28 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
     }
   }
 
-  all_extra_vars = scheme_reverse(all_extra_vars);
-  for (i = len; i < extra_vars_pos; i++, all_extra_vars = SCHEME_CDR(all_extra_vars)) {
-    SCHEME_VEC_ELS(defn_syms)[i] = SCHEME_CAR(all_extra_vars);
+  if (extra_vars_pos) {
+    a = export_syms;
+    export_syms = scheme_make_vector(len + extra_vars_pos, NULL);
+    for (i = 0; i < len; i++) {
+      SCHEME_VEC_ELS(export_syms)[i] = SCHEME_VEC_ELS(a)[i];
+    }
+
+    all_extra_vars = scheme_reverse(all_extra_vars);
+    for (i = len; i < extra_vars_pos; i++, all_extra_vars = SCHEME_CDR(all_extra_vars)) {
+      a = SCHEME_CAR(all_extra_vars);
+      SCHEME_VEC_ELS(export_syms)[i] = SCHEME_STX_VAL(a);
+      a = extract_source_name(e);
+      if (!SAME_OBJ(a, SCHEME_VEC_ELS(export_syms)[i]))
+        source_names = scheme_hash_tree_set(source_names, SCHEME_VEC_ELS(export_syms)[i], a);
+    }
   }
 
   /* Prepare linklet record */
 
   linklet->importss = import_symss;
   linklet->exports = export_syms;
-  linklet->defns = defn_syms;
+  linklet->source_names = source_names;
 
   /* Compile body forms */
   bodies = scheme_make_vector(body_len, scheme_false);

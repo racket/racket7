@@ -59,7 +59,16 @@ static Scheme_Object *variable_p(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_instance(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv);
 
-static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Linklet *linklet, Scheme_Object *form);
+static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet);
+
+static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
+                                                 int num_instances, Scheme_Instance **instances);
+
+static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Instance *instance,
+                                   int num_instances, Scheme_Instance **instances);
+static void pop_prefix(Scheme_Object **rs);
+static Scheme_Object *suspend_prefix(Scheme_Object **rs);
+static Scheme_Object **resume_prefix(Scheme_Object *v);
 
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
@@ -92,9 +101,9 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("instance-name", instance_name, 1, 1, env);
   ADD_PRIM_W_ARITY("instance-data", instance_data, 1, 1, env);
   ADD_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, env);
-  ADD_PRIM_W_ARITY("instance-variable-value", instance_variable_value, 1, 1, env);
-  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 1, 1, env);
-  ADD_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 1, 1, env);
+  ADD_PRIM_W_ARITY2("instance-variable-value", instance_variable_value, 2, 3, 0, -1, env);
+  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 2, 2, env);
+  ADD_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 2, 2, env);
 
   ADD_FOLDING_PRIM("linklet_directory?", linklet_directory_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY("hash->linklet-directory", hash_to_linklet_directory, 1, 1, env);
@@ -105,7 +114,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, env);
 
   ADD_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, env);
-  ADD_PRIM_W_ARITY("variable-reference->instance", variable_top_level_namespace, 1, 1, env);
+  ADD_PRIM_W_ARITY("variable-reference->instance", variable_instance, 1, 1, env);
 
   REGISTER_SO(scheme_varref_const_p_proc);
   scheme_varref_const_p_proc = scheme_make_prim_w_arity(variable_const_p, 
@@ -146,9 +155,6 @@ scheme_init_linklet(Scheme_Startup_Env *env)
 
 static Scheme_Object *primitive_table(int argc, Scheme_Object *argv[])
 {
-  Scheme_Env *env, *menv;
-  Scheme_Object *name;
-  Scheme_Hash_Tree *ht;
   Scheme_Hash_Table *table;
 
   if (!SCHEME_SYMBOLP(argv[0]))
@@ -156,24 +162,11 @@ static Scheme_Object *primitive_table(int argc, Scheme_Object *argv[])
   if ((argc > 1) && !SCHEME_HASHTRP(argv[1]))
     scheme_wrong_contract("primitive-table", "(and/c hash? immutable?)", 1, argc, argv);
 
-  table = scheme_hash_get(scheme_startup_env->primitive_tables, argv[0]);
+  table = (Scheme_Hash_Table *)scheme_hash_get(scheme_startup_env->primitive_tables, argv[0]);
   if (!table) {
     if (argc > 1) {
-      Scheme_Object *k, *v;
-      mzlonglong pos;
-
       table = scheme_make_hash_table(SCHEME_hash_ptr);
       scheme_hash_set(scheme_startup_env->primitive_tables, argv[0], (Scheme_Object *)table);
-
-      ht = (Scheme_Hash_Tree *)argv[1];
-      pos = scheme_hash_tree_next(ht, -1);
-      while (pos != -1) {
-        scheme_hash_tree_index(ht, pos, &k, &v);
-        if (SCHEME_SYMBOLP(k)) {
-          scheme_add_global_symbol(k, v, menv);
-        }
-        pos = scheme_hash_tree_next(ht, pos);
-      }
     } else
       return scheme_false;
   }
@@ -193,7 +186,7 @@ static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)
 
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
 {
-  return compile_and_or_optimize_linklet(argv[0], NULL);
+  return (Scheme_Object *)compile_and_or_optimize_linklet(argv[0], NULL);
 }
 
 static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
@@ -201,7 +194,7 @@ static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
     scheme_wrong_contract("recompile-linklet", "linklet?", 0, argc, argv);
   
-  return compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0]);
+  return (Scheme_Object *)compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0]);
 }
 
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
@@ -251,9 +244,9 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
   }
 
   if (argc > 2)
-    return instantiate_linklet(linket, inst, count, instances, 1, 0);
+    return _instantiate_linklet_multi(linklet, inst, len, instances);
   else {
-    (void)instantiate_linklet(linket, inst, count, instances, 1, 0);
+    (void)_instantiate_linklet_multi(linklet, inst, len, instances);
     return (Scheme_Object *)inst;
   }
 }
@@ -271,7 +264,7 @@ static Scheme_Object *linklet_import_variables(int argc, Scheme_Object **argv)
 
   for (i = SCHEME_VEC_SIZE(linklet->importss); i--; ) {
     l = scheme_null;
-    for (j = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->num_importss)[i]); j--; ) {
+    for (j = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j--; ) {
       l = scheme_make_pair(SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j], l);
     }
     ll = scheme_make_pair(ll, l);
@@ -291,8 +284,8 @@ static Scheme_Object *linklet_export_variables(int argc, Scheme_Object **argv)
 
   linklet = (Scheme_Linklet *)argv[0];
 
-  for (i = linklet->num_exports; i--; ) {
-    l = scheme_make_pair(linklet->exports[i], l);
+  for (i = SCHEME_VEC_SIZE(linklet->exports); i--; ) {
+    l = scheme_make_pair(SCHEME_VEC_ELS(linklet->exports)[i], l);
   }
 
   return l;
@@ -305,13 +298,109 @@ static Scheme_Object *instance_p(int argc, Scheme_Object **argv)
           : scheme_false);
 }
 
-static Scheme_Object *make_instance(int argc, Scheme_Object **argv);
-static Scheme_Object *instance_name(int argc, Scheme_Object **argv);
-static Scheme_Object *instance_data(int argc, Scheme_Object **argv);
-static Scheme_Object *instance_variable_names(int argc, Scheme_Object **argv);
-static Scheme_Object *instance_variable_value(int argc, Scheme_Object **argv);
-static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object **argv);
-static Scheme_Object *instance_unset_variable(int argc, Scheme_Object **argv);
+static Scheme_Object *make_instance(int argc, Scheme_Object **argv)
+{
+  return (Scheme_Object *)scheme_make_instance(argv[0], (argc > 1) ? argv[1] : scheme_false);
+}
+
+static Scheme_Object *instance_name(int argc, Scheme_Object **argv)
+{
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
+    scheme_wrong_contract("instance-name", "instance?", 0, argc, argv);
+
+  return ((Scheme_Instance *)argv[0])->name;
+}
+
+static Scheme_Object *instance_data(int argc, Scheme_Object **argv)
+{
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
+    scheme_wrong_contract("instance-data", "instance?", 0, argc, argv);
+
+  return ((Scheme_Instance *)argv[0])->data;
+}
+  
+static Scheme_Object *instance_variable_names(int argc, Scheme_Object **argv)
+{
+  Scheme_Bucket_Table *variables;
+  Scheme_Bucket *b;
+  int i;
+  Scheme_Object *l = scheme_null;
+  
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
+    scheme_wrong_contract("instance-variable-names", "instance?", 0, argc, argv);
+
+  variables = ((Scheme_Instance *)argv[0])->variables;
+
+  for (i = variables->size; i--; ) {
+    b = variables->buckets[i];
+    if (b && b->val) {
+      l = scheme_make_pair((Scheme_Object *)b->key, l);
+    }
+  }
+
+  return l;
+}
+
+static Scheme_Object *instance_variable_value(int argc, Scheme_Object **argv)
+{
+  Scheme_Instance *inst;
+  Scheme_Bucket *b;
+    
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
+    scheme_wrong_contract("instance-variable-value", "instance?", 0, argc, argv);
+  if (!SCHEME_SYMBOLP(argv[1]))
+    scheme_wrong_contract("instance-variable-value", "symbol?", 1, argc, argv);
+
+  inst = (Scheme_Instance *)argv[0];
+    
+  b = scheme_instance_variable_bucket_or_null(argv[1], inst);
+  if (b && b->val)
+    return b->val;
+
+  if (argc > 2) {
+    if (SCHEME_PROCP(argv[2]))
+      return _scheme_tail_apply(argv[2], 0, NULL);
+    return argv[2];
+  }
+
+  scheme_raise_exn(MZEXN_FAIL_CONTRACT,
+                   "instance-variable-value: instance variable not found\n"
+                   "  instance: %V\n"
+                   "  name: %S",
+                   inst->name,
+                   argv[1]);
+  return NULL;
+}
+
+static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object **argv)
+{
+  Scheme_Bucket *b;
+  
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
+    scheme_wrong_contract("instance-set-variable-value!", "instance?", 0, argc, argv);
+  if (!SCHEME_SYMBOLP(argv[1]))
+    scheme_wrong_contract("instance-set-variable-value!", "symbol?", 1, argc, argv);
+
+  b = scheme_instance_variable_bucket(argv[1], (Scheme_Instance *)argv[0]);
+  b->val = argv[2];
+
+  return scheme_void;
+}
+
+static Scheme_Object *instance_unset_variable(int argc, Scheme_Object **argv)
+{
+  Scheme_Bucket *b;
+    
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
+    scheme_wrong_contract("instance-unset-variable!", "instance?", 0, argc, argv);
+  if (!SCHEME_SYMBOLP(argv[1]))
+    scheme_wrong_contract("instance-unset-variable!", "symbol?", 1, argc, argv);
+
+  b = scheme_instance_variable_bucket(argv[1], (Scheme_Instance *)argv[0]);
+  b->val = NULL;
+
+  return scheme_void;
+}
 
 static Scheme_Object *linklet_directory_p(int argc, Scheme_Object **argv)
 {
@@ -332,12 +421,14 @@ static Scheme_Object *hash_to_linklet_directory(int argc, Scheme_Object **argv)
 {
   mzlonglong pos;
   Scheme_Object *k, *v;
+  Scheme_Hash_Tree *hash;
   
-  if (!SCHEME_HASHTRP(SCHEME_TYPE(argv[0]))
-      || !SAME_TYPE(scheme_eq_hash_tree_type, SCHEME_HASHTR_TYPE(o)))
+  if (!SCHEME_HASHTRP(argv[0])
+      || !SAME_TYPE(scheme_eq_hash_tree_type, SCHEME_HASHTR_TYPE(argv[0])))
     scheme_wrong_contract("hash->linklet-directory",
                           "(and/c hash? hash-eq? immutable? (not/c impersonator?))",
                           0, argc, argv);
+  hash = (Scheme_Hash_Tree *)argv[0];
 
   /* mapping: #f -> bundle, sym -> linklet directory */
 
@@ -366,7 +457,7 @@ static Scheme_Object *hash_to_linklet_directory(int argc, Scheme_Object **argv)
     pos = scheme_hash_tree_next(hash, pos);
   }
 
-  v = scheme_malloc_one_small();
+  v = scheme_alloc_small_object();
   v->type = scheme_linklet_directory_type;
   SCHEME_PTR_VAL(v) = argv[0];
   return v;
@@ -391,12 +482,15 @@ static Scheme_Object *hash_to_linklet_bundle(int argc, Scheme_Object **argv)
 {
   mzlonglong pos;
   Scheme_Object *k, *v;
+  Scheme_Hash_Tree *hash;
   
-  if (!SCHEME_HASHTRP(SCHEME_TYPE(argv[0]))
-      || !SAME_TYPE(scheme_eq_hash_tree_type, SCHEME_HASHTR_TYPE(o)))
+  if (!SCHEME_HASHTRP(argv[0])
+      || !SAME_TYPE(scheme_eq_hash_tree_type, SCHEME_HASHTR_TYPE(argv[0])))
     scheme_wrong_contract("hash->linklet-bundle",
                           "(and/c hash? hash-eq? immutable? (not/c impersonator?))",
                           0, argc, argv);
+
+  hash = (Scheme_Hash_Tree *)argv[0];
 
   /* mapping: keys must be symbols and fixnums */
 
@@ -412,7 +506,7 @@ static Scheme_Object *hash_to_linklet_bundle(int argc, Scheme_Object **argv)
     pos = scheme_hash_tree_next(hash, pos);
   }
 
-  v = scheme_malloc_one_small();
+  v = scheme_alloc_small_object();
   v->type = scheme_linklet_bundle_type;
   SCHEME_PTR_VAL(v) = argv[0];
   return v;
@@ -434,12 +528,11 @@ static Scheme_Object *variable_instance(int argc, Scheme_Object **argv)
   if (!SAME_TYPE(SCHEME_TYPE(v), scheme_global_ref_type))
     scheme_wrong_contract("variable-reference-instance", "variable-reference?", 0, argc, argv);
 
-  v = SCHEME_PTR1_VAL(v);
+  v = SCHEME_PTR2_VAL(argv[0]);
   if (SCHEME_FALSEP(v))
-    v = SCHEME_PTR2_VAL(argv[0]);
-  env = scheme_get_bucket_home((Scheme_Bucket *)v);
+    return scheme_false;
 
-  return (Scheme_Object *)env;
+  return (Scheme_Object *)scheme_get_bucket_home((Scheme_Bucket *)v);
 }
 
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
@@ -465,35 +558,35 @@ static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
 /*                       instance variable buckets                        */
 /*========================================================================*/
 
-Scheme_Object *scheme_get_home_weak_link(Scheme_Env *e)
+Scheme_Object *scheme_get_home_weak_link(Scheme_Instance *i)
 {
-  if (!e->weak_self_link) {
+  if (!i->weak_self_link) {
     Scheme_Object *wb;
     if (scheme_starting_up)
-      wb = scheme_box((Scheme_Object *)e);
+      wb = scheme_box((Scheme_Object *)i);
     else
-      wb = scheme_make_weak_box((Scheme_Object *)e);
-    e->weak_self_link = wb;
+      wb = scheme_make_weak_box((Scheme_Object *)i);
+    i->weak_self_link = wb;
   }
 
-  return e->weak_self_link;
+  return i->weak_self_link;
 }
 
-Scheme_Env *scheme_get_bucket_home(Scheme_Bucket *b)
+Scheme_Instance *scheme_get_bucket_home(Scheme_Bucket *b)
 {
   Scheme_Object *l;
 
   l = ((Scheme_Bucket_With_Home *)b)->home_link;
   if (l) {
     if (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_STRONG_HOME_LINK)
-      return (Scheme_Env *)l;
+      return (Scheme_Instance *)l;
     else
-      return (Scheme_Env *)SCHEME_WEAK_BOX_VAL(l);
+      return (Scheme_Instance *)SCHEME_WEAK_BOX_VAL(l);
   } else
     return NULL;
 }
 
-void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Env *e)
+void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Instance *e)
 {
   if (!((Scheme_Bucket_With_Home *)b)->home_link) {
     if (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_STRONG_HOME_LINK)
@@ -532,7 +625,7 @@ Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Ins
   if (SCHEME_FALSEP(symbol))
     ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_STRONG_HOME_LINK;
 
-  scheme_set_bucket_home(b, env);
+  scheme_set_bucket_home(b, inst);
 
   return b;
 }
@@ -541,10 +634,10 @@ Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Sc
 {
   Scheme_Bucket *b;
     
-  b = scheme_bucket_or_null_from_table(inst->variables, (char *)symbol);
+  b = scheme_bucket_or_null_from_table(inst->variables, (char *)symbol, 0);
   if (b) {
     ASSERT_IS_VARIABLE_BUCKET(b);
-    scheme_set_bucket_home(b, env);
+    scheme_set_bucket_home(b, inst);
   }
 
   return b;
@@ -560,12 +653,12 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
   int enforce_const, set_undef, can_inline;
  
   config = scheme_current_config();
-  enforce_consts = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_COMPILE_MODULE_CONSTS));
+  enforce_const = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_COMPILE_MODULE_CONSTS));
   set_undef = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_ALLOW_SET_UNDEFINED));
-  can_inline = SCHEME_FALSE(scheme_get_param(config, MZCONFIG_DISALLOW_INLINE));
+  can_inline = SCHEME_FALSEP(scheme_get_param(config, MZCONFIG_DISALLOW_INLINE));
 
   if (!linklet) {
-    linklet = scheme_frontend_compile_linklet(form, set_undef);
+    linklet = scheme_compile_linklet(form, set_undef);
     linklet = scheme_letrec_check_linklet(linklet);
   }
   linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline);
@@ -575,7 +668,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
   if (recompile_every_compile) {
     int i;
     for (i = recompile_every_compile; i--; ) {
-      linklet = scheme_unresolve_linklet(linklet);
+      linklet = scheme_unresolve_linklet(linklet, (set_undef ? COMP_ALLOW_SET_UNDEFINED : 0));
       linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline);
       linklet = scheme_resolve_linklet(linklet, enforce_const);
       linklet = scheme_sfs_linklet(linklet);
@@ -601,9 +694,9 @@ static Scheme_Object *body_one_expr(void *prefix_plus_expr, int argc, Scheme_Obj
 {
   Scheme_Object *v, **saved_runstack;
 
-  saved_runstack = scheme_resume_prefix(SCHEME_CAR((Scheme_Object *)prefix_plus_expr));
+  saved_runstack = resume_prefix(SCHEME_CAR((Scheme_Object *)prefix_plus_expr));
   v = _scheme_eval_linked_expr_multi(SCHEME_CDR((Scheme_Object *)prefix_plus_expr));
-  scheme_suspend_prefix(saved_runstack);
+  suspend_prefix(saved_runstack);
 
   return v;
 }
@@ -637,18 +730,12 @@ static int needs_prompt(Scheme_Object *e)
   }
 }
 
-Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet)
+Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instance *instance)
 {
   Scheme_Thread *p;
-  Scheme_Module *m = menv->module;
   Scheme_Object *body, **save_runstack, *save_prefix, *v = scheme_void;
-  int depth;
   int i, cnt;
-  Scheme_Cont_Frame_Data cframe;
-  Scheme_Config *config;
-  int volatile save_phase_shift;
   mz_jmp_buf newbuf, * volatile savebuf;
-  LOG_RUN_DECLS;
 
   p = scheme_current_thread;
   savebuf = p->error_buf;
@@ -660,16 +747,17 @@ Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet)
     p2->error_buf = savebuf;
     scheme_longjmp(*savebuf, 1);
   } else {
-    cnt = linklet->num_bodies;
+    cnt = SCHEME_VEC_SIZE(linklet->bodies);
     for (i = 0; i < cnt; i++) {
-      body = m->bodies[i];
+      body = SCHEME_VEC_ELS(linklet->bodies)[i];
       if (needs_prompt(body)) {
         /* We need to push the prefix after the prompt is set, so
            restore the runstack and then add the prefix back. */
         save_prefix = suspend_prefix(save_runstack);
         v = _scheme_call_with_prompt_multi(body_one_expr, 
-                                           scheme_make_raw_pair(save_prefix
-                                                                scheme_make_raw_pair(body, instance)));
+                                           scheme_make_raw_pair(save_prefix,
+                                                                scheme_make_raw_pair(body,
+                                                                                     (Scheme_Object *)instance)));
         resume_prefix(save_prefix);
 
         /* Double-check that the definition-installing part of the
@@ -701,12 +789,12 @@ Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet)
                                "  variable: %S\n"
                                "  in module: %D",
                                (Scheme_Object *)b->key,
-                               menv->module->modsrc);
+                               instance->name);
             }
           }
         }
       } else
-        v = _eval_linked_expr_multi(body);
+        v = _scheme_eval_linked_expr_multi(body);
 
       if (i < cnt)
         scheme_ignore_result(v);
@@ -714,18 +802,17 @@ Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet)
 
     p = scheme_current_thread;
     p->error_buf = savebuf;
-    p->current_phase_shift = save_phase_shift;
   }
 
   return v;
 }
 
-static Scheme_Object *eval_linklet_body(Scheme_Linklet *linklet)
+static Scheme_Object *eval_linklet_body(Scheme_Linklet *linklet, Scheme_Instance *instance)
 {
 #ifdef MZ_USE_JIT
-  scheme_linklet_run_start(linklet, scheme_make_pair(instance->name, scheme_true));
+  return scheme_linklet_run_start(linklet, instance, scheme_make_pair(instance->name, scheme_true));
 #else
-  scheme_linklet_run_finish(linklet);
+  return scheme_linklet_run_finish(linklet, instance);
 #endif
 }
 
@@ -733,11 +820,12 @@ static void *instantiate_linklet_k(void)
 {
   Scheme_Thread *p = scheme_current_thread;
   Scheme_Linklet *linklet = (Scheme_Linklet *)p->ku.k.p1;
-  Scheme_Instance *instances = (Scheme_Instance *)p->ku.k.p2;
+  Scheme_Instance *instance = (Scheme_Instance *)p->ku.k.p2;
   Scheme_Instance **instances = (Scheme_Instance **)p->ku.k.p3;
   int multi = p->ku.k.i1;
   int num_instances = p->ku.k.i2;
-  Scheme_Object *b;
+  int depth;
+  Scheme_Object *b, *v;
   Scheme_Object **save_runstack;
 
   p->ku.k.p1 = NULL;
@@ -746,7 +834,7 @@ static void *instantiate_linklet_k(void)
 
   depth = linklet->max_let_depth;  
   if (!scheme_check_runstack(depth)) {
-    p->ku.k.p1 = top;
+    p->ku.k.p1 = linklet;
     p->ku.k.p2 = instance;
     p->ku.k.p3 = instances;
     p->ku.k.i1 = multi;
@@ -758,12 +846,29 @@ static void *instantiate_linklet_k(void)
   if (SCHEME_TRUEP(b))
     linklet = scheme_jit_linklet(linklet);
 
-  for (i = linklet->num_exports; i--; ) {
-    scheme_hash_set(instance->exports, linklet->exports[i], linklet->defns[i]);
+  /* Pushng the prefix looks up imported variables */
+  save_runstack = push_prefix(linklet, instance, num_instances, instances);
+
+  /* For variables in this instances, merge source-name info from the
+     linklet to the instance */
+  if (linklet->source_names->count) {
+    if (instance->source_names->count) {
+      mzlonglong pos;
+      Scheme_Hash_Tree *ht = instance->source_names;
+      Scheme_Object *k, *v;
+      pos = scheme_hash_tree_next(linklet->source_names, -1);
+      while (pos != -1) {
+        scheme_hash_tree_index(linklet->source_names, pos, &k, &v);
+        ht = scheme_hash_tree_set(ht, k, v);
+        pos = scheme_hash_tree_next(linklet->source_names, pos);
+      }
+      instance->source_names = ht;
+    } else
+      instance->source_names = linklet->source_names;
   }
 
-  save_runstack = push_prefix(linklet, instance, num_instances, instances);
-  v = eval_linklet_body(linklet);  
+  v = eval_linklet_body(linklet, instance);
+
   pop_prefix(save_runstack);
 
   if (!multi)
@@ -772,7 +877,7 @@ static void *instantiate_linklet_k(void)
   return (void *)v;
 }
 
-static Scheme_Object *do_instantiate_linklet(Scheme_Linklet *linket, Scheme_Instance *instance,
+static Scheme_Object *do_instantiate_linklet(Scheme_Linklet *linklet, Scheme_Instance *instance,
                                              int num_instances, Scheme_Instance **instances,
                                              int multi, int top)
 {
@@ -791,22 +896,7 @@ static Scheme_Object *do_instantiate_linklet(Scheme_Linklet *linket, Scheme_Inst
     return (Scheme_Object *)instantiate_linklet_k();
 }
 
-Scheme_Object *scheme_instiantate_linklet(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
-{
-  return do_instantiate_linklet(linklet, instance, num_instances, instances, 0, 1);
-}
-
-Scheme_Object *scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
-{
-  return do_instantiate_linklet(linklet, instance, num_instances, instances, 1, 1);
-}
-
-Scheme_Object *_scheme_instiantate_linklet(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
-{
-  return do_instantiate_linklet(linklet, instance, num_instances, instances, 0, 0);
-}
-
-Scheme_Object *_scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
+static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance, int num_instances, Scheme_Instance **instances)
 {
   return do_instantiate_linklet(linklet, instance, num_instances, instances, 1, 0);
 }
@@ -815,8 +905,8 @@ Scheme_Object *_scheme_instiantate_linklet_multi(Scheme_Linklet *linklet, Scheme
 /*        creating/pushing prefix for top-levels and syntax objects       */
 /*========================================================================*/
 
-static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *instance,
-                                   int num_instances, Scheme_Object **instances)
+static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Instance *instance,
+                                   int num_instances, Scheme_Instance **instances)
 {
   Scheme_Object **rs_save, **rs, *v;
   Scheme_Prefix *pf;
@@ -829,7 +919,7 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
 
   i = 1;
   for (j = num_importss; j--; ) {
-    i += SCHEME_VEC_SIZE(SCHEME_VEC_ELSE(linklet->importss)[j]);
+    i += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[j]);
   }
   i += num_exports;
   tl_map_len = (i + 31) / 32;
@@ -844,13 +934,14 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
   rs[0] = (Scheme_Object *)pf;
 
   pos = 0;
-  v = scheme_instance_variable_bucket(v, instance);
+  v = (Scheme_Object *)scheme_instance_variable_bucket(scheme_false, instance);
   pf->a[pos++] = v;
   
   for (j = 0; j < num_importss; j++) {
     int num_imports = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[j]);
     for (i = 0; i < num_imports; i++) {
-      v = scheme_hash_ref(instances[j], SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[j])[i]);
+      v = SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[j])[i];
+      v = (Scheme_Object *)scheme_instance_variable_bucket(v, (Scheme_Instance *)instances[j]);
       if (!v) {
         scheme_signal_error("instantiate-linklet: mismatch;\n"
                             " possibly, bytecode file needs re-compile because dependencies changed\n"
@@ -861,13 +952,12 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Object *insta
                             instances[j]->name,
                             instance->name);
       }
-      v = scheme_instance_variable_bucket(v, (Scheme_Instance *)instances[j]);
       pf->a[pos++] = v;
     }
   }
 
   for (i = 0; i < num_exports; i++) {
-    v = scheme_instance_variable_bucket(SCHEME_VEC_ELS(linklet->exports)[i], instance);
+    v = (Scheme_Object *)scheme_instance_variable_bucket(SCHEME_VEC_ELS(linklet->exports)[i], instance);
     pf->a[pos++] = v;
   }
 

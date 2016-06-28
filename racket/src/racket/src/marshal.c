@@ -36,8 +36,6 @@ static Scheme_Object *write_letrec(Scheme_Object *obj);
 static Scheme_Object *read_letrec(Scheme_Object *obj);
 static Scheme_Object *write_let_one(Scheme_Object *obj);
 static Scheme_Object *read_let_one(Scheme_Object *obj);
-static Scheme_Object *write_top(Scheme_Object *obj);
-static Scheme_Object *read_top(Scheme_Object *obj);
 static Scheme_Object *write_case_lambda(Scheme_Object *obj);
 static Scheme_Object *read_case_lambda(Scheme_Object *obj);
 
@@ -68,15 +66,9 @@ static Scheme_Object *read_with_cont_mark(Scheme_Object *obj);
 
 static Scheme_Object *write_toplevel(Scheme_Object *obj);
 static Scheme_Object *read_toplevel(Scheme_Object *obj);
-static Scheme_Object *write_variable(Scheme_Object *obj);
-static Scheme_Object *read_variable(Scheme_Object *obj);
-static Scheme_Object *write_module_variable(Scheme_Object *obj);
-static Scheme_Object *read_module_variable(Scheme_Object *obj);
 static Scheme_Object *write_local(Scheme_Object *obj);
 static Scheme_Object *read_local(Scheme_Object *obj);
 static Scheme_Object *read_local_unbox(Scheme_Object *obj);
-static Scheme_Object *write_resolve_prefix(Scheme_Object *obj);
-static Scheme_Object *read_resolve_prefix(Scheme_Object *obj);
 
 static Scheme_Object *write_lambda(Scheme_Object *obj);
 static Scheme_Object *read_lambda(Scheme_Object *obj);
@@ -129,16 +121,11 @@ void scheme_init_marshal(Scheme_Startup_Env *env)
   scheme_install_type_writer(scheme_inline_variant_type, write_inline_variant);
   scheme_install_type_reader(scheme_inline_variant_type, read_inline_variant);
 
-  scheme_install_type_writer(scheme_compilation_top_type, write_top);
-  scheme_install_type_reader(scheme_compilation_top_type, read_top);
-
   scheme_install_type_writer(scheme_lambda_type, write_lambda);
   scheme_install_type_reader(scheme_lambda_type, read_lambda);
 
   scheme_install_type_writer(scheme_toplevel_type, write_toplevel);
   scheme_install_type_reader(scheme_toplevel_type, read_toplevel);
-  scheme_install_type_writer(scheme_variable_type, write_variable);
-  scheme_install_type_reader(scheme_variable_type, read_variable);
   scheme_install_type_writer(scheme_local_type, write_local);
   scheme_install_type_reader(scheme_local_type, read_local);
   scheme_install_type_writer(scheme_local_unbox_type, write_local);
@@ -271,44 +258,6 @@ static Scheme_Object *read_letrec(Scheme_Object *obj)
   }
 
   return (Scheme_Object *)lr;
-}
-
-static Scheme_Object *write_top(Scheme_Object *obj)
-{
-  Scheme_Compilation_Top *top = (Scheme_Compilation_Top *)obj;
-
-  if (!top->prefix)
-    scheme_contract_error("write",
-                          "cannot marshal shared compiled code",
-                          "compiled code", 1, obj,
-                          NULL);
-
-  return cons(scheme_make_integer(top->max_let_depth),
-              cons(binding_namess_to_vectors(top->binding_namess),
-                   cons((Scheme_Object *)top->prefix,
-                        scheme_protect_quote(top->code))));
-}
-
-static Scheme_Object *read_top(Scheme_Object *obj)
-{
-  Scheme_Compilation_Top *top;
-
-  top = MALLOC_ONE_TAGGED(Scheme_Compilation_Top);
-  top->iso.so.type = scheme_compilation_top_type;
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  top->max_let_depth = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  if (top->max_let_depth < 0) return NULL; /* Should this check for a max as well? */
-  obj = SCHEME_CDR(obj);
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  top->binding_namess = SCHEME_CAR(obj); /* checking is in scheme_install_binding_names() */
-  obj = SCHEME_CDR(obj);
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  top->prefix = (Resolve_Prefix *)SCHEME_CAR(obj);
-  top->code = SCHEME_CDR(obj);
-  if (!SAME_TYPE(SCHEME_TYPE(top->prefix), scheme_resolve_prefix_type)) 
-    return NULL;
-
-  return (Scheme_Object *)top;
 }
 
 static Scheme_Object *write_case_lambda(Scheme_Object *obj)
@@ -994,9 +943,9 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
 
   l = scheme_null;
 
-  l = scheme_make_pair(linklet->imports, l);
+  l = scheme_make_pair(linklet->importss, l);
   l = scheme_make_pair(linklet->exports, l);
-  l = scheme_make_pair(linklet->defns, l);
+  l = scheme_make_pair((Scheme_Object *)linklet->source_names, l);
 
   l = scheme_make_pair(linklet->bodies, l);
 
@@ -1042,13 +991,34 @@ static int is_vector_of_vector_of_symbols(Scheme_Object *v)
   return 1;
 }
 
-static Scheme_Object *read_module(Scheme_Object *obj)
+static int is_hash_of_symbol_to_symbol(Scheme_Object *_ht)
+{
+  mzlonglong pos;
+  Scheme_Object *k, *v;
+  Scheme_Hash_Tree *ht;
+
+  if (!SCHEME_HASHTRP(_ht))
+    return 0;
+
+  ht = (Scheme_Hash_Tree *)_ht;
+
+  pos = scheme_hash_tree_next(ht, -1);
+  while (pos != -1) {
+    scheme_hash_tree_index(ht, pos, &k, &v);
+    if (!SCHEME_SYMBOLP(k) || !SCHEME_SYMBOLP(v))
+      return 0;
+    pos = scheme_hash_tree_next(ht, pos);
+  }
+
+  return 1;
+}
+
+static Scheme_Object *read_linklet(Scheme_Object *obj)
 {
   Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
-  Scheme_Object *e, l, *a;
-  int i, j, len;
+  Scheme_Object *e, *a;
 
-  linklet = MALLOC_ONE_TAGGED(Scheme_Linlet);
+  linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
   linklet->so.type = scheme_linklet_type;
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
@@ -1069,8 +1039,8 @@ static Scheme_Object *read_module(Scheme_Object *obj)
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
   a = SCHEME_CAR(obj);
-  if (!is_vector_of_symbols(a)) return_NULL();
-  linklet->defns = a;
+  if (!is_hash_of_symbol_to_symbol(a)) return_NULL();
+  linklet->source_names = (Scheme_Hash_Tree *)a;
   obj = SCHEME_CDR(obj);
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
@@ -1083,9 +1053,7 @@ static Scheme_Object *read_module(Scheme_Object *obj)
   if (!is_vector_of_vector_of_symbols(a)) return_NULL();
   linklet->importss = a;
 
-  if (SCHEME_VEC_SIZE(linklet->exports) != SCHEME_VEC_SIZE(linklet->defns))
-    return_NULL();
-  if (linklet->num_lifts > SCHEME_VEC_SIZE(linklet->defns))
+  if (linklet->num_lifts > SCHEME_VEC_SIZE(linklet->exports))
     return_NULL();
   
   return (Scheme_Object *)linklet;

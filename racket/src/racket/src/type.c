@@ -122,7 +122,6 @@ scheme_init_type ()
   set_name(scheme_with_cont_mark_type, "<with-continuation-mark-code>");
 
   set_name(scheme_define_values_type, "<define-values-code>");
-  set_name(scheme_define_syntaxes_type, "<define-syntaxes-code>");
   set_name(scheme_begin0_sequence_type, "<begin0-code>");
   set_name(scheme_inline_variant_type, "<inline-variant-code>");
   set_name(scheme_set_bang_type, "<set!-code>");
@@ -141,6 +140,8 @@ scheme_init_type ()
   set_name(scheme_letrec_type, "<letrec-code>");
   set_name(scheme_let_one_type, "<let-one-code>");
   set_name(scheme_quote_compilation_type, "<quote-code>");
+
+  set_name(scheme_linklet_type, "<linklet>");
 
   set_name(scheme_eval_waiting_type, "<eval-waiting>");
   set_name(scheme_void_type, "<void>");
@@ -218,8 +219,6 @@ scheme_init_type ()
   set_name(scheme_bucket_type, "<hash-table-bucket>");
   set_name(scheme_prefix_type, "<runtime-prefix>");
   set_name(scheme_readtable_type, "<readtable>");
-
-  set_name(scheme_compilation_top_type, "<compiled-code>");
 
   set_name(scheme_svector_type, "<short-vector>");
 

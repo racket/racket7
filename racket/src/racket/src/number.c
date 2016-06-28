@@ -771,8 +771,8 @@ void scheme_init_flfxnum_number(Scheme_Startup_Env *env)
                                                     1, 2),
 			     env);
 
-  GLOBAL_PRIM_W_ARITY("shared-flvector", shared_flvector, 0, -1, env);
-  GLOBAL_PRIM_W_ARITY("make-shared-flvector", make_shared_flvector, 1, 2, env);
+  ADD_PRIM_W_ARITY("shared-flvector", shared_flvector, 0, -1, env);
+  ADD_PRIM_W_ARITY("make-shared-flvector", make_shared_flvector, 1, 2, env);
 
   p = scheme_make_immed_prim(flvector_length, "flvector-length", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
@@ -813,8 +813,8 @@ void scheme_init_flfxnum_number(Scheme_Startup_Env *env)
                                                     1, 2),
 			     env);
 
-  GLOBAL_PRIM_W_ARITY("shared-fxvector", shared_fxvector, 0, -1, env);
-  GLOBAL_PRIM_W_ARITY("make-shared-fxvector", make_shared_fxvector, 1, 2, env);
+  ADD_PRIM_W_ARITY("shared-fxvector", shared_fxvector, 0, -1, env);
+  ADD_PRIM_W_ARITY("make-shared-fxvector", make_shared_fxvector, 1, 2, env);
 
   p = scheme_make_immed_prim(fxvector_length, "fxvector-length", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
@@ -1080,8 +1080,8 @@ void scheme_init_extfl_number(Scheme_Startup_Env *env)
                                                     1, 2),
 			     env);
 
-  GLOBAL_PRIM_W_ARITY("shared-extflvector", shared_extflvector, 0, -1, env);
-  GLOBAL_PRIM_W_ARITY("make-shared-extflvector", make_shared_extflvector, 1, 2, env);
+  ADD_PRIM_W_ARITY("shared-extflvector", shared_extflvector, 0, -1, env);
+  ADD_PRIM_W_ARITY("make-shared-extflvector", make_shared_extflvector, 1, 2, env);
 
   p = scheme_make_immed_prim(extflvector_length, "extflvector-length", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED

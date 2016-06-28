@@ -48,6 +48,8 @@
 #define INITIAL_INLINING_FUEL   32
 #define INITIAL_FLATTENING_FUEL 16
 
+#define SCHEME_LAMBDA_FRAME 1
+
 struct Optimize_Info
 {
   MZTAG_IF_REQUIRED
@@ -82,6 +84,8 @@ struct Optimize_Info
   char letrec_not_twice, enforce_const, use_psize, has_nonleaf;
   Scheme_Hash_Table *top_level_consts;
 
+  Scheme_Hash_Table *inline_variants;
+
   int maybe_values_argument; /* triggers an approximation for clock increments */
 
   /* Set by expression optimization: */
@@ -107,6 +111,8 @@ struct Optimize_Info
 typedef struct Optimize_Info_Sequence {
   int init_flatten_fuel, min_flatten_fuel;
 } Optimize_Info_Sequence;
+
+static Scheme_Object *optimize_expr(Scheme_Object *expr, Optimize_Info *info, int context);
 
 static void merge_lambda_arg_types(Scheme_Lambda *lam1, Scheme_Lambda *lam2);
 static void check_lambda_arg_types_registered(Scheme_Lambda *lam, int app_count);
@@ -280,8 +286,8 @@ char *scheme_optimize_context_to_string(Scheme_Object *context)
       prefix = "";
     }
 
-    if (SAME_TYPE(SCHEME_TYPE(linklet), scheme_linbklet_type)) {
-      mctx = scheme_display_to_string(((Scheme_linklet *)linklet)->name, NULL);
+    if (SAME_TYPE(SCHEME_TYPE(linklet), scheme_linklet_type)) {
+      mctx = scheme_display_to_string(((Scheme_Linklet *)linklet)->name, NULL);
       mprefix = " in module: ";
     } else {
       mctx = "";
@@ -356,15 +362,15 @@ static Scheme_Object *get_struct_proc_shape(Scheme_Object *rator, Optimize_Info 
   Scheme_Object *c;
 
   if (info
-      && (info->top_level_consts || info->cp->inline_variants)
+      && (info->top_level_consts || info->inline_variants)
       && SAME_TYPE(SCHEME_TYPE(rator), scheme_ir_toplevel_type)) {
     int pos;
     pos = SCHEME_IR_TOPLEVEL_POS(rator);
     c = NULL;
     if (info->top_level_consts)
       c = scheme_hash_get(info->top_level_consts, scheme_make_integer(pos));
-    if (!c && info->cp->inline_variants)
-      c = scheme_hash_get(info->cp->inline_variants, scheme_make_integer(pos));
+    if (!c && info->inline_variants)
+      c = scheme_hash_get(info->inline_variants, scheme_make_integer(pos));
     if (c && SAME_TYPE(SCHEME_TYPE(c), scheme_struct_proc_shape_type)) {
       return c;
     }
@@ -1147,11 +1153,14 @@ static int is_constant_super(Scheme_Object *arg,
           }
         }
       } else if (SAME_TYPE(SCHEME_TYPE(name), scheme_ir_toplevel_type)) {
+        scheme_signal_error("not yet implemented");
+#if 0
         intptr_t k;
         if (scheme_decode_struct_shape(((Scheme_IR_Toplevel *)name)->shape, &k)) {
           if ((k & STRUCT_PROC_SHAPE_MASK) == STRUCT_PROC_SHAPE_STRUCT)
             return (k >> STRUCT_PROC_SHAPE_SHIFT) + 1;
         }
+#endif
       }
     }
     if (top_level_table) {
@@ -1923,7 +1932,7 @@ static Scheme_Object *apply_inlined(Scheme_Lambda *lam, Optimize_Info *info,
     sub_info = optimize_info_add_frame(info, 0, 0, 0);
     if (!single_use || lam->ir_info->is_dup)
       sub_info->inline_fuel >>= 1;
-    p = scheme_optimize_expr(p, sub_info, context);
+    p = optimize_expr(p, sub_info, context);
     info->single_result = sub_info->single_result;
     info->preserves_marks = sub_info->preserves_marks;
     optimize_info_done(sub_info, NULL);
@@ -2091,9 +2100,9 @@ Scheme_Object *optimize_for_inline(Optimize_Info *info, Scheme_Object *le, int a
       int pos;
       pos = SCHEME_IR_TOPLEVEL_POS(le);
       single_use = 0;
-      if (info->cp->inline_variants) {
+      if (info->inline_variants) {
         Scheme_Object *iv;
-        iv = scheme_hash_get(info->cp->inline_variants, scheme_make_integer(pos));
+        iv = scheme_hash_get(info->inline_variants, scheme_make_integer(pos));
         if (iv && SCHEME_TRUEP(iv)) {
           Scheme_Hash_Table *iv_ht = NULL;
           if (SCHEME_HASHTP(iv)) {
@@ -2112,11 +2121,11 @@ Scheme_Object *optimize_for_inline(Optimize_Info *info, Scheme_Object *le, int a
               if (!iv_ht) {
                 iv_ht = scheme_make_hash_table(SCHEME_hash_ptr);
                 scheme_hash_set(iv_ht, scheme_false, orig_iv);
-                scheme_hash_set(info->cp->inline_variants, scheme_make_integer(pos), (Scheme_Object *)iv_ht);
+                scheme_hash_set(info->inline_variants, scheme_make_integer(pos), (Scheme_Object *)iv_ht);
               }
               scheme_hash_set(iv_ht, scheme_make_integer(argc), iv ? iv : scheme_false);
             } else
-              scheme_hash_set(info->cp->inline_variants, scheme_make_integer(pos), iv ? iv : scheme_false);
+              scheme_hash_set(info->inline_variants, scheme_make_integer(pos), iv ? iv : scheme_false);
           }
           if (iv && SCHEME_TRUEP(iv)) {
             le = iv;
@@ -2456,7 +2465,7 @@ static Scheme_Object *check_app_let_rator(Scheme_Object *app, Scheme_Object *rat
   reset_rator(app, rator);
   orig_rator = replace_tail_inside(app, inside, orig_rator);
 
-  return scheme_optimize_expr(orig_rator, info, context);
+  return optimize_expr(orig_rator, info, context);
 }
 
 static int is_nonmutating_nondependant_primitive(Scheme_Object *rator, int n)
@@ -3017,12 +3026,12 @@ static Scheme_Object *optimize_application(Scheme_Object *o, Optimize_Info *info
   /* Check for (apply ... (list ...)) early: */
   le = direct_apply((Scheme_Object *)app, app->args[0], app->args[app->num_args], info);
   if (le)
-    return scheme_optimize_expr(le, info, context);
+    return optimize_expr(le, info, context);
 
   if (app->num_args == 3) {
     le = call_with_immed_mark(app->args[0], app->args[1], app->args[2], app->args[3], info);
     if (le)
-      return scheme_optimize_expr(le, info, context);
+      return optimize_expr(le, info, context);
   }
 
   le = check_app_let_rator(o, app->args[0], info, app->num_args, context);
@@ -3049,7 +3058,7 @@ static Scheme_Object *optimize_application(Scheme_Object *o, Optimize_Info *info
     }
 
     optimize_info_seq_step(info, &info_seq);
-    le = scheme_optimize_expr(app->args[i], info, sub_context);
+    le = optimize_expr(app->args[i], info, sub_context);
     app->args[i] = le;
     if (info->escapes) {
       int j;
@@ -3473,7 +3482,7 @@ static Scheme_Object *check_ignored_call_cc(Scheme_Object *rator, Scheme_Object 
                   
                   expr = (Scheme_Object *)seq;
                 }                
-                return scheme_optimize_expr(expr, info, context);
+                return optimize_expr(expr, info, context);
               }
           }
       }
@@ -3522,7 +3531,7 @@ static Scheme_Object *optimize_application2(Scheme_Object *o, Optimize_Info *inf
 
   sub_context = OPT_CONTEXT_SINGLED;
 
-  le = scheme_optimize_expr(app->rator, info, sub_context);
+  le = optimize_expr(app->rator, info, sub_context);
   app->rator = le;
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
@@ -3547,7 +3556,7 @@ static Scheme_Object *optimize_application2(Scheme_Object *o, Optimize_Info *inf
 
   optimize_info_seq_step(info, &info_seq);
 
-  le = scheme_optimize_expr(app->rand, info, sub_context);
+  le = optimize_expr(app->rand, info, sub_context);
   app->rand = le;
   optimize_info_seq_done(info, &info_seq);
   if (info->escapes) {
@@ -3865,11 +3874,11 @@ static Scheme_Object *optimize_application3(Scheme_Object *o, Optimize_Info *inf
   /* Check for (apply ... (list ...)) early: */
   le = direct_apply((Scheme_Object *)app, app->rator, app->rand2, info);
   if (le)
-    return scheme_optimize_expr(le, info, context);
+    return optimize_expr(le, info, context);
 
   le = call_with_immed_mark(app->rator, app->rand1, app->rand2, NULL, info);
   if (le)
-    return scheme_optimize_expr(le, info, context);
+    return optimize_expr(le, info, context);
 
   le = check_app_let_rator(o, app->rator, info, 2, context);
   if (le) 
@@ -3883,7 +3892,7 @@ static Scheme_Object *optimize_application3(Scheme_Object *o, Optimize_Info *inf
 
   sub_context = OPT_CONTEXT_SINGLED;
 
-  le = scheme_optimize_expr(app->rator, info, sub_context);
+  le = optimize_expr(app->rator, info, sub_context);
   app->rator = le;
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
@@ -3910,7 +3919,7 @@ static Scheme_Object *optimize_application3(Scheme_Object *o, Optimize_Info *inf
 
   optimize_info_seq_step(info, &info_seq);
 
-  le = scheme_optimize_expr(app->rand1, info, sub_context);
+  le = optimize_expr(app->rand1, info, sub_context);
   app->rand1 = le;
   if (info->escapes) {
     info->size += 1;
@@ -3927,7 +3936,7 @@ static Scheme_Object *optimize_application3(Scheme_Object *o, Optimize_Info *inf
 
   optimize_info_seq_step(info, &info_seq);
 
-  le = scheme_optimize_expr(app->rand2, info, sub_context);
+  le = optimize_expr(app->rand2, info, sub_context);
   app->rand2 = le;
   optimize_info_seq_done(info, &info_seq);
   if (info->escapes) {
@@ -4436,10 +4445,10 @@ static Scheme_Object *optimize_sequence(Scheme_Object *o, Optimize_Info *info, i
 
     if (sub_opt) {
       optimize_info_seq_step(info, &info_seq);
-      le = scheme_optimize_expr(s->array[i], info,
-                                ((i + 1 == count)
-                                 ? scheme_optimize_tail_context(context)
-                                 : 0));
+      le = optimize_expr(s->array[i], info,
+                         ((i + 1 == count)
+                          ? scheme_optimize_tail_context(context)
+                          : 0));
     } else
       le = s->array[i];
 
@@ -4891,7 +4900,7 @@ static Scheme_Object *optimize_branch(Scheme_Object *o, Optimize_Info *info, int
 
   optimize_info_seq_init(info, &info_seq);
 
-  t = scheme_optimize_expr(t, info, OPT_CONTEXT_BOOLEAN | OPT_CONTEXT_SINGLED);
+  t = optimize_expr(t, info, OPT_CONTEXT_BOOLEAN | OPT_CONTEXT_SINGLED);
 
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
@@ -4953,9 +4962,9 @@ static Scheme_Object *optimize_branch(Scheme_Object *o, Optimize_Info *info, int
       info->size -= 1;
 
       if (SCHEME_FALSEP(t2))
-        xb = scheme_optimize_expr(fb, info, scheme_optimize_tail_context(context));
+        xb = optimize_expr(fb, info, scheme_optimize_tail_context(context));
       else
-        xb = scheme_optimize_expr(tb, info, scheme_optimize_tail_context(context));
+        xb = optimize_expr(tb, info, scheme_optimize_tail_context(context));
       
       optimize_info_seq_done(info, &info_seq);
       return replace_tail_inside(xb, inside, t);
@@ -4974,7 +4983,7 @@ static Scheme_Object *optimize_branch(Scheme_Object *o, Optimize_Info *info, int
   then_info = optimize_info_add_frame(info, 0, 0, 0);
   add_types_for_t_branch(t, then_info, 5);
   then_info_init = optimize_info_add_frame(then_info, 0, 0, 0);
-  tb = scheme_optimize_expr(tb, then_info, scheme_optimize_tail_context(context));
+  tb = optimize_expr(tb, then_info, scheme_optimize_tail_context(context));
   optimize_info_done(then_info, NULL);
 
   info->escapes = 0;
@@ -4988,7 +4997,7 @@ static Scheme_Object *optimize_branch(Scheme_Object *o, Optimize_Info *info, int
   else_info = optimize_info_add_frame(info, 0, 0, 0);
   add_types_for_f_branch(t, else_info, 5);
   else_info_init = optimize_info_add_frame(else_info, 0, 0, 0);
-  fb = scheme_optimize_expr(fb, else_info, scheme_optimize_tail_context(context));
+  fb = optimize_expr(fb, else_info, scheme_optimize_tail_context(context));
   optimize_info_done(else_info, NULL);
 
   if (then_info->escapes && else_info->escapes) {
@@ -5123,7 +5132,7 @@ static Scheme_Object *optimize_wcm(Scheme_Object *o, Optimize_Info *info, int co
 
   optimize_info_seq_init(info, &info_seq);
 
-  k = scheme_optimize_expr(wcm->key, info, OPT_CONTEXT_SINGLED);
+  k = optimize_expr(wcm->key, info, OPT_CONTEXT_SINGLED);
 
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
@@ -5132,7 +5141,7 @@ static Scheme_Object *optimize_wcm(Scheme_Object *o, Optimize_Info *info, int co
 
   optimize_info_seq_step(info, &info_seq);
 
-  v = scheme_optimize_expr(wcm->val, info, OPT_CONTEXT_SINGLED);
+  v = optimize_expr(wcm->val, info, OPT_CONTEXT_SINGLED);
 
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
@@ -5148,7 +5157,7 @@ static Scheme_Object *optimize_wcm(Scheme_Object *o, Optimize_Info *info, int co
 
   optimize_info_seq_step(info, &info_seq);
 
-  b = scheme_optimize_expr(wcm->body, info, scheme_optimize_tail_context(context));
+  b = optimize_expr(wcm->body, info, scheme_optimize_tail_context(context));
 
   if (init_vclock == info->vclock) {
     /* body has no effect itself, so we can rewind the clock */
@@ -5199,7 +5208,7 @@ define_values_optimize(Scheme_Object *data, Optimize_Info *info, int context)
   Scheme_Object *val = SCHEME_VEC_ELS(data)[1];
 
   optimize_info_used_top(info);
-  val = scheme_optimize_expr(val, info, 0);
+  val = optimize_expr(val, info, 0);
 
   SCHEME_VEC_ELS(data)[0] = vars;
   SCHEME_VEC_ELS(data)[1] = val;
@@ -5216,7 +5225,7 @@ set_optimize(Scheme_Object *data, Optimize_Info *info, int context)
   var = sb->var;
   val = sb->val;
 
-  val = scheme_optimize_expr(val, info, OPT_CONTEXT_SINGLED);
+  val = optimize_expr(val, info, OPT_CONTEXT_SINGLED);
 
   if (info->escapes)
       return val;
@@ -5338,7 +5347,7 @@ apply_values_optimize(Scheme_Object *data, Optimize_Info *info, int context)
 
   optimize_info_seq_init(info, &info_seq);
 
-  f = scheme_optimize_expr(f, info, OPT_CONTEXT_SINGLED);
+  f = optimize_expr(f, info, OPT_CONTEXT_SINGLED);
 
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
@@ -5346,7 +5355,7 @@ apply_values_optimize(Scheme_Object *data, Optimize_Info *info, int context)
   }
   optimize_info_seq_step(info, &info_seq);
 
-  e = scheme_optimize_expr(e, info, 0);
+  e = optimize_expr(e, info, 0);
 
   optimize_info_seq_done(info, &info_seq);
 
@@ -5395,14 +5404,14 @@ with_immed_mark_optimize(Scheme_Object *data, Optimize_Info *info, int context)
 
   optimize_info_seq_init(info, &info_seq);
 
-  key = scheme_optimize_expr(wcm->key, info, OPT_CONTEXT_SINGLED);
+  key = optimize_expr(wcm->key, info, OPT_CONTEXT_SINGLED);
   optimize_info_seq_step(info, &info_seq);
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
     return key;
   }
 
-  val = scheme_optimize_expr(wcm->val, info, OPT_CONTEXT_SINGLED);
+  val = optimize_expr(wcm->val, info, OPT_CONTEXT_SINGLED);
   optimize_info_seq_step(info, &info_seq);
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
@@ -5418,7 +5427,7 @@ with_immed_mark_optimize(Scheme_Object *data, Optimize_Info *info, int context)
   var->optimize_used = 0;
   var->optimize.init_kclock = info->kclock;
   
-  body = scheme_optimize_expr(SCHEME_CDR(wcm->body), body_info, 0);
+  body = optimize_expr(SCHEME_CDR(wcm->body), body_info, 0);
   
   optimize_info_done(body_info, NULL);
 
@@ -5468,7 +5477,7 @@ case_lambda_optimize(Scheme_Object *expr, Optimize_Info *info, int context)
 
   for (i = 0; i < seq->count; i++) {
     le = seq->array[i];
-    le = scheme_optimize_expr(le, info, 0);
+    le = optimize_expr(le, info, 0);
     seq->array[i] = le;
   }
 
@@ -5517,11 +5526,11 @@ static Scheme_Object *begin0_optimize(Scheme_Object *obj, Optimize_Info *info, i
 
     optimize_info_seq_step(info, &info_seq);
 
-    le = scheme_optimize_expr(s->array[i], 
-                              info,
-                              (!i
-                               ? scheme_optimize_result_context(context)
-                               : 0));
+    le = optimize_expr(s->array[i], 
+                       info,
+                       (!i
+                        ? scheme_optimize_result_context(context)
+                        : 0));
 
     if (!i) {
       single_result = info->single_result;
@@ -6379,7 +6388,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
           b3->tbranch = scheme_true;
           b3->fbranch = b->fbranch;
 
-          form = scheme_optimize_expr((Scheme_Object *)b3, info, context);
+          form = optimize_expr((Scheme_Object *)b3, info, context);
 
           return form;
         }
@@ -6397,7 +6406,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
     if (SAME_OBJ((Scheme_Object *)irlv->vars[0], irlv->body)) {
       body = irlv->value;
       body = ensure_single_value(body);
-      return scheme_optimize_expr(body, info, context);
+      return optimize_expr(body, info, context);
     }
   }
 
@@ -6434,7 +6443,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
           irlv->value = seq->array[seq->count - 1];
           seq->array[seq->count - 1] = (Scheme_Object *)head;
 
-          return scheme_optimize_expr((Scheme_Object *)seq, info, context);
+          return optimize_expr((Scheme_Object *)seq, info, context);
         }
       }
     } while (try_again);
@@ -6528,14 +6537,14 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
       pre_sclock = rhs_info->sclock;
       if (!found_escapes) {
         optimize_info_seq_step(rhs_info, &info_seq);
-        value = scheme_optimize_expr(pre_body->value, rhs_info,
-                                     (((pre_body->count == 1)
-                                       ? OPT_CONTEXT_SINGLED
-                                       : 0)
-                                      | (((pre_body->count == 1)
-                                          && !pre_body->vars[0]->non_app_count)
-                                         ? (pre_body->vars[0]->use_count << OPT_CONTEXT_APP_COUNT_SHIFT)
-                                         : 0)));
+        value = optimize_expr(pre_body->value, rhs_info,
+                              (((pre_body->count == 1)
+                                ? OPT_CONTEXT_SINGLED
+                                : 0)
+                               | (((pre_body->count == 1)
+                                   && !pre_body->vars[0]->non_app_count)
+                                  ? (pre_body->vars[0]->use_count << OPT_CONTEXT_APP_COUNT_SHIFT)
+                                  : 0)));
         pre_body->value = value;
         if (rhs_info->escapes)
           found_escapes = 1;
@@ -6846,14 +6855,14 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
             rhs_info->use_psize = info->use_psize;
 
             optimize_info_seq_step(rhs_info, &info_seq);
-            value = scheme_optimize_expr(self_value, rhs_info,
-                                         (((irlv->count == 1)
-                                           ? OPT_CONTEXT_SINGLED
-                                           : 0)
-                                          | (((irlv->count == 1)
-                                              && !irlv->vars[0]->non_app_count)
-                                             ? (irlv->vars[0]->use_count << OPT_CONTEXT_APP_COUNT_SHIFT)
-                                             : 0)));
+            value = optimize_expr(self_value, rhs_info,
+                                  (((irlv->count == 1)
+                                    ? OPT_CONTEXT_SINGLED
+                                    : 0)
+                                   | (((irlv->count == 1)
+                                       && !irlv->vars[0]->non_app_count)
+                                      ? (irlv->vars[0]->use_count << OPT_CONTEXT_APP_COUNT_SHIFT)
+                                      : 0)));
             
             if (!OPT_DISCOURAGE_EARLY_INLINE)
               --rhs_info->letrec_not_twice;
@@ -6963,7 +6972,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
   optimize_info_seq_done(body_info, &info_seq);
 
   if (!found_escapes) {
-    body = scheme_optimize_expr(body, body_info, scheme_optimize_tail_context(context));
+    body = optimize_expr(body, body_info, scheme_optimize_tail_context(context));
   } else {
     body = scheme_false;
     body_info->single_result = 1;
@@ -7255,7 +7264,7 @@ optimize_lambda(Scheme_Object *_lam, Optimize_Info *info, int context)
     }
   }
 
-  code = scheme_optimize_expr(lam->body, info, 0);
+  code = optimize_expr(lam->body, info, 0);
 
   propagate_used_variables(info);
 
@@ -7547,20 +7556,19 @@ static int is_general_lambda(Scheme_Object *e, Optimize_Info *info)
   return 0;
 }
 
-void install_definition(Scheme_Object **bodies, int pos, Scheme_Object *old_defn, int name_pos, Scheme_Object *rhs)
+void install_definition(Scheme_Object *bodies, int pos, Scheme_Object *old_defn, int name_pos, Scheme_Object *rhs)
 {
   Scheme_Object *def;
 
-  var = scheme_make_pair(var, scheme_null);
   def = scheme_make_vector(2, NULL);
   SCHEME_DEFN_RHS(def) = rhs;
-  SCHEME_DEFN_VAR_(def, 0) = SCHEME_DEFN_VAR(old_def)[name_pos];
+  SCHEME_DEFN_VAR_(def, 0) = SCHEME_DEFN_VAR_(old_defn, name_pos);
   def->type = scheme_define_values_type;
 
-  bodies[pos] = def;
+  SCHEME_VEC_ELS(bodies)[pos] = def;
 }
 
-int split_define_values(Scheme_Object *defn, int n, Scheme_Object **bodies, int offset)
+int split_define_values(Scheme_Object *defn, int n, Scheme_Object *bodies, int offset)
 {
   Scheme_Object *e = SCHEME_DEFN_RHS(defn);
   
@@ -7656,12 +7664,13 @@ int split_define_values(Scheme_Object *defn, int n, Scheme_Object **bodies, int 
 
 Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline)
 {
-  Scheme_Object *e, *vars;
+  Scheme_Object *e;
   int start_simultaneous = 0, i_m, cnt;
   Scheme_Object *cl_first = NULL, *cl_last = NULL;
   Scheme_Hash_Table *consts = NULL, *fixed_table = NULL, *re_consts = NULL;
   Scheme_Hash_Table *originals = NULL;
   int cont, inline_fuel, is_proc_def;
+  Optimize_Info *info;
   Optimize_Info_Sequence info_seq;
 
   info = optimize_info_create(linklet, enforce_const, can_inline);
@@ -7669,7 +7678,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
 
   optimize_info_seq_init(info, &info_seq);
 
-  cnt = linklet->num_bodies;
+  cnt = SCHEME_VEC_SIZE(linklet->bodies);
 
   /* First, flatten `(define-values (x ...) (values e ...))'
      to `(define (x) e) ...' when possible. */
@@ -7693,7 +7702,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
       int j = 0;
       new_bodies = scheme_make_vector(cnt+inc, scheme_false);
       for (i_m = 0; i_m < cnt; i_m++) {
-        e = SCHEME_VEC_ELS(linklet->bodies)[im];
+        e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
         if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
           int n;
           n = SCHEME_DEFN_VAR_COUNT(e);
@@ -7718,13 +7727,13 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
          size estimate, which is used to discourage early loop unrolling
          at the expense of later inlining. */
       for (i_m = 0; i_m < cnt; i_m++) {
-        e = linklet->bodies[i_m];
+        e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
         if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type))  {
           int n;
 
           n = SCHEME_DEFN_VAR_COUNT(e);
           if ((n == 1) && SCHEME_LAMBDAP(SCHEME_DEFN_RHS(e)))  {
-            Scheme_IR_Toplevel *var = (Scheme_IR_Toplevel *)SCHEME_DEFN_VAR(e, 1);
+            Scheme_IR_Toplevel *var = SCHEME_DEFN_VAR(e, 1);
 
             if (!(SCHEME_IR_TOPLEVEL_FLAGS(var) & SCHEME_IR_TOPLEVEL_MUTATED)) {
               if (!consts)
@@ -7744,13 +7753,13 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
 
   for (i_m = 0; i_m < cnt; i_m++) {
     /* Optimize this expression: */
-    e = linklet->bodies[i_m];
+    e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
 
     is_proc_def = 0;
     if (OPT_DISCOURAGE_EARLY_INLINE && info->enforce_const) {
       if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
         Scheme_Object *e2;
-        e2 = SCHEME_DEN_RHS(e);
+        e2 = SCHEME_DEFN_RHS(e);
         if (is_general_lambda(e2, info))
           is_proc_def = 1;
       }
@@ -7764,7 +7773,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
     } else
       inline_fuel = 0;
     optimize_info_seq_step(info, &info_seq);
-    e = scheme_optimize_expr(e, info, 0);
+    e = optimize_expr(e, info, 0);
     if (is_proc_def && OPT_DISCOURAGE_EARLY_INLINE) {
       info->use_psize = 0;
       info->inline_fuel = inline_fuel;
@@ -7778,7 +7787,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
       if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
 	int n, cnst = 0, sproc = 0, sstruct = 0;
         Simple_Stuct_Type_Info stinfo;
-        Scheme_Obejct *defn = e;
+        Scheme_Object *defn = e;
 
         n = SCHEME_DEFN_VAR_COUNT(defn);
 	e = SCHEME_DEFN_RHS(defn);
@@ -7906,7 +7915,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
             old_sz = 0;
 
           optimize_info_seq_step(info, &info_seq);
-          e = scheme_optimize_expr(e, info, 0);
+          e = optimize_expr(e, info, 0);
 	  SCHEME_VEC_ELS(linklet->bodies)[start_simultaneous] = e;
 
           if (re_consts) {
@@ -7980,9 +7989,9 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
     /* When binding is not inlinable/propagatable, unless it's
        set!ed, it is constant after evaluating the definition. We
        map the top-level position to indicate constantness. */
-    e = linklet->bodies[i_m];
+    e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
     if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
-      int i;
+      int i, n = SCHEME_DEFN_VAR_COUNT(e);
       Scheme_IR_Toplevel *var;
       
       for (i = 0; i < n; i++) {
@@ -7991,7 +8000,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
         /* Test for set!: */
         if (!(SCHEME_IR_TOPLEVEL_FLAGS(var) & SCHEME_IR_TOPLEVEL_MUTATED)) {
           if (!info->top_level_consts
-              || ! scheme_hash_ref(info->top_level_consts, (Scheme_Object *)var)) {
+              || !scheme_hash_get(info->top_level_consts, (Scheme_Object *)var)) {
             if (!fixed_table) {
               fixed_table = scheme_make_hash_table(SCHEME_hash_ptr);
               if (!info->top_level_consts) {
@@ -8084,10 +8093,10 @@ static Scheme_Object *optimize_k(void)
   p->ku.k.p1 = NULL;
   p->ku.k.p2 = NULL;
 
-  return scheme_optimize_expr(expr, info, context);
+  return optimize_expr(expr, info, context);
 }
 
-Scheme_Object *scheme_optimize_expr(Scheme_Object *expr, Optimize_Info *info, int context)
+Scheme_Object *optimize_expr(Scheme_Object *expr, Optimize_Info *info, int context)
 {
   Scheme_Type type = SCHEME_TYPE(expr);
 
@@ -8124,7 +8133,7 @@ Scheme_Object *scheme_optimize_expr(Scheme_Object *expr, Optimize_Info *info, in
       val = optimize_info_propagate_local(expr);
       if (val) {
         info->size -= 1;
-        return scheme_optimize_expr(val, info, context);
+        return optimize_expr(val, info, context);
       }
 
       val = collapse_local(expr, info, context);
@@ -8165,7 +8174,7 @@ Scheme_Object *scheme_optimize_expr(Scheme_Object *expr, Optimize_Info *info, in
 
             o->moved = 1;
 
-            val = scheme_optimize_expr(o->expr, info, context);
+            val = optimize_expr(o->expr, info, context);
 
             if (info->maybe_values_argument) {
               /* Although `val` could be counted as taking 0 time, we advance
@@ -8560,7 +8569,7 @@ static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_
 
   info->enforce_const = enforce_const;
   if (!can_inline)
-    oi->inline_fuel = -1;
+    info->inline_fuel = -1;
 
   return info;
 }

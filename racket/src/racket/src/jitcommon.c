@@ -3455,15 +3455,18 @@ static int more_common0(mz_jit_state *jitter, void *_data)
     in = jit_arg_p();
     jit_getarg_p(JIT_R0, in); /* linklet */
     in = jit_arg_p();
-    jit_getarg_p(JIT_R1, in); /* &name */
+    jit_getarg_p(JIT_R1, in); /* instance */
+    in = jit_arg_p();
+    jit_getarg_p(JIT_R2, in); /* &name */
     CHECK_LIMIT();
 
     /* Store the name where we can find it */
     mz_push_locals();
-    mz_set_local_p(JIT_R1, JIT_LOCAL2);
+    mz_set_local_p(JIT_R2, JIT_LOCAL2);
 
-    jit_prepare(1);
+    jit_prepare(2);
     jit_pusharg_p(JIT_R0);
+    jit_pusharg_p(JIT_R1);
     (void)mz_finish(scheme_linklet_run_finish);
     CHECK_LIMIT();
     mz_pop_locals();

@@ -1176,6 +1176,8 @@ typedef struct Scheme_Thread {
 
   struct Scheme_Overflow *overflow;
 
+  struct Scheme_Marshal_Tables *current_mt;
+
   struct Optimize_Info *constant_folding; /* compiler hack */
   Scheme_Object *reading_delayed; /* reader hack */
 

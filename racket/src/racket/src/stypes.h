@@ -54,7 +54,8 @@ enum {
      perspective of the compiler */
 
   scheme_linklet_bundle_type,           /* 27 */
-  scheme_linklet_directorytype,         /* 27 */
+  scheme_linklet_directory_type,        /* 27 */
+  scheme_instance_type,                 /* 27 */
 
   /* procedure types */
   scheme_prim_type,                     /* 40 */

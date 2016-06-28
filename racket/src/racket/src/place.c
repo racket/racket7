@@ -103,13 +103,13 @@ static void register_traversers(void);
 static void *place_start_proc(void *arg);
 MZ_DO_NOT_INLINE(static void *place_start_proc_after_stack(void *data_arg, void *stack_base));
 
-# define PLACE_PRIM_W_ARITY(name, func, a1, a2, env) GLOBAL_PRIM_W_ARITY(name, func, a1, a2, env)
+# define PLACE_PRIM_W_ARITY(name, func, a1, a2, env) ADD_PRIM_W_ARITY(name, func, a1, a2, env)
 
 #else
 
 SHARED_OK static int scheme_places_enabled = 0;
 
-# define PLACE_PRIM_W_ARITY(name, func, a1, a2, env) GLOBAL_PRIM_W_ARITY(name, not_implemented, a1, a2, env)
+# define PLACE_PRIM_W_ARITY(name, func, a1, a2, env) ADD_PRIM_W_ARITY(name, not_implemented, a1, a2, env)
 
 static Scheme_Object *not_implemented(int argc, Scheme_Object **argv)
 {
@@ -135,8 +135,8 @@ void scheme_init_place(Scheme_Startup_Env *env)
 
   scheme_switch_prim_instance(env, "#%place");
 
-  GLOBAL_PRIM_W_ARITY("place-enabled?",       scheme_place_enabled,   0, 0, env);
-  GLOBAL_PRIM_W_ARITY("place-shared?",        scheme_place_shared,    1, 1, env);
+  ADD_PRIM_W_ARITY("place-enabled?",       scheme_place_enabled,   0, 0, env);
+  ADD_PRIM_W_ARITY("place-shared?",        scheme_place_shared,    1, 1, env);
   PLACE_PRIM_W_ARITY("dynamic-place",         scheme_place,           5, 5, env);
   PLACE_PRIM_W_ARITY("place-pumper-threads",  place_pumper_threads,   1, 2, env);
   PLACE_PRIM_W_ARITY("place-sleep",           place_sleep,     1, 1, env);
@@ -152,11 +152,6 @@ void scheme_init_place(Scheme_Startup_Env *env)
   PLACE_PRIM_W_ARITY("place-dead-evt",        make_place_dead, 1, 1, env);
 
   scheme_restore_prim_instance(env);
-
-  /* Treat place creation as "unsafe", since the new place starts with
-     permissive guards that can access unsafe features that affect
-     existing places. */
-  scheme_protect_primitive_provide(plenv, scheme_intern_symbol("dynamic-place"));
 }
 
 void scheme_init_place_per_place()

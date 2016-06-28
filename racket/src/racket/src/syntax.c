@@ -43,13 +43,12 @@ static Scheme_Object *syntax_p(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_to_datum(int argc, Scheme_Object **argv);
 static Scheme_Object *datum_to_syntax(int argc, Scheme_Object **argv);
 
+static Scheme_Object *syntax_e(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_line(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_col(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_pos(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_span(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_src(int argc, Scheme_Object **argv);
-static Scheme_Object *syntax_to_list(int argc, Scheme_Object **argv);
-static Scheme_Object *syntax_tainted_p(int argc, Scheme_Object **argv);
 
 static Scheme_Object *syntax_property(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_property_keys(int argc, Scheme_Object **argv);
@@ -64,10 +63,6 @@ static void register_traversers(void);
 #endif
 
 #define CONS scheme_make_pair
-
-/* "substx" means that we need to propagate marks to nested syntax objects */
-#define HAS_SUBSTX(obj) (SCHEME_PAIRP(obj) || SCHEME_VECTORP(obj) || SCHEME_BOXP(obj) || prefab_p(obj) || SCHEME_HASHTRP(obj))
-#define HAS_CHAPERONE_SUBSTX(obj) (HAS_SUBSTX(obj) || (SCHEME_NP_CHAPERONEP(obj) && HAS_SUBSTX(SCHEME_CHAPERONE_VAL(obj))))
 
 XFORM_NONGCING static int prefab_p(Scheme_Object *o)
 {
@@ -84,6 +79,9 @@ XFORM_NONGCING static int prefab_p(Scheme_Object *o)
 #define MUTATE_STX_OBJ        1
 
 #define STX_ASSERT(x) MZ_ASSERT(x)
+
+#define HAS_SUBSTX(obj) (SCHEME_PAIRP(obj) || SCHEME_VECTORP(obj) || SCHEME_BOXP(obj) || prefab_p(obj) || SCHEME_HASHTRP(obj))
+#define HAS_CHAPERONE_SUBSTX(obj) (HAS_SUBSTX(obj) || (SCHEME_NP_CHAPERONEP(obj) && HAS_SUBSTX(SCHEME_CHAPERONE_VAL(obj))))
 
 /*========================================================================*/
 /*                           initialization                               */
@@ -109,7 +107,7 @@ void scheme_init_stx(Scheme_Startup_Env *env)
   ADD_FOLDING_PRIM("syntax->datum", syntax_to_datum, 1, 1, 1, env);
   ADD_IMMED_PRIM("datum->syntax", datum_to_syntax, 2, 5, env);
   
-  ADD_FOLDING_PRIM_UNARY_INLINED("syntax-e", scheme_checked_syntax_e, 1, 1, 1, env);
+  ADD_FOLDING_PRIM("syntax-e", syntax_e, 1, 1, 1, env);
 
   ADD_FOLDING_PRIM("syntax-line"    , syntax_line   , 1, 1, 1, env);
   ADD_FOLDING_PRIM("syntax-column"  , syntax_col    , 1, 1, 1, env);
@@ -137,10 +135,10 @@ void scheme_init_stx(Scheme_Startup_Env *env)
   scheme_paren_shape_symbol = scheme_intern_symbol("paren-shape");
 
   REGISTER_SO(scheme_paren_shape_preserve_square);
-  scheme_paren_shape_preserve_square = make_preserved_property_value(scheme_make_ascii_character('['));
+  scheme_paren_shape_preserve_square = scheme_make_ascii_character('[');
 
   REGISTER_SO(scheme_paren_shape_preserve_curly);
-  scheme_paren_shape_preserve_curly = make_preserved_property_value(scheme_make_ascii_character('{'));
+  scheme_paren_shape_preserve_curly = scheme_make_ascii_character('{');
 
   REGISTER_SO(scheme_source_stx_props);
   REGISTER_SO(square_stx_props);
@@ -165,7 +163,6 @@ Scheme_Object *scheme_make_stx(Scheme_Object *val,
 
   stx = MALLOC_ONE_TAGGED(Scheme_Stx);
   stx->so.type = scheme_stx_type;
-  STX_KEY(stx) = HAS_SUBSTX(val) ? STX_SUBSTX_FLAG : 0;
   stx->val = val;
   stx->srcloc = srcloc;
   stx->props = props;
@@ -280,108 +277,6 @@ int scheme_stx_proper_list_length(Scheme_Object *list)
   return -1;
 }
 
-#ifdef DO_STACK_CHECK
-static Scheme_Object *flatten_syntax_list_k(void)
-{
-  Scheme_Thread *p = scheme_current_thread;
-  Scheme_Object *l = (Scheme_Object *)p->ku.k.p1;
-  int *r = (int *)p->ku.k.p2;
-
-  p->ku.k.p1 = NULL;
-  p->ku.k.p2 = NULL;
-
-  return scheme_flatten_syntax_list(l, r);
-}
-#endif
-
-Scheme_Object *scheme_flatten_syntax_list(Scheme_Object *lst, int *islist)
-{
-  Scheme_Object *l = lst, *lflat, *first, *last;
-
-  /* Check whether the list ends in a null: */
-  while (SCHEME_PAIRP(l)) {
-    l = SCHEME_CDR(l);
-  }
-
-  if (SCHEME_NULLP(l)) {
-    /* Yes. We're done: */
-    if (islist)
-      *islist = 1;
-    return lst;
-  }
-
-  if (islist)
-    *islist = 0;
-
-  lflat = NULL;
-
-  /* Is it a syntax object, possibly with a list? */
-  if (SCHEME_STXP(l)) {
-    l = scheme_stx_content(l);
-    if (SCHEME_NULLP(l) || SCHEME_PAIRP(l)) {
-      int lislist;
-
-      lflat = NULL;
-
-#ifdef DO_STACK_CHECK
-      {
-# include "mzstkchk.h"
-	{
-	  Scheme_Thread *p = scheme_current_thread;
-	  int *r;
-
-	  r = (int *)scheme_malloc_atomic(sizeof(int));
-
-	  p->ku.k.p1 = (void *)l;
-	  p->ku.k.p2 = (void *)r;
-
-	  lflat = scheme_handle_stack_overflow(flatten_syntax_list_k);
-
-	  lislist = *r;
-	}
-      }
-#endif
-
-      if (!lflat)
-	lflat = scheme_flatten_syntax_list(l, &lislist);
-
-      if (!lislist) {
-	/* Not a list. Can't flatten this one. */
-	return lst;
-      }
-    } else {
-      /* Not a syntax list. No chance of flattening. */
-      return lst;
-    }
-  } else {
-    /* No. No chance of flattening, then. */
-    return lst;
-  }
-
-  /* Need to flatten, end with lflat */
-
-  if (islist)
-    *islist = 1;
-
-  first = last = NULL;
-  for (l = lst; SCHEME_PAIRP(l); l = SCHEME_CDR(l)) {
-    Scheme_Object *p;
-    p = scheme_make_pair(SCHEME_CAR(l), scheme_null);
-    if (last)
-      SCHEME_CDR(last) = p;
-    else
-      first = p;
-    last = p;
-  }
-
-  if (last)
-    SCHEME_CDR(last) = lflat;
-  else
-    first = lflat;
-
-  return first;
-}
-
 /*========================================================================*/
 /*                           syntax->datum                                */
 /*========================================================================*/
@@ -401,8 +296,7 @@ static Scheme_Object *syntax_to_datum_k(void)
 static Scheme_Object *syntax_to_datum_inner(Scheme_Object *o)
 {
   Scheme_Stx *stx = (Scheme_Stx *)o;
-  Scheme_Object *v, *result, *converted_wraps = NULL;
-  int add_taint = 0;
+  Scheme_Object *v, *result;
 
 #ifdef DO_STACK_CHECK
   {
@@ -435,7 +329,7 @@ static Scheme_Object *syntax_to_datum_inner(Scheme_Object *o)
       v = SCHEME_CDR(v);
     }
     if (!SCHEME_NULLP(v)) {
-      v = syntax_to_datum_inner(v, with_scopes, mt);
+      v = syntax_to_datum_inner(v);
       SCHEME_CDR(last) = v;
     }
 
@@ -522,7 +416,7 @@ static Scheme_Object *datum_to_syntax_inner(Scheme_Object *o,
 					    Scheme_Stx *stx_src,
 					    Scheme_Hash_Table *ht)
 {
-  Scheme_Object *result;
+  Scheme_Object *result, *hashed;
 
   if (SCHEME_STXP(o))
     return o;
@@ -555,8 +449,6 @@ static Scheme_Object *datum_to_syntax_inner(Scheme_Object *o,
       hashed = NULL;
   } else
     hashed = NULL;
-
-  srcloc_vec = scheme_false;
 
   if (SCHEME_PAIRP(o)) {
     Scheme_Object *first = NULL, *last = NULL, *p;
@@ -703,16 +595,12 @@ static int quick_check_graph(Scheme_Object *o, int fuel)
     return fuel;
 }
 
-static Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o, 
-                                             Scheme_Object *stx_src,
-                                             int can_graph, int copy_props)
-     /* If stx_wraps is a hash table, then `o' includes scopes.
-	If copy_props > 0, properties are copied from src.
-	If copy_props != 1 or 0, then taint armings are copied from src, too,
-          but src must not be tainted. */
+Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o, 
+                                      Scheme_Object *stx_src,
+                                      int flags)
 {
   Scheme_Hash_Table *ht;
-  Scheme_Object *v, *code = NULL;
+  Scheme_Object *v;
 
   if (!SCHEME_FALSEP(stx_src) && !SCHEME_STXP(stx_src))
     return o;
@@ -720,7 +608,7 @@ static Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o,
   if (SCHEME_STXP(o))
     return o;
 
-  if (can_graph && !quick_check_graph(o, 10))
+  if ((flags & DTS_CAN_GRAPH) && !quick_check_graph(o, 10))
     ht = scheme_make_hash_table(SCHEME_hash_ptr);
   else
     ht = NULL;
@@ -735,6 +623,9 @@ static Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o,
                           NULL);
     return NULL;
   }
+
+  if (flags & DTS_COPY_PROPS)
+    ((Scheme_Stx *)v)->props = ((Scheme_Stx *)stx_src)->props;
 
   return v;
 }
@@ -753,7 +644,7 @@ static Scheme_Object *syntax_to_datum(int argc, Scheme_Object **argv)
   if (!SCHEME_STXP(argv[0]))
     scheme_wrong_contract("syntax->datum", "syntax?", 0, argc, argv);
     
-  return scheme_syntax_to_datum(argv[0], 0, NULL);
+  return scheme_syntax_to_datum(argv[0]);
 }
 
 static int nonneg_exact_or_false_p(Scheme_Object *o)
@@ -773,8 +664,10 @@ static Scheme_Object *datum_to_syntax(int argc, Scheme_Object **argv)
   Scheme_Object *src = scheme_false;
   Scheme_Hash_Tree *properties = NULL;
   
+  /* The first argument is accepted only for backward compatibility: */
   if (!SCHEME_FALSEP(argv[0]) && !SCHEME_STXP(argv[0]))
     scheme_wrong_contract("datum->syntax", "(or/c syntax? #f)", 0, argc, argv);
+  
   if (argc > 2) {
     int ll;
 
@@ -875,26 +768,21 @@ static Scheme_Object *datum_to_syntax(int argc, Scheme_Object **argv)
   if (SCHEME_STXP(argv[1]))
     return argv[1];
 
-  src = scheme_datum_to_syntax(argv[1], src, argv[0], 1, 0);
+  src = scheme_datum_to_syntax(argv[1], src, DTS_CAN_GRAPH);
 
   if (properties) {
     ((Scheme_Stx *)src)->props = properties;
   }
 
-  if (!SCHEME_FALSEP(argv[0]) && !is_clean(argv[0])) {
-    int mutate = MUTATE_STX_OBJ;
-    add_taint_to_stx(src, &mutate);
-  }
-
   return src;
 }
 
-Scheme_Object *scheme_checked_syntax_e(int argc, Scheme_Object **argv)
+static Scheme_Object *syntax_e(int argc, Scheme_Object **argv)
 {
   if (!SCHEME_STXP(argv[0]))
     scheme_wrong_contract("syntax-e", "syntax?", 0, argc, argv);
     
-  return scheme_stx_content(argv[0]);
+  return SCHEME_STX_VAL(argv[0]);
 }
 
 static Scheme_Object *syntax_line(int argc, Scheme_Object **argv)
@@ -998,9 +886,7 @@ static Scheme_Object *syntax_property(int argc, Scheme_Object **argv)
                             NULL);
   }
   
-  return scheme_stx_property2(argv[0],
-                              argv[1],
-                              (argc > 2) ? argv[2] : NULL);
+  return scheme_stx_property(argv[0], argv[1], NULL);
 }
 
 static Scheme_Object *syntax_property_keys(int argc, Scheme_Object **argv)
