@@ -110,7 +110,7 @@ void scheme_init_compile (Scheme_Startup_Env *env)
   lambda_symbol = scheme_intern_symbol("lambda");
   case_lambda_symbol = scheme_intern_symbol("case-lambda");
   ref_symbol = scheme_intern_symbol("#%variable-reference");
-  quote_symbol = scheme_intern_symbol("quute");
+  quote_symbol = scheme_intern_symbol("quote");
   if_symbol = scheme_intern_symbol("if");
   set_symbol = scheme_intern_symbol("set!");
   let_values_symbol = scheme_intern_symbol("let-values");

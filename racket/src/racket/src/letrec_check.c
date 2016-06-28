@@ -810,14 +810,11 @@ static Scheme_Object *letrec_check_define_values(Scheme_Object *lam, Letrec_Chec
   if (SCHEME_VEC_SIZE(lam) <= 1)
     return lam;
   else {
-    Scheme_Object *vars = SCHEME_VEC_ELS(lam)[0];
-    Scheme_Object *val = SCHEME_VEC_ELS(lam)[1];
-    SCHEME_ASSERT(SCHEME_PAIRP(vars) || SCHEME_NULLP(vars),
-                  "letrec_check_define_values: processing resolved code");
+    Scheme_Object *val = SCHEME_VEC_ELS(lam)[0];
 
     val = letrec_check_expr(val, frame, pos);
 
-    SCHEME_VEC_ELS(lam)[1] = val;
+    SCHEME_VEC_ELS(lam)[0] = val;
   }
     
   return lam;
