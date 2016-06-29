@@ -2905,7 +2905,7 @@ intptr_t scheme_count_memory(Scheme_Object *root, Scheme_Hash_Table *ht)
       s = sizeof(Scheme_Lambda);
       s += data->closure_size * sizeof(mzshort);
 #if FORCE_KNOWN_SUBPARTS
-      e = COUNT(data->code);
+      e = COUNT(data->body);
 #endif
     }
     break;
@@ -2941,9 +2941,9 @@ intptr_t scheme_count_memory(Scheme_Object *root, Scheme_Hash_Table *ht)
     break;
   case scheme_ir_let_header_type:
     {
-      Scheme_Let_Header *let = (Scheme_Let_Header *)root;
+      Scheme_IR_Let_Header *let = (Scheme_IR_Let_Header *)root;
 
-      s = sizeof(Scheme_Let_Header);
+      s = sizeof(Scheme_IR_Let_Header);
 #if FORCE_KNOWN_SUBPARTS
       e = COUNT(let->body);
 #endif
@@ -3068,8 +3068,6 @@ intptr_t scheme_count_memory(Scheme_Object *root, Scheme_Hash_Table *ht)
   case scheme_undefined_type:
     /* Only one */
     break;
-  case scheme_syntax_compiler_type:
-    break;
   case scheme_macro_type:
   case scheme_set_macro_type:
     s = sizeof(Scheme_Small_Object);
@@ -3145,9 +3143,6 @@ intptr_t scheme_count_memory(Scheme_Object *root, Scheme_Hash_Table *ht)
     break;
   case scheme_sema_type:
     s = sizeof(Scheme_Sema);
-    break;
-  case scheme_compilation_top_type:
-    s = sizeof(Scheme_Compilation_Top);
     break;
   case scheme_hash_table_type:
     {

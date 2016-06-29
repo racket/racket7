@@ -299,7 +299,7 @@ Scheme_Comp_Env *scheme_new_comp_env(Scheme_Linklet *linklet, int flags)
   Scheme_Comp_Env *env;
   Scheme_Hash_Tree *vars;
 
-  env = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
+  env = MALLOC_ONE_RT(Scheme_Comp_Env);
   SET_REQUIRED_TAG(env->type = scheme_rt_comp_env);
   env->flags = flags;
 

@@ -93,7 +93,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 2, env);
   ADD_PRIM_W_ARITY("recompile-linklet", recompile_linklet, 1, 1, env);
-  ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 1, 2, 0, -1, env);
+  ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 2, 3, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
 
@@ -187,14 +187,18 @@ static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)
 
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
 {
-  Scheme_Object *name;
+  Scheme_Object *name, *e;
 
   if (argc > 1)
     name = argv[1];
   else
     name = scheme_intern_symbol("anonymous-linklet");
-  
-  return (Scheme_Object *)compile_and_or_optimize_linklet(argv[0], NULL, name);
+
+  e = argv[0];
+  if (!SCHEME_STXP(e))
+    e = scheme_datum_to_syntax(e, scheme_false, DTS_CAN_GRAPH);
+
+  return (Scheme_Object *)compile_and_or_optimize_linklet(e, NULL, name);
 }
 
 static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
@@ -252,7 +256,6 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
   while (!SCHEME_NULLP(l)) {
     instances[len++] = (Scheme_Instance *)SCHEME_CAR(l);
     l = SCHEME_CDR(l);
-    len++;
   }
 
   if (argc > 2)
@@ -279,7 +282,7 @@ static Scheme_Object *linklet_import_variables(int argc, Scheme_Object **argv)
     for (j = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j--; ) {
       l = scheme_make_pair(SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j], l);
     }
-    ll = scheme_make_pair(ll, l);
+    ll = scheme_make_pair(l, ll);
   }
 
   return ll;
@@ -484,7 +487,7 @@ static Scheme_Object *linklet_bundle_p(int argc, Scheme_Object **argv)
 
 static Scheme_Object *linklet_bundle_to_hash(int argc, Scheme_Object **argv)
 {
-  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_directory_type))
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_bundle_type))
     scheme_wrong_contract("linklet-bundle->hash", "linklet-bundle?", 0, argc, argv);
 
   return SCHEME_PTR_VAL(argv[0]);
@@ -624,6 +627,7 @@ Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
   inst->data = data;
 
   variables = scheme_make_bucket_table(7, SCHEME_hash_ptr);
+  variables->with_home = 1;
   inst->variables = variables;
 
   ht = scheme_make_hash_tree(0);
@@ -824,7 +828,7 @@ Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instanc
       } else
         v = _scheme_eval_linked_expr_multi(body);
 
-      if (i < cnt)
+      if (i < (cnt - 1))
         scheme_ignore_result(v);
     }
 

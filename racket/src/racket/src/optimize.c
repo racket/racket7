@@ -473,9 +473,9 @@ int scheme_omittable_expr(Scheme_Object *o, int vals, int fuel, int flags,
     note_match(1, vals, warn_info);
     if ((vals == 1) || (vals < 0)) {
       if (!(flags & OMITTABLE_KEEP_VARS)
-          && ((SCHEME_TOPLEVEL_FLAGS(o) & SCHEME_TOPLEVEL_FLAGS_MASK) >= SCHEME_TOPLEVEL_READY))
+          && ((SCHEME_IR_TOPLEVEL_FLAGS((Scheme_IR_Toplevel *)o) & SCHEME_TOPLEVEL_FLAGS_MASK) >= SCHEME_TOPLEVEL_READY))
         return 1;
-      else if ((SCHEME_TOPLEVEL_FLAGS(o) & SCHEME_TOPLEVEL_FLAGS_MASK) >= SCHEME_TOPLEVEL_FIXED)
+      else if ((SCHEME_IR_TOPLEVEL_FLAGS((Scheme_IR_Toplevel *)o) & SCHEME_TOPLEVEL_FLAGS_MASK) >= SCHEME_TOPLEVEL_FIXED)
         return 1;
       else
         return 0;
@@ -5816,7 +5816,7 @@ int scheme_ir_propagate_ok(Scheme_Object *value, Optimize_Info *info)
   }
 
   if (SAME_TYPE(SCHEME_TYPE(value), scheme_ir_toplevel_type)) {
-    if ((SCHEME_TOPLEVEL_FLAGS(value) & SCHEME_TOPLEVEL_FLAGS_MASK) >= SCHEME_TOPLEVEL_FIXED)
+    if ((SCHEME_IR_TOPLEVEL_FLAGS((Scheme_IR_Toplevel *)value) & SCHEME_TOPLEVEL_FLAGS_MASK) >= SCHEME_TOPLEVEL_FIXED)
       return 1;
     if (info->top_level_consts) {
       int pos;

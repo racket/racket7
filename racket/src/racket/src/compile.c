@@ -1800,8 +1800,15 @@ Scheme_Object *compile_expr(Scheme_Object *form, Scheme_Comp_Env *env, int app_p
   MZ_ASSERT(SCHEME_STXP(form));
 
   if (!SCHEME_STX_PAIRP(form)) {
-    if (SCHEME_STX_SYMBOLP(form))
+    Scheme_Object *val = SCHEME_STX_VAL(form);
+    if (SCHEME_SYMBOLP(val))
       return scheme_compile_lookup(form, env, (app_position ? SCHEME_APP_POS : 0));
+    else if (SCHEME_NUMBERP(val)
+             || SCHEME_CHAR_STRINGP(val)
+             || SCHEME_BYTE_STRINGP(val)
+             || SAME_OBJ(val, scheme_true)
+             || SAME_OBJ(val, scheme_false))
+      return val;
     else
       scheme_wrong_syntax("compile", form, NULL, "unrecognized form");
   } else {
@@ -1998,6 +2005,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
         SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(e);
       } else {
         SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CAR(e));
+        e = SCHEME_STX_CADR(e);
       }
       if (pos >= num_toplevels) {
         new_toplevels = MALLOC_N(Scheme_IR_Toplevel*, 2 * num_toplevels);

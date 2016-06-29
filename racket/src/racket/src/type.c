@@ -143,6 +143,8 @@ scheme_init_type ()
 
   set_name(scheme_linklet_type, "<linklet>");
   set_name(scheme_instance_type, "<instance>");
+  set_name(scheme_linklet_directory_type, "<linklet-directory>");
+  set_name(scheme_linklet_bundle_type, "<linklet-bundle>");
 
   set_name(scheme_eval_waiting_type, "<eval-waiting>");
   set_name(scheme_void_type, "<void>");
