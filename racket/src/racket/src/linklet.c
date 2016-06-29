@@ -65,8 +65,9 @@ static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet);
 static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
                                                  int num_instances, Scheme_Instance **instances);
 
-static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Instance *instance,
-                                   int num_instances, Scheme_Instance **instances);
+static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *instance,
+                                     int num_instances, Scheme_Instance **instances,
+                                     Scheme_Hash_Tree *source_names);
 static void pop_prefix(Scheme_Object **rs);
 static Scheme_Object *suspend_prefix(Scheme_Object **rs);
 static Scheme_Object **resume_prefix(Scheme_Object *v);
@@ -299,8 +300,8 @@ static Scheme_Object *linklet_export_variables(int argc, Scheme_Object **argv)
 
   linklet = (Scheme_Linklet *)argv[0];
 
-  for (i = SCHEME_VEC_SIZE(linklet->exports); i--; ) {
-    l = scheme_make_pair(SCHEME_VEC_ELS(linklet->exports)[i], l);
+  for (i = linklet->num_exports; i--; ) {
+    l = scheme_make_pair(SCHEME_VEC_ELS(linklet->defns)[i], l);
   }
 
   return l;
@@ -664,6 +665,37 @@ Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Sc
 }
 
 /*========================================================================*/
+/*                          managing bucket names                         */
+/*========================================================================*/
+
+static Scheme_Object *generate_bucket_name(Scheme_Object *old_name, Scheme_Instance *instance)
+{
+  int search_start = 0;
+  char buf[32];
+  Scheme_Object *n;
+  
+  while (1) {
+    sprintf(buf, ".%d", search_start);
+    n = scheme_intern_exact_parallel_symbol(buf, strlen(buf));
+    n = scheme_symbol_append(old_name, n);
+    if (!scheme_instance_variable_bucket_or_null(n, instance))
+      return n;
+  }
+}
+
+static Scheme_Hash_Tree *update_source_names(Scheme_Hash_Tree *source_names,
+                                             Scheme_Object *old_name, Scheme_Object *new_name)
+{
+  Scheme_Object *v;
+
+  v = scheme_hash_tree_get(source_names, old_name);
+  if (v)
+    return scheme_hash_tree_set(source_names, new_name, v);
+  else
+    return source_names;
+}
+
+/*========================================================================*/
 /*                            compiling linklets                          */
 /*========================================================================*/
 
@@ -859,6 +891,7 @@ static void *instantiate_linklet_k(void)
   int depth;
   Scheme_Object *b, *v;
   Scheme_Object **save_runstack;
+  Scheme_Hash_Tree *source_names;
 
   p->ku.k.p1 = NULL;
   p->ku.k.p2 = NULL;
@@ -879,24 +912,25 @@ static void *instantiate_linklet_k(void)
     linklet = scheme_jit_linklet(linklet);
 
   /* Pushng the prefix looks up imported variables */
-  save_runstack = push_prefix(linklet, instance, num_instances, instances);
+  save_runstack = MZ_RUNSTACK;
+  source_names = push_prefix(linklet, instance, num_instances, instances, linklet->source_names);
 
   /* For variables in this instances, merge source-name info from the
      linklet to the instance */
-  if (linklet->source_names->count) {
+  if (source_names->count) {
     if (instance->source_names->count) {
       mzlonglong pos;
       Scheme_Hash_Tree *ht = instance->source_names;
       Scheme_Object *k, *v;
-      pos = scheme_hash_tree_next(linklet->source_names, -1);
+      pos = scheme_hash_tree_next(source_names, -1);
       while (pos != -1) {
-        scheme_hash_tree_index(linklet->source_names, pos, &k, &v);
+        scheme_hash_tree_index(source_names, pos, &k, &v);
         ht = scheme_hash_tree_set(ht, k, v);
-        pos = scheme_hash_tree_next(linklet->source_names, pos);
+        pos = scheme_hash_tree_next(source_names, pos);
       }
       instance->source_names = ht;
     } else
-      instance->source_names = linklet->source_names;
+      instance->source_names = source_names;
   }
 
   v = eval_linklet_body(linklet, instance);
@@ -944,23 +978,24 @@ Scheme_Object *scheme_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_
 /*        creating/pushing prefix for top-levels and syntax objects       */
 /*========================================================================*/
 
-static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Instance *instance,
-                                   int num_instances, Scheme_Instance **instances)
+static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *instance,
+                                     int num_instances, Scheme_Instance **instances,
+                                     Scheme_Hash_Tree *source_names)
 {
-  Scheme_Object **rs_save, **rs, *v;
+  Scheme_Object **rs, *v;
   Scheme_Prefix *pf;
-  int i, j, pos, tl_map_len, num_importss, num_exports;
+  int i, j, pos, tl_map_len, num_importss, num_defns;
 
-  rs_save = rs = MZ_RUNSTACK;
+  rs = MZ_RUNSTACK;
 
   num_importss = SCHEME_VEC_SIZE(linklet->importss);
-  num_exports = SCHEME_VEC_SIZE(linklet->exports);
+  num_defns = SCHEME_VEC_SIZE(linklet->defns);
 
   i = 1;
   for (j = num_importss; j--; ) {
     i += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[j]);
   }
-  i += num_exports;
+  i += num_defns;
   tl_map_len = (i + 31) / 32;
 
   pf = scheme_malloc_tagged(sizeof(Scheme_Prefix) 
@@ -995,12 +1030,20 @@ static Scheme_Object **push_prefix(Scheme_Linklet *linklet, Scheme_Instance *ins
     }
   }
 
-  for (i = 0; i < num_exports; i++) {
-    v = (Scheme_Object *)scheme_instance_variable_bucket(SCHEME_VEC_ELS(linklet->exports)[i], instance);
+  for (i = 0; i < num_defns; i++) {
+    v = SCHEME_VEC_ELS(linklet->defns)[i];
+    if (i >= linklet->num_exports) {
+      /* avoid conflict with any existing bucket */
+      if (scheme_instance_variable_bucket_or_null(v, instance)) {
+        v = generate_bucket_name(v, instance);
+        source_names = update_source_names(source_names, SCHEME_VEC_ELS(linklet->defns)[i], v);
+      }
+    }
+    v = (Scheme_Object *)scheme_instance_variable_bucket(v, instance);
     pf->a[pos++] = v;
   }
 
-  return rs_save;
+  return source_names;
 }
 
 static void pop_prefix(Scheme_Object **rs)

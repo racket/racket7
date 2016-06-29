@@ -1674,7 +1674,7 @@ static Scheme_Object *define_values_execute(Scheme_Object *vec)
         toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
         b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
 
-        // REMOVEME printf("%s\n", scheme_write_to_string((Scheme_Object *)b->key, 0));
+        // REMOVEME printf("%s %ld\n", scheme_write_to_string((Scheme_Object *)b->key, 0), SCHEME_TOPLEVEL_POS(var));
 
         scheme_set_global_bucket("define-values", b, values[i], 1);
         
@@ -1698,7 +1698,7 @@ static Scheme_Object *define_values_execute(Scheme_Object *vec)
     toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
     b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
 
-    // REMOVEME printf("%s\n", scheme_write_to_string((Scheme_Object *)b->key, 0));
+    // REMOVEME printf("%s %ld\n", scheme_write_to_string((Scheme_Object *)b->key, 0), SCHEME_TOPLEVEL_POS(var));
 
     scheme_set_global_bucket("define-values", b, vals, 1);
       

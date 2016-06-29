@@ -89,9 +89,9 @@ static int is_nonconstant_procedure(Scheme_Object *lam, Resolve_Info *info, Sche
 static int resolve_is_inside_proc(Resolve_Info *info);
 static int resolve_has_toplevel(Resolve_Info *info);
 static void set_tl_pos_used(Resolve_Info *info, int pos);
-static Scheme_Object *generate_name(Scheme_Object *base_sym, Scheme_Hash_Table *used_names, int search_start);
+static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int search_start);
 static void enable_expression_resolve_lifts(Resolve_Info *ri);
-static void extend_linklet_exports(Scheme_Linklet *linklet, int num_lifts);
+static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts);
 static Resolve_Info *resolve_info_create(Scheme_Linklet *rp, int enforce_const);
 
 #ifdef MZ_PRECISE_GC
@@ -1999,48 +1999,44 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
   if (num_lifts) {
     /* Adjust the `exports` array to take into account lifted
        definitions */
-    extend_linklet_exports(linklet, num_lifts);
+    extend_linklet_defns(linklet, num_lifts);
   }
 
   return linklet;
 }
 
-static void extend_linklet_exports(Scheme_Linklet *linklet, int num_lifts)
+static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts)
 {
   int cnt, i;
-  Scheme_Object *new_exports, *b;
+  Scheme_Object *new_defns, *b;
   Scheme_Hash_Table *names;
-  
+
   linklet->num_lifts = num_lifts;
-  cnt = SCHEME_VEC_SIZE(linklet->exports) + num_lifts;
-  new_exports = scheme_make_vector(cnt, scheme_false);
+  cnt = SCHEME_VEC_SIZE(linklet->defns) + num_lifts;
+  new_defns = scheme_make_vector(cnt, scheme_false);
   names = scheme_make_hash_table(SCHEME_hash_ptr);
   
-  for (i = 0; i < SCHEME_VEC_SIZE(linklet->exports); i++) {
-    SCHEME_VEC_ELS(new_exports)[i] = SCHEME_VEC_ELS(linklet->exports)[i];
-    scheme_hash_set(names, SCHEME_VEC_ELS(new_exports)[i], scheme_true);
+  for (i = 0; i < SCHEME_VEC_SIZE(linklet->defns); i++) {
+    SCHEME_VEC_ELS(new_defns)[i] = SCHEME_VEC_ELS(linklet->defns)[i];
+    scheme_hash_set(names, SCHEME_VEC_ELS(new_defns)[i], scheme_true);
   }
   
   for (; i < cnt; i++) {
-    b = generate_name(NULL, names, i - SCHEME_VEC_SIZE(linklet->exports));
-    SCHEME_VEC_ELS(new_exports)[i] = b;
+    b = generate_lifted_name(names, i - SCHEME_VEC_SIZE(linklet->defns));
+    SCHEME_VEC_ELS(new_defns)[i] = b;
   }
 
-  linklet->exports = new_exports;
+  linklet->defns = new_defns;
 }
 
-static Scheme_Object *generate_name(Scheme_Object *base_sym, Scheme_Hash_Table *used_names, int search_start)
+static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int search_start)
 {
   char buf[32];
   Scheme_Object *n;
   
-  if (!base_sym)
-    base_sym = scheme_intern_exact_parallel_symbol("?lifted", 7);
-
   while (1) {
-    sprintf(buf, ".%d", search_start);
+    sprintf(buf, "?lifted.%d", search_start);
     n = scheme_intern_exact_parallel_symbol(buf, strlen(buf));
-    n = scheme_symbol_append(base_sym, n);
     if (!scheme_hash_get(used_names, n)) {
       scheme_hash_set(used_names, n, scheme_true);
       return n;
@@ -2492,7 +2488,7 @@ typedef struct Unresolve_Info {
 
   int inlining;
 
-  int num_toplevels; /* compute imports + exports for linklet */
+  int num_toplevels; /* compute imports + defns for linklet */
   int num_extra_toplevels; /* created toplevels for cyclic lambdas */
 
   Scheme_Hash_Table *toplevels;
@@ -2537,7 +2533,7 @@ static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, int comp_flag
   for (i = SCHEME_VEC_SIZE(linklet->importss); i--; ) {
     count += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
   }
-  count += SCHEME_VEC_SIZE(linklet->exports);
+  count += SCHEME_VEC_SIZE(linklet->defns);
   ui->num_toplevels = count;
 
   return ui;
@@ -3792,7 +3788,7 @@ static void count_toplevels_array(Scheme_Linklet *linklet)
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     num_toplevels += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
   }
-  num_toplevels += SCHEME_VEC_SIZE(linklet->exports);
+  num_toplevels += SCHEME_VEC_SIZE(linklet->defns);
 
   linklet->num_toplevels = num_toplevels;
 }
@@ -3842,8 +3838,8 @@ Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags
   new_linklet->bodies = bs2;
 
   if (ui->num_extra_toplevels) {
-    /* Extend export-name array to extra toplevels: */
-    extend_linklet_exports(new_linklet, ui->num_extra_toplevels);
+    /* Extend defn-name array to extra toplevels: */
+    extend_linklet_defns(new_linklet, ui->num_extra_toplevels);
   }
 
   return new_linklet;

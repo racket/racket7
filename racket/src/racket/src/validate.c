@@ -160,7 +160,7 @@ void scheme_validate_linklet(Mz_CPort *port, Scheme_Linklet *linklet)
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     num_toplevels += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
   }
-  num_toplevels += SCHEME_VEC_SIZE(linklet->exports);
+  num_toplevels += SCHEME_VEC_SIZE(linklet->defns);
   
       
   tl_state = MALLOC_N_ATOMIC(mzshort, num_toplevels);

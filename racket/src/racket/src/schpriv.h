@@ -3081,19 +3081,25 @@ struct Scheme_Linklet
 {
   Scheme_Object so; /* scheme_linklet_type */
 
-  Scheme_Object *name; /* for reporting purposes; FIXME: doens't belong here? */
-
-  /* Import, export, and definition names are kept as identifiers up
-     to `resolve`, so that we have source locations, and then symbols
-     afterward. */
+  Scheme_Object *name; /* for reporting purposes; FIXME: doesn't belong here? */
 
   Scheme_Object *importss; /* vector of symbol (extenal names) */
   int **import_flags; /* records compiler assumptions */
 
-  Scheme_Object *exports; /* vector of symbol; unreadable starting "?" was generated */
+  /* The symbols in the `defns` arracy correspond to external names
+     for the first `num_exports` entries. The remaining (non-exported)
+     names should be adjusted on instantiation to avoid conflicts with
+     any existing names. Unreadable symbols starting with "?" were
+     generated for resolve-pass lifts. */
+  Scheme_Object *defns; /* vector of symbol */
+  int num_exports; /* this many in the prefix of `defns` are exported */
   int num_lifts; /* this many at the tail of `exports` are from resolve lifts */
 
-  Scheme_Hash_Tree *source_names; /* symbol (external name) -> symbol (source name) */
+  /* For error reporting, we can recover the source name from the
+     symbol that is used in the bucket; this table is merged to the
+     one in the instance, updating symbols as changed to avoid
+     conflicts. */
+  Scheme_Hash_Tree *source_names; /* symbol (external name) -> symbol (internal or source name) */
   
   Scheme_Object *bodies; /* vector of definition or expression */
 

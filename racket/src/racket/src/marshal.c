@@ -944,11 +944,12 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
   l = scheme_null;
 
   l = scheme_make_pair(linklet->importss, l);
-  l = scheme_make_pair(linklet->exports, l);
+  l = scheme_make_pair(linklet->defns, l);
   l = scheme_make_pair((Scheme_Object *)linklet->source_names, l);
 
   l = scheme_make_pair(linklet->bodies, l);
 
+  l = scheme_make_pair(scheme_make_integer(linklet->num_exports), l);
   l = scheme_make_pair(scheme_make_integer(linklet->num_lifts), l);
   l = scheme_make_pair(scheme_make_integer(linklet->max_let_depth), l);
 
@@ -1032,6 +1033,11 @@ static Scheme_Object *read_linklet(Scheme_Object *obj)
   obj = SCHEME_CDR(obj);
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
+  e = SCHEME_CAR(obj);
+  linklet->num_exports = SCHEME_INT_VAL(e);
+  obj = SCHEME_CDR(obj);
+
+  if (!SCHEME_PAIRP(obj)) return_NULL();
   a = SCHEME_CAR(obj);
   if (!SCHEME_VECTORP(a)) return_NULL();
   linklet->bodies = a;
@@ -1046,15 +1052,17 @@ static Scheme_Object *read_linklet(Scheme_Object *obj)
   if (!SCHEME_PAIRP(obj)) return_NULL();
   a = SCHEME_CAR(obj);
   if (!is_vector_of_symbols(a)) return_NULL();
-  linklet->exports = a;
+  linklet->defns = a;
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
   a = SCHEME_CAR(obj);
   if (!is_vector_of_vector_of_symbols(a)) return_NULL();
   linklet->importss = a;
 
-  if (linklet->num_lifts > SCHEME_VEC_SIZE(linklet->exports))
+  if (linklet->num_exports > SCHEME_VEC_SIZE(linklet->defns))
     return_NULL();
-  
+  if (linklet->num_lifts > (SCHEME_VEC_SIZE(linklet->defns) - linklet->num_exports))
+    return_NULL();
+
   return (Scheme_Object *)linklet;
 }
