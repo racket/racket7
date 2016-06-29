@@ -1443,8 +1443,7 @@ static int compare_keys(const void *a, const void *b)
                            || SCHEME_CHAR_STRINGP(v) \
                            || SCHEME_BYTE_STRINGP(v) \
                            || SCHEME_CHARP(v) \
-                           || SCHEME_NUMBERP(v) \
-                           || SAME_TYPE(SCHEME_TYPE(v), scheme_module_index_type))
+                           || SCHEME_NUMBERP(v))
   av = ((Scheme_Object **)a)[0];
   bv = ((Scheme_Object **)b)[0];
   if (SCHEME_FIRSTP(av)) {

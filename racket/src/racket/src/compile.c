@@ -1950,7 +1950,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   Scheme_Hash_Tree *source_names;
   Scheme_IR_Toplevel **toplevels, **new_toplevels, *tl;
   int body_len, len, islen, i, j, extra_vars_pos, pos = 0, num_toplevels, pos_after_imports;
-  Scheme_Comp_Env *env;
+  Scheme_Comp_Env *env, *d_env;
   DupCheckRecord r;
   
   body_len = check_form(form, form);
@@ -2099,14 +2099,19 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
       len = scheme_stx_proper_list_length(a);
       vec = scheme_make_vector(len+1, NULL);
 
+      if (len == 1)
+        d_env = scheme_set_comp_env_name(env, SCHEME_STX_CAR(a));
+      else
+        d_env = env;
+      
       for (j = 0; j < len; j++, a = SCHEME_STX_CDR(a)) {
         v = scheme_compile_lookup(SCHEME_STX_CAR(a), env, 0);
         MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_ir_toplevel_type));
         MZ_ASSERT(((Scheme_IR_Toplevel *)v)->instance_pos == -1);
         SCHEME_DEFN_VAR_(vec, j) = v;
       }
-      
-      a = compile_expr(SCHEME_STX_CADR(SCHEME_STX_CDR(e)), env, 0);
+
+      a = compile_expr(SCHEME_STX_CADR(SCHEME_STX_CDR(e)), d_env, 0);
       SCHEME_DEFN_RHS(vec) = a;
  
       e = vec;

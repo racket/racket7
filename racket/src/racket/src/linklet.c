@@ -106,11 +106,11 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 3, 3, env);
   ADD_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 2, 2, env);
 
-  ADD_FOLDING_PRIM("linklet_directory?", linklet_directory_p, 1, 1, 1, env);
+  ADD_FOLDING_PRIM("linklet-directory?", linklet_directory_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY("hash->linklet-directory", hash_to_linklet_directory, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-directory->hash", linklet_directory_to_hash, 1, 1, env);
 
-  ADD_FOLDING_PRIM("linklet_bundle?", linklet_bundle_p, 1, 1, 1, env);
+  ADD_FOLDING_PRIM("linklet-bundle?", linklet_bundle_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY("hash->linklet-bundle", hash_to_linklet_bundle, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, env);
 

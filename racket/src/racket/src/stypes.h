@@ -121,7 +121,6 @@ enum {
   scheme_weak_box_type,                 /* 88 */
   scheme_ephemeron_type,                /* 89 */
   scheme_struct_type_type,              /* 90 */
-  scheme_module_index_type,             /* 91 */
   scheme_set_macro_type,                /* 92 */
   scheme_listener_type,                 /* 93 */
   scheme_env_type,                      /* 94 */

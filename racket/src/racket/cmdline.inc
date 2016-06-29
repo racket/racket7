@@ -385,7 +385,7 @@ static void configure_environment(Scheme_Object *mod)
   submod = scheme_intern_symbol("submod");
   cr = scheme_intern_symbol("configure-runtime");
 
-  if (SAME_TYPE(SCHEME_TYPE(mod), scheme_module_index_type)) {
+  if (scheme_is_module_path_index(mod)) {
     mpij = scheme_builtin_value("module-path-index-join");
     a[0] = scheme_make_pair(submod, 
                             scheme_make_pair(scheme_make_utf8_string("."),

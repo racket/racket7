@@ -1673,7 +1673,7 @@ static Scheme_Object *define_values_execute(Scheme_Object *vec)
         var = SCHEME_VEC_ELS(vec)[i+delta];
         toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
         b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
-	
+
         scheme_set_global_bucket("define-values", b, values[i], 1);
         
         if (SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL) {
@@ -3413,7 +3413,7 @@ Scheme_Object *scheme_namespace_require(Scheme_Object *mod_path)
 
 Scheme_Env *scheme_make_empty_env(void)
 {
-  Scheme_Object *proc, *ns, *inst;
+  Scheme_Object *proc, *ns, *inst, *a[2];
   Scheme_Env *env;
   
   proc = scheme_get_startup_export("current-namespace");
@@ -3424,7 +3424,9 @@ Scheme_Env *scheme_make_empty_env(void)
   env->namespace = ns;
 
   proc = scheme_get_startup_export("namespace->instance");
-  inst = scheme_apply(proc, 0, NULL);
+  a[0] = ns;
+  a[1] = scheme_make_integer(0);
+  inst = scheme_apply(proc, 2, a);
 
   env->instance = (Scheme_Instance *)inst;
 
@@ -3820,6 +3822,14 @@ Scheme_Object *scheme_make_modidx(Scheme_Object *path,
   a[1] = base;
   return scheme_apply(proc, 2, a);
  
+}
+
+int scheme_is_module_path_index(Scheme_Object *v)
+{
+  Scheme_Object *proc, *a[1];
+  proc = scheme_get_startup_export("module-path-index?");
+  a[0] = v;
+  return SCHEME_TRUEP(scheme_apply(proc, 1, a));
 }
 
 int scheme_is_module_path(Scheme_Object *v)
