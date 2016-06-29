@@ -705,7 +705,7 @@ static Scheme_Object *ref_compile (Scheme_Object *form, Scheme_Comp_Env *env)
   /* retaining `pseudo-var' ensures that the environment stays
      linked from the actual variable */
   if ((l == 1) || !(env->flags & COMP_ENV_CHECKING_CONSTANT))
-    pseudo_var = (Scheme_Object *)env->linklet->toplevels[0];
+    pseudo_var = (Scheme_Object *)scheme_make_ir_toplevel(0, -1, -1, 0);
   else {
     /* If the variable reference will be used only for
        `variable-reference-constant?`, then we don't want a string
@@ -1707,7 +1707,7 @@ static Scheme_Object *compile_app(Scheme_Object *orig_form, Scheme_Comp_Env *env
     orig_rest_form = SCHEME_STX_CDR(form);
 
     /* Look for (call-with-values (lambda () M) (lambda (id ...) N)) */
-    if (SCHEME_STX_SYMBOLP(name)) {
+    if (SAME_OBJ(SCHEME_STX_VAL(name), call_with_values_symbol)) {
       Scheme_Object *at_first, *at_second, *the_end;
       at_first = SCHEME_STX_CDR(form);
       if (SCHEME_STX_PAIRP(at_first)) {
@@ -1715,46 +1715,35 @@ static Scheme_Object *compile_app(Scheme_Object *orig_form, Scheme_Comp_Env *env
         if (SCHEME_STX_PAIRP(at_second)) {
           the_end = SCHEME_STX_CDR(at_second);
           if (SCHEME_STX_NULLP(the_end)) {
-            Scheme_Object *orig_at_second = at_second;
-
-            if (SAME_OBJ(SCHEME_STX_VAL(name), call_with_values_symbol)) {
-              Scheme_Object *orig_first, *first = at_first;
-              orig_first = SCHEME_STX_CAR(at_first);
-              if (SAME_OBJ(SCHEME_STX_VAL(orig_first), lambda_symbol)
-                  && SCHEME_STX_PAIRP(at_first)
-                  && (arg_count(at_first) == 0)) {
-                Scheme_Object *orig_second, *second = at_second;
-                orig_second = SCHEME_STX_CAR(at_second);
-                if (SAME_OBJ(SCHEME_STX_VAL(orig_second), lambda_symbol)
-                    && SCHEME_STX_PAIRP(at_second)
-                    && (arg_count(at_second) >= 0)) {
-                  Scheme_Object *lhs;
-                  second = SCHEME_STX_CDR(second);
-                  lhs = SCHEME_STX_CAR(second);
-                  second = SCHEME_STX_CDR(second);
-                  first = SCHEME_STX_CDR(first);
-                  first = SCHEME_STX_CDR(first);
-                  first = icons(begin_symbol, first);
-                  first = scheme_datum_to_syntax(first, at_first, DTS_COPY_PROPS);
-                  second = icons(begin_symbol, second);
-                  second = scheme_datum_to_syntax(second, at_second, DTS_COPY_PROPS);
-                  /* Convert to let-values: */
-                  name = icons(let_values_symbol,
-                               icons(icons(icons(lhs, icons(first, scheme_null)), 
-                                           scheme_null),
-                                     icons(second, scheme_null)));
-                  form = scheme_datum_to_syntax(name, forms, DTS_COPY_PROPS);
-                  env->value_name = orig_vname;
-                  return compile_expr(form, env, 0);
-                }
-                if (!SAME_OBJ(second, orig_second)) {
-                  at_second = scheme_datum_to_syntax(icons(second, the_end), at_second, DTS_COPY_PROPS);
-                } 
-              }
-              if (!SAME_OBJ(first, orig_first)
-                  || !SAME_OBJ(at_second, orig_at_second)) {
-                at_first = scheme_datum_to_syntax(icons(first, at_second), at_first, DTS_COPY_PROPS);
-              }
+            Scheme_Object *first;
+            first = SCHEME_STX_CAR(at_first);
+            if (SCHEME_STX_PAIRP(first)
+                && SAME_OBJ(SCHEME_STX_VAL(SCHEME_STX_CAR(first)), lambda_symbol)
+                && (arg_count(first) == 0)) {
+              Scheme_Object *second;
+              second = SCHEME_STX_CAR(at_second);
+              if (SCHEME_STX_PAIRP(second)
+                  && SAME_OBJ(SCHEME_STX_VAL(SCHEME_STX_CAR(second)), lambda_symbol)
+                  && (arg_count(second) >= 0)) {
+                Scheme_Object *lhs;
+                second = SCHEME_STX_CDR(second);
+                lhs = SCHEME_STX_CAR(second);
+                second = SCHEME_STX_CDR(second);
+                first = SCHEME_STX_CDR(first);
+                first = SCHEME_STX_CDR(first);
+                first = icons(begin_symbol, first);
+                first = scheme_datum_to_syntax(first, at_first, DTS_COPY_PROPS);
+                second = icons(begin_symbol, second);
+                second = scheme_datum_to_syntax(second, at_second, DTS_COPY_PROPS);
+                /* Convert to let-values: */
+                name = icons(let_values_symbol,
+                             icons(icons(icons(lhs, icons(first, scheme_null)), 
+                                         scheme_null),
+                                   icons(second, scheme_null)));
+                form = scheme_datum_to_syntax(name, forms, DTS_COPY_PROPS);
+                env->value_name = orig_vname;
+                return compile_expr(form, env, 0);
+              } 
             }
           }
         }
@@ -1906,7 +1895,7 @@ static Scheme_Object *define_parse(Scheme_Object *form,
     if (!v) {
       int pos = *_extra_vars_pos + pos_after_imports;
       env = scheme_extend_comp_env(*_env, name,
-                                   (Scheme_Object *)scheme_make_ir_toplevel(-1, *_extra_vars_pos, pos, 0),
+                                   (Scheme_Object *)scheme_make_ir_toplevel(pos, -1, -1, 0),
                                    1);
       *_env = env;
       extra_vars = scheme_make_pair(name, extra_vars);
@@ -1984,7 +1973,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   toplevels = MALLOC_N(Scheme_IR_Toplevel*, num_toplevels);
   
   /* first `toplevels` slot holds the instance strongly */
-  tl = scheme_make_ir_toplevel(-1, -1, pos, 0);
+  tl = scheme_make_ir_toplevel(pos, -1, -1, 0);
   toplevels[pos++] = tl;
   
   /* Parse imports, filling in `ilens` and `import_syms`, and also
@@ -2016,7 +2005,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
         num_toplevels *= 2;
         toplevels = new_toplevels;
       }
-      tl = scheme_make_ir_toplevel(i, j, pos, 0);
+      tl = scheme_make_ir_toplevel(pos, i, j, 0);
       toplevels[pos++] = tl;
       env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
     }
@@ -2052,7 +2041,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
       num_toplevels *= 2;
       toplevels = new_toplevels;
     }
-    tl = scheme_make_ir_toplevel(-1, j, pos, 0);
+    tl = scheme_make_ir_toplevel(pos, -1, -1, 0);
     toplevels[pos++] = tl;
     env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
   }
@@ -2101,8 +2090,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
 
   linklet->bodies = bodies;
 
-  linklet->num_toplevels = pos;
-  linklet->toplevels = toplevels;
+  linklet->num_toplevels = pos + extra_vars_pos;
 
   for (i = 0; i < body_len; i++, form = SCHEME_STX_CDR(form)) {
     e = SCHEME_STX_CAR(form);

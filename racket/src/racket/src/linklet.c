@@ -98,12 +98,12 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
 
   ADD_FOLDING_PRIM("instance?", instance_p, 1, 1, 1, env);
-  ADD_PRIM_W_ARITY("make-instance", make_instance, 2, 2, env);
+  ADD_PRIM_W_ARITY("make-instance", make_instance, 1, 2, env);
   ADD_PRIM_W_ARITY("instance-name", instance_name, 1, 1, env);
   ADD_PRIM_W_ARITY("instance-data", instance_data, 1, 1, env);
   ADD_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, env);
   ADD_PRIM_W_ARITY2("instance-variable-value", instance_variable_value, 2, 3, 0, -1, env);
-  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 2, 2, env);
+  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 3, 3, env);
   ADD_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 2, 2, env);
 
   ADD_FOLDING_PRIM("linklet_directory?", linklet_directory_p, 1, 1, 1, env);

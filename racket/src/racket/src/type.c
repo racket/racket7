@@ -142,6 +142,7 @@ scheme_init_type ()
   set_name(scheme_quote_compilation_type, "<quote-code>");
 
   set_name(scheme_linklet_type, "<linklet>");
+  set_name(scheme_instance_type, "<instance>");
 
   set_name(scheme_eval_waiting_type, "<eval-waiting>");
   set_name(scheme_void_type, "<void>");

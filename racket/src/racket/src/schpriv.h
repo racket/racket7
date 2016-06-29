@@ -1367,9 +1367,9 @@ typedef struct Scheme_IR_Local
 typedef struct Scheme_IR_Toplevel
 {
   Scheme_Inclhash_Object iso; /* scheme_import_export_variable_type; not hashable */
+  int identity_pos; /* a convenience: unique to a combination of instance_pos and variable_pos */
   int instance_pos; /* import instance position, or -1 for exported and internal */
   int variable_pos; /* position within import instance */
-  int identity_pos; /* a convenience: unique to a combination of instance_pos and variable_pos */
 } Scheme_IR_Toplevel;
 
 /* See also SCHEME_TOPLEVEL_... */
@@ -1378,7 +1378,7 @@ typedef struct Scheme_IR_Toplevel
 #define SCHEME_IR_TOPLEVEL_FLAGS(var) MZ_OPT_HASH_KEY(&(var)->iso)
 #define SCHEME_IR_TOPLEVEL_POS(var) (((Scheme_IR_Toplevel *)var)->identity_pos)
 
-Scheme_IR_Toplevel *scheme_make_ir_toplevel(int instance_pos, int variable_pos, int identity_pos, int flags);
+Scheme_IR_Toplevel *scheme_make_ir_toplevel(int identity_pos, int instance_pos, int variable_pos, int flags);
 Scheme_Object *scheme_ir_toplevel_to_flagged_toplevel(Scheme_Object *tl, int flags);
 
 typedef struct {
@@ -3099,8 +3099,7 @@ struct Scheme_Linklet
 
   int max_let_depth;
 
-  int num_toplevels;
-  Scheme_IR_Toplevel **toplevels; /* during compilation/optimization, only */
+  int num_toplevels; /* only after compile and before resolve */
 };
 
 #define SCHEME_DEFN_VAR_COUNT(d) (SCHEME_VEC_SIZE(d)-1)

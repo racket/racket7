@@ -980,7 +980,6 @@ static int ir_toplevel_SIZE(void *p, struct NewGC *gc) {
 static int ir_toplevel_MARK(void *p, struct NewGC *gc) {
 #ifndef GC_NO_MARK_PROCEDURE_NEEDED
   Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)p;
-  gcMARK2(tl->name, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -993,7 +992,6 @@ static int ir_toplevel_MARK(void *p, struct NewGC *gc) {
 static int ir_toplevel_FIXUP(void *p, struct NewGC *gc) {
 #ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
   Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)p;
-  gcFIXUP2(tl->name, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -2643,14 +2641,6 @@ static int thread_val_MARK(void *p, struct NewGC *gc) {
   gcMARK2(pr->return_marks_to, gc);
   gcMARK2(pr->returned_marks, gc);
   
-  gcMARK2(pr->current_local_env, gc);
-  gcMARK2(pr->current_local_scope, gc);
-  gcMARK2(pr->current_local_use_scope, gc);
-  gcMARK2(pr->current_local_name, gc);
-  gcMARK2(pr->current_local_modidx, gc);
-  gcMARK2(pr->current_local_menv, gc);
-  gcMARK2(pr->current_local_bindings, gc);
-
   gcMARK2(pr->current_mt, gc);
 
   gcMARK2(pr->constant_folding, gc);
@@ -2775,14 +2765,6 @@ static int thread_val_FIXUP(void *p, struct NewGC *gc) {
   gcFIXUP2(pr->return_marks_to, gc);
   gcFIXUP2(pr->returned_marks, gc);
   
-  gcFIXUP2(pr->current_local_env, gc);
-  gcFIXUP2(pr->current_local_scope, gc);
-  gcFIXUP2(pr->current_local_use_scope, gc);
-  gcFIXUP2(pr->current_local_name, gc);
-  gcFIXUP2(pr->current_local_modidx, gc);
-  gcFIXUP2(pr->current_local_menv, gc);
-  gcFIXUP2(pr->current_local_bindings, gc);
-
   gcFIXUP2(pr->current_mt, gc);
 
   gcFIXUP2(pr->constant_folding, gc);
@@ -3281,6 +3263,52 @@ static int env_val_FIXUP(void *p, struct NewGC *gc) {
 #define env_val_IS_CONST_SIZE 1
 
 
+static int startup_env_val_SIZE(void *p, struct NewGC *gc) {
+#ifndef GC_NO_SIZE_NEEDED_FROM_PROCS
+  gcBYTES_TO_WORDS(sizeof(Scheme_Startup_Env));
+#else
+  return 0;
+#endif
+}
+
+static int startup_env_val_MARK(void *p, struct NewGC *gc) {
+#ifndef GC_NO_MARK_PROCEDURE_NEEDED
+  Scheme_Env *e = (Scheme_Env *)p;
+
+  gcMARK2(e->current_table, gc);
+  gcMARK2(e->primitive_table, gc);
+  gcMARK2(e->all_primitives_table, gc);
+  gcMARK2(e->primitive_ids_table, gc);
+# ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
+  return 0;
+# else
+  return
+  gcBYTES_TO_WORDS(sizeof(Scheme_Startup_Env));
+# endif
+#endif
+}
+
+static int startup_env_val_FIXUP(void *p, struct NewGC *gc) {
+#ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
+  Scheme_Env *e = (Scheme_Env *)p;
+
+  gcFIXUP2(e->current_table, gc);
+  gcFIXUP2(e->primitive_table, gc);
+  gcFIXUP2(e->all_primitives_table, gc);
+  gcFIXUP2(e->primitive_ids_table, gc);
+# ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
+  return 0;
+# else
+  return
+  gcBYTES_TO_WORDS(sizeof(Scheme_Startup_Env));
+# endif
+#endif
+}
+
+#define startup_env_val_IS_ATOMIC 0
+#define startup_env_val_IS_CONST_SIZE 1
+
+
 static int random_state_val_SIZE(void *p, struct NewGC *gc) {
 #ifndef GC_NO_SIZE_NEEDED_FROM_PROCS
   gcBYTES_TO_WORDS(sizeof(Scheme_Random_State));
@@ -3466,9 +3494,8 @@ static int linklet_val_MARK(void *p, struct NewGC *gc) {
   gcMARK2(l->name, gc);
   gcMARK2(l->importss, gc);
   gcMARK2(l->exports, gc);
-  gcMARK2(l->defns, gc);
+  gcMARK2(l->source_names, gc);
   gcMARK2(l->bodies, gc);
-  gcMARK2(l->toplevels, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -3485,9 +3512,8 @@ static int linklet_val_FIXUP(void *p, struct NewGC *gc) {
   gcFIXUP2(l->name, gc);
   gcFIXUP2(l->importss, gc);
   gcFIXUP2(l->exports, gc);
-  gcFIXUP2(l->defns, gc);
+  gcFIXUP2(l->source_names, gc);
   gcFIXUP2(l->bodies, gc);
-  gcFIXUP2(l->toplevels, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -3515,7 +3541,7 @@ static int instance_val_MARK(void *p, struct NewGC *gc) {
 
   gcMARK2(i->variables, gc);
   gcMARK2(i->weak_self_link, gc);
-  gcMARK2(i->exports, gc);
+  gcMARK2(i->source_names, gc);
   gcMARK2(i->name, gc);
   gcMARK2(i->data, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
@@ -3533,7 +3559,7 @@ static int instance_val_FIXUP(void *p, struct NewGC *gc) {
 
   gcFIXUP2(i->variables, gc);
   gcFIXUP2(i->weak_self_link, gc);
-  gcFIXUP2(i->exports, gc);
+  gcFIXUP2(i->source_names, gc);
   gcFIXUP2(i->name, gc);
   gcFIXUP2(i->data, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS

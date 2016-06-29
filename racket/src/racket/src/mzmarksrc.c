@@ -985,7 +985,6 @@ linklet_val {
   gcMARK2(l->exports, gc);
   gcMARK2(l->source_names, gc);
   gcMARK2(l->bodies, gc);
-  gcMARK2(l->toplevels, gc);
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Linklet));
 }

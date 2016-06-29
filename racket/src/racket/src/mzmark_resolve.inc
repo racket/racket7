@@ -13,7 +13,6 @@ static int mark_resolve_info_MARK(void *p, struct NewGC *gc) {
   Resolve_Info *i = (Resolve_Info *)p;
   
   gcMARK2(i->linklet, gc);
-  gcMARK2(i->stx_map, gc);
   gcMARK2(i->tl_map, gc);
   gcMARK2(i->redirects, gc);
   gcMARK2(i->lifts, gc);
@@ -33,7 +32,6 @@ static int mark_resolve_info_FIXUP(void *p, struct NewGC *gc) {
   Resolve_Info *i = (Resolve_Info *)p;
   
   gcFIXUP2(i->linklet, gc);
-  gcFIXUP2(i->stx_map, gc);
   gcFIXUP2(i->tl_map, gc);
   gcFIXUP2(i->redirects, gc);
   gcFIXUP2(i->lifts, gc);

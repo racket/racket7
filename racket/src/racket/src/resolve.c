@@ -1993,7 +1993,7 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
   for (i = 0; i < cnt; i++, body = SCHEME_CDR(body)) {
     SCHEME_VEC_ELS(new_bodies)[i] = SCHEME_CAR(body);
   }
-  
+
   linklet->bodies = new_bodies;
 
   if (num_lifts) {
@@ -2001,8 +2001,6 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
        definitions */
     extend_linklet_exports(linklet, num_lifts);
   }
-  
-  linklet->toplevels = NULL;
 
   return linklet;
 }
@@ -2535,7 +2533,7 @@ static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, int comp_flag
 
   ui->comp_flags = comp_flags;
 
-  count = 0;
+  count = 1;
   for (i = SCHEME_VEC_SIZE(linklet->importss); i--; ) {
     count += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
   }
@@ -2742,7 +2740,7 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
   /* FIXME: get shape information... */
   
   /* Check whether this variable is already known in the optimzation context: */
-  v = (Scheme_Object *)ui->linklet->toplevels[pos];
+  v = (Scheme_Object *)NULL; // ui->linklet->toplevels[pos];
   MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_ir_toplevel_type));
 
   if (flags)
@@ -3680,10 +3678,7 @@ void locate_cyclic_closures(Scheme_Object *e, Unresolve_Info *ui)
         if (SAME_OBJ(c, scheme_true)) {
           Scheme_IR_Toplevel *tl;
           
-          tl = scheme_make_ir_toplevel(-1,
-                                       ui->linklet->num_toplevels + ui->num_extra_toplevels,
-                                       ui->num_toplevels + ui->num_extra_toplevels,
-                                       0);
+          tl = scheme_make_ir_toplevel(ui->num_toplevels + ui->num_extra_toplevels, -1, -1, 0);
           ui->num_extra_toplevels++;
           
           scheme_hash_set(ui->closures, e, (Scheme_Object *)tl);
@@ -3789,11 +3784,9 @@ static void convert_closures_to_definitions(Unresolve_Info *ui)
   }
 }
 
-static void generate_toplevels_array(Scheme_Linklet *linklet)
+static void count_toplevels_array(Scheme_Linklet *linklet)
 {
-  Scheme_Object *v, *e;
-  Scheme_IR_Toplevel **toplevels, *tl;
-  int i, j, pos = 0, num_toplevels;
+  int i, num_toplevels;
 
   num_toplevels = 1;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
@@ -3801,40 +3794,7 @@ static void generate_toplevels_array(Scheme_Linklet *linklet)
   }
   num_toplevels += SCHEME_VEC_SIZE(linklet->exports);
 
-  toplevels = MALLOC_N(Scheme_IR_Toplevel*, num_toplevels);
-
-  /* Start with the pseudo-variable with a strong link to the instance: */
-  tl = scheme_make_ir_toplevel(-1, -1, pos, 0);
-  toplevels[pos++] = tl;
-  
-  for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
-    for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
-      tl = scheme_make_ir_toplevel(i, j, pos, 0);
-      toplevels[pos++] = tl;
-    }
-  }
-
-  for (j = 0; j < SCHEME_VEC_SIZE(linklet->exports); j++) {
-    tl = scheme_make_ir_toplevel(-1, j, pos, 0);
-    toplevels[pos++] = tl;
-  }
-
-  /* Determine which toplevels are mutable by checking all definitions: */
-  for (i = 0; i < SCHEME_VEC_SIZE(linklet->bodies); i++) {
-    e = SCHEME_VEC_ELS(linklet->bodies)[i];
-    if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
-      for (j = 1; j < SCHEME_VEC_SIZE(e); j++) {
-        v = SCHEME_VEC_ELS(e)[j];
-        if (!(SCHEME_TOPLEVEL_FLAGS(v) & SCHEME_TOPLEVEL_SEAL)) {
-          tl = toplevels[SCHEME_TOPLEVEL_POS(v)];
-          SCHEME_IR_TOPLEVEL_FLAGS(tl) |= SCHEME_IR_TOPLEVEL_MUTATED;
-        }
-      }
-    }
-  }
-
-  linklet->num_toplevels = pos;
-  linklet->toplevels = toplevels;
+  linklet->num_toplevels = num_toplevels;
 }
 
 Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags)
@@ -3850,7 +3810,7 @@ Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags
   new_linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
   memcpy(new_linklet, linklet, sizeof(Scheme_Linklet));
 
-  generate_toplevels_array(new_linklet);
+  count_toplevels_array(new_linklet);
   
   ui = new_unresolve_info(new_linklet, comp_flags);
 
