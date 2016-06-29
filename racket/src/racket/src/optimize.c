@@ -8054,7 +8054,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
     for (i_m = 0; i_m < cnt; i_m++) {
       /* Optimize this expression: */
       e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
-      if (scheme_omittable_expr(e, -1, -1, 0, info, NULL)) {
+      if ((i_m < (cnt - 1)) && scheme_omittable_expr(e, -1, -1, 0, info, NULL)) {
         can_omit++;
       }
     }
@@ -8065,7 +8065,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
       for (i_m = 0; i_m < cnt; i_m++) {
         /* Optimize this expression: */
         e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
-        if (!scheme_omittable_expr(e, -1, -1, 0, info, NULL)) {
+        if ((i_m == (cnt-1)) || !scheme_omittable_expr(e, -1, -1, 0, info, NULL)) {
           SCHEME_VEC_ELS(new_bodies)[j++] = e;
         }
       }

@@ -645,7 +645,7 @@ static Scheme_Object *jit_expr(Scheme_Object *expr)
 Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet)
 {
   Scheme_Linklet *new_linklet;
-  Scheme_Object *bodies;
+  Scheme_Object *bodies, *v;
   int i;
 
   new_linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
@@ -654,8 +654,11 @@ Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet)
   i = SCHEME_VEC_SIZE(linklet->bodies);
   bodies = scheme_make_vector(i, NULL);
   while (i--) {
-    SCHEME_VEC_ELS(bodies)[i] = SCHEME_VEC_ELS(linklet->bodies)[i];
+    v = jit_expr(SCHEME_VEC_ELS(linklet->bodies)[i]);
+    SCHEME_VEC_ELS(bodies)[i] = v;
   }
+
+  new_linklet->bodies = bodies;
 
   return new_linklet;
 }

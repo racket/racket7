@@ -3465,8 +3465,8 @@ static int more_common0(mz_jit_state *jitter, void *_data)
     mz_set_local_p(JIT_R2, JIT_LOCAL2);
 
     jit_prepare(2);
-    jit_pusharg_p(JIT_R0);
     jit_pusharg_p(JIT_R1);
+    jit_pusharg_p(JIT_R0);
     (void)mz_finish(scheme_linklet_run_finish);
     CHECK_LIMIT();
     mz_pop_locals();

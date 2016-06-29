@@ -548,7 +548,7 @@ static Scheme_Object *variable_instance(int argc, Scheme_Object **argv)
   if (SCHEME_FALSEP(v))
     return scheme_false;
 
-  return (Scheme_Object *)scheme_get_bucket_home((Scheme_Bucket *)v);
+  return v;
 }
 
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
@@ -680,6 +680,7 @@ static Scheme_Object *generate_bucket_name(Scheme_Object *old_name, Scheme_Insta
     n = scheme_symbol_append(old_name, n);
     if (!scheme_instance_variable_bucket_or_null(n, instance))
       return n;
+    search_start++;
   }
 }
 
@@ -939,7 +940,7 @@ static void *instantiate_linklet_k(void)
 
   if (!multi)
     v = scheme_check_one_value(v);
-  
+
   return (void *)v;
 }
 
