@@ -407,6 +407,7 @@ void scheme_init_linklet(Scheme_Startup_Env *env);
 void scheme_init_print_buffers_places(void);
 void scheme_init_string_places(void);
 void scheme_init_thread_places(void);
+void scheme_init_linklet_places(void);
 void scheme_init_eval_places(void);
 void scheme_init_compile_places(void);
 void scheme_init_compenv_places(void);
@@ -2445,7 +2446,7 @@ long_double scheme_long_double_expt(long_double x, long_double y);
 typedef struct Scheme_Prefix
 {
   Scheme_Inclhash_Object iso; /* scheme_prefix_type; 0x1 => incremental-mode fixup chain */
-  int num_slots, num_toplevels, num_stxes;
+  int num_slots, saw_num_slots;
 #ifdef MZ_PRECISE_GC
   struct Scheme_Prefix *next_final; /* for special GC handling */
   struct Scheme_Object *fixup_chain; /* for special GC handling */

@@ -65,9 +65,6 @@ static int mark_unresolve_info_MARK(void *p, struct NewGC *gc) {
   gcMARK2(i->vars, gc);
   gcMARK2(i->linklet, gc);
   gcMARK2(i->closures, gc);
-  gcMARK2(i->module, gc);
-  gcMARK2(i->new_toplevels, gc);
-  gcMARK2(i->inline_variants, gc);
   gcMARK2(i->toplevels, gc);
   gcMARK2(i->definitions, gc);
   gcMARK2(i->ref_lifts, gc);
@@ -88,9 +85,6 @@ static int mark_unresolve_info_FIXUP(void *p, struct NewGC *gc) {
   gcFIXUP2(i->vars, gc);
   gcFIXUP2(i->linklet, gc);
   gcFIXUP2(i->closures, gc);
-  gcFIXUP2(i->module, gc);
-  gcFIXUP2(i->new_toplevels, gc);
-  gcFIXUP2(i->inline_variants, gc);
   gcFIXUP2(i->toplevels, gc);
   gcFIXUP2(i->definitions, gc);
   gcFIXUP2(i->ref_lifts, gc);

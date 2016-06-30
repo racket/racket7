@@ -1040,6 +1040,7 @@ MZ_EXTERN Scheme_Object *scheme_namespace_require(Scheme_Object *);
 
 MZ_EXTERN int scheme_is_module_path(Scheme_Object *);
 MZ_EXTERN int scheme_is_module_path_index(Scheme_Object *);
+MZ_EXTERN int scheme_is_resolved_module_path(Scheme_Object *);
 
 MZ_EXTERN Scheme_Object *scheme_datum_to_kernel_stx(Scheme_Object *e);
 

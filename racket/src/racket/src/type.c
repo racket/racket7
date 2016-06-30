@@ -551,7 +551,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_boxenv_type, twoptr_obj);
   GC_REG_TRAV(scheme_case_lambda_sequence_type, case_closure);
   GC_REG_TRAV(scheme_begin0_sequence_type, seq_rec);
-  GC_REG_TRAV(scheme_splice_sequence_type, seq_rec);
   GC_REG_TRAV(scheme_set_bang_type, set_bang);
   GC_REG_TRAV(scheme_inline_variant_type, vector_obj);
 
@@ -559,13 +558,20 @@ void scheme_register_traversers(void)
   
   GC_REG_TRAV(scheme_ir_lambda_type, unclosed_proc);
   GC_REG_TRAV(scheme_ir_local_type, ir_local);
+  GC_REG_TRAV(scheme_ir_toplevel_type, ir_toplevel);
   GC_REG_TRAV(scheme_ir_let_value_type, ir_let_value);
   GC_REG_TRAV(scheme_ir_let_header_type, let_header);
-  GC_REG_TRAV(scheme_ir_toplevel_type, toplevel_obj);
 
   GC_REG_TRAV(scheme_quote_compilation_type, small_object);
 
+  GC_REG_TRAV(scheme_linklet_type, linklet_val);
+  GC_REG_TRAV(scheme_instance_type, instance_val);
+  GC_REG_TRAV(scheme_linklet_directory_type, small_object);
+  GC_REG_TRAV(scheme_linklet_bundle_type, small_object);
+
   GC_REG_TRAV(_scheme_ir_values_types_, bad_trav);
+
+  GC_REG_TRAV(scheme_prefix_type, prefix_val);
 
   GC_REG_TRAV(scheme_prim_type, prim_proc);
   GC_REG_TRAV(scheme_closed_prim_type, closed_prim_proc);
@@ -618,8 +624,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_true_type, small_atomic_obj);
   GC_REG_TRAV(scheme_false_type, small_atomic_obj);
   GC_REG_TRAV(scheme_void_type, small_atomic_obj); 
-  GC_REG_TRAV(scheme_primitive_syntax_type, syntax_compiler);
-  GC_REG_TRAV(scheme_macro_type, small_object);
   GC_REG_TRAV(scheme_box_type, small_object);
   GC_REG_TRAV(scheme_thread_type, thread_val);
   GC_REG_TRAV(scheme_prompt_type, prompt_val);

@@ -52,8 +52,6 @@ static int mark_cport_MARK(void *p, struct NewGC *gc) {
   gcMARK2(cp->symtab, gc);
   gcMARK2(cp->symtab_entries, gc);
   gcMARK2(cp->relto, gc);
-  gcMARK2(cp->magic_sym, gc);
-  gcMARK2(cp->magic_val, gc);
   gcMARK2(cp->shared_offsets, gc);
   gcMARK2(cp->delay_info, gc);
   gcMARK2(cp->symtab_refs, gc);
@@ -76,8 +74,6 @@ static int mark_cport_FIXUP(void *p, struct NewGC *gc) {
   gcFIXUP2(cp->symtab, gc);
   gcFIXUP2(cp->symtab_entries, gc);
   gcFIXUP2(cp->relto, gc);
-  gcFIXUP2(cp->magic_sym, gc);
-  gcFIXUP2(cp->magic_val, gc);
   gcFIXUP2(cp->shared_offsets, gc);
   gcFIXUP2(cp->delay_info, gc);
   gcFIXUP2(cp->symtab_refs, gc);
@@ -150,8 +146,6 @@ static int mark_read_params_MARK(void *p, struct NewGC *gc) {
 #ifndef GC_NO_MARK_PROCEDURE_NEEDED
   ReadParams *rp = (ReadParams *)p;
   gcMARK2(rp->table, gc);
-  gcMARK2(rp->magic_sym, gc);
-  gcMARK2(rp->magic_val, gc);
   gcMARK2(rp->delay_load_info, gc);
   gcMARK2(rp->read_relative_path, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
@@ -167,8 +161,6 @@ static int mark_read_params_FIXUP(void *p, struct NewGC *gc) {
 #ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
   ReadParams *rp = (ReadParams *)p;
   gcFIXUP2(rp->table, gc);
-  gcFIXUP2(rp->magic_sym, gc);
-  gcFIXUP2(rp->magic_val, gc);
   gcFIXUP2(rp->delay_load_info, gc);
   gcFIXUP2(rp->read_relative_path, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS

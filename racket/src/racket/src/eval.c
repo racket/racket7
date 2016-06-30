@@ -222,11 +222,6 @@ static Scheme_Object *disallow_inline(int argc, Scheme_Object **argv);
 
 void scheme_escape_to_continuation(Scheme_Object *obj, int num_rands, Scheme_Object **rands, Scheme_Object *alt_full);
 
-#ifdef MZ_PRECISE_GC
-static void mark_pruned_prefixes(struct NewGC *gc);
-static int check_pruned_prefix(void *p);
-#endif
-
 #define cons(x,y) scheme_make_pair(x,y)
 
 typedef void (*DW_PrePost_Proc)(void *);
@@ -279,12 +274,6 @@ scheme_init_eval (Scheme_Startup_Env *env)
 
 void scheme_init_eval_places()
 {
-#ifdef MZ_PRECISE_GC
-  scheme_prefix_finalize = (Scheme_Prefix *)0x1; /* 0x1 acts as a sentenel */
-  scheme_inc_prefix_finalize = (Scheme_Prefix *)0x1;
-  GC_set_post_propagate_hook(mark_pruned_prefixes);
-  GC_set_treat_as_incremental_mark(scheme_prefix_type, check_pruned_prefix);
-#endif
 #ifdef DEBUG_CHECK_STACK_FRAME_SIZE
   (void)scheme_do_eval(SCHEME_TAIL_CALL_WAITING, 0, NULL, 0);
 #endif
@@ -3832,6 +3821,14 @@ int scheme_is_module_path_index(Scheme_Object *v)
 {
   Scheme_Object *proc, *a[1];
   proc = scheme_get_startup_export("module-path-index?");
+  a[0] = v;
+  return SCHEME_TRUEP(scheme_apply(proc, 1, a));
+}
+
+int scheme_is_resolved_module_path(Scheme_Object *v)
+{
+  Scheme_Object *proc, *a[1];
+  proc = scheme_get_startup_export("resolved-module-path?");
   a[0] = v;
   return SCHEME_TRUEP(scheme_apply(proc, 1, a));
 }

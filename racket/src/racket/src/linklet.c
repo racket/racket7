@@ -73,6 +73,11 @@ static Scheme_Object *suspend_prefix(Scheme_Object **rs);
 static Scheme_Object **resume_prefix(Scheme_Object *v);
 
 #ifdef MZ_PRECISE_GC
+static void mark_pruned_prefixes(struct NewGC *gc);
+static int check_pruned_prefix(void *p);
+#endif
+
+#ifdef MZ_PRECISE_GC
 static void register_traversers(void);
 #endif
 
@@ -149,6 +154,16 @@ scheme_init_linklet(Scheme_Startup_Env *env)
         recompile_every_compile = 32;
     }
   }
+}
+
+void scheme_init_linklet_places(void)
+{
+#ifdef MZ_PRECISE_GC
+  scheme_prefix_finalize = (Scheme_Prefix *)0x1; /* 0x1 acts as a sentenel */
+  scheme_inc_prefix_finalize = (Scheme_Prefix *)0x1;
+  GC_set_post_propagate_hook(mark_pruned_prefixes);
+  GC_set_treat_as_incremental_mark(scheme_prefix_type, check_pruned_prefix);
+#endif
 }
 
 /*========================================================================*/
@@ -1108,7 +1123,8 @@ static void mark_pruned_prefixes(struct NewGC *gc) XFORM_SKIP_PROC
             if (!(use_bits[i] & ((unsigned)1 << j))) {
               int pos;
               pos = (i * 32) + j;
-              pf->a[pos] = NULL;
+              if (pos < maxpos)
+                pf->a[pos] = NULL;
             }
           }
           use_bits[i] = 0;
@@ -1122,6 +1138,7 @@ static void mark_pruned_prefixes(struct NewGC *gc) XFORM_SKIP_PROC
         pf = (Scheme_Prefix *)GC_resolve2(pf, gc);
         GC_retract_only_mark_stack_entry(pf, gc);
         GC_mark_no_recur(gc, 0);
+        pf->saw_num_slots = -1;
       } else
         pf = (Scheme_Prefix *)GC_resolve2(pf, gc);
 
@@ -1183,7 +1200,6 @@ START_XFORM_SKIP;
 
 static void register_traversers(void)
 {
-  GC_REG_TRAV(scheme_rt_saved_stack, mark_saved_stack);
 }
 
 END_XFORM_SKIP;

@@ -158,40 +158,6 @@ static int toplevel_obj_FIXUP(void *p, struct NewGC *gc) {
 #define toplevel_obj_IS_CONST_SIZE 1
 
 
-static int quotesyntax_obj_SIZE(void *p, struct NewGC *gc) {
-#ifndef GC_NO_SIZE_NEEDED_FROM_PROCS
-  gcBYTES_TO_WORDS(sizeof(Scheme_Quote_Syntax));
-#else
-  return 0;
-#endif
-}
-
-static int quotesyntax_obj_MARK(void *p, struct NewGC *gc) {
-#ifndef GC_NO_MARK_PROCEDURE_NEEDED
-# ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
-  return 0;
-# else
-  return
-  gcBYTES_TO_WORDS(sizeof(Scheme_Quote_Syntax));
-# endif
-#endif
-}
-
-static int quotesyntax_obj_FIXUP(void *p, struct NewGC *gc) {
-#ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
-# ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
-  return 0;
-# else
-  return
-  gcBYTES_TO_WORDS(sizeof(Scheme_Quote_Syntax));
-# endif
-#endif
-}
-
-#define quotesyntax_obj_IS_ATOMIC 1
-#define quotesyntax_obj_IS_CONST_SIZE 1
-
-
 static int cpointer_obj_SIZE(void *p, struct NewGC *gc) {
 #ifndef GC_NO_SIZE_NEEDED_FROM_PROCS
    (SCHEME_CPTR_HAS_OFFSET(p)
@@ -979,7 +945,6 @@ static int ir_toplevel_SIZE(void *p, struct NewGC *gc) {
 
 static int ir_toplevel_MARK(void *p, struct NewGC *gc) {
 #ifndef GC_NO_MARK_PROCEDURE_NEEDED
-  Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)p;
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -991,7 +956,6 @@ static int ir_toplevel_MARK(void *p, struct NewGC *gc) {
 
 static int ir_toplevel_FIXUP(void *p, struct NewGC *gc) {
 #ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
-  Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)p;
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -1001,7 +965,7 @@ static int ir_toplevel_FIXUP(void *p, struct NewGC *gc) {
 #endif
 }
 
-#define ir_toplevel_IS_ATOMIC 0
+#define ir_toplevel_IS_ATOMIC 1
 #define ir_toplevel_IS_CONST_SIZE 1
 
 
@@ -3273,10 +3237,10 @@ static int startup_env_val_SIZE(void *p, struct NewGC *gc) {
 
 static int startup_env_val_MARK(void *p, struct NewGC *gc) {
 #ifndef GC_NO_MARK_PROCEDURE_NEEDED
-  Scheme_Env *e = (Scheme_Env *)p;
+  Scheme_Startup_Env *e = (Scheme_Startup_Env *)p;
 
   gcMARK2(e->current_table, gc);
-  gcMARK2(e->primitive_table, gc);
+  gcMARK2(e->primitive_tables, gc);
   gcMARK2(e->all_primitives_table, gc);
   gcMARK2(e->primitive_ids_table, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
@@ -3290,10 +3254,10 @@ static int startup_env_val_MARK(void *p, struct NewGC *gc) {
 
 static int startup_env_val_FIXUP(void *p, struct NewGC *gc) {
 #ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
-  Scheme_Env *e = (Scheme_Env *)p;
+  Scheme_Startup_Env *e = (Scheme_Startup_Env *)p;
 
   gcFIXUP2(e->current_table, gc);
-  gcFIXUP2(e->primitive_table, gc);
+  gcFIXUP2(e->primitive_tables, gc);
   gcFIXUP2(e->all_primitives_table, gc);
   gcFIXUP2(e->primitive_ids_table, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
@@ -3348,7 +3312,7 @@ static int prefix_val_SIZE(void *p, struct NewGC *gc) {
   Scheme_Prefix *pf = (Scheme_Prefix *)p;
   gcBYTES_TO_WORDS((sizeof(Scheme_Prefix) 
 		    + ((pf->num_slots-mzFLEX_DELTA) * sizeof(Scheme_Object *))
-                    + ((((pf->num_slots - pf->num_stxes) + 31) / 32) 
+                    + ((((pf->num_slots + 31) / 32) 
                        * sizeof(int))));
 #else
   return 0;
@@ -3367,7 +3331,7 @@ static int prefix_val_MARK(void *p, struct NewGC *gc) {
   return
   gcBYTES_TO_WORDS((sizeof(Scheme_Prefix) 
 		    + ((pf->num_slots-mzFLEX_DELTA) * sizeof(Scheme_Object *))
-                    + ((((pf->num_slots - pf->num_stxes) + 31) / 32) 
+                    + ((((pf->num_slots + 31) / 32) 
                        * sizeof(int))));
 # endif
 #endif
@@ -3385,7 +3349,7 @@ static int prefix_val_FIXUP(void *p, struct NewGC *gc) {
   return
   gcBYTES_TO_WORDS((sizeof(Scheme_Prefix) 
 		    + ((pf->num_slots-mzFLEX_DELTA) * sizeof(Scheme_Object *))
-                    + ((((pf->num_slots - pf->num_stxes) + 31) / 32) 
+                    + ((((pf->num_slots + 31) / 32) 
                        * sizeof(int))));
 # endif
 #endif
@@ -3489,11 +3453,11 @@ static int linklet_val_SIZE(void *p, struct NewGC *gc) {
 
 static int linklet_val_MARK(void *p, struct NewGC *gc) {
 #ifndef GC_NO_MARK_PROCEDURE_NEEDED
-  Scheme_Linklet *l = (Scheme_Module *)p;
+  Scheme_Linklet *l = (Scheme_Linklet *)p;
 
   gcMARK2(l->name, gc);
   gcMARK2(l->importss, gc);
-  gcMARK2(l->exports, gc);
+  gcMARK2(l->defns, gc);
   gcMARK2(l->source_names, gc);
   gcMARK2(l->bodies, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
@@ -3507,11 +3471,11 @@ static int linklet_val_MARK(void *p, struct NewGC *gc) {
 
 static int linklet_val_FIXUP(void *p, struct NewGC *gc) {
 #ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
-  Scheme_Linklet *l = (Scheme_Module *)p;
+  Scheme_Linklet *l = (Scheme_Linklet *)p;
 
   gcFIXUP2(l->name, gc);
   gcFIXUP2(l->importss, gc);
-  gcFIXUP2(l->exports, gc);
+  gcFIXUP2(l->defns, gc);
   gcFIXUP2(l->source_names, gc);
   gcFIXUP2(l->bodies, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS

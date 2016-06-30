@@ -1905,10 +1905,9 @@ static Scheme_Object *define_parse(Scheme_Object *form,
       scheme_wrong_syntax(NULL, name, form, "not a definable variable");
 
     if (!v) {
-      int pos = *_extra_vars_pos + pos_after_imports;
-      env = scheme_extend_comp_env(*_env, name,
-                                   (Scheme_Object *)scheme_make_ir_toplevel(pos, -1, -1, 0),
-                                   1);
+      int pos = (*_extra_vars_pos) + pos_after_imports;
+      v = (Scheme_Object *)scheme_make_ir_toplevel(pos, -1, -1, 0);
+      env = scheme_extend_comp_env(*_env, name, v, 1);
       *_env = env;
       extra_vars = scheme_make_pair(name, extra_vars);
       (*_extra_vars_pos)++;

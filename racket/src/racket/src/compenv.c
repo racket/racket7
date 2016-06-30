@@ -322,7 +322,7 @@ Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id,
   if (mutate)
     env2 = env;
   else {
-    env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
+    env2 = MALLOC_ONE_RT(Scheme_Comp_Env);
     memcpy(env2, env, sizeof(Scheme_Comp_Env));
   }
 
@@ -339,7 +339,7 @@ Scheme_Comp_Env *scheme_set_comp_env_flags(Scheme_Comp_Env *env, int flags)
   if ((env->flags & flags) == flags)
     return env;
 
-  env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
+  env2 = MALLOC_ONE_RT(Scheme_Comp_Env);
   memcpy(env2, env, sizeof(Scheme_Comp_Env));
   env2->flags |= flags;
 
@@ -353,7 +353,7 @@ Scheme_Comp_Env *scheme_set_comp_env_name(Scheme_Comp_Env *env, Scheme_Object *n
   if (SAME_OBJ(env->value_name, name))
     return env;
 
-  env2 = MALLOC_ONE_TAGGED(Scheme_Comp_Env);
+  env2 = MALLOC_ONE_RT(Scheme_Comp_Env);
   memcpy(env2, env, sizeof(Scheme_Comp_Env));
   env2->value_name = name;
 

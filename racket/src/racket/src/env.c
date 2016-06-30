@@ -536,6 +536,7 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   scheme_init_string_places();
   scheme_init_logger();
   scheme_init_eval_places();
+  scheme_init_linklet_places();
   scheme_init_compile_places();
   scheme_init_regexp_places();
   scheme_init_sema_places();
@@ -599,7 +600,7 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
 }
 
 #ifdef MZ_USE_PLACES
-Scheme_Startup_Env *scheme_place_instance_init(void *stack_base, struct NewGC *parent_gc, intptr_t memory_limit)
+Scheme_Env *scheme_place_instance_init(void *stack_base, struct NewGC *parent_gc, intptr_t memory_limit)
 {
   Scheme_Env *env;
 # if defined(MZ_PRECISE_GC)

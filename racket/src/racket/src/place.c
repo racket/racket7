@@ -260,6 +260,12 @@ static void close_six_fds(intptr_t *rw) {
   for (i=0; i<6; i++) { if (rw[i] >= 0) scheme_close_file_fd(rw[i]); }
 }
 
+static int is_predefined_module_path(Scheme_Object *v)
+{
+  /* Every table of primitives should have a corresponding predefined module */
+  return !!scheme_hash_get(scheme_startup_env->primitive_tables, v);
+}
+
 Scheme_Object *place_pumper_threads(int argc, Scheme_Object *args[]) {
   Scheme_Place          *place;
   Scheme_Object         *tmp;
@@ -332,7 +338,7 @@ Scheme_Object *scheme_place(int argc, Scheme_Object *args[]) {
     out_arg = args[3];
     err_arg = args[4];
 
-    if (!scheme_is_module_path(args[0]) && !SCHEME_PATHP(args[0]) && !SCHEME_MODNAMEP(args[0])) {
+    if (!scheme_is_module_path(args[0]) && !SCHEME_PATHP(args[0]) && !scheme_is_resolved_module_path(args[0])) {
       scheme_wrong_contract("dynamic-place", "(or/c module-path? path? resolved-module-path?)", 0, argc, args);
     }
     if (!SCHEME_SYMBOLP(args[1])) {
@@ -350,7 +356,7 @@ Scheme_Object *scheme_place(int argc, Scheme_Object *args[]) {
 
     if (SCHEME_PAIRP(args[0]) 
         && SAME_OBJ(SCHEME_CAR(args[0]), quote_symbol)
-        && !scheme_is_predefined_module_p(args[0])) {
+        && !is_predefined_module_path(args[0])) {
       scheme_contract_error("dynamic-place", "not a filesystem or predefined module-path", 
                             "module path", 1, args[0],
                             NULL);

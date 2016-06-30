@@ -36,12 +36,6 @@ toplevel_obj {
   gcBYTES_TO_WORDS(sizeof(Scheme_Toplevel));
 }
 
-quotesyntax_obj {
- mark:
- size:
-  gcBYTES_TO_WORDS(sizeof(Scheme_Quote_Syntax));
-}
-
 cpointer_obj {
  mark:
   if (!(SCHEME_CPTR_FLAGS(p) & 0x1)) {
@@ -241,7 +235,6 @@ ir_local {
 
 ir_toplevel {
  mark:
-  Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)p;
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_IR_Toplevel));
 }
@@ -927,10 +920,10 @@ env_val {
 
 startup_env_val {
  mark:
-  Scheme_Env *e = (Scheme_Env *)p;
+  Scheme_Startup_Env *e = (Scheme_Startup_Env *)p;
 
   gcMARK2(e->current_table, gc);
-  gcMARK2(e->primitive_table, gc);
+  gcMARK2(e->primitive_tables, gc);
   gcMARK2(e->all_primitives_table, gc);
   gcMARK2(e->primitive_ids_table, gc);
  size:
@@ -952,7 +945,7 @@ prefix_val {
  size:
   gcBYTES_TO_WORDS((sizeof(Scheme_Prefix) 
 		    + ((pf->num_slots-mzFLEX_DELTA) * sizeof(Scheme_Object *))
-                    + ((((pf->num_slots - pf->num_stxes) + 31) / 32) 
+                    + ((((pf->num_slots + 31) / 32) 
                        * sizeof(int))));
 }
 
@@ -978,11 +971,11 @@ stx_val {
 
 linklet_val {
  mark:
-  Scheme_Linklet *l = (Scheme_Module *)p;
+  Scheme_Linklet *l = (Scheme_Linklet *)p;
 
   gcMARK2(l->name, gc);
   gcMARK2(l->importss, gc);
-  gcMARK2(l->exports, gc);
+  gcMARK2(l->defns, gc);
   gcMARK2(l->source_names, gc);
   gcMARK2(l->bodies, gc);
  size:
@@ -1080,6 +1073,12 @@ END env;
 
 /**********************************************************************/
 
+START linklet;
+
+END linklet;
+
+/**********************************************************************/
+
 START compenv;
 
 mark_comp_env {
@@ -1121,9 +1120,6 @@ mark_unresolve_info {
   gcMARK2(i->vars, gc);
   gcMARK2(i->linklet, gc);
   gcMARK2(i->closures, gc);
-  gcMARK2(i->module, gc);
-  gcMARK2(i->new_toplevels, gc);
-  gcMARK2(i->inline_variants, gc);
   gcMARK2(i->toplevels, gc);
   gcMARK2(i->definitions, gc);
   gcMARK2(i->ref_lifts, gc);
@@ -1579,11 +1575,9 @@ mark_marshal_tables {
   gcMARK2(mt->st_refs, gc);
   gcMARK2(mt->st_ref_stack, gc);
   gcMARK2(mt->intern_map, gc);
-  gcMARK2(mt->identity_map, gc);
   gcMARK2(mt->key_map, gc);
   gcMARK2(mt->delay_map, gc);
   gcMARK2(mt->cdata_map, gc);
-  gcMARK2(mt->rn_saved, gc);
   gcMARK2(mt->shared_offsets, gc);
   gcMARK2(mt->path_cache, gc);
   gcMARK2(mt->sorted_keys, gc);
@@ -2056,8 +2050,6 @@ mark_cport {
   gcMARK2(cp->symtab, gc);
   gcMARK2(cp->symtab_entries, gc);
   gcMARK2(cp->relto, gc);
-  gcMARK2(cp->magic_sym, gc);
-  gcMARK2(cp->magic_val, gc);
   gcMARK2(cp->shared_offsets, gc);
   gcMARK2(cp->delay_info, gc);
   gcMARK2(cp->symtab_refs, gc);
@@ -2080,8 +2072,6 @@ mark_read_params {
  mark:
   ReadParams *rp = (ReadParams *)p;
   gcMARK2(rp->table, gc);
-  gcMARK2(rp->magic_sym, gc);
-  gcMARK2(rp->magic_val, gc);
   gcMARK2(rp->delay_load_info, gc);
   gcMARK2(rp->read_relative_path, gc);
  size:

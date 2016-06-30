@@ -4665,7 +4665,6 @@ START_XFORM_SKIP;
 static void register_traversers(void)
 {
   GC_REG_TRAV(scheme_rt_indexed_string, mark_indexed_string);
-  GC_REG_TRAV(scheme_rt_load_handler_data, mark_load_handler_data);
   GC_REG_TRAV(scheme_rt_user_input, mark_user_input);
   GC_REG_TRAV(scheme_rt_user_output, mark_user_output);
 }

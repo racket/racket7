@@ -621,6 +621,8 @@
   scheme_extension_table->scheme_dynamic_require_reader = scheme_dynamic_require_reader;
   scheme_extension_table->scheme_namespace_require = scheme_namespace_require;
   scheme_extension_table->scheme_is_module_path = scheme_is_module_path;
+  scheme_extension_table->scheme_is_module_path_index = scheme_is_module_path_index;
+  scheme_extension_table->scheme_is_resolved_module_path = scheme_is_resolved_module_path;
   scheme_extension_table->scheme_datum_to_kernel_stx = scheme_datum_to_kernel_stx;
   scheme_extension_table->scheme_module_is_declared = scheme_module_is_declared;
   scheme_extension_table->scheme_intern_symbol = scheme_intern_symbol;

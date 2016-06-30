@@ -278,7 +278,7 @@ sfs.@LTO@: $(srcdir)/sfs.c
 sort.@LTO@: $(srcdir)/sort.c
 	$(CC) $(ALL_CFLAGS) -c $(srcdir)/sort.c -o sort.@LTO@
 startup.@LTO@: $(srcdir)/startup.c
-	$(CC) $(ALL_CFLAGS) -c $(srcdir)/startup.c -I. -I$(srcdir) -o startup.@LTO@
+	$(CC) $(ALL_CFLAGS) -c $(srcdir)/startup.c -I.. -I$(srcdir) -o startup.@LTO@
 string.@LTO@: $(srcdir)/string.c
 	$(CC) $(ALL_CFLAGS) -c $(srcdir)/string.c -I. -o string.@LTO@
 struct.@LTO@: $(srcdir)/struct.c
@@ -422,7 +422,7 @@ sfs.@LTO@: $(COMMON_HEADERS) \
 sort.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h
 startup.@LTO@: $(COMMON_HEADERS)  \
-        $(srcdir)/stypes.h  $(srcdir)/schminc.h $(srcdir)/startup.inc cstartup.inc
+        $(srcdir)/stypes.h  $(srcdir)/schminc.h $(srcdir)/startup.inc ../cstartup.inc
 string.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h    $(srcdir)/schvers.h $(srcdir)/mzmark_string.inc $(srcdir)/strops.inc \
          $(srcdir)/schustr.inc $(srcdir)/systype.inc
@@ -443,5 +443,5 @@ validate.@LTO@: $(COMMON_HEADERS) \
 
 # If "cstartup.inc" hasn't been built, yet, create it as
 # a redirect to "startup.inc"
-cstartup.inc:
-	echo '#include "startup.inc"' > cstartup.inc
+../cstartup.inc:
+	echo '#include "startup.inc"' > ../cstartup.inc
