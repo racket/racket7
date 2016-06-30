@@ -8413,10 +8413,10 @@ extract_one_cc_mark(int argc, Scheme_Object *argv[])
   if (SCHEME_TRUEP(argv[0])
       && !SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_cont_mark_set_type))
     scheme_wrong_contract("continuation-mark-set-first", "(or/c continuation-mark-set? #f)", 0, argc, argv);
-  
+
   if ((argv[1] == scheme_parameterization_key)
       || (argv[1] == scheme_break_enabled_key)) {
-    /* Minor hack: these keys are used in "startup.rkt" to access
+    /* Minor hack: these keys are used in the startup linklet to access
        parameterizations, and we want that access to go through
        prompts. If they keys somehow leaked, it's ok, because that
        doesn't expose anything that isn't already exposed by functions

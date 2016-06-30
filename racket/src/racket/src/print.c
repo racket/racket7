@@ -1944,6 +1944,8 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
 		  || SCHEME_STRUCT_TYPEP(obj) 
 		  || SCHEME_EOFP(obj)
                   || SAME_OBJ(scheme_undefined, obj)
+                  || SAME_OBJ(scheme_parameterization_key, obj)
+                  || SAME_OBJ(scheme_break_enabled_key, obj)
 		  || SAME_TYPE(scheme_always_evt_type, SCHEME_TYPE(obj))
 		  || SAME_TYPE(scheme_never_evt_type, SCHEME_TYPE(obj))
 		  || SAME_TYPE(scheme_struct_property_type, SCHEME_TYPE(obj))
@@ -3047,21 +3049,16 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
                           SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(a[i].bundle)));
       }
     }
-  else if (SCHEME_TYPE(obj) <= _scheme_last_type_ && scheme_type_writers[SCHEME_TYPE(obj)]
-	   && (compact || SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_bundle_type)))
+  else if ((SCHEME_TYPE(obj) <= _scheme_last_type_)
+           && ((compact && scheme_type_writers[SCHEME_TYPE(obj)])
+               || SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_bundle_type)))
     {
-      Scheme_Type t = SCHEME_TYPE(obj);
-      Scheme_Object *v;
-      intptr_t slen;
-
-      if (t >= _scheme_last_type_) {
-	/* Doesn't happen: */
-	scheme_signal_error("internal error: bad type with writer");
-	return 0;
-      }
-
       if (compact) {
-	if (t < CPT_RANGE(SMALL_MARSHALLED)) {
+        Scheme_Type t = SCHEME_TYPE(obj);
+        Scheme_Object *v;
+        Scheme_Type_Writer writer;
+
+        if (t < CPT_RANGE(SMALL_MARSHALLED)) {
 	  unsigned char s[1];
 	  s[0] = t + CPT_SMALL_MARSHALLED_START;
 	  print_this_string(pp, (char *)s, 0, 1);
@@ -3069,25 +3066,21 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
 	  print_compact(pp, CPT_MARSHALLED);
 	  print_compact_number(pp, t);
 	}
-      } else {
-	print_this_string(pp, "#~", 0, 2);
-      }
-
-      {
-	Scheme_Type_Writer writer;
+        
 	writer = scheme_type_writers[t];
 	v = writer(obj);
-      }
-
-      if (compact)
 	closed = print(v, notdisplay, 1, NULL, mt, pp);
-      else {
+      } else {
         Scheme_Hash_Table *st_refs, *symtab, *intern_map, *path_cache;
+        Scheme_Object *v;
         intptr_t *shared_offsets;
         intptr_t st_len, j, shared_offset, start_offset;
+        intptr_t slen;
 
-        MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_bundle_type));
-        v = SCHEME_PTR_VAL(v); /* extract hash table from a linklet bundle */
+        MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_bundle_type));
+        v = SCHEME_PTR_VAL(obj); /* extract hash table from a linklet bundle */
+
+        print_this_string(pp, "#~", 0, 2);
 
         mt = MALLOC_ONE_RT(Scheme_Marshal_Tables);
         SET_REQUIRED_TAG(mt->type = scheme_rt_marshal_info);

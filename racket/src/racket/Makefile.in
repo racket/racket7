@@ -299,11 +299,7 @@ exn:
 	$(MAKE) $(srcdir)/src/schexn.h
 	$(MAKE) $(collectsdir)/racket/private/kernstruct.rkt
 
-STARTUPDEST = startup.inc
 CSTARTUPDEST = cstartup.inc
-
-startup:
-	$(MAKE) $(srcdir)/src/$(STARTUPDEST)
 
 MZCONFIGDIR@NOT_MINGW@ = .
 MZCONFIGDIR@MINGW@ = "$(srcdir)/../worksp"
@@ -317,10 +313,8 @@ $(srcdir)/src/schexn.h: $(srcdir)/src/makeexn
 $(collectsdir)/racket/private/kernstruct.rkt: $(srcdir)/src/makeexn
 	$(RACKET) -um $(srcdir)/src/makeexn kernstruct $(collectsdir)/racket/private/kernstruct.rkt
 
-$(srcdir)/src/$(STARTUPDEST): $(srcdir)/src/startup.rktl $(srcdir)/src/sstoinct.rkt
-	$(RACKET) -cu $(srcdir)/src/sstoinct.rkt < $(srcdir)/src/startup.rktl > $(srcdir)/src/$(STARTUPDEST) 
 cstartup:
-	@RUN_RACKET_CGC@ -cu $(srcdir)/src/sstoinc.rkt $(CSTARTUPEXTRA) src/$(CSTARTUPDEST) $(srcdir)/src/startup.rktl 
+	@RUN_RACKET_CGC@ -cu $(srcdir)/src/compile-startup.rkt src/$(CSTARTUPDEST) $(srcdir)/src/startup.inc
 
 mark:
 	racket -cu $(srcdir)/src/mkmark.rkt $(srcdir)/src < $(srcdir)/src/mzmarksrc.c

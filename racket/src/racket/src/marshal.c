@@ -936,6 +936,25 @@ static Scheme_Object *read_local_unbox(Scheme_Object *obj)
   return do_read_local(scheme_local_unbox_type, obj);
 }
 
+static Scheme_Object *hash_tree_to_vector(Scheme_Hash_Tree *ht)
+{
+  Scheme_Object *vec, *k, *v;
+  mzlonglong pos;
+  int i = 0;
+
+  vec = scheme_make_vector(2 * ht->count, NULL);
+  
+  pos = scheme_hash_tree_next(ht, -1);
+  while (pos != -1) {
+    scheme_hash_tree_index(ht, pos, &k, &v);
+    SCHEME_VEC_ELS(vec)[i++] = k;
+    SCHEME_VEC_ELS(vec)[i++] = v;
+    pos = scheme_hash_tree_next(ht, pos);
+  }
+
+  return vec;
+}
+
 static Scheme_Object *write_linklet(Scheme_Object *obj)
 {
   Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
@@ -945,7 +964,7 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
 
   l = scheme_make_pair(linklet->importss, l);
   l = scheme_make_pair(linklet->defns, l);
-  l = scheme_make_pair((Scheme_Object *)linklet->source_names, l);
+  l = scheme_make_pair(hash_tree_to_vector(linklet->source_names), l);
 
   l = scheme_make_pair(linklet->bodies, l);
 
@@ -956,7 +975,7 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
   return l;
 }
 
-#if 0
+#if 1 // REMOVEME
 # define return_NULL() return (printf("%d\n", __LINE__), NULL)
 #else
 # define return_NULL() return NULL
@@ -992,26 +1011,25 @@ static int is_vector_of_vector_of_symbols(Scheme_Object *v)
   return 1;
 }
 
-static int is_hash_of_symbol_to_symbol(Scheme_Object *_ht)
+static Scheme_Object *vector_to_hash_tree(Scheme_Object *vec)
 {
-  mzlonglong pos;
-  Scheme_Object *k, *v;
   Scheme_Hash_Tree *ht;
+  int i = 0;
 
-  if (!SCHEME_HASHTRP(_ht))
-    return 0;
+  if (!SCHEME_VECTORP(vec))
+    return NULL;
+  if (!SCHEME_VEC_SIZE(vec) & 0x1)
+    return NULL;
 
-  ht = (Scheme_Hash_Tree *)_ht;
-
-  pos = scheme_hash_tree_next(ht, -1);
-  while (pos != -1) {
-    scheme_hash_tree_index(ht, pos, &k, &v);
-    if (!SCHEME_SYMBOLP(k) || !SCHEME_SYMBOLP(v))
-      return 0;
-    pos = scheme_hash_tree_next(ht, pos);
+  ht = scheme_make_hash_tree(0);
+  for (i = SCHEME_VEC_SIZE(vec) - 2; i; i -= 2) {
+    if (!SCHEME_SYMBOLP(SCHEME_VEC_ELS(vec)[i])
+        || !SCHEME_SYMBOLP(SCHEME_VEC_ELS(vec)[i+1]))
+      return NULL;
+    ht = scheme_hash_tree_set(ht, SCHEME_VEC_ELS(vec)[i], SCHEME_VEC_ELS(vec)[i+1]);
   }
 
-  return 1;
+  return (Scheme_Object *)ht;
 }
 
 static Scheme_Object *read_linklet(Scheme_Object *obj)
@@ -1044,8 +1062,8 @@ static Scheme_Object *read_linklet(Scheme_Object *obj)
   obj = SCHEME_CDR(obj);
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
-  a = SCHEME_CAR(obj);
-  if (!is_hash_of_symbol_to_symbol(a)) return_NULL();
+  a = vector_to_hash_tree(SCHEME_CAR(obj));
+  if (!a) return_NULL();
   linklet->source_names = (Scheme_Hash_Tree *)a;
   obj = SCHEME_CDR(obj);
 
@@ -1053,6 +1071,7 @@ static Scheme_Object *read_linklet(Scheme_Object *obj)
   a = SCHEME_CAR(obj);
   if (!is_vector_of_symbols(a)) return_NULL();
   linklet->defns = a;
+  obj = SCHEME_CDR(obj);
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
   a = SCHEME_CAR(obj);

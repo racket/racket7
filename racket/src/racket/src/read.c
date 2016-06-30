@@ -5414,7 +5414,7 @@ static Scheme_Object *read_marshalled(int type, CPort *port)
   if ((type < 0) || (type >= _scheme_last_type_)) {
     scheme_ill_formed_code(port);
   }
-
+  
   reader = scheme_type_readers[type];
 
   if (!reader) {
@@ -5874,17 +5874,14 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
       }
 
       /* Read main body: */
-      result = read_marshalled(scheme_linklet_type, rp);
+      result = read_compact(rp, 1);
 
       if (delay_info)
         if (delay_info->ut)
           delay_info->ut->rp = NULL; /* clean up */
 
-      if (*local_ht) {
-        scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                        "read (compiled): ill-formed code (unexpected graph structure)");
-        return NULL;
-      }
+      if (*local_ht)
+        result = scheme_resolve_placeholders(result);
 
       if (!SCHEME_HASHTRP(result))
         scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
@@ -5921,14 +5918,17 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
           }
         }
       }
-      
-      if (directory) {
-        Scheme_Object *v;
 
+      {
+        Scheme_Object *v;
         v = scheme_alloc_small_object();
         v->type = scheme_linklet_bundle_type;
         SCHEME_PTR_VAL(v) = result;
         result = v;
+      }
+      
+      if (directory) {
+        Scheme_Object *v;
 
         /* Find bundle's symbol path by it's starting position */
         v = scheme_hash_get(directory, scheme_make_integer(bundle_pos));
