@@ -184,6 +184,11 @@ Scheme_Object *scheme_make_fsemaphore(int argc, Scheme_Object *argv[])
   return (Scheme_Object*)fsema;
 }
 
+static Scheme_Object *make_fsemaphore(int argc, Scheme_Object *argv[])
+{
+  return scheme_make_fsemaphore(argc, argv);
+}
+
 Scheme_Object *scheme_fsemaphore_post(int argc, Scheme_Object *argv[])
 {
   fsemaphore_t *fsema;
@@ -247,40 +252,24 @@ static Scheme_Object *mark_future_trace_end(int argc, Scheme_Object *argv[])
   return scheme_void;
 }
 
-void scheme_init_futures(Scheme_Startup_Env *newenv)
-{
-  ADD_PRIM_W_ARITY("future?",          future_p,         1, 1, newenv);
-  ADD_PRIM_W_ARITY("future",           scheme_future,    1, 1, newenv);
-  ADD_PRIM_W_ARITY("processor-count",  processor_count,  0, 0, newenv);
-  ADD_PRIM_W_ARITY("touch",            touch,            1, 1, newenv);
-  ADD_PRIM_W_ARITY("current-future",   scheme_current_future,   0, 0, newenv);
-  ADD_PRIM_W_ARITY("make-fsemaphore",  scheme_make_fsemaphore,  1, 1, newenv);
-  ADD_PRIM_W_ARITY("fsemaphore?",      scheme_fsemaphore_p,     1, 1, newenv);
-  ADD_PRIM_W_ARITY("fsemaphore-post",  scheme_fsemaphore_post,  1, 1, newenv);
-  ADD_PRIM_W_ARITY("fsemaphore-wait",  scheme_fsemaphore_wait,  1, 1, newenv);
-  ADD_PRIM_W_ARITY("fsemaphore-try-wait?", scheme_fsemaphore_try_wait, 1, 1, newenv);
-  ADD_PRIM_W_ARITY("fsemaphore-count", scheme_fsemaphore_count, 1, 1, newenv);
-  ADD_PRIM_W_ARITY("would-be-future", would_be_future, 1, 1, newenv);
-  ADD_PRIM_W_ARITY("futures-enabled?", futures_enabled, 0, 0, newenv);
-  ADD_PRIM_W_ARITY("reset-future-logs-for-tracing!", reset_future_logs_for_tracking, 0, 0, newenv);
-  ADD_PRIM_W_ARITY("mark-future-trace-end!", mark_future_trace_end, 0, 0, newenv);
-
-#ifdef MZ_PRECISE_GC
-  register_traversers();
-#endif
-}
-
 void scheme_init_futures_once()
 {
 }
 
 void scheme_init_futures_per_place()
 {
+#ifdef MZ_PRECISE_GC
+  register_traversers();
+#endif
 }
 
 void scheme_end_futures_per_place()
 {
 }
+
+/* Set differently below when futures are supported */
+#define SCHEME_FUTURE_PRIM_IS_NARY_INLINED  SCHEME_PRIM_SOMETIMES_INLINED
+#define SCHEME_FUTURE_PRIM_IS_UNARY_INLINED SCHEME_PRIM_SOMETIMES_INLINED
 
 #else
 
@@ -462,6 +451,12 @@ typedef struct future_thread_params_t {
   Scheme_Current_LWC *lwc;
 } future_thread_params_t;
 
+/* Set differently above when futures are not supported */
+#define SCHEME_FUTURE_PRIM_IS_NARY_INLINED  SCHEME_PRIM_IS_NARY_INLINED
+#define SCHEME_FUTURE_PRIM_IS_UNARY_INLINED SCHEME_PRIM_IS_UNARY_INLINED
+
+#endif
+
 /**********************************************************************/
 /* Plumbing for Racket initialization                                 */
 /**********************************************************************/
@@ -472,8 +467,7 @@ void scheme_init_futures(Scheme_Startup_Env *newenv)
   Scheme_Object *p;
 
   scheme_addto_prim_instance("future?", 
-                             scheme_make_folding_prim(
-                                                      future_p, 
+                             scheme_make_folding_prim(future_p, 
                                                       "future?", 
                                                       1, 
                                                       1,
@@ -481,26 +475,25 @@ void scheme_init_futures(Scheme_Startup_Env *newenv)
                              newenv);
 
   p = scheme_make_prim_w_arity(scheme_future, "future", 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("future", p, newenv);
 
   scheme_addto_prim_instance("processor-count", 
-                             scheme_make_prim_w_arity(
-                                                      processor_count, 
+                             scheme_make_prim_w_arity(processor_count, 
                                                       "processor-count", 
                                                       0, 
                                                       0), 
                              newenv);
 
   p = scheme_make_prim_w_arity(touch, "touch", 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("touch", p, newenv);
 
   p = scheme_make_immed_prim(scheme_current_future, 
                              "current-future", 
                              0, 
                              0);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_NARY_INLINED);
   scheme_addto_prim_instance("current-future", p, newenv);
 
   p = scheme_make_immed_prim(scheme_fsemaphore_p, 
@@ -508,42 +501,42 @@ void scheme_init_futures(Scheme_Startup_Env *newenv)
                              1, 
                              1);
 
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("fsemaphore?", p, newenv);
 
   p = scheme_make_immed_prim(make_fsemaphore, 
                              "make-fsemaphore", 
                              1, 
                              1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("make-fsemaphore", p, newenv);
 
   p = scheme_make_immed_prim(scheme_fsemaphore_count, 
                              "fsemaphore-count", 
                              1, 
                              1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("fsemaphore-count", p, newenv);
   
   p = scheme_make_immed_prim(scheme_fsemaphore_wait, 
                              "fsemaphore-wait",
                              1, 
                              1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("fsemaphore-wait", p, newenv);
 
   p = scheme_make_immed_prim(scheme_fsemaphore_post, 
                              "fsemaphore-post", 
                              1, 
                              1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("fsemaphore-post", p, newenv);
 
   p = scheme_make_immed_prim(scheme_fsemaphore_try_wait, 
                              "fsemaphore-try-wait?", 
                              1, 
                              1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_FUTURE_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("fsemaphore-try-wait?", p, newenv);  
 
   ADD_PRIM_W_ARITY("would-be-future", would_be_future, 1, 1, newenv);
@@ -551,6 +544,8 @@ void scheme_init_futures(Scheme_Startup_Env *newenv)
   ADD_PRIM_W_ARITY("reset-future-logs-for-tracing!", reset_future_logs_for_tracking, 0, 0, newenv);
   ADD_PRIM_W_ARITY("mark-future-trace-end!", mark_future_trace_end, 0, 0, newenv);
 }
+
+#ifdef MZ_USE_FUTURES
 
 void scheme_init_futures_once()
 {
