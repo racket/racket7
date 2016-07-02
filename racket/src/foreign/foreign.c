@@ -4786,6 +4786,7 @@ void scheme_init_foreign(Scheme_Startup_Env *env)
   t->scheme_to_c = ((Scheme_Object*)(void*)(&ffi_type_pointer));
   t->c_to_scheme = ((Scheme_Object*)FOREIGN_fpointer);
   scheme_addto_prim_instance("_fpointer", (Scheme_Object*)t, env);
+  scheme_addto_prim_instance("prop:cpointer", scheme_cpointer_property, env);
   scheme_restore_prim_instance(env);
 }
 

@@ -115,7 +115,7 @@ void scheme_init_stx(Scheme_Startup_Env *env)
   ADD_FOLDING_PRIM("syntax-span"    , syntax_span   , 1, 1, 1, env);
   ADD_FOLDING_PRIM("syntax-source"  , syntax_src    , 1, 1, 1, env);
 
-  ADD_IMMED_PRIM("syntax-property"                  , syntax_property           , 2, 4, env);
+  ADD_IMMED_PRIM("syntax-property"                  , syntax_property           , 2, 3, env);
   ADD_IMMED_PRIM("syntax-property-symbol-keys"      , syntax_property_keys      , 1, 1, env);
 
   REGISTER_SO(source_symbol);
@@ -878,15 +878,10 @@ static Scheme_Object *syntax_property(int argc, Scheme_Object **argv)
   if (!SCHEME_STXP(argv[0]))
     scheme_wrong_contract("syntax-property", "syntax?", 0, argc, argv);
 
-  if ((argc > 3) && SCHEME_TRUEP(argv[3])) {
-    if (!SCHEME_SYMBOLP(argv[1]) || SCHEME_SYM_WEIRDP(argv[1]))
-      scheme_contract_error("syntax-property",
-                            "expected an interned symbol key for a preserved property"
-                            "given", 1, argv[1],
-                            NULL);
-  }
-  
-  return scheme_stx_property(argv[0], argv[1], NULL);
+  if (argc > 2)
+    return scheme_stx_property(argv[0], argv[1], argv[2]);
+  else
+    return scheme_stx_property(argv[0], argv[1], NULL);
 }
 
 static Scheme_Object *syntax_property_keys(int argc, Scheme_Object **argv)

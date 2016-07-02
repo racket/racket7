@@ -560,8 +560,6 @@ static Scheme_Object *variable_instance(int argc, Scheme_Object **argv)
     scheme_wrong_contract("variable-reference-instance", "variable-reference?", 0, argc, argv);
 
   v = SCHEME_PTR2_VAL(argv[0]);
-  if (SCHEME_FALSEP(v))
-    return scheme_false;
 
   return v;
 }

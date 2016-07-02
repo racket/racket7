@@ -234,7 +234,7 @@ scheme_init_type ()
 
   set_name(scheme_inspector_type, "<inspector>");
   
-  set_name(scheme_stx_type, "<syntax>");
+  set_name(scheme_stx_type, "<correlated>");
 
   set_name(scheme_subprocess_type, "<subprocess>");
 

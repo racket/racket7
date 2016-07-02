@@ -53,6 +53,11 @@ static Scheme_Object *make_global_ref(Scheme_Object *var, Scheme_Object *dummy)
   o = scheme_alloc_object();
   o->type = scheme_global_ref_type;
   SCHEME_PTR1_VAL(o) = var;
+  if (!SCHEME_FALSEP(dummy)) {
+    Scheme_Instance *home;
+    home = scheme_get_bucket_home((Scheme_Bucket *)dummy);
+    dummy = (Scheme_Object *)home;
+  }
   SCHEME_PTR2_VAL(o) = dummy;
 
   return o;

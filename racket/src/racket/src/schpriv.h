@@ -924,7 +924,7 @@ typedef struct {
 
 typedef struct Scheme_Instance Scheme_Instance;
 
-Scheme_Instance *scheme_get_bucket_home(Scheme_Bucket *b);
+XFORM_NONGCING Scheme_Instance *scheme_get_bucket_home(Scheme_Bucket *b);
 void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Instance *e);
 Scheme_Object *scheme_get_home_weak_link(Scheme_Instance *e);
 
