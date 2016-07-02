@@ -4653,8 +4653,6 @@ scheme_do_open_input_file(char *name, int offset, int argc, Scheme_Object *argv[
   if (!SCHEME_PATH_STRINGP(argv[0]))
     scheme_wrong_contract(name, "path-string?", 0, argc, argv);
 
-  printf("%s\n", scheme_write_to_string(argv[0], 0)); // REMOVEME
-
   for (i = 1 + offset; argc > i; i++) {
     if (!SCHEME_SYMBOLP(argv[i]))
       scheme_wrong_contract(name, "symbol?", i, argc, argv);

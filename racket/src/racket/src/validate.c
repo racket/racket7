@@ -398,7 +398,7 @@ static int define_values_validate(Scheme_Object *data, Mz_CPort *port,
     int ts = (tl_timestamp + (result ? 0 : 1));
     if (tl_state) {
       int p = SCHEME_TOPLEVEL_POS(SCHEME_VEC_ELS(data)[i]);
-      if (p < num_toplevels) {
+      if (p < (num_toplevels - num_lifts)) {
         int s = -tl_state[p];
         int expected_flags = s & SCHEME_TOPLEVEL_FLAGS_MASK;
         int this_flags = flags;
@@ -416,8 +416,9 @@ static int define_values_validate(Scheme_Object *data, Mz_CPort *port,
                    `(define x x)' with `x' claimed as constant. The
                    `tl_timestamp++' before checking a closure body
                    allows things like `(define x (lambda () x))'. */
-                && ((s >> 2) <= ts)))
+                && ((s >> 2) <= ts))) {
           scheme_ill_formed_code(port);
+        }
         tl_state[p] = (ts << 2) | this_flags;
       }
     }
@@ -461,6 +462,8 @@ static void ref_validate(Scheme_Object *data, Mz_CPort *port,
                          struct Validate_Clearing *vc, int tailpos,
                          Scheme_Hash_Tree *procs)
 {
+  tl_timestamp++; /* allows (define x (#%variable-reference x)) */
+  
   if (!SCHEME_FALSEP(SCHEME_PTR1_VAL(data)))
     validate_toplevel(SCHEME_PTR1_VAL(data), port, stack, tls, depth, delta, 
                       num_toplevels, num_lifts, tl_use_map,

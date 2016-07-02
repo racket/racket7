@@ -5605,7 +5605,6 @@ static Scheme_Object *bundle_list_to_hierarchical_directory(Scheme_Object *bundl
   Scheme_Object *p, *v, *path, *stack = scheme_null;
   int len, prev_len = 0;
   
-  bundles = scheme_reverse(bundles);
   accum = scheme_make_hash_tree(0);
 
   /* The bundles list is in post-order, so we can build directories
@@ -5664,7 +5663,7 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
 				    ReadParams *params)
 {
   Scheme_Hash_Table *directory = NULL; /* position -> symbol-path */
-  Scheme_Object *bundles; /* list of (cons symbol-path bundle-or-#f) */
+  Scheme_Object *bundles = scheme_null; /* list of (cons symbol-path bundle-or-#f) */
   int bundle_pos, bundles_to_read = 0;
   Scheme_Object *result;
   intptr_t size, shared_size, got, offset;
@@ -5682,7 +5681,7 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
 	  
   while (1) {
     if (directory)
-      bundle_pos = SCHEME_INT_VAL(scheme_file_position(1, &port));
+      bundle_pos = SCHEME_INT_VAL(scheme_file_position(1, &port)) - 2; /* -2 for "#~" */
     else
       bundle_pos = 0;
     

@@ -7,6 +7,23 @@
   
   (define-values (dest) (vector-ref (current-command-line-arguments) 0))
   (define-values (src) (vector-ref (current-command-line-arguments) 1))
+  (define-values (other-files) (cddr (vector->list (current-command-line-arguments))))
+
+  ;; Bail out if we don't need to do anything:
+  (if (file-exists? dest)
+      (if (call-with-input-file dest (lambda (i)
+                                       (begin
+                                         (read-line i 'any)
+                                         (not (eof-object? (read-line i 'any))))))
+          (if (andmap (lambda (f)
+                        ((file-or-directory-modify-seconds dest)
+                         . > . 
+                         (file-or-directory-modify-seconds f)))
+                      (cons src other-files))
+              (exit 0)
+              (void))
+          (void))
+      (void))
   
   (define-values (get-lines)
     (lambda (in)

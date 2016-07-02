@@ -5281,7 +5281,7 @@ ref_optimize(Scheme_Object *data, Optimize_Info *info, int context)
   if (SAME_TYPE(SCHEME_TYPE(v), scheme_ir_local_type)) {
     SCHEME_PTR1_VAL(data) = (SCHEME_VAR(v)->mutated ? scheme_false : scheme_true);
   } else if (SAME_TYPE(SCHEME_TYPE(v), scheme_ir_toplevel_type)) {
-    /* Knowing whether a top-level variable is fixed lets up optimize
+    /* Knowing whether a top-level variable is fixed lets us optimize
        uses of `variable-reference-constant?` */
     if (info->top_level_consts) {
       int pos = SCHEME_IR_TOPLEVEL_POS(v);

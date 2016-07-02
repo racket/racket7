@@ -102,6 +102,7 @@ cgc-core:
 
 3m:
 	$(MAKE) @CGC_IF_NEEDED_FOR_MMM@
+	$(MAKE) cstartup
 	cd gc2; $(MAKE) all
 	cd dynsrc; $(MAKE) dynlib3m
 	cd gc2; $(MAKE) ../racket@MMM@
@@ -313,8 +314,13 @@ $(srcdir)/src/schexn.h: $(srcdir)/src/makeexn
 $(collectsdir)/racket/private/kernstruct.rkt: $(srcdir)/src/makeexn
 	$(RACKET) -um $(srcdir)/src/makeexn kernstruct $(collectsdir)/racket/private/kernstruct.rkt
 
+# This target may update "cstartup.inc", either replacing a stub
+# "cstartup.inc" that redirects to "startup.inc" or rebuilding because
+# "startup.inc" or "schvers.h" changed; so, during a CGC build, we try
+# again after building this target to potentially update the CGC build
+# to a compiled-startup build
 cstartup:
-	@RUN_RACKET_CGC@ -cu $(srcdir)/src/compile-startup.rkt src/$(CSTARTUPDEST) $(srcdir)/src/startup.inc
+	@RUN_RACKET_CGC@ -cu $(srcdir)/src/compile-startup.rkt $(CSTARTUPDEST) $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
 
 mark:
 	racket -cu $(srcdir)/src/mkmark.rkt $(srcdir)/src < $(srcdir)/src/mzmarksrc.c
@@ -326,6 +332,7 @@ clean@NOT_OSX@:
 	/bin/rm -f mzdyn.o libmzgc.@LIBSFX@ libracket.@LIBSFX@ libracket3m.@LIBSFX@ libdl.a racket racket.multiboot
 	/bin/rm -f include/macosxpre
 	/bin/rm -f include/macosxpre.p
+	/bin/rm -f $(CSTARTUPDEST)
 	cd gc; $(MAKE) clean
 	cd gc2; $(MAKE) clean
 	cd sgc; $(MAKE) clean

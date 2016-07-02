@@ -1018,11 +1018,11 @@ static Scheme_Object *vector_to_hash_tree(Scheme_Object *vec)
 
   if (!SCHEME_VECTORP(vec))
     return NULL;
-  if (!SCHEME_VEC_SIZE(vec) & 0x1)
+  if (SCHEME_VEC_SIZE(vec) & 0x1)
     return NULL;
 
   ht = scheme_make_hash_tree(0);
-  for (i = SCHEME_VEC_SIZE(vec) - 2; i; i -= 2) {
+  for (i = SCHEME_VEC_SIZE(vec) - 2; i >= 0; i -= 2) {
     if (!SCHEME_SYMBOLP(SCHEME_VEC_ELS(vec)[i])
         || !SCHEME_SYMBOLP(SCHEME_VEC_ELS(vec)[i+1]))
       return NULL;

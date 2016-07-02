@@ -41,8 +41,77 @@
 ;;   -e means a reversed list of tokens
 
 (module xform '#%kernel
-  (#%require '#%min-stx)
+  ;; Some minimal syntax for writing the rest ----------------------------------------
+  (module min-stx '#%kernel
+    (#%require '#%paramz
+               (for-syntax '#%kernel))
 
+    (#%provide unless
+               and
+               let
+               parameterize)
+
+    (begin-for-syntax 
+      (define-values (here-stx) (quote-syntax here)))
+
+    (define-syntaxes (unless)
+      (lambda (stx)
+        (let-values ([(s) (syntax->list stx)])
+          (datum->syntax here-stx
+                         (list 'if (cadr s)
+                               (void)
+                               (cons 'begin (cddr s)))))))
+
+    (define-syntaxes (and)
+      (lambda (stx)
+        (let-values ([(s) (cdr (syntax->list stx))])
+          (if (null? s)
+              (quote-syntax #t)
+              (if (null? (cdr s))
+                  (car s)
+                  (datum->syntax here-stx
+                                 (list 'if (car s) (cons 'and (cdr s)) #f)))))))
+
+    (define-syntaxes (let)
+      (lambda (stx)
+        (let-values ([(s) (cdr (syntax->list stx))])
+          (datum->syntax 
+           here-stx
+           (if (symbol? (syntax-e (car s)))
+               (let-values ([(clauses)
+                             (map (lambda (c)
+                                    (syntax->list c))
+                                  (syntax->list (cadr s)))])
+                 (list 'letrec-values (list (list (list (car s))
+                                                  (list* 'lambda
+                                                         (map car clauses)
+                                                         (cddr s))))
+                       (cons (car s) (map cadr clauses))))
+               (list* 'let-values (map (lambda (c)
+                                         (let-values ([(c) (syntax->list c)])
+                                           (cons (list (car c))
+                                                 (cdr c))))
+                                       (syntax->list (car s)))
+                      (cdr s)))))))
+
+    (define-syntaxes (parameterize)
+      (lambda (stx)
+        (let-values ([(s) (cdr (syntax->list stx))])
+          (let-values ([(bindings) (apply append
+                                          (map syntax->list (syntax->list (car s))))])
+            (syntax-arm
+             (datum->syntax 
+              here-stx
+              (list 'with-continuation-mark
+                    'parameterization-key
+                    (list* 'extend-parameterization
+                           '(continuation-mark-set-first #f parameterization-key)
+                           bindings)
+                    (list* 'let-values ()
+                           (cdr s))))))))))
+  ;; ----------------------------------------
+  (#%require 'min-stx)
+  
   (define-values (rel-dir)
     (if (string=? "--setup" (vector-ref (current-command-line-arguments) 0))
         (vector-ref (current-command-line-arguments) 1)
