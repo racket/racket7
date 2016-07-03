@@ -97,6 +97,7 @@ cgc-core:
 	$(MAKE) mzlibrary
 	$(MAKE) racket@CGC@
 	$(MAKE) cstartup
+	$(MAKE) mzlibrary
 	$(MAKE) racket@CGC@
 	$(MAKE) mzcom@CGC@
 

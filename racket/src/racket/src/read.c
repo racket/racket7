@@ -5602,57 +5602,69 @@ Scheme_Object *wrap_as_linklet_directory(Scheme_Hash_Tree *ht)
 static Scheme_Object *bundle_list_to_hierarchical_directory(Scheme_Object *bundles)
 {
   Scheme_Hash_Tree *accum, *next;
-  Scheme_Object *p, *v, *path, *stack = scheme_null;
-  int len, prev_len = 0;
+  Scheme_Object *p, *v, *path, *stack;
+  int len, prev_len, i;
   
-  accum = scheme_make_hash_tree(0);
-
   /* The bundles list is in post-order, so we can build directories
      bottom-up */
 
+  prev_len = 0;
+  stack = scheme_null;
+  accum = scheme_make_hash_tree(0);
+
   while (1) {
+    MZ_ASSERT(SCHEME_PAIRP(bundles));
     p = SCHEME_CAR(bundles);
     path = SCHEME_CAR(p);
     v = SCHEME_CDR(p);
 
-    if (SCHEME_NULLP(path))
-      len = 0;
-    else
-      len = scheme_list_length(path) - 1;
+    MZ_ASSERT(SCHEME_FALSEP(v) || SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_bundle_type));
 
-    while (len < prev_len) {
-      p = SCHEME_CAR(stack);
-      next = (Scheme_Hash_Tree *)SCHEME_CDR(p);
-      next = scheme_hash_tree_set(next, SCHEME_CAR(p), wrap_as_linklet_directory(accum));
-      accum = next;
-      prev_len--;
-    }
+    len = scheme_list_length(path);
 
-    if (SCHEME_NULLP(path)) {
-      MZ_ASSERT(SCHEME_NULLP(SCHEME_CDR(bundles)));
-      
-      if (!SCHEME_FALSEP(v))
-        accum = scheme_hash_tree_set(accum, scheme_false, v);
+    if (len < prev_len)
+      return NULL;
 
-      return wrap_as_linklet_directory(accum);
-    }
-    
-    while (len > prev_len) {
-      stack = scheme_make_pair(scheme_make_pair(SCHEME_CAR(path),
-                                                (Scheme_Object *)accum),
-                               stack);
-      accum = scheme_make_hash_tree(0);
-      path = SCHEME_CDR(path);
+    while (len > prev_len + 1) {
+      stack = scheme_make_pair((Scheme_Object *)accum, stack);
       prev_len++;
+      accum = scheme_make_hash_tree(0);
     }
 
-    if (!SCHEME_FALSEP(v))
-      accum = scheme_hash_tree_set(accum, SCHEME_CAR(path), v);
+    for (i = 0; i < prev_len - 1; i++) {
+      path = SCHEME_CDR(path);
+    }
 
+    if (len == prev_len) {
+      if (!SCHEME_FALSEP(v)) {
+        MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_bundle_type));
+        accum = scheme_hash_tree_set(accum, scheme_false, v);
+      }
+
+      if (!len)
+        return wrap_as_linklet_directory(accum);
+
+      next = (Scheme_Hash_Tree *)SCHEME_CAR(stack);
+      stack = SCHEME_CDR(stack);
+      next = scheme_hash_tree_set(next, SCHEME_CAR(path), wrap_as_linklet_directory(accum));
+      prev_len--;
+      accum = next;
+    } else {
+      MZ_ASSERT(len == prev_len + 1);
+      if (prev_len)
+        path = SCHEME_CDR(path);
+      next = scheme_make_hash_tree(0);
+      if (!SCHEME_FALSEP(v)) {
+        MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_bundle_type));
+        next = scheme_hash_tree_set(next, scheme_false, v);
+      }
+      accum = scheme_hash_tree_set(accum, SCHEME_CAR(path), wrap_as_linklet_directory(next));
+    }
+      
     bundles = SCHEME_CDR(bundles);
+    if (SCHEME_NULLP(bundles))
+      return NULL;
   }
-
-  return SCHEME_CAR(stack);
 }
 
 /* "#~" has been read */
@@ -5934,13 +5946,17 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
         if (!v)
           scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
                           "read (compiled): cannot match bundle position to linklet-directory path");
-
+                
         bundles = scheme_make_pair(scheme_make_pair(v, result), bundles);
         bundles_to_read--;
 
         if (!bundles_to_read) {
           /* convert flattened directory into hierarchical form */
-          return bundle_list_to_hierarchical_directory(bundles);
+          v = bundle_list_to_hierarchical_directory(bundles);
+          if (!v)
+            scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
+                            "read (compiled): bad shape for bundle-directory tree");
+          return v;
         }
         /* otherwise, continue reading bundles */
       } else
