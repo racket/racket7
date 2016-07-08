@@ -9,18 +9,84 @@
 ;; `for-label', otherwise it could get a .zo anyway.
 
 ;; Also, do not `require' any module that is compiled. That constraint
-;; essentially restrcts this module to `require's of '#%... modules.
+;; essentially restricts this module to `require's of '#%... modules.
 
 (module main '#%kernel
-  (#%require '#%min-stx
-             '#%utils ; for find-main-collects
+  (#%require '#%utils ; for find-main-collects
+             '#%paramz
              ;; Need to make sure they're here:
-             '#%builtin)
+             '#%builtin
+             (for-syntax '#%kernel))
 
   (module test '#%kernel)
+  
+  ;; ----------------------------------------
+  ;; Some minimal syntax extensions to '#%kernel
+  
+  (define-syntaxes (parameterize)
+    (lambda (stx)
+      (let-values ([(s) (cdr (syntax->list stx))])
+        (let-values ([(bindings) (apply append
+                                        (map syntax->list (syntax->list (car s))))])
+          (datum->syntax 
+           (quote-syntax here)
+           (list 'with-continuation-mark
+                 'parameterization-key
+                 (list* 'extend-parameterization
+                        '(continuation-mark-set-first #f parameterization-key)
+                        bindings)
+                 (list* 'let-values ()
+                        (cdr s))))))))
 
-  (when (file-stream-port? (current-output-port))
-    (file-stream-buffer-mode (current-output-port) 'line))
+  (define-syntaxes (and)
+    (lambda (stx)
+      (let-values ([(s) (cdr (syntax->list stx))])
+        (if (null? s)
+            (quote-syntax #t)
+            (if (null? (cdr s))
+                (car s)
+                (datum->syntax (quote-syntax here)
+                               (list 'if (car s) (cons 'and (cdr s)) #f)))))))
+
+  (define-syntaxes (or)
+    (lambda (stx)
+      (let-values ([(s) (cdr (syntax->list stx))])
+        (if (null? s)
+            (quote-syntax #f)
+            (if (null? (cdr s))
+                (car s)
+                (datum->syntax (quote-syntax here)
+                               (list 'let-values (list (list (list 'x)
+                                                             (car s)))
+                                     (list 'if 'x 'x (cons 'or (cdr s))))))))))
+
+  (define-syntaxes (let)
+    (lambda (stx)
+      (let-values ([(s) (cdr (syntax->list stx))])
+        (datum->syntax 
+         (quote-syntax here)
+         (if (symbol? (syntax-e (car s)))
+             (let-values ([(clauses)
+                           (map (lambda (c)
+                                  (syntax->list c))
+                                (syntax->list (cadr s)))])
+               (list 'letrec-values (list (list (list (car s))
+                                                (list* 'lambda
+                                                       (map car clauses)
+                                                       (cddr s))))
+                     (cons (car s) (map cadr clauses))))
+             (list* 'let-values (map (lambda (c)
+                                       (let-values ([(c) (syntax->list c)])
+                                         (cons (list (car c))
+                                               (cdr c))))
+                                     (syntax->list (car s)))
+                    (cdr s)))))))
+  
+  ;; ----------------------------------------
+
+  (if (file-stream-port? (current-output-port))
+      (file-stream-buffer-mode (current-output-port) 'line)
+      (void))
 
   (define-values (make-kernel-namespace)
     (lambda ()
@@ -81,8 +147,9 @@
   (define-values (main-collects-relative->path)
     (let ([main-collects #f])
       (lambda (p)
-        (unless main-collects
-          (set! main-collects (find-main-collects)))
+        (if main-collects
+            (void)
+            (set! main-collects (find-main-collects)))
         (if (and (pair? p)
                  (eq? 'collects (car p)))
             (apply build-path main-collects
@@ -95,10 +162,12 @@
           (on? "-n"))
       ;; Don't use .zos, in case they're out of date, and don't load
       ;;  cm:
-      (when (or (on? "--clean")
-                (on? "-c"))
-	(use-compiled-file-paths null)
-	(print-bootstrapping "command-line --clean or -c"))
+      (if (or (on? "--clean")
+              (on? "-c"))
+          (begin
+            (use-compiled-file-paths null)
+            (print-bootstrapping "command-line --clean or -c"))
+          (void))
   
       ;; Load the cm instance to be installed while loading Setup PLT.
       ;; This has to be dynamic, so we get a chance to turn off compiled
@@ -120,8 +189,9 @@
 		    ;;  compiled files.
 		    (let loop ([skip-zo/reason (and (null? (use-compiled-file-paths))
                                                     "empty use-compiled-file-paths")])
-		      (when skip-zo/reason
-			(print-bootstrapping skip-zo/reason))
+		      (if skip-zo/reason
+                          (print-bootstrapping skip-zo/reason)
+                          (void))
 		      ((call-with-escape-continuation
                         (lambda (escape)
 			 ;; Create a new namespace, and also install load handlers
@@ -154,9 +224,10 @@
                                                                                     (eq? (car dep) 'indirect))
                                                                                (cdr dep)
                                                                                dep)])
-                                                                      (unless (and (pair? dep)
-                                                                                   (eq? (car dep) 'ext))
-                                                                        (dynamic-require (main-collects-relative->path dep) #f))))
+                                                                      (if (and (pair? dep)
+                                                                               (eq? (car dep) 'ext))
+                                                                          (void)
+                                                                          (dynamic-require (main-collects-relative->path dep) #f))))
                                                                   (cddr deps))))
 						     ;; Not a .zo! Don't use .zo files at all...
 						     (escape (lambda ()
@@ -173,7 +244,7 @@
 		           ;; If something goes wrong, of course, give up on .zo files.
                            (parameterize ([uncaught-exception-handler
                                            (lambda (exn)
-                                             (when (exn:break? exn) (exit 1))
+                                             (if (exn:break? exn) (exit 1) (void))
                                              (if skip-zo/reason
                                                  (escape
                                                   (lambda () (raise exn)))
@@ -189,8 +260,9 @@
 				    (dynamic-require 'compiler/cm 'trust-existing-zos)])
 			       ;; Return the two extracted functions:
 			       (lambda () (values mk trust-zos)))))))))])
-	(when (on? "--trust-zos")
-	  (trust-zos #t))
+	(if (on? "--trust-zos")
+            (trust-zos #t)
+            (void))
 	(current-load/use-compiled (mk))))
 
   ;; This has to be dynamic, so we get a chance to turn off
