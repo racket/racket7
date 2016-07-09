@@ -34,7 +34,7 @@ static Scheme_Linklet *eval_linklet_string(const char *str, intptr_t len, int ex
     len = strlen(str);
   port = scheme_make_sized_byte_string_input_port(str, -len); /* negative means it's constant */
 
-  expr = scheme_internal_read(port, NULL, 1, 1, 0, 0, -1, NULL, NULL);
+  expr = scheme_internal_read(port, NULL, 1, 1, 0, 0, -1, NULL, scheme_true);
 
   if (extract) {
     /* expr is a linklet bundle; 'startup is mapped to the linklet */

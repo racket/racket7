@@ -5903,12 +5903,14 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
         Scheme_Hash_Tree *t = (Scheme_Hash_Tree *)result;
         Scheme_Object *key, *val;
 
-        i = scheme_hash_tree_next(t, -1);
-        while (i != -1) {
-          scheme_hash_tree_index(t, i, &key, &val);
-          if (SAME_TYPE(SCHEME_TYPE(val), scheme_linklet_type))
-            scheme_validate_linklet(rp, (Scheme_Linklet *)val);
-          i = scheme_hash_tree_next(t, i);
+        if (!scheme_starting_up) {
+          i = scheme_hash_tree_next(t, -1);
+          while (i != -1) {
+            scheme_hash_tree_index(t, i, &key, &val);
+            if (SAME_TYPE(SCHEME_TYPE(val), scheme_linklet_type))
+              scheme_validate_linklet(rp, (Scheme_Linklet *)val);
+            i = scheme_hash_tree_next(t, i);
+          }
         }
       
         /* If no exception, the resulting code is ok. */

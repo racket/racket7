@@ -3462,7 +3462,7 @@ Scheme_Object *scheme_eval_multi(Scheme_Object *obj, Scheme_Env *env)
 static Scheme_Object *finish_eval_with_prompt(void *_data, int argc, Scheme_Object **argv)
 {
   Scheme_Object *data = (Scheme_Object *)_data;
-  return _scheme_eval_compiled(SCHEME_CAR(data), (Scheme_Env *)SCHEME_CDR(data));
+  return scheme_eval(SCHEME_CAR(data), (Scheme_Env *)SCHEME_CDR(data));
 }
 
 Scheme_Object *scheme_eval_with_prompt(Scheme_Object *obj, Scheme_Env *env)
@@ -3476,7 +3476,7 @@ Scheme_Object *scheme_eval_with_prompt(Scheme_Object *obj, Scheme_Env *env)
 static Scheme_Object *finish_eval_multi_with_prompt(void *_data, int argc, Scheme_Object **argv)
 {
   Scheme_Object *data = (Scheme_Object *)_data;
-  return _scheme_eval_compiled_multi(SCHEME_CAR(data), (Scheme_Env *)SCHEME_CDR(data));
+  return scheme_eval_multi(SCHEME_CAR(data), (Scheme_Env *)SCHEME_CDR(data));
 }
 
 Scheme_Object *scheme_eval_multi_with_prompt(Scheme_Object *obj, Scheme_Env *env)
@@ -3540,8 +3540,8 @@ static Scheme_Object *read_syntax(Scheme_Object *port, Scheme_Object *src)
 {
   Scheme_Object *proc, *a[2];
   proc = scheme_get_startup_export("read-syntax");
-  a[0] = port;
-  a[1] = src;
+  a[0] = src;
+  a[1] = port;
   return scheme_apply(proc, 2, a);
 }
 
