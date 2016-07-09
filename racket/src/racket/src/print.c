@@ -1946,6 +1946,7 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
                   || SAME_OBJ(scheme_undefined, obj)
                   || SAME_OBJ(scheme_parameterization_key, obj)
                   || SAME_OBJ(scheme_break_enabled_key, obj)
+                  || SAME_OBJ(scheme_exn_handler_key, obj)
 		  || SAME_TYPE(scheme_always_evt_type, SCHEME_TYPE(obj))
 		  || SAME_TYPE(scheme_never_evt_type, SCHEME_TYPE(obj))
 		  || SAME_TYPE(scheme_struct_property_type, SCHEME_TYPE(obj))
