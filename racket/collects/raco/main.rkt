@@ -11,8 +11,9 @@
              '#%builtin)
 
   (let-values ([(cmdline) (current-command-line-arguments)])
-    (if (and (positive? (vector-length cmdline))
-             (equal? "setup" (vector-ref cmdline 0)))
+    (if (if (positive? (vector-length cmdline))
+            (equal? "setup" (vector-ref cmdline 0))
+            #f)
         (with-continuation-mark
           parameterization-key
           (extend-parameterization
@@ -20,6 +21,6 @@
            current-command-line-arguments
            (list->vector
             (cdr
-             (vector->list cmdline)))))
+             (vector->list cmdline))))
           (dynamic-require 'setup/main #f))
         (dynamic-require 'raco/raco #f))))
