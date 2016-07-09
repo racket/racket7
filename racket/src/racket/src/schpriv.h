@@ -3107,6 +3107,8 @@ struct Scheme_Linklet
   int max_let_depth;
 
   int num_toplevels; /* only after compile and before resolve */
+
+  struct Scheme_Linklet *jitted; /* NULL or a JIT-prepared copy of the linklet */
 };
 
 #define SCHEME_DEFN_VAR_COUNT(d) (SCHEME_VEC_SIZE(d)-1)

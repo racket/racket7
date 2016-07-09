@@ -921,9 +921,17 @@ static void *instantiate_linklet_k(void)
     return (Scheme_Object *)scheme_enlarge_runstack(depth, instantiate_linklet_k);
   }
 
-  b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
-  if (SCHEME_TRUEP(b))
-    linklet = scheme_jit_linklet(linklet);
+  if (linklet->jitted) {
+    linklet = linklet->jitted;
+  } else {
+    b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
+    if (SCHEME_TRUEP(b)) {
+      Scheme_Linklet *jitted;
+      jitted = scheme_jit_linklet(linklet);
+      linklet->jitted = jitted;
+      linklet = jitted;
+    }
+  }
 
   /* Pushng the prefix looks up imported variables */
   save_runstack = MZ_RUNSTACK;

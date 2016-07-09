@@ -34,7 +34,8 @@
                                    (if (ts2 . > . ts)
                                        (error 'changed-dependency "~a" (car paths))
                                        (dloop (cdr paths)))))))
-                         (dloop (call-with-input-file sdep read)))))))
+                         (dloop (call-with-input-file sdep read))))))
+                  (loop (cdr paths)))
                 (loop (cdr paths)))))))
 
   (if (directory-exists? "xsrc")
