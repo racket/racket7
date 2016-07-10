@@ -2007,7 +2007,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
         SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CAR(e));
         e = SCHEME_STX_CADR(e);
       }
-      tl = scheme_make_ir_toplevel(pos++, i, j, 0);
+      tl = scheme_make_ir_toplevel(pos++, i, j, SCHEME_TOPLEVEL_READY);
       env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
     }
   }
