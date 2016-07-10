@@ -30,6 +30,8 @@ SHARED_OK static int validate_compile_result = 0;
 SHARED_OK static int recompile_every_compile = 0;
 
 static Scheme_Object *primitive_table(int argc, Scheme_Object **argv);
+static Scheme_Object *primitive_to_position(int argc, Scheme_Object **argv);
+static Scheme_Object *position_to_primitive(int argc, Scheme_Object **argv);
 
 static Scheme_Object *linklet_p(int argc, Scheme_Object **argv);
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv);
@@ -95,6 +97,8 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   scheme_switch_prim_instance(env, "#%linklet");
 
   ADD_PRIM_W_ARITY("primitive-table", primitive_table, 1, 2, env);
+  ADD_PRIM_W_ARITY("primitive->compiled-position", primitive_to_position, 1, 1, env);
+  ADD_PRIM_W_ARITY("compiled-position->primitive", position_to_primitive, 1, 1, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 2, env);
@@ -192,6 +196,23 @@ static Scheme_Object *primitive_table(int argc, Scheme_Object *argv[])
     return (Scheme_Object *)table;
   else
     return scheme_void;
+}
+
+static Scheme_Object *primitive_to_position(int argc, Scheme_Object **argv)
+{
+  Scheme_Object *pos;
+  pos = scheme_hash_get(scheme_startup_env->primitive_ids_table, argv[0]);
+  return (pos ? pos : scheme_false);
+}
+
+static Scheme_Object *position_to_primitive(int argc, Scheme_Object **argv)
+{
+  Scheme_Object *v;
+  if (SCHEME_INTP(argv[0]) && (SCHEME_INT_VAL(argv[0]) >= 0))
+    v = scheme_position_to_builtin(SCHEME_INT_VAL(argv[0]));
+  else
+    v = NULL;
+  return (v ? v : scheme_false);
 }
 
 static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)

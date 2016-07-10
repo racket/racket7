@@ -582,6 +582,18 @@ void scheme_init_variable_references_constants()
   variable_references = scheme_make_builtin_references_table(&unsafe_variable_references_start);
 }
 
+Scheme_Object *scheme_position_to_builtin(int l)
+{
+  if (l < (EXPECTED_PRIM_COUNT 
+           + EXPECTED_UNSAFE_COUNT 
+           + EXPECTED_FLFXNUM_COUNT 
+           + EXPECTED_EXTFL_COUNT
+           + EXPECTED_FUTURES_COUNT
+           + EXPECTED_FOREIGN_COUNT))
+    return variable_references[l];
+  else
+    return NULL;
+}
 
 static void track_indentation(Scheme_Object *indentation, int line, int col)
 {

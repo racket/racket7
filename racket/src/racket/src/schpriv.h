@@ -477,6 +477,8 @@ extern int scheme_builtin_ref_counter;
 Scheme_Object **scheme_make_builtin_references_table(int *_unsafe_start);
 Scheme_Object *scheme_make_local(Scheme_Type type, int pos, int flags);
 
+Scheme_Object *scheme_position_to_builtin(int l);
+
 typedef struct Scheme_Linklet  Scheme_Linklet;
 Scheme_Linklet *scheme_startup_linklet();
 

@@ -5,38 +5,18 @@
          racket/match
          racket/list
          racket/set
-         racket/path)
+         racket/path
+         (only-in '#%linklet compiled-position->primitive))
 
 (provide decompile)
 
 ;; ----------------------------------------
 
 (define primitive-table
-  ;; Figure out number-to-id mapping for kernel functions in `primitive'
-  (let ([bindings
-         (let ([ns (make-base-empty-namespace)])
-           (parameterize ([current-namespace ns])
-             (namespace-require ''#%kernel)
-             (namespace-require ''#%unsafe)
-             (namespace-require ''#%flfxnum)
-             (namespace-require ''#%extfl)
-             (namespace-require ''#%futures)
-             (namespace-require ''#%foreign)
-             (for/list ([l (namespace-mapped-symbols)])
-               (cons l (with-handlers ([exn:fail? (lambda (x) #f)])
-                         (compile l))))))]
-        [table (make-hash)])
-    (for ([b (in-list bindings)])
-      (let ([v (and (cdr b)
-                    (zo-parse 
-                     (open-input-bytes
-                      (with-output-to-bytes
-                          (λ () (write (cdr b)))))))])
-        (let ([n (match v
-                   [(struct compilation-top (_ _ prefix (struct primval (n)))) n]
-                   [else #f])])
-          (hash-set! table n (car b)))))
-    table))
+  (for/hash ([i (in-naturals)]
+             #:break (not (compiled-position->primitive i)))
+    (define v (compiled-position->primitive i))
+    (values i (or (object-name v) v))))
 
 (define (list-ref/protect l pos who)
   (list-ref l pos)
@@ -47,291 +27,37 @@
 
 ;; ----------------------------------------
 
-(define-struct glob-desc (vars num-tls num-stxs num-lifts))
+(define-struct glob-desc (vars))
 
 ;; Main entry:
 (define (decompile top)
-  (let ([stx-ht (make-hasheq)])
-    (match top
-      [(struct compilation-top (max-let-depth binding-namess prefix form))
-       (let-values ([(globs defns) (decompile-prefix prefix stx-ht)])
-         (expose-module-path-indexes
-          `(begin
-            ,@defns
-            ,(decompile-form form globs '(#%globals) (make-hasheq) stx-ht))))]
-      [else (error 'decompile "unrecognized: ~e" top)])))
-
-(define (expose-module-path-indexes e)
-  ;; This is a nearly general replace-in-graph function. (It seems like a lot
-  ;; of work to expose module path index content and sharing, though.)
-  (define ht (make-hasheq))
-  (define mconses null)
-  (define (x-mcons a b)
-    (define m (mcons a b))
-    (set! mconses (cons (cons m (cons a b)) mconses))
-    m)
-  (define main
-    (let loop ([e e])
-      (cond
-       [(hash-ref ht e #f)]
-       [(module-path-index? e)
-        (define ph (make-placeholder #f))
-        (hash-set! ht e ph)
-        (define-values (name base) (module-path-index-split e))
-        (placeholder-set! ph (x-mcons '#%modidx
-                                      (x-mcons (loop name)
-                                               (x-mcons (loop base)
-                                                        null))))
-        ph]
-       [(pair? e)
-        (define ph (make-placeholder #f))
-        (hash-set! ht e ph)
-        (placeholder-set! ph (cons (loop (car e))
-                                   (loop (cdr e))))
-        ph]
-       [(mpair? e)
-        (define m (mcons #f #f))
-        (hash-set! ht e m)
-        (set! mconses (cons (cons m (cons (loop (mcar e))
-                                          (loop (mcdr e))))
-                            mconses))
-        m]
-       [(box? e)
-        (define ph (make-placeholder #f))
-        (hash-set! ht e ph)
-        (placeholder-set! ph (box (loop (unbox e))))
-        ph]
-       [(vector? e)
-        (define ph (make-placeholder #f))
-        (hash-set! ht e ph)
-        (placeholder-set! ph
-                          (for/vector #:length (vector-length e) ([i (in-vector e)])
-                                      (loop i)))
-        ph]
-       [(hash? e)
-        (define ph (make-placeholder #f))
-        (hash-set! ht e ph)
-        (placeholder-set! ph
-                          ((cond
-                            [(hash-eq? ht)
-                             make-hasheq-placeholder]
-                            [(hash-eqv? ht)
-                             make-hasheqv-placeholder]
-                            [else make-hash-placeholder])
-                           (for/list ([(k v) (in-hash e)])
-                             (cons (loop k) (loop v)))))
-        ph]
-       [(prefab-struct-key e)
-        => (lambda (k)
-             (define ph (make-placeholder #f))
-             (hash-set! ht e ph)
-             (placeholder-set! ph
-                               (apply make-prefab-struct
-                                      k
-                                      (map loop
-                                           (cdr (vector->list (struct->vector e))))))
-             ph)]
-       [else
-        e])))
-  (define l (make-reader-graph (cons main mconses)))
-  (for ([i (in-list (cdr l))])
-    (set-mcar! (car i) (cadr i))
-    (set-mcdr! (car i) (cddr i)))
-  (car l))
-
-(define (decompile-prefix a-prefix stx-ht)
-  (match a-prefix
-    [(struct prefix (num-lifts toplevels stxs src-insp-desc))
-     (let ([lift-ids (for/list ([i (in-range num-lifts)])
-                       (gensym 'lift))]
-           [stx-ids (map (lambda (i) (gensym 'stx)) 
-                         stxs)])
-       (values (glob-desc 
-                (append 
-                 (map (lambda (tl)
-                        (match tl
-                          [#f '#%linkage]
-                          [(? symbol?) (string->symbol (format "_~a" tl))]
-                          [(struct global-bucket (name)) 
-                           (string->symbol (format "_~a" name))]
-                          [(struct module-variable (modidx sym pos phase constantness))
-                           (if (and (module-path-index? modidx)
-                                    (let-values ([(n b) (module-path-index-split modidx)])
-                                      (and (not n) (not b))))
-                               (string->symbol (format "_~a" sym))
-                               (string->symbol (format "_~s~a@~s~a" 
-                                                       sym 
-                                                       (match constantness
-                                                         ['constant ":c"]
-                                                         ['fixed ":f"]
-                                                         [(function-shape a pm?) 
-                                                          (if pm? ":P" ":p")]
-                                                         [(struct-type-shape c) ":t"]
-                                                         [(constructor-shape a) ":mk"]
-                                                         [(predicate-shape) ":?"]
-                                                         [(accessor-shape c) ":ref"]
-                                                         [(mutator-shape c) ":set!"]
-                                                         [else ""])
-                                                       (mpi->string modidx) 
-                                                       (if (zero? phase)
-                                                           ""
-                                                           (format "/~a" phase)))))]
-                          [else (error 'decompile-prefix "bad toplevel: ~e" tl)]))
-                      toplevels)
-                 stx-ids
-                 (if (null? stx-ids) null '(#%stx-array))
-                 lift-ids)
-                (length toplevels)
-                (length stxs)
-                num-lifts)
-               (list*
-                `(quote inspector ,src-insp-desc)
-                ;; `(quote tls ,toplevels)
-                (map (lambda (stx id)
-                       `(define ,id ,(if stx
-                                         `(#%decode-syntax 
-                                           ,(decompile-stx (stx-content stx) stx-ht))
-                                         #f)))
-                     stxs stx-ids))))]
-    [else (error 'decompile-prefix "huh?: ~e" a-prefix)]))
-
-(define (decompile-stx stx stx-ht)
-  (or (hash-ref stx-ht stx #f)
-      (let ([p (mcons #f #f)])
-        (hash-set! stx-ht stx p)
-        (match stx
-          [(stx-obj datum wrap srcloc props tamper-status)
-           (set-mcar! p (case tamper-status
-                          [(clean) 'wrap]
-                          [(tainted) 'wrap-tainted]
-                          [(armed) 'wrap-armed]))
-           (set-mcdr! p (mcons
-                         (cond
-                          [(pair? datum) 
-                           (cons (decompile-stx (car datum) stx-ht)
-                                 (let loop ([l (cdr datum)])
-                                   (cond
-                                    [(null? l) null]
-                                    [(pair? l)
-                                     (cons (decompile-stx (car l) stx-ht)
-                                           (loop (cdr l)))]
-                                    [else
-                                     (decompile-stx l stx-ht)])))]
-                          [(vector? datum)
-                           (for/vector ([e (in-vector datum)])
-                             (decompile-stx e stx-ht))]
-                          [(box? datum)
-                           (box (decompile-stx (unbox datum) stx-ht))]
-                          [else datum])
-                         (let* ([l (mcons wrap null)]
-                                [l (if (hash-count props)
-                                       (mcons props l)
-                                       l)]
-                                [l (if srcloc
-                                       (mcons srcloc l)
-                                       l)])
-                           l)))
-           p]))))
-
-(define (mpi->string modidx)
   (cond
-   [(symbol? modidx) modidx]
-   [else 
-    (collapse-module-path-index modidx)]))
+   [(hash? top)
+    (for/hash ([(k v) (in-hash top)])
+      (values k (decompile v)))]
+   [(linkl? top)
+    (decompile-linklet top)]
+   [else `(quote ,top)]))
 
-(define (decompile-module mod-form orig-stack stx-ht mod-name)
-  (match mod-form
-    [(struct mod (name srcname self-modidx
-                       prefix provides requires body syntax-bodies unexported 
-                       max-let-depth dummy lang-info 
-                       internal-context binding-names
-                       flags pre-submodules post-submodules))
-     (let-values ([(globs defns) (decompile-prefix prefix stx-ht)]
-                  [(stack) (append '(#%modvars) orig-stack)]
-                  [(closed) (make-hasheq)])
-       `(,mod-name ,(if (symbol? name) name (last name)) ....
-           (quote self ,self-modidx)
-           (quote internal-context 
-                  ,(if (stx? internal-context)
-                       `(#%decode-syntax 
-                         ,(decompile-stx (stx-content internal-context) stx-ht))
-                       internal-context))
-           (quote bindings ,(for/hash ([(phase ht) (in-hash binding-names)])
-                              (values phase
-                                      (for/hash ([(sym id) (in-hash ht)])
-                                        (values sym
-                                                (if (eq? id #t)
-                                                    #t
-                                                    `(#%decode-syntax 
-                                                      ,(decompile-stx (stx-content id) stx-ht))))))))
-           (quote language-info ,lang-info)
-           ,@(if (null? flags) '() (list `(quote ,flags)))
-           ,@(let ([l (apply
-                       append
-                       (for/list ([req (in-list requires)]
-                                  #:when (pair? (cdr req)))
-                         (define l (for/list ([mpi (in-list (cdr req))])
-                                     (define p (mpi->string mpi))
-                                     (if (path? p)
-                                         (let ([d (current-load-relative-directory)])
-                                           (path->string (if d
-                                                             (find-relative-path (simplify-path d #t)
-                                                                                 (simplify-path p #f) 
-                                                                                 #:more-than-root? #t)
-                                                             p)))
-                                         p)))
-                         (if (eq? 0 (car req))
-                             l
-                             `((,@(case (car req)
-                                    [(#f) `(for-label)]
-                                    [(1) `(for-syntax)]
-                                    [else `(for-meta ,(car req))])
-                                ,@l)))))])
-               (if (null? l)
-                   null
-                   `((require ,@l))))
-           (provide ,@(apply
-                       append
-                       (for/list ([p (in-list provides)])
-                         (define phase (car p))
-                         (define l
-                           (for/list ([pv (in-list (append (cadr p) (caddr p)))])
-                             (match pv
-                               [(struct provided (name src src-name nom-src src-phase protected?))
-                                (define n (if (eq? name src-name)
-                                              name
-                                              `(rename-out [,src-name ,name])))
-                                (if protected?
-                                    `(protect-out ,n)
-                                    n)])))
-                         (if (or (null? l) (eq? phase 0))
-                             l
-                             `((,@(case phase
-                                    [(#f) `(for-label)]
-                                    [(1) `(for-syntax)]
-                                    [else `(for-meta ,phase)])
-                                ,@l))))))
-          ,@defns
-          ,@(for/list ([submod (in-list pre-submodules)])
-              (decompile-module submod orig-stack stx-ht 'module))
-          ,@(for/list ([b (in-list syntax-bodies)])
-              (let loop ([n (sub1 (car b))])
-                (if (zero? n)
-                    (cons 'begin
-                          (for/list ([form (in-list (cdr b))])
-                            (decompile-form form globs stack closed stx-ht)))
-                    (list 'begin-for-syntax (loop (sub1 n))))))
-          ,@(map (lambda (form)
-                   (decompile-form form globs stack closed stx-ht))
-                 body)
-          ,@(for/list ([submod (in-list post-submodules)])
-              (decompile-module submod orig-stack stx-ht 'module*))))]
-    [else (error 'decompile-module "huh?: ~e" mod-form)]))
+(define (decompile-linklet l)
+  (match l
+    [(struct linkl (importss exports internals lifts source-names body max-let-depth))
+     (define closed (make-hasheq))
+     (define globs (glob-desc
+                    (append
+                     (list 'root)
+                     (apply append importss)
+                     exports
+                     internals
+                     lifts)))
+     `(linklet
+       ,importss
+       ,exports
+       ,@(for/list ([form (in-list body)])
+           (decompile-form form globs '(#%globals) closed)))]))
 
-(define (decompile-form form globs stack closed stx-ht)
+(define (decompile-form form globs stack closed)
   (match form
-    [(? mod?)
-     (decompile-module form stack stx-ht 'module)]
     [(struct def-values (ids rhs))
      `(define-values ,(map (lambda (tl)
                              (match tl
@@ -344,29 +70,10 @@
                 ,(decompile-expr (inline-variant-inline rhs) globs stack closed)
                 ,(decompile-expr (inline-variant-direct rhs) globs stack closed))
              (decompile-expr rhs globs stack closed)))]
-    [(struct def-syntaxes (ids rhs prefix max-let-depth dummy))
-     `(define-syntaxes ,ids
-        ,(let-values ([(globs defns) (decompile-prefix prefix stx-ht)])
-           `(let ()
-              ,@defns
-              ,(decompile-form rhs globs '(#%globals) closed stx-ht))))]
-    [(struct seq-for-syntax (exprs prefix max-let-depth dummy))
-     `(begin-for-syntax
-       ,(let-values ([(globs defns) (decompile-prefix prefix stx-ht)])
-          `(let ()
-             ,@defns
-             ,@(for/list ([rhs (in-list exprs)])
-                 (decompile-form rhs globs '(#%globals) closed stx-ht)))))]
     [(struct seq (forms))
      `(begin ,@(map (lambda (form)
-                      (decompile-form form globs stack closed stx-ht))
+                      (decompile-form form globs stack closed))
                     forms))]
-    [(struct splice (forms))
-     `(begin ,@(map (lambda (form)
-                      (decompile-form form globs stack closed stx-ht))
-                    forms))]
-    [(struct req (reqs dummy))
-     `(#%require . (#%decode-syntax ,reqs))]
     [else
      (decompile-expr form globs stack closed)]))
 
@@ -421,8 +128,6 @@
      `(#%variable-reference ,(if (eq? tl #t)
                                  '<constant-local>
                                  (decompile-tl tl globs stack closed #t)))]
-    [(struct topsyntax (depth pos midpt))
-     (list-ref/protect (glob-desc-vars globs) (+ midpt pos) 'topsyntax)]
     [(struct primval (id))
      (hash-ref primitive-table id (lambda () (error "unknown primitive: " id)))]
     [(struct assign (id rhs undef-ok?))
@@ -558,20 +263,9 @@
                                    '()
                                    (list
                                     (for/list ([pos (in-list (sort (set->list tl-map) <))])
-                                      (define tl-pos
-                                        (cond
-                                         [(or (pos . < . (glob-desc-num-tls globs))
-                                              (zero? (glob-desc-num-stxs globs)))
-                                          pos]
-                                         [(= pos (glob-desc-num-tls globs))
-                                          'stx]
-                                         [else
-                                          (+ pos (glob-desc-num-stxs globs))]))
-                                      (if (eq? tl-pos 'stx)
-                                          '#%syntax
-                                          (list-ref/protect (glob-desc-vars globs)
-                                                            tl-pos
-                                                            'lam))))))))
+                                      (list-ref/protect (glob-desc-vars globs)
+                                                        pos
+                                                        'lam)))))))
          ,(decompile-expr body globs
                           (append captures
                                   (append vars rest-vars))
