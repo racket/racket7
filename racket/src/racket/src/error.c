@@ -2490,7 +2490,7 @@ void scheme_unbound_global(Scheme_Bucket *b)
       errmsg = ("%S: undefined;\n"
                 " cannot reference an identifier before its definition\n"
                 "  in module: %D\n"
-                "  internal name: %S\n");
+                "  internal name: %S");
     else
       errmsg = ("%S: undefined;\n"
                 " cannot reference an identifier before its definition%_%_");
