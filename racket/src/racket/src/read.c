@@ -89,6 +89,8 @@ ROSYM static Scheme_Object *terminating_macro_symbol;
 ROSYM static Scheme_Object *non_terminating_macro_symbol;
 ROSYM static Scheme_Object *dispatch_macro_symbol;
 ROSYM static Scheme_Object *hash_code_symbol;
+ROSYM static Scheme_Object *pre_symbol;
+ROSYM static Scheme_Object *post_symbol;
 /* For recoginizing unresolved hash tables and commented-out graph introductions: */
 ROSYM static Scheme_Object *unresolved_uninterned_symbol;
 ROSYM static Scheme_Object *tainted_uninterned_symbol;
@@ -434,6 +436,8 @@ void scheme_init_read(Scheme_Startup_Env *env)
   REGISTER_SO(non_terminating_macro_symbol);
   REGISTER_SO(dispatch_macro_symbol);
   REGISTER_SO(hash_code_symbol);
+  REGISTER_SO(pre_symbol);
+  REGISTER_SO(post_symbol);
   REGISTER_SO(builtin_fast);
 
   quote_symbol                  = scheme_intern_symbol("quote");
@@ -457,6 +461,8 @@ void scheme_init_read(Scheme_Startup_Env *env)
   dispatch_macro_symbol        = scheme_intern_symbol("dispatch-macro");
 
   hash_code_symbol             = scheme_intern_symbol("hash-code");
+  pre_symbol                   = scheme_intern_symbol("pre");
+  post_symbol                  = scheme_intern_symbol("post");
 
   /* initialize builtin_fast */
   {
@@ -5741,7 +5747,7 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
       bundles_to_read = directory->count;
     } else if (mode == 'B') {
       /* single module or other top-level form */
-      
+
       /* Allow delays? */
       if (params->delay_load_info) {
         delay_info = MALLOC_ONE_RT(Scheme_Load_Delay);
@@ -5942,6 +5948,12 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
                                                            scheme_make_sized_byte_string(hash_code, 20, 1));
           }
         }
+      }
+
+      if (!directory) {
+        /* Since we're loading an individual bundle, strip submodule references */
+        result = (Scheme_Object *)scheme_hash_tree_set((Scheme_Hash_Tree *)result, pre_symbol, NULL);
+        result = (Scheme_Object *)scheme_hash_tree_set((Scheme_Hash_Tree *)result, post_symbol, NULL);
       }
 
       {
