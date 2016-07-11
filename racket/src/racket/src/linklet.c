@@ -186,8 +186,7 @@ static Scheme_Object *primitive_table(int argc, Scheme_Object *argv[])
   table = (Scheme_Hash_Table *)scheme_hash_get(scheme_startup_env->primitive_tables, argv[0]);
   if (!table) {
     if (argc > 1) {
-      table = scheme_make_hash_table(SCHEME_hash_ptr);
-      scheme_hash_set(scheme_startup_env->primitive_tables, argv[0], (Scheme_Object *)table);
+      scheme_hash_set(scheme_startup_env->primitive_tables, argv[0], argv[1]);
     } else
       return scheme_false;
   }
@@ -404,7 +403,7 @@ static Scheme_Object *instance_variable_value(int argc, Scheme_Object **argv)
     scheme_wrong_contract("instance-variable-value", "symbol?", 1, argc, argv);
 
   inst = (Scheme_Instance *)argv[0];
-    
+
   b = scheme_instance_variable_bucket_or_null(argv[1], inst);
   if (b && b->val)
     return b->val;

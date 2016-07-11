@@ -5556,7 +5556,7 @@ Scheme_Object *scheme_string_to_symbol_path(char *_s, intptr_t len)
 }
 
 /* Installs into `ht` a mapping of offset -> (listof symbol) */
-static void read_linklet_directory(Scheme_Object *port, Scheme_Hash_Table *ht, int depth)
+static void read_linklet_directory(Scheme_Object *port, Scheme_Hash_Table *ht, int depth, intptr_t bundle_pos)
 {
   char *s;
   Scheme_Object *v, *p;
@@ -5597,15 +5597,15 @@ static void read_linklet_directory(Scheme_Object *port, Scheme_Hash_Table *ht, i
   offset = read_simple_number_from_port(port); /* offset */
   (void)read_simple_number_from_port(port); /* length */
 
-  scheme_hash_set(ht, scheme_make_integer(offset), v);
+  scheme_hash_set(ht, scheme_make_integer(offset+bundle_pos), v);
 
   left = read_simple_number_from_port(port);
   right = read_simple_number_from_port(port);
 
   if (left)
-    read_linklet_directory(port, ht, depth+1);
+    read_linklet_directory(port, ht, depth+1, bundle_pos);
   if (right)
-    read_linklet_directory(port, ht, depth+1);
+    read_linklet_directory(port, ht, depth+1, bundle_pos);
 }
 
 Scheme_Object *wrap_as_linklet_directory(Scheme_Hash_Tree *ht)
@@ -5694,7 +5694,8 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
 {
   Scheme_Hash_Table *directory = NULL; /* position -> symbol-path */
   Scheme_Object *bundles = scheme_null; /* list of (cons symbol-path bundle-or-#f) */
-  int bundle_pos, bundles_to_read = 0;
+  intptr_t bundle_pos;
+  int bundles_to_read = 0;
   Scheme_Object *result;
   intptr_t size, shared_size, got, offset;
   CPort *rp;
@@ -5710,10 +5711,7 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
   char hash_code[20];
 	  
   while (1) {
-    if (directory)
-      bundle_pos = SCHEME_INT_VAL(scheme_file_position(1, &port)) - 2; /* -2 for "#~" */
-    else
-      bundle_pos = 0;
+    bundle_pos = SCHEME_INT_VAL(scheme_file_position(1, &port)) - 2; /* -2 for "#~" */
     
     /* Check version: */
     size = scheme_get_byte(port);
@@ -5743,7 +5741,7 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
                         "read (compiled): found unexpected linklet directory nesting");
       (void)read_simple_number_from_port(port); /* count */
       directory = scheme_make_hash_table_equal();
-      read_linklet_directory(port, directory, 0);
+      read_linklet_directory(port, directory, 0, bundle_pos);
       bundles_to_read = directory->count;
     } else if (mode == 'B') {
       /* single module or other top-level form */
