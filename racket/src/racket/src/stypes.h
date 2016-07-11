@@ -16,7 +16,7 @@ enum {
   scheme_letrec_type,                   /* 11 */
   scheme_let_one_type,                  /* 12 */
   scheme_with_cont_mark_type,           /* 13 */
-  scheme_quote_syntax_type,             /* 14 */
+  scheme_quote_syntax_type,             /* 14 */ // REMOVEME
 
   scheme_define_values_type,            /* 15 */
   scheme_set_bang_type,                 /* 16 */
