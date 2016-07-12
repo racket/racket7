@@ -657,7 +657,7 @@ Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
   inst = MALLOC_ONE_TAGGED(Scheme_Instance);
   inst->so.type = scheme_instance_type;
 
-  inst->name = name;
+  inst->name = (name ? name : scheme_false);
   inst->data = data;
 
   variables = scheme_make_bucket_table(7, SCHEME_hash_ptr);
