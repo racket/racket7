@@ -2325,7 +2325,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
 		    && SCHEME_SYMBOLP(p[1])
 		    && !strcmp(SCHEME_SYM_VAL(p[1]), "objects"));
 
-    for (i = 0; i < maxpos; i++) {
+    for (i = maxpos; i--; ) {
       void *tn = scheme_get_type_name_or_null(i);
       if (tn && !strcmp(tn, s)) {
 	if (just_objects)
@@ -2512,7 +2512,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
         && SCHEME_SYMBOLP(p[1])) {
       int i, maxpos;
       maxpos = scheme_num_types();
-      for (i = 0; i < maxpos; i++) {
+      for (i = maxpos; i--; ) {
         void *tn;
         tn = scheme_get_type_name_or_null(i);
         if (tn && !strcmp(tn, SCHEME_SYM_VAL(p[1]))) {
@@ -2540,7 +2540,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
 
     maxpos = scheme_num_types();
 
-    for (i = 0; i < maxpos; i++) {
+    for (i = maxpos; i--; ) {
       void *tn;
       tn = scheme_get_type_name_or_null(i);
       if (tn && !strcmp(tn, s)) {
