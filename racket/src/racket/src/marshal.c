@@ -960,6 +960,11 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
   Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
   Scheme_Object *l;
 
+  if (linklet->jit_ready)
+    scheme_arg_mismatch("write",
+                        "cannot marshal linklet that has been evaluated",
+                        obj);
+
   l = scheme_null;
 
   l = scheme_make_pair(linklet->importss, l);

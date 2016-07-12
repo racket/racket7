@@ -1929,6 +1929,16 @@ static void cons_onto_list(void *p)
 
 static int print_all_traced(void *p) { return 1; }
 
+static int record_nth_counter, record_nth_target;
+static int record_nth_traced(void *p) {
+  record_nth_counter++;
+  if (record_nth_counter == record_nth_target) {
+    record_nth_counter = 0;
+    return 1;
+  }
+  return 0;
+}
+
 static int traced_buffer_counter, traced_buffer_size;
 static void **traced_buffer;
 
@@ -2213,6 +2223,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
   int dump_flags = 0;
   GC_for_each_found_proc for_each_found = NULL;
   GC_print_traced_filter_proc maybe_print_traced_filter = NULL;
+  GC_record_traced_filter_proc record_traced_filter = NULL;
 # else
 #  define skip_summary 0
 #  define dump_flags 0
@@ -2232,6 +2243,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
 
 #if defined(MZ_PRECISE_GC) && MZ_PRECISE_GC_TRACE
   maybe_print_traced_filter = print_all_traced;
+  record_traced_filter = print_all_traced;
 #endif
 
 #if 0
@@ -2534,11 +2546,12 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
       if (tn && !strcmp(tn, s)) {
 	trace_for_tag = i;
 	dump_flags |= GC_DUMP_SHOW_TRACE;
-        if ((c > 1)
-            && SCHEME_SYMBOLP(p[1])
-            && !strcmp(SCHEME_SYM_VAL(p[1]), "new"))
-          maybe_print_traced_filter = record_traced_and_print_new;
-	break;
+        if (c > 1) {
+          if (SCHEME_SYMBOLP(p[1])
+              && !strcmp(SCHEME_SYM_VAL(p[1]), "new"))
+            maybe_print_traced_filter = record_traced_and_print_new;
+        }
+        break;
       }
     }
 
@@ -2619,6 +2632,12 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
     cons_accum_result = scheme_null;
     dump_flags -= (dump_flags & GC_DUMP_SHOW_TRACE);
   }
+
+  if ((c > 2) && SCHEME_INTP(p[2])) {
+    record_nth_target = SCHEME_INT_VAL(p[2]);
+    record_nth_counter = 0;
+    record_traced_filter = record_nth_traced;
+  }
 #endif
 
   if (!skip_summary)
@@ -2629,6 +2648,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
 		      scheme_get_type_name_or_null,
 		      for_each_found,
 		      trace_for_tag, trace_for_tag,
+                      record_traced_filter,
                       maybe_print_traced_filter,
 		      print_tagged_value,
 		      path_length_limit,
@@ -2721,13 +2741,14 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
 # if MZ_PRECISE_GC_TRACE
     scheme_console_printf(" (dump-memory-stats sym ['new]) - prints paths to instances of type named by sym.\n");
     scheme_console_printf("   Example: (dump-memory-stats '<pair>)\n");
-    scheme_console_printf("   If 'new, all will be retrined, only new paths will be shown\n");
+    scheme_console_printf("   If 'new, all will be retried, only new paths will be shown\n");
     scheme_console_printf(" (dump-memory-stats 'struct) - show counts for specific structure types.\n");
     scheme_console_printf(" (dump-memory-stats 'fnl) - prints not-yet-finalized objects.\n");
     scheme_console_printf(" (dump-memory-stats num) - prints paths to objects with tag num.\n");
     scheme_console_printf(" (dump-memory-stats -num) - prints paths to objects of size num.\n");
     scheme_console_printf(" (dump-memory-stats sym/num len) - limits path to size len.\n");
     scheme_console_printf(" (dump-memory-stats sym/num 'cons) - builds list instead of showing paths.\n");
+    scheme_console_printf(" (dump-memory-stats sym/num any num) - record only each numth object.\n");
     scheme_console_printf(" (dump-memory-stats 'peek num v) - returns value if num is address of object, v otherwise.\n");
     scheme_console_printf(" (dump-memory-stats 'next v) - next tagged object after v, #f if none; start with #f.\n");
     scheme_console_printf(" (dump-memory-stats 'addr v) - returns the address of v.\n");

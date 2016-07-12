@@ -36,6 +36,7 @@ static Scheme_Object *position_to_primitive(int argc, Scheme_Object **argv);
 static Scheme_Object *linklet_p(int argc, Scheme_Object **argv);
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv);
+static Scheme_Object *eval_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *linklet_import_variables(int argc, Scheme_Object **argv);
 static Scheme_Object *linklet_export_variables(int argc, Scheme_Object **argv);
@@ -103,6 +104,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 2, env);
   ADD_PRIM_W_ARITY("recompile-linklet", recompile_linklet, 1, 1, env);
+  ADD_PRIM_W_ARITY("eval-linklet", eval_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 2, 3, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
@@ -247,6 +249,28 @@ static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
   name = ((Scheme_Linklet *)argv[0])->name;
   
   return (Scheme_Object *)compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0], name);
+}
+
+static Scheme_Object *eval_linklet(int argc, Scheme_Object **argv)
+{
+  /* "Evaluation" is not necessary before instantiation, but it makes
+     the linklet JIT-prepared (so the JIT-prepared linklet could be
+     reused, for example) while also making the linklet ineligible for
+     marshaling. */
+  Scheme_Linklet *linklet;
+  
+  if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
+    scheme_wrong_contract("eval-linklet", "linklet?", 0, argc, argv);
+
+  linklet = (Scheme_Linklet *)argv[0];
+  if (!linklet->jit_ready) {
+    Scheme_Object *b;
+    b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
+    if (SCHEME_TRUEP(b))
+      linklet = scheme_jit_linklet(linklet);
+  }
+
+  return (Scheme_Object *)linklet;
 }
 
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
@@ -941,16 +965,10 @@ static void *instantiate_linklet_k(void)
     return (Scheme_Object *)scheme_enlarge_runstack(depth, instantiate_linklet_k);
   }
 
-  if (linklet->jitted) {
-    linklet = linklet->jitted;
-  } else {
+  if (!linklet->jit_ready) {
     b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
-    if (SCHEME_TRUEP(b)) {
-      Scheme_Linklet *jitted;
-      jitted = scheme_jit_linklet(linklet);
-      linklet->jitted = jitted;
-      linklet = jitted;
-    }
+    if (SCHEME_TRUEP(b))
+      linklet = scheme_jit_linklet(linklet);
   }
 
   /* Pushng the prefix looks up imported variables */

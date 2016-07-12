@@ -5925,6 +5925,7 @@ void GC_dump_with_traces(int flags,
                          GC_get_type_name_proc get_type_name,
                          GC_for_each_found_proc for_each_found,
                          short min_trace_for_tag, short max_trace_for_tag,
+                         GC_record_traced_filter_proc record_traced_filter,
                          GC_print_traced_filter_proc print_traced_filter,
                          GC_print_tagged_value_proc print_tagged_value,
                          int path_length_limit,
@@ -5963,7 +5964,8 @@ void GC_dump_with_traces(int flags,
             if (for_each_struct) for_each_struct(obj_start);
           }
           if ((tag >= min_trace_for_tag) && (tag <= max_trace_for_tag)) {
-            register_traced_object(obj_start);
+            if (record_traced_filter(obj_start))
+              register_traced_object(obj_start);
             if (for_each_found)
               for_each_found(obj_start);
           }
@@ -5987,7 +5989,8 @@ void GC_dump_with_traces(int flags,
       }
       if (((tag >= min_trace_for_tag) && (tag <= max_trace_for_tag))
           || ((-tag >= min_trace_for_tag) && (-tag <= max_trace_for_tag))) {
-        register_traced_object(obj_start);
+        if (record_traced_filter(obj_start))
+          register_traced_object(obj_start);
         if (for_each_found)
           for_each_found(obj_start);
       }
@@ -6014,7 +6017,8 @@ void GC_dump_with_traces(int flags,
                 if (for_each_struct) for_each_struct(obj_start);
               }
               if ((tag >= min_trace_for_tag) && (tag <= max_trace_for_tag)) {
-                register_traced_object(obj_start);
+                if (record_traced_filter(obj_start))
+                  register_traced_object(obj_start);
                 if (for_each_found)
                   for_each_found(obj_start);
               }
@@ -6121,7 +6125,7 @@ void GC_dump_with_traces(int flags,
 
 void GC_dump(void)
 {
-  GC_dump_with_traces(0, NULL, NULL, 0, -1, NULL, NULL, 0, NULL);
+  GC_dump_with_traces(0, NULL, NULL, 0, -1, NULL, NULL, NULL, 0, NULL);
 }
 
 #ifdef MZ_GC_BACKTRACE

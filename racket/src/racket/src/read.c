@@ -5171,7 +5171,7 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
         if (!v) {
           if (port->delay_info) {
             /* This is where we construct information for
-               loading the syntax object on demand. */
+               loading the lamda form on demand. */
             v = scheme_make_raw_pair(scheme_make_integer(l),
                                      (Scheme_Object *)port->delay_info);
           } else {

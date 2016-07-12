@@ -660,6 +660,8 @@ Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet)
 
   new_linklet->bodies = bodies;
 
+  new_linklet->jit_ready = 1;
+
   return new_linklet;
 }
 

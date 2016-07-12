@@ -3083,6 +3083,7 @@ Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Sc
 struct Scheme_Linklet
 {
   Scheme_Object so; /* scheme_linklet_type */
+  char jitted;
 
   Scheme_Object *name; /* for reporting purposes; FIXME: doesn't belong here? */
 
@@ -3110,7 +3111,7 @@ struct Scheme_Linklet
 
   int num_toplevels; /* only after compile and before resolve */
 
-  struct Scheme_Linklet *jitted; /* NULL or a JIT-prepared copy of the linklet */
+  int jit_ready; /* true if the linklet is in has been prepared for the JIT */
 };
 
 #define SCHEME_DEFN_VAR_COUNT(d) (SCHEME_VEC_SIZE(d)-1)

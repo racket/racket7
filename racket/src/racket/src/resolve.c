@@ -44,7 +44,7 @@
 struct Resolve_Info
 {
   MZTAG_IF_REQUIRED
-  char use_jit, in_module, in_proc, enforce_const, no_lift;
+  char in_module, in_proc, enforce_const, no_lift;
   int current_depth; /* tracks the stack depth, so variables can be
                         resolved relative to it; this depth is reset
                         on entry to `lambda` forms */
@@ -2187,7 +2187,6 @@ static Scheme_Object *shift_lifted_reference(Scheme_Object *tl, Resolve_Info *in
 static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_const)
 {
   Resolve_Info *naya;
-  Scheme_Object *b;
 
   naya = MALLOC_ONE_RT(Resolve_Info);
 #ifdef MZTAG_REQUIRED
@@ -2199,9 +2198,6 @@ static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_co
   naya->next = NULL;
   naya->enforce_const = enforce_const;
   naya->linklet = linklet;
-
-  b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
-  naya->use_jit = SCHEME_TRUEP(b);
 
   return naya;
 }
@@ -2227,7 +2223,6 @@ static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambd
 #endif
   naya->linklet = info->linklet;
   naya->next = (lambda ? NULL : info);
-  naya->use_jit = info->use_jit;
   naya->enforce_const = info->enforce_const;
   naya->current_depth = (lambda ? 0 : info->current_depth) + size;
   naya->current_lex_depth = info->current_lex_depth + size;
