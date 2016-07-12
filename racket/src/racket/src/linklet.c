@@ -97,14 +97,14 @@ scheme_init_linklet(Scheme_Startup_Env *env)
 
   scheme_switch_prim_instance(env, "#%linklet");
 
-  ADD_PRIM_W_ARITY("primitive-table", primitive_table, 1, 2, env);
-  ADD_PRIM_W_ARITY("primitive->compiled-position", primitive_to_position, 1, 1, env);
-  ADD_PRIM_W_ARITY("compiled-position->primitive", position_to_primitive, 1, 1, env);
+  ADD_IMMED_PRIM("primitive-table", primitive_table, 1, 2, env);
+  ADD_IMMED_PRIM("primitive->compiled-position", primitive_to_position, 1, 1, env);
+  ADD_IMMED_PRIM("compiled-position->primitive", position_to_primitive, 1, 1, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
-  ADD_PRIM_W_ARITY("compile-linklet", compile_linklet, 1, 2, env);
-  ADD_PRIM_W_ARITY("recompile-linklet", recompile_linklet, 1, 1, env);
-  ADD_PRIM_W_ARITY("eval-linklet", eval_linklet, 1, 1, env);
+  ADD_IMMED_PRIM("compile-linklet", compile_linklet, 1, 2, env);
+  ADD_IMMED_PRIM("recompile-linklet", recompile_linklet, 1, 1, env);
+  ADD_IMMED_PRIM("eval-linklet", eval_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 2, 3, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
@@ -126,8 +126,8 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("hash->linklet-bundle", hash_to_linklet_bundle, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, env);
 
-  ADD_PRIM_W_ARITY("variable-reference?", variable_p, 1, 1, env);
-  ADD_PRIM_W_ARITY("variable-reference->instance", variable_instance, 1, 1, env);
+  ADD_FOLDING_PRIM("variable-reference?", variable_p, 1, 1, 1, env);
+  ADD_IMMED_PRIM("variable-reference->instance", variable_instance, 1, 1, env);
 
   REGISTER_SO(scheme_varref_const_p_proc);
   scheme_varref_const_p_proc = scheme_make_prim_w_arity(variable_const_p, 
@@ -266,8 +266,11 @@ static Scheme_Object *eval_linklet(int argc, Scheme_Object **argv)
   if (!linklet->jit_ready) {
     Scheme_Object *b;
     b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
-    if (SCHEME_TRUEP(b))
-      linklet = scheme_jit_linklet(linklet);
+    if (SCHEME_TRUEP(b)) {
+      /* Make a JIT-prepable linklet --- but don't actually prep until
+         forced by instantiation. */
+      linklet = scheme_jit_linklet(linklet, 1);
+    }
   }
 
   return (Scheme_Object *)linklet;
@@ -968,7 +971,9 @@ static void *instantiate_linklet_k(void)
   if (!linklet->jit_ready) {
     b = scheme_get_param(scheme_current_config(), MZCONFIG_USE_JIT);
     if (SCHEME_TRUEP(b))
-      linklet = scheme_jit_linklet(linklet);
+      linklet = scheme_jit_linklet(linklet, 2);
+  } else {
+    linklet = scheme_jit_linklet(linklet, 2);
   }
 
   /* Pushng the prefix looks up imported variables */

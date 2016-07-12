@@ -4991,34 +4991,21 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
       break;
     case CPT_HASH_TABLE:
       {
-	Scheme_Object *l;
+        Scheme_Hash_Tree *ht;
 	int kind, len;
         Scheme_Object *k;
 
 	kind = read_compact_number(port);
 	len = read_compact_number(port);
-	
-	l = scheme_null;
+
+        ht = scheme_make_hash_tree(kind);
 	while (len--) {
 	  k = read_compact(port, 0);
 	  v = read_compact(port, 0);
-	  /* We can't always hash directly, because a key or value
-	     might have a graph reference inside it. */
-	  l = scheme_make_pair(scheme_make_pair(k, v), l);
+          ht = scheme_hash_tree_set(ht, k, v);
 	}
 
-        if (!(*port->ht)) {
-          /* So that resolve_references is called to build the table: */
-          Scheme_Hash_Table *tht;
-          tht = scheme_make_hash_table(SCHEME_hash_ptr);
-          *(port->ht) = tht;
-        }
-
-	/* Let resolve_references complete the table construction: */
-        v = scheme_alloc_object();
-        v->type = scheme_table_placeholder_type;
-        SCHEME_PINT_VAL(v) = kind;
-        SCHEME_IPTR_VAL(v) = l;
+	v = (Scheme_Object *)ht;
       }
       break;
     case CPT_MARSHALLED:
@@ -5908,7 +5895,8 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
           delay_info->ut->rp = NULL; /* clean up */
 
       if (*local_ht)
-        result = scheme_resolve_placeholders(result);
+        scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
+                        "read (compiled): unexpected graph structure");
 
       if (!SCHEME_HASHTRP(result))
         scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
@@ -6131,6 +6119,10 @@ Scheme_Object *scheme_load_delayed_code(int _which, Scheme_Load_Delay *_delay_in
   } else {
     v = read_compact(rp, 0);
     v_exn = NULL;
+    if (*ht) {
+      scheme_read_err(rp->orig_port, NULL, -1, -1, -1, -1, 0, NULL,
+                      "read (compiled): unexpected graph structure");
+    }
   }
   scheme_current_thread->error_buf = savebuf;
   scheme_current_thread->reading_delayed = NULL;
@@ -6153,17 +6145,10 @@ Scheme_Object *scheme_load_delayed_code(int _which, Scheme_Load_Delay *_delay_in
   scheme_end_atomic_no_swap();
   
   if (v) {
-    if (*ht) {
-      v = resolve_references(v, port, NULL,
-                             scheme_make_hash_table(SCHEME_hash_ptr), 
-                             scheme_make_hash_table(SCHEME_hash_ptr),
-                             delay_info->symtab_entries,
-                             0, 0);
-    }
-
-    delay_info->symtab[which] = v;
-    record_symtab_self_contained(delay_info->symtab_entries, v);
-        
+    /* Although `which` is a symbol-table index for `v`,
+       we don't actually record v, because the delayed
+       reference is now complete (and we'd like to be
+       able to GC it if it's otherwise unused). */
     return v;
   } else {
     if (v_exn && !scheme_current_thread->cjs.is_kill)

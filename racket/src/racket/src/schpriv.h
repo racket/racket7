@@ -2886,7 +2886,7 @@ void scheme_finish_application(Scheme_App_Rec *app);
 
 Scheme_Sequence *scheme_malloc_sequence(int count);
 
-Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *);
+Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *, int step);
 Scheme_Object *scheme_jit_closure(Scheme_Object *, Scheme_Object *context);
 void scheme_jit_fill_threadlocal_table();
 

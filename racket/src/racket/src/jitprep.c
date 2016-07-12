@@ -642,14 +642,27 @@ static Scheme_Object *jit_expr(Scheme_Object *expr)
   }
 }
 
-Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet)
+Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet, int step)
+/* step 1: clone the immediate record, to be mutated for actual prepataion
+   step 2: actual preparation */
 {
   Scheme_Linklet *new_linklet;
   Scheme_Object *bodies, *v;
   int i;
 
-  new_linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
-  memcpy(new_linklet, linklet, sizeof(Scheme_Linklet));
+  if (!linklet->jit_ready) {
+    new_linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
+    memcpy(new_linklet, linklet, sizeof(Scheme_Linklet));
+  } else
+    new_linklet = linklet;
+
+  if (new_linklet->jit_ready >= step)
+    return new_linklet;
+
+  if (step == 1) {
+    new_linklet->jit_ready = 1;
+    return new_linklet;
+  }
 
   i = SCHEME_VEC_SIZE(linklet->bodies);
   bodies = scheme_make_vector(i, NULL);
@@ -660,7 +673,7 @@ Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet)
 
   new_linklet->bodies = bodies;
 
-  new_linklet->jit_ready = 1;
+  new_linklet->jit_ready = 2;
 
   return new_linklet;
 }
