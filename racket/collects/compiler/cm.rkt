@@ -34,7 +34,7 @@
          make-compile-lock
          compile-lock->parallel-lock-client
          
-         install-module-hashes!
+         install-linklet-hashes!
 
          (contract-out
           [current-path->mode
@@ -480,7 +480,7 @@
               (write code b)
               ;; Compute SHA1 over modules within bytecode
               (let* ([s (get-output-bytes b)])
-                (install-module-hashes! s)
+                (install-linklet-hashes! s)
                 ;; Write out the bytecode with module hash
                 (write-bytes s out)))))
         ;; redundant, but close as early as possible:
@@ -493,31 +493,31 @@
                     up-to-date collection-cache read-src-syntax)))
     (trace-printf "wrote zo file: ~a" zo-name)))
 
-(define (install-module-hashes! s [start 0] [len (bytes-length s)])
+(define (install-linklet-hashes! s [start 0] [len (bytes-length s)])
   (define vlen (bytes-ref s (+ start 2)))
   (define mode (integer->char (bytes-ref s (+ start 3 vlen))))
   (case mode
-    [(#\T)
-     ;; A single module:
+    [(#\B)
+     ;; A linklet bundle:
      (define h (sha1-bytes (open-input-bytes (if (and (zero? start)
                                                       (= len (bytes-length s)))
                                                  s
                                                  (subbytes s start (+ start len))))))
-     ;; Write sha1 for module hash:
+     ;; Write sha1 for bundle hash:
      (bytes-copy! s (+ start 4 vlen) h)]
     [(#\D)
-     ;; A directory form modules and submodules. The format starts with <count>,
+     ;; A linklet directory. The format starts with <count>,
      ;; and then it's <count> records of the format:
-     ;;  <name-len> <name-bytes> <mod-pos> <mod-len> <left-pos> <right-pos>
+     ;;  <name-len> <name-bytes> <bund-pos> <bund-len> <left-pos> <right-pos>
      (define (read-num rel-pos)
        (define pos (+ start rel-pos))
        (integer-bytes->integer s #t #f pos (+ pos 4)))
      (define count (read-num (+ 4 vlen)))
      (for/fold ([pos (+ 8 vlen)]) ([i (in-range count)])
        (define pos-pos (+ pos 4 (read-num pos)))
-       (define mod-start (read-num pos-pos))
-       (define mod-len (read-num (+ pos-pos 4)))
-       (install-module-hashes! s (+ start mod-start) mod-len)
+       (define bund-start (read-num pos-pos))
+       (define bund-len (read-num (+ pos-pos 4)))
+       (install-linklet-hashes! s (+ start bund-start) bund-len)
        (+ pos-pos 16))
      (void)]
     [else 
