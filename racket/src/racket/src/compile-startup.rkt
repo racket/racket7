@@ -7,7 +7,8 @@
   
   (define-values (dest) (vector-ref (current-command-line-arguments) 0))
   (define-values (src) (vector-ref (current-command-line-arguments) 1))
-  (define-values (other-files) (cddr (vector->list (current-command-line-arguments))))
+  (define-values (vers) (vector-ref (current-command-line-arguments) 2))
+  (define-values (other-files) (cdddr (vector->list (current-command-line-arguments))))
 
   ;; Bail out if we don't need to do anything:
   (if (file-exists? dest)
@@ -19,7 +20,7 @@
                         ((file-or-directory-modify-seconds dest)
                          . > . 
                          (file-or-directory-modify-seconds f)))
-                      (cons src other-files))
+                      (list* src vers other-files))
               (exit 0)
               (void))
           (void))
@@ -44,6 +45,23 @@
                                 "\\1"))
              (reverse (cdr (reverse (cdr (call-with-input-file src get-lines)))))))))))
   
+  (define-values (version-comparisons)
+    (call-with-input-file 
+     vers
+     (lambda (in)
+       (letrec-values ([(get-version-comparisons)
+                        (lambda ()
+                          (let-values ([(line) (read-line in 'any)])
+                            (if (eof-object? line)
+                                ""
+                                (let-values ([(m) (regexp-match #rx"^#define (MZSCHEME_VERSION_[A-Z]) ([0-9]+)"
+                                                                line)])
+                                  (if m
+                                      (string-append " || (" (cadr m) " != " (caddr m) ")"
+                                                     (get-version-comparisons))
+                                      (get-version-comparisons))))))])
+                      (get-version-comparisons)))))
+  
   (define-values (DIGS-PER-LINE) 20)
   
   (call-with-output-file
@@ -52,6 +70,9 @@
      (let-values ([(p) (open-output-bytes)])
        (write (hash->linklet-bundle (hasheq 'startup linklet)) p)
        (let-values ([(s) (get-output-bytes p)])
+         (fprintf outfile "#if 0 ~a\n" version-comparisons)
+         (fprintf outfile "# include \"startup.inc\"\n")         
+         (fprintf outfile "#else\n")
          (fprintf outfile "  {\n    SHARED_OK static unsigned char expr[] = {")
          (letrec-values ([(loop)
                           (lambda (chars pos)
@@ -67,5 +88,6 @@
                                             (add1 pos))))))])
                         (loop (bytes->list s) 0))
          (fprintf outfile "0};\n    EVAL_ONE_SIZED_STR((char *)expr, ~a);\n" (bytes-length s))
-         (fprintf outfile "  }\n"))))
-   'truncate)) 
+         (fprintf outfile "  }\n")
+         (fprintf outfile "#endif\n"))))
+   'truncate))

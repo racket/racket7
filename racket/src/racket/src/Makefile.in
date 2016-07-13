@@ -421,7 +421,7 @@ sfs.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h $(srcdir)/mzmark_sfs.inc
 sort.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h
-startup.@LTO@: $(COMMON_HEADERS)  \
+startup.@LTO@: $(COMMON_HEADERS) $(srcdir)/schvers.h \
         $(srcdir)/stypes.h  $(srcdir)/schminc.h $(srcdir)/startup.inc ../cstartup.inc
 string.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h    $(srcdir)/schvers.h $(srcdir)/mzmark_string.inc $(srcdir)/strops.inc \

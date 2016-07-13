@@ -24,6 +24,7 @@
 */
 
 #include "schpriv.h"
+#include "schvers.h"
 #include "schminc.h"
 
 static Scheme_Linklet *eval_linklet_string(const char *str, intptr_t len, int extract)

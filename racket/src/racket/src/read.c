@@ -5976,12 +5976,46 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
     } else {
       scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
                       "read (compiled): found bad mode");
-    }  
-    
-    if ((scheme_get_byte(port) != '#')
-        || (scheme_get_byte(port) != '~'))
-      scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
-                      "read (compiled): no `#~' for next module in multi-module stream");
+    }
+
+
+    while (1) {
+      int c1, c2;
+
+      c1 = scheme_get_byte(port);
+      c2 = scheme_get_byte(port);
+
+      if ((c1 != '#') || ((c2 != '~') && (c2 != 'f')))
+        scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
+                        "read (compiled): no `#~' for next linklet (%d to go) in a linklet directory",
+                        bundles_to_read);
+      
+      if (c2 == 'f') {
+        /* Got #f in place of a bundle */
+        Scheme_Object *v;
+        
+        bundle_pos = SCHEME_INT_VAL(scheme_file_position(1, &port)) - 2; /* -2 for "#f" */
+        v = scheme_hash_get(directory, scheme_make_integer(bundle_pos));
+        if (!v)
+          scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
+                          "read (compiled): cannot match empty-bundle position to linklet-directory path");
+
+        bundles = scheme_make_pair(scheme_make_pair(v, scheme_false), bundles);
+        bundles_to_read--;
+
+        if (!bundles_to_read) {
+          /* convert flattened directory into hierarchical form */
+          v = bundle_list_to_hierarchical_directory(bundles);
+          if (!v)
+            scheme_read_err(port, NULL, -1, -1, -1, -1, 0, NULL,
+                            "read (compiled): bad shape for bundle-directory tree");
+          return v;
+        }
+      } else {
+        /* continue outer loop to read next bundle */
+        break;
+      }
+    }
   }
 }
 
