@@ -986,7 +986,7 @@ instance_val {
  mark:
   Scheme_Instance *i = (Scheme_Instance *)p;
 
-  gcMARK2(i->variables, gc);
+  gcMARK2(i->variables.a, gc);
   gcMARK2(i->weak_self_link, gc);
   gcMARK2(i->source_names, gc);
   gcMARK2(i->name, gc);

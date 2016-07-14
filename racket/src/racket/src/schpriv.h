@@ -3085,7 +3085,12 @@ extern Scheme_Startup_Env * scheme_startup_env;
 struct Scheme_Instance {
   Scheme_Object so; /* scheme_instance_type */
 
-  Scheme_Bucket_Table *variables;
+  union {
+    Scheme_Bucket **a;       /* for a small, predefined number of keys */
+    Scheme_Bucket_Table *bt; /* general case */
+  } variables;
+  int array_size; /* 0 => hash mode */
+  
   Scheme_Object *weak_self_link; /* for Scheme_Bucket_With_Home */
 
   Scheme_Hash_Tree *source_names; /* bucket symbol -> source symbol; initially copied from linklet */

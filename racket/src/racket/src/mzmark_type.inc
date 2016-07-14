@@ -3503,7 +3503,7 @@ static int instance_val_MARK(void *p, struct NewGC *gc) {
 #ifndef GC_NO_MARK_PROCEDURE_NEEDED
   Scheme_Instance *i = (Scheme_Instance *)p;
 
-  gcMARK2(i->variables, gc);
+  gcMARK2(i->variables.a, gc);
   gcMARK2(i->weak_self_link, gc);
   gcMARK2(i->source_names, gc);
   gcMARK2(i->name, gc);
@@ -3521,7 +3521,7 @@ static int instance_val_FIXUP(void *p, struct NewGC *gc) {
 #ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
   Scheme_Instance *i = (Scheme_Instance *)p;
 
-  gcFIXUP2(i->variables, gc);
+  gcFIXUP2(i->variables.a, gc);
   gcFIXUP2(i->weak_self_link, gc);
   gcFIXUP2(i->source_names, gc);
   gcFIXUP2(i->name, gc);

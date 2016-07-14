@@ -26,6 +26,8 @@
 #include "schpriv.h"
 #include "schrunst.h"
 
+SHARED_OK Scheme_Hash_Tree *empty_hash_tree;
+
 SHARED_OK static int validate_compile_result = 0;
 SHARED_OK static int recompile_every_compile = 0;
 
@@ -110,7 +112,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
 
   ADD_FOLDING_PRIM("instance?", instance_p, 1, 1, 1, env);
-  ADD_PRIM_W_ARITY("make-instance", make_instance, 1, 2, env);
+  ADD_PRIM_W_ARITY("make-instance", make_instance, 1, -1, env);
   ADD_PRIM_W_ARITY("instance-name", instance_name, 1, 1, env);
   ADD_PRIM_W_ARITY("instance-data", instance_data, 1, 1, env);
   ADD_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, env);
@@ -378,7 +380,37 @@ static Scheme_Object *instance_p(int argc, Scheme_Object **argv)
 
 static Scheme_Object *make_instance(int argc, Scheme_Object **argv)
 {
-  return (Scheme_Object *)scheme_make_instance(argv[0], (argc > 1) ? argv[1] : scheme_false);
+  Scheme_Instance *inst;
+  int i;
+
+  inst = scheme_make_instance(argv[0], (argc > 1) ? argv[1] : scheme_false);
+
+  if (argc > 2) {
+    Scheme_Bucket **a, *b;
+
+    a = MALLOC_N(Scheme_Bucket *, (argc - 2) >> 1);
+    
+    for (i = 2; i < argc; i += 2) {
+      if (!SCHEME_SYMBOLP(argv[i]))
+        scheme_wrong_contract("make-instance", "symbol?", i, argc, argv);
+      if (i+1 == argc)
+        scheme_contract_error("make-instance",
+                              "value missing for variable name",
+                              "variable name", 1, argv[i],
+                              NULL);
+      b = (Scheme_Bucket *)MALLOC_ONE_TAGGED(Scheme_Bucket_With_Home);
+      b->so.type = scheme_variable_type;
+      b->key = (char *)argv[i];
+      b->val = argv[i+1];
+      scheme_set_bucket_home(b, inst);
+      a[(i-2)>>1] = b;
+    }
+
+    inst->array_size = (argc-2)>>1;
+    inst->variables.a = a;
+  }
+
+  return (Scheme_Object *)inst;
 }
 
 static Scheme_Object *instance_name(int argc, Scheme_Object **argv)
@@ -399,20 +431,26 @@ static Scheme_Object *instance_data(int argc, Scheme_Object **argv)
   
 static Scheme_Object *instance_variable_names(int argc, Scheme_Object **argv)
 {
-  Scheme_Bucket_Table *variables;
   Scheme_Bucket *b;
   int i;
   Scheme_Object *l = scheme_null;
+  Scheme_Instance *inst;
   
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
     scheme_wrong_contract("instance-variable-names", "instance?", 0, argc, argv);
 
-  variables = ((Scheme_Instance *)argv[0])->variables;
+  inst = (Scheme_Instance *)argv[0];
 
-  for (i = variables->size; i--; ) {
-    b = variables->buckets[i];
-    if (b && b->val) {
-      l = scheme_make_pair((Scheme_Object *)b->key, l);
+  if (inst->array_size) {
+    for (i = inst->array_size; i--; ) {
+      l = scheme_make_pair((Scheme_Object *)inst->variables.a[i]->key, l);
+    }
+  } else if (inst->variables.bt) {
+    for (i = inst->variables.bt->size; i--; ) {
+      b = inst->variables.bt->buckets[i];
+      if (b && b->val) {
+        l = scheme_make_pair((Scheme_Object *)b->key, l);
+      }
     }
   }
 
@@ -678,30 +716,65 @@ void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Instance *e)
 Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
 {
   Scheme_Instance *inst;
-  Scheme_Bucket_Table *variables;
-  Scheme_Hash_Tree *ht;
 
+  if (!empty_hash_tree) {
+    REGISTER_SO(empty_hash_tree);
+    empty_hash_tree = scheme_make_hash_tree(0);
+  }
+  
   inst = MALLOC_ONE_TAGGED(Scheme_Instance);
   inst->so.type = scheme_instance_type;
 
   inst->name = (name ? name : scheme_false);
   inst->data = data;
 
-  variables = scheme_make_bucket_table(7, SCHEME_hash_ptr);
-  variables->with_home = 1;
-  inst->variables = variables;
-
-  ht = scheme_make_hash_tree(0);
-  inst->source_names = ht;
+  inst->source_names = empty_hash_tree;
 
   return inst;
+}
+
+void scheme_instance_to_hash_mode(Scheme_Instance *inst, int size_estimate)
+{
+  Scheme_Bucket_Table *variables;
+  Scheme_Bucket **a;
+
+  if (inst->array_size) {
+    size_estimate = inst->array_size * 2;
+    a = inst->variables.a;
+  } else
+    a = NULL;
+
+  variables = scheme_make_bucket_table(size_estimate, SCHEME_hash_ptr);
+  variables->with_home = 1;
+
+  inst->variables.bt = variables;
+  inst->array_size = 0;
+
+  if (a) {
+    size_estimate >>= 1;
+    while (size_estimate--) {
+      scheme_add_bucket_to_table(inst->variables.bt, a[size_estimate]);
+    }
+  }
 }
 
 Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Instance *inst)
 {
   Scheme_Bucket *b;
-    
-  b = scheme_bucket_from_table(inst->variables, (char *)symbol);
+
+  if (inst->array_size) {
+    int i;
+    for (i = inst->array_size; i--; ) {
+      b = inst->variables.a[i];
+      if (SAME_OBJ(symbol, (Scheme_Object *)b->key))
+        return b;
+    }
+  }
+
+  if (inst->array_size || !inst->variables.bt)
+    scheme_instance_to_hash_mode(inst, 0);
+  
+  b = scheme_bucket_from_table(inst->variables.bt, (char *)symbol);
   ASSERT_IS_VARIABLE_BUCKET(b);
   if (SCHEME_FALSEP(symbol))
     ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_STRONG_HOME_LINK;
@@ -714,8 +787,18 @@ Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Ins
 Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Scheme_Instance *inst)
 {
   Scheme_Bucket *b;
-    
-  b = scheme_bucket_or_null_from_table(inst->variables, (char *)symbol, 0);
+
+  if (inst->array_size) {
+    int i;
+    for (i = inst->array_size; i--; ) {
+      b = inst->variables.a[i];
+      if (SAME_OBJ(symbol, (Scheme_Object *)b->key))
+        return b;
+    }
+    return NULL;
+  }
+
+  b = scheme_bucket_or_null_from_table(inst->variables.bt, (char *)symbol, 0);
   if (b) {
     ASSERT_IS_VARIABLE_BUCKET(b);
     scheme_set_bucket_home(b, inst);
