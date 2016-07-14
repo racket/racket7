@@ -77,6 +77,8 @@ static void pop_prefix(Scheme_Object **rs);
 static Scheme_Object *suspend_prefix(Scheme_Object **rs);
 static Scheme_Object **resume_prefix(Scheme_Object *v);
 
+static Scheme_Bucket *make_bucket(Scheme_Object *key, Scheme_Object *val, Scheme_Instance *inst);
+
 #ifdef MZ_PRECISE_GC
 static void mark_pruned_prefixes(struct NewGC *gc);
 static int check_pruned_prefix(void *p);
@@ -398,11 +400,7 @@ static Scheme_Object *make_instance(int argc, Scheme_Object **argv)
                               "value missing for variable name",
                               "variable name", 1, argv[i],
                               NULL);
-      b = (Scheme_Bucket *)MALLOC_ONE_TAGGED(Scheme_Bucket_With_Home);
-      b->so.type = scheme_variable_type;
-      b->key = (char *)argv[i];
-      b->val = argv[i+1];
-      scheme_set_bucket_home(b, inst);
+      b = make_bucket(argv[i], argv[i+1], inst);
       a[(i-2)>>1] = b;
     }
 
@@ -711,6 +709,19 @@ void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Instance *e)
       ((Scheme_Bucket_With_Home *)b)->home_link = link;
     }
   }
+}
+
+static Scheme_Bucket *make_bucket(Scheme_Object *key, Scheme_Object *val, Scheme_Instance *inst)
+{
+  Scheme_Bucket *b;
+  
+  b = (Scheme_Bucket *)MALLOC_ONE_TAGGED(Scheme_Bucket_With_Home);
+  b->so.type = scheme_variable_type;
+  b->key = (char *)key;
+  b->val = val;
+  scheme_set_bucket_home(b, inst);
+  
+  return b;
 }
 
 Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
@@ -1132,7 +1143,7 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
 {
   Scheme_Object **rs, *v;
   Scheme_Prefix *pf;
-  int i, j, pos, tl_map_len, num_importss, num_defns;
+  int i, j, pos, tl_map_len, num_importss, num_defns, starts_empty;
 
   rs = MZ_RUNSTACK;
 
@@ -1178,17 +1189,35 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
     }
   }
 
-  for (i = 0; i < num_defns; i++) {
-    v = SCHEME_VEC_ELS(linklet->defns)[i];
-    if (i >= linklet->num_exports) {
-      /* avoid conflict with any existing bucket */
-      if (scheme_instance_variable_bucket_or_null(v, instance)) {
-        v = generate_bucket_name(v, instance);
-        source_names = update_source_names(source_names, SCHEME_VEC_ELS(linklet->defns)[i], v);
-      }
+  starts_empty = (!instance->array_size && !instance->variables.bt);
+
+  if (starts_empty && (num_defns < 10)) {
+    /* Faster to build an array-shaped instance (which will be
+       converted to a bucket table on demand, if necessary) */
+    Scheme_Bucket **a, *b;
+
+    a = MALLOC_N(Scheme_Bucket *, num_defns);
+    for (i = 0; i < num_defns; i++) {
+      b = make_bucket(SCHEME_VEC_ELS(linklet->defns)[i], NULL, instance);
+      a[i] = b;
     }
-    v = (Scheme_Object *)scheme_instance_variable_bucket(v, instance);
-    pf->a[pos++] = v;
+
+    instance->array_size = num_defns;
+    instance->variables.a = a;
+  } else {
+    /* General case: bucket-table instance: */
+    for (i = 0; i < num_defns; i++) {
+      v = SCHEME_VEC_ELS(linklet->defns)[i];
+      if ((i >= linklet->num_exports) && !starts_empty) {
+        /* avoid conflict with any existing bucket */
+        if (scheme_instance_variable_bucket_or_null(v, instance)) {
+          v = generate_bucket_name(v, instance);
+          source_names = update_source_names(source_names, SCHEME_VEC_ELS(linklet->defns)[i], v);
+        }
+      }
+      v = (Scheme_Object *)scheme_instance_variable_bucket(v, instance);
+      pf->a[pos++] = v;
+    }
   }
 
   return source_names;
