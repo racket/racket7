@@ -1021,7 +1021,7 @@
               _
               _
               (#%plain-lambda {one:id}
-                (let-values _ two:id)))
+                two:id))
             
             (let ()
               (when (bound-identifier=? #'one #'two)

@@ -7805,7 +7805,6 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
         int n;
         n = SCHEME_DEFN_VAR_COUNT(e);
         if (n > 1) {
-          e = SCHEME_DEFN_RHS(e);
           if (split_define_values(e, n, NULL, 0))
             inc += (n - 1);
         }

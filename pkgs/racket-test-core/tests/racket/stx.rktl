@@ -509,14 +509,14 @@
 
 (define base-lib (caddr (identifier-binding* #'lambda)))
 
-(test `('#%kernel case-lambda ,base-lib case-lambda 0 0 0)
+(test `('#%core case-lambda ,base-lib case-lambda 0 0 0)
       identifier-binding* #'case-lambda)
 (test `("private/promise.rkt" delay* ,base-lib delay 0 0 0)
       identifier-binding* #'delay)
-(test `('#%kernel #%module-begin ,base-lib #%plain-module-begin 0 0 0)
+(test `('#%core #%module-begin ,base-lib #%plain-module-begin 0 0 0)
       identifier-binding* #'#%plain-module-begin)
 (require (only-in racket/base [#%plain-module-begin #%pmb]))
-(test '('#%kernel #%module-begin racket/base #%plain-module-begin 0 0 0)
+(test '('#%core #%module-begin racket/base #%plain-module-begin 0 0 0)
       identifier-binding* #'#%pmb)
 
 (let ([b (identifier-binding
@@ -940,7 +940,7 @@
 (test #t has-stx-property? (expand #'(let () (define-syntax x 1) (define y 12) 10)) 'let-values 'x 'disappeared-binding)
 (test #t has-stx-property? (expand #'(let () (define-syntax x 1) (define y y) 10)) 'letrec-values 'x 'disappeared-binding)
 (test #t has-stx-property? (expand #'(let () (define-struct s (x)) 10)) 'let-values 's 'disappeared-binding)
-(test #t has-stx-property? (expand #'(let () (define-syntax x 1) 10)) 'let-values 'x 'disappeared-binding)
+(test #t has-stx-property? (expand #'(let () (define-syntax x 1) 10)) 'quote 'x 'disappeared-binding)
 (test #f has-stx-property? (expand #'(fluid-let-syntax ([x 1]) 10)) 'let-values 'x 'disappeared-binding)
 
 ;; Disappearing use:
@@ -955,12 +955,12 @@
            (syntax-case e ()
              [(lv (bind ...) beg)
               (let ([db (syntax-property #'beg 'disappeared-binding)])
-                (let-values ([(bg e)
+                (let-values ([(e)
                               (syntax-case #'beg (#%plain-app list)
-                                [(bg () (#%plain-app list e))
-                                 (values #'bg #'e)]
-                                [(bg () e)
-                                 (values #'bg #'e)])])
+                                [(#%plain-app list e)
+                                 (values #'e)]
+                                [e
+                                 (values #'e)])])
                   (let ([o (syntax-property e 'origin)])
                     (test #t (lambda (db o)
                                (and (list? db)
@@ -1921,7 +1921,7 @@
              (require (for-syntax racket/base))
              (begin-for-syntax
               (displayln (syntax-transforming-module-expression?))))))
-  (test "#t\n#f\n" get-output-string o))
+  (test "#t\n#t\n" get-output-string o))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Check that a common wraps encoding that is detected only

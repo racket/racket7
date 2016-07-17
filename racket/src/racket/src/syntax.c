@@ -805,7 +805,7 @@ static Scheme_Object *syntax_col(int argc, Scheme_Object **argv)
   if (!SCHEME_STXP(argv[0]))
     scheme_wrong_contract("syntax-column", "syntax?", 0, argc, argv);
     
-  if (stx->srcloc->col < 0)
+  if (stx->srcloc->col <= 0)
     return scheme_false;
   else
     return scheme_make_integer(stx->srcloc->col-1);
