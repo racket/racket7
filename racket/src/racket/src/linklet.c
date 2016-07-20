@@ -68,14 +68,15 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
 static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet);
 
 static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
-                                                 int num_instances, Scheme_Instance **instances);
+                                                 int num_instances, Scheme_Instance **instances,
+                                                 int use_prompt);
 
 static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *instance,
                                      int num_instances, Scheme_Instance **instances,
                                      Scheme_Hash_Tree *source_names);
-static void pop_prefix(Scheme_Object **rs);
-static Scheme_Object *suspend_prefix(Scheme_Object **rs);
-static Scheme_Object **resume_prefix(Scheme_Object *v);
+static void pop_prefix();
+static Scheme_Object *suspend_prefix();
+static void resume_prefix(Scheme_Object *v);
 
 static Scheme_Bucket *make_bucket(Scheme_Object *key, Scheme_Object *val, Scheme_Instance *inst);
 
@@ -109,7 +110,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_IMMED_PRIM("compile-linklet", compile_linklet, 1, 2, env);
   ADD_IMMED_PRIM("recompile-linklet", recompile_linklet, 1, 1, env);
   ADD_IMMED_PRIM("eval-linklet", eval_linklet, 1, 1, env);
-  ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 2, 3, 0, -1, env);
+  ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 2, 4, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
 
@@ -285,7 +286,7 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
   Scheme_Linklet *linklet;
   Scheme_Object *l;
   Scheme_Instance *inst, **instances;
-  int len = 0, num_importss;
+  int len = 0, num_importss, use_prompt, return_instance;
 
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
     scheme_wrong_contract("instantiate-linklet", "linklet?", 0, argc, argv);
@@ -310,12 +311,17 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
                           "given instances", 1, scheme_make_integer(len),
                           NULL);
 
-  if (argc > 2) {
+  if ((argc > 2) && SCHEME_TRUEP(argv[2])) {
     if (!SAME_TYPE(SCHEME_TYPE(argv[2]), scheme_instance_type))
-      scheme_wrong_contract("instantiate-linklet", "instance?", 2, argc, argv);
+      scheme_wrong_contract("instantiate-linklet", "(or/c instance? #f)", 2, argc, argv);
     inst = (Scheme_Instance *)argv[2];
-  } else
+    return_instance = 0;
+  } else {
     inst = scheme_make_instance(linklet->name, scheme_false);
+    return_instance = 1;
+  }
+
+  use_prompt = ((argc < 4) || SCHEME_TRUEP(argv[3]));
 
   instances = MALLOC_N(Scheme_Instance*, len);
   l = argv[1];
@@ -325,10 +331,10 @@ static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
     l = SCHEME_CDR(l);
   }
 
-  if (argc > 2)
-    return _instantiate_linklet_multi(linklet, inst, len, instances);
+  if (!return_instance)
+    return _instantiate_linklet_multi(linklet, inst, len, instances, use_prompt);
   else {
-    (void)_instantiate_linklet_multi(linklet, inst, len, instances);
+    (void)_instantiate_linklet_multi(linklet, inst, len, instances, use_prompt);
     return (Scheme_Object *)inst;
   }
 }
@@ -913,11 +919,11 @@ static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet)
 
 static Scheme_Object *body_one_expr(void *prefix_plus_expr, int argc, Scheme_Object **argv)
 {
-  Scheme_Object *v, **saved_runstack;
+  Scheme_Object *v;
 
-  saved_runstack = resume_prefix(SCHEME_CAR((Scheme_Object *)prefix_plus_expr));
+  resume_prefix(SCHEME_CAR((Scheme_Object *)prefix_plus_expr));
   v = _scheme_eval_linked_expr_multi(SCHEME_CDR((Scheme_Object *)prefix_plus_expr));
-  suspend_prefix(saved_runstack);
+  (void)suspend_prefix();
 
   return v;
 }
@@ -951,10 +957,10 @@ static int needs_prompt(Scheme_Object *e)
   }
 }
 
-Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instance *instance)
+Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instance *instance, int use_prompt)
 {
   Scheme_Thread *p;
-  Scheme_Object *body, **save_runstack, *save_prefix, *v = scheme_void;
+  Scheme_Object *body, *save_prefix, *v = scheme_void;
   int i, cnt;
   mz_jmp_buf newbuf, * volatile savebuf;
 
@@ -971,10 +977,10 @@ Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instanc
     cnt = SCHEME_VEC_SIZE(linklet->bodies);
     for (i = 0; i < cnt; i++) {
       body = SCHEME_VEC_ELS(linklet->bodies)[i];
-      if (needs_prompt(body)) {
+      if (use_prompt && needs_prompt(body)) {
         /* We need to push the prefix after the prompt is set, so
            restore the runstack and then add the prefix back. */
-        save_prefix = suspend_prefix(save_runstack);
+        save_prefix = suspend_prefix();
         v = _scheme_call_with_prompt_multi(body_one_expr, 
                                            scheme_make_raw_pair(save_prefix, body));
         resume_prefix(save_prefix);
@@ -1026,13 +1032,14 @@ Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instanc
   return v;
 }
 
-static Scheme_Object *eval_linklet_body(Scheme_Linklet *linklet, Scheme_Instance *instance)
+static Scheme_Object *eval_linklet_body(Scheme_Linklet *linklet, Scheme_Instance *instance, int use_prompt)
 {
 #ifdef MZ_USE_JIT
-  return scheme_linklet_run_start(linklet, instance, scheme_make_pair(instance->name, scheme_true));
-#else
-  return scheme_linklet_run_finish(linklet, instance);
+  if (use_prompt)
+    return scheme_linklet_run_start(linklet, instance, scheme_make_pair(instance->name, scheme_true));
 #endif
+  
+  return scheme_linklet_run_finish(linklet, instance, 0);
 }
 
 static void *instantiate_linklet_k(void)
@@ -1043,9 +1050,9 @@ static void *instantiate_linklet_k(void)
   Scheme_Instance **instances = (Scheme_Instance **)p->ku.k.p3;
   int multi = p->ku.k.i1;
   int num_instances = p->ku.k.i2;
+  int use_prompt = p->ku.k.i3;
   int depth;
   Scheme_Object *b, *v;
-  Scheme_Object **save_runstack;
   Scheme_Hash_Tree *source_names;
 
   p->ku.k.p1 = NULL;
@@ -1059,6 +1066,7 @@ static void *instantiate_linklet_k(void)
     p->ku.k.p3 = instances;
     p->ku.k.i1 = multi;
     p->ku.k.i2 = num_instances;
+    p->ku.k.i3 = use_prompt;
     return (Scheme_Object *)scheme_enlarge_runstack(depth, instantiate_linklet_k);
   }
 
@@ -1071,7 +1079,6 @@ static void *instantiate_linklet_k(void)
   }
 
   /* Pushng the prefix looks up imported variables */
-  save_runstack = MZ_RUNSTACK;
   source_names = push_prefix(linklet, instance, num_instances, instances, linklet->source_names);
 
   /* For variables in this instances, merge source-name info from the
@@ -1092,9 +1099,9 @@ static void *instantiate_linklet_k(void)
       instance->source_names = source_names;
   }
 
-  v = eval_linklet_body(linklet, instance);
+  v = eval_linklet_body(linklet, instance, use_prompt);
 
-  pop_prefix(save_runstack);
+  pop_prefix();
 
   if (!multi)
     v = scheme_check_one_value(v);
@@ -1104,7 +1111,7 @@ static void *instantiate_linklet_k(void)
 
 static Scheme_Object *do_instantiate_linklet(Scheme_Linklet *linklet, Scheme_Instance *instance,
                                              int num_instances, Scheme_Instance **instances,
-                                             int multi, int top)
+                                             int use_prompt, int multi, int top)
 {
   Scheme_Thread *p = scheme_current_thread;
   
@@ -1114,6 +1121,7 @@ static Scheme_Object *do_instantiate_linklet(Scheme_Linklet *linklet, Scheme_Ins
   
   p->ku.k.i1 = multi;
   p->ku.k.i2 = num_instances;
+  p->ku.k.i3 = use_prompt;
 
   if (top)
     return (Scheme_Object *)scheme_top_level_do(instantiate_linklet_k, 1);
@@ -1122,15 +1130,17 @@ static Scheme_Object *do_instantiate_linklet(Scheme_Linklet *linklet, Scheme_Ins
 }
 
 static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
-                                                 int num_instances, Scheme_Instance **instances)
+                                                 int num_instances, Scheme_Instance **instances,
+                                                 int use_prompt)
 {
-  return do_instantiate_linklet(linklet, instance, num_instances, instances, 1, 0);
+  return do_instantiate_linklet(linklet, instance, num_instances, instances, use_prompt, 1, 0);
 }
 
 Scheme_Object *scheme_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
-                                                int num_instances, Scheme_Instance **instances)
+                                                int num_instances, Scheme_Instance **instances,
+                                                int use_prompt)
 {
-  return do_instantiate_linklet(linklet, instance, num_instances, instances, 1, 1);
+  return do_instantiate_linklet(linklet, instance, num_instances, instances, use_prompt, 1, 1);
 }
 
 /*========================================================================*/
@@ -1200,6 +1210,7 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
     for (i = 0; i < num_defns; i++) {
       b = make_bucket(SCHEME_VEC_ELS(linklet->defns)[i], NULL, instance);
       a[i] = b;
+      pf->a[pos++] = (Scheme_Object *)b;
     }
 
     instance->array_size = num_defns;
@@ -1223,32 +1234,25 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
   return source_names;
 }
 
-static void pop_prefix(Scheme_Object **rs)
+static void pop_prefix()
 {
   /* This function must not allocate, since a relevant multiple-values
      result may be in the thread record (and we don't want it zerod) */
-  MZ_RUNSTACK = rs;
+  MZ_RUNSTACK++;
 }
 
-static Scheme_Object *suspend_prefix(Scheme_Object **rs)
+static Scheme_Object *suspend_prefix()
 {
-  if (rs != MZ_RUNSTACK) {
-    Scheme_Object *v;
-    v = MZ_RUNSTACK[0];
-    MZ_RUNSTACK++;
-    return v;
-  } else
-    return NULL;
+  Scheme_Object *v;
+  v = MZ_RUNSTACK[0];
+  MZ_RUNSTACK++;
+  return v;
 }
 
-static Scheme_Object **resume_prefix(Scheme_Object *v)
+static void resume_prefix(Scheme_Object *v)
 {
-  if (v) {
-    --MZ_RUNSTACK;
-    MZ_RUNSTACK[0] = v;
-    return MZ_RUNSTACK + 1;
-  } else
-    return MZ_RUNSTACK;
+  --MZ_RUNSTACK;
+  MZ_RUNSTACK[0] = v;
 }
 
 #ifdef MZ_PRECISE_GC

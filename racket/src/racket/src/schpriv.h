@@ -2486,7 +2486,8 @@ Scheme_Object *_scheme_tail_apply_to_list (Scheme_Object *rator, Scheme_Object *
 Scheme_Object *_scheme_apply_native(Scheme_Object *obj, int num_rands, Scheme_Object **rands);
 
 Scheme_Object *scheme_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
-                                                int num_instances, Scheme_Instance **instances);
+                                                int num_instances, Scheme_Instance **instances,
+                                                int use_prompt);
 
 Scheme_Object *scheme_internal_read(Scheme_Object *port, Scheme_Object *stxsrc, int crc, int cantfail, 
 				    int recur, int expose_comment, int pre_char, Scheme_Object *readtable,
@@ -2902,7 +2903,7 @@ struct Start_Module_Args;
 #ifdef MZ_USE_JIT
 Scheme_Object *scheme_linklet_run_start(Scheme_Linklet* linklet, Scheme_Instance *instance, Scheme_Object *name);
 #endif
-Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instance *instance);
+Scheme_Object *scheme_linklet_run_finish(Scheme_Linklet* linklet, Scheme_Instance *instance, int use_prompt);
 
 Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *env);
 
@@ -3840,5 +3841,7 @@ Scheme_Object *scheme_place_async_channel_receive(Scheme_Object *ch);
 
 void scheme_process_global_lock(void);
 void scheme_process_global_unlock(void);
+
+Scheme_Object *scheme_expander_syntax_to_datum(Scheme_Object *v);
 
 #endif /* __mzscheme_private__ */

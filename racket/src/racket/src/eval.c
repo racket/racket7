@@ -3396,6 +3396,18 @@ Scheme_Object *scheme_dynamic_require_reader(int argc, Scheme_Object *argv[])
   return scheme_apply(proc, argc, argv);
 }
 
+Scheme_Object *scheme_expander_syntax_to_datum(Scheme_Object *v)
+{
+  Scheme_Object *proc, *a[1];
+  if (scheme_starting_up)
+    return v;
+  else {
+    proc = scheme_get_startup_export("maybe-syntax->datum");
+    a[0] = v;
+    return scheme_apply(proc, 1, a);
+  }
+}
+
 Scheme_Object *scheme_namespace_require(Scheme_Object *mod_path)
 {
   Scheme_Object *proc, *a[1];

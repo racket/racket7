@@ -577,7 +577,7 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   REGISTER_SO(scheme_startup_instance);
   scheme_startup_instance = scheme_make_instance(scheme_intern_symbol("startup"), scheme_false);
   startup_linklet = scheme_startup_linklet();
-  scheme_instantiate_linklet_multi(startup_linklet, scheme_startup_instance, 0, NULL);
+  scheme_instantiate_linklet_multi(startup_linklet, scheme_startup_instance, 0, NULL, 0);
 
   env = scheme_make_empty_env();
   scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 

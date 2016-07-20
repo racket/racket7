@@ -3464,7 +3464,10 @@ static int more_common0(mz_jit_state *jitter, void *_data)
     mz_push_locals();
     mz_set_local_p(JIT_R2, JIT_LOCAL2);
 
-    jit_prepare(2);
+    jit_movi_i(JIT_R2, 1);
+
+    jit_prepare(3);
+    jit_pusharg_i(JIT_R2);
     jit_pusharg_p(JIT_R1);
     jit_pusharg_p(JIT_R0);
     (void)mz_finish(scheme_linklet_run_finish);

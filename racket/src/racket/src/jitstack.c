@@ -695,7 +695,7 @@ Scheme_Object *scheme_linklet_run_start(Scheme_Linklet *linklet, Scheme_Instance
   if (proc && !CHECK_RUNSTACK_REGISTER_UPDATE)
     return proc(linklet, inst, &name);
   else
-    return scheme_linklet_run_finish(linklet, inst);
+    return scheme_linklet_run_finish(linklet, inst, 1);
 }
 
 void scheme_thread_start_child(Scheme_Thread *child, Scheme_Object *child_thunk)

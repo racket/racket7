@@ -1437,8 +1437,10 @@ read_inner_inner_inner(Scheme_Object *port, Scheme_Object *stxsrc, Scheme_Hash_T
               if (SCHEME_VEC_SIZE(v)) {
                 Scheme_Object *key;
                 key = SCHEME_VEC_ELS(v)[0];
-                if (stxsrc)
+                if (stxsrc) {
                   key = scheme_syntax_to_datum(key);
+                  key = scheme_expander_syntax_to_datum(key);
+                }
                 st = scheme_lookup_prefab_type(key, SCHEME_VEC_SIZE(v) - 1);
               } else
                 st = NULL;
@@ -2023,18 +2025,22 @@ read_inner_inner_inner(Scheme_Object *port, Scheme_Object *stxsrc, Scheme_Hash_T
 	special_value_need_copy = 0;
 	goto start_over;
       }
-    } else if (SCHEME_STXP(v)) {
+    } else {
       if (!stxsrc)
-	v = scheme_syntax_to_datum(v);
-    } else if (stxsrc) {
-      Scheme_Object *s;
-      s = scheme_make_stx_w_offset(scheme_false, line, col, pos, SPAN(port, pos), stxsrc, STX_SRCTAG);
-      v = scheme_datum_to_syntax(v, s, DTS_CAN_GRAPH);
+        v = scheme_expander_syntax_to_datum(v);
+      if (SCHEME_STXP(v)) {
+        if (!stxsrc)
+          v = scheme_syntax_to_datum(v);
+      } else if (stxsrc) {
+        Scheme_Object *s;
+        s = scheme_make_stx_w_offset(scheme_false, line, col, pos, SPAN(port, pos), stxsrc, STX_SRCTAG);
+        v = scheme_datum_to_syntax(v, s, DTS_CAN_GRAPH);
+      }
+      if (special_value_need_copy && !stxsrc) {
+        set_need_copy(ht);
+      }
+      return v;
     }
-    if (special_value_need_copy && !stxsrc) {
-      set_need_copy(ht);
-    }
-    return v;
   }
 }
 
@@ -4227,6 +4233,7 @@ static Scheme_Object *read_hash(Scheme_Object *port, Scheme_Object *stxsrc,
       val = SCHEME_STX_CAR(l);
       key = SCHEME_STX_CAR(val);
       key = scheme_syntax_to_datum(key);
+      key = scheme_expander_syntax_to_datum(key);
       val = SCHEME_STX_CDR(val);
       
       t = scheme_hash_tree_set(t, key, val);
@@ -6352,6 +6359,8 @@ static Scheme_Object *readtable_call(int w_char, int ch, Scheme_Object *proc, Re
   }
 
   if (!get_info && !scheme_special_comment_value(v)) {
+    if (!src)
+      v = scheme_expander_syntax_to_datum(v);
     if (SCHEME_STXP(v)) {
       if (!src)
 	v = scheme_syntax_to_datum(v);
@@ -6689,9 +6698,10 @@ static Scheme_Object *do_reader(Scheme_Object *try_modpath,
   Scheme_Object *modpath, *name, *a[3], *proc, *v, *no_val;
   int num_a;
 
-  if (stxsrc)
+  if (stxsrc) {
     modpath = scheme_syntax_to_datum(modpath_stx);
-  else
+    modpath = scheme_expander_syntax_to_datum(modpath);
+  } else
     modpath = modpath_stx;
 
   proc = scheme_get_param(scheme_current_config(), MZCONFIG_READER_GUARD);
