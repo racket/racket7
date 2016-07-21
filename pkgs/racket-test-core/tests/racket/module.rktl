@@ -1132,7 +1132,7 @@
                          '(rename-out [z x])
                          "x"
                          ;; slow:
-                         "exp\nexp\nrun\nexp\nexp\n"))])
+                         "exp\nexp\nrun\nexp\n"))])
   (define ns (make-base-namespace))
   (define o (open-output-string))
   (parameterize ([current-output-port o])
@@ -1279,7 +1279,7 @@ case of module-leve bindings; it doesn't cover local bindings.
   (define vlen (bytes-ref s (+ start 2)))
   (define mode (integer->char (bytes-ref s (+ start 3 vlen))))
   (case mode
-    [(#\T)
+    [(#\B)
      (define h (make-bytes 20 (+ 42 c)))
      (bytes-copy! s (+ start 4 vlen) h)]
     [(#\D)

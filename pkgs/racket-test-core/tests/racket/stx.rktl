@@ -950,7 +950,7 @@
 ;; Check that origin is bound by disappeared binding:
 (test #t has-stx-property? (expand #'(let () (define-syntax (x stx) #'(quote y)) x)) 'quote 'x 'origin)
 (let ([check-expr
-       (lambda (expr)
+       (lambda (expr #:extract-origin [extract-origin values])
          (let ([e (expand expr)])
            (syntax-case e ()
              [(lv (bind ...) beg)
@@ -961,7 +961,7 @@
                                  (values #'e)]
                                 [e
                                  (values #'e)])])
-                  (let ([o (syntax-property e 'origin)])
+                  (let ([o (extract-origin (syntax-property e 'origin))])
                     (test #t (lambda (db o)
                                (and (list? db)
                                     (list? o)
@@ -971,7 +971,10 @@
                                     (identifier? (car o))
                                     (ormap (lambda (db) (free-identifier=? db (car o))) db)))
                           db o))))])))])
-  (check-expr #'(let () (letrec-syntaxes+values ([(x) (lambda (stx) #'(quote y))]) () x)))
+  (check-expr #'(let () (letrec-syntaxes+values ([(x) (lambda (stx) #'(quote y))]) () x))
+              #:extract-origin (lambda (v) (and (pair? v)
+                                           (pair? (car v))
+                                           (list (caar v)))))
   (check-expr #'(let () (letrec-syntaxes+values ([(x) (lambda (stx) #'(quote y))]) () (list x))))
   (check-expr #'(let-values () (define-syntax (x stx) #'(quote y)) x))
   (check-expr #'(let-values () (define-syntax (x stx) #'(quote y)) (list x)))
@@ -1487,7 +1490,7 @@
 (test '(10 20 #t) '@!$get @!$get)
 |#
 
-(test '(12)
+(test '(1) ; old expander produced 12
       eval
       (expand
        #'(let ([b 12])
