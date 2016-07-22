@@ -6,13 +6,14 @@
                          "small-scheme.rkt" 
                          "stxloc.rkt" "stxparamkey.rkt"))
 
-  (#%provide (for-syntax do-syntax-parameterize))
+  (#%provide (for-syntax do-syntax-parameterize)
+             let-local-keys)
 
-  (define-for-syntax (do-syntax-parameterize stx let-syntaxes-id empty-body-ok? keep-orig?)
+  (define-for-syntax (do-syntax-parameterize stx let-syntaxes-id empty-body-ok?)
     (syntax-case stx ()
       [(_ ([id val] ...) body ...)
        (let ([ids (syntax->list #'(id ...))])
-	 (with-syntax ([((gen-id must-be-renamer?) ...)
+	 (with-syntax ([((gen-id local-key must-be-renamer?) ...)
                     (map (lambda (id)
                            (unless (identifier? id)
                              (raise-syntax-error
@@ -28,9 +29,8 @@
                                 stx
                                 id))
                              (list
-                              (syntax-local-get-shadower
-                               (syntax-local-introduce (syntax-parameter-target sp))
-                               #t)
+                              (car (generate-temporaries '(stx-param)))
+                              (syntax-parameter-key sp)
                               (rename-transformer-parameter? sp))))
                          ids)])
 	   (let ([dup (check-duplicate-identifier ids)])
@@ -46,15 +46,22 @@
                 #f
                 "missing body expression(s)"
                 stx)))
-           (with-syntax ([let-syntaxes let-syntaxes-id]
-                         [(orig ...) (if keep-orig?
-                                         (list ids)
-                                         #'())])
+           (with-syntax ([let-syntaxes let-syntaxes-id])
              (syntax/loc stx
-               (let-syntaxes ([(gen-id)
-                               (convert-renamer
-                                (if must-be-renamer? (quote-syntax val) #f)
-                                val)]
+               (let-syntaxes ([(gen-id) (convert-renamer must-be-renamer? val)]
                               ...)
-                 orig ...
-                 body ...)))))])))
+                 (let-local-keys ([local-key gen-id] ...)
+                   body ...))))))]))
+  
+  (define-syntax (let-local-keys stx)
+    (if (eq? 'expression (syntax-local-context))
+        (let-values ([(expr opaque-expr)
+                      (syntax-case stx ()
+                        [(_ ([local-key id] ...) body ...)
+                         (syntax-local-expand-expression/extend-environment
+                          #'(let-values () body ...)
+                          (syntax->datum #'(local-key ...))
+                          (syntax->list #'(id ...)))])])
+          opaque-expr)
+        (with-syntax ([stx stx])
+          #'(#%expression stx)))))
