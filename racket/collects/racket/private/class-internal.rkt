@@ -20,7 +20,8 @@
                      syntax/private/boundmap
                      syntax/parse
                      syntax/intdef
-                     "classidmap.rkt"))
+                     "classidmap.rkt")
+         (submod "classidmap.rkt" finder))
 
 (define insp (current-inspector)) ; for all opaque structures
 
@@ -452,7 +453,7 @@
     ;; expands an expression enough that we can check whether it has
     ;; the right form for a method; must use local syntax definitions
     (define (proc-shape name orig-stx xform? 
-                        the-obj the-finder
+                        the-obj
                         bad class-name expand-stop-names
                         def-ctx lookup-localize)
       (define (expand expr locals)
@@ -510,7 +511,6 @@
                     (kw-vars-ok? (syntax vars))))
            (if xform?
                (with-syntax ([the-obj the-obj]
-                             [the-finder the-finder]
                              [name (mk-name name)])
                  (with-syntax ([vars (if (or (free-identifier=? #'lam #'lambda)
                                              (free-identifier=? #'lam #'λ))
@@ -529,7 +529,7 @@
                                                  ;; optional argument; need to wrap arg expression
                                                  (cons
                                                   (with-syntax ([expr (syntax/loc #'expr
-                                                                        (let-syntax ([the-finder (quote-syntax the-obj)])
+                                                                        (syntax-parameterize ([the-finder (quote-syntax the-obj)])
                                                                           (#%expression expr)))])
                                                     (syntax/loc (car vars)
                                                       (id expr)))
@@ -539,7 +539,7 @@
                                          #'vars)])
                    (let ([l (syntax/loc stx 
                               (lambda (the-obj . vars) 
-                                (let-syntax ([the-finder (quote-syntax the-obj)])
+                                (syntax-parameterize ([the-finder (quote-syntax the-obj)])
                                   body1 body ...)))])
                      (syntax-track-origin
                       (with-syntax ([l (rearm (add-method-property l) stx)])
@@ -559,11 +559,10 @@
                 (andmap vars-ok? (syntax->list (syntax (vars ...)))))
            (if xform?
                (with-syntax ([the-obj the-obj]
-                             [the-finder the-finder]
                              [name (mk-name name)])
                  (let ([cl (syntax/loc stx
                              (case-lambda [(the-obj . vars) 
-                                           (let-syntax ([the-finder (quote-syntax the-obj)])
+                                           (syntax-parameterize ([the-finder (quote-syntax the-obj)])
                                              body1 body ...)] ...))])
                    (syntax-track-origin 
                     (with-syntax ([cl (rearm (add-method-property cl) stx)])
@@ -616,10 +615,8 @@
                                    (with-syntax ([old-id old-id]
                                                  [old-id-localized (lookup-localize (localize old-id))]
                                                  [new-id new-id]
-                                                 [the-obj the-obj]
-                                                 [the-finder the-finder])
+                                                 [the-obj the-obj])
                                      (syntax (old-id (make-direct-method-map 
-                                                      (quote-syntax the-finder)
                                                       (quote the-obj)
                                                       (quote-syntax old-id)
                                                       (quote-syntax old-id-localized)
@@ -677,8 +674,7 @@
     
     (define (main stx super-expr deserialize-id-expr name-id interface-exprs defn-and-exprs)
       (let-values ([(this-id) #'this-id]
-                   [(the-obj) (datum->syntax (quote-syntax here) (gensym 'self))]
-                   [(the-finder) (datum->syntax #f (gensym 'find-self))])
+                   [(the-obj) (datum->syntax (quote-syntax here) (gensym 'self))])
         
         (let* ([def-ctx (syntax-local-make-definition-context)]
                [localized-map (make-bound-identifier-mapping)]
@@ -1077,7 +1073,7 @@
                                                (let ([expr 
                                                       (syntax-track-origin
                                                        (proc-shape #f (syntax expr) #f 
-                                                                   the-obj the-finder
+                                                                   the-obj
                                                                    bad class-name expand-stop-names
                                                                    def-ctx lookup-localize)
                                                        (car exprs)
@@ -1376,7 +1372,6 @@
                         (let ([mappings
                                ;; make-XXX-map is supplied by private/classidmap.rkt
                                (with-syntax ([the-obj the-obj]
-                                             [the-finder the-finder]
                                              [this-id this-id])
                                  (syntax 
                                   ([(inherit-field-name ...
@@ -1389,7 +1384,6 @@
                                      pubment-name ...)
                                     (values
                                      (make-field-map #t
-                                                     (quote-syntax the-finder)
                                                      (quote the-obj)
                                                      (quote-syntax inherit-field-name)
                                                      (quote-syntax inherit-field-name-localized)
@@ -1397,45 +1391,38 @@
                                                      (quote-syntax inherit-field-mutator))
                                      ...
                                      (make-field-map #f
-                                                     (quote-syntax the-finder)
                                                      (quote the-obj)
                                                      (quote-syntax local-field)
                                                      (quote-syntax local-field-localized)
                                                      (quote-syntax local-field-accessor)
                                                      (quote-syntax local-field-mutator))
                                      ...
-                                     (make-rename-super-map (quote-syntax the-finder)
-                                                            (quote the-obj)
+                                     (make-rename-super-map (quote the-obj)
                                                             (quote-syntax rename-super-orig)
                                                             (quote-syntax rename-super-orig-localized)
                                                             (quote-syntax rename-super-temp))
                                      ...
-                                     (make-rename-inner-map (quote-syntax the-finder)
-                                                            (quote the-obj)
+                                     (make-rename-inner-map (quote the-obj)
                                                             (quote-syntax rename-inner-orig)
                                                             (quote-syntax rename-inner-orig-localized)
                                                             (quote-syntax rename-inner-temp))
                                      ...
-                                     (make-method-map (quote-syntax the-finder)
-                                                      (quote the-obj)
+                                     (make-method-map (quote the-obj)
                                                       (quote-syntax method-name)
                                                       (quote-syntax method-name-localized)
                                                       (quote-syntax method-accessor))
                                      ...
-                                     (make-direct-method-map (quote-syntax the-finder)
-                                                             (quote the-obj)
+                                     (make-direct-method-map (quote the-obj)
                                                              (quote-syntax private-name)
                                                              (quote-syntax private-name-localized)
                                                              (quote private-temp))
                                      ...
-                                     (make-direct-method-map (quote-syntax the-finder)
-                                                             (quote the-obj)
+                                     (make-direct-method-map (quote the-obj)
                                                              (quote-syntax public-final-name)
                                                              (quote-syntax public-final-name-localized)
                                                              (quote public-final-temp))
                                      ...
-                                     (make-direct-method-map (quote-syntax the-finder)
-                                                             (quote the-obj)
+                                     (make-direct-method-map (quote the-obj)
                                                              (quote-syntax pubment-name)
                                                              (quote-syntax pubment-name-localized)
                                                              (quote pubment-temp))
@@ -1453,7 +1440,7 @@
                                       (lambda (m)
                                         (and (bound-identifier=? (car m) name)
                                              (with-syntax ([proc (proc-shape (car m) (cdr m) #t 
-                                                                             the-obj the-finder
+                                                                             the-obj
                                                                              bad class-name expand-stop-names
                                                                              def-ctx lookup-localize)]
                                                            [extra-init-mappings extra-init-mappings])
@@ -1520,7 +1507,6 @@
                                           
                                           [exprs exprs]
                                           [the-obj the-obj]
-                                          [the-finder the-finder]
                                           [name class-name]
                                           [(stx-def ...) (map cdr stx-defines)]
                                           [super-expression super-expr]
@@ -1579,10 +1565,8 @@
                                              ...)
                                          (syntax-parameterize
                                           ([this-param (make-this-map (quote-syntax this-id)
-                                                                      (quote-syntax the-finder)
                                                                       (quote the-obj))]
-                                           [this%-param (make-this%-map (quote-syntax (object-ref this))
-                                                                        (quote-syntax the-finder))])
+                                           [this%-param (make-this%-map (quote-syntax (object-ref this)))])
                                           (let-syntaxes
                                            mappings
                                            (syntax-parameterize 
@@ -1592,7 +1576,6 @@
                                                   [(_ rename-super-extra-orig . args) 
                                                    (generate-super-call 
                                                     stx
-                                                    (quote-syntax the-finder)
                                                     (quote the-obj)
                                                     (quote-syntax rename-super-extra-temp)
                                                     (syntax args))]
@@ -1617,7 +1600,6 @@
                                                   [(_ default-expr rename-inner-extra-orig . args)
                                                    (generate-inner-call 
                                                     stx
-                                                    (quote-syntax the-finder)
                                                     (quote the-obj)
                                                     (syntax default-expr)
                                                     (quote-syntax rename-inner-extra-temp)
@@ -1659,7 +1641,7 @@
                                                #, ;; Attach srcloc (useful for profiling)
                                                (quasisyntax/loc stx
                                                  (lambda (the-obj super-go si_c si_inited? si_leftovers init-args)
-                                                   (let-syntax ([the-finder (quote-syntax the-obj)])
+                                                   (syntax-parameterize ([the-finder (quote-syntax the-obj)])
                                                      (syntax-parameterize
                                                       ([super-instantiate-param
                                                         (lambda (stx)

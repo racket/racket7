@@ -57,7 +57,9 @@
                    (lambda () #f)))))
     (define-values (val to-id) (syntax-local-value/immediate (or id default-id)
                                                              (lambda () (values #f #f))))
-    val)
+    (if (rename-transformer? val)
+        (syntax-local-value to-id (lambda () val))
+        val))
   
   (define (syntax-parameter-local-value id)
     (let loop ([id id])
@@ -76,7 +78,7 @@
   (define (apply-transformer v stx set!-stx)
     (cond
      [(rename-transformer? v) 
-      (with-syntax ([target (rename-transformer-target v)])
+      (with-syntax ([target  (rename-transformer-target v)])
 	(syntax-case stx ()
 	  [(set! id _expr) 
 	   (free-identifier=? #'set! set!-stx)

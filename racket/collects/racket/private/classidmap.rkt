@@ -3,6 +3,7 @@
 (require syntax/stx
          (for-syntax racket/base)
          (for-template racket/base
+                       racket/stxparam
                        racket/unsafe/undefined
                        "class-wrapped.rkt"
                        "class-undef.rkt"))
@@ -28,8 +29,15 @@
       [else
        (list* 'apply id this (reverse (cons args accum)))])))
 
-(define (find the-finder name src)
-  (let ([this-id (syntax-local-value (syntax-local-get-shadower the-finder))])
+(module finder racket/base
+  (require racket/stxparam
+           (for-syntax racket/base))
+  (provide the-finder)
+  (define-syntax-parameter the-finder #f))
+(require (for-template 'finder))
+
+(define (find name src)
+  (let ([this-id (syntax-parameter-value #'the-finder)])
     (datum->syntax this-id name src)))
 
 ;; Check Syntax binding info:
@@ -51,7 +59,7 @@
 (define (add-declare-field-initialization id src-stx stx)
   (quasisyntax/loc src-stx (begin '(declare-field-initialization #,id) #,stx)))
 
-(define (make-this-map orig-id the-finder the-obj)
+(define (make-this-map orig-id the-obj)
   (let ()
     (mk-set!-trans
      orig-id
@@ -64,11 +72,11 @@
            stx
            (datum->syntax
             stx
-            (cons (find the-finder the-obj stx) (syntax args))
+            (cons (find the-obj stx) (syntax args))
             stx))]
-         [id (add-declare-this-escapes stx (find the-finder the-obj stx))])))))
+         [id (add-declare-this-escapes stx (find the-obj stx))])))))
 
-(define (make-this%-map replace-stx the-finder)
+(define (make-this%-map replace-stx)
   (let ()
     (make-set!-transformer
      (λ (stx)
@@ -81,7 +89,7 @@
          [(f . args)
           (quasisyntax/loc stx (#,replace-stx . args))])))))
 
-(define (make-field-map inherited? the-finder the-obj the-binder the-binder-localized
+(define (make-field-map inherited? the-obj the-binder the-binder-localized
                         field-accessor field-mutator)
   (let ()
     (define (choose-src a b) (if (syntax-source a) a b))
@@ -89,7 +97,7 @@
      the-binder-localized
      (lambda (stx)
        (class-syntax-protect
-        (with-syntax ([obj-expr (find the-finder the-obj stx)])
+        (with-syntax ([obj-expr (find the-obj stx)])
           (syntax-case stx (field-initialization-value set!)
             [(set! id (field-initialization-value expr))
              (add-declare-field-initialization
@@ -131,7 +139,7 @@
                                    ((unsyntax field-accessor) obj))])
                 (syntax/loc (choose-src stx #'id) (let* bindings get))))])))))))
 
-(define (make-method-map the-finder the-obj the-binder the-binder-localized method-accessor)
+(define (make-method-map the-obj the-binder the-binder-localized method-accessor)
   (let ()
     (mk-set!-trans
      the-binder-localized
@@ -148,8 +156,8 @@
              (datum->syntax 
               (quote-syntax here)
               (make-method-apply
-               (list method-accessor (find the-finder the-obj stx))
-               (find the-finder the-obj stx)
+               (list method-accessor (find the-obj stx))
+               (find the-obj stx)
                (syntax args))
               stx)))]
           [_else
@@ -160,7 +168,7 @@
 
 ;; For methods that are dirrectly available via their names
 ;;  (e.g., private methods)
-(define (make-direct-method-map the-finder the-obj the-binder the-binder-localized new-name)
+(define (make-direct-method-map the-obj the-binder the-binder-localized new-name)
   (let ()
     (mk-set!-trans
      the-binder-localized
@@ -176,7 +184,7 @@
              the-binder (syntax id)
              (datum->syntax 
               (quote-syntax here)
-              (make-method-apply (find the-finder new-name stx) (find the-finder the-obj stx) (syntax args))
+              (make-method-apply (find new-name stx) (find the-obj stx) (syntax args))
               stx)))]
           [_else
            (raise-syntax-error 
@@ -184,7 +192,7 @@
             "misuse of method (not in application)" 
             stx)]))))))
 
-(define (make-rename-super-map the-finder the-obj the-binder the-binder-localized rename-temp)
+(define (make-rename-super-map the-obj the-binder the-binder-localized rename-temp)
   (let ()
     (mk-set!-trans
      the-binder-localized
@@ -200,7 +208,7 @@
              the-binder (syntax id)
              (datum->syntax 
               (quote-syntax here)
-              (make-method-apply (find the-finder rename-temp stx) (find the-finder the-obj stx) (syntax args))
+              (make-method-apply (find rename-temp stx) (find the-obj stx) (syntax args))
               stx)))]
           [_else
            (raise-syntax-error 
@@ -208,7 +216,7 @@
             "misuse of super method (not in application)" 
             stx)]))))))
 
-(define (make-rename-inner-map the-finder the-obj the-binder the-binder-localized rename-temp)
+(define (make-rename-inner-map the-obj the-binder the-binder-localized rename-temp)
   (let ()
     (mk-set!-trans
      the-binder-localized
@@ -218,14 +226,14 @@
           [(set! id expr)
            (raise-syntax-error 'class "cannot mutate inner method" stx)]
           [(id (lambda () default) . args)
-           (let ([target (find the-finder the-obj stx)])
+           (let ([target (find the-obj stx)])
              (add-declare-this-escapes
               stx
               (binding
                the-binder (syntax id)
                (datum->syntax 
                 (quote-syntax here)
-                (make-method-apply (list (find the-finder rename-temp stx) target #'default)
+                (make-method-apply (list (find rename-temp stx) target #'default)
                                    target (syntax args))
                 stx))))]
           [(id (lambda largs default) . args)
@@ -249,27 +257,27 @@
             "misuse of inner method (not in application)" 
             stx)]))))))
 
-(define (generate-super-call stx the-finder the-obj rename-temp args)
+(define (generate-super-call stx the-obj rename-temp args)
   (add-declare-this-escapes
    stx
    (class-syntax-protect
     (datum->syntax 
      (quote-syntax here)
-     (make-method-apply (find the-finder rename-temp stx) 
-                        (find the-finder the-obj stx) 
+     (make-method-apply (find rename-temp stx) 
+                        (find the-obj stx) 
                         args)
      stx))))
 
-(define (generate-inner-call stx the-finder the-obj default-expr rename-temp args)
+(define (generate-inner-call stx the-obj default-expr rename-temp args)
   (add-declare-this-escapes
    stx
    (class-syntax-protect
     (datum->syntax 
      (quote-syntax here)
-     (let ([target (find the-finder the-obj stx)])
+     (let ([target (find the-obj stx)])
        (datum->syntax 
         (quote-syntax here)
-        `(let ([i (,(find the-finder rename-temp stx) ,target)])
+        `(let ([i (,(find rename-temp stx) ,target)])
            (if i
                ,(make-method-apply 'i target args)
                ,default-expr))
