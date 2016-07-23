@@ -9,11 +9,11 @@
   (#%provide (for-syntax do-syntax-parameterize)
              let-local-keys)
 
-  (define-for-syntax (do-syntax-parameterize stx let-syntaxes-id empty-body-ok?)
+  (define-for-syntax (do-syntax-parameterize stx letrec-syntaxes-id empty-body-ok?)
     (syntax-case stx ()
-      [(_ ([id val] ...) body ...)
+      [(-syntax-parameterize ([id val] ...) body ...)
        (let ([ids (syntax->list #'(id ...))])
-	 (with-syntax ([((gen-id local-key must-be-renamer?) ...)
+	 (with-syntax ([((gen-id local-key who/must-be-renamer) ...)
                     (map (lambda (id)
                            (unless (identifier? id)
                              (raise-syntax-error
@@ -31,7 +31,8 @@
                              (list
                               (car (generate-temporaries '(stx-param)))
                               (syntax-parameter-key sp)
-                              (rename-transformer-parameter? sp))))
+                              (and (rename-transformer-parameter? sp)
+                                   #'-syntax-parameterize))))
                          ids)])
 	   (let ([dup (check-duplicate-identifier ids)])
 	     (when dup
@@ -46,10 +47,10 @@
                 #f
                 "missing body expression(s)"
                 stx)))
-           (with-syntax ([let-syntaxes let-syntaxes-id])
+           (with-syntax ([letrec-syntaxes letrec-syntaxes-id])
              (syntax/loc stx
-               (let-syntaxes ([(gen-id) (convert-renamer must-be-renamer? val)]
-                              ...)
+               (letrec-syntaxes ([(gen-id) (wrap-parameter-value 'who/must-be-renamer val)]
+                                 ...)
                  (let-local-keys ([local-key gen-id] ...)
                    body ...))))))]))
   

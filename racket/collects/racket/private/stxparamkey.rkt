@@ -6,7 +6,21 @@
   ;; Consulted before the expander's table, for use by compile-time
   ;; code wrapped by a run-time-phased `syntax-parameterize`:
   (define current-parameter-environment (make-parameter #hasheq()))
-  
+
+  ;; Wrap the value for a syntax parameter in a `parameter-value` struct,
+  ;; so that we can distinguish it from rename transformers that arrive
+  ;; at the value
+  (define-values (struct:parameter-value make-parameter-value parameter-value? parameter-value-ref parameter-value-set!)
+    (make-struct-type 'parameter-value #f 1 0 #f null (current-inspector) #f '(0)))
+  (define parameter-value-content (make-struct-field-accessor parameter-value-ref 0))
+
+  (define (wrap-parameter-value who/must-be-transformer v)
+    (unless (or (not who/must-be-transformer) (rename-transformer? v))
+      (raise-argument-error who/must-be-transformer
+                            "rename-transformer?"
+                            v))
+    (make-parameter-value v))
+
   (define (extend-parameter-environment env binds)
     (with-syntax ([((key sp-id) ...) binds])
       (let loop ([ht (current-parameter-environment)]
@@ -40,7 +54,7 @@
     ;; used to test the rename-transformer
     (define lt
       (if (syntax-transforming?)
-          (syntax-local-environment-ref key default-id)
+          (rename-transformer-target (syntax-parameter-key-value key default-id))
           default-id))
     (syntax-property lt 'not-free-identifier=? #t))
   
@@ -55,25 +69,25 @@
                   (syntax-local-environment-ref
                    key
                    (lambda () #f)))))
-    (define-values (val to-id) (syntax-local-value/immediate (or id default-id)
-                                                             (lambda () (values #f #f))))
-    (if (rename-transformer? val)
-        (syntax-local-value to-id (lambda () val))
-        val))
+    (let loop ([id (or id default-id)])
+      (define-values (val next-id) (syntax-local-value/immediate id (lambda () (values #f #f))))
+      (cond
+       [(parameter-value? val) (parameter-value-content val)]
+       [next-id
+        ;; Some part of expansion introduced a rename transformer
+        ;; between our identifier and its binding
+        (loop next-id)]
+       [else val])))
   
   (define (syntax-parameter-local-value id)
     (let loop ([id id])
       (define-values (sp next-id) (syntax-local-value/immediate id (lambda () (values #f #f))))
       (cond
        [(syntax-parameter? sp) sp]
-       [next-id (loop next-id)])))
-
-  (define (convert-renamer convert? v)
-    (unless (or (not convert?) (rename-transformer? v))
-      (raise-argument-error 'define-rename-transformer-parameter 
-                            "rename-transformer?"
-                            v))
-    v)
+       [next-id
+        ;; Might be a rename of a syntax-parameter binding
+        (loop next-id)]
+       [else #f])))
 
   (define (apply-transformer v stx set!-stx)
     (cond
@@ -110,9 +124,9 @@
        stx
        #f)]))
 
-  (#%provide current-parameter-environment
+  (#%provide wrap-parameter-value
+             current-parameter-environment
              extend-parameter-environment
-             convert-renamer
              apply-transformer
              syntax-parameter?
              make-syntax-parameter

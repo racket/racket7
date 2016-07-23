@@ -21,7 +21,7 @@
       [(_ id init-val)
        (with-syntax ([gen-id (car (generate-temporaries (list #'id)))])
          #'(begin
-             (define-syntax gen-id init-val)
+             (define-syntax gen-id (wrap-parameter-value #f init-val))
              (define-syntax id
                (let ([key (gensym)])
                  (make-syntax-parameter
@@ -33,7 +33,7 @@
       [(_ id init-val)
        (with-syntax ([gen-id (car (generate-temporaries (list #'id)))])
          #'(begin
-             (define-syntax gen-id (convert-renamer #t init-val))
+             (define-syntax gen-id (wrap-parameter-value 'define-rename-transformer-parameter init-val))
              (define-syntax id 
                (let ([key (gensym)])
                  (make-rename-transformer-parameter 
@@ -41,4 +41,4 @@
                   key)))))]))
 
   (define-syntax (syntax-parameterize stx)
-    (do-syntax-parameterize stx #'let-syntaxes #f)))
+    (do-syntax-parameterize stx #'letrec-syntaxes #f)))
