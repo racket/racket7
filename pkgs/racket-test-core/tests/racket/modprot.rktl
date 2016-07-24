@@ -212,45 +212,10 @@
      (#%require '#%unsafe)
      (display unsafe-car)))
 
-(require compiler/zo-structs
-         compiler/zo-marshal)
-
-(define unsafe-synth-zo
-  (let ([bstr
-         (zo-marshal
-          (compilation-top
-           10
-           #hash()
-           (prefix 0
-                   (list 'dummy)
-                   null
-                   'insp0)
-           (mod 'unsafe
-                'unsafe
-                (module-path-index-join #f #f)
-                (prefix 0
-                        (list (module-variable (module-path-index-join ''#%unsafe #f)
-                                               'unsafe-car
-                                               -1
-                                               0
-                                               #f))
-                        null
-                        'insp0)
-                null
-                null
-                null ; body
-                null
-                null
-                0
-                (toplevel 0 0 #f #f)
-                #f
-                #f
-                #hash()
-                null
-                null
-                null)))])
-    (parameterize ([read-accept-compiled #t])
-      (read (open-input-bytes bstr)))))
+(require (only-in racket/unsafe/ops unsafe-car)
+         compiler/zo-structs
+         compiler/zo-marshal
+         (only-in '#%linklet primitive->compiled-position))
 
 ;; - - - - - - - - - - - - - - - - - - - -
 
@@ -268,7 +233,9 @@
 (define (mp-try-all zero one two/no-protect two/protect 
                     three/nabbed three/pnabbed three/snabbed three/nfnabbed three/nfpnabbed three/nfsnabbed 
                     three/normal
-                    get-one-inspector get-three-inspector fail-pnab? fail-prot? fail-three? np-ok? fail-three-comp?)
+                    get-one-inspector get-three-inspector fail-pnab? fail-prot? fail-three? np-ok? fail-three-comp?
+                    #:via-2-ok? [via-2-ok? #f]
+                    #:unprot-ok? [unprot-ok? #f])
   (let ([try
          (lambda (two three v fail-three?)
            (let ([ns (make-base-namespace)]
@@ -291,17 +258,17 @@
              (test #t regexp-match?
                    (if (byte-regexp? v) v (byte-regexp (string->bytes/utf-8 (format "~a\n" v))))
                    (get-output-bytes p))))])
-    (try two/no-protect three/nabbed (if fail-prot? #rx#"unexported .* unexp" #rx#"one .5.") fail-three?)
-    (try two/no-protect three/nfnabbed (if (and fail-prot? (not np-ok?)) #rx#"unexported .* unexp" #rx#"two .5.") fail-three?)
-    (try two/no-protect three/pnabbed (if fail-pnab? #rx#"protected .* prot" #rx#"zero .8.") fail-three?)
-    (try two/no-protect three/nfpnabbed (if (and fail-pnab? (not np-ok?)) #rx#"protected .* prot" #rx#"two .8.") (or fail-three? fail-three-comp?))
-    (try two/no-protect three/snabbed (if (and fail-prot? np-ok?) #rx#"unexported .* stx" #rx#"one .13.") fail-three?)
+    (try two/no-protect three/nabbed (if fail-prot? #rx#"unexported" #rx#"one .5.") fail-three?)
+    (try two/no-protect three/nfnabbed (if (and fail-prot? (not np-ok?) (not unprot-ok?)) #rx#"unexported .* unexp" #rx#"two .5.") fail-three?)
+    (try two/no-protect three/pnabbed (if fail-pnab? #rx#"protected" #rx#"zero .8.") fail-three?)
+    (try two/no-protect three/nfpnabbed (if (and fail-pnab? (not np-ok?) (not unprot-ok?)) #rx#"protected .* prot" #rx#"two .8.") (or fail-three? fail-three-comp?))
+    (try two/no-protect three/snabbed (if (and fail-prot? (not np-ok?) (not via-2-ok?)) #rx#"unexported .* stx" #rx#"one .13.") fail-three?)
     (try two/no-protect three/nfsnabbed #rx#"two .13." fail-three?)
     (try two/no-protect three/normal #rx#"two .10." fail-three?)
-    (try two/protect three/nabbed (if fail-prot? #rx#"unexported .* unexp" #rx#"one .5.") fail-three?)
-    (try two/protect three/pnabbed (if fail-pnab? #rx#"protected .* prot" #rx#"zero .8.") fail-three?)
-    (try two/protect three/snabbed (if (and fail-prot? np-ok?) #rx#"unexported .* stx" #rx#"one .13.") fail-three?)
-    (try two/protect three/normal  (if fail-prot? #rx#"protected .* normal" #rx#"two .10.") fail-three?)))
+    (try two/protect three/nabbed (if fail-prot? #rx#"unexported" #rx#"one .5.") fail-three?)
+    (try two/protect three/pnabbed (if fail-pnab? #rx#"protected" #rx#"zero .8.") fail-three?)
+    (try two/protect three/snabbed (if (and fail-prot? (not np-ok?) (not via-2-ok?)) #rx#"unexported .* stx" #rx#"one .13.") fail-three?)
+    (try two/protect three/normal  (if fail-prot? #rx#"protected" #rx#"two .10.") fail-three?)))
 
 (define (unsafe-try unsafe get-inspector unsafe-fail? unsafe-ref-fail? read-fail?)
   (let ([ns (make-base-namespace)]
@@ -408,26 +375,25 @@
             three/normal-zo
             make-inspector current-code-inspector #t #f #f #f #t)
 (unsafe-try unsafe-zo make-inspector #f #f #t)
-(unsafe-try unsafe-synth-zo make-inspector #f #t #f)
 
-(displayln "zo and source, second:")
+(displayln "source and zo, change inspector:")
 (mp-try-all zero one two/no-protect two/protect 
             three/nabbed three/pnabbed three/snabbed-zo three/nfnabbed three/nfpnabbed three/nfsnabbed-zo 
             three/normal
-            make-inspector current-code-inspector #t #f #t #f #t)
+            current-code-inspector make-inspector #t #t #t #t #t)
 (unsafe-try unsafe make-inspector #t #t #f)
 
-(displayln "zo and source, third:")
+(displayln "zo, change inspector:")
 (mp-try-all zero-zo one-zo two/no-protect-zo two/protect-zo 
             three/nabbed-zo three/pnabbed-zo three/snabbed-zo three/nfnabbed-zo three/nfpnabbed-zo three/nfsnabbed-zo 
             three/normal-zo
-            current-code-inspector make-inspector #t #t #f #f #f)
+            make-inspector make-inspector #t #t #f #f #f #:via-2-ok? #t)
 
 (displayln "just source, weaken inspector:")
 (mp-try-all zero one two/no-protect two/protect 
             three/nabbed three/pnabbed three/snabbed three/nfnabbed three/nfpnabbed three/nfsnabbed 
             three/normal
-            current-code-inspector make-inspector #t #t #t #t #f)
+            current-code-inspector make-inspector #t #t #t #f #f #:unprot-ok? #t)
 
 ;; ----------------------------------------
 

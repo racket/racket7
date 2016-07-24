@@ -52,10 +52,10 @@
   (define unsorted-pre-bundle-bytess
     (for/list ([(name bundle) (in-hash top)])
       (define name-bstr
-        (if (symbol? name)
+        (if (null? name)
             #""
             (apply bytes-append
-                   (for/list ([sym (in-list (cdr name))])
+                   (for/list ([sym (in-list name)])
                      (define b (string->bytes/utf-8 (symbol->string sym)))
                      (define len (bytes-length b))
                      (bytes-append (if (len . < . 255)
@@ -99,8 +99,9 @@
                            null
                            (let ([mb (car bundle-bytess)])
                              (cons (bundle-bytes (bundle-bytes-code-bstr mb)
-                                              (bundle-bytes-name-bstr mb)
-                                              offset)
+                                                 (bundle-bytes-name-list mb)
+                                                 (bundle-bytes-name-bstr mb)
+                                                 offset)
                                    (loop (+ offset
                                             (bytes-length (bundle-bytes-code-bstr mb)))
                                          (cdr bundle-bytess)))))))
