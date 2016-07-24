@@ -405,8 +405,12 @@ scheme_compile_lookup(Scheme_Object *find_id, Scheme_Comp_Env *env, int flags)
 
   v = scheme_hash_tree_get(env->vars, SCHEME_STX_VAL(find_id));
 
-  if (!v)
+  if (!v) {
     v = scheme_hash_get(scheme_startup_env->all_primitives_table, SCHEME_STX_VAL(find_id));
+
+    if (v && (flags & SCHEME_REFERENCING))
+      return scheme_true; /* => kernel primitive */
+  }
 
   if (!v) {
     if (flags & SCHEME_NULL_FOR_UNBOUND)

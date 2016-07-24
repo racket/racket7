@@ -813,7 +813,8 @@ Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Sc
         return b;
     }
     return NULL;
-  }
+  } else if (!inst->variables.bt)
+    return NULL;
 
   b = scheme_bucket_or_null_from_table(inst->variables.bt, (char *)symbol, 0);
   if (b) {

@@ -738,7 +738,8 @@ static Scheme_Object *ref_compile (Scheme_Object *form, Scheme_Comp_Env *env)
     var = scheme_compile_lookup(name, env, SCHEME_REFERENCING);
     
     if (!SAME_TYPE(SCHEME_TYPE(var), scheme_ir_toplevel_type)
-        && !SAME_TYPE(SCHEME_TYPE(var), scheme_ir_local_type)) {
+        && !SAME_TYPE(SCHEME_TYPE(var), scheme_ir_local_type)
+        && !SAME_OBJ(var, scheme_true)) {
       scheme_wrong_syntax(NULL, name, form, "identifier does not refer to a variable");
     }
   }
