@@ -2976,7 +2976,7 @@ static Scheme_Object *do_read_syntax_f(const char *who, int argc, Scheme_Object 
     o[1] = (argc ? argv[0] : ip->name);
 
     result = _scheme_apply(ip->read_handler, 2, o);
-    if (SCHEME_STXP(result) || SCHEME_EOFP(result))
+    if (scheme_is_syntax(result) || SCHEME_EOFP(result))
       return result;
     else {
       o[0] = result;

@@ -654,21 +654,25 @@
     (error who "unexpected cycle in input")]
    [else v]))
 
-(define (read-prefix port)
+(define (read-prefix port can-be-false?)
   ;; skip the "#~"
-  (unless (equal? #"#~" (read-bytes 2 port))
+  (define tag (read-bytes 2 port))
+  (unless (or (equal? #"#~" tag)
+              (and can-be-false? (equal? #"#f" tag)))
     (error 'zo-parse "not a bytecode stream"))
 
-  (define version (read-bytes (min 63 (read-byte port)) port))
-
-  (read-char port))
+  (cond
+   [(equal? #"#f" tag) #f]
+   [else
+    (define version (read-bytes (min 63 (read-byte port)) port))
+    (read-char port)]))
 
 ;; path -> bytes
 ;; implementes read.c:read_compiled
 (define (zo-parse [port (current-input-port)])
   (define init-pos (file-position port))
 
-  (define mode (read-prefix port))
+  (define mode (read-prefix port #f))
 
   (case mode
     [(#\B) (zo-parse-top port)]
@@ -704,11 +708,17 @@
          (error 'zo-parse 
                 "next bundle expected at ~a, currently at ~a"
                 (+ init-pos (sub-info-start sub-info)) pos))
-       (unless (eq? (read-prefix port) #\B)
-         (error 'zo-parse "expected a bundle"))
-       (define sub (zo-parse-top port #f))
-       (unless (hash? sub)
-         (error 'zo-parse "expected a bundle hash"))
+       (define tag (read-prefix port #t))
+       (define sub
+         (cond
+          [(not tag) #f]
+          [else
+           (unless (eq? tag #\B)
+             (error 'zo-parse "expected a bundle"))
+           (define sub (and tag (zo-parse-top port #f)))
+           (unless (hash? sub)
+             (error 'zo-parse "expected a bundle hash"))
+           sub]))
        (values (sub-info-name sub-info) sub))]
     [else
      (error 'zo-parse "bad file format specifier")]))

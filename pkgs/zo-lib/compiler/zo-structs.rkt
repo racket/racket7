@@ -57,7 +57,7 @@
                                   [internals (listof symbol?)]
                                   [lifts (listof symbol?)]
                                   [source-names (hash/c symbol? symbol?)]
-                                  [body (listof form?)]
+                                  [body (listof (or/c form? any/c))]
                                   [max-let-depth exact-nonnegative-integer?]))
 
 (define-form-struct (lam expr) ([name (or/c symbol? vector? empty?)]

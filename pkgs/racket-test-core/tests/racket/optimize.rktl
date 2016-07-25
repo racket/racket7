@@ -912,9 +912,8 @@
 	  [t2 (get-output-bytes s2)])
       (define same? (bytes=? t1 t2))
       (when (and (not same?) want-same?)
-        (printf "~s\n~s\n" 
-                (zo-parse (open-input-bytes t1))
-                (zo-parse (open-input-bytes t2))))
+        (pretty-write (zo-parse (open-input-bytes t1)))
+        (pretty-write (zo-parse (open-input-bytes t2))))
       (unless (equal? same? want-same?)
         ;; Unquote to cause a failure to stop
         'stop)

@@ -215,6 +215,9 @@ ir_local {
 
   gcMARK2(var->name, gc);
   switch (var->mode) {
+  case SCHEME_VAR_MODE_COMPILE:
+    gcMARK2(var->compile.use_box, gc);
+    break;
   case SCHEME_VAR_MODE_LETREC_CHECK:
     gcMARK2(var->letrec_check.frame, gc);
     break;

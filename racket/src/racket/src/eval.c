@@ -200,6 +200,8 @@ THREAD_LOCAL_DECL(static int generate_lifts_count);
 THREAD_LOCAL_DECL(int scheme_overflow_count);
 THREAD_LOCAL_DECL(Scheme_Prefix *scheme_prefix_finalize);
 THREAD_LOCAL_DECL(Scheme_Prefix *scheme_inc_prefix_finalize);
+THREAD_LOCAL_DECL(Scheme_Object *is_syntax_proc);
+THREAD_LOCAL_DECL(Scheme_Object *expander_syntax_to_datum_proc);
 int scheme_get_overflow_count() { return scheme_overflow_count; }
 
 /* read-only globals */
@@ -3396,15 +3398,29 @@ Scheme_Object *scheme_dynamic_require_reader(int argc, Scheme_Object *argv[])
   return scheme_apply(proc, argc, argv);
 }
 
+int scheme_is_syntax(Scheme_Object *v)
+{
+  Scheme_Object *a[1];
+  if (!is_syntax_proc) {
+    REGISTER_SO(is_syntax_proc);
+    is_syntax_proc = scheme_get_startup_export("syntax?");
+  }
+  a[0] = v;
+  return SCHEME_TRUEP(scheme_apply(is_syntax_proc, 1, a));
+}
+
 Scheme_Object *scheme_expander_syntax_to_datum(Scheme_Object *v)
 {
-  Scheme_Object *proc, *a[1];
+  Scheme_Object *a[1];
   if (scheme_starting_up)
     return v;
   else {
-    proc = scheme_get_startup_export("maybe-syntax->datum");
+    if (!expander_syntax_to_datum_proc) {
+      REGISTER_SO(expander_syntax_to_datum_proc);
+      expander_syntax_to_datum_proc = scheme_get_startup_export("maybe-syntax->datum");
+    }
     a[0] = v;
-    return scheme_apply(proc, 1, a);
+    return scheme_apply(expander_syntax_to_datum_proc, 1, a);
   }
 }
 

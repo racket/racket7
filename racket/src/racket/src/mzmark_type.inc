@@ -879,6 +879,9 @@ static int ir_local_MARK(void *p, struct NewGC *gc) {
 
   gcMARK2(var->name, gc);
   switch (var->mode) {
+  case SCHEME_VAR_MODE_COMPILE:
+    gcMARK2(var->compile.use_box, gc);
+    break;
   case SCHEME_VAR_MODE_LETREC_CHECK:
     gcMARK2(var->letrec_check.frame, gc);
     break;
@@ -908,6 +911,9 @@ static int ir_local_FIXUP(void *p, struct NewGC *gc) {
 
   gcFIXUP2(var->name, gc);
   switch (var->mode) {
+  case SCHEME_VAR_MODE_COMPILE:
+    gcFIXUP2(var->compile.use_box, gc);
+    break;
   case SCHEME_VAR_MODE_LETREC_CHECK:
     gcFIXUP2(var->letrec_check.frame, gc);
     break;

@@ -1320,6 +1320,11 @@ typedef struct Scheme_IR_Local
   /* `mode` determines which union is active: */
   union {
     struct {
+      /* To detect uses on right-hand sides in `letrec` */
+      int *use_box;
+      int use_position;
+    } compile;
+    struct {
       /* Maps the variable into the letrec-check pass's frames: */
       struct Letrec_Check_Frame *frame;
       int frame_pos;
@@ -2565,7 +2570,7 @@ typedef struct Scheme_Comp_Env
 
 #define COMP_ENV_CHECKING_CONSTANT    0x1
 #define COMP_ENV_DONT_COUNT_AS_USE    0x2
-#define COMP_ENV_ALLOW_SET_UNDEFINED  0x3
+#define COMP_ENV_ALLOW_SET_UNDEFINED  0x4
 
 Scheme_Comp_Env *scheme_new_comp_env(Scheme_Linklet *linklet, int flags);
 Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var, int mutate);
@@ -3843,5 +3848,6 @@ void scheme_process_global_lock(void);
 void scheme_process_global_unlock(void);
 
 Scheme_Object *scheme_expander_syntax_to_datum(Scheme_Object *v);
+int scheme_is_syntax(Scheme_Object *v);
 
 #endif /* __mzscheme_private__ */

@@ -177,49 +177,11 @@ static void bad_form(Scheme_Object *form, int l)
 		      l - 1, (l != 2) ? "s" : "");
 }
 
-static Scheme_Object *simplify_inferred_name(Scheme_Object *name);
-
-static Scheme_Object *simplify_inferred_name_k(void)
-{
-  Scheme_Thread *p = scheme_current_thread;
-  Scheme_Object *name = (Scheme_Object *)p->ku.k.p1;
-
-  p->ku.k.p1 = NULL;
-
-  return (void *)simplify_inferred_name(name);
-}
-
-
-static Scheme_Object *simplify_inferred_name(Scheme_Object *name)
-{
-  {
-# include "mzstkchk.h"
-    {
-      Scheme_Thread *p = scheme_current_thread;
-
-      p->ku.k.p1 = (void *)name;
-
-      return scheme_handle_stack_overflow(simplify_inferred_name_k);
-    }
-  }
-
-  if (SCHEME_PAIRP(name)) {
-    Scheme_Object *name_car = SCHEME_CAR(name), *name_cdr = SCHEME_CDR(name);
-    name_car = simplify_inferred_name(name_car);
-    name_cdr = simplify_inferred_name(name_cdr);
-    if (SAME_OBJ(name_car, name_cdr))
-      return name_car;
-  }
-
-  return name;
-}
-
 static Scheme_Comp_Env *check_name_property(Scheme_Object *code, Scheme_Comp_Env *env)
 {
   Scheme_Object *name;
 
   name = scheme_stx_property(code, inferred_name_symbol, NULL);
-  name = simplify_inferred_name(name);
   if (name && SCHEME_SYMBOLP(name))
     return scheme_set_comp_env_name(env, name);
   else
@@ -376,7 +338,6 @@ Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *e
   Scheme_Object *name;
 
   name = scheme_stx_property(code, inferred_name_symbol, NULL);
-  name = simplify_inferred_name(name);
   if (name && SCHEME_SYMBOLP(name)) {
     name = combine_name_with_srcloc(name, code, 0);
   } else if (name && SCHEME_VOIDP(name)) {
@@ -947,7 +908,7 @@ static Scheme_Object *do_let_compile (Scheme_Object *form, Scheme_Comp_Env *orig
                                       int recursive)
 {
   Scheme_Object *bindings, *l, *binding, *name, **names, *forms;
-  int num_clauses, num_bindings, i, k, m, pre_k, mutate_frame = 0;
+  int num_clauses, num_bindings, i, k, m, pre_k, mutate_frame = 0, *use_box;
   Scheme_Comp_Env *frame, *rhs_env;
   Scheme_Object *first = NULL;
   Scheme_IR_Let_Value *last = NULL, *lv;
@@ -1013,6 +974,12 @@ static Scheme_Object *do_let_compile (Scheme_Object *form, Scheme_Comp_Env *orig
   names = MALLOC_N(Scheme_Object *, num_bindings);
 
   frame = scheme_set_comp_env_name(origenv, NULL);
+
+  if (recursive) {
+    use_box = MALLOC_N_ATOMIC(int, 1);
+    *use_box = -1;
+  } else
+    use_box = 0;
   
   scheme_begin_dup_symbol_check(&r);
 
@@ -1075,6 +1042,11 @@ static Scheme_Object *do_let_compile (Scheme_Object *form, Scheme_Comp_Env *orig
 
     for (m = pre_k; m < k; m++) {
       var = scheme_make_ir_local(names[m]);
+      if (recursive) {
+        var->mode = SCHEME_VAR_MODE_COMPILE;
+        var->compile.use_box = use_box;
+        var->compile.use_position = m;
+      }
       vars[m-pre_k] = var;
       frame = scheme_extend_comp_env(frame, names[m], (Scheme_Object *)var, mutate_frame);
       mutate_frame = 1;
@@ -1087,7 +1059,10 @@ static Scheme_Object *do_let_compile (Scheme_Object *form, Scheme_Comp_Env *orig
                      (recursive ? SCHEME_LET_RECURSIVE : 0));
 
   if (recursive) {
+    int prev_might_invoke = 0;
+    int group_clauses = 0;
     Scheme_Object *rhs;
+
     k = 0;
     lv = (Scheme_IR_Let_Value *)first;
     for (i = 0; i < num_clauses; i++, lv = (Scheme_IR_Let_Value *)lv->body) {
@@ -1098,7 +1073,63 @@ static Scheme_Object *do_let_compile (Scheme_Object *form, Scheme_Comp_Env *orig
         rhs_env = scheme_set_comp_env_name(frame, NULL);
       rhs = compile_expr(rhs, rhs_env, 0);
       lv->value = rhs;
+        
+      /* Record when this binding doesn't use any or later bindings in
+         the same set. Break bindings into smaller sets based on this
+         information, we have to be conservative as reflected by
+         scheme_might_invoke_call_cc(). Implement splitting by
+         recording with SCHEME_IRLV_NO_GROUP_LATER_USES and check
+         again at the end. */
+      if (!prev_might_invoke && !scheme_might_invoke_call_cc(rhs)) {
+        group_clauses++;
+        if ((group_clauses == 1) && (*use_box < k)) {
+          /* A clause that should be in its own `let' */
+          SCHEME_IRLV_FLAGS(lv) |= SCHEME_IRLV_NO_GROUP_USES;
+          group_clauses = 0;
+        } else if (*use_box < (k + lv->count)) {
+          /* End a recursive `letrec' group */
+          SCHEME_IRLV_FLAGS(lv) |= SCHEME_IRLV_NO_GROUP_LATER_USES;
+          group_clauses = 0;
+        }
+      } else
+        prev_might_invoke = 1;
+      
       k += lv->count;
+    }
+
+    if (!prev_might_invoke) {
+      Scheme_IR_Let_Header *current_head = head;
+      Scheme_IR_Let_Value *next = NULL;
+      int group_count = 0;
+      lv = (Scheme_IR_Let_Value *)first;
+      group_clauses = 0;
+      for (i = 0; i < num_clauses; i++, lv = next) {
+        next = (Scheme_IR_Let_Value *)lv->body;
+        group_clauses++;
+        group_count += lv->count;
+        if (SCHEME_IRLV_FLAGS(lv) & (SCHEME_IRLV_NO_GROUP_USES
+                                    | SCHEME_IRLV_NO_GROUP_LATER_USES)) {
+          /* A clause that should be in its own `let' */
+          Scheme_IR_Let_Header *next_head;
+          int single = (SCHEME_IRLV_FLAGS(lv) & SCHEME_IRLV_NO_GROUP_USES);
+          MZ_ASSERT(!single || (group_clauses == 1));
+          if (current_head->num_clauses - group_clauses) {
+            next_head = make_header(lv->body, 
+                                    current_head->count - group_count,
+                                    current_head->num_clauses - group_clauses,
+                                    SCHEME_LET_RECURSIVE);
+            lv->body = (Scheme_Object *)next_head;
+            current_head->num_clauses = group_clauses;
+            current_head->count = group_count;
+          } else
+            next_head = NULL;
+          if (single)
+            SCHEME_LET_FLAGS(current_head) -= SCHEME_LET_RECURSIVE;
+          current_head = next_head;
+          group_clauses = 0;
+          group_count = 0;
+        }
+      }
     }
   }
 

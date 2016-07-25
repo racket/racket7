@@ -396,6 +396,11 @@ static void record_local_use(Scheme_IR_Local *var, int flags)
   if (!(flags & (SCHEME_APP_POS | SCHEME_SETTING)))
     if (var->non_app_count < SCHEME_USE_COUNT_INF)
       var->non_app_count++;
+
+  if (var->mode == SCHEME_VAR_MODE_COMPILE) {
+    if ((*var->compile.use_box) < var->compile.use_position)
+      (*var->compile.use_box) = var->compile.use_position;
+  }
 }
 
 Scheme_Object *
