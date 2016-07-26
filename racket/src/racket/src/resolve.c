@@ -64,14 +64,18 @@ struct Resolve_Info
   Scheme_Object *lifts; /* tracks functions lifted by closure conversion */
   struct Resolve_Info *next;
 
-  int num_toplevels; /* number of toplevels, initially, in `linklet`; lifting
-                        adds more */
+  int num_toplevels; /* number of toplevels, initially, in `linklet`,
+                        taking into account that some imports may be
+                        dropped; lifting adds more */
   int *toplevel_starts; /* position within toplevels array where an
-                           import or definition starts; add 1 to an
-                           import position, and use 0 for definitions
-                           (which, both cases, corresponds to adding 1
-                           to `instance_pos` in an
+                           import instance or set of definitions
+                           starts; add 1 to an import instance
+                           position, and use 0 for definitions (which,
+                           both cases, corresponds to adding 1 to
+                           `instance_pos` in an
                            `Scheme_IR_Topelevel`). */
+  int *toplevel_deltas; /* shifts for toplevels in the import range to
+                           accomodate removals */
 };
 
 #define cons(a,b) scheme_make_pair(a,b)
@@ -101,6 +105,7 @@ static void set_tl_pos_used(Resolve_Info *info, int pos);
 static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int search_start);
 static void enable_expression_resolve_lifts(Resolve_Info *ri);
 static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts);
+static void prune_unused_imports(Scheme_Linklet *linklet);
 static Resolve_Info *resolve_info_create(Scheme_Linklet *rp, int enforce_const);
 
 #ifdef MZ_PRECISE_GC
@@ -2011,6 +2016,10 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
     extend_linklet_defns(linklet, num_lifts);
   }
 
+  /* Adjust the imports vector of vectors to drop unused imports at
+     the level of variables */
+  prune_unused_imports(linklet);
+
   return linklet;
 }
 
@@ -2036,6 +2045,60 @@ static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts)
   }
 
   linklet->defns = new_defns;
+}
+
+static void prune_unused_imports(Scheme_Linklet *linklet)
+{
+  int i, j, in_shapes_pos = 0, out_shapes_pos = 0;
+  int num_total_imports;
+  Scheme_Object *vec, *new_vec, *shapes_vec;
+
+  shapes_vec = linklet->import_shapes;
+  
+  num_total_imports = 0;
+  for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
+    int drop = 0, len;
+    vec = SCHEME_VEC_ELS(linklet->importss)[i];
+    len = SCHEME_VEC_SIZE(vec);
+    num_total_imports += len;
+    for (j = 0; j < len; j++) {
+      if (SCHEME_FALSEP(SCHEME_VEC_ELS(vec)[j]))
+        drop++;
+      else {
+        if (shapes_vec && (in_shapes_pos > out_shapes_pos)) {
+          SCHEME_VEC_ELS(shapes_vec)[out_shapes_pos] = SCHEME_VEC_ELS(shapes_vec)[in_shapes_pos];
+        }
+        out_shapes_pos++;
+      }
+      in_shapes_pos++;
+    }
+    if (drop) {
+      num_total_imports -= drop;
+      drop = len - drop;
+      new_vec = scheme_make_vector(drop, NULL);
+      for (j = len; j--; ) {
+        if (!SCHEME_FALSEP(SCHEME_VEC_ELS(vec)[j])) {
+          SCHEME_VEC_ELS(new_vec)[--drop] = SCHEME_VEC_ELS(vec)[j];
+        }
+      }
+      MZ_ASSERT(!drop);
+      SCHEME_VEC_ELS(linklet->importss)[i] = new_vec;
+    }
+  }
+
+  MZ_ASSERT(in_shapes_pos == linklet->num_total_imports);
+  linklet->num_total_imports = num_total_imports;
+
+  if (shapes_vec) {
+    MZ_ASSERT(out_shapes_pos == num_total_imports);
+    if (out_shapes_pos < in_shapes_pos) {
+      new_vec = scheme_make_vector(out_shapes_pos, NULL);
+      for (i = 0; i < out_shapes_pos; i++) {
+        SCHEME_VEC_ELS(new_vec)[i] = SCHEME_VEC_ELS(shapes_vec)[i];
+      }
+      linklet->import_shapes = new_vec;
+    }
+  }
 }
 
 static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int search_start)
@@ -2196,8 +2259,9 @@ static Scheme_Object *shift_lifted_reference(Scheme_Object *tl, Resolve_Info *in
 static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_const)
 {
   Resolve_Info *naya;
-  int *toplevel_starts, pos, i;
-
+  int *toplevel_starts, pos, dpos, i, j;
+  int *toplevel_deltas;
+  
   naya = MALLOC_ONE_RT(Resolve_Info);
 #ifdef MZTAG_REQUIRED
   naya->type = scheme_rt_resolve_info;
@@ -2209,19 +2273,27 @@ static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_co
   naya->enforce_const = enforce_const;
   naya->linklet = linklet;
 
-  naya->num_toplevels = (SCHEME_LINKLET_PREFIX_PREFIX
-                         + linklet->num_total_imports
-                         + SCHEME_VEC_SIZE(linklet->defns));
-
   toplevel_starts = MALLOC_N_ATOMIC(int, SCHEME_VEC_SIZE(linklet->importss) + 1);
+  toplevel_deltas = MALLOC_N_ATOMIC(int, (linklet->num_total_imports + SCHEME_LINKLET_PREFIX_PREFIX));
   pos = SCHEME_LINKLET_PREFIX_PREFIX;
+  dpos = pos;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     toplevel_starts[i+1] = pos;
-    pos += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
+    for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
+      toplevel_deltas[pos] = (dpos - pos);
+      if (SCHEME_FALSEP(SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j]))
+        toplevel_deltas[pos] = 0xFFFFFF; /* shouldn't be used */
+      else
+        dpos++;
+      pos++;
+    }
   }
-  toplevel_starts[0] = pos;
-  
+  toplevel_starts[0] = dpos;
+
+  naya->num_toplevels = (dpos + SCHEME_VEC_SIZE(linklet->defns));
+
   naya->toplevel_starts = toplevel_starts;
+  naya->toplevel_deltas = toplevel_deltas;
 
   return naya;
 }
@@ -2262,6 +2334,7 @@ static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambd
   naya->lifts = info->lifts;
   naya->num_toplevels = info->num_toplevels;
   naya->toplevel_starts = info->toplevel_starts;
+  naya->toplevel_deltas = info->toplevel_deltas;
 
   return naya;
 }
@@ -2446,8 +2519,10 @@ static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, 
       pos = 0;
     } else
       pos = info->toplevel_starts[0] + SCHEME_IR_TOPLEVEL_POS(expr);
-  } else
+  } else {
     pos = (info->toplevel_starts[SCHEME_IR_TOPLEVEL_INSTANCE(expr) + 1] + SCHEME_IR_TOPLEVEL_POS(expr));
+    pos += info->toplevel_deltas[pos];
+  }
 
   set_tl_pos_used(info, pos);
 

@@ -66,6 +66,9 @@ struct Optimize_Info
                                  where is getter is (integer -> linklet getter) */
   Scheme_Hash_Table *inline_variants; /* linklet -> symbol -> value */
 
+  /* Track which imports are still used after optimization */
+  char **imports_used;
+
   /* Propagated up and down the chain: */
   int size;
   int vclock; /* virtual clock that ticks for a side effect, a branch,
@@ -165,6 +168,7 @@ static Scheme_Object *optimize_clone(int single_use, Scheme_Object *obj, Optimiz
 
 static Scheme_Object *get_import_shape(Optimize_Info *info, Scheme_IR_Toplevel *var);
 static Scheme_Object *get_import_inline(Optimize_Info *info, Scheme_IR_Toplevel *var, int argc);
+static void register_import_used(Optimize_Info *info, Scheme_IR_Toplevel *expr);
 static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet);
 
 XFORM_NONGCING static int relevant_predicate(Scheme_Object *pred);
@@ -5374,6 +5378,7 @@ ref_optimize(Scheme_Object *data, Optimize_Info *info, int context)
       v = scheme_ir_toplevel_to_flagged_toplevel(v, SCHEME_TOPLEVEL_FIXED);
       SCHEME_PTR1_VAL(data) = v;
     }
+    register_import_used(info, (Scheme_IR_Toplevel *)v);
   }
 
   info->preserves_marks = 1;
@@ -8162,7 +8167,9 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
     cnt -= can_omit;
   }
 
-  /* Record shapes, if any, of imports as used for optimization */
+  /* Record shapes, if any, of imports as used for optimization; also
+     reflect import usage, so that the resolve pass can remove unused
+     imports */
   record_optimize_shapes(info, linklet);
 
   return linklet;
@@ -8358,6 +8365,7 @@ Scheme_Object *optimize_expr(Scheme_Object *expr, Optimize_Info *info, int conte
       }
     }
     optimize_info_used_top(info);
+    register_import_used(info, (Scheme_IR_Toplevel *)expr);
     return expr;
   case scheme_variable_type:
     scheme_signal_error("got toplevel in wrong place");
@@ -8643,6 +8651,8 @@ static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_
 {
   Optimize_Info *info;
   Scheme_Logger *logger;
+  int i, j;
+  char *iu, **imports_used;
 
   info = MALLOC_ONE_RT(Optimize_Info);
 #ifdef MZTAG_REQUIRED
@@ -8659,6 +8669,16 @@ static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_
   info->enforce_const = enforce_const;
   if (!can_inline)
     info->inline_fuel = -1;
+
+  i = SCHEME_VEC_SIZE(linklet->importss);
+  imports_used = MALLOC_N(char*, i);
+  while (i--) {
+    j = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
+    iu = MALLOC_N_ATOMIC(char, j);
+    memset(iu, 0, j);
+    imports_used[i] = iu;
+  }
+  info->imports_used = imports_used;
 
   return info;
 }
@@ -8910,6 +8930,7 @@ static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int orig, int
   naya->linklets = info->linklets;
   naya->getters = info->getters;
   naya->inline_variants = info->inline_variants;
+  naya->imports_used = info->imports_used;
 
   return naya;
 }
@@ -9178,11 +9199,30 @@ static Scheme_Object *get_import_inline(Optimize_Info *info, Scheme_IR_Toplevel 
   return get_import_inline_or_shape(info, var, argc, 0);
 }
 
+static void register_import_used(Optimize_Info *info, Scheme_IR_Toplevel *var)
+{
+  if (var->instance_pos >= 0) {
+    /* Record that the import is used. The resolve pass can
+       drop references that have been optimized away. */
+    info->imports_used[var->instance_pos][var->variable_pos] = 1;
+  }
+}
+
 static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet)
 {
   int i, j, k;
   Scheme_Object *shapes, *v;
   Scheme_Linklet *in_linklet;
+
+  for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
+    for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
+      if (!info->imports_used[i][j]) {
+        /* Set symbol to #f to communicate non-use to the resolve pass: */
+        SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j] = scheme_false;
+      }
+    }
+  }
+
   
   if (info->used_import_shape) {
     shapes = scheme_make_vector(linklet->num_total_imports, scheme_false);

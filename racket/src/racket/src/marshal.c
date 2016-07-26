@@ -1137,5 +1137,10 @@ static Scheme_Object *read_linklet(Scheme_Object *obj)
     linklet->num_total_imports = i;
   }
 
+  if (linklet->import_shapes) {
+    if (linklet->num_total_imports != SCHEME_VEC_SIZE(linklet->import_shapes))
+      return_NULL();
+  }
+
   return (Scheme_Object *)linklet;
 }

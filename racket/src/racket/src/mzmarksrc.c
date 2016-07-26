@@ -1122,6 +1122,7 @@ mark_resolve_info {
   gcMARK2(i->lifts, gc);
   gcMARK2(i->next, gc);
   gcMARK2(i->toplevel_starts, gc);
+  gcMARK2(i->toplevel_deltas, gc);
 
  size:
   gcBYTES_TO_WORDS(sizeof(Resolve_Info));
@@ -1207,6 +1208,7 @@ mark_optimize_info {
   gcMARK2(i->linklets, gc);
   gcMARK2(i->getters, gc);
   gcMARK2(i->inline_variants, gc);
+  gcMARK2(i->imports_used, gc);
   gcMARK2(i->top_level_consts, gc);
   gcMARK2(i->transitive_use_var, gc);
   gcMARK2(i->context, gc);
