@@ -2148,6 +2148,11 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
 
       a = compile_expr(SCHEME_STX_CADR(SCHEME_STX_CDR(e)), d_env, 0);
       SCHEME_DEFN_RHS(vec) = a;
+
+      if (SCHEME_TRUEP(scheme_stx_property(e, compiler_inline_hint_symbol, NULL))) {
+        /* use "immutable" bit to mark compiler-inline hint: */
+        SCHEME_SET_IMMUTABLE(vec);
+      }
  
       e = vec;
       e->type = scheme_define_values_type;

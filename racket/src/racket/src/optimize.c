@@ -2136,7 +2136,7 @@ Scheme_Object *optimize_for_inline(Optimize_Info *info, Scheme_Object *le, int a
     already_opt = 1;
   }
 
-  if (le && SAME_TYPE(le, scheme_ir_toplevel_type)) {
+  if (le && SAME_TYPE(SCHEME_TYPE(le), scheme_ir_toplevel_type)) {
     Scheme_Object *inl;
     single_use = 0;
     do {
