@@ -671,7 +671,7 @@ static Scheme_Object *ref_compile (Scheme_Object *form, Scheme_Comp_Env *env)
   /* retaining `pseudo-var' ensures that the environment stays
      linked from the actual variable */
   if ((l == 1) || !(env->flags & COMP_ENV_CHECKING_CONSTANT))
-    pseudo_var = (Scheme_Object *)scheme_make_ir_toplevel(0, -1, -1, 0);
+    pseudo_var = (Scheme_Object *)scheme_make_ir_toplevel(-1, -1, 0);
   else {
     /* If the variable reference will be used only for
        `variable-reference-constant?`, then we don't want a string
@@ -1905,8 +1905,7 @@ static Scheme_Object *define_parse(Scheme_Object *form,
                                    Scheme_Object **_vars, Scheme_Object **_val,
                                    Scheme_Comp_Env **_env,
                                    DupCheckRecord *r,
-                                   int *_extra_vars_pos,
-                                   int pos_after_imports)
+                                   int *_extra_vars_pos)
 {
   Scheme_Object *vars, *rest, *name, *v, *extra_vars = scheme_null;
   Scheme_Comp_Env *env;
@@ -1937,8 +1936,7 @@ static Scheme_Object *define_parse(Scheme_Object *form,
       scheme_wrong_syntax(NULL, name, form, "not a definable variable");
 
     if (!v) {
-      int pos = (*_extra_vars_pos) + pos_after_imports;
-      v = (Scheme_Object *)scheme_make_ir_toplevel(pos, -1, -1, 0);
+      v = (Scheme_Object *)scheme_make_ir_toplevel(-1, *_extra_vars_pos, 0);
       env = scheme_extend_comp_env(*_env, name, v, 1);
       *_env = env;
       extra_vars = scheme_make_pair(name, extra_vars);
@@ -1992,7 +1990,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   Scheme_Object *import_syms, *import_symss, *bodies, *all_extra_vars;
   Scheme_Hash_Tree *source_names, *also_used_names;
   Scheme_IR_Toplevel *tl;
-  int body_len, len, islen, i, j, extra_vars_pos, pos = 0, pos_after_imports;
+  int body_len, len, islen, i, j, extra_vars_pos;
   Scheme_Comp_Env *env, *d_env;
   DupCheckRecord r;
   
@@ -2012,9 +2010,6 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   form = SCHEME_STX_CDR(form);
   body_len -= 3;
 
-  /* first `toplevels` slot holds the instance strongly */
-  pos++;
-  
   /* Parse imports, filling in `ilens` and `import_syms`, and also
      extending `env`. */
   islen = scheme_stx_proper_list_length(imports);
@@ -2039,14 +2034,12 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
         SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CAR(e));
         e = SCHEME_STX_CADR(e);
       }
-      tl = scheme_make_ir_toplevel(pos++, i, j, SCHEME_TOPLEVEL_READY);
+      tl = scheme_make_ir_toplevel(i, j, SCHEME_TOPLEVEL_READY);
       env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
     }
 
     linklet->num_total_imports += len;
   }
-
-  pos_after_imports = pos;
 
   /* Parse exports, filling in `defn_syms` and extending `env`. */
   len = scheme_stx_proper_list_length(exports);
@@ -2078,7 +2071,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
       source_names = scheme_hash_tree_set(source_names, SCHEME_VEC_ELS(defn_syms)[j], a);
     else
       also_used_names = scheme_hash_tree_set(also_used_names, a, scheme_true);
-    tl = scheme_make_ir_toplevel(pos++, -1, -1, 0);
+    tl = scheme_make_ir_toplevel(-1, j, 0);
     env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
   }
 
@@ -2091,7 +2084,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
     e = SCHEME_STX_CAR(a);
     if (is_define_values(e)) {
       Scheme_Object *vars, *vals;
-      extra_vars = define_parse(e, &vars, &vals, &env, &r, &extra_vars_pos, pos_after_imports);
+      extra_vars = define_parse(e, &vars, &vals, &env, &r, &extra_vars_pos);
       if (extra_vars) {
         all_extra_vars = scheme_append(extra_vars, all_extra_vars);
       }
@@ -2133,8 +2126,6 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   bodies = scheme_make_vector(body_len, scheme_false);
 
   linklet->bodies = bodies;
-
-  linklet->num_toplevels = pos + (extra_vars_pos - len);
 
   for (i = 0; i < body_len; i++, form = SCHEME_STX_CDR(form)) {
     e = SCHEME_STX_CAR(form);

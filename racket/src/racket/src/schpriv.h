@@ -1378,18 +1378,21 @@ typedef struct Scheme_IR_Local
 typedef struct Scheme_IR_Toplevel
 {
   Scheme_Inclhash_Object iso; /* scheme_import_export_variable_type; not hashable */
-  int identity_pos; /* a convenience: unique to a combination of instance_pos and variable_pos */
   int instance_pos; /* import instance position, or -1 for exported and internal */
-  int variable_pos; /* position within import instance */
+  int variable_pos; /* position within import instance or definition sequence */
 } Scheme_IR_Toplevel;
 
 /* See also SCHEME_TOPLEVEL_... */
 #define SCHEME_IR_TOPLEVEL_MUTATED 0x4
 
 #define SCHEME_IR_TOPLEVEL_FLAGS(var) MZ_OPT_HASH_KEY(&(var)->iso)
-#define SCHEME_IR_TOPLEVEL_POS(var) (((Scheme_IR_Toplevel *)var)->identity_pos)
+#define SCHEME_IR_TOPLEVEL_INSTANCE(var) (((Scheme_IR_Toplevel *)var)->instance_pos)
+#define SCHEME_IR_TOPLEVEL_POS(var) (((Scheme_IR_Toplevel *)var)->variable_pos)
 
-Scheme_IR_Toplevel *scheme_make_ir_toplevel(int identity_pos, int instance_pos, int variable_pos, int flags);
+/* Number of runstack slots before imports: */
+#define SCHEME_LINKLET_PREFIX_PREFIX 1
+
+Scheme_IR_Toplevel *scheme_make_ir_toplevel(int instance_pos, int variable_pos, int flags);
 Scheme_Object *scheme_ir_toplevel_to_flagged_toplevel(Scheme_Object *tl, int flags);
 
 typedef struct {
@@ -3137,8 +3140,6 @@ struct Scheme_Linklet
   Scheme_Object *bodies; /* vector of definition or expression */
 
   int max_let_depth;
-
-  int num_toplevels; /* only after compile and before resolve */
 
   int jit_ready; /* true if the linklet is in has been prepared for the JIT */
 

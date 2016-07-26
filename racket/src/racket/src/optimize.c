@@ -362,24 +362,34 @@ int scheme_is_functional_nonfailing_primitive(Scheme_Object *rator, int num_args
     return 0;
 }
 
+static Scheme_Object *get_defn_shape(Optimize_Info *info, Scheme_IR_Toplevel *var)
+{
+  Scheme_Object *v;
+
+  if (info->top_level_consts && (var->instance_pos == -1)) {
+    v = scheme_hash_get(info->top_level_consts, scheme_make_integer(var->variable_pos));
+    if (v) return v;
+    
+    v = scheme_hash_get(info->top_level_consts, scheme_false);
+    if (v && scheme_hash_get((Scheme_Hash_Table *)v, scheme_make_integer(var->variable_pos)))
+      return scheme_fixed_key;
+  }
+        
+  return NULL;
+}
+
 static Scheme_Object *get_struct_proc_shape(Scheme_Object *rator, Optimize_Info *info)
 /* Determines whether `rator` is known to be a struct accessor, etc. */
 {
   Scheme_Object *c;
 
-  if (info
-      && (info->top_level_consts || info->inline_variants)
-      && SAME_TYPE(SCHEME_TYPE(rator), scheme_ir_toplevel_type)) {
-    int pos;
-    pos = SCHEME_IR_TOPLEVEL_POS(rator);
-    c = NULL;
-    if (info->top_level_consts)
-      c = scheme_hash_get(info->top_level_consts, scheme_make_integer(pos));
+  if (info && SAME_TYPE(SCHEME_TYPE(rator), scheme_ir_toplevel_type)) {
+    c = get_defn_shape(info, (Scheme_IR_Toplevel *)rator);
     if (!c)
       c = get_import_shape(info, (Scheme_IR_Toplevel *)rator);
-    if (c && SAME_TYPE(SCHEME_TYPE(c), scheme_struct_proc_shape_type)) {
+    
+    if (c && SAME_TYPE(SCHEME_TYPE(c), scheme_struct_proc_shape_type))
       return c;
-    }
   }
 
   return NULL;
@@ -1144,13 +1154,9 @@ static int is_constant_super(Scheme_Object *arg,
   Scheme_Object *v;
 
   if (SAME_TYPE(SCHEME_TYPE(arg), scheme_ir_toplevel_type)) {
-    pos = SCHEME_IR_TOPLEVEL_POS(arg);
     if (info) {
       /* This is optimize mode */
-      if (info->top_level_consts)
-        v = scheme_hash_get(info->top_level_consts, scheme_make_integer(pos));
-      else
-        v = NULL;
+      v = get_defn_shape(info, (Scheme_IR_Toplevel *)arg);
       if (!v)
         v = get_import_shape(info, (Scheme_IR_Toplevel *)arg);
       if (v && SAME_TYPE(SCHEME_TYPE(v), scheme_struct_proc_shape_type)) {
@@ -2126,28 +2132,19 @@ Scheme_Object *optimize_for_inline(Optimize_Info *info, Scheme_Object *le, int a
     already_opt = 1;
   }
 
-  if (le) {
-    while (SAME_TYPE(SCHEME_TYPE(le), scheme_ir_toplevel_type)) {
-      int pos;
-      Scheme_Object *inl;
-      pos = SCHEME_IR_TOPLEVEL_POS(le);
-      single_use = 0;
-      do {
-        inl = get_import_inline(info, (Scheme_IR_Toplevel *)le, argc);
-        if (inl) le = inl;
-      } while (inl && SAME_TYPE(SCHEME_TYPE(le), scheme_ir_toplevel_type));
-      if (SAME_TYPE(SCHEME_TYPE(le), scheme_ir_toplevel_type) && info->top_level_consts) {
-        le = scheme_hash_get(info->top_level_consts, scheme_make_integer(pos));
-        if (le && SCHEME_WILL_BE_LAMBDAP(le)) {
-          psize = SCHEME_WILL_BE_LAMBDA_SIZE(le);
-          le = NULL;
-        }
-        if (!le)
-          break;
-        already_opt = 1;
-      } else
-        break;
+  if (le && SAME_TYPE(le, scheme_ir_toplevel_type)) {
+    Scheme_Object *inl;
+    single_use = 0;
+    do {
+      inl = get_import_inline(info, (Scheme_IR_Toplevel *)le, argc);
+      if (!inl) inl = get_defn_shape(info, (Scheme_IR_Toplevel *)le);
+      if (inl) le = inl;
+    } while (inl && SAME_TYPE(SCHEME_TYPE(le), scheme_ir_toplevel_type));
+    if (le && SCHEME_WILL_BE_LAMBDAP(le)) {
+      psize = SCHEME_WILL_BE_LAMBDA_SIZE(le);
+      le = NULL;
     }
+    already_opt = 1;
   }
 
   if (le && SAME_TYPE(SCHEME_TYPE(le), scheme_case_lambda_sequence_type)) {
@@ -3130,22 +3127,18 @@ static int appn_flags(Scheme_Object *rator, Optimize_Info *info)
 /* Record some properties of an application that are useful to the SFS pass. */
 {
   if (SAME_TYPE(SCHEME_TYPE(rator), scheme_ir_toplevel_type)) {
-    if (info->top_level_consts) {
-      int pos;
-      pos = SCHEME_IR_TOPLEVEL_POS(rator);
-      rator = scheme_hash_get(info->top_level_consts, scheme_make_integer(pos));
-      rator = no_potential_size(rator);
-      if (!rator) return 0;
-      if (SAME_TYPE(SCHEME_TYPE(rator), scheme_proc_shape_type)) {
-        return APPN_FLAG_SFS_TAIL;
-      } else if (SAME_TYPE(SCHEME_TYPE(rator), scheme_struct_proc_shape_type)) {
-        int ps = SCHEME_PROC_SHAPE_MODE(rator);
-        if ((ps == STRUCT_PROC_SHAPE_PRED)
-            || (ps == STRUCT_PROC_SHAPE_GETTER)
-            || (ps == STRUCT_PROC_SHAPE_SETTER))
-          return (APPN_FLAG_IMMED | APPN_FLAG_SFS_TAIL);
-        return 0;
-      }
+    rator = get_defn_shape(info, (Scheme_IR_Toplevel *)rator);
+    rator = no_potential_size(rator);
+    if (!rator) return 0;
+    if (SAME_TYPE(SCHEME_TYPE(rator), scheme_proc_shape_type)) {
+      return APPN_FLAG_SFS_TAIL;
+    } else if (SAME_TYPE(SCHEME_TYPE(rator), scheme_struct_proc_shape_type)) {
+      int ps = SCHEME_PROC_SHAPE_MODE(rator);
+      if ((ps == STRUCT_PROC_SHAPE_PRED)
+          || (ps == STRUCT_PROC_SHAPE_GETTER)
+          || (ps == STRUCT_PROC_SHAPE_SETTER))
+        return (APPN_FLAG_IMMED | APPN_FLAG_SFS_TAIL);
+      return 0;
     }
   }
 
@@ -3418,18 +3411,13 @@ static Scheme_Object *lookup_constant_proc(Optimize_Info *info, Scheme_Object *r
   else if (SAME_TYPE(SCHEME_TYPE(rand), scheme_ir_local_type))
     c = optimize_info_lookup_lambda(rand);
   else if (SAME_TYPE(SCHEME_TYPE(rand), scheme_ir_toplevel_type)) {
-    if (info->top_level_consts) {
-      int pos;
-
-      while (1) {
-        pos = SCHEME_IR_TOPLEVEL_POS(rand);
-        c = scheme_hash_get(info->top_level_consts, scheme_make_integer(pos));
-        c = no_potential_size(c);
-        if (c && SAME_TYPE(SCHEME_TYPE(c), scheme_ir_toplevel_type))
-          rand = c;
-        else
-          break;
-      }
+    while (1) {
+      c = get_defn_shape(info, (Scheme_IR_Toplevel *)rand);
+      c = no_potential_size(c);
+      if (c && SAME_TYPE(SCHEME_TYPE(c), scheme_ir_toplevel_type))
+        rand = c;
+      else
+        break;
     }
   }
 
@@ -4627,6 +4615,7 @@ static Scheme_Object *equivalent_exprs(Scheme_Object *a, Scheme_Object *b,
 
   if (SAME_TYPE(SCHEME_TYPE(a), scheme_ir_toplevel_type)
       && SAME_TYPE(SCHEME_TYPE(b), scheme_ir_toplevel_type)
+      && (SCHEME_IR_TOPLEVEL_INSTANCE(a) == SCHEME_IR_TOPLEVEL_INSTANCE(b))
       && (SCHEME_IR_TOPLEVEL_POS(a) == SCHEME_IR_TOPLEVEL_POS(b)))
     return a;
 
@@ -5380,26 +5369,10 @@ ref_optimize(Scheme_Object *data, Optimize_Info *info, int context)
   } else if (SAME_TYPE(SCHEME_TYPE(v), scheme_ir_toplevel_type)) {
     /* Knowing whether a top-level variable is fixed lets us optimize
        uses of `variable-reference-constant?` */
-    if (info->top_level_consts) {
-      int pos = SCHEME_IR_TOPLEVEL_POS(v);
-      int fixed = 0;
-
-      if (scheme_hash_get(info->top_level_consts, scheme_make_integer(pos)))
-        fixed = 1;
-      else {
-        GC_CAN_IGNORE Scheme_Object *t;
-        t = scheme_hash_get(info->top_level_consts, scheme_false);
-        if (t) {
-          if (scheme_hash_get((Scheme_Hash_Table *)t, scheme_make_integer(pos)))
-            fixed = 1;
-        } else if (get_import_shape(info, (Scheme_IR_Toplevel *)v))
-          fixed = 1;
-      }
-
-      if (fixed) {
-        v = scheme_ir_toplevel_to_flagged_toplevel(v, SCHEME_TOPLEVEL_FIXED);
-        SCHEME_PTR1_VAL(data) = v;
-      }
+    if (get_defn_shape(info, (Scheme_IR_Toplevel *)v)
+        || get_import_shape(info, (Scheme_IR_Toplevel *)v)) {
+      v = scheme_ir_toplevel_to_flagged_toplevel(v, SCHEME_TOPLEVEL_FIXED);
+      SCHEME_PTR1_VAL(data) = v;
     }
   }
 
@@ -5918,18 +5891,16 @@ int scheme_ir_propagate_ok(Scheme_Object *value, Optimize_Info *info)
       return 1;
     if (get_import_shape(info, (Scheme_IR_Toplevel *)value))
       return 1;
-    if (info->top_level_consts) {
-      int pos;
-      pos = SCHEME_IR_TOPLEVEL_POS(value);
-      value = scheme_hash_get(info->top_level_consts, scheme_make_integer(pos));
-      value = no_potential_size(value);
-      if (SAME_OBJ(value, scheme_constant_key)
-          || (value && SAME_TYPE(SCHEME_TYPE(value), scheme_struct_proc_shape_type)))
-        return 0;
-      if (value)
-        return 1;
-    }
-    return 0;
+
+    value = get_defn_shape(info, (Scheme_IR_Toplevel *)value);
+    value = no_potential_size(value);
+    if (SAME_OBJ(value, scheme_constant_key)
+        || (value && SAME_TYPE(SCHEME_TYPE(value), scheme_struct_proc_shape_type)))
+      return 0;
+    else if (value)
+      return 1;
+    else
+      return 0;
   }
 
   /* Test this after the specific cases, 
@@ -7845,7 +7816,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
             if (!(SCHEME_IR_TOPLEVEL_FLAGS(var) & SCHEME_IR_TOPLEVEL_MUTATED)) {
               if (!consts)
                 consts = scheme_make_hash_table(SCHEME_hash_ptr);
-              scheme_hash_set(consts, scheme_make_integer(var->identity_pos), estimate_closure_size(e));
+              scheme_hash_set(consts, scheme_make_integer(var->variable_pos), estimate_closure_size(e));
             }
           }
         }
@@ -7966,14 +7937,14 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
                   consts = scheme_make_hash_table(SCHEME_hash_ptr);
                   info->top_level_consts = consts;
                 }
-                scheme_hash_set(consts, scheme_make_integer(var->identity_pos), e2);
+                scheme_hash_set(consts, scheme_make_integer(var->variable_pos), e2);
 
                 if (sstruct || (SCHEME_TYPE(e2) > _scheme_ir_values_types_)) {
                   /* No use re-optimizing */
                 } else {
                   if (!re_consts)
                     re_consts = scheme_make_hash_table(SCHEME_hash_ptr);
-                  scheme_hash_set(re_consts, scheme_make_integer(i_m), scheme_make_integer(var->identity_pos));
+                  scheme_hash_set(re_consts, scheme_make_integer(i_m), scheme_make_integer(var->variable_pos));
                 }
               } else {
                 /* At least mark it as fixed */
@@ -7986,7 +7957,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
                   }
                   scheme_hash_set(info->top_level_consts, scheme_false, (Scheme_Object *)fixed_table);
                 }
-                scheme_hash_set(fixed_table, scheme_make_integer(var->identity_pos), scheme_true);
+                scheme_hash_set(fixed_table, scheme_make_integer(var->variable_pos), scheme_true);
               }
             }
           }
@@ -8125,7 +8096,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
               }
               scheme_hash_set(info->top_level_consts, scheme_false, (Scheme_Object *)fixed_table);
             }
-            scheme_hash_set(fixed_table, scheme_make_integer(var->identity_pos), scheme_true);
+            scheme_hash_set(fixed_table, scheme_make_integer(var->variable_pos), scheme_true);
           }
         }
       }
@@ -8345,10 +8316,19 @@ Scheme_Object *optimize_expr(Scheme_Object *expr, Optimize_Info *info, int conte
   case scheme_ir_toplevel_type:
     info->size += 1;
     {
-      int pos;
       Scheme_Object *c;
 
-      c = get_import_inline(info, (Scheme_IR_Toplevel *)expr, -1);
+      while (1) {
+        c = get_import_inline(info, (Scheme_IR_Toplevel *)expr, -1);
+        if (!c)
+          c = get_defn_shape(info, (Scheme_IR_Toplevel *)expr);
+        c = no_potential_size(c);
+        if (c && SAME_TYPE(SCHEME_TYPE(c), scheme_ir_toplevel_type))
+          expr = c;
+        else
+          break;
+      }
+      
       if (c) {
         if (SAME_OBJ(c, scheme_constant_key)) {
           /* can't copy, but constant across instantiations */
@@ -8362,18 +8342,8 @@ Scheme_Object *optimize_expr(Scheme_Object *expr, Optimize_Info *info, int conte
           expr = scheme_ir_toplevel_to_flagged_toplevel(expr, SCHEME_TOPLEVEL_FIXED);
           c = NULL;
         }
-      } else if (info->top_level_consts) {
-        while (1) {
-          pos = SCHEME_IR_TOPLEVEL_POS(expr);
-          c = scheme_hash_get(info->top_level_consts, scheme_make_integer(pos));
-          c = no_potential_size(c);
-          if (c && SAME_TYPE(SCHEME_TYPE(c), scheme_ir_toplevel_type))
-            expr = c;
-          else
-            break;
-        }
       } else
-        c = NULL;
+        info->vclock += 1;
 
       if (c) {
         if (context & OPT_CONTEXT_BOOLEAN)
@@ -8385,23 +8355,6 @@ Scheme_Object *optimize_expr(Scheme_Object *expr, Optimize_Info *info, int conte
 	/* We can't inline, but mark the top level as a constant,
 	   so we can direct-jump and avoid null checks in JITed code: */
         expr = scheme_ir_toplevel_to_flagged_toplevel(expr, SCHEME_TOPLEVEL_CONST);
-      } else {
-	/* false is mapped to a table of non-constant ready values: */
-        if (info->top_level_consts)
-          c = scheme_hash_get(info->top_level_consts, scheme_false);
-        else
-          c = NULL;
-	if (c) {
-	  c = scheme_hash_get((Scheme_Hash_Table *)c, scheme_make_integer(pos));
-
-	  if (c) {
-	    /* We can't inline, but mark the top level as ready and fixed,
-	       so we can avoid null checks in JITed code, etc: */
-	    expr = scheme_ir_toplevel_to_flagged_toplevel(expr, SCHEME_TOPLEVEL_FIXED);
-	  }
-	}
-        if (!c)
-          info->vclock += 1;
       }
     }
     optimize_info_used_top(info);
@@ -9176,7 +9129,6 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
     } else if (argc >= 0) {
       int has_cases = 0;
 
-      linklet->num_toplevels = 1 + linklet->num_total_imports + SCHEME_VEC_SIZE(linklet->defns);
       v = scheme_unresolve(v, argc, &has_cases, linklet);
 
       if (!iv_ht) {

@@ -63,6 +63,15 @@ struct Resolve_Info
                                   to their stack depths for the enclosing `lambda` */
   Scheme_Object *lifts; /* tracks functions lifted by closure conversion */
   struct Resolve_Info *next;
+
+  int num_toplevels; /* number of toplevels, initially, in `linklet`; lifting
+                        adds more */
+  int *toplevel_starts; /* position within toplevels array where an
+                           import or definition starts; add 1 to an
+                           import position, and use 0 for definitions
+                           (which, both cases, corresponds to adding 1
+                           to `instance_pos` in an
+                           `Scheme_IR_Topelevel`). */
 };
 
 #define cons(a,b) scheme_make_pair(a,b)
@@ -2174,7 +2183,7 @@ static Scheme_Object *shift_lifted_reference(Scheme_Object *tl, Resolve_Info *in
                             SCHEME_TOPLEVEL_CONST);
   
   /* register if non-stub: */
-  if (pos >= info->linklet->num_toplevels)
+  if (pos >= info->num_toplevels)
     set_tl_pos_used(info, pos);
 
   return tl;
@@ -2187,6 +2196,7 @@ static Scheme_Object *shift_lifted_reference(Scheme_Object *tl, Resolve_Info *in
 static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_const)
 {
   Resolve_Info *naya;
+  int *toplevel_starts, pos, i;
 
   naya = MALLOC_ONE_RT(Resolve_Info);
 #ifdef MZTAG_REQUIRED
@@ -2198,6 +2208,20 @@ static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_co
   naya->next = NULL;
   naya->enforce_const = enforce_const;
   naya->linklet = linklet;
+
+  naya->num_toplevels = (SCHEME_LINKLET_PREFIX_PREFIX
+                         + linklet->num_total_imports
+                         + SCHEME_VEC_SIZE(linklet->defns));
+
+  toplevel_starts = MALLOC_N_ATOMIC(int, SCHEME_VEC_SIZE(linklet->importss) + 1);
+  pos = SCHEME_LINKLET_PREFIX_PREFIX;
+  for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
+    toplevel_starts[i+1] = pos;
+    pos += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
+  }
+  toplevel_starts[0] = pos;
+  
+  naya->toplevel_starts = toplevel_starts;
 
   return naya;
 }
@@ -2236,6 +2260,8 @@ static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambd
   naya->max_let_depth = naya->current_depth;
   naya->in_proc = lambda || info->in_proc;
   naya->lifts = info->lifts;
+  naya->num_toplevels = info->num_toplevels;
+  naya->toplevel_starts = info->toplevel_starts;
 
   return naya;
 }
@@ -2414,7 +2440,14 @@ static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, 
 
   skip = resolve_toplevel_pos(info);
 
-  pos = SCHEME_IR_TOPLEVEL_POS(expr);
+  if (SCHEME_IR_TOPLEVEL_INSTANCE(expr) == -1) {
+    if (SCHEME_IR_TOPLEVEL_POS(expr) == -1) {
+      /* (-1, -1) is the prefix slot */
+      pos = 0;
+    } else
+      pos = info->toplevel_starts[0] + SCHEME_IR_TOPLEVEL_POS(expr);
+  } else
+    pos = (info->toplevel_starts[SCHEME_IR_TOPLEVEL_INSTANCE(expr) + 1] + SCHEME_IR_TOPLEVEL_POS(expr));
 
   set_tl_pos_used(info, pos);
 
@@ -2437,7 +2470,7 @@ static Scheme_Object *resolve_invent_toplevel(Resolve_Info *info)
   skip = resolve_toplevel_pos(info);
 
   count = SCHEME_VEC_ELS(info->lifts)[1];
-  pos = (int)(SCHEME_INT_VAL(count) + info->linklet->num_toplevels);
+  pos = (int)(SCHEME_INT_VAL(count) + info->num_toplevels);
   count = scheme_make_integer(SCHEME_INT_VAL(count) + 1);
   SCHEME_VEC_ELS(info->lifts)[1] = count;
 
@@ -2485,6 +2518,7 @@ typedef struct Unresolve_Info {
   int inlining;
 
   int num_toplevels; /* compute imports + defns for linklet */
+  int num_defns; /* initial defns for linklet */
   int num_extra_toplevels; /* created toplevels for cyclic lambdas */
 
   Scheme_Hash_Table *toplevels;
@@ -2503,7 +2537,6 @@ static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, int comp_flag
   Unresolve_Info *ui;
   Scheme_IR_Local **vars;
   Scheme_Hash_Table *ht;
-  int count, i;
 
   ui = MALLOC_ONE_RT(Unresolve_Info);
   SET_REQUIRED_TAG(ui->type = scheme_rt_unresolve_info);
@@ -2525,12 +2558,10 @@ static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, int comp_flag
 
   ui->comp_flags = comp_flags;
 
-  count = 1;
-  for (i = SCHEME_VEC_SIZE(linklet->importss); i--; ) {
-    count += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
-  }
-  count += SCHEME_VEC_SIZE(linklet->defns);
-  ui->num_toplevels = count;
+  ui->num_defns = SCHEME_VEC_SIZE(linklet->defns);
+  ui->num_toplevels = (SCHEME_LINKLET_PREFIX_PREFIX
+                       + linklet->num_total_imports
+                       + ui->num_defns);
 
   return ui;
 }
@@ -2702,9 +2733,9 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
   
   /* Create a reference that works for the optimization context. */
   
-  MZ_ASSERT(pos < ui->linklet->num_toplevels);
+  MZ_ASSERT(pos < ui->num_toplevels);
   
-  if (ui->inlining && (pos > (ui->linklet->num_toplevels - ui->linklet->num_lifts))) {
+  if (ui->inlining && (pos > (ui->num_toplevels - ui->linklet->num_lifts))) {
     /* Must be cross-linklet, since there are no lifts during
        linklet optimization... and generated code cannot refer to a
        lift across a module boundary. */
@@ -3486,7 +3517,7 @@ static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int a
       var = unresolve_expr(sb->var, ui, 0);
       if (!var) return_NULL;
       if (SAME_TYPE(SCHEME_TYPE(var), scheme_ir_toplevel_type)) {
-        SCHEME_TOPLEVEL_FLAGS(var) |= SCHEME_TOPLEVEL_MUTATED;
+        SCHEME_IR_TOPLEVEL_FLAGS(((Scheme_IR_Toplevel *)var)) |= SCHEME_TOPLEVEL_MUTATED;
       }
       val = unresolve_expr(sb->val, ui, 0);
       if (!val) return_NULL;
@@ -3509,7 +3540,7 @@ static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int a
       LOG_UNRESOLVE(printf("unresolve_varref: (a) %d %d\n", e->type, a->type));
 
       if (SAME_TYPE(SCHEME_TYPE(a), scheme_ir_toplevel_type)) {
-        SCHEME_TOPLEVEL_FLAGS(a) |= SCHEME_TOPLEVEL_MUTATED;
+        SCHEME_IR_TOPLEVEL_FLAGS((Scheme_IR_Toplevel *)a) |= SCHEME_TOPLEVEL_MUTATED;
       }
 
       b = SCHEME_PTR2_VAL(e);
@@ -3675,7 +3706,7 @@ void locate_cyclic_closures(Scheme_Object *e, Unresolve_Info *ui)
         if (SAME_OBJ(c, scheme_true)) {
           Scheme_IR_Toplevel *tl;
           
-          tl = scheme_make_ir_toplevel(ui->num_toplevels + ui->num_extra_toplevels, -1, -1, 0);
+          tl = scheme_make_ir_toplevel(-1, ui->num_defns + ui->num_extra_toplevels, 0);
           ui->num_extra_toplevels++;
           
           scheme_hash_set(ui->closures, e, (Scheme_Object *)tl);
@@ -3781,19 +3812,6 @@ static void convert_closures_to_definitions(Unresolve_Info *ui)
   }
 }
 
-static void count_toplevels_array(Scheme_Linklet *linklet)
-{
-  int i, num_toplevels;
-
-  num_toplevels = 1;
-  for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
-    num_toplevels += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
-  }
-  num_toplevels += SCHEME_VEC_SIZE(linklet->defns);
-
-  linklet->num_toplevels = num_toplevels;
-}
-
 Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags)
 /* Convert from "resolved" form back to the intermediate representation used
    by the optimizer. Unresolving generates an intermediate-representation prefix
@@ -3807,8 +3825,6 @@ Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags
   new_linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
   memcpy(new_linklet, linklet, sizeof(Scheme_Linklet));
 
-  count_toplevels_array(new_linklet);
-  
   ui = new_unresolve_info(new_linklet, comp_flags);
 
   cnt = SCHEME_VEC_SIZE(linklet->bodies);

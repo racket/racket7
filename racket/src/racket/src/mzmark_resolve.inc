@@ -17,6 +17,7 @@ static int mark_resolve_info_MARK(void *p, struct NewGC *gc) {
   gcMARK2(i->redirects, gc);
   gcMARK2(i->lifts, gc);
   gcMARK2(i->next, gc);
+  gcMARK2(i->toplevel_starts, gc);
 
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
@@ -36,6 +37,7 @@ static int mark_resolve_info_FIXUP(void *p, struct NewGC *gc) {
   gcFIXUP2(i->redirects, gc);
   gcFIXUP2(i->lifts, gc);
   gcFIXUP2(i->next, gc);
+  gcFIXUP2(i->toplevel_starts, gc);
 
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
