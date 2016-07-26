@@ -5228,24 +5228,28 @@
    (write-bytes
     (zo-marshal
      (match m
-       [(compilation-top max-let-depth binding-namess prefix code)
-        (compilation-top max-let-depth binding-namess prefix 
-                         (let ([body (mod-body code)])
-                           (struct-copy mod code [body
-                                                  (match body 
-                                                    [(list a b)
-                                                     (list (match a
-                                                             [(application rator (list rand))
-                                                              (application
-                                                               rator
-                                                               (list
-                                                                (struct-copy 
-                                                                 lam rand
-                                                                 [body
-                                                                  (match (lam-body rand)
-                                                                    [(toplevel depth pos const? ready?)
-                                                                     (toplevel depth pos #t #t)])])))])
-                                                           b)])])))]))
+       [(linkl-bundle t)
+        (linkl-bundle
+         (hash-set t
+                   0
+                   (let* ([l (hash-ref t 0)]
+                          [body (linkl-body l)])
+                     (struct-copy linkl l [body
+                                           (match body 
+                                             [(list a b c)
+                                              (list (match a
+                                                      [(application rator (list rand))
+                                                       (application
+                                                        rator
+                                                        (list
+                                                         (struct-copy 
+                                                          lam rand
+                                                          [body
+                                                           (match (lam-body rand)
+                                                             [(toplevel depth pos const? ready?)
+                                                              (toplevel depth pos #t #t)])])))])
+                                                    b
+                                                    c)])]))))]))
     o2))
 
   ;; validator should reject this at read or eval time (depending on how lazy validation is):
@@ -5273,7 +5277,8 @@
 
   ; extract the content of the begin0 expression
   (define (analyze-beg0 m)
-    (define def-z (car (mod-body (compilation-top-code m))))
+    (define lb (hash-ref (linkl-directory-table m)'()))
+    (define def-z (car (linkl-body (hash-ref (linkl-bundle-table lb) 0))))
     (define body-z (let-one-body (def-values-rhs def-z)))
     (define expr-z (car (beg0-seq body-z)))
     (cond
@@ -5487,8 +5492,9 @@
       (write (compile l) o)
       (parameterize ([read-accept-compiled #t])
         (zo-parse (open-input-bytes (get-output-bytes o))))))
-  (let* ([m (compilation-top-code b)]
-         [d (car (mod-body m))]
+  (let* ([lb (hash-ref (linkl-directory-table b) '())]
+         [m (hash-ref (linkl-bundle-table lb) 0)]
+         [d (car (linkl-body m))]
          [b (closure-code (def-values-rhs d))]
          [c (application-rator (lam-body b))]
          [l (closure-code c)]

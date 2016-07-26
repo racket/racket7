@@ -717,7 +717,7 @@
   (define mode (read-prefix port #f))
 
   (case mode
-    [(#\B) (zo-parse-top port)]
+    [(#\B) (linkl-bundle (zo-parse-top port))]
     [(#\D)
      (struct sub-info (name start len))
      (define sub-infos
@@ -744,24 +744,25 @@
                     len))
         <
         #:key sub-info-start))
-     (for/hash ([sub-info (in-list sub-infos)])
-       (define pos (file-position port))
-       (unless (= (- pos init-pos) (sub-info-start sub-info))
-         (error 'zo-parse 
-                "next bundle expected at ~a, currently at ~a"
-                (+ init-pos (sub-info-start sub-info)) pos))
-       (define tag (read-prefix port #t))
-       (define sub
-         (cond
-          [(not tag) #f]
-          [else
-           (unless (eq? tag #\B)
-             (error 'zo-parse "expected a bundle"))
-           (define sub (and tag (zo-parse-top port #f)))
-           (unless (hash? sub)
-             (error 'zo-parse "expected a bundle hash"))
-           sub]))
-       (values (sub-info-name sub-info) sub))]
+     (linkl-directory
+      (for/hash ([sub-info (in-list sub-infos)])
+        (define pos (file-position port))
+        (unless (= (- pos init-pos) (sub-info-start sub-info))
+          (error 'zo-parse 
+                 "next bundle expected at ~a, currently at ~a"
+                 (+ init-pos (sub-info-start sub-info)) pos))
+        (define tag (read-prefix port #t))
+        (define sub
+          (cond
+           [(not tag) #f]
+           [else
+            (unless (eq? tag #\B)
+              (error 'zo-parse "expected a bundle"))
+            (define sub (and tag (zo-parse-top port #f)))
+            (unless (hash? sub)
+              (error 'zo-parse "expected a bundle hash"))
+            (linkl-bundle sub)]))
+        (values (sub-info-name sub-info) sub)))]
     [else
      (error 'zo-parse "bad file format specifier")]))
 

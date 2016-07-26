@@ -14,8 +14,8 @@
          racket/extflonum)
 
 (provide/contract
- [zo-marshal (hash? . -> . bytes?)]
- [zo-marshal-to (hash? output-port? . -> . void?)])
+ [zo-marshal ((or/c linkl-directory? linkl-bundle?) . -> . bytes?)]
+ [zo-marshal-to ((or/c linkl-directory? linkl-bundle?) output-port? . -> . void?)])
 
 (struct not-ready ())
 
@@ -27,15 +27,15 @@
   (get-output-bytes bs))
 
 (define (zo-marshal-to top outp) 
-  (if (and (hash? top)
-           (for/and ([(k v) (in-hash top)])
-             (and (list? k)
-                  (andmap symbol? k)
-                  (hash? v))))
-      ;; linklet directory:
-      (zo-marshal-directory-to top outp)
-      ;; single linklet bundle:
-      (zo-marshal-bundle-to top outp)))
+  (match top
+    [(linkl-directory table)
+     ;; linklet directory:
+     (zo-marshal-directory-to table outp)]
+    [(linkl-bundle table)
+     ;; single linklet bundle:
+     (zo-marshal-bundle-to table outp)]
+    [else
+     (error 'zo-marshal-top "not a linklet bundle or directory:" top)]))
 
 (define (zo-marshal-directory-to top outp)
   ;; Write the compiled form header
@@ -65,7 +65,7 @@
                                         (integer->integer-bytes len 4 #f #f)))
                                    b)))))
       (define o (open-output-bytes))
-      (zo-marshal-bundle-to bundle o)
+      (zo-marshal-bundle-to (linkl-bundle-table bundle) o)
       (bundle-bytes (get-output-bytes o)
                     name
                     name-bstr

@@ -32,9 +32,20 @@
 ;; Main entry:
 (define (decompile top)
   (cond
-   [(hash? top)
-    (for/hash ([(k v) (in-hash top)])
-      (values k (decompile v)))]
+   [(linkl-directory? top)
+    (cons
+     'linklet-directory
+     (apply
+      append
+      (for/list ([(k v) (in-hash (linkl-directory-table top))])
+        (list '#:name k '#:bundle (decompile v)))))]
+   [(linkl-bundle? top)
+    (cons
+     'linklet-bundle
+     (apply
+      append
+      (for/list ([(k v) (in-hash (linkl-bundle-table top))])
+        (list '#:key k '#:value (decompile v)))))]
    [(linkl? top)
     (decompile-linklet top)]
    [else `(quote ,top)]))

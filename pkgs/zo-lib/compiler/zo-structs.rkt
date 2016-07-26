@@ -64,6 +64,10 @@
                                   [body (listof (or/c form? any/c))]
                                   [max-let-depth exact-nonnegative-integer?]))
 
+(define-form-struct linkl-directory ([table (hash/c (listof symbol?) linkl-bundle?)]))
+(define-form-struct linkl-bundle    ([table (hash/c (or/c symbol? fixnum?)
+                                                    any/c)])) ; can be anythin, but especially a linklet
+
 (define-form-struct (lam expr) ([name (or/c symbol? vector? empty?)]
                                 [flags (listof (or/c 'preserves-marks 'is-method 'single-result
                                                      'only-rest-arg-not-used 'sfs-clear-rest-args))]
