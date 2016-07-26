@@ -3463,9 +3463,11 @@ static int linklet_val_MARK(void *p, struct NewGC *gc) {
 
   gcMARK2(l->name, gc);
   gcMARK2(l->importss, gc);
+  gcMARK2(l->import_shapes, gc);
   gcMARK2(l->defns, gc);
   gcMARK2(l->source_names, gc);
   gcMARK2(l->bodies, gc);
+  gcMARK2(l->constants, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -3481,9 +3483,11 @@ static int linklet_val_FIXUP(void *p, struct NewGC *gc) {
 
   gcFIXUP2(l->name, gc);
   gcFIXUP2(l->importss, gc);
+  gcFIXUP2(l->import_shapes, gc);
   gcFIXUP2(l->defns, gc);
   gcFIXUP2(l->source_names, gc);
   gcFIXUP2(l->bodies, gc);
+  gcFIXUP2(l->constants, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else

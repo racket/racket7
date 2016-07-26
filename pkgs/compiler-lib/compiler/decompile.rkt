@@ -41,7 +41,7 @@
 
 (define (decompile-linklet l)
   (match l
-    [(struct linkl (importss exports internals lifts source-names body max-let-depth))
+    [(struct linkl (name importss import-shapess exports internals lifts source-names body max-let-depth))
      (define closed (make-hasheq))
      (define globs (glob-desc
                     (append

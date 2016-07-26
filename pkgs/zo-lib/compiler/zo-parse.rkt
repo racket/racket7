@@ -163,11 +163,22 @@
       
 (define (read-linklet v)
   (match v
-    [`(,max-let-depth ,num-lifts ,num-exports
+    [`(,name ,max-let-depth ,num-lifts ,num-exports
        ,body
-       ,source-names ,defns-vec ,imports-vec)
+       ,source-names ,defns-vec ,imports-vec ,shapes-vec)
      (define defns (vector->list defns-vec))
-     (linkl (map vector->list (vector->list imports-vec))
+     (linkl name
+            (map vector->list (vector->list imports-vec))
+            (if (not shapes-vec)
+                (for/list ([imports (in-vector imports-vec)])
+                  (for/list ([i (in-vector imports)])
+                    #f))
+                (let ([pos 0])
+                  (for/list ([imports (in-vector imports-vec)])
+                    (for/list ([i (in-vector imports)])
+                      (begin0
+                       (parse-shape (vector-ref shapes-vec pos))
+                       (set! pos (add1 pos)))))))
             (take defns num-exports)
             (take (list-tail defns num-exports) (- (length defns) num-exports num-lifts))
             (drop defns (- (length defns) num-lifts))
@@ -179,6 +190,37 @@
 
 (define (read-inline-variant v)
   (make-inline-variant (car v) (cdr v)))
+
+(define (parse-shape shape)
+  (cond
+   [(not shape) #f]
+   [(eq? shape #t) 'constant]
+   [(eq? shape (void)) 'fixed]
+   [(number? shape) 
+    (define n (arithmetic-shift shape -1))
+    (make-function-shape (if (negative? n)
+                             (make-arity-at-least (sub1 (- n)))
+                             n)
+                         (odd? shape))]
+   [(and (symbol? shape)
+         (regexp-match? #rx"^struct" (symbol->string shape)))
+    (define n (string->number (substring (symbol->string shape) 6)))
+    (case (bitwise-and n #x7)
+      [(0) (make-struct-type-shape (arithmetic-shift n -3))]
+      [(1) (make-constructor-shape (arithmetic-shift n -3))]
+      [(2) (make-predicate-shape)]
+      [(3) (make-accessor-shape (arithmetic-shift n -3))]
+      [(4) (make-mutator-shape (arithmetic-shift n -3))]
+      [else (make-struct-other-shape)])]
+   [else
+    ;; parse symbol as ":"-separated sequence of arities
+    (make-function-shape
+     (for/list ([s (regexp-split #rx":" (symbol->string shape))])
+       (define i (string->number s))
+       (if (negative? i)
+           (make-arity-at-least (sub1 (- i)))
+           i))
+     #f)]))
 
 ;; ----------------------------------------
 ;; Unmarshal dispatch for various types

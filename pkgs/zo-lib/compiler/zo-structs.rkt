@@ -50,9 +50,13 @@
 
 ;; Definitions (top level or within module):
 (define-form-struct (def-values form) ([ids (listof (or/c toplevel? symbol?))]
-                                       [rhs (or/c expr? seq? inline-variant? any/c)])) 
+                                       [rhs (or/c expr? seq? inline-variant? any/c)]))
 
-(define-form-struct (linkl form) ([importss (listof (listof symbol?))]
+(define-form-struct (linkl form) ([name symbol?]
+                                  [importss (listof (listof symbol?))]
+                                  [import-shapess (listof (listof  (or/c #f 'constant 'fixed 
+                                                                         function-shape? 
+                                                                         struct-shape?)))]
                                   [exports (listof symbol?)]
                                   [internals (listof symbol?)]
                                   [lifts (listof symbol?)]

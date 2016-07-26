@@ -978,9 +978,11 @@ linklet_val {
 
   gcMARK2(l->name, gc);
   gcMARK2(l->importss, gc);
+  gcMARK2(l->import_shapes, gc);
   gcMARK2(l->defns, gc);
   gcMARK2(l->source_names, gc);
   gcMARK2(l->bodies, gc);
+  gcMARK2(l->constants, gc);
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Linklet));
 }
@@ -1201,8 +1203,10 @@ mark_optimize_info {
   gcMARK2(i->next, gc);
   gcMARK2(i->consts, gc);
   gcMARK2(i->linklet, gc);
-  gcMARK2(i->top_level_consts, gc);
+  gcMARK2(i->linklets, gc);
+  gcMARK2(i->getters, gc);
   gcMARK2(i->inline_variants, gc);
+  gcMARK2(i->top_level_consts, gc);
   gcMARK2(i->transitive_use_var, gc);
   gcMARK2(i->context, gc);
   gcMARK2(i->logger, gc);

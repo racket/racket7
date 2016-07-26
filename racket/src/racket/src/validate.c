@@ -144,7 +144,7 @@ void scheme_validate_linklet(Mz_CPort *port, Scheme_Linklet *linklet)
   Validate_TLS tls;
   mzshort *tl_state;
   Scheme_Hash_Table *st_ht = NULL;
-  Scheme_Object *form;
+  Scheme_Object *form, *shape;
 
   depth = linklet->max_let_depth + 1; /* +1 is for prefix */
 
@@ -161,15 +161,25 @@ void scheme_validate_linklet(Mz_CPort *port, Scheme_Linklet *linklet)
     num_toplevels += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
   }
   num_toplevels += SCHEME_VEC_SIZE(linklet->defns);
-  
       
   tl_state = MALLOC_N_ATOMIC(mzshort, num_toplevels);
   memset(tl_state, 0, sizeof(mzshort) * num_toplevels);
 
   pos = 1;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
-    for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
-      tl_state[pos++] = SCHEME_TOPLEVEL_READY;
+    for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++, pos++) {
+      shape = (linklet->import_shapes ? SCHEME_VEC_ELS(linklet->import_shapes)[pos-1] : scheme_false);
+      if (SCHEME_TRUEP(shape)) {
+        if (SAME_OBJ(shape, scheme_void))
+          tl_state[pos] = SCHEME_TOPLEVEL_FIXED;
+        else {
+          intptr_t k;
+          tl_state[pos] = SCHEME_TOPLEVEL_CONST;
+          if (scheme_decode_struct_shape(shape, &k))
+            add_struct_mapping(&st_ht, pos, k);
+        }
+      } else
+        tl_state[pos] = SCHEME_TOPLEVEL_READY;
     }
   }
 
@@ -350,8 +360,8 @@ static int define_values_validate(Scheme_Object *data, Mz_CPort *port,
 
   if (scheme_is_simple_make_struct_type(val, size-1, 1, 0, 1, NULL,
                                         &stinfo, NULL,
-                                        NULL, NULL, (_st_ht ? *_st_ht : NULL), 
-                                        NULL, 0, NULL, NULL, NULL, 5)) {
+                                        NULL, (_st_ht ? *_st_ht : NULL), 
+                                        NULL, 0, NULL, NULL, 5)) {
     /* This set of bindings is constant across invocations, but
        if `uses_super', we need to increment tl_timestamp for
        subtype-defining `struct' sequences. */

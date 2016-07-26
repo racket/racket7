@@ -809,10 +809,11 @@
 
 (define (convert-linklet linklet-form)
   (match linklet-form
-    [(struct linkl (importss exports internals lifts
-                             source-names body max-let-depth))
+    [(struct linkl (name importss import-shapess exports internals lifts
+                         source-names body max-let-depth))
      (define names-count (* 2 (hash-count source-names)))
-     (list max-let-depth
+     (list name
+           max-let-depth
            (length lifts)
            (length exports)
            (list->vector body)
@@ -820,7 +821,14 @@
                                               [(n) (in-list (list k v))])
                         n)
            (list->vector (append exports internals lifts))
-           (list->vector (map list->vector importss)))]))
+           (list->vector (map list->vector importss))
+           (if (not (for*/or ([import-shapes (in-list import-shapess)]
+                              [import-shape (in-list import-shapes)])
+                      import-shape))
+               #f
+               (for/vector ([import-shapes (in-list import-shapess)])
+                 (for/vector ([import-shape (in-list import-shapes)])
+                   (encode-shape import-shape)))))]))
 
 (define (out-lam expr out)  
   (match expr
@@ -911,3 +919,44 @@
     (if r
         (find-relative-path r v)
         v)))
+
+(define (encode-shape constantness)
+  (define (to-sym n) (string->symbol (format "struct~a" n)))
+  (cond
+   [(eq? constantness 'constant) #t]
+   [(eq? constantness 'fixed) (void)]
+   [(function-shape? constantness)
+    (let ([a (function-shape-arity constantness)])
+      (cond
+       [(arity-at-least? a) 
+        (bitwise-ior (arithmetic-shift (- (add1 (arity-at-least-value a))) 1)
+                     (if (function-shape-preserves-marks? constantness) 1 0))]
+       [(list? a)
+        (string->symbol (apply
+                         string-append
+                         (add-between
+                          (for/list ([a (in-list a)])
+                            (define n (if (arity-at-least? a)
+                                          (- (add1 (arity-at-least-value a)))
+                                          a))
+                            (number->string n))
+                          ":")))]
+       [else 
+        (bitwise-ior (arithmetic-shift a 1) 
+                     (if (function-shape-preserves-marks? constantness) 1 0))]))]
+   [(struct-type-shape? constantness)
+    (to-sym (arithmetic-shift (struct-type-shape-field-count constantness)
+                              4))]
+   [(constructor-shape? constantness)
+    (to-sym (bitwise-ior 1 (arithmetic-shift (constructor-shape-arity constantness)
+                                             4)))]
+   [(predicate-shape? constantness) (to-sym 2)]
+   [(accessor-shape? constantness)
+    (to-sym (bitwise-ior 3 (arithmetic-shift (accessor-shape-field-count constantness)
+                                             4)))]
+   [(mutator-shape? constantness)
+    (to-sym (bitwise-ior 4 (arithmetic-shift (mutator-shape-field-count constantness)
+                                             4)))]
+   [(struct-other-shape? constantness)
+    (to-sym 5)]
+   [else #f]))

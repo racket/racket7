@@ -3267,7 +3267,8 @@ int scheme_decode_struct_shape(Scheme_Object *expected, intptr_t *_v)
   if (!expected || !SCHEME_SYMBOLP(expected))
     return 0;
 
-  if (SCHEME_SYM_VAL(expected)[0] != 's')
+  if ((SCHEME_SYM_VAL(expected)[0] != 's')
+      || (SCHEME_SYM_LEN(expected)  < 6))
     return 0;
   
   for (i = 6, v = 0; SCHEME_SYM_VAL(expected)[i]; i++) {

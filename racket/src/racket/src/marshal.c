@@ -966,6 +966,11 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
                         obj);
 
   l = scheme_null;
+  
+  if (linklet->import_shapes)
+    l = scheme_make_pair(linklet->import_shapes, l);
+  else
+    l = scheme_make_pair(scheme_false, l);
 
   l = scheme_make_pair(linklet->importss, l);
   l = scheme_make_pair(linklet->defns, l);
@@ -977,10 +982,12 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
   l = scheme_make_pair(scheme_make_integer(linklet->num_lifts), l);
   l = scheme_make_pair(scheme_make_integer(linklet->max_let_depth), l);
 
+  l = scheme_make_pair(linklet->name, l);
+
   return l;
 }
 
-#if 1 // REMOVEME
+#if 0
 # define return_NULL() return (printf("%d\n", __LINE__), NULL)
 #else
 # define return_NULL() return NULL
@@ -995,6 +1002,27 @@ static int is_vector_of_symbols(Scheme_Object *v)
   
   for (i = SCHEME_VEC_SIZE(v); i--; ) {
     if (!SCHEME_SYMBOLP(SCHEME_VEC_ELS(v)[i]))
+      return 0;
+  }
+
+  return 1;
+}
+
+static int is_vector_of_shapes(Scheme_Object *v)
+{
+  int i;
+  Scheme_Object *s;
+
+  if (!SCHEME_VECTORP(v))
+    return 0;
+  
+  for (i = SCHEME_VEC_SIZE(v); i--; ) {
+    s = SCHEME_VEC_ELS(v)[i];
+    if (SCHEME_TRUEP(s)
+        && !SCHEME_SYMBOLP(s)
+        && !SCHEME_INTP(s)
+        && !SAME_OBJ(s, scheme_true)
+        && !SAME_OBJ(s, scheme_void))
       return 0;
   }
 
@@ -1046,6 +1074,11 @@ static Scheme_Object *read_linklet(Scheme_Object *obj)
   linklet->so.type = scheme_linklet_type;
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
+  linklet->name = SCHEME_CAR(obj);
+  if (!SCHEME_SYMBOLP(linklet->name)) return_NULL();
+  obj = SCHEME_CDR(obj);
+
+  if (!SCHEME_PAIRP(obj)) return_NULL();
   e = SCHEME_CAR(obj);
   linklet->max_let_depth = SCHEME_INT_VAL(e);
   obj = SCHEME_CDR(obj);
@@ -1082,11 +1115,27 @@ static Scheme_Object *read_linklet(Scheme_Object *obj)
   a = SCHEME_CAR(obj);
   if (!is_vector_of_vector_of_symbols(a)) return_NULL();
   linklet->importss = a;
+  obj = SCHEME_CDR(obj);
 
+  if (!SCHEME_PAIRP(obj)) return_NULL();
+  a = SCHEME_CAR(obj);
+  if (!SCHEME_FALSEP(a)) {
+    if (!is_vector_of_shapes(a)) return_NULL();
+    linklet->import_shapes = a;
+  }
+  
   if (linklet->num_exports > SCHEME_VEC_SIZE(linklet->defns))
     return_NULL();
   if (linklet->num_lifts > (SCHEME_VEC_SIZE(linklet->defns) - linklet->num_exports))
     return_NULL();
+
+  {
+    int i = 0, j;
+    for (j = SCHEME_VEC_SIZE(linklet->importss); j--; ) {
+      i += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[j]);
+    }
+    linklet->num_total_imports = i;
+  }
 
   return (Scheme_Object *)linklet;
 }

@@ -1655,8 +1655,8 @@ static Scheme_Object *define_values_execute(Scheme_Object *vec)
 
       is_st = !!scheme_is_simple_make_struct_type(vals_expr, g, 1, 0, 1, 
                                                   NULL, NULL, NULL, NULL,
-                                                  NULL, NULL, MZ_RUNSTACK, 0, 
-                                                  NULL, NULL, NULL, 5);
+                                                  NULL, MZ_RUNSTACK, 0, 
+                                                  NULL, NULL, 5);
       
       for (i = 0; i < g; i++) {
 	Scheme_Prefix *toplevels;

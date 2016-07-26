@@ -2042,6 +2042,8 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
       tl = scheme_make_ir_toplevel(pos++, i, j, SCHEME_TOPLEVEL_READY);
       env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
     }
+
+    linklet->num_total_imports += len;
   }
 
   pos_after_imports = pos;

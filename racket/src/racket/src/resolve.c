@@ -2424,7 +2424,8 @@ static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, 
 
 static Scheme_Object *shift_toplevel(Scheme_Object *expr, int delta)
 {
-  return scheme_make_toplevel(delta, SCHEME_TOPLEVEL_POS(expr),
+  return scheme_make_toplevel(SCHEME_TOPLEVEL_DEPTH(expr) + delta,
+                              SCHEME_TOPLEVEL_POS(expr),
                               SCHEME_TOPLEVEL_FLAGS(expr) & SCHEME_TOPLEVEL_FLAGS_MASK);
 }
 
@@ -2707,6 +2708,11 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
     /* Must be cross-linklet, since there are no lifts during
        linklet optimization... and generated code cannot refer to a
        lift across a module boundary. */
+    return_NULL;
+  }
+
+  /* FIXME: enable pulling references across linklet */
+  if (ui->inlining) {
     return_NULL;
   }
 
@@ -3889,11 +3895,6 @@ Scheme_Object *scheme_unresolve(Scheme_Object *iv, int argc, int *_has_cases, Sc
 
   /* convert an optimized & resolved closure back to compiled form: */
   o = unresolve_lambda(lam, ui);
-
-  if (o) {
-    /* Added any toplevels? */
-    scheme_signal_error("new toplevels: not yet implemented");
-  }
 
   return o;
 }

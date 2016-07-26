@@ -2837,7 +2837,7 @@ Scheme_Object *scheme_protect_quote(Scheme_Object *expr);
 
 Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linklet *linklet);
 
-Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline);
+Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline, Scheme_Object *get_import);
 
 /* Context uses result as a boolean: */
 #define OPT_CONTEXT_BOOLEAN    0x1
@@ -2964,11 +2964,10 @@ Scheme_Object *scheme_is_simple_make_struct_type(Scheme_Object *app, int vals, i
                                                  int check_auto, int *_auto_e_depth, 
                                                  Simple_Stuct_Type_Info *_stinfo,
                                                  Scheme_Object **_parent_identity,
-                                                 Scheme_Hash_Table *top_level_consts, 
-                                                 Scheme_Hash_Table *inline_variants,
+                                                 Optimize_Info *info,
                                                  Scheme_Hash_Table *top_level_table,
                                                  Scheme_Object **runstack, int rs_delta,
-                                                 Scheme_Object **symbols, Scheme_Hash_Table *symbol_table,
+                                                 Scheme_Linklet *enclosing_linklet,
                                                  Scheme_Object **_name,
                                                  int fuel);
 
@@ -3116,8 +3115,9 @@ struct Scheme_Linklet
 
   Scheme_Object *name; /* for reporting purposes; FIXME: doesn't belong here? */
 
-  Scheme_Object *importss; /* vector of symbol (extenal names) */
-  int **import_flags; /* records compiler assumptions */
+  Scheme_Object *importss; /* vector of vector of symbol (extenal names) */
+  Scheme_Object *import_shapes; /* optional flattened vector of values; records compiler assumptions */
+  int num_total_imports; /* total number of symbols in `importss` */
 
   /* The symbols in the `defns` arracy correspond to external names
      for the first `num_exports` entries. The remaining (non-exported)
@@ -3141,6 +3141,8 @@ struct Scheme_Linklet
   int num_toplevels; /* only after compile and before resolve */
 
   int jit_ready; /* true if the linklet is in has been prepared for the JIT */
+
+  Scheme_Hash_Table *constants; /* holds info about the linklet's body for inlining */
 };
 
 #define SCHEME_DEFN_VAR_COUNT(d) (SCHEME_VEC_SIZE(d)-1)

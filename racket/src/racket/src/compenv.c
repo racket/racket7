@@ -128,7 +128,7 @@ Scheme_Object *scheme_toplevel_to_flagged_toplevel(Scheme_Object *_tl, int flags
 Scheme_IR_Toplevel *scheme_make_ir_toplevel(int identity_pos, int instance_pos, int variable_pos, int flags)
 {
   Scheme_IR_Toplevel *tl;
-  
+
   tl = MALLOC_ONE_TAGGED(Scheme_IR_Toplevel);
   tl->iso.so.type = scheme_ir_toplevel_type;
   SCHEME_TOPLEVEL_FLAGS(tl) = flags | HIGH_BIT_TO_DISABLE_HASHING;
@@ -144,7 +144,7 @@ Scheme_Object *scheme_ir_toplevel_to_flagged_toplevel(Scheme_Object *_tl, int fl
 {
   Scheme_IR_Toplevel *tl = (Scheme_IR_Toplevel *)_tl;
   tl = scheme_make_ir_toplevel(tl->identity_pos, tl->instance_pos, tl->variable_pos,
-                               SCHEME_TOPLEVEL_FLAGS(tl) | flags);
+                               (SCHEME_TOPLEVEL_FLAGS(tl) & ~SCHEME_TOPLEVEL_FLAGS_MASK) | flags);
   return (Scheme_Object *)tl;
 }
 

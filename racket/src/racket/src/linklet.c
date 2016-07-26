@@ -64,7 +64,9 @@ static Scheme_Object *variable_p(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_instance(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv);
 
-static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet, Scheme_Object *name);
+static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet,
+                                                       Scheme_Object *name,
+                                                       Scheme_Object *get_import);
 static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet);
 
 static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
@@ -107,8 +109,8 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_IMMED_PRIM("compiled-position->primitive", position_to_primitive, 1, 1, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
-  ADD_IMMED_PRIM("compile-linklet", compile_linklet, 1, 2, env);
-  ADD_IMMED_PRIM("recompile-linklet", recompile_linklet, 1, 1, env);
+  ADD_IMMED_PRIM("compile-linklet", compile_linklet, 1, 3, env);
+  ADD_IMMED_PRIM("recompile-linklet", recompile_linklet, 1, 3, env);
   ADD_IMMED_PRIM("eval-linklet", eval_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 2, 4, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
@@ -230,30 +232,45 @@ static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)
 
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
 {
-  Scheme_Object *name, *e;
+  Scheme_Object *name, *e, *get_import;
 
-  if (argc > 1)
+  if (argc > 2) {
+    scheme_check_proc_arity("compile-linklet", 1, 2, argc, argv);
+    get_import = argv[2];
+  } else
+    get_import = NULL;
+
+  if ((argc > 1) && SCHEME_TRUEP(argv[1]))
     name = argv[1];
   else
-    name = scheme_intern_symbol("anonymous-linklet");
+    name = scheme_intern_symbol("anonymous");
 
   e = argv[0];
   if (!SCHEME_STXP(e))
     e = scheme_datum_to_syntax(e, scheme_false, DTS_CAN_GRAPH);
 
-  return (Scheme_Object *)compile_and_or_optimize_linklet(e, NULL, name);
+  return (Scheme_Object *)compile_and_or_optimize_linklet(e, NULL, name, get_import);
 }
 
 static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
 {
-  Scheme_Object *name;
+  Scheme_Object *name, *get_import;
     
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
     scheme_wrong_contract("recompile-linklet", "linklet?", 0, argc, argv);
 
-  name = ((Scheme_Linklet *)argv[0])->name;
+  if ((argc > 1) && SCHEME_TRUEP(argv[1]))
+    name = argv[1];
+  else
+    name = ((Scheme_Linklet *)argv[0])->name;
+
+  if (argc > 2) {
+    scheme_check_proc_arity("compile-linklet", 1, 2, argc, argv);
+    get_import = argv[2];
+  } else
+    get_import = NULL;
   
-  return (Scheme_Object *)compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0], name);
+  return (Scheme_Object *)compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0], name, get_import);
 }
 
 static Scheme_Object *eval_linklet(int argc, Scheme_Object **argv)
@@ -862,7 +879,7 @@ static Scheme_Hash_Tree *update_source_names(Scheme_Hash_Tree *source_names,
 /*========================================================================*/
 
 static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet,
-                                                       Scheme_Object *name)
+                                                       Scheme_Object *name, Scheme_Object *get_import)
 {
   Scheme_Config *config;
   int enforce_const, set_undef, can_inline;
@@ -879,7 +896,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
     linklet = clone_linklet(linklet);
   }
   linklet->name = name;
-  linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline);
+  linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, get_import);
   linklet = scheme_resolve_linklet(linklet, enforce_const);
   linklet = scheme_sfs_linklet(linklet);
   
@@ -887,7 +904,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
     int i;
     for (i = recompile_every_compile; i--; ) {
       linklet = scheme_unresolve_linklet(linklet, (set_undef ? COMP_ALLOW_SET_UNDEFINED : 0));
-      linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline);
+      linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, get_import);
       linklet = scheme_resolve_linklet(linklet, enforce_const);
       linklet = scheme_sfs_linklet(linklet);
     }
@@ -901,7 +918,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
 
 Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form, Scheme_Object *name)
 {
-  return compile_and_or_optimize_linklet(form, NULL, name);
+  return compile_and_or_optimize_linklet(form, NULL, name, NULL);
 }
 
 static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet)
@@ -1155,17 +1172,14 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
   Scheme_Object **rs, *v;
   Scheme_Prefix *pf;
   int i, j, pos, tl_map_len, num_importss, num_defns, starts_empty;
+  GC_CAN_IGNORE const char *bad_reason;
 
   rs = MZ_RUNSTACK;
 
   num_importss = SCHEME_VEC_SIZE(linklet->importss);
   num_defns = SCHEME_VEC_SIZE(linklet->defns);
 
-  i = 1;
-  for (j = num_importss; j--; ) {
-    i += SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[j]);
-  }
-  i += num_defns;
+  i = 1 + linklet->num_total_imports + num_defns;
   tl_map_len = (i + 31) / 32;
 
   pf = scheme_malloc_tagged(sizeof(Scheme_Prefix) 
@@ -1186,12 +1200,38 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
     for (i = 0; i < num_imports; i++) {
       v = SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[j])[i];
       v = (Scheme_Object *)scheme_instance_variable_bucket(v, (Scheme_Instance *)instances[j]);
+
+      if (v) {
+        if (!((Scheme_Bucket *)v)->val) {
+          bad_reason = "is unintialized";
+          v = NULL;
+        } else if (linklet->import_shapes) {
+          Scheme_Object *shape = SCHEME_VEC_ELS(linklet->import_shapes)[pos-1];
+          if (SAME_OBJ(shape, scheme_void)) {
+            /* Optimizer assumed constant; if it isn't, too bad */
+          } else if (SAME_OBJ(shape, scheme_true)) {
+            if (!(((Scheme_Bucket_With_Flags *)v)->flags & GLOB_IS_CONSISTENT)) {
+              bad_reason = "is not a procedure or structure-type constant across all instantiations";
+              v = NULL;
+            }
+          } else if (SCHEME_TRUEP(shape)) {
+            if (!scheme_get_or_check_procedure_shape(((Scheme_Bucket *)v)->val, shape)) {
+              bad_reason = "has the wrong procedure or structure-type shape";
+              v = NULL;
+            }
+          }
+        }
+      } else
+        bad_reason = "is not exported";
+      
       if (!v) {
         scheme_signal_error("instantiate-linklet: mismatch;\n"
+                            " reference to a variable that %s;\n"
                             " possibly, bytecode file needs re-compile because dependencies changed\n"
                             "  name: %V\n"
                             "  exporting instance: %V\n"
                             "  importing instance: %V",
+                            bad_reason,
                             SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[j])[i],
                             instances[j]->name,
                             instance->name);
