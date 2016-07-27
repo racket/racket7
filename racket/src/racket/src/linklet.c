@@ -66,6 +66,7 @@ static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv);
 
 static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet,
                                                        Scheme_Object *name,
+                                                       Scheme_Object **_import_keys,
                                                        Scheme_Object *get_import);
 static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet);
 
@@ -109,8 +110,8 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_IMMED_PRIM("compiled-position->primitive", position_to_primitive, 1, 1, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
-  ADD_IMMED_PRIM("compile-linklet", compile_linklet, 1, 3, env);
-  ADD_IMMED_PRIM("recompile-linklet", recompile_linklet, 1, 3, env);
+  ADD_PRIM_W_ARITY2("compile-linklet", compile_linklet, 1, 4, 2, 2, env);
+  ADD_PRIM_W_ARITY2("recompile-linklet", recompile_linklet, 1, 4, 2, 2, env);
   ADD_IMMED_PRIM("eval-linklet", eval_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 2, 4, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
@@ -230,15 +231,34 @@ static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)
           : scheme_false);
 }
 
+void extract_import_info(const char *who, int argc, Scheme_Object **argv,
+                         Scheme_Object **_import_keys, Scheme_Object **_get_import)
+{
+  
+  if (argc > 2) {
+    *_import_keys = argv[2];
+    if (SCHEME_FALSEP(*_import_keys))
+      *_import_keys = NULL;
+    else if (!SCHEME_VECTORP(*_import_keys))
+      scheme_wrong_contract(who, "(or/c vector? #f)", 2, argc, argv);
+  } else
+    *_import_keys = NULL;
+
+  if (argc > 3) {
+    scheme_check_proc_arity(who, 1, 3, argc, argv);
+    if (*_import_keys)
+      *_get_import = argv[3];
+    else
+      *_get_import = NULL; /* not useful without keys */
+  } else
+    *_get_import = NULL;
+}
+
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
 {
-  Scheme_Object *name, *e, *get_import;
+  Scheme_Object *name, *e, *import_keys, *get_import, *a[2];
 
-  if (argc > 2) {
-    scheme_check_proc_arity("compile-linklet", 1, 2, argc, argv);
-    get_import = argv[2];
-  } else
-    get_import = NULL;
+  extract_import_info("compile-linklet", argc, argv, &import_keys, &get_import);
 
   if ((argc > 1) && SCHEME_TRUEP(argv[1]))
     name = argv[1];
@@ -249,28 +269,51 @@ static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
   if (!SCHEME_STXP(e))
     e = scheme_datum_to_syntax(e, scheme_false, DTS_CAN_GRAPH);
 
-  return (Scheme_Object *)compile_and_or_optimize_linklet(e, NULL, name, get_import);
+  e = (Scheme_Object *)compile_and_or_optimize_linklet(e, NULL, name, &import_keys, get_import);
+
+  if (import_keys) {
+    a[0] = e;
+    a[1] = import_keys;
+    return scheme_values(2, a);
+  } else
+    return e;
 }
 
 static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
 {
-  Scheme_Object *name, *get_import;
+  Scheme_Object *name, *import_keys, *get_import, *a[2];
+  Scheme_Linklet *linklet;
     
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_linklet_type))
     scheme_wrong_contract("recompile-linklet", "linklet?", 0, argc, argv);
+
+  linklet = (Scheme_Linklet *)argv[0];
+
+  extract_import_info("recompile-linklet", argc, argv, &import_keys, &get_import);
 
   if ((argc > 1) && SCHEME_TRUEP(argv[1]))
     name = argv[1];
   else
     name = ((Scheme_Linklet *)argv[0])->name;
 
-  if (argc > 2) {
-    scheme_check_proc_arity("compile-linklet", 1, 2, argc, argv);
-    get_import = argv[2];
-  } else
-    get_import = NULL;
+  if (import_keys && (SCHEME_VEC_SIZE(import_keys) != SCHEME_VEC_SIZE(linklet->importss))) {
+    scheme_contract_error("recompile-linklet",
+                          "given number of import keys does not match import count of linklet",
+                          "linklet", 1, linklet,
+                          "linklet imports", 1, scheme_make_integer(SCHEME_VEC_SIZE(linklet->importss)),
+                          "given keys", 1, scheme_make_integer(SCHEME_VEC_SIZE(import_keys)),
+                          NULL);
+  }
   
-  return (Scheme_Object *)compile_and_or_optimize_linklet(NULL, (Scheme_Linklet *)argv[0], name, get_import);
+  linklet = compile_and_or_optimize_linklet(NULL, linklet, name, &import_keys, get_import);
+
+  if (import_keys) {
+    a[0] = (Scheme_Object *)linklet;
+    a[1] = import_keys;
+
+    return scheme_values(2, a);
+  } else
+    return (Scheme_Object *)linklet;
 }
 
 static Scheme_Object *eval_linklet(int argc, Scheme_Object **argv)
@@ -879,7 +922,8 @@ static Scheme_Hash_Tree *update_source_names(Scheme_Hash_Tree *source_names,
 /*========================================================================*/
 
 static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet,
-                                                       Scheme_Object *name, Scheme_Object *get_import)
+                                                       Scheme_Object *name,
+                                                       Scheme_Object **_import_keys, Scheme_Object *get_import)
 {
   Scheme_Config *config;
   int enforce_const, set_undef, can_inline;
@@ -889,14 +933,17 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
   set_undef = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_ALLOW_SET_UNDEFINED));
   can_inline = SCHEME_FALSEP(scheme_get_param(config, MZCONFIG_DISALLOW_INLINE));
 
+  if (_import_keys && !*_import_keys)
+    _import_keys = NULL;
+
   if (!linklet) {
-    linklet = scheme_compile_linklet(form, set_undef);
+    linklet = scheme_compile_linklet(form, set_undef, (_import_keys ? *_import_keys : NULL));
     linklet = scheme_letrec_check_linklet(linklet);
   } else {
     linklet = clone_linklet(linklet);
   }
   linklet->name = name;
-  linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, get_import);
+  linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, _import_keys, get_import);
   linklet = scheme_resolve_linklet(linklet, enforce_const);
   linklet = scheme_sfs_linklet(linklet);
   
@@ -904,7 +951,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
     int i;
     for (i = recompile_every_compile; i--; ) {
       linklet = scheme_unresolve_linklet(linklet, (set_undef ? COMP_ALLOW_SET_UNDEFINED : 0));
-      linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, get_import);
+      linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, _import_keys, get_import);
       linklet = scheme_resolve_linklet(linklet, enforce_const);
       linklet = scheme_sfs_linklet(linklet);
     }
@@ -918,7 +965,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
 
 Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form, Scheme_Object *name)
 {
-  return compile_and_or_optimize_linklet(form, NULL, name, NULL);
+  return compile_and_or_optimize_linklet(form, NULL, name, NULL, NULL);
 }
 
 static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet)

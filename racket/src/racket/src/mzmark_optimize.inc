@@ -15,8 +15,10 @@ static int mark_optimize_info_MARK(void *p, struct NewGC *gc) {
   gcMARK2(i->next, gc);
   gcMARK2(i->consts, gc);
   gcMARK2(i->linklet, gc);
+  gcMARK2(i->get_import, gc);
+  gcMARK2(i->import_keys, gc);
   gcMARK2(i->linklets, gc);
-  gcMARK2(i->getters, gc);
+  gcMARK2(i->import_next_keys, gc);
   gcMARK2(i->inline_variants, gc);
   gcMARK2(i->imports_used, gc);
   gcMARK2(i->top_level_consts, gc);
@@ -42,8 +44,10 @@ static int mark_optimize_info_FIXUP(void *p, struct NewGC *gc) {
   gcFIXUP2(i->next, gc);
   gcFIXUP2(i->consts, gc);
   gcFIXUP2(i->linklet, gc);
+  gcFIXUP2(i->get_import, gc);
+  gcFIXUP2(i->import_keys, gc);
   gcFIXUP2(i->linklets, gc);
-  gcFIXUP2(i->getters, gc);
+  gcFIXUP2(i->import_next_keys, gc);
   gcFIXUP2(i->inline_variants, gc);
   gcFIXUP2(i->imports_used, gc);
   gcFIXUP2(i->top_level_consts, gc);

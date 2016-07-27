@@ -1205,8 +1205,10 @@ mark_optimize_info {
   gcMARK2(i->next, gc);
   gcMARK2(i->consts, gc);
   gcMARK2(i->linklet, gc);
+  gcMARK2(i->get_import, gc);
+  gcMARK2(i->import_keys, gc);
   gcMARK2(i->linklets, gc);
-  gcMARK2(i->getters, gc);
+  gcMARK2(i->import_next_keys, gc);
   gcMARK2(i->inline_variants, gc);
   gcMARK2(i->imports_used, gc);
   gcMARK2(i->top_level_consts, gc);

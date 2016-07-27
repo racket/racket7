@@ -1982,7 +1982,7 @@ Scheme_Object *extract_source_name(Scheme_Object *e)
   return a;
 }
 
-Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
+Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Scheme_Object *import_keys)
 {
   Scheme_Linklet *linklet;
   Scheme_Object *orig_form = form, *imports, *exports;
@@ -2015,6 +2015,14 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef)
   islen = scheme_stx_proper_list_length(imports);
   if (islen < 0)
     scheme_wrong_syntax(NULL, imports, orig_form, IMPROPER_LIST_FORM);
+
+  if (import_keys && (SCHEME_VEC_SIZE(import_keys) != islen))
+    scheme_contract_error("compile-linklet",
+                          "import count of linklet form does not match given number of import keys",
+                          "linklet", 1, linklet,
+                          "linklet form imports", 1, scheme_make_integer(islen),
+                          "given keys", 1, scheme_make_integer(SCHEME_VEC_SIZE(import_keys)),
+                          NULL);
   
   import_symss = scheme_make_vector(islen, scheme_false);
 

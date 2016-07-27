@@ -2049,56 +2049,63 @@ static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts)
 
 static void prune_unused_imports(Scheme_Linklet *linklet)
 {
-  int i, j, in_shapes_pos = 0, out_shapes_pos = 0;
+  int i, new_i = 0, j;
   int num_total_imports;
-  Scheme_Object *vec, *new_vec, *shapes_vec;
+  Scheme_Object *vec, *new_vec, *new_importss;
 
-  shapes_vec = linklet->import_shapes;
+  for (i = SCHEME_VEC_SIZE(linklet->importss); i--; ) {
+    if (!SCHEME_INTP(SCHEME_VEC_ELS(linklet->importss)[i]))
+      new_i++;
+  }
+  if (new_i != SCHEME_VEC_SIZE(linklet->importss)) {
+    new_importss = scheme_make_vector(new_i, NULL);
+    new_i = 0;
+  } else
+    new_importss = NULL;
   
   num_total_imports = 0;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
-    int drop = 0, len;
+    int drop = 0, len, drop_all = 0;
     vec = SCHEME_VEC_ELS(linklet->importss)[i];
-    len = SCHEME_VEC_SIZE(vec);
-    num_total_imports += len;
-    for (j = 0; j < len; j++) {
-      if (SCHEME_FALSEP(SCHEME_VEC_ELS(vec)[j]))
-        drop++;
-      else {
-        if (shapes_vec && (in_shapes_pos > out_shapes_pos)) {
-          SCHEME_VEC_ELS(shapes_vec)[out_shapes_pos] = SCHEME_VEC_ELS(shapes_vec)[in_shapes_pos];
-        }
-        out_shapes_pos++;
+    if (SCHEME_INTP(vec)) {
+      len = SCHEME_INT_VAL(vec);
+      num_total_imports += len;
+      drop = len;
+      drop_all = 1;
+    } else {
+      len = SCHEME_VEC_SIZE(vec);
+      num_total_imports += len;
+      for (j = 0; j < len; j++) {
+        if (SCHEME_FALSEP(SCHEME_VEC_ELS(vec)[j]))
+          drop++;
       }
-      in_shapes_pos++;
     }
     if (drop) {
       num_total_imports -= drop;
       drop = len - drop;
-      new_vec = scheme_make_vector(drop, NULL);
-      for (j = len; j--; ) {
-        if (!SCHEME_FALSEP(SCHEME_VEC_ELS(vec)[j])) {
-          SCHEME_VEC_ELS(new_vec)[--drop] = SCHEME_VEC_ELS(vec)[j];
+      if (!drop_all) {
+        new_vec = scheme_make_vector(drop, NULL);
+        for (j = len; j--; ) {
+          if (!SCHEME_FALSEP(SCHEME_VEC_ELS(vec)[j])) {
+            SCHEME_VEC_ELS(new_vec)[--drop] = SCHEME_VEC_ELS(vec)[j];
+          }
         }
+        MZ_ASSERT(!drop);
+        SCHEME_VEC_ELS(linklet->importss)[i] = new_vec;
       }
-      MZ_ASSERT(!drop);
-      SCHEME_VEC_ELS(linklet->importss)[i] = new_vec;
     }
+    if (!drop_all && new_importss)
+      SCHEME_VEC_ELS(new_importss)[new_i++] = SCHEME_VEC_ELS(linklet->importss)[i];
   }
 
-  MZ_ASSERT(in_shapes_pos == linklet->num_total_imports);
+  if (new_importss) {
+    MZ_ASSERT(new_i == SCHEME_VEC_SIZE(new_importss));
+    linklet->importss = new_importss;
+  }
+
   linklet->num_total_imports = num_total_imports;
 
-  if (shapes_vec) {
-    MZ_ASSERT(out_shapes_pos == num_total_imports);
-    if (out_shapes_pos < in_shapes_pos) {
-      new_vec = scheme_make_vector(out_shapes_pos, NULL);
-      for (i = 0; i < out_shapes_pos; i++) {
-        SCHEME_VEC_ELS(new_vec)[i] = SCHEME_VEC_ELS(shapes_vec)[i];
-      }
-      linklet->import_shapes = new_vec;
-    }
-  }
+  MZ_ASSERT(!linklet->import_shapes || (linklet->num_total_imports == SCHEME_VEC_SIZE(linklet->import_shapes)));
 }
 
 static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int search_start)
@@ -2279,13 +2286,18 @@ static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_co
   dpos = pos;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     toplevel_starts[i+1] = pos;
-    for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
-      toplevel_deltas[pos] = (dpos - pos);
-      if (SCHEME_FALSEP(SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j]))
-        toplevel_deltas[pos] = 0xFFFFFF; /* shouldn't be used */
-      else
-        dpos++;
-      pos++;
+    if (SCHEME_INTP(SCHEME_VEC_ELS(linklet->importss)[i])) {
+      /* This import is getting dropped */
+      pos += SCHEME_INT_VAL(SCHEME_VEC_ELS(linklet->importss)[i]);
+    } else {
+      for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
+        toplevel_deltas[pos] = (dpos - pos);
+        if (SCHEME_FALSEP(SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j]))
+          toplevel_deltas[pos] = 0xFFFFFF; /* shouldn't be used */
+        else
+          dpos++;
+        pos++;
+      }
     }
   }
   toplevel_starts[0] = dpos;

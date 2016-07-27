@@ -2022,8 +2022,10 @@ static Scheme_Object *get_or_check_arity(Scheme_Object *p, intptr_t a, Scheme_Ob
 
     if (type == scheme_lambda_type) 
       data = (Scheme_Lambda *)p;
-    else
+    else if (type == scheme_closure_type)
       data = SCHEME_CLOSURE_CODE(p);
+    else
+      return scheme_false;
 
     mina = maxa = data->num_params;
     if (SCHEME_LAMBDA_FLAGS(data) & LAMBDA_HAS_REST) {
@@ -2223,7 +2225,9 @@ Scheme_Object *scheme_get_or_check_procedure_shape(Scheme_Object *e, Scheme_Obje
     e = SCHEME_VEC_ELS(e)[1];
 
   p = scheme_get_or_check_arity(e, -3);
-
+  if (SCHEME_FALSEP(p))
+    return NULL;
+  
   if (SCHEME_PAIRP(p)) {
     /* encode as a symbol */
     int sz = 32, c = 0;

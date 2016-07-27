@@ -2840,7 +2840,8 @@ Scheme_Object *scheme_protect_quote(Scheme_Object *expr);
 
 Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linklet *linklet);
 
-Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline, Scheme_Object *get_import);
+Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline,
+                                        Scheme_Object **_import_keys, Scheme_Object *get_import);
 
 /* Context uses result as a boolean: */
 #define OPT_CONTEXT_BOOLEAN    0x1
@@ -2887,7 +2888,7 @@ Scheme_Object *scheme_toplevel_to_flagged_toplevel(Scheme_Object *tl, int flags)
 int scheme_expr_produces_local_type(Scheme_Object *expr, int *_involves_k_cross);
 
 Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form, Scheme_Object *name);
-Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef);
+Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Scheme_Object *import_keys);
 
 Scheme_Object *scheme_make_sequence_compilation(Scheme_Object *compiled_list,
 						int strip_values,
