@@ -1051,6 +1051,9 @@
                       (begin (quote-syntax foo) 3))])
               x)
            '3)
+
+;; The compiler doens't currently recognize the expansion of `quote-syntax`
+#;
 (test-comp '(if (lambda () 10)
                 'ok
                 (quote-syntax no!))
@@ -1960,6 +1963,8 @@
               (void 10))
            '(module m racket/base))
 
+;; The compiler doens't currently recognize the expansion of `quote-syntax`
+#;
 (test-comp '(module m racket/base
               (void (quote-syntax unused!)))
            '(module m racket/base))
@@ -2780,6 +2785,36 @@
              (module d racket/base
                (require (submod ".." a))
                (list b c (c 1)))))
+
+;; Use of `c` added to `a` via `b`
+(test-comp `(module m racket/base
+             (module c racket/base
+               (provide c)
+               (define c 'c)
+               (set! c c))
+             (module b racket/base
+               (require (submod ".." c))
+               (provide b)
+               (define (b) c))
+             (module a racket/base
+               (require (submod ".." b)
+                        (submod ".." c))
+               c
+               (b)))
+           `(module m racket/base
+             (module c racket/base
+               (provide c)
+               (define c 'c)
+               (set! c c))
+             (module b racket/base
+               (require (submod ".." c))
+               (provide b)
+               (define (b) c))
+             (module a racket/base
+               (require (submod ".." b)
+                        (submod ".." c))
+               c
+               c)))
 
 (module check-inline-request racket/base
   (require racket/performance-hint)

@@ -9115,11 +9115,12 @@ static Scheme_Linklet *get_linklet_for_import_key(Optimize_Info *info, Scheme_Ob
         scheme_contract_error("compile-linklet",
                               "result is not #f or a vector of keys that match the result linklet's import count",
                               "linklet", 1, v,
+                              "import count", 1, scheme_make_integer(SCHEME_VEC_SIZE(((Scheme_Linklet *)v)->importss)),
                               "invalid as vector of keys", 1, next_keys,
                               NULL);
 
       if (SCHEME_TRUEP(next_keys)) {
-        ht = scheme_hash_tree_set(cross->import_next_keys, v, next_keys);
+        ht = scheme_hash_tree_set(cross->import_next_keys, key, next_keys);
         cross->import_next_keys = ht;
       }
     }
@@ -9317,10 +9318,10 @@ Scheme_Object *scheme_optimize_get_import_key(Optimize_Info *info, Scheme_Object
     /* Add this linklet as an import */
     pos = scheme_make_integer(info->cross->import_keys->count);
 
-    ht = scheme_hash_tree_set(info->cross->import_keys, key, pos);
+    ht = scheme_hash_tree_set(info->cross->import_keys, pos, key);
     info->cross->import_keys = ht;
     
-    ht = scheme_hash_tree_set(info->cross->rev_import_keys, pos, key);
+    ht = scheme_hash_tree_set(info->cross->rev_import_keys, key, pos);
     info->cross->rev_import_keys = ht;
   }
 
@@ -9357,7 +9358,7 @@ static void register_import_used(Optimize_Info *info, Scheme_IR_Toplevel *var)
 
 static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet, Scheme_Object **_import_keys)
 {
-  int i, j, k, used, total, dropped_imports = 0, total_used;
+  int i, j, k, used, total, added_imports = 0, dropped_imports = 0, total_used;
   Scheme_Object *shapes, *v;
   Scheme_Linklet *in_linklet;
   Scheme_Hash_Tree *ht;
@@ -9365,11 +9366,12 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
   if (info->cross) {
     /* Add new imported instances */
     if (info->cross->import_keys->count > SCHEME_VEC_SIZE(linklet->importss)) {
-      printf("EXPAND\n");
+      added_imports = SCHEME_VEC_SIZE(linklet->importss) - info->cross->import_keys->count;
       v = scheme_make_vector(info->cross->import_keys->count, scheme_make_vector(0, NULL));
       for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
         SCHEME_VEC_ELS(v)[i] = SCHEME_VEC_ELS(linklet->importss)[i];
       }
+      linklet->importss = v;
     }
 
     /* Add imported variables for each instance */
@@ -9416,16 +9418,19 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
   }
   linklet->num_total_imports = total;
 
-  if (dropped_imports) {
+  if (dropped_imports || added_imports) {
     /* Report a revised set of imports back to the client */
     v = scheme_make_vector(SCHEME_VEC_SIZE(linklet->importss) - dropped_imports, NULL);
+    *_import_keys = v;
     used = 0;
     for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
-      if (!SCHEME_INTP(SCHEME_VEC_ELS(linklet->importss)[i]))
-        SCHEME_VEC_ELS(v)[used++] = SCHEME_VEC_ELS(*_import_keys)[i];
+      if (!SCHEME_INTP(SCHEME_VEC_ELS(linklet->importss)[i])) {
+        v = scheme_hash_tree_get(info->cross->import_keys, scheme_make_integer(i));
+        MZ_ASSERT(v);
+        SCHEME_VEC_ELS((*_import_keys))[used++] = v;
+      }
     }
     MZ_ASSERT(used == (SCHEME_VEC_SIZE(linklet->importss) - dropped_imports));
-    *_import_keys = v;
   }
   
   if (info->used_import_shape) {
