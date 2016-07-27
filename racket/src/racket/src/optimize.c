@@ -7766,6 +7766,10 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
   *iu = empty_eq_hash_tree;
   info->imports_used = iu;
 
+  /* Less inlining for a large module: */
+  if (SCHEME_VEC_SIZE(linklet->bodies) > 128)
+    info->inline_fuel >>= 1;
+
   if (_import_keys) {
     Cross_Linklet_Info *cross;
     Scheme_Hash_Tree *ht;
@@ -7882,19 +7886,18 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
       }
     }
 
+    inline_fuel = info->inline_fuel;
     if (is_proc_def && OPT_DISCOURAGE_EARLY_INLINE) {
       info->use_psize = 1;
-      inline_fuel = info->inline_fuel;
       if (inline_fuel > 2)
         info->inline_fuel = 2;
-    } else
-      inline_fuel = 0;
+    }
     optimize_info_seq_step(info, &info_seq);
     e = optimize_expr(e, info, 0);
     if (is_proc_def && OPT_DISCOURAGE_EARLY_INLINE) {
       info->use_psize = 0;
-      info->inline_fuel = inline_fuel;
     }
+    info->inline_fuel = inline_fuel;
     SCHEME_VEC_ELS(linklet->bodies)[i_m] = e;
 
     if (info->enforce_const) {
@@ -8025,7 +8028,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
 
 	while (1) {
 	  /* Re-optimize this expression. */
-          int old_sz, new_sz;
+          int old_sz, new_sz, orig_fuel;
 
           e = SCHEME_VEC_ELS(linklet->bodies)[start_simultaneous];
 
@@ -8040,7 +8043,9 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
             old_sz = 0;
 
           optimize_info_seq_step(info, &info_seq);
+          orig_fuel = info->inline_fuel;
           e = optimize_expr(e, info, 0);
+          info->inline_fuel = orig_fuel;
 	  SCHEME_VEC_ELS(linklet->bodies)[start_simultaneous] = e;
 
           if (re_consts) {
