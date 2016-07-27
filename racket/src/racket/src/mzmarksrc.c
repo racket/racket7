@@ -1134,6 +1134,8 @@ mark_unresolve_info {
   
   gcMARK2(i->vars, gc);
   gcMARK2(i->linklet, gc);
+  gcMARK2(i->linklet_key, gc);
+  gcMARK2(i->opt_info, gc);
   gcMARK2(i->closures, gc);
   gcMARK2(i->toplevels, gc);
   gcMARK2(i->definitions, gc);
@@ -1205,11 +1207,7 @@ mark_optimize_info {
   gcMARK2(i->next, gc);
   gcMARK2(i->consts, gc);
   gcMARK2(i->linklet, gc);
-  gcMARK2(i->get_import, gc);
-  gcMARK2(i->import_keys, gc);
-  gcMARK2(i->linklets, gc);
-  gcMARK2(i->import_next_keys, gc);
-  gcMARK2(i->inline_variants, gc);
+  gcMARK2(i->cross, gc);
   gcMARK2(i->imports_used, gc);
   gcMARK2(i->top_level_consts, gc);
   gcMARK2(i->transitive_use_var, gc);

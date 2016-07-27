@@ -2598,7 +2598,12 @@ typedef struct Unresolve_Info {
   int depth;     /* stack in unresolved coordinates */
   int stack_size;
   Scheme_IR_Local **vars;
+
+  /* For cross-linklet inlining: */
   Scheme_Linklet *linklet;
+  Scheme_Object *linklet_key;
+  Optimize_Info *opt_info;
+  
   Scheme_Hash_Table *closures; /* handle cycles */
   int has_non_leaf, has_tl, body_size;
 
@@ -2608,7 +2613,7 @@ typedef struct Unresolve_Info {
   int num_defns; /* initial defns for linklet */
   int num_extra_toplevels; /* created toplevels for cyclic lambdas */
 
-  Scheme_Hash_Table *toplevels;
+  Scheme_IR_Toplevel **toplevels;
   Scheme_Object *definitions;
   int lift_offset, lift_to_local;
   Scheme_Hash_Table *ref_lifts;
@@ -2619,7 +2624,8 @@ static void locate_cyclic_closures(Scheme_Object *e, Unresolve_Info *ui);
 static Scheme_IR_Let_Header *make_let_header(int count);
 static Scheme_IR_Let_Value *make_ir_let_value(int count);
 
-static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, int comp_flags)
+static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, Scheme_Object *linklet_key, Optimize_Info *opt_info,
+                                          int comp_flags)
 {
   Unresolve_Info *ui;
   Scheme_IR_Local **vars;
@@ -2629,14 +2635,14 @@ static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, int comp_flag
   SET_REQUIRED_TAG(ui->type = scheme_rt_unresolve_info);
 
   ui->linklet = linklet;
+  ui->linklet_key = linklet_key;
+  ui->opt_info = opt_info;
 
   ui->stack_pos = 0;
   ui->stack_size = 10;
   vars = MALLOC_N(Scheme_IR_Local *, ui->stack_size);
   ui->vars = vars;
 
-  ht = scheme_make_hash_table(SCHEME_hash_ptr);
-  ui->toplevels = ht;
   ui->definitions = scheme_null;
   ht = scheme_make_hash_table(SCHEME_hash_ptr);
   ui->ref_lifts = ht;
@@ -2822,15 +2828,41 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
   
   MZ_ASSERT(pos < ui->num_toplevels);
   
-  if (ui->inlining && (pos > (ui->num_toplevels - ui->linklet->num_lifts))) {
-    /* Must be cross-linklet, since there are no lifts during
-       linklet optimization... and generated code cannot refer to a
-       lift across a module boundary. */
+  if (ui->inlining && (pos > (SCHEME_LINKLET_PREFIX_PREFIX
+                              + ui->linklet->num_total_imports
+                              + ui->linklet->num_exports))) {
+    /* Cannot refer to an unexported variable across a module boundary. */
     return_NULL;
   }
 
-  /* FIXME: enable pulling references across linklet */
   if (ui->inlining) {
+    /* Can we introduce a new top-level reference while inlining
+       across a module boundary? */
+    if (pos >= (ui->linklet->num_total_imports + SCHEME_LINKLET_PREFIX_PREFIX)) {
+      /* no new instance needed, but maybe a new symbol from that instance */
+      pos -= (ui->linklet->num_total_imports + SCHEME_LINKLET_PREFIX_PREFIX);
+      return scheme_optimize_add_import_variable(ui->opt_info, ui->linklet_key,
+                                                 SCHEME_VEC_ELS(ui->linklet->defns)[pos]);
+    } else {
+      /* Find import: */
+      int instance_pos = 0;
+      pos -= SCHEME_LINKLET_PREFIX_PREFIX;
+      while (pos >= SCHEME_VEC_SIZE(SCHEME_VEC_ELS(ui->linklet->importss)[instance_pos])) {
+        pos -= SCHEME_VEC_SIZE(SCHEME_VEC_ELS(ui->linklet->importss)[instance_pos]);
+        instance_pos++;
+      }
+      MZ_ASSERT(instance_pos < SCHEME_VEC_SIZE(ui->linklet->importss));
+
+      /* Getting this imported linklet's import's key may add an import to the 
+         linklet being optimized: */
+      v = scheme_optimize_get_import_key(ui->opt_info, ui->linklet_key, instance_pos);
+      if (v) {
+        /* Can add relevant linklet import (or already have it) */
+        return scheme_optimize_add_import_variable(ui->opt_info, v,
+                                                   SCHEME_VEC_ELS(SCHEME_VEC_ELS(ui->linklet->importss)[instance_pos])[pos]);
+      }
+    }
+    
     return_NULL;
   }
 
@@ -2851,11 +2883,8 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
     }
     is_constant = 0;
   }
-
-  /* FIXME: get shape information... */
   
-  /* Check whether this variable is already known in the optimzation context: */
-  v = (Scheme_Object *)NULL; // ui->linklet->toplevels[pos];
+  v = (Scheme_Object *)ui->toplevels[pos];
   MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(v), scheme_ir_toplevel_type));
 
   if (flags)
@@ -3604,6 +3633,10 @@ static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int a
       var = unresolve_expr(sb->var, ui, 0);
       if (!var) return_NULL;
       if (SAME_TYPE(SCHEME_TYPE(var), scheme_ir_toplevel_type)) {
+        if (((Scheme_IR_Toplevel *)var)->instance_pos != -1) {
+          /* Cannot inline a `set!` of another linklet's variable */
+          return_NULL;
+        }
         SCHEME_IR_TOPLEVEL_FLAGS(((Scheme_IR_Toplevel *)var)) |= SCHEME_TOPLEVEL_MUTATED;
       }
       val = unresolve_expr(sb->val, ui, 0);
@@ -3907,13 +3940,22 @@ Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags
   Scheme_Linklet *new_linklet;
   Scheme_Object *bs, *bs2, *ds;
   Unresolve_Info *ui;
+  Scheme_IR_Toplevel **toplevels, *tl;
   int i, cnt, len;
 
   new_linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
   memcpy(new_linklet, linklet, sizeof(Scheme_Linklet));
 
-  ui = new_unresolve_info(new_linklet, comp_flags);
+  ui = new_unresolve_info(new_linklet, NULL, NULL, comp_flags);
 
+  cnt = SCHEME_VEC_SIZE(linklet->defns);
+  toplevels = MALLOC_N(Scheme_IR_Toplevel *, cnt);
+  for (i = 0; i < cnt; i++) {
+    tl = scheme_make_ir_toplevel(-1, i, 0);
+    toplevels[i] = tl;
+  }
+  ui->toplevels = toplevels;
+  
   cnt = SCHEME_VEC_SIZE(linklet->bodies);
   bs = scheme_make_vector(cnt, NULL);
 
@@ -3949,7 +3991,8 @@ Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags
   return new_linklet;
 }
 
-Scheme_Object *scheme_unresolve(Scheme_Object *iv, int argc, int *_has_cases, Scheme_Linklet *linklet)
+Scheme_Object *scheme_unresolve(Scheme_Object *iv, int argc, int *_has_cases,
+                                Scheme_Linklet *linklet, Scheme_Object *linklet_key, Optimize_Info *opt_info)
 /* Convert a single function from "resolved" form back to the
    intermediate representation used by the optimizer. Unresolving can
    add new items to the intermediate-representation prefix for top levels. */
@@ -3993,7 +4036,7 @@ Scheme_Object *scheme_unresolve(Scheme_Object *iv, int argc, int *_has_cases, Sc
   if (!lam)
     return_NULL;
 
-  ui = new_unresolve_info(linklet, 0);
+  ui = new_unresolve_info(linklet, linklet_key, opt_info, 0);
   ui->inlining = 1;
 
   /* convert an optimized & resolved closure back to compiled form: */

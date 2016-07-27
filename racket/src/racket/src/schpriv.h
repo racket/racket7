@@ -2871,8 +2871,14 @@ Scheme_Object *scheme_make_noninline_proc(Scheme_Object *e);
 Scheme_Object *scheme_optimize_extract_tail_inside(Scheme_Object *t2);
 
 Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *, int enforce_const);
-Scheme_Object *scheme_unresolve(Scheme_Object *, int argv, int *_has_cases, Scheme_Linklet *linklet);
+Scheme_Object *scheme_unresolve(Scheme_Object *, int argv, int *_has_cases,
+                                Scheme_Linklet *linklet, Scheme_Object *linklet_key,
+                                Optimize_Info *opt_info);
 Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *, int comp_flags);
+
+/* Callbacks from unresolver to optimizer: */
+Scheme_Object *scheme_optimize_add_import_variable(Optimize_Info *info, Scheme_Object *linklet_key, Scheme_Object *symbol);
+Scheme_Object *scheme_optimize_get_import_key(Optimize_Info *info, Scheme_Object *linklet_key, int instance_pos);
 
 int scheme_check_leaf_rator(Scheme_Object *le, int *_flags);
 
