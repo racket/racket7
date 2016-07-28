@@ -669,12 +669,22 @@ static int finish_cmd_line_run(FinishArgs *fa, Repl_Proc repl)
 
 #ifndef DONT_LOAD_INIT_FILE
   if (fa->a->use_repl && !fa->a->no_init_file) {
-    char *filename;
-    filename = GET_INIT_FILENAME(fa->global_env);
-    if (filename) {
-      filename = scheme_expand_filename(filename, -1, "startup", NULL, SCHEME_GUARD_FILE_EXISTS);
-      if (scheme_file_exists(filename))
-	scheme_load(filename);
+    Scheme_Object *a[2];
+    a[0] = get_init_filename(fa->global_env, INIT_FILENAME_CONF_SYM, DEFAULT_INIT_MODULE);
+    if (a[0]) {
+        mz_jmp_buf * volatile save, newbuf;
+        Scheme_Thread * volatile p;
+        p = scheme_get_current_thread();
+        save = p->error_buf;
+        p->error_buf = &newbuf;
+        if (!scheme_setjmp(newbuf)) {
+          a[1] = scheme_make_integer(0);
+          scheme_dynamic_require(2, a);
+        } else {
+          scheme_clear_escape();
+          exit_val = 1;
+        }
+        p->error_buf = save;
     }
   }
 #endif /* DONT_LOAD_INIT_FILE */
@@ -746,6 +756,8 @@ static Scheme_Object *reverse_path_list(Scheme_Object *l, int rel_to_cwd)
 # define GC_CAN_IGNORE /**/
 #endif
 
+#include <ctype.h>
+
 static Scheme_Object *get_log_level(char *prog, char *real_switch, const char *envvar, const char *what, GC_CAN_IGNORE char *str)
 {
   int k, len, default_lvl = -1;
@@ -755,6 +767,10 @@ static Scheme_Object *get_log_level(char *prog, char *real_switch, const char *e
   l =  scheme_make_null();
 
   while (1) {
+    while (*str && isspace(*((unsigned char *)str))) {
+      str++;
+    }
+
     if (!*str) {
       if (default_lvl == -1) default_lvl = 0;
       if (last)
@@ -792,13 +808,13 @@ static Scheme_Object *get_log_level(char *prog, char *real_switch, const char *e
     if (k != -1) {
       if (*str == '@') {
         str++;
-        for (s = str; *s && *s != ' '; s++) {
+        for (s = str; *s && !isspace(*((unsigned char *)s)); s++) {
         }
         l = scheme_make_pair(scheme_make_sized_byte_string(str, s - str, 1), l);
         if (!last) last = l;
         l = scheme_make_pair(scheme_make_integer(k), l);
         str = s;
-      } else if ((*str == ' ') || !*str) {
+      } else if (isspace(*((unsigned char *)str)) || !*str) {
         if (default_lvl == -1)
           default_lvl = k;
         else
@@ -812,7 +828,7 @@ static Scheme_Object *get_log_level(char *prog, char *real_switch, const char *e
       PRINTF("%s: %s <levels> %s%s%s must be one of the following\n"
              " <level>s:\n"
              "   none fatal error warning info debug\n"
-             " or up to one such <level> in space-separated sequence of\n"
+             " or up to one such <level> in whitespace-separated sequence of\n"
              "   <level>@<name>\n"
              " given: %s\n",
              prog, what, 
@@ -1551,10 +1567,26 @@ static int run_from_cmd_line(int argc, char *_argv[],
       else if ((s[0] == '1') || (s[0] == 'y') || (s[0] == 'Y'))
         scheme_incremental_garbage_collection(1);
       else {
-         PRINTF("%s: unrecognized value for PLT_INCREMENTAL_GC;\n"
+        PRINTF("%s: unrecognized value for PLT_INCREMENTAL_GC;\n"
                 " a value that starts \"1\", \"y\", or \"Y\" permanently enables incremental mode,\n"
                 " and a value that starts \"0\", \"n\", or \"N\" disables incremental mode,\n"
                 " and the default enables incremental mode as requested via `collect-garbage'\n"
+                "  unrecognized value: %s\n",
+                prog, s);
+      }
+    }
+  }
+  {
+    char *s;
+    s = getenv("PLT_COMPILED_FILE_CHECK");
+    if (s) {
+      if (!strcmp(s, "modify-seconds"))
+        scheme_set_compiled_file_check(SCHEME_COMPILED_FILE_CHECK_MODIFY_SECONDS);
+      else if (!strcmp(s, "exists"))
+        scheme_set_compiled_file_check(SCHEME_COMPILED_FILE_CHECK_EXISTS);
+      else {
+        PRINTF("%s: unrecognized value for PLT_COMPILED_FILE_CHECK;\n"
+                " recognized values are \"modify-seconds\" and \"exists\"\n"
                 "  unrecognized value: %s\n",
                 prog, s);
       }

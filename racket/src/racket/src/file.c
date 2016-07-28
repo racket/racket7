@@ -212,6 +212,7 @@ static Scheme_Object *use_compiled_kind(int, Scheme_Object *[]);
 static Scheme_Object *compiled_file_roots(int, Scheme_Object *[]);
 static Scheme_Object *use_user_paths(int, Scheme_Object *[]);
 static Scheme_Object *use_link_paths(int, Scheme_Object *[]);
+static Scheme_Object *use_compiled_file_check(int, Scheme_Object *[]);
 static Scheme_Object *find_system_path(int argc, Scheme_Object **argv);
 #endif
 
@@ -602,6 +603,11 @@ void scheme_init_file(Scheme_Startup_Env *env)
 			     scheme_register_parameter(use_link_paths,
 						       "use-collection-link-paths",
 						       MZCONFIG_USE_LINK_PATHS),
+			     env);
+  scheme_addto_prim_instance("use-compiled-file-check",
+			     scheme_register_parameter(use_compiled_file_check,
+						       "use-compiled-file-check",
+						       MZCONFIG_USE_COMPILED_FILE_CHECK),
 			     env);
 
 #ifdef DOS_FILE_SYSTEM
@@ -6479,7 +6485,7 @@ static Scheme_Object *collpaths_gen_p(int argc, Scheme_Object **argv, int rel_ok
       Scheme_Hash_Tree *new_ht;
       Scheme_Object *key, *val, *idx, *a[2];
 
-      new_ht = scheme_make_hash_tree(0);
+      new_ht = scheme_make_hash_tree(SCHEME_hashtr_eq);
 
       a[0] = s;
       idx = scheme_hash_table_iterate_start(1, a);
@@ -6640,6 +6646,29 @@ static Scheme_Object *use_link_paths(int argc, Scheme_Object *argv[])
 			     scheme_make_integer(MZCONFIG_USE_LINK_PATHS),
 			     argc, argv,
 			     -1, NULL, NULL, 1);
+}
+
+static Scheme_Object *compiled_file_check_p(int argc, Scheme_Object *argv[])
+{
+  Scheme_Object *v = argv[0];
+
+  if (SCHEME_SYMBOLP(v)
+      && !SCHEME_SYM_WEIRDP(v)
+      && (((SCHEME_SYM_LEN(v) == 14)
+           && !strcmp(SCHEME_SYM_VAL(v), "modify-seconds"))
+          || ((SCHEME_SYM_LEN(v) == 6)
+              && !strcmp(SCHEME_SYM_VAL(v), "exists"))))
+    return v;
+
+  return NULL;
+}
+
+static Scheme_Object *use_compiled_file_check(int argc, Scheme_Object *argv[])
+{
+  return scheme_param_config2("use-compiled-file-check", 
+                              scheme_make_integer(MZCONFIG_USE_COMPILED_FILE_CHECK),
+                              argc, argv,
+                              -1, compiled_file_check_p, "(or/c 'modify-seconds 'exists)", 0);
 }
 
 /********************************************************************************/

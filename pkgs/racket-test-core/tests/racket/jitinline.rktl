@@ -17,7 +17,7 @@
   (namespace-require 'racket/fixnum)
   (namespace-require 'racket/unsafe/ops)
   (namespace-require 'racket/unsafe/undefined)
-  (namespace-require '(rename '#%kernel k:list-pair? list-pair?))
+  (namespace-require '(prefix k: '#%kernel))
   (eval '(define-values (prop:thing thing? thing-ref) 
            (make-struct-type-property 'thing)))
   (eval '(struct rock (x) #:property prop:thing 'yes))

@@ -333,9 +333,10 @@
                                      #`(just-meta
                                         #,(import-orig-mode import)
                                         #,(mode-wrap (phase+ base-mode (import-req-mode import))
-                                                     #`(rename #,(import-src-mod-path import)
+                                                     (quasisyntax/loc in
+                                                       (rename #,(import-src-mod-path import)
                                                                #,(import-local-id import)
-                                                               #,(import-src-sym import)))))
+                                                               #,(import-src-sym import))))))
                                    imports)
                               (map (lambda (src)
                                      (mode-wrap (phase+ base-mode (import-source-mode src))
@@ -736,8 +737,9 @@
                                    (if (eq? (syntax-e (export-local-id export))
                                             (export-out-sym export))
                                        (export-local-id export)
-                                       #`(rename #,(export-local-id export)
-                                                 #,(export-out-sym export)))]
+                                       (quasisyntax/loc out
+                                         (rename #,(export-local-id export)
+                                                 #,(export-out-sym export))))]
                                   [mode (export-mode export)])
                               (let ([phased
                                      (cond

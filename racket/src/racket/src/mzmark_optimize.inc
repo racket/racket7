@@ -13,7 +13,6 @@ static int mark_optimize_info_MARK(void *p, struct NewGC *gc) {
   Optimize_Info *i = (Optimize_Info *)p;
   
   gcMARK2(i->next, gc);
-  gcMARK2(i->consts, gc);
   gcMARK2(i->linklet, gc);
   gcMARK2(i->cross, gc);
   gcMARK2(i->imports_used, gc);
@@ -38,7 +37,6 @@ static int mark_optimize_info_FIXUP(void *p, struct NewGC *gc) {
   Optimize_Info *i = (Optimize_Info *)p;
   
   gcFIXUP2(i->next, gc);
-  gcFIXUP2(i->consts, gc);
   gcFIXUP2(i->linklet, gc);
   gcFIXUP2(i->cross, gc);
   gcFIXUP2(i->imports_used, gc);

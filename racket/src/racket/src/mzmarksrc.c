@@ -1206,7 +1206,6 @@ mark_optimize_info {
   Optimize_Info *i = (Optimize_Info *)p;
   
   gcMARK2(i->next, gc);
-  gcMARK2(i->consts, gc);
   gcMARK2(i->linklet, gc);
   gcMARK2(i->cross, gc);
   gcMARK2(i->imports_used, gc);

@@ -61,6 +61,7 @@ typedef struct Cross_Linklet_Info
   Scheme_Hash_Tree *inline_variants; /* key -> symbol -> value */
   Scheme_Hash_Tree *import_syms; /* import-position -> ((symbol -> variable-position)
                                     .                   + (variable-position -> symbol)) */
+  int used_import_shape;
 } Cross_Linklet_Info;
 
 struct Optimize_Info
@@ -69,13 +70,11 @@ struct Optimize_Info
   short flags;
   struct Optimize_Info *next;
   int original_frame, new_frame;
-  Scheme_Object *consts;
   struct Scheme_Linklet *linklet;
   int init_kclock;
 
   /* For cross-linklet inlining: */
   Cross_Linklet_Info *cross;
-  int used_import_shape;
 
   /* Track which imports are still used after optimization */
   Scheme_Hash_Tree **imports_used; /* import position -> variable position -> true */
@@ -226,7 +225,7 @@ static void register_traversers(void);
 void scheme_init_optimize()
 {
   REGISTER_SO(empty_eq_hash_tree);
-  empty_eq_hash_tree = scheme_make_hash_tree(0);
+  empty_eq_hash_tree = scheme_make_hash_tree(SCHEME_hashtr_eq);
 
 #ifdef MZ_PRECISE_GC
   register_traversers();
@@ -972,10 +971,15 @@ static int is_inspector_call(Scheme_Object *a)
   return 0;
 }
 
-static int is_proc_spec_proc(Scheme_Object *p)
+static int is_proc_spec_proc(Scheme_Object *p, int init_field_count)
 /* Does `p` produce a good `prop:procedure` value? */
 {
   Scheme_Type vtype;
+
+  if (SCHEME_INTP(p)
+      && (SCHEME_INT_VAL(p) >= 0)
+      && (SCHEME_INT_VAL(p) < init_field_count))
+    return 1;
 
   if (SCHEME_PROCP(p)) {
     p = scheme_get_or_check_arity(p, -1);
@@ -1315,7 +1319,7 @@ Scheme_Object *scheme_is_simple_make_struct_type(Scheme_Object *e, int vals, int
             && ((app->num_args < 8)
                 /* procedure property: */
                 || SCHEME_FALSEP(app->args[8])
-                || is_proc_spec_proc(app->args[8]))
+                || is_proc_spec_proc(app->args[8], SCHEME_INT_VAL(app->args[3])))
             && ((app->num_args < 9)
                 /* immutables: */
                 || is_int_list(app->args[9],
@@ -2641,7 +2645,8 @@ static Scheme_Object *rator_implies_predicate(Scheme_Object *rator, int argc)
     } else if (SAME_OBJ(rator, scheme_list_star_proc)) {
       if (argc > 2)
         return scheme_pair_p_proc;
-    } else if (IS_NAMED_PRIM(rator, "vector->list")) {
+    } else if (IS_NAMED_PRIM(rator, "vector->list")
+               || IS_NAMED_PRIM(rator, "map")) {
       return scheme_list_p_proc;
     } else if (IS_NAMED_PRIM(rator, "string-append")
                || IS_NAMED_PRIM(rator, "string->immutable-string")) {
@@ -2735,7 +2740,7 @@ static Scheme_Object *do_expr_implies_predicate(Scheme_Object *expr, Optimize_In
         if (SAME_OBJ(p, scheme_list_pair_p_proc))
           return scheme_list_p_proc;
       }
-      
+
       return rator_implies_predicate(app->rator, 1);
     }
     break;
@@ -2776,6 +2781,17 @@ static Scheme_Object *do_expr_implies_predicate(Scheme_Object *expr, Optimize_In
           return scheme_list_pair_p_proc;
       }
 
+      if (SCHEME_PRIMP(app->rator)
+          && IS_NAMED_PRIM(app->rator, "append")) {
+        Scheme_Object *p;
+        p = do_expr_implies_predicate(app->rand2, info, NULL, fuel-1, ignore_vars);
+        if (SAME_OBJ(p, scheme_list_pair_p_proc))
+          return scheme_list_pair_p_proc;
+        if (SAME_OBJ(p, scheme_list_p_proc)
+            || SAME_OBJ(p, scheme_null_p_proc))
+          return scheme_list_p_proc;
+      }
+
       return rator_implies_predicate(app->rator, 2);
     }
     break;
@@ -2796,6 +2812,17 @@ static Scheme_Object *do_expr_implies_predicate(Scheme_Object *expr, Optimize_In
           return scheme_real_p_proc;
       }
       
+      if (SCHEME_PRIMP(app->args[0])
+          && IS_NAMED_PRIM(app->args[0], "append")) {
+        Scheme_Object *p;
+        p = do_expr_implies_predicate(app->args[app->num_args], info, NULL, fuel-1, ignore_vars);
+        if (SAME_OBJ(p, scheme_list_pair_p_proc))
+          return scheme_list_pair_p_proc;
+        if (SAME_OBJ(p, scheme_list_p_proc)
+            || SAME_OBJ(p, scheme_null_p_proc))
+          return scheme_list_p_proc;
+      }
+
       return rator_implies_predicate(app->args[0], app->num_args);
     }
     break;
@@ -3270,18 +3297,24 @@ static void check_known_both(Optimize_Info *info, Scheme_Object *app,
 }
 
 
-static void check_known_all(Optimize_Info *info, Scheme_Object *_app,
+static void check_known_all(Optimize_Info *info, Scheme_Object *_app, int skip_head, int skip_tail,
                             const char *who, Scheme_Object *expect_pred, Scheme_Object *unsafe)
 {
   Scheme_App_Rec *app = (Scheme_App_Rec *)_app;
   if (SCHEME_PRIMP(app->args[0]) && (!who || IS_NAMED_PRIM(app->args[0], who))) {
     int ok_so_far = 1, i;
 
-    for (i = 0; i < app->num_args; i++) {
-      if (!check_known_variant(info, (Scheme_Object *)app, app->args[0], app->args[i+1], who, expect_pred,
-                               ((i == app->num_args - 1) && ok_so_far) ? unsafe : NULL,
-                               expect_pred))
+    for (i = skip_head; i < app->num_args - skip_tail; i++) {
+      if (!check_known_variant(info, _app, app->args[0], app->args[i+1], who, expect_pred,
+                               NULL, expect_pred))
         ok_so_far = 0;
+    }
+    
+    if (ok_so_far && unsafe) {
+      if (SAME_OBJ(unsafe, scheme_true))
+        set_application_omittable(_app, unsafe);
+      else
+        reset_rator(_app, unsafe);
     }
   }
 }
@@ -3351,6 +3384,7 @@ static void increment_clocks_for_application(Optimize_Info *info,
 static Scheme_Object *finish_optimize_application(Scheme_App_Rec *app, Optimize_Info *info, int context, int rator_flags)
 {
   Scheme_Object *le;
+  Scheme_Object *rator =  app->args[0];
   int all_vals = 1, i, flags;
 
   for (i = app->num_args; i--; ) {
@@ -3359,12 +3393,20 @@ static Scheme_Object *finish_optimize_application(Scheme_App_Rec *app, Optimize_
   }
 
   info->size += 1;
-  increment_clocks_for_application(info, app->args[0], app->num_args);
+  increment_clocks_for_application(info, rator, app->num_args);
   
   if (all_vals) {
-    le = try_optimize_fold(app->args[0], NULL, (Scheme_Object *)app, info);
+    le = try_optimize_fold(rator, NULL, (Scheme_Object *)app, info);
     if (le)
       return le;
+  }
+
+  if (!app->num_args  
+      && (SAME_OBJ(rator, scheme_list_proc)
+          || (SCHEME_PRIMP(rator) && IS_NAMED_PRIM(rator, "append")))) {
+    info->preserves_marks = 1;
+    info->single_result = 1;
+    return scheme_null;
   }
 
   info->preserves_marks = !!(rator_flags & LAMBDA_PRESERVES_MARKS);
@@ -3373,37 +3415,47 @@ static Scheme_Object *finish_optimize_application(Scheme_App_Rec *app, Optimize_
     info->preserves_marks = -info->preserves_marks;
     info->single_result = -info->single_result;
   }
-
-  if (!app->num_args && SAME_OBJ(app->args[0], scheme_list_proc))
-    return scheme_null;
     
   if (SCHEME_PRIMP(app->args[0])) {
     Scheme_Object *app_o = (Scheme_Object *)app, *rator = app->args[0];
+    Scheme_Object *rand1 = NULL, *rand2 = NULL;
 
-    if (app->num_args >= 1) {
-      Scheme_Object *rand1 = app->args[1];
+    if (app->num_args >= 1)
+      rand1 = app->args[1];
 
-      check_known(info, app_o, rator, rand1, "vector-set!", scheme_vector_p_proc, NULL);
+    if (app->num_args >= 2)
+      rand2 = app->args[2];
 
-      check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "vector-set!", scheme_vector_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "vector-set!", scheme_fixnum_p_proc, NULL);
 
-      check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL);
-      check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL);
-      check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL);
-      check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL);
 
-      check_known_all(info, app_o, "string-append", scheme_string_p_proc, scheme_true);
-      check_known_all(info, app_o, "bytes-append", scheme_byte_string_p_proc, scheme_true);
-      check_known(info, app_o, rator, rand1, "string-set!", scheme_string_p_proc, NULL);
-      check_known(info, app_o, rator, rand1, "bytes-set!", scheme_byte_string_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL);
+    check_known_all(info, app_o, 1, 0, "map", scheme_list_p_proc, NULL);
+    check_known_all(info, app_o, 1, 0, "for-each", scheme_list_p_proc, NULL);
+    check_known_all(info, app_o, 1, 0, "andmap", scheme_list_p_proc, NULL);
+    check_known_all(info, app_o, 1, 0, "ormap", scheme_list_p_proc, NULL);
 
-      if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
-        check_known_all(info, app_o, NULL, scheme_real_p_proc,
-                        (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
-      if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_NUMBER)
-        check_known_all(info, app_o, NULL, scheme_number_p_proc,
-                        (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
-    }
+    check_known(info, app_o, rator, rand1, "string-set!", scheme_string_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "string-set!", scheme_fixnum_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "bytes-set!", scheme_byte_string_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "bytes-set!", scheme_fixnum_p_proc, NULL);
+    
+    check_known_all(info, app_o, 0, 0, "string-append", scheme_string_p_proc, scheme_true);
+    check_known_all(info, app_o, 0, 0, "bytes-append", scheme_byte_string_p_proc, scheme_true);
+
+    check_known_all(info, app_o, 0, 1, "append", scheme_list_p_proc, scheme_true);
+
+    if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
+      check_known_all(info, app_o, 0, 0, NULL, scheme_real_p_proc,
+                      (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
+    if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_NUMBER)
+      check_known_all(info, app_o, 0, 0, NULL, scheme_number_p_proc,
+                      (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
   }
 
   register_local_argument_types(app, NULL, NULL, info);
@@ -3628,7 +3680,8 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
   }
 
   if (SAME_OBJ(scheme_values_proc, rator)
-      || SAME_OBJ(scheme_list_star_proc, rator)) {
+      || SAME_OBJ(scheme_list_star_proc, rator)
+      || (SCHEME_PRIMP(rator) && IS_NAMED_PRIM(rator, "append"))) {
     SCHEME_APPN_FLAGS(app) |= (APPN_FLAG_IMMED | APPN_FLAG_SFS_TAIL);
     info->preserves_marks = 1;
     info->single_result = 1;
@@ -3637,6 +3690,8 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
         || single_valued_noncm_expression(rand, 5)) {
       return replace_tail_inside(rand, inside, app->rand);
     }
+    app->rator = scheme_values_proc;
+    rator = scheme_values_proc;
   }
 
   if (SCHEME_PRIMP(rator)) {
@@ -3815,6 +3870,8 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
       check_known(info, app_o, rator, rand, "unsafe-unbox*", scheme_box_p_proc, NULL);
       check_known(info, app_o, rator, rand, "vector-length", scheme_vector_p_proc, scheme_unsafe_vector_length_proc);
 
+      check_known(info, app_o, rator, rand, "length", scheme_list_p_proc, scheme_true);
+
       check_known(info, app_o, rator, rand, "string-append", scheme_string_p_proc, scheme_true);
       check_known(info, app_o, rator, rand, "bytes-append", scheme_byte_string_p_proc, scheme_true);
       check_known(info, app_o, rator, rand, "string->immutable-string", scheme_string_p_proc, scheme_true);
@@ -3838,10 +3895,11 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
       check_known(info, app_o, rator, rand, "cadddr", scheme_pair_p_proc, NULL);
       check_known(info, app_o, rator, rand, "cddddr", scheme_pair_p_proc, NULL);
 
-      check_known(info, app_o, rator, rand, "list->vector", scheme_list_p_proc, NULL);
+      check_known(info, app_o, rator, rand, "list->vector", scheme_list_p_proc, scheme_true);
       check_known(info, app_o, rator, rand, "vector->list", scheme_vector_p_proc, NULL);
       check_known(info, app_o, rator, rand, "vector->values", scheme_vector_p_proc, NULL);
       check_known(info, app_o, rator, rand, "vector->immutable-vector", scheme_vector_p_proc, NULL);
+      check_known(info, app_o, rator, rand, "make-vector", scheme_fixnum_p_proc, NULL);
       
       /* Some of these may have changed app->rator. */
       rator = app->rator; 
@@ -4308,7 +4366,13 @@ static Scheme_Object *finish_optimize_application3(Scheme_App3_Rec *app, Optimiz
     check_known_both(info, app_o, rator, rand1, rand2, "string-append", scheme_string_p_proc, scheme_true);
     check_known_both(info, app_o, rator, rand1, rand2, "bytes-append", scheme_byte_string_p_proc, scheme_true);
     check_known(info, app_o, rator, rand1, "string-ref", scheme_string_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "string-ref", scheme_fixnum_p_proc, NULL);
     check_known(info, app_o, rator, rand1, "bytes-ref", scheme_byte_string_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "bytes-ref", scheme_fixnum_p_proc, NULL);
+
+    check_known(info, app_o, rator, rand1, "append", scheme_list_p_proc, scheme_true);
+    check_known(info, app_o, rator, rand1, "list-ref", scheme_pair_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "list-ref", scheme_fixnum_p_proc, NULL);
 
     if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
       check_known_both(info, app_o, rator, rand1, rand2, NULL, scheme_real_p_proc,
@@ -4318,6 +4382,8 @@ static Scheme_Object *finish_optimize_application3(Scheme_App3_Rec *app, Optimiz
                        (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
 
     check_known(info, app_o, rator, rand1, "vector-ref", scheme_vector_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "vector-ref", scheme_fixnum_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "make-vector", scheme_fixnum_p_proc, NULL);
 
     check_known(info, app_o, rator, rand1, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL);
     check_known(info, app_o, rator, rand2, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL);
@@ -4327,6 +4393,10 @@ static Scheme_Object *finish_optimize_application3(Scheme_App3_Rec *app, Optimiz
     check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL);
     check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL);
     check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "map", scheme_list_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "for-each", scheme_list_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "andmap", scheme_list_p_proc, NULL);
+    check_known(info, app_o, rator, rand2, "ormap", scheme_list_p_proc, NULL);
 
     rator = app->rator; /* in case it was updated */
   }
@@ -4682,7 +4752,7 @@ static void add_type(Optimize_Info *info, Scheme_Object *var, Scheme_Object *pre
   }
 
   if (!new_types)
-    new_types = scheme_make_hash_tree(0);
+    new_types = scheme_make_hash_tree(SCHEME_hashtr_eq);
   new_types = scheme_hash_tree_set(new_types, var, pred);
   info->types = new_types;
 }
@@ -6536,7 +6606,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
   body_info = optimize_info_add_frame(info, head->count, head->count, 0);
   rhs_info = body_info;
 
-  merge_skip_vars = scheme_make_hash_tree(0);
+  merge_skip_vars = scheme_make_hash_tree(SCHEME_hashtr_eq);
   body = head->body;
   for (i = head->num_clauses; i--; ) {
     pre_body = (Scheme_IR_Let_Value *)body;
@@ -7756,6 +7826,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
   Scheme_Hash_Table *originals = NULL;
   int cont, inline_fuel, is_proc_def;
   Optimize_Info *info;
+  Optimize_Info *limited_info;
   Optimize_Info_Sequence info_seq;
   Scheme_Hash_Tree **iu;
 
@@ -7799,6 +7870,16 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
   }
 
   optimize_info_seq_init(info, &info_seq);
+
+  /* Use `limited_info` for optimization decisions that need to be
+     rediscovered by the validator. The validator knows shape
+     information for imported variables, and it know about structure
+     bindings for later forms. */
+  limited_info = MALLOC_ONE_RT(Optimize_Info);
+#ifdef MZTAG_REQUIRED
+  limited_info->type = scheme_rt_optimize_info;
+#endif
+  limited_info->linklet = info->linklet;
 
   cnt = SCHEME_VEC_SIZE(linklet->bodies);
 
@@ -7913,17 +7994,20 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
         n = SCHEME_DEFN_VAR_COUNT(defn);
 	e = SCHEME_DEFN_RHS(defn);
 
+        limited_info->cross = info->cross;
 	cont = scheme_omittable_expr(e, n, -1,
                                      /* ignore APPN_FLAG_OMITTABLE, because the
                                         validator won't be able to reconstruct it
                                         in general */
                                      OMITTABLE_IGNORE_APPN_OMIT, 
-                                     /* similarly, no `info' here, because the decision
+                                     /* similarly, use `limited_info` instead of `info'
+                                        here, because the decision
                                         of omittable should not depend on
                                         information that's only available at
                                         optimization time: */
-                                     NULL, 
+                                     limited_info, 
                                      info);
+        info->cross = limited_info->cross;
 
         if (n == 1) {
           if (scheme_ir_propagate_ok(e, info))
@@ -7980,6 +8064,16 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
                   info->top_level_consts = consts;
                 }
                 scheme_hash_set(consts, scheme_make_integer(var->variable_pos), e2);
+
+                if (sstruct) {
+                  /* include in `limited_info` */
+                  Scheme_Hash_Table *limited_consts = limited_info->top_level_consts;
+                  if (!limited_consts) {
+                    limited_consts = scheme_make_hash_table(SCHEME_hash_ptr);
+                    limited_info->top_level_consts = limited_consts;
+                  }
+                  scheme_hash_set(limited_consts, scheme_make_integer(var->variable_pos), e2);
+                }
 
                 if (sstruct || (SCHEME_TYPE(e2) > _scheme_ir_values_types_)) {
                   /* No use re-optimizing */
@@ -8975,8 +9069,6 @@ static void optimize_info_done(Optimize_Info *info, Optimize_Info *parent)
   parent->flatten_fuel = info->flatten_fuel;
   if (info->has_nonleaf)
     parent->has_nonleaf = 1;
-  if (info->used_import_shape)
-    parent->used_import_shape = 1;
 }
 
 
@@ -9217,7 +9309,7 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
     if (want_shape) {
       v = scheme_get_or_check_procedure_shape(v, NULL);
       if (v)
-        info->used_import_shape = 1;
+        info->cross->used_import_shape = 1;
     } else if (argc >= 0) {
       int has_cases = 0;
 
@@ -9256,7 +9348,7 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
   }
 
   if (v && (want_shape || (argc < 0)))
-    info->used_import_shape = 1;
+    info->cross->used_import_shape = 1;
   
   return v;
 }
@@ -9438,7 +9530,7 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
     MZ_ASSERT(used == (SCHEME_VEC_SIZE(linklet->importss) - dropped_imports));
   }
   
-  if (info->used_import_shape) {
+  if (info->cross && info->cross->used_import_shape) {
     /* The import-shapes vector needs only the imports that will be kept */
     shapes = scheme_make_vector(total_used, scheme_false);
     linklet->import_shapes = shapes;
