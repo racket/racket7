@@ -2080,6 +2080,50 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       __END_TINY_JUMPS__(1);
       
       return 1;
+    } else if (IS_NAMED_PRIM(rator, "prefab-struct-key")) {
+      GC_CAN_IGNORE jit_insn *ref, *ref2, *ref3;
+            
+      mz_runstack_skipped(jitter, 1);
+      scheme_generate_non_tail(app->rand, jitter, 0, 1, 0);
+      CHECK_LIMIT();
+      mz_runstack_unskipped(jitter, 1);
+
+      mz_rs_sync();
+
+      jit_movi_p(JIT_R1, scheme_false);
+
+      __START_SHORT_JUMPS__(1);
+      ref = jit_bmsi_ul(jit_forward(), JIT_R0, 0x1);
+      
+      /* check for chaperone: */
+      jit_ldxi_s(JIT_R2, JIT_R0, &((Scheme_Object *)0x0)->type);
+      ref2 = jit_beqi_i(jit_forward(), JIT_R2, scheme_proc_chaperone_type);
+      ref3 = jit_bnei_i(jit_forward(), JIT_R2, scheme_chaperone_type);
+      mz_patch_branch(ref2);
+      jit_ldxi_p(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CHAPERONE_VAL((Scheme_Object *)0x0));
+      jit_ldxi_s(JIT_R2, JIT_R0, &((Scheme_Object *)0x0)->type);
+      mz_patch_branch(ref3);
+      CHECK_LIMIT();
+
+      /* check for structure: */
+      ref2 = jit_bnei_i(jit_forward(), JIT_R2, scheme_structure_type);
+      jit_ldxi_p(JIT_R0, JIT_R0, (intptr_t)&((Scheme_Structure *)0x0)->stype);
+      jit_ldxi_p(JIT_R0, JIT_R0, (intptr_t)&((Scheme_Struct_Type *)0x0)->prefab_key);
+      ref3 = jit_beqi_p(jit_forward(), JIT_R0, NULL);
+      /* is a prefab; extract key */
+      jit_ldxi_p(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CDR(0x0));
+      jit_movr_p(JIT_R1, JIT_R0);
+      CHECK_LIMIT();
+
+      mz_patch_branch(ref3);
+      mz_patch_branch(ref2);
+      mz_patch_branch(ref);
+      CHECK_LIMIT();
+      __END_SHORT_JUMPS__(1);
+
+      jit_movr_p(dest, JIT_R1);
+      
+      return 1;
     } else if (IS_NAMED_PRIM(rator, "cpointer-tag")) {
       GC_CAN_IGNORE jit_insn *ref, *refslow, *refdone;
 

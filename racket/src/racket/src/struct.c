@@ -242,7 +242,7 @@ scheme_init_struct (Scheme_Startup_Env *env)
   Scheme_Object **loc_values;
   int loc_count;
   int i;
-  Scheme_Object *guard;
+  Scheme_Object *guard, *p;
 
   READ_ONLY static const char *arity_fields[1] = { "value" };
   READ_ONLY static const char *date_fields[10] = { "second", "minute", "hour",
@@ -599,11 +599,12 @@ scheme_init_struct (Scheme_Startup_Env *env)
                                                         1, 2);
   scheme_addto_prim_instance("struct->vector", scheme_struct_to_vector_proc, env);
 
-  scheme_addto_prim_instance("prefab-struct-key",
-			     scheme_make_immed_prim(prefab_struct_key,
-                                                    "prefab-struct-key",
-                                                    1, 1),
-			     env);
+  p = scheme_make_immed_prim(prefab_struct_key,
+                             "prefab-struct-key",
+                             1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  scheme_addto_prim_instance("prefab-struct-key", p, env);
+  
   scheme_addto_prim_instance("make-prefab-struct",
 			     scheme_make_prim_w_arity(make_prefab_struct,
 						      "make-prefab-struct",
@@ -732,14 +733,11 @@ scheme_init_struct (Scheme_Startup_Env *env)
 						      1, 1, 1),
 			     env);
 
-  {
-    Scheme_Object *p;
-    p = scheme_make_prim_w_arity(scheme_extract_checked_procedure,
-                                 "checked-procedure-check-and-extract",
-                                 5, 5);
-    SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
-    scheme_addto_prim_instance("checked-procedure-check-and-extract", p, env);
-  }
+  p = scheme_make_prim_w_arity(scheme_extract_checked_procedure,
+                               "checked-procedure-check-and-extract",
+                               5, 5);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
+  scheme_addto_prim_instance("checked-procedure-check-and-extract", p, env);
 
   scheme_addto_prim_instance("chaperone-struct",
                              scheme_make_prim_w_arity(chaperone_struct,
