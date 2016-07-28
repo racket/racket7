@@ -366,6 +366,7 @@ typedef struct Thread_Local_Variables {
   struct Scheme_Hash_Table *ffi_lock_ht_;
   struct Scheme_Object *is_syntax_proc_;
   struct Scheme_Object *expander_syntax_to_datum_proc_;
+  struct Scheme_Hash_Table *local_primitive_tables_;
 } Thread_Local_Variables;
 
 #if defined(IMPLEMENT_THREAD_LOCAL_VIA_PTHREADS)
@@ -741,6 +742,7 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define ffi_lock_ht XOA (scheme_get_thread_local_variables()->ffi_lock_ht_)
 #define is_syntax_proc XOA (scheme_get_thread_local_variables()->is_syntax_proc_)
 #define expander_syntax_to_datum_proc XOA (scheme_get_thread_local_variables()->expander_syntax_to_datum_proc_)
+#define local_primitive_tables XOA (scheme_get_thread_local_variables()->local_primitive_tables_)
 
 /* **************************************** */
 

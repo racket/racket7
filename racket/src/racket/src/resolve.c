@@ -58,7 +58,8 @@ struct Resolve_Info
                            to the current stack depth */
   void *tl_map; /* fixnum or bit array (as array of `int's) indicating which
                    globals+lifts in prefix are used */
-  int stx_count; /* tracks the number of literal syntax objects used */
+  struct Resolve_Info *top; /* for merging tl_map from lifted uses */
+  
   Scheme_Hash_Tree *redirects; /* maps variables that will be from the closure
                                   to their stack depths for the enclosing `lambda` */
   Scheme_Object *lifts; /* tracks functions lifted by closure conversion */
@@ -91,6 +92,7 @@ static int resolve_info_lookup(Resolve_Info *resolve, Scheme_IR_Local *var, Sche
 static Scheme_Object *resolve_info_lift_added(Resolve_Info *resolve, Scheme_Object *var, int convert_shift);
 static void resolve_info_set_toplevel_pos(Resolve_Info *info, int pos);
 static void merge_resolve(Resolve_Info *info, Resolve_Info *new_info);
+static void merge_resolve_tl_map(Resolve_Info *info, Resolve_Info *new_info);
 static Scheme_Object *resolve_generate_stub_lift(void);
 static int resolve_toplevel_pos(Resolve_Info *info);
 static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, int keep_ready);
@@ -102,9 +104,11 @@ static int is_nonconstant_procedure(Scheme_Object *lam, Resolve_Info *info, Sche
 static int resolve_is_inside_proc(Resolve_Info *info);
 static int resolve_has_toplevel(Resolve_Info *info);
 static void set_tl_pos_used(Resolve_Info *info, int pos);
+static int is_tl_pos_used(Resolve_Info *info, int tl_pos);
 static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int search_start);
 static void enable_expression_resolve_lifts(Resolve_Info *ri);
 static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts);
+static void prune_omittable_definition_if_unused(Scheme_Object *form, Resolve_Info *rslv);
 static void prune_unused_imports(Scheme_Linklet *linklet);
 static Resolve_Info *resolve_info_create(Scheme_Linklet *rp, int enforce_const);
 
@@ -1928,6 +1932,7 @@ resolve_lambda(Scheme_Object *_lam, Resolve_Info *info,
       if (has_tl)
         closure_map[0] = 0; /* globals for closure creation will be at 0 after lifting */
       result = tl;
+      merge_resolve_tl_map(new_info->top, new_info);
     }
   } else if (!just_compute_lift) {
     merge_resolve(info, new_info);
@@ -2005,6 +2010,7 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
   cnt = scheme_list_length(body);
   new_bodies = scheme_make_vector(cnt, scheme_false);
   for (i = 0; i < cnt; i++, body = SCHEME_CDR(body)) {
+    prune_omittable_definition_if_unused(SCHEME_CAR(body), rslv);    
     SCHEME_VEC_ELS(new_bodies)[i] = SCHEME_CAR(body);
   }
 
@@ -2021,6 +2027,30 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
   prune_unused_imports(linklet);
 
   return linklet;
+}
+
+static void prune_omittable_definition_if_unused(Scheme_Object *form, Resolve_Info *rslv)
+{
+  if (SAME_TYPE(SCHEME_TYPE(form), scheme_define_values_type)) {
+    int count = SCHEME_DEFN_VAR_COUNT(form);
+    int i;
+
+    for (i = 0; i < count; i++) {
+      int pos = SCHEME_TOPLEVEL_POS(SCHEME_DEFN_VAR(form, i));
+      if (pos < (SCHEME_LINKLET_PREFIX_PREFIX
+                 + rslv->linklet->num_total_imports
+                 + rslv->linklet->num_exports))
+        return;
+      if (is_tl_pos_used(rslv, pos))
+        return;
+    }
+
+    if (scheme_omittable_expr(SCHEME_DEFN_RHS(form), count, 5, OMITTABLE_RESOLVED, 0, 0)) {
+      /* Prune right-hand side */
+      if (count == 1)
+        SCHEME_DEFN_RHS(form) = scheme_false;
+    }
+  }
 }
 
 static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts)
@@ -2307,6 +2337,8 @@ static Resolve_Info *resolve_info_create(Scheme_Linklet *linklet, int enforce_co
   naya->toplevel_starts = toplevel_starts;
   naya->toplevel_deltas = toplevel_deltas;
 
+  naya->top = naya;
+
   return naya;
 }
 
@@ -2347,6 +2379,7 @@ static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambd
   naya->num_toplevels = info->num_toplevels;
   naya->toplevel_starts = info->toplevel_starts;
   naya->toplevel_deltas = info->toplevel_deltas;
+  naya->top = info->top;
 
   return naya;
 }
@@ -2408,6 +2441,29 @@ static void set_tl_pos_used(Resolve_Info *info, int tl_pos)
     ((int *)tl_map)[1 + (tl_pos / 32)] |= ((unsigned)1 << (tl_pos & 31));
 }
 
+static int is_tl_pos_used(Resolve_Info *info, int tl_pos)
+{
+  void *tl_map = info->tl_map;
+  int len;
+
+  if (!tl_map)
+    len = 0;
+  else if ((uintptr_t)tl_map & 0x1)
+    len = 31;
+  else
+    len = (*(int *)tl_map) * 32;
+
+  if (tl_pos>= len)
+    return 0;
+
+  if ((uintptr_t)tl_map & 0x1)
+    return (((int)tl_map & (1 << (tl_pos + 1))) ? 1 : 0);
+  else
+    return ((((int *)tl_map)[1 + (tl_pos / 32)] & ((unsigned)1 << (tl_pos & 31)))
+            ? 1
+            : 0);
+}
+
 static void *merge_tl_map(void *tl_map, void *new_tl_map)
 {
   if (!tl_map)
@@ -2431,12 +2487,8 @@ static void *merge_tl_map(void *tl_map, void *new_tl_map)
   }
 }
 
-static void merge_resolve(Resolve_Info *info, Resolve_Info *new_info)
+static void merge_resolve_tl_map(Resolve_Info *info, Resolve_Info *new_info)
 {
-  if (new_info->next /* NULL => lambda */
-      && (new_info->max_let_depth > info->max_let_depth))
-    info->max_let_depth = new_info->max_let_depth;
-
   if (!new_info->tl_map) {
     /* nothing to do */
   } else {
@@ -2444,6 +2496,15 @@ static void merge_resolve(Resolve_Info *info, Resolve_Info *new_info)
     tl_map = merge_tl_map(info->tl_map, new_info->tl_map);
     info->tl_map = tl_map;
   }
+}
+
+static void merge_resolve(Resolve_Info *info, Resolve_Info *new_info)
+{
+  if (new_info->next /* NULL => lambda */
+      && (new_info->max_let_depth > info->max_let_depth))
+    info->max_let_depth = new_info->max_let_depth;
+
+  merge_resolve_tl_map(info, new_info);
 }
 
 static void resolve_info_add_mapping(Resolve_Info *info, Scheme_IR_Local *var, Scheme_Object *v)
@@ -2536,7 +2597,8 @@ static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, 
     pos += info->toplevel_deltas[pos];
   }
 
-  set_tl_pos_used(info, pos);
+  if (as_reference)
+    set_tl_pos_used(info, pos);
 
   return scheme_make_toplevel(skip, pos,
                               SCHEME_IR_TOPLEVEL_FLAGS((Scheme_IR_Toplevel *)expr) & SCHEME_TOPLEVEL_FLAGS_MASK);

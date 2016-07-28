@@ -1120,6 +1120,7 @@ mark_resolve_info {
   gcMARK2(i->tl_map, gc);
   gcMARK2(i->redirects, gc);
   gcMARK2(i->lifts, gc);
+  gcMARK2(i->top, gc);
   gcMARK2(i->next, gc);
   gcMARK2(i->toplevel_starts, gc);
   gcMARK2(i->toplevel_deltas, gc);
