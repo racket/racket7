@@ -31,6 +31,8 @@ SHARED_OK Scheme_Hash_Tree *empty_hash_tree;
 SHARED_OK static int validate_compile_result = 0;
 SHARED_OK static int recompile_every_compile = 0;
 
+THREAD_LOCAL_DECL(Scheme_Hash_Table *local_primitive_tables);
+
 static Scheme_Object *primitive_table(int argc, Scheme_Object **argv);
 static Scheme_Object *primitive_to_position(int argc, Scheme_Object **argv);
 static Scheme_Object *position_to_primitive(int argc, Scheme_Object **argv);
@@ -194,9 +196,16 @@ static Scheme_Object *primitive_table(int argc, Scheme_Object *argv[])
     scheme_wrong_contract("primitive-table", "(and/c hash? immutable?)", 1, argc, argv);
 
   table = (Scheme_Hash_Table *)scheme_hash_get(scheme_startup_env->primitive_tables, argv[0]);
+  if (!table && local_primitive_tables)
+    table = (Scheme_Hash_Table *)scheme_hash_get(local_primitive_tables, argv[0]);
+  
   if (!table) {
     if (argc > 1) {
-      scheme_hash_set(scheme_startup_env->primitive_tables, argv[0], argv[1]);
+      if (!local_primitive_tables) {
+        REGISTER_SO(local_primitive_tables);
+        local_primitive_tables = scheme_make_hash_table(SCHEME_hash_ptr);
+      }
+      scheme_hash_set(local_primitive_tables, argv[0], argv[1]);
     } else
       return scheme_false;
   }
