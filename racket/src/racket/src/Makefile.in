@@ -426,7 +426,7 @@ startup.@LTO@: $(COMMON_HEADERS) $(srcdir)/schvers.h \
 string.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h    $(srcdir)/schvers.h $(srcdir)/mzmark_string.inc $(srcdir)/strops.inc \
          $(srcdir)/schustr.inc $(srcdir)/systype.inc
-struct.@LTO@: $(COMMON_HEADERS) $(srcdir)/struct_count.inc \
+struct.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h $(srcdir)/mzmark_struct.inc
 syntax.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h $(srcdir)/schfd.h $(srcdir)/mzmark_syntax.inc

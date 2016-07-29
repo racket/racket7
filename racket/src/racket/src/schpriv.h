@@ -3562,6 +3562,17 @@ void scheme_count_generic(Scheme_Object *o, intptr_t *s, intptr_t *e, Scheme_Has
 #endif
 #endif
 
+
+/* See "salloc.c": */
+#define RECORD_ALLOCATION_COUNTS 0
+
+#if RECORD_ALLOCATION_COUNTS
+extern void scheme_record_allocation(Scheme_Object *key);
+# define DEBUG_COUNT_ALLOCATION(x) scheme_record_allocation(x);
+#else 
+# define DEBUG_COUNT_ALLOCATION(x) /* empty */
+#endif
+
 /*========================================================================*/
 /*                           miscellaneous                                */
 /*========================================================================*/

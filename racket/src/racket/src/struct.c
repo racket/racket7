@@ -2240,8 +2240,6 @@ static Scheme_Object **apply_guards(Scheme_Struct_Type *stype, int argc, Scheme_
   return args;
 }
 
-#include "struct_count.inc"
-
 Scheme_Object *
 scheme_make_struct_instance(Scheme_Object *_stype, int argc, Scheme_Object **args)
 {
@@ -2252,7 +2250,7 @@ scheme_make_struct_instance(Scheme_Object *_stype, int argc, Scheme_Object **arg
 
   stype = (Scheme_Struct_Type *)_stype;
 
-  count_alloc(stype);
+  DEBUG_COUNT_ALLOCATION((Scheme_Object *)stype);
 
   c = stype->num_slots;
   inst = (Scheme_Structure *)
@@ -2302,7 +2300,7 @@ Scheme_Object *scheme_make_blank_prefab_struct_instance(Scheme_Struct_Type *styp
   Scheme_Structure *inst;
   int c;
 
-  count_alloc(stype);
+  DEBUG_COUNT_ALLOCATION((Scheme_Object *)stype);
 
   c = stype->num_slots;
   inst = (Scheme_Structure *)
@@ -2338,7 +2336,7 @@ Scheme_Object *scheme_make_prefab_struct_instance(Scheme_Struct_Type *stype,
   Scheme_Structure *inst;
   int i, c;
 
-  count_alloc(stype);
+  DEBUG_COUNT_ALLOCATION((Scheme_Object *)stype);
 
   c = stype->num_slots;
   inst = (Scheme_Structure *)
@@ -2397,7 +2395,7 @@ make_simple_struct_instance(int argc, Scheme_Object **args, Scheme_Object *prim)
   Scheme_Struct_Type *stype = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(prim)[0];
   int i, c;
 
-  count_alloc(stype);
+  DEBUG_COUNT_ALLOCATION((Scheme_Object *)stype);
 
   c = stype->num_slots;
   inst = (Scheme_Structure *)

@@ -2789,7 +2789,7 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
 		    stx->srcloc->pos);
 	  print_utf8_string(pp, quick_buffer, 0, -1);
 	} else
-	  print_utf8_string(pp, "#<correlated", 0, 8);
+	  print_utf8_string(pp, "#<correlated", 0, 13);
         if (pp->print_syntax) {
           intptr_t slen;
           char *str;

@@ -356,6 +356,19 @@ Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *e
       name = combine_name_with_srcloc(name, code, 0);
     }
   }
+
+#if RECORD_ALLOCATION_COUNTS
+  if (!name) {
+    /* Try harder to synthesize a name */
+    char *s;
+    int len;
+    s = scheme_write_to_string(code, NULL);
+    len = strlen(s);
+    if (len > 100) s[100] = 0;
+    name = scheme_make_symbol(s);
+  }
+#endif
+  
   return name;
 }
 
@@ -394,7 +407,7 @@ static Scheme_Object *make_lambda(Scheme_Comp_Env *env, Scheme_Object *code)
   forms = SCHEME_STX_CDR(forms);
 
   env = check_name_property(code, env);
-  name = scheme_build_closure_name(code, env);
+  name = scheme_build_closure_name(code, env);  
   lam->name = name;
 
   env = scheme_set_comp_env_name(env, NULL);
