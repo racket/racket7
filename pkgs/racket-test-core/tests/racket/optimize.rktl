@@ -4675,8 +4675,9 @@
       (write (compile l) o)
       (parameterize ([read-accept-compiled #t])
         (zo-parse (open-input-bytes (get-output-bytes o))))))
-  (let* ([m (compilation-top-code b)]
-         [d (car (mod-body m))]
+  (let* ([lb (hash-ref (linkl-directory-table b) '())]
+         [m (hash-ref (linkl-bundle-table lb) 0)]
+         [d (car (linkl-body m))]
          [rhs (def-values-rhs d)]
          [b (inline-variant-direct rhs)]
          [v (application-rator (lam-body b))])
@@ -4694,8 +4695,9 @@
       (write (compile l) o)
       (parameterize ([read-accept-compiled #t])
         (zo-parse (open-input-bytes (get-output-bytes o))))))
-  (let* ([m (compilation-top-code b)]
-         [d (cadr (mod-body m))]
+  (let* ([lb (hash-ref (linkl-directory-table b) '())]
+         [m (hash-ref (linkl-bundle-table lb) 0)]
+         [d (cadr (linkl-body m))]
          [rhs (def-values-rhs d)]
          [b (inline-variant-direct rhs)]
          [v (application-rator (lam-body b))])
