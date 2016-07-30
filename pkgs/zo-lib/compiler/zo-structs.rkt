@@ -43,30 +43,30 @@
                                      [const? boolean?] 
                                      [ready? boolean?]))  ; access binding via prefix array (which is on stack)
 
-(define-form-struct (seq form) ([forms (listof (or/c form? any/c))])) ; `begin'
+(define-form-struct (seq expr) ([forms (listof (or/c expr? any/c))])) ; `begin'
 
-(define-form-struct (inline-variant form) ([direct expr?]
-                                           [inline expr?]))
+(define-form-struct (inline-variant zo) ([direct expr?]
+                                         [inline expr?]))
 
 ;; Definitions (top level or within module):
 (define-form-struct (def-values form) ([ids (listof (or/c toplevel? symbol?))]
                                        [rhs (or/c expr? seq? inline-variant? any/c)]))
 
-(define-form-struct (linkl form) ([name symbol?]
-                                  [importss (listof (listof symbol?))]
-                                  [import-shapess (listof (listof  (or/c #f 'constant 'fixed 
-                                                                         function-shape? 
-                                                                         struct-shape?)))]
-                                  [exports (listof symbol?)]
-                                  [internals (listof symbol?)]
-                                  [lifts (listof symbol?)]
-                                  [source-names (hash/c symbol? symbol?)]
-                                  [body (listof (or/c form? any/c))]
-                                  [max-let-depth exact-nonnegative-integer?]))
+(define-form-struct (linkl zo) ([name symbol?]
+                                [importss (listof (listof symbol?))]
+                                [import-shapess (listof (listof  (or/c #f 'constant 'fixed 
+                                                                       function-shape? 
+                                                                       struct-shape?)))]
+                                [exports (listof symbol?)]
+                                [internals (listof symbol?)]
+                                [lifts (listof symbol?)]
+                                [source-names (hash/c symbol? symbol?)]
+                                [body (listof (or/c form? any/c))]
+                                [max-let-depth exact-nonnegative-integer?]))
 
-(define-form-struct linkl-directory ([table (hash/c (listof symbol?) linkl-bundle?)]))
-(define-form-struct linkl-bundle    ([table (hash/c (or/c symbol? fixnum?)
-                                                    any/c)])) ; can be anythin, but especially a linklet
+(define-form-struct (linkl-directory zo) ([table (hash/c (listof symbol?) linkl-bundle?)]))
+(define-form-struct (linkl-bundle zo)    ([table (hash/c (or/c symbol? fixnum?)
+                                                         any/c)])) ; can be anythingv, but especially a linklet
 
 (define-form-struct (lam expr) ([name (or/c symbol? vector? empty?)]
                                 [flags (listof (or/c 'preserves-marks 'is-method 'single-result

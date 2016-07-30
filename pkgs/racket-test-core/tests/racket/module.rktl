@@ -1796,5 +1796,20 @@ case of module-leve bindings; it doesn't cover local bindings.
 (test 333 dynamic-require ''module-that-uses-eval-to-define-a-macro-in-its-own-namespace 'result)
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check that `all-defined` exports at only the right phase
+
+(module module-that-exports-at-phase-0-only racket/kernel
+  (#%require (for-syntax racket/kernel))
+  (#%provide (all-defined))
+  (define-values (x) 1)
+  (begin-for-syntax
+    (define-values (x) 2)))
+
+(module module-that-imports-at-multiple-phases racket/kernel
+  (#%require 'module-that-exports-at-phase-0-only
+             ;; Causes a collsion if the module exports too much
+             (for-syntax 'module-that-exports-at-phase-0-only)))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)

@@ -4,7 +4,7 @@
           "common.rkt"
           (for-label racket/base
                      compiler/decompile
-                     (only-in compiler/zo-parse compilation-top? req)
+                     (only-in compiler/zo-parse linkl-directory? linkl-bundle? linkl?)
                      compiler/zo-marshal))
 
 @title[#:tag "decompile"]{@exec{raco decompile}: Decompiling Bytecode}
@@ -133,7 +133,7 @@ Many forms in the decompiled code, such as @racket[module],
 
 @defmodule[compiler/decompile]
 
-@defproc[(decompile [top compilation-top?]) any/c]{
+@defproc[(decompile [top (or/c linkl-directory? linkl-bundle? linkl?)]) any/c]{
 
 Consumes the result of parsing bytecode and returns an S-expression
 (as described above) that represents the compiled code.}
