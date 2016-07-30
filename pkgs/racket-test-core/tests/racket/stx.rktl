@@ -940,7 +940,7 @@
 (test #t has-stx-property? (expand #'(let () (define-syntax x 1) (define y 12) 10)) 'let-values 'x 'disappeared-binding)
 (test #t has-stx-property? (expand #'(let () (define-syntax x 1) (define y y) 10)) 'letrec-values 'x 'disappeared-binding)
 (test #t has-stx-property? (expand #'(let () (define-struct s (x)) 10)) 'let-values 's 'disappeared-binding)
-(test #t has-stx-property? (expand #'(let () (define-syntax x 1) 10)) 'quote 'x 'disappeared-binding)
+(test #t has-stx-property? (expand #'(let () (define-syntax x 1) 10)) 'let-values 'x 'disappeared-binding)
 (test #f has-stx-property? (expand #'(fluid-let-syntax ([x 1]) 10)) 'let-values 'x 'disappeared-binding)
 
 ;; Disappearing use:
@@ -950,18 +950,18 @@
 ;; Check that origin is bound by disappeared binding:
 (test #t has-stx-property? (expand #'(let () (define-syntax (x stx) #'(quote y)) x)) 'quote 'x 'origin)
 (let ([check-expr
-       (lambda (expr #:extract-origin [extract-origin values])
+       (lambda (expr)
          (let ([e (expand expr)])
            (syntax-case e ()
              [(lv (bind ...) beg)
               (let ([db (syntax-property #'beg 'disappeared-binding)])
-                (let-values ([(e)
+                (let-values ([(bg e)
                               (syntax-case #'beg (#%plain-app list)
-                                [(#%plain-app list e)
-                                 (values #'e)]
-                                [e
-                                 (values #'e)])])
-                  (let ([o (extract-origin (syntax-property e 'origin))])
+                                [(bg () (#%plain-app list e))
+                                 (values #'bg #'e)]
+                                [(bg () e)
+                                 (values #'bg #'e)])])
+                  (let ([o (syntax-property e 'origin)])
                     (test #t (lambda (db o)
                                (and (list? db)
                                     (list? o)
@@ -971,10 +971,7 @@
                                     (identifier? (car o))
                                     (ormap (lambda (db) (free-identifier=? db (car o))) db)))
                           db o))))])))])
-  (check-expr #'(let () (letrec-syntaxes+values ([(x) (lambda (stx) #'(quote y))]) () x))
-              #:extract-origin (lambda (v) (and (pair? v)
-                                           (pair? (car v))
-                                           (list (caar v)))))
+  (check-expr #'(let () (letrec-syntaxes+values ([(x) (lambda (stx) #'(quote y))]) () x)))
   (check-expr #'(let () (letrec-syntaxes+values ([(x) (lambda (stx) #'(quote y))]) () (list x))))
   (check-expr #'(let-values () (define-syntax (x stx) #'(quote y)) x))
   (check-expr #'(let-values () (define-syntax (x stx) #'(quote y)) (list x)))
