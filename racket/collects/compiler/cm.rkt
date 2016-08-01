@@ -34,7 +34,7 @@
          make-compile-lock
          compile-lock->parallel-lock-client
          
-         install-linklet-hashes!
+         install-module-hashes!
 
          (contract-out
           [current-path->mode
@@ -481,7 +481,7 @@
               (write code b)
               ;; Compute SHA1 over modules within bytecode
               (let* ([s (get-output-bytes b)])
-                (install-linklet-hashes! s)
+                (install-module-hashes! s)
                 ;; Write out the bytecode with module hash
                 (write-bytes s out)))))
         ;; redundant, but close as early as possible:
@@ -494,7 +494,7 @@
                     up-to-date collection-cache read-src-syntax)))
     (trace-printf "wrote zo file: ~a" zo-name)))
 
-(define (install-linklet-hashes! s [start 0] [len (bytes-length s)])
+(define (install-module-hashes! s [start 0] [len (bytes-length s)])
   (define vlen (bytes-ref s (+ start 2)))
   (define mode (integer->char (bytes-ref s (+ start 3 vlen))))
   (case mode
@@ -518,7 +518,7 @@
        (define pos-pos (+ pos 4 (read-num pos)))
        (define bund-start (read-num pos-pos))
        (define bund-len (read-num (+ pos-pos 4)))
-       (install-linklet-hashes! s (+ start bund-start) bund-len)
+       (install-module-hashes! s (+ start bund-start) bund-len)
        (+ pos-pos 16))
      (void)]
     [else 
