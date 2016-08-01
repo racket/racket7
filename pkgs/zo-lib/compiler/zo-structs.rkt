@@ -115,3 +115,36 @@
                                             [def-val (or/c expr? seq? any/c)] 
                                             [body (or/c expr? seq? any/c)]))
 (define-form-struct (primval expr) ([id exact-nonnegative-integer?])) ; direct preference to a kernel primitive
+
+;; For backward compatibility, provide limited matching support as `compilation-top`:
+(provide compilation-top)
+(require (for-syntax racket/base))
+(define-match-expander compilation-top
+  (lambda (stx)
+    (syntax-case stx ()
+      [(_ max-let-depth binding-namess prefix code)
+       #'(linkl-directory (hash-table ('() (linkl-bundle
+                                            (hash-table (0 (linkl _ ; name
+                                                                  _ ; imports
+                                                                  _ ; import shapes
+                                                                  _ ; exports
+                                                                  _ ; internals
+                                                                  _ ; lifts
+                                                                  _ ; source-names
+                                                                  (list code) ; body
+                                                                  max-let-depth))
+                                                        _ (... ...))))
+                                      _ (... ...)))]))
+  (lambda (stx)
+    (syntax-case stx ()
+      [(_ max-let-depth binding-namess prefix code)
+       #'(linkl-directory (hasheq '() (linkl-bundle
+                                       (hasheq 0 (linkl 'top
+                                                        '()
+                                                        '()
+                                                        '()
+                                                        '()
+                                                        '()
+                                                        #hasheq()
+                                                        (list code)
+                                                        (add1 max-let-depth))))))])))
