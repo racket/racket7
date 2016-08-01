@@ -169,7 +169,8 @@ exception.}
 @defproc[(namespace-set-variable-value! [sym symbol?]
                                         [v any/c]
                                         [map? any/c #f]
-                                        [namespace namespace? (current-namespace)])
+                                        [namespace namespace? (current-namespace)]
+                                        [as-constant? any/c #f])
          void?]{
 
 Sets the value of @racket[sym] in the top-level environment of
@@ -179,7 +180,13 @@ it is not already defined.
 If @racket[map?] is supplied as true, then the namespace's
 @tech{identifier} mapping is also adjusted (see
 @secref["namespace-model"]) in the @tech{phase level} corresponding to
-the @tech{base phase}, so that @racket[sym] maps to the variable.}
+the @tech{base phase}, so that @racket[sym] maps to the variable.
+
+If @racket[as-constant?] is true, then the variable is made a constant
+(so future assignments are rejected) after @racket[v] is installed as
+the value.
+
+@history[#:changed "6.6.1" @elem{Added the @racket[as-constant?] argument.}]}
 
 
 @defproc[(namespace-undefine-variable! [sym symbol?]

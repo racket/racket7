@@ -125,7 +125,7 @@ scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("instance-data", instance_data, 1, 1, env);
   ADD_PRIM_W_ARITY("instance-variable-names", instance_variable_names, 1, 1, env);
   ADD_PRIM_W_ARITY2("instance-variable-value", instance_variable_value, 2, 3, 0, -1, env);
-  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 3, 3, env);
+  ADD_PRIM_W_ARITY("instance-set-variable-value!", instance_set_variable_value, 3, 4, env);
   ADD_PRIM_W_ARITY("instance-unset-variable!", instance_unset_variable, 2, 2, env);
 
   ADD_FOLDING_PRIM("linklet-directory?", linklet_directory_p, 1, 1, 1, env);
@@ -564,6 +564,7 @@ static Scheme_Object *instance_variable_value(int argc, Scheme_Object **argv)
 static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object **argv)
 {
   Scheme_Bucket *b;
+  int set_as_constant = 0;
   
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
     scheme_wrong_contract("instance-set-variable-value!", "instance?", 0, argc, argv);
@@ -571,7 +572,15 @@ static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object **argv
     scheme_wrong_contract("instance-set-variable-value!", "symbol?", 1, argc, argv);
 
   b = scheme_instance_variable_bucket(argv[1], (Scheme_Instance *)argv[0]);
+
+  if ((argc > 3) && SCHEME_TRUEP(argv[3]))
+    set_as_constant = 1;
+
+  scheme_set_global_bucket("instance-set-variable-value!", b, argv[2], 1);
+    
   b->val = argv[2];
+  if (set_as_constant)
+    ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_IS_IMMUTATED;
 
   return scheme_void;
 }
