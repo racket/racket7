@@ -938,18 +938,19 @@ static Scheme_Object *read_local_unbox(Scheme_Object *obj)
 
 static Scheme_Object *hash_tree_to_vector(Scheme_Hash_Tree *ht)
 {
+  Scheme_Object **keys;
   Scheme_Object *vec, *k, *v;
-  mzlonglong pos;
-  int i = 0;
+  int i = 0, pos = 0;
 
   vec = scheme_make_vector(2 * ht->count, NULL);
-  
-  pos = scheme_hash_tree_next(ht, -1);
-  while (pos != -1) {
-    scheme_hash_tree_index(ht, pos, &k, &v);
-    SCHEME_VEC_ELS(vec)[i++] = k;
-    SCHEME_VEC_ELS(vec)[i++] = v;
-    pos = scheme_hash_tree_next(ht, pos);
+
+  keys = scheme_extract_sorted_keys((Scheme_Object *)ht);
+
+  for (i = 0; i < ht->count; i++) {
+    k = keys[i];
+    v = scheme_hash_tree_get(ht, k);
+    SCHEME_VEC_ELS(vec)[pos++] = k;
+    SCHEME_VEC_ELS(vec)[pos++] = v;
   }
 
   return vec;
