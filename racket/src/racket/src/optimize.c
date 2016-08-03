@@ -9177,7 +9177,7 @@ static Scheme_Linklet *get_linklet_for_import_key(Optimize_Info *info, Scheme_Ob
 
   if (!cross)
     return NULL;
-  
+
   v = scheme_hash_tree_get(cross->linklets, key);
   if (!v) {
     a[0] = key;
@@ -9360,6 +9360,9 @@ Scheme_Object *scheme_optimize_add_import_variable(Optimize_Info *info, Scheme_O
   Scheme_Object *pos, *var_pos, *vec;
   Scheme_Hash_Tree *syms, *ht;
   int i;
+
+  if (SCHEME_FALSEP(linklet_key))
+    return NULL;
 
   pos = scheme_hash_tree_get(info->cross->rev_import_keys, linklet_key);
   MZ_ASSERT(pos);
