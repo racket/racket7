@@ -23,7 +23,7 @@
 #define NEWGC_BTC_ACCOUNT
 
 /* Configuration of the nursery (a.k.a. generation 0) */
-#define GEN0_INITIAL_SIZE (1 * 1024 * 1024)
+#define GEN0_INITIAL_SIZE (4 * 1024 * 1024)
 #define GEN0_SIZE_FACTOR 0.5
 #define GEN0_SIZE_ADDITION (512 * 1024)
 #define GEN0_MAX_SIZE (32 * 1024 * 1024)
