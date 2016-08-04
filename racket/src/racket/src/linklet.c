@@ -98,8 +98,7 @@ static void register_traversers(void);
 /*                             initialization                             */
 /*========================================================================*/
 
-void
-scheme_init_linklet(Scheme_Startup_Env *env)
+void scheme_init_linklet(Scheme_Startup_Env *env)
 {
 #ifdef MZ_PRECISE_GC
   register_traversers();
@@ -107,7 +106,6 @@ scheme_init_linklet(Scheme_Startup_Env *env)
 
   scheme_switch_prim_instance(env, "#%linklet");
 
-  ADD_IMMED_PRIM("primitive-table", primitive_table, 1, 2, env);
   ADD_IMMED_PRIM("primitive->compiled-position", primitive_to_position, 1, 1, env);
   ADD_IMMED_PRIM("compiled-position->primitive", position_to_primitive, 1, 1, env);
 
@@ -170,6 +168,19 @@ scheme_init_linklet(Scheme_Startup_Env *env)
         recompile_every_compile = 32;
     }
   }
+}
+
+void scheme_init_unsafe_linklet(Scheme_Startup_Env *env)
+{
+#ifdef MZ_PRECISE_GC
+  register_traversers();
+#endif
+
+  scheme_switch_prim_instance(env, "#%linklet");
+
+  ADD_IMMED_PRIM("primitive-table", primitive_table, 1, 2, env);
+
+  scheme_restore_prim_instance(env);
 }
 
 void scheme_init_linklet_places(void)

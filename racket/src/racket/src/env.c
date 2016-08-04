@@ -341,6 +341,15 @@ static void init_startup_env(void)
 
   MARK_START_TIME();
 
+  init_flfxnum(env);
+  init_extfl(env);
+  init_futures(env);
+
+  builtin_unsafe_start = builtin_ref_counter;
+  scheme_init_unsafe_linklet(env);
+  init_unsafe(env);
+  init_foreign(env);
+  
 #if USE_COMPILED_STARTUP
   if (builtin_ref_counter != EXPECTED_PRIM_COUNT) {
     printf("Primitive count %d doesn't match expected count %d\n"
@@ -350,14 +359,6 @@ static void init_startup_env(void)
   }
 #endif
 
-  init_flfxnum(env);
-  init_extfl(env);
-  init_futures(env);
-
-  builtin_unsafe_start = builtin_ref_counter;
-  init_unsafe(env);
-  init_foreign(env);
-  
   scheme_init_variable_references_constants();
 
   scheme_init_longdouble_fixup();
@@ -382,18 +383,6 @@ static void init_unsafe(Scheme_Startup_Env *env)
   scheme_init_extfl_unsafe_numcomp(env);
 
   scheme_restore_prim_instance(env);
-
-#if USE_COMPILED_STARTUP
-  if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT
-                              + EXPECTED_EXTFL_COUNT + EXPECTED_FUTURES_COUNT
-                              + EXPECTED_UNSAFE_COUNT)) {
-    printf("Unsafe count %d doesn't match expected count %d\n",
-	   builtin_ref_counter - EXPECTED_PRIM_COUNT
-           - EXPECTED_FLFXNUM_COUNT - EXPECTED_EXTFL_COUNT 
-           - EXPECTED_FUTURES_COUNT, EXPECTED_UNSAFE_COUNT);
-    abort();
-  }
-#endif
 }
 
 static void init_flfxnum(Scheme_Startup_Env *env)
@@ -405,15 +394,6 @@ static void init_flfxnum(Scheme_Startup_Env *env)
   scheme_init_flfxnum_numcomp(env);
 
   scheme_restore_prim_instance(env);
-
-#if USE_COMPILED_STARTUP
-  if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT)) {
-    printf("Flfxnum count %d doesn't match expected count %d\n",
-	   builtin_ref_counter - EXPECTED_PRIM_COUNT, 
-           EXPECTED_FLFXNUM_COUNT);
-    abort();
-  }
-#endif
 }
 
 static void init_extfl(Scheme_Startup_Env *env)
@@ -426,16 +406,6 @@ static void init_extfl(Scheme_Startup_Env *env)
   scheme_init_extfl_numstr(env);
 
   scheme_restore_prim_instance(env);
-
-#if USE_COMPILED_STARTUP
-  if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT
-                              + EXPECTED_EXTFL_COUNT)) {
-    printf("extfl count %d doesn't match expected count %d\n",
-	   builtin_ref_counter - EXPECTED_PRIM_COUNT - EXPECTED_FLFXNUM_COUNT,
-           EXPECTED_EXTFL_COUNT);
-    abort();
-  }
-#endif
 }
 
 static void init_futures(Scheme_Startup_Env *env)
@@ -445,35 +415,11 @@ static void init_futures(Scheme_Startup_Env *env)
   scheme_init_futures(env);
 
   scheme_restore_prim_instance(env);
-
-#if USE_COMPILED_STARTUP
-  if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT
-                              + EXPECTED_EXTFL_COUNT + EXPECTED_FUTURES_COUNT)) {
-    printf("Futures count %d doesn't match expected count %d\n",
-	   builtin_ref_counter - EXPECTED_PRIM_COUNT - EXPECTED_FLFXNUM_COUNT
-           - EXPECTED_EXTFL_COUNT, 
-           EXPECTED_FUTURES_COUNT);
-    abort();
-  }
-#endif
 }
 
 static void init_foreign(Scheme_Startup_Env *env)
 {
   scheme_init_foreign(env);
-
-#if USE_COMPILED_STARTUP
-  if (builtin_ref_counter != (EXPECTED_PRIM_COUNT + EXPECTED_FLFXNUM_COUNT
-                              + EXPECTED_EXTFL_COUNT + EXPECTED_FUTURES_COUNT
-                              + EXPECTED_UNSAFE_COUNT + EXPECTED_FOREIGN_COUNT)) {
-    printf("Foreign count %d doesn't match expected count %d\n",
-	   builtin_ref_counter - EXPECTED_PRIM_COUNT - EXPECTED_FLFXNUM_COUNT
-           - EXPECTED_EXTFL_COUNT - EXPECTED_FUTURES_COUNT
-           - EXPECTED_UNSAFE_COUNT,
-           EXPECTED_FOREIGN_COUNT);
-    abort();
-  }
-#endif
 }
 
 /*========================================================================*/

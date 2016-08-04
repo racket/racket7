@@ -590,12 +590,7 @@ void scheme_init_variable_references_constants()
 
 Scheme_Object *scheme_position_to_builtin(int l)
 {
-  if (l < (EXPECTED_PRIM_COUNT 
-           + EXPECTED_UNSAFE_COUNT 
-           + EXPECTED_FLFXNUM_COUNT 
-           + EXPECTED_EXTFL_COUNT
-           + EXPECTED_FUTURES_COUNT
-           + EXPECTED_FOREIGN_COUNT))
+  if (l < EXPECTED_PRIM_COUNT)
     return variable_references[l];
   else
     return NULL;
@@ -5023,12 +5018,7 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
       break;
     case CPT_REFERENCE:
       l = read_compact_number(port);
-      RANGE_CHECK(l, < (EXPECTED_PRIM_COUNT 
-                        + EXPECTED_UNSAFE_COUNT 
-                        + EXPECTED_FLFXNUM_COUNT 
-                        + EXPECTED_EXTFL_COUNT
-                        + EXPECTED_FUTURES_COUNT
-                        + EXPECTED_FOREIGN_COUNT));
+      RANGE_CHECK(l, < EXPECTED_PRIM_COUNT);
       if ((l >= unsafe_variable_references_start)
           && !port->unsafe_ok)
         unsafe_disallowed(port);
