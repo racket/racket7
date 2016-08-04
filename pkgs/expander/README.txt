@@ -108,7 +108,9 @@ Roadmap to the implementation:
 
  expand/ - expander loop and core forms
 
- common/module-path.rkt - [resolved] module path [indexes]
+ common/ - utilities
+   module-path.rkt - [resolved] module path [indexes]
+   performance.rkt - enable performance instrumentation
 
  compile/ - from expanded to S-expression linket
    main.rkt - compiler functions called from "eval/main.rkt"
