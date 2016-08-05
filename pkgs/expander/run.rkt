@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/cmdline
          racket/pretty
+         racket/runtime-path
          (only-in racket/base
                   [eval host:eval]
                   [namespace-require host:namespace-require])
@@ -20,6 +21,8 @@
          "extract/main.rkt"
          (only-in "run/linklet.rkt" linklet-compile-to-s-expr))
 
+(define-runtime-path main.rkt "main.rkt")
+
 (define extract? #f)
 (define expand? #f)
 (define linklets? #f)
@@ -32,7 +35,7 @@
 (define print-extracted-to #f)
 (define extract-to-c? #f)
 (define quiet-load? #f)
-(define startup-module (path->complete-path "main.rkt"))
+(define startup-module main.rkt)
 (define submod-name #f)
 (define load-file #f)
 (define args

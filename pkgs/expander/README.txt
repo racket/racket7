@@ -1,7 +1,7 @@
-This package constains the implementation of Racket's macro expander.
+This package contains the implementation of Racket's macro expander.
 A copy of this implementation is extracted and built into the Racket
 executable, so normally this package's modules are not run directly.
-The expander can be run separately, however, and the Racket epaander
+The expander can be run separately, however, and the Racket expander
 is updated by modifying this package as it exists in the main Racket
 Git repository.
 
@@ -15,11 +15,11 @@ Running:
    complete, but they're a quick and useful sanity check. The
    "demo.rkt" module uses the somewhat internal interface exported by
    `main`, where the expansion, compilation, and evaluation are less
-   overloaded and more controlable.
+   overloaded and more controllable.
 
    Use the "bootstrap-demo.rkt" when running in an older version of
    Racket that is not built with this expander (but that version of
-   Racket must be new enough to provide a primitive '#%linket module
+   Racket must be new enough to provide a primitive '#%linklet module
    as a bootstrapping hook).
 
  % racket run.rkt -c <dir>
@@ -28,7 +28,7 @@ Running:
 
    Runs the expander to load itself from source. Expanded and compiled
    modules are stored in <dir>, somewhat like bytecode files.
-   Dependency tarcking doesn't take into account the expander itself,
+   Dependency tracking doesn't take into account the expander itself,
    so throw away <dir> if the expander changes in a way that you want
    reflected in compilation results.
 
@@ -109,6 +109,7 @@ Roadmap to the implementation:
    syntax.rkt - syntax-object structure
    scope.rkt - scope sets and binding
    binding.rkt - binding representations
+   binding-table.rkt - managing sets of bindings
 
  namespace/ - namespaces and module instances
 
@@ -116,9 +117,10 @@ Roadmap to the implementation:
 
  common/ - utilities
    module-path.rkt - [resolved] module path [indexes]
-   performance.rkt - enable performance instrumentation
+   performance.rkt - performance instrumentation; enable statistic
+                     gathering and reporting by changing this module
 
- compile/ - from expanded to S-expression linket
+ compile/ - from expanded to S-expression linklet
    main.rkt - compiler functions called from "eval/main.rkt"
 
  eval/ - evaluation
@@ -133,14 +135,20 @@ Roadmap to the implementation:
                  handler, and compiler handler
    ...-primitive.rkt - export built-in functions as modules
 
- run/ - helpers to drive the expander
+ run/ - helpers to drive the expander; not part of the resulting
+        expander's implementation
    linklet.rkt - a bootstrapping implementation of `linklet` by
                  compilation into `lambda` plus primitives
 
- extract/ - extracts subset of compilation units (by "run.rkt")
+ extract/ - extracts a module and its dependencies to a single
+            linklet, especially for extracting the compiler itself
+            (via "run.rkt"); not part of the resulting expander's
+            implementation
 
- main.rkt - installs eval handler, etc.; entry point for diretcly
-            running the expander/compiler/evaluator
+ main.rkt - installs eval handler, etc.; entry point for directly
+            running the expander/compiler/evaluator, and the provided
+            variables of this module become the entry points for the
+            embedded expander
 
  demo.rkt - exercises the expander and compiler (uses "main.rkt")
 
@@ -157,6 +165,22 @@ Beware that names are routinely shadowed when they are provided by
 example, `syntax?` is shadowed, and any part of the expander that
 needs `syntax?` must import "syntax/syntax.rkt" or
 "syntax/checked-syntax.rkt".
+
+----------------------------------------
+
+Implementation guidelines:
+
+ * Do not rely on more than `racket/base` for code that will be
+   extracted as the compiler implementation. (Relying on more in
+   "run/" or "extract/" is allowed.)
+
+ * The runtime implementation of the expander must not itself use any
+   syntax objects as provided by the Racket implementation used to
+   compile the expander. That means, for example, that the contract
+   system cannot be used in the implementation of the expander, since
+   the contract system manages some information with syntax objects at
+   run time. The expander-extraction process double-checks that the
+   expander is independent of its host in this way.
 
 ----------------------------------------
 
@@ -180,14 +204,14 @@ Some naming conventions:
 
  ctx - an expansion context (including the expand-time environment)
 
- cctx - a compilation context (including a compile-tme environment)
+ cctx - a compilation context (including a compile-time environment)
 
  insp - an inspector
 
  mpi - a module path index
 
  mod-name - a resolved module path, usually; sometimes used for other
-  forms of module reference (FIXME)
+  forms of module reference
 
  <subscript>-<something> - like <something>, but specifically one for
    <subscript>; for example, `m-ns` is a namespace for some module
