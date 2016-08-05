@@ -1,7 +1,7 @@
 
 expander:
 	../../racket/bin/raco make bootstrap-run.rkt
-	../../racket/bin/racket bootstrap-run.rkt -c compiled/cache -O ../../racket
+	../../racket/bin/racket bootstrap-run.rkt -c compiled/cache-src -O ../../racket
 
 demo:
 	../../racket/bin/raco make demo.rkt

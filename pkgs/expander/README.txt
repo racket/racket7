@@ -93,7 +93,7 @@ Running:
    that copy of Racket to build the expander and drop a replacement
    into the "src" directory. Re-making the Racket tree will then use
    the updated expander. You may have to manually discard
-   "compiled/cache" when things change.
+   "compiled/cache-src" when things change.
 
 ----------------------------------------
 

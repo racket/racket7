@@ -466,9 +466,15 @@
 (define (propagation-merge prop base-prop prev-scs prev-smss)
   (cond
    [(not prop) base-prop]
-   [(not base-prop) (propagation prev-scs
-                                 prev-smss
-                                 (propagation-scope-ops prop))]
+   [(not base-prop)
+    (cond
+     [(and (eq? (propagation-prev-scs prop) prev-scs)
+           (eq? (propagation-prev-smss prop) prev-smss))
+      prop]
+     [else
+      (propagation prev-scs
+                   prev-smss
+                   (propagation-scope-ops prop))])]
    [else
     (define new-ops
       (for/fold ([ops (propagation-scope-ops base-prop)]) ([(sc op) (in-immutable-hash (propagation-scope-ops prop))])
