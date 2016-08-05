@@ -2,6 +2,8 @@
 
 (provide performance-region)
 
+;; To enable measurement, see the end of this file.
+
 ;; The expression form
 ;;
 ;;   (performance-region [key-expr ...] body ....)
@@ -30,7 +32,7 @@
 ;; Beware that `body ...` is not in tail position when
 ;; performance measurement is enabled.
 
-;; ----------------------------------------
+;; ------------------------------------------------------------
 ;; Re-export this submodule to enable performance measurements
 
 (module measure-mode racket/base
@@ -137,7 +139,7 @@
                                   (when (and newline? (positive? i)) (log-performance-info ""))
                                   (loop k (hash-ref accums k) (string-append indent "  ") #f)))))))
 
-;; ----------------------------------------
+;; ------------------------------------------------------------
 ;; Re-export this submodule to disable measurements
 
 (module no-measure-mode racket/base
@@ -146,5 +148,8 @@
   (define-syntax-rule (performance-region [tag0-expr tag-expr ...] body ...)
     (let () body ...)))
 
+
+;; ------------------------------------------------------------
+;; Select whether to measure (has overhead) or not:
 
 (require (submod "." no-measure-mode))

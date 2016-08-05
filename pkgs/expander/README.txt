@@ -95,6 +95,12 @@ Running:
    the updated expander. You may have to manually discard
    "compiled/cache-src" when things change.
 
+ % make demo
+ % make run ARGS="<arg> ..."
+
+   More shortcuts. Use `make run ARGS="<arg> ..."` as a shorthand for `racket
+   run.rkt -c compiled/cache <arg> ...`.
+
 ----------------------------------------
 
 Roadmap to the implementation:
