@@ -101,6 +101,8 @@ Running:
    More shortcuts. Use `make run ARGS="<arg> ..."` as a shorthand for `racket
    run.rkt -c compiled/cache <arg> ...`.
 
+   See "Makefile" for more information and other shortcuts.
+
 ----------------------------------------
 
 Roadmap to the implementation:

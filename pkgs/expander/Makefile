@@ -1,24 +1,32 @@
 
+RACKET = ../../racket/bin/racket
+RACO = ../../racket/bin/raco
+
 expander:
-	../../racket/bin/raco make bootstrap-run.rkt
-	../../racket/bin/racket bootstrap-run.rkt -c compiled/cache-src -O ../../racket
+	$(RACO) make bootstrap-run.rkt
+	$(RACKET) bootstrap-run.rkt -c compiled/cache-src -O ../../racket
 
 demo:
-	../../racket/bin/raco make demo.rkt
-	../../racket/bin/racket demo.rkt
-
-
-
-.PHONY: run run-no-cache
+	$(RACO) make demo.rkt
+	$(RACKET) demo.rkt
 
 run:
-	../../racket/bin/raco make run.rkt
-	../../racket/bin/racket $(RKT_ARGS) run.rkt -c compiled/cache $(ARGS)
+	$(RACO) make run.rkt
+	$(RACKET) $(RKT_ARGS) run.rkt -c compiled/cache $(ARGS)
 
+# Like `run`, but with source as compiled (as used for flattening)
 run-src:
-	../../racket/bin/raco make bootstrap-run.rkt
-	../../racket/bin/racket $(RKT_ARGS) bootstrap-run.rkt -s -c compiled/cache-src $(ARGS)
+	$(RACO) make bootstrap-run.rkt
+	$(RACKET) $(RKT_ARGS) bootstrap-run.rkt -s -c compiled/cache-src $(ARGS)
 
+# Like `run`, but without using a cache for expanded and compiled linklets
 run-no-cache:
-	../../racket/bin/raco make run.rkt
-	../../racket/bin/racket $(RKT_ARGS) run.rkt $(ARGS)
+	$(RACO) make run.rkt
+	$(RACKET) $(RKT_ARGS) run.rkt $(ARGS)
+
+# Writes the extracted, compiled, decompiled expander to compiled/exp.rkt
+decompile:
+	$(RACO) make bootstrap-run.rkt
+	$(RACKET) $(RKT_ARGS) bootstrap-run.rkt -c compiled/cache-src -s -x -D -o compiled/exp.rkt
+
+.PHONY: expander demo run run-no-cache

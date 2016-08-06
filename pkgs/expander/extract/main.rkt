@@ -8,6 +8,7 @@
          "check-and-report.rkt"
          "flatten.rkt"
          "gc-defn.rkt"
+         "decompile.rkt"
          "save-and-report.rkt")
 
 (provide extract)
@@ -18,7 +19,8 @@
 ;; that `dynamic-require` would produce.
 (define (extract start-mod-path cache
                  #:print-extracted-to print-extracted-to
-                 #:as-c? as-c?)
+                 #:as-c? as-c?
+                 #:as-decompiled? as-decompiled?)
   ;; Located modules:
   (define compiled-modules (make-hash))
 
@@ -100,6 +102,10 @@
     ;; Remove unreferenced definitions
     (define gced-linklet-expr
       (garbage-collect-definitions flattened-linklet-expr))
-    
-    (save-and-report-flattened! gced-linklet-expr print-extracted-to
-                                #:as-c? as-c?)))
+
+    (cond
+     [as-decompiled?
+      (compile-and-decompile gced-linklet-expr print-extracted-to)]
+     [else
+      (save-and-report-flattened! gced-linklet-expr print-extracted-to
+                                  #:as-c? as-c?)])))
