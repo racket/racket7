@@ -2171,8 +2171,8 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Schem
       SCHEME_DEFN_RHS(vec) = a;
 
       if (SCHEME_TRUEP(scheme_stx_property(e, compiler_inline_hint_symbol, NULL))) {
-        /* use "immutable" bit to mark compiler-inline hint: */
-        SCHEME_SET_IMMUTABLE(vec);
+        /* mark compiler-inline hint: */
+        SCHEME_SET_DEFN_ALWAYS_INLINE(vec);
       }
  
       e = vec;

@@ -3161,6 +3161,13 @@ struct Scheme_Linklet
 #define SCHEME_DEFN_VAR_(d, pos) (SCHEME_VEC_ELS(d)[(pos)+1])
 #define SCHEME_DEFN_VAR(d, pos)  ((Scheme_IR_Toplevel *)SCHEME_DEFN_VAR_(d, pos))
 
+/* Recycle some vector flags to use on definitions for the compiler,
+   optimizer, and resolver to commuincate: */
+#define SCHEME_DEFN_ALWAYS_INLINEP(d) SCHEME_IMMUTABLEP(d)
+#define SCHEME_SET_DEFN_ALWAYS_INLINE(d) SCHEME_SET_IMMUTABLE(d)
+#define SCHEME_DEFN_CAN_OMITP(d) SHARED_ALLOCATEDP(d)
+#define SCHEME_SET_DEFN_CAN_OMIT(d) SHARED_ALLOCATED_SET(d)
+
 #define SCHEME_VARREF_FLAGS(pr) MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)pr)->iso)
 
 void scheme_addto_prim_instance(const char *name, Scheme_Object *obj, Scheme_Startup_Env *env);

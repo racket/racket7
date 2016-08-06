@@ -8009,6 +8009,11 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
                                      info);
         info->cross = limited_info->cross;
 
+        if (cont) {
+          /* Record for the resolve pass's pruning that definition is omittable */
+          SCHEME_SET_DEFN_CAN_OMIT(defn);
+        }
+
         if (n == 1) {
           if (scheme_ir_propagate_ok(e, info))
             cnst = 1;
@@ -8249,7 +8254,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
       e = SCHEME_VEC_ELS(linklet->bodies)[i_m];
       if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
         int size_override;
-        size_override = SCHEME_IMMUTABLEP(e);
+        size_override = SCHEME_DEFN_ALWAYS_INLINEP(e);
         if (SCHEME_DEFN_VAR_COUNT(e) == 1) {
           Scheme_Object *sub_e, *alt_e;
           sub_e = SCHEME_DEFN_RHS(e);

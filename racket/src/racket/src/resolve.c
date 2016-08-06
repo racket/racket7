@@ -2045,7 +2045,8 @@ static void prune_omittable_definition_if_unused(Scheme_Object *form, Resolve_In
         return;
     }
 
-    if (scheme_omittable_expr(SCHEME_DEFN_RHS(form), count, 5, OMITTABLE_RESOLVED, 0, 0)) {
+    if (SCHEME_DEFN_CAN_OMITP(form)
+        || scheme_omittable_expr(SCHEME_DEFN_RHS(form), count, 5, OMITTABLE_RESOLVED, 0, 0)) {
       /* Prune right-hand side */
       if (count == 1)
         SCHEME_DEFN_RHS(form) = scheme_false;
