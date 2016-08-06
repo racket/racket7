@@ -1,5 +1,10 @@
 #lang racket/base
 (require racket/private/config
+         (only-in racket/private/collect
+                  ;; We want the original, non-keyword versions of these,
+                  ;; not the keyword-based versions provided by `racket/base`:
+                  collection-path
+                  collection-file-path)
          "../common/reflect-hash.rkt")
 
 (provide utils-primitives)
