@@ -1124,6 +1124,7 @@ mark_resolve_info {
   gcMARK2(i->next, gc);
   gcMARK2(i->toplevel_starts, gc);
   gcMARK2(i->toplevel_deltas, gc);
+  gcMARK2(i->toplevel_defns, gc);
 
  size:
   gcBYTES_TO_WORDS(sizeof(Resolve_Info));

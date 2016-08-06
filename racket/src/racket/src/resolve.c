@@ -77,6 +77,14 @@ struct Resolve_Info
                            `Scheme_IR_Topelevel`). */
   int *toplevel_deltas; /* shifts for toplevels in the import range to
                            accomodate removals */
+
+  Scheme_Hash_Table *toplevel_defns; /* for pruning unused definitions, if
+                                        some definitions are unexported
+                                          resolved position -> definition
+                                          definition -> #f - not yet used
+                                                        #t - enqueued
+                                                        list - resolved with lifts
+                                                        NULL - used or has side effect */
 };
 
 #define cons(a,b) scheme_make_pair(a,b)
@@ -104,12 +112,11 @@ static int is_nonconstant_procedure(Scheme_Object *lam, Resolve_Info *info, Sche
 static int resolve_is_inside_proc(Resolve_Info *info);
 static int resolve_has_toplevel(Resolve_Info *info);
 static void set_tl_pos_used(Resolve_Info *info, int pos);
-static int is_tl_pos_used(Resolve_Info *info, int tl_pos);
 static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int search_start);
 static void enable_expression_resolve_lifts(Resolve_Info *ri);
 static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts);
-static void prune_omittable_definition_if_unused(Scheme_Object *form, Resolve_Info *rslv);
 static void prune_unused_imports(Scheme_Linklet *linklet);
+static void prepare_definition_queue(Scheme_Linklet *linklet, Resolve_Info *rslv);
 static Resolve_Info *resolve_info_create(Scheme_Linklet *rp, int enforce_const);
 
 #ifdef MZ_PRECISE_GC
@@ -1983,22 +1990,76 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
   rslv = resolve_info_create(linklet, enforce_const);
   enable_expression_resolve_lifts(rslv);
 
-  cnt = SCHEME_VEC_SIZE(linklet->bodies);
+  if (linklet->num_exports < SCHEME_VEC_SIZE(linklet->defns)) {
+    /* Some definitions are not exported, so resolve in a way
+       that lets us GC unused definitions */
+    prepare_definition_queue(linklet, rslv);
+  }
+
+  cnt = SCHEME_VEC_SIZE(linklet->bodies);  
   for (i = 0; i < cnt; i++) {
     Scheme_Object *e;
-    e = resolve_expr(SCHEME_VEC_ELS(linklet->bodies)[i], rslv);
-    
-    /* add lift just before the expression that introduced it;
-       this ordering is needed for bytecode validation of
-       constantness for top-level references */
-    lift_vec = rslv->lifts;
-    if (!SCHEME_NULLP(SCHEME_VEC_ELS(lift_vec)[0])) {
-      body = scheme_append(SCHEME_VEC_ELS(lift_vec)[0], body);
-      SCHEME_VEC_ELS(lift_vec)[0] = scheme_null;
+
+    e = SCHEME_VEC_ELS(linklet->bodies)[i];
+
+    if (!rslv->toplevel_defns || !scheme_hash_get(rslv->toplevel_defns, e)) {
+      e = resolve_expr(e, rslv);
+
+      /* add lift just before the expression that introduced it;
+         this ordering is needed for bytecode validation of
+         constantness for top-level references */
+      lift_vec = rslv->lifts;
+      if (!SCHEME_NULLP(SCHEME_VEC_ELS(lift_vec)[0])) {
+        body = scheme_append(SCHEME_VEC_ELS(lift_vec)[0], body);
+        SCHEME_VEC_ELS(lift_vec)[0] = scheme_null;
+      }
     }
 
     body = scheme_make_pair(e, body);
   }
+
+  /* If we're pruning unused definitions, handle the stack of pending definitions */
+  if (rslv->toplevel_defns) {
+    Scheme_Object *l, *e;
+
+    /* Loop while the definition stack is non-empty */
+    while (1) {
+      l = scheme_hash_get(rslv->toplevel_defns, scheme_null);
+      if (SCHEME_NULLP(l))
+        break;
+      scheme_hash_set(rslv->toplevel_defns, scheme_null, SCHEME_CDR(l));
+
+      l = SCHEME_CAR(l);
+      e = scheme_make_pair(resolve_expr(l, rslv), scheme_null);
+      lift_vec = rslv->lifts;
+      if (!SCHEME_NULLP(SCHEME_VEC_ELS(lift_vec)[0])) {
+        e = scheme_append(SCHEME_VEC_ELS(lift_vec)[0], e);
+        SCHEME_VEC_ELS(lift_vec)[0] = scheme_null;
+      }
+      scheme_hash_set(rslv->toplevel_defns, l, e);
+    }
+
+    /* Update the body list, flattening lifts as we go */
+    for (l = body, body = scheme_null; SCHEME_PAIRP(l); l = SCHEME_CDR(l)) {
+      e = scheme_hash_get(rslv->toplevel_defns, SCHEME_CAR(l));
+      if (e) {
+        if (SCHEME_PAIRP(e))
+          body = scheme_append(e, body);
+        else {
+          /* Never reached */
+          MZ_ASSERT(SAME_OBJ(e, scheme_true));
+          e = SCHEME_CAR(l);
+          MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type));
+          MZ_ASSERT(SCHEME_DEFN_VAR_COUNT(e) == 1);
+          SCHEME_DEFN_RHS(e) = scheme_make_integer(5);
+          e = resolve_expr(SCHEME_CAR(l), rslv);
+          body = scheme_make_pair(e, body);
+        }
+      } else
+        body = scheme_make_pair(SCHEME_CAR(l), body);
+    }
+  } else
+    body = scheme_reverse(body);
 
   linklet->max_let_depth = rslv->max_let_depth;
 
@@ -2006,11 +2067,9 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
   num_lifts = SCHEME_INT_VAL(SCHEME_VEC_ELS(lift_vec)[1]);
 
   /* Recompute body array: */
-  body = scheme_reverse(body);
   cnt = scheme_list_length(body);
   new_bodies = scheme_make_vector(cnt, scheme_false);
   for (i = 0; i < cnt; i++, body = SCHEME_CDR(body)) {
-    prune_omittable_definition_if_unused(SCHEME_CAR(body), rslv);    
     SCHEME_VEC_ELS(new_bodies)[i] = SCHEME_CAR(body);
   }
 
@@ -2029,27 +2088,48 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
   return linklet;
 }
 
-static void prune_omittable_definition_if_unused(Scheme_Object *form, Resolve_Info *rslv)
+static void prepare_definition_queue(Scheme_Linklet *linklet, Resolve_Info *rslv)
 {
-  if (SAME_TYPE(SCHEME_TYPE(form), scheme_define_values_type)) {
-    int count = SCHEME_DEFN_VAR_COUNT(form);
-    int i;
+  Scheme_Hash_Table *ht;
+  Scheme_Object *e, *var;
+  int i, j, cnt, vcnt;
 
-    for (i = 0; i < count; i++) {
-      int pos = SCHEME_TOPLEVEL_POS(SCHEME_DEFN_VAR(form, i));
-      if (pos < (SCHEME_LINKLET_PREFIX_PREFIX
-                 + rslv->linklet->num_total_imports
-                 + rslv->linklet->num_exports))
-        return;
-      if (is_tl_pos_used(rslv, pos))
-        return;
-    }
+  ht = scheme_make_hash_table(SCHEME_hash_ptr);
+  rslv->toplevel_defns = ht;
 
-    if (SCHEME_DEFN_CAN_OMITP(form)
-        || scheme_omittable_expr(SCHEME_DEFN_RHS(form), count, 5, OMITTABLE_RESOLVED, 0, 0)) {
-      /* Prune right-hand side */
-      if (count == 1)
-        SCHEME_DEFN_RHS(form) = scheme_false;
+  /* Queue is initially empty: */
+  scheme_hash_set(rslv->toplevel_defns, scheme_null, scheme_null);
+
+  cnt = SCHEME_VEC_SIZE(linklet->bodies);  
+  
+  for (i = 0; i < cnt; i++) {
+    e = SCHEME_VEC_ELS(linklet->bodies)[i];
+    
+    if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
+      vcnt = SCHEME_DEFN_VAR_COUNT(e);
+      if ((vcnt == 1)
+          && (SCHEME_DEFN_CAN_OMITP(e)
+              || scheme_omittable_expr(SCHEME_DEFN_RHS(e), vcnt, 5, 0, NULL, NULL))) {
+        for (j = 0; j < vcnt; j++) {
+          var = SCHEME_DEFN_VAR_(e, j);
+          MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(var), scheme_ir_toplevel_type));
+          if (SCHEME_IR_TOPLEVEL_POS(var) < (SCHEME_LINKLET_PREFIX_PREFIX
+                                             + linklet->num_total_imports
+                                             + linklet->num_exports)) {
+            /* variable is exported */
+            break;
+          }
+        }
+        if (j >= vcnt) {
+          scheme_hash_set(rslv->toplevel_defns, e, scheme_true);
+          for (j = 0; j < vcnt; j++) {
+            int tl_pos;
+            var = SCHEME_DEFN_VAR_(e, j);
+            tl_pos = SCHEME_IR_TOPLEVEL_POS(var) + 1 + linklet->num_total_imports;
+            scheme_hash_set(rslv->toplevel_defns, scheme_make_integer(tl_pos), e);
+          }
+        }
+      }
     }
   }
 }
@@ -2381,6 +2461,7 @@ static Resolve_Info *resolve_info_extend(Resolve_Info *info, int size, int lambd
   naya->toplevel_starts = info->toplevel_starts;
   naya->toplevel_deltas = info->toplevel_deltas;
   naya->top = info->top;
+  naya->toplevel_defns = info->toplevel_defns;
 
   return naya;
 }
@@ -2440,29 +2521,27 @@ static void set_tl_pos_used(Resolve_Info *info, int tl_pos)
     info->tl_map = (void *)((uintptr_t)tl_map | ((uintptr_t)1 << (tl_pos + 1)));
   else
     ((int *)tl_map)[1 + (tl_pos / 32)] |= ((unsigned)1 << (tl_pos & 31));
-}
 
-static int is_tl_pos_used(Resolve_Info *info, int tl_pos)
-{
-  void *tl_map = info->tl_map;
-  int len;
-
-  if (!tl_map)
-    len = 0;
-  else if ((uintptr_t)tl_map & 0x1)
-    len = 31;
-  else
-    len = (*(int *)tl_map) * 32;
-
-  if (tl_pos>= len)
-    return 0;
-
-  if ((uintptr_t)tl_map & 0x1)
-    return (((int)tl_map & (1 << (tl_pos + 1))) ? 1 : 0);
-  else
-    return ((((int *)tl_map)[1 + (tl_pos / 32)] & ((unsigned)1 << (tl_pos & 31)))
-            ? 1
-            : 0);
+  /* If we're pruning unused definitions, then ensure a newly referenced definition */
+  if (info->toplevel_defns
+      && (tl_pos >= (SCHEME_LINKLET_PREFIX_PREFIX
+                     + info->linklet->num_total_imports
+                     + info->linklet->num_exports))) {
+    Scheme_Object *defn;
+    defn = scheme_hash_get(info->toplevel_defns, scheme_make_integer(tl_pos));
+    if (defn) {
+      if (SAME_OBJ(scheme_true, scheme_hash_get(info->toplevel_defns, defn))) {
+        /* Enqueue the defn for traversal: */
+        scheme_hash_set(info->toplevel_defns,
+                        scheme_null,
+                        scheme_make_pair(defn,
+                                         scheme_hash_get(info->toplevel_defns, scheme_null)));
+        /* Add to indicate that it's enqueued */
+        scheme_hash_set(info->toplevel_defns, defn, scheme_false);
+      }
+      scheme_hash_set(info->toplevel_defns, scheme_make_integer(tl_pos), NULL);
+    }
+  }
 }
 
 static void *merge_tl_map(void *tl_map, void *new_tl_map)
