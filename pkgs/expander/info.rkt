@@ -2,7 +2,7 @@
 
 (define collection "expander")
 
-(define deps `(["racket" #:version "6.6.0.2"]
+(define deps `(["base" #:version "6.6.0.2"]
                "zo-lib"
                "compiler-lib"))
 

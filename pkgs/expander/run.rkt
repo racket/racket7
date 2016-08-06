@@ -34,7 +34,7 @@
 (define time-expand? #f)
 (define print-extracted-to #f)
 (define extract-to-c? #f)
-(define extract-to-decompiled? #t)
+(define extract-to-decompiled? #f)
 (define quiet-load? #f)
 (define startup-module main.rkt)
 (define submod-name #f)
