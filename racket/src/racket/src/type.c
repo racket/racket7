@@ -689,6 +689,7 @@ void scheme_register_traversers(void)
 
   GC_REG_TRAV(scheme_proc_shape_type, small_atomic_obj);
   GC_REG_TRAV(scheme_struct_proc_shape_type, struct_proc_shape);
+  GC_REG_TRAV(scheme_struct_prop_proc_shape_type, small_atomic_obj);
 
   GC_REG_TRAV(scheme_environment_variables_type, small_object);
 

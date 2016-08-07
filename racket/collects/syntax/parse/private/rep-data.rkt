@@ -1,19 +1,14 @@
 #lang racket/base
 (require racket/contract/base
          racket/dict
-         racket/list
          syntax/private/id-table
          racket/syntax
          syntax/parse/private/residual-ct ;; keep abs. path
          "make.rkt"
          "minimatch.rkt"
-         "kws.rkt"
-         "rep-attrs.rkt"
-         "rep-patterns.rkt")
+         "kws.rkt")
 ;; from residual.rkt
 (provide (struct-out stxclass)
-         (struct-out options)
-         (struct-out integrate)
          (struct-out conventions)
          (struct-out literalset)
          (struct-out eh-alternative-set)
@@ -21,8 +16,6 @@
 ;; from here
 (provide stxclass/s?
          stxclass/h?
-         stxclass-commit?
-         stxclass-delimit-cut?
          (struct-out rhs)
          (struct-out variant))
 
@@ -31,29 +24,29 @@
 (define (stxclass/h? x)
   (and (stxclass? x) (stxclass-splicing? x)))
 
-(define (stxclass-commit? x)
-  (options-commit? (stxclass-options x)))
-(define (stxclass-delimit-cut? x)
-  (options-delimit-cut? (stxclass-options x)))
+;; An RHS is #s(rhs SAttrs Bool Stx/#f Variants Stxs Bool Bool)
+(define-struct rhs
+  (attrs        ;; (Listof Sattr)
+   transparent? ;; Bool
+   description  ;; Syntax/#f
+   variants     ;; (Listof Variant)
+   definitions  ;; (Listof Stx), aux definitions from txlifts, local conventions?, etc
+   commit?      ;; Bool
+   delimit-cut? ;; Bool
+   ) #:prefab)
 
-#|
-An RHS is
-  #s(rhs stx (listof SAttr) bool stx/#f (listof Variant) (listof stx) Options Integrate/#f)
-definitions: auxiliary definitions from #:declare
-|#
-(define-struct rhs (ostx attrs transparent? description variants definitions options integrate)
-  #:prefab)
-
-#|
-A Variant is
-  (make-variant stx (listof SAttr) Pattern (listof stx))
-|#
-(define-struct variant (ostx attrs pattern definitions) #:prefab)
+;; A Variant is (variant Stx SAttrs Pattern Stxs)
+(define-struct variant
+  (ostx         ;; Stx
+   attrs        ;; (Listof SAttr)
+   pattern      ;; Pattern
+   definitions  ;; (Listof Stx)
+   ) #:prefab)
 
 ;; make-dummy-stxclass : identifier -> SC
 ;; Dummy stxclass for calculating attributes of recursive stxclasses.
 (define (make-dummy-stxclass name)
-  (make stxclass (syntax-e name) #f null #f #f #s(options #f #t) #f))
+  (make stxclass (syntax-e name) #f null #f #f #f #t #f #f))
 
 ;; Environments
 
@@ -63,12 +56,12 @@ DeclEnv =
                 (listof ConventionRule))
 
 DeclEntry =
-  (den:lit id id ct-phase ct-phase)
-  (den:datum-lit id symbol)
-  (den:class id id Arguments)
-  (den:magic-class id id Arguments stx)
-  (den:parser id (listof SAttr) bool bool bool)
-  (den:delayed id id)
+- (den:lit Id Id Stx Stx)
+- (den:datum-lit Id Symbol)
+- (den:class Id Id Arguments)
+- (den:magic-class Id Id Arguments Stx)
+- (den:parser Id (Listof SAttr) Bool Bool Bool String/#f)
+- (den:delayed Id Id)
 
 Arguments is defined in rep-patterns.rkt
 
@@ -97,7 +90,7 @@ expressions are duplicated, and may be evaluated in different scopes.
 
 (define-struct den:class (name class argu))
 (define-struct den:magic-class (name class argu role))
-(define-struct den:parser (parser attrs splicing? commit? delimit-cut?))
+(define-struct den:parser (parser attrs splicing? commit? delimit-cut? desc))
 ;; and from residual.rkt:
 ;;  (define-struct den:lit (internal external input-phase lit-phase))
 ;;  (define-struct den:datum-lit (internal external))
@@ -142,7 +135,7 @@ expressions are duplicated, and may be evaluated in different scopes.
                          stxclass-name)
            (wrong-syntax (if blame-declare? name id)
                          "identifier previously declared"))]
-      [(den:parser _p _a _sp _c _dc?)
+      [(den:parser _p _a _sp _c _dc? _desc)
        (wrong-syntax id "(internal error) late unbound check")]
       ['#f (void)])))
 
@@ -192,10 +185,6 @@ expressions are duplicated, and may be evaluated in different scopes.
 (define DeclEntry/c 
   (or/c den:lit? den:datum-lit? den:class? den:magic-class? den:parser? den:delayed?))
 
-;; ct-phase = syntax, expr that computes absolute phase
-;;   usually = #'(syntax-local-phase-level)
-(define ct-phase/c syntax?)
-
 (provide (struct-out den:class)
          (struct-out den:magic-class)
          (struct-out den:parser)
@@ -207,7 +196,6 @@ expressions are duplicated, and may be evaluated in different scopes.
 (provide/contract
  [DeclEnv/c contract?]
  [DeclEntry/c contract?]
- [ct-phase/c contract?]
 
  [make-dummy-stxclass (-> identifier? stxclass?)]
  [stxclass-lookup-config (parameter/c (symbols 'no 'try 'yes))]

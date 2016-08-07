@@ -1,7 +1,6 @@
 #lang racket/base
 (require syntax/parse/private/residual-ct ;; keep abs. path
          "rep-attrs.rkt"
-         "kws.rkt"
          "minimatch.rkt"
          racket/syntax)
 (provide (all-defined-out))
@@ -14,8 +13,8 @@ Uses Arguments from kws.rkt
 A SinglePattern is one of
   (pat:any)
   (pat:svar id)  -- "simple" var, no stxclass
-  (pat:var/p id id Arguments (Listof IAttr) nat/#f bool stx) -- var with parser
-  (pat:literal identifier ct-phase ct-phase)
+  (pat:var/p Id Id Arguments (Listof IAttr) Nat/#f Bool Stx String/#f) -- var with parser
+  (pat:literal identifier Stx Stx)
   (pat:datum datum)
   (pat:action ActionPattern SinglePattern)
   (pat:head HeadPattern SinglePattern)
@@ -23,7 +22,7 @@ A SinglePattern is one of
   (pat:and (listof SinglePattern))
   (pat:or (listof IAttr) (listof SinglePattern) (listof (listof IAttr)))
   (pat:not SinglePattern)
-  (pat:pair boolean SinglePattern SinglePattern)
+  (pat:pair SinglePattern SinglePattern)
   (pat:vector SinglePattern)
   (pat:box SinglePattern)
   (pat:pstruct key SinglePattern)
@@ -39,13 +38,13 @@ A ListPattern is a subtype of SinglePattern; one of
   (pat:datum '())
   (pat:action ActionPattern ListPattern)
   (pat:head HeadPattern ListPattern)
-  (pat:pair #t SinglePattern ListPattern)
+  (pat:pair SinglePattern ListPattern)
   (pat:dots EllipsisHeadPattern ListPattern)
 |#
 
 (define-struct pat:any () #:prefab)
 (define-struct pat:svar (name) #:prefab)
-(define-struct pat:var/p (name parser argu nested-attrs attr-count commit? role) #:prefab)
+(define-struct pat:var/p (name parser argu nested-attrs attr-count commit? role desc) #:prefab)
 (define-struct pat:literal (id input-phase lit-phase) #:prefab)
 (define-struct pat:datum (datum) #:prefab)
 (define-struct pat:action (action inner) #:prefab)
@@ -54,7 +53,7 @@ A ListPattern is a subtype of SinglePattern; one of
 (define-struct pat:and (patterns) #:prefab)
 (define-struct pat:or (attrs patterns attrss) #:prefab)
 (define-struct pat:not (pattern) #:prefab)
-(define-struct pat:pair (proper? head tail) #:prefab)
+(define-struct pat:pair (head tail) #:prefab)
 (define-struct pat:vector (pattern) #:prefab)
 (define-struct pat:box (pattern) #:prefab)
 (define-struct pat:pstruct (key pattern) #:prefab)
@@ -92,7 +91,7 @@ A SideClause is just an ActionPattern
 
 #|
 A HeadPattern is one of 
-  (hpat:var/p id id Arguments (listof IAttr) nat/#f bool stx)
+  (hpat:var/p Id Id Arguments (Listof IAttr) Nat/#f Bool Stx String/#f)
   (hpat:seq ListPattern)
   (hpat:action ActionPattern HeadPattern)
   (hpat:and HeadPattern SinglePattern)
@@ -107,7 +106,7 @@ A HeadPattern is one of
   (hpat:peek-not HeadPattern)
 |#
 
-(define-struct hpat:var/p (name parser argu nested-attrs attr-count commit? role) #:prefab)
+(define-struct hpat:var/p (name parser argu nested-attrs attr-count commit? role desc) #:prefab)
 (define-struct hpat:seq (inner) #:prefab)
 (define-struct hpat:action (action inner) #:prefab)
 (define-struct hpat:and (head single) #:prefab)
@@ -215,7 +214,7 @@ A RepConstraint is one of
      null]
     [(pat:svar name)
      (list (attr name 0 #t))]
-    [(pat:var/p name _ _ nested-attrs _ _ _)
+    [(pat:var/p name _ _ nested-attrs _ _ _ _)
      (if name (cons (attr name 0 #t) nested-attrs) nested-attrs)]
     [(pat:reflect _ _ _ name nested-attrs)
      (if name (cons (attr name 0 #t) nested-attrs) nested-attrs)]
@@ -227,7 +226,7 @@ A RepConstraint is one of
      (append-iattrs (map pattern-attrs (list a sp)))]
     [(pat:head headp tailp)
      (append-iattrs (map pattern-attrs (list headp tailp)))]
-    [(pat:pair _proper? headp tailp)
+    [(pat:pair headp tailp)
      (append-iattrs (map pattern-attrs (list headp tailp)))]
     [(pat:vector sp)
      (pattern-attrs sp)]
@@ -275,7 +274,7 @@ A RepConstraint is one of
      (pattern-attrs sp)]
 
     ;; -- H patterns
-    [(hpat:var/p name _ _ nested-attrs _ _ _)
+    [(hpat:var/p name _ _ nested-attrs _ _ _ _)
      (if name (cons (attr name 0 #t) nested-attrs) nested-attrs)]
     [(hpat:reflect _ _ _ name nested-attrs)
      (if name (cons (attr name 0 #t) nested-attrs) nested-attrs)]
@@ -356,15 +355,12 @@ A RepConstraint is one of
 (define (action-pattern->single-pattern a)
   (pat:action a (pat:any)))
 
-(define (proper-list-pattern? p trust-pair?)
+(define (proper-list-pattern? p)
   (or (and (pat:datum? p) (eq? (pat:datum-datum p) '()))
-      (and (pat:pair? p)
-           (if trust-pair?
-               (pat:pair-proper? p)
-               (proper-list-pattern? (pat:pair-tail p) trust-pair?)))
-      (and (pat:head? p) (proper-list-pattern? (pat:head-tail p) trust-pair?))
-      (and (pat:dots? p) (proper-list-pattern? (pat:dots-tail p) trust-pair?))
-      (and (pat:action? p) (proper-list-pattern? (pat:action-inner p) trust-pair?))))
+      (and (pat:pair? p) (proper-list-pattern? (pat:pair-tail p)))
+      (and (pat:head? p) (proper-list-pattern? (pat:head-tail p)))
+      (and (pat:dots? p) (proper-list-pattern? (pat:dots-tail p)))
+      (and (pat:action? p) (proper-list-pattern? (pat:action-inner p)))))
 
 ;; ----
 
@@ -475,7 +471,7 @@ A RepConstraint is one of
     [(pat:datum '()) 'yes]
     [(pat:action ap lp) (lpat-nullable lp)]
     [(pat:head hp lp) (3and (hpat-nullable hp) (lpat-nullable lp))]
-    [(pat:pair '#t sp lp) 'no]
+    [(pat:pair sp lp) 'no]
     [(pat:dots ehps lp) (3and (3andmap ehpat-nullable ehps) (lpat-nullable lp))]
     ;; For hpat:and, handle the following which are not ListPatterns
     [(pat:and lps) (3andmap lpat-nullable lps)]
@@ -494,6 +490,7 @@ A RepConstraint is one of
     [(hpat:commit hp) (hpat-nullable hp)]
     [(hpat:ord hp _ _) (hpat-nullable hp)]
     [(hpat:post hp) (hpat-nullable hp)]
+    [(? pattern? hp) 'no]
     [_ 'unknown]))
 
 ;; ehpat-nullable : EllipsisHeadPattern -> AbsNullable

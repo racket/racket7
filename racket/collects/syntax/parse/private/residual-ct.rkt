@@ -1,8 +1,6 @@
 #lang racket/base
 (provide (struct-out attr)
          (struct-out stxclass)
-         (struct-out options)
-         (struct-out integrate)
          (struct-out conventions)
          (struct-out literalset)
          (struct-out lse:lit)
@@ -15,7 +13,12 @@
          log-syntax-parse-error
          log-syntax-parse-warning
          log-syntax-parse-info
-         log-syntax-parse-debug)
+         log-syntax-parse-debug
+         prop:pattern-expander
+         pattern-expander?
+         pattern-expander-proc
+         current-syntax-parse-pattern-introducer
+         syntax-local-syntax-parse-pattern-introduce)
 
 (define-logger syntax-parse)
 
@@ -24,20 +27,18 @@
 
 ;; == from rep-data.rkt
 
-#|
-A stxclass is
-  #s(stxclass symbol (listof symbol) (list-of SAttr) identifier bool Options Integrate/#f)
-where Options = #s(options boolean boolean)
-      Integrate = #s(integrate id string)
-Arity is defined in kws.rkt
-|#
-(define-struct stxclass (name arity attrs parser splicing? options integrate)
-  #:prefab)
-
-(define-struct options (commit? delimit-cut?)
-  #:prefab)
-(define-struct integrate (predicate description)
-  #:prefab)
+;; A stxclass is #s(stxclass Symbol Symbols SAttrs Id Bool Bool BoolOptions Id/#f String/#f)
+(define-struct stxclass
+  (name         ;; Symbol
+   arity        ;; Arity (defined in kws.rkt)
+   attrs        ;; (Listof SAttr)
+   parser       ;; Id, reference to parser (see parse.rkt for parser signature)
+   splicing?    ;; Bool
+   commit?      ;; Bool
+   delimit-cut? ;; Bool
+   inline       ;; Id/#f, reference to a predicate
+   desc         ;; String/#f, String = known constant description
+   ) #:prefab)
 
 #|
 A Conventions is
@@ -50,8 +51,8 @@ A ConventionRule is (list regexp DeclEntry)
 A LiteralSet is
  (make-literalset (listof LiteralSetEntry))
 An LiteralSetEntry is one of
- - (make-lse:lit symbol id ct-phase)
- - (make-lse:datum-lit symbol symbol)
+ - (make-lse:lit Symbol Id Stx)
+ - (make-lse:datum-lit Symbol Symbol)
 |#
 (define-struct literalset (literals) #:transparent)
 (define-struct lse:lit (internal external phase) #:transparent)
@@ -69,3 +70,20 @@ An EH-alternative is
 (define-struct den:lit (internal external input-phase lit-phase) #:transparent)
 (define-struct den:datum-lit (internal external) #:transparent)
 (define-struct den:delayed (parser class))
+
+;; == Pattern expanders
+
+(define-values (prop:pattern-expander pattern-expander? get-proc-getter)
+  (make-struct-type-property 'pattern-expander))
+
+(define (pattern-expander-proc pat-expander)
+  (define get-proc (get-proc-getter pat-expander))
+  (get-proc pat-expander))
+
+(define current-syntax-parse-pattern-introducer
+  (make-parameter
+   (lambda (stx)
+     (error 'syntax-local-syntax-parse-pattern-introduce "not expanding syntax-parse pattern"))))
+
+(define (syntax-local-syntax-parse-pattern-introduce stx)
+  ((current-syntax-parse-pattern-introducer) stx))

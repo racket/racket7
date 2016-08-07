@@ -206,7 +206,32 @@
                     `(letrec ([x (,e? y y)]
                               [y (random)])
                        (list x x y y))
-                    #f))])
+                    #f)
+         (test-comp `(lambda (x y) (when (and (pair? x) (box? y)) (,e? x y)))
+                    `(lambda (x y) (when (and (pair? x) (box? y)) #f)))
+         (test-comp `(lambda (x y) (car x) (unbox y) (,e? x y))
+                    `(lambda (x y) (car x) (unbox y) #f))
+         (test-comp `(lambda (x) (car x) (,e? x (box 0)))
+                    `(lambda (x) (car x) #f))
+         ;Ensure that the reduction doesn't eliminate side effects
+         (test-comp `(lambda (x) (car x) (,e? (begin (newline) x) (box 0)))
+                    `(lambda (x) (car x) #f)
+                    #f)
+         (test-comp `(lambda (x) (car x) (,e? x (begin (newline) (box 0))))
+                    `(lambda (x) (car x) #f)
+                    #f)
+         (test-comp `(lambda () (,e? (box 0) (begin (newline) 7)))
+                    `(lambda () (begin (newline) 7))
+                    #f)
+         (test-comp `(lambda () (,e? (begin (newline) 7) (box 0)))
+                    `(lambda () (begin (newline) 7))
+                    #f)
+         (test-comp `(lambda (x) (if (,e? x '(0)) (pair? x) 0))
+                    `(lambda (x) (if (,e? x '(0)) #t 0)))
+         (test-comp `(lambda (x) (if (,e? x (list 0)) (pair? x) 0))
+                    `(lambda (x) (if (,e? x (list 0)) #t 0)))
+         (test-comp `(lambda (x y) (car y) (if (,e? x y) (pair? x) 0))
+                    `(lambda (x y) (car y) (if (,e? x y) #t 0))))])
   (test-equal? 'eq?)
   (test-equal? 'eqv?)
   (test-equal? 'equal?))
@@ -729,23 +754,6 @@
               (let ([y (random)])
                 (begin0 y (set! y 5)))))
 
-(test-comp '(lambda (x y) (car x) (unbox y) #f)
-           '(lambda (x y) (car x) (unbox y) (eq? x y)))
-(test-comp '(lambda (x) (car x) #f)
-           '(lambda (x) (car x) (eq? x (box 0))))
-(test-comp '(lambda (x) (car x) #f)
-           '(lambda (x) (car x) (eq? (begin (newline) x) (box 0)))
-           #f)
-(test-comp '(lambda (x) (car x) #f)
-           '(lambda (x) (car x) (eq? x (begin (newline) (box 0))))
-           #f)
-(test-comp '(lambda () (begin (newline) 7))
-           '(lambda () (eq? (box 0) (begin (newline) 7)))
-           #f)
-(test-comp '(lambda () (begin (newline) 7))
-           '(lambda () (eq? (begin (newline) 7) (box 0)))
-           #f)
-
 ; It's necessary to use the random from #%kernel because otherwise
 ; the function will keep an unnecessary reference for the module that
 ; defines the random visible from racket/base.
@@ -1184,12 +1192,6 @@
 (test-comp '(lambda (x) (if (null? x) 1 0) null)
            '(lambda (x) (if (null? x) 1 0) x)
            #f)
-(test-comp '(lambda (x) (if (eq? x '(0)) #t 0))
-           '(lambda (x) (if (eq? x '(0)) (pair? x) 0)))
-(test-comp '(lambda (x) (if (eq? x (list 0)) #t 0))
-           '(lambda (x) (if (eq? x (list 0)) (pair? x) 0)))
-(test-comp '(lambda (x y) (car y) (if (eq? x y) #t 0))
-           '(lambda (x y) (car y) (if (eq? x y) (pair? x) 0)))
 (test-comp '(lambda (x) (if x 1 (list #f)))
            '(lambda (x) (if x 1 (list x))))
 
@@ -1224,6 +1226,18 @@
                           (lambda () r)))
            '(lambda (z) (lambda ()
                           (lambda () z)))
+           #f)
+;; Don't move omittable expressions that keep a reference:
+(test-comp '(lambda (z) (let ([r (pair? z)])
+                          (lambda () r)))
+           '(lambda (z) (lambda ()
+                          (lambda () (pair? z))))
+           #f)
+(test-comp '(lambda (z) (when (list? z)
+                          (let ([r (list->vector z)])
+                            (lambda () r))))
+           '(lambda (z) (when (list? z)
+                          (lambda () (list->vector z))))
            #f)
 
 
@@ -3262,6 +3276,97 @@
                (a? (a-x (a 1 2)))
                5)))
 
+(test-comp '(lambda ()
+             (make-struct-type 'a #f 0 0 #f)
+             10)
+           '(lambda ()
+             10))
+
+(test-comp '(lambda ()
+             (make-struct-type-property 'a)
+             10)
+           '(lambda ()
+             10))
+
+(test-comp '(module m racket/base
+             (define-values (prop:a a? a-ref) (make-struct-type-property 'a))
+             (lambda (x)
+               (a? x)
+               (if a? (if a-ref x 11) 10)))
+           '(module m racket/base
+             (define-values (prop:a a? a-ref) (make-struct-type-property 'a))
+             (lambda (x)
+               x)))
+
+(test-comp '(module m racket/base
+             (define (f x) (list (g x) g))
+             ;; Defining and using a property doesn't interrupt a sequence
+             ;; of simultaneous definitions, so `g` above can be inlined
+             (define-values (prop:a a? a-ref) (make-struct-type-property 'a))
+             (struct b () #:property prop:a 'a)
+             (define (g y) (list y)))
+           '(module m racket/base
+             (define (f x) (list (list x) g))
+             (define-values (prop:a a? a-ref) (make-struct-type-property 'a))
+             (struct b () #:property prop:a 'a)
+             (define (g y) (list y))))
+
+(test-comp '(module m racket/base
+             (define (f x) (list (g x) g))
+             ;; A property type with a guard inhibits inlining, because the
+             ;; guard might raise an error
+             (define-values (prop:a a? a-ref) (make-struct-type-property 'a error))
+             (struct b () #:property prop:a 'a)
+             (define (g y) (list y)))
+           '(module m racket/base
+             (define (f x) (list (list x) g))
+             (define-values (prop:a a? a-ref) (make-struct-type-property 'a error))
+             (struct b () #:property prop:a 'a)
+             (define (g y) (list y)))
+           #f)
+
+(module struct-type-property-a racket/base
+  (provide prop:a)
+  (define-values (prop:a a? a-ref) (make-struct-type-property 'a)))
+
+(test-comp '(module m racket/base
+             (require 'struct-type-property-a)
+             (define (f x) (list (g x) g))
+             (struct b () #:property prop:a 'a)
+             (define (g y) (list y)))
+           '(module m racket/base
+             (require 'struct-type-property-a)
+             (define (f x) (list (list x) g))
+             (struct b () #:property prop:a 'a)
+             (define (g y) (list y))))
+
+(module struct-type-property-a-with-guard racket/base
+  (provide prop:a)
+  (define-values (prop:a a? a-ref) (make-struct-type-property 'a error)))
+
+(test-comp '(module m racket/base
+             (require 'struct-type-property-a-with-guard)
+             (define (f x) (list (g x) g))
+             (struct b () #:property prop:a 'a)
+             (define (g y) (list y)))
+           '(module m racket/base
+             (require 'struct-type-property-a-with-guard)
+             (define (f x) (list (list x) g))
+             (struct b () #:property prop:a 'a)
+             (define (g y) (list y)))
+           #f)
+
+;; A function with a required optional argument creates a pattern like
+;; the ones above, but intermediate points include extra references
+;; that make it difficult to check with `test-comp`
+#;
+(test-comp '(module m racket/base
+             (define (f x) (list (g #:x x)))
+             (define (g #:x y) (list y)))
+           '(module m racket/base
+             (define (f x) (list (list x)))
+             (define (g #:x y) (list y))))
+
 (test-comp `(lambda (b)
               (let ([v (unbox b)])
                 (with-continuation-mark 'x 'y (unbox v))))
@@ -3484,6 +3589,13 @@
   (check-number-op-unary 'add1)
   (check-number-op-unary 'sub1)
   (check-number-op-unary 'abs))
+
+(test-comp '(lambda () (-) (void))
+           '(lambda () (void))
+           #f)
+(test-comp '(lambda () (/) (void))
+           '(lambda () (void))
+           #f)
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Check elimination of dead code after error

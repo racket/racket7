@@ -1653,10 +1653,14 @@ static Scheme_Object *define_values_execute(Scheme_Object *vec)
 	scheme_current_thread->values_buffer = NULL;
       scheme_current_thread->ku.multiple.array = NULL;
 
-      is_st = !!scheme_is_simple_make_struct_type(vals_expr, g, 1, 0, 1, 
+      is_st = !!scheme_is_simple_make_struct_type(vals_expr, g, CHECK_STRUCT_TYPE_RESOLVED, 
                                                   NULL, NULL, NULL, NULL,
                                                   NULL, MZ_RUNSTACK, 0, 
                                                   NULL, NULL, 5);
+      if (!is_st)
+        is_st = scheme_is_simple_make_struct_type_property(vals_expr, g, CHECK_STRUCT_TYPE_RESOLVED, 
+                                                           NULL, NULL, NULL, MZ_RUNSTACK, 0, 
+                                                           NULL, 5);
       
       for (i = 0; i < g; i++) {
 	Scheme_Prefix *toplevels;
@@ -1664,8 +1668,6 @@ static Scheme_Object *define_values_execute(Scheme_Object *vec)
         var = SCHEME_VEC_ELS(vec)[i+delta];
         toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
         b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
-
-        // REMOVEME printf("%s %ld\n", scheme_write_to_string((Scheme_Object *)b->key, 0), SCHEME_TOPLEVEL_POS(var));
 
         scheme_set_global_bucket("define-values", b, values[i], 1);
         

@@ -12,6 +12,12 @@
 
 #include <errno.h>
 
+#ifdef MZ_USE_FFIPOLL
+# define MZ_USE_FFIPOLL_COND 1
+#else /* MZ_USE_FFIPOLL undefined */
+# define MZ_USE_FFIPOLL_COND 0
+#endif /* MZ_USE_FFIPOLL */
+
 #ifndef SIZEOF_BOOL
 # define SIZEOF_BOOL 0
 #endif /* SIZEOF_BOOL */
@@ -3505,7 +3511,9 @@ static void ffi_call_in_orig_place(ffi_cif *cif, void *c_func, intptr_t cfoff,
          to handle those anyway, since the call in the original
          place may lead to a callback that should run in
          this place. */
+#     ifndef MZ_USE_FFIPOLL
       check_foreign_work(0);
+#     endif /* MZ_USE_FFIPOLL */
     }
   }
 }
@@ -3580,7 +3588,7 @@ static Scheme_Object *ffi_do_call(int argc, Scheme_Object *argv[], Scheme_Object
   int i;
   intptr_t basetype, offset, *offsets;
 #ifdef MZ_USE_PLACES
-  if (orig_place && (scheme_current_place_id == 0))
+  if (orig_place && (scheme_current_place_id == 0) && !MZ_USE_FFIPOLL_COND)
     orig_place = 0;
 #endif
   if (!cif) {
@@ -3722,7 +3730,7 @@ static Scheme_Object *foreign_ffi_call(int argc, Scheme_Object *argv[])
   int i, nargs, save_errno;
   Scheme_Object *lock = scheme_false;
 # ifdef MZ_USE_PLACES
-  int orig_place;
+  int orig_place = MZ_USE_FFIPOLL_COND;
 # define FFI_CALL_VEC_SIZE 9
 # else /* MZ_USE_PLACES undefined */
 # define FFI_CALL_VEC_SIZE 8
@@ -3757,10 +3765,10 @@ static Scheme_Object *foreign_ffi_call(int argc, Scheme_Object *argv[])
     }
   } else
     save_errno = 0;
-# ifdef MZ_USE_PLACES
+# if defined(MZ_USE_PLACES) && !defined(MZ_USE_FFIPOLL)
   if (argc > 5) orig_place = SCHEME_TRUEP(argv[5]);
   else orig_place = 0;
-# endif /* MZ_USE_PLACES */
+# endif /* defined(MZ_USE_PLACES) && !defined(MZ_USE_FFIPOLL) */
   if (argc > 6) {
     if (!SCHEME_FALSEP(argv[6])) {
       if (!SCHEME_CHAR_STRINGP(argv[6]))
@@ -3899,11 +3907,19 @@ static Scheme_Object *callback_thunk(void *_qc, int argc, Scheme_Object *argv[])
 }
 
 static void check_foreign_work(int check_for_in_original)
+# ifdef MZ_USE_FFIPOLL
+  XFORM_SKIP_PROC
+# endif /* MZ_USE_FFIPOLL */
 {
   GC_CAN_IGNORE Queued_Callback *qc;
   ffi_callback_struct *data;
   Scheme_Object *a[1], *proc;
 
+#ifdef MZ_USE_FFIPOLL
+  /* We don't currently support callbacks from C to Racket in FFIPOLL
+     mode, and this function is not allowed to touch the GC or Racket
+     in that mode. */
+#else
   if (ffi_sync_queue) {
     do {
       mzrt_mutex_lock(ffi_sync_queue->lock);
@@ -3931,9 +3947,10 @@ static void check_foreign_work(int check_for_in_original)
 
     } while (qc);
   }
+#endif
 
 #ifdef MZ_USE_PLACES
-  if (check_for_in_original && (scheme_current_place_id == 0) && orig_place_mutex) {
+  if (check_for_in_original && ((scheme_current_place_id == 0) || MZ_USE_FFIPOLL_COND) && orig_place_mutex) {
     FFI_Orig_Place_Call *todo;
     void *sh;
 
@@ -3967,6 +3984,9 @@ static void check_foreign_work(int check_for_in_original)
 }
 
 void scheme_check_foreign_work(void)
+# ifdef MZ_USE_FFIPOLL
+  XFORM_SKIP_PROC
+# endif /* MZ_USE_FFIPOLL */
 {
   check_foreign_work(1);
 }

@@ -291,6 +291,13 @@ Scheme_Object *scheme_intern_struct_proc_shape(int shape)
   return scheme_intern_symbol(buf);
 }
 
+Scheme_Object *scheme_intern_struct_prop_proc_shape(int shape)
+{
+  char buf[20];
+  sprintf(buf, "prop%d", shape);
+  return scheme_intern_symbol(buf);
+}
+
 /*********************************************************************/
 
 Scheme_Comp_Env *scheme_new_comp_env(Scheme_Linklet *linklet, int flags)
