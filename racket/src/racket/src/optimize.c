@@ -8291,11 +8291,6 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
                                      info);
         info->cross = limited_info->cross;
 
-        if (cont) {
-          /* Record for the resolve pass's pruning that definition is omittable */
-          SCHEME_SET_DEFN_CAN_OMIT(defn);
-        }
-
         if (n == 1) {
           if (scheme_ir_propagate_ok(e, info))
             cnst = 1;
@@ -8326,6 +8321,11 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
              enough that the validator can see it, re-check whether we can continue
              a group of simultaneously defined variables. */
           cont = scheme_omittable_expr(e, n, 5, OMITTABLE_IGNORE_APPN_OMIT, limited_info, NULL);
+        }
+
+        if (cont) {
+          /* Record for the resolve pass's pruning that definition is omittable */
+          SCHEME_SET_DEFN_CAN_OMIT(defn);
         }
 
 	if (cnst) {

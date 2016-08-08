@@ -118,6 +118,7 @@ static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts);
 static void prune_unused_imports(Scheme_Linklet *linklet);
 static void prepare_definition_queue(Scheme_Linklet *linklet, Resolve_Info *rslv);
 static Resolve_Info *resolve_info_create(Scheme_Linklet *rp, int enforce_const);
+static void install_values_false(Scheme_Object *e);
 
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
@@ -2050,8 +2051,10 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
           MZ_ASSERT(SAME_OBJ(e, scheme_true));
           e = SCHEME_CAR(l);
           MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type));
-          MZ_ASSERT(SCHEME_DEFN_VAR_COUNT(e) == 1);
-          SCHEME_DEFN_RHS(e) = scheme_make_integer(5);
+          if (SCHEME_DEFN_VAR_COUNT(e) == 1)
+            SCHEME_DEFN_RHS(e) = scheme_false;
+          else
+            install_values_false(e);
           e = resolve_expr(SCHEME_CAR(l), rslv);
           body = scheme_make_pair(e, body);
         }
@@ -2107,9 +2110,8 @@ static void prepare_definition_queue(Scheme_Linklet *linklet, Resolve_Info *rslv
     
     if (SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type)) {
       vcnt = SCHEME_DEFN_VAR_COUNT(e);
-      if ((vcnt == 1)
-          && (SCHEME_DEFN_CAN_OMITP(e)
-              || scheme_omittable_expr(SCHEME_DEFN_RHS(e), vcnt, 5, 0, NULL, NULL))) {
+      if (SCHEME_DEFN_CAN_OMITP(e)
+          || scheme_omittable_expr(SCHEME_DEFN_RHS(e), vcnt, 5, 0, NULL, NULL)) {
         for (j = 0; j < vcnt; j++) {
           var = SCHEME_DEFN_VAR_(e, j);
           MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(var), scheme_ir_toplevel_type));
@@ -2231,6 +2233,31 @@ static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int se
       scheme_hash_set(used_names, n, scheme_true);
       return n;
     }
+  }
+}
+
+static void install_values_false(Scheme_Object *defn)
+{
+  int cnt = SCHEME_DEFN_VAR_COUNT(defn);
+
+  if (cnt == 2) {
+    Scheme_App3_Rec *app;
+    app = MALLOC_ONE_TAGGED(Scheme_App3_Rec);
+    app->iso.so.type = scheme_application3_type;
+    app->rator = scheme_values_proc;
+    app->rand1 = scheme_false;
+    app->rand2 = scheme_false;
+    SCHEME_APPN_FLAGS(app) |= APPN_FLAG_SFS_TAIL;
+    SCHEME_DEFN_RHS(defn) = (Scheme_Object *)app;
+  } else {
+    Scheme_App_Rec *app;
+    int i;
+    app = scheme_malloc_application(cnt+1);
+    app->args[0] = scheme_values_proc;
+    for (i = 0; i < cnt; i++) {
+      app->args[i+1] = scheme_false;
+    }
+    SCHEME_DEFN_RHS(defn) = (Scheme_Object *)app;
   }
 }
 
