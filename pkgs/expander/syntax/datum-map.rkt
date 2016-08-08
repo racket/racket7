@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../common/prefab.rkt")
+(require "../common/prefab.rkt"
+         "../common/inline.rkt")
 
 (provide datum-map
          datum-has-elements?)
@@ -16,12 +17,30 @@
 ;; discovered, the procedure attached to 'cycle-fail in the initial
 ;; table is called
 
-(define (datum-map s f [seen #f])
-  (let loop ([tail? #f] [s s] [prev-depth 0] [prev-seen seen])
+;; The inline version uses `f` only in an application position to
+;; help avoid allocating a closure. It also covers only the most common
+;; cases, defering to the general (not inlined) function for other cases.
+(define-inline (datum-map s f [seen #f])
+  (let loop ([tail? #f] [s s] [prev-depth 0])
     (define depth (add1 prev-depth)) ; avoid cycle-checking overhead for shallow cases
+    (cond
+     [(and seen (depth . > . 32))
+      (datum-map-slow tail? s (lambda (tail? s) (f tail? s)) seen)]
+     [(null? s) (f tail? s)]
+     [(pair? s)
+      (f tail? (cons (loop #f (car s) depth)
+                     (loop #t (cdr s) depth)))]
+     [(or (symbol? s) (boolean? s) (number? s))
+      (f #f s)]
+     [(or (vector? s) (box? s) (prefab-struct-key s) (hash? s))
+      (datum-map-slow tail? s (lambda (tail? s) (f tail? s)) seen)]
+     [else (f #f s)])))
+
+(define (datum-map-slow tail? s f seen)
+  (let loop ([tail? tail?] [s s] [prev-seen seen])
     (define seen
       (cond
-       [(and prev-seen (depth . > . 32) (datum-has-elements? s))
+       [(and prev-seen (datum-has-elements? s))
         (cond
          [(hash-ref prev-seen s #f)
           ((hash-ref prev-seen 'cycle-fail) s)]
@@ -30,37 +49,37 @@
     (cond
      [(null? s) (f tail? s)]
      [(pair? s)
-      (f tail? (cons (loop #f (car s) depth seen)
-                     (loop #t (cdr s) depth seen)))]
+      (f tail? (cons (loop #f (car s) seen)
+                     (loop #t (cdr s) seen)))]
      [(or (symbol? s) (boolean? s) (number? s))
       (f #f s)]
      [(vector? s)
       (f #f (vector->immutable-vector
              (for/vector #:length (vector-length s) ([e (in-vector s)])
-                         (loop #f e depth seen))))]
+                         (loop #f e seen))))]
      [(box? s)
-      (f #f (box-immutable (loop #f (unbox s) depth seen)))]
+      (f #f (box-immutable (loop #f (unbox s) seen)))]
      [(immutable-prefab-struct-key s)
       => (lambda (key)
            (f #f
               (apply make-prefab-struct
                      key
                      (for/list ([e (in-vector (struct->vector s) 1)])
-                       (loop #f e depth seen)))))]
+                       (loop #f e seen)))))]
      [(and (hash? s) (immutable? s))
       (cond
        [(hash-eq? s)
         (f #f
            (for/hasheq ([(k v) (in-hash s)])
-             (values k (loop #f v depth seen))))]
+             (values k (loop #f v seen))))]
        [(hash-eqv? s)
         (f #f
            (for/hasheqv ([(k v) (in-hash s)])
-             (values k (loop #f v depth seen))))]
+             (values k (loop #f v seen))))]
        [else
         (f #f
            (for/hash ([(k v) (in-hash s)])
-             (values k (loop #f v depth seen))))])]
+             (values k (loop #f v seen))))])]
      [else (f #f s)])))
 
 (define (datum-has-elements? d)

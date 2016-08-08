@@ -2,6 +2,7 @@
 (require "../compile/serialize-property.rkt"
          "../compile/serialize-state.rkt"
          "../common/set.rkt"
+         "../common/inline.rkt"
          "preserved.rkt"
          "tamper.rkt"
          "datum-map.rkt")
@@ -194,7 +195,7 @@
 ;; The optional `seen` argument is an `eq?`-based immutable hash table
 ;; to detect and reject cycles. See `datum-map`.
 
-(define (syntax-map s f d->s s-e [seen #f])
+(define-inline (syntax-map s f d->s s-e [seen #f])
   (let loop ([s s])
     (datum-map s
                (lambda (tail? v)
@@ -207,7 +208,7 @@
 ;;  when a syntax object is found, it is just passed to `d` --- so there's
 ;;  no `d->s` or `s-e`, since they would not be called
 
-(define (non-syntax-map s f [s-> (lambda (x) x)] [seen #f])
+(define-inline (non-syntax-map s f [s-> (lambda (x) x)] [seen #f])
   (datum-map s
              (lambda (tail? v)
                (cond
