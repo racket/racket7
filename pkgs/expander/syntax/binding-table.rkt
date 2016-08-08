@@ -193,8 +193,7 @@
            ;; (extracted from the symbol-keyed hash table) or it is a pair
            ;; for walking down the list of bulk bindings
            ([i (or (hash-iterate-first ht)
-                   bulk-bindings)]
-            [already-covered-scopes #hasheq()]) ; scope sets with bindings to overriding bulk bindings
+                   bulk-bindings)])
            ;; We're done when we've moved on to the bulk-binding part
            ;; and none are left:
            (not (null? i))
@@ -202,10 +201,7 @@
            ;; either can be #f, in which case the consumer of the
            ;; sequence should move on the the next result
            ([(scopes-id) (cond
-                          [(pair? i)
-                           (define scs (bulk-binding-at-scopes (car i)))
-                           (and (not (set-member? already-covered-scopes scs))
-                                scs)]
+                          [(pair? i) (bulk-binding-at-scopes (car i))]
                           [else (hash-iterate-key ht i)])]
             [(binding-id) (cond
                            [(pair? i)
@@ -216,20 +212,12 @@
                            [else (hash-iterate-value ht i)])])
            #t
            #t
-           [;; Next value for the index `i`:
-            (cond
+           ;; Next value for the index `i`:
+           [(cond
              [(pair? i) (cdr i)]
              [else (or (hash-iterate-next ht i)
-                       bulk-bindings)])
-            ;; Next value for `already-covered-scopes`; add the just-reported scope set
-            ;; if we'll continue to explore bulk bindings
-            (cond
-             [(and (pair? bulk-bindings)
-                   scopes-id
-                   binding-id
-                   (or (not (pair? i)) (not (null? (cdr i)))))
-              (set-add already-covered-scopes scopes-id)]
-             [else already-covered-scopes])])]])))
+                       bulk-bindings)])])]])))
+
 ;; ----------------------------------------
 
 ;; Return a set of symbols that have bindings for a given scope set

@@ -23,22 +23,29 @@
       (define bindings
         (cond
          [(identifier? s)
-          (for*/list ([sc (in-set s-scs)]
+          (for*/fold ([bindings null] [covered-scope-sets (set)])
+                     ([sc (in-set s-scs)]
                       [(scs b) (in-binding-table sym (scope-binding-table sc) s null)]
                       #:when (and scs b
                                   (or all-bindings?
-                                      (subset? scs s-scs))))
-            (hash 'name (syntax-e s)
-                  'context (scope-set->context scs)
-                  'match? (subset? scs s-scs)
-                  (if (local-binding? b)
-                      'local
-                      'module)
-                  (if (local-binding? b)
-                      (local-binding-key b)
-                      (vector (module-binding-sym b)
-                              (module-binding-module b)
-                              (module-binding-phase b)))))]
+                                      (subset? scs s-scs))
+                                  ;; Skip overidden:
+                                  (not (set-member? covered-scope-sets scs))))
+            (values
+             (cons
+              (hash 'name (syntax-e s)
+                    'context (scope-set->context scs)
+                    'match? (subset? scs s-scs)
+                    (if (local-binding? b)
+                        'local
+                        'module)
+                    (if (local-binding? b)
+                        (local-binding-key b)
+                        (vector (module-binding-sym b)
+                                (module-binding-module b)
+                                (module-binding-phase b))))
+              bindings)
+             (set-add covered-scope-sets scs)))]
          [else null]))
       (if (null? bindings)
           context-ht

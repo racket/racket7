@@ -658,33 +658,35 @@
            (resolve-cache-get sym phase scopes))
       => (lambda (b) b)]
      [else
-      (define candidates
-        (for*/list ([sc (in-set scopes)]
+      (define-values (best-scopes best-binding)
+        (for*/fold ([best-scopes #f] [best-binding #f])
+                   ([sc (in-set scopes)]
                     [(b-scopes binding) (in-binding-table sym (scope-binding-table sc) s extra-shifts)]
                     #:when (and b-scopes binding (subset? b-scopes scopes)))
-          (cons b-scopes binding)))
-      (define max-candidate
-        (and (pair? candidates)
-             (for/fold ([max-c (car candidates)]) ([c (in-list (cdr candidates))])
-               (if ((set-count (car c)) . > . (set-count (car max-c)))
-                   c
-                   max-c))))
+          (cond
+           [(eq? best-scopes 'ambiguous)
+            (values 'ambiguous #f)]
+           [(not best-scopes)
+            (values b-scopes binding)]
+           [(subset? b-scopes best-scopes) ; can be `set=?` if binding is overridden
+            (values best-scopes best-binding)]
+           [(subset? best-scopes b-scopes)
+            (values b-scopes binding)]
+           [else
+            (values 'ambiguous #f)])))
       (cond
-       [max-candidate
-        (cond
-         [(not (for/and ([c (in-list candidates)])
-                 (subset? (car c) (car max-candidate))))
-          (if (fallback? smss)
-              (fallback-loop (fallback-rest smss))
-              ambiguous-value)]
-         [else
-          (resolve-cache-set! sym phase scopes (cdr max-candidate))
-          (and (or (not exactly?)
-                   (equal? (set-count scopes)
-                           (set-count (car max-candidate))))
-               (if get-scopes?
-                   (car max-candidate)
-                   (cdr max-candidate)))])]
+       [(eq? best-scopes 'ambiguous)
+        (if (fallback? smss)
+            (fallback-loop (fallback-rest smss))
+            ambiguous-value)]
+       [best-scopes
+        (resolve-cache-set! sym phase scopes best-binding)
+        (and (or (not exactly?)
+                 (eqv? (set-count scopes)
+                       (set-count best-scopes)))
+             (if get-scopes?
+                 best-scopes
+                 best-binding))]
        [else
         (if (fallback? smss)
             (fallback-loop (fallback-rest smss))

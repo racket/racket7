@@ -208,13 +208,12 @@
 ;;  no `d->s` or `s-e`, since they would not be called
 
 (define (non-syntax-map s f [s-> (lambda (x) x)] [seen #f])
-  (let loop ([s s])
-    (datum-map s
-               (lambda (tail? v)
-                 (cond
-                  [(syntax? v) (s-> v)]
-                  [else (f tail? v)]))
-               seen)))
+  (datum-map s
+             (lambda (tail? v)
+               (cond
+                [(syntax? v) (s-> v)]
+                [else (f tail? v)]))
+             seen))
 
 (define disallow-cycles
   (hasheq 'cycle-fail
