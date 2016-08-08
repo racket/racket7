@@ -1325,9 +1325,14 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
 
     a = MALLOC_N(Scheme_Bucket *, num_defns);
     for (i = 0; i < num_defns; i++) {
-      b = make_bucket(SCHEME_VEC_ELS(linklet->defns)[i], NULL, instance);
-      a[i] = b;
-      pf->a[pos++] = (Scheme_Object *)b;
+      v = SCHEME_VEC_ELS(linklet->defns)[i];
+      if (SCHEME_FALSEP(v)) {
+        pf->a[pos++] = NULL;
+      } else {
+        b = make_bucket(v, NULL, instance);
+        a[i] = b;
+        pf->a[pos++] = (Scheme_Object *)b;
+      }
     }
 
     instance->array_size = num_defns;
@@ -1336,14 +1341,18 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
     /* General case: bucket-table instance: */
     for (i = 0; i < num_defns; i++) {
       v = SCHEME_VEC_ELS(linklet->defns)[i];
-      if ((i >= linklet->num_exports) && !starts_empty) {
-        /* avoid conflict with any existing bucket */
-        if (scheme_instance_variable_bucket_or_null(v, instance)) {
-          v = generate_bucket_name(v, instance);
-          source_names = update_source_names(source_names, SCHEME_VEC_ELS(linklet->defns)[i], v);
+      if (SCHEME_FALSEP(v)) {
+        v = NULL;
+      } else {
+        if ((i >= linklet->num_exports) && !starts_empty) {
+          /* avoid conflict with any existing bucket */
+          if (scheme_instance_variable_bucket_or_null(v, instance)) {
+            v = generate_bucket_name(v, instance);
+            source_names = update_source_names(source_names, SCHEME_VEC_ELS(linklet->defns)[i], v);
+          }
         }
+        v = (Scheme_Object *)scheme_instance_variable_bucket(v, instance);
       }
-      v = (Scheme_Object *)scheme_instance_variable_bucket(v, instance);
       pf->a[pos++] = v;
     }
   }

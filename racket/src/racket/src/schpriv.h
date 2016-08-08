@@ -3157,9 +3157,10 @@ struct Scheme_Linklet
   /* The symbols in the `defns` arracy correspond to external names
      for the first `num_exports` entries. The remaining (non-exported)
      names should be adjusted on instantiation to avoid conflicts with
-     any existing names. Unreadable symbols starting with "?" were
+     any existing names; a #f value indicates an unused variable whose
+     definition has been pruned. Unreadable symbols starting with "?" were
      generated for resolve-pass lifts. */
-  Scheme_Object *defns; /* vector of symbol */
+  Scheme_Object *defns; /* vector of symbol-or-#f */
   int num_exports; /* this many in the prefix of `defns` are exported */
   int num_lifts; /* this many at the tail of `exports` are from resolve lifts */
 

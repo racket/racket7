@@ -117,8 +117,8 @@ static void enable_expression_resolve_lifts(Resolve_Info *ri);
 static void extend_linklet_defns(Scheme_Linklet *linklet, int num_lifts);
 static void prune_unused_imports(Scheme_Linklet *linklet);
 static void prepare_definition_queue(Scheme_Linklet *linklet, Resolve_Info *rslv);
+static void remove_definition_names(Scheme_Object *defn, Scheme_Linklet *linklet);
 static Resolve_Info *resolve_info_create(Scheme_Linklet *rp, int enforce_const);
-static void install_values_false(Scheme_Object *e);
 
 #ifdef MZ_PRECISE_GC
 static void register_traversers(void);
@@ -2047,16 +2047,8 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
         if (SCHEME_PAIRP(e))
           body = scheme_append(e, body);
         else {
-          /* Never reached */
-          MZ_ASSERT(SAME_OBJ(e, scheme_true));
-          e = SCHEME_CAR(l);
-          MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(e), scheme_define_values_type));
-          if (SCHEME_DEFN_VAR_COUNT(e) == 1)
-            SCHEME_DEFN_RHS(e) = scheme_false;
-          else
-            install_values_false(e);
-          e = resolve_expr(SCHEME_CAR(l), rslv);
-          body = scheme_make_pair(e, body);
+          /* Never reached, so just drop it */
+          remove_definition_names(SCHEME_CAR(l), linklet);
         }
       } else
         body = scheme_make_pair(SCHEME_CAR(l), body);
@@ -2133,6 +2125,30 @@ static void prepare_definition_queue(Scheme_Linklet *linklet, Resolve_Info *rslv
         }
       }
     }
+  }
+}
+
+static void remove_definition_names(Scheme_Object *defn, Scheme_Linklet *linklet)
+{
+  int i, cnt;
+  Scheme_Object *var, *name;
+  Scheme_Hash_Tree *source_names;
+
+  MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(defn), scheme_define_values_type));
+
+  cnt = SCHEME_DEFN_VAR_COUNT(defn);
+  for (i = 0; i < cnt; i++) {
+    var = SCHEME_DEFN_VAR_(defn, i);
+    MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(var), scheme_ir_toplevel_type));
+
+    name = SCHEME_VEC_ELS(linklet->defns)[SCHEME_IR_TOPLEVEL_POS(var)];
+
+    if (linklet->source_names) {
+      source_names = scheme_hash_tree_set(linklet->source_names, name, NULL);
+      linklet->source_names = source_names;
+    }
+
+    SCHEME_VEC_ELS(linklet->defns)[SCHEME_IR_TOPLEVEL_POS(var)] = scheme_false;
   }
 }
 
@@ -2233,31 +2249,6 @@ static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int se
       scheme_hash_set(used_names, n, scheme_true);
       return n;
     }
-  }
-}
-
-static void install_values_false(Scheme_Object *defn)
-{
-  int cnt = SCHEME_DEFN_VAR_COUNT(defn);
-
-  if (cnt == 2) {
-    Scheme_App3_Rec *app;
-    app = MALLOC_ONE_TAGGED(Scheme_App3_Rec);
-    app->iso.so.type = scheme_application3_type;
-    app->rator = scheme_values_proc;
-    app->rand1 = scheme_false;
-    app->rand2 = scheme_false;
-    SCHEME_APPN_FLAGS(app) |= APPN_FLAG_SFS_TAIL;
-    SCHEME_DEFN_RHS(defn) = (Scheme_Object *)app;
-  } else {
-    Scheme_App_Rec *app;
-    int i;
-    app = scheme_malloc_application(cnt+1);
-    app->args[0] = scheme_values_proc;
-    for (i = 0; i < cnt; i++) {
-      app->args[i+1] = scheme_false;
-    }
-    SCHEME_DEFN_RHS(defn) = (Scheme_Object *)app;
   }
 }
 

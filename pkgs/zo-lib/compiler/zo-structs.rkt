@@ -61,7 +61,7 @@
                                                                        function-shape? 
                                                                        struct-shape?)))]
                                 [exports (listof symbol?)]
-                                [internals (listof symbol?)]
+                                [internals (listof (or/c symbol? #f))]
                                 [lifts (listof symbol?)]
                                 [source-names (hash/c symbol? symbol?)]
                                 [body (listof (or/c form? any/c))]

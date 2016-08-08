@@ -70,7 +70,7 @@ structures that are produced by @racket[zo-parse] and consumed by
                                                     function-shape? 
                                                     struct-shape?)))]
              [exports (listof symbol?)]
-             [internals (listof symbol?)]
+             [internals (listof (or/c symbol? #f))]
              [lifts (listof symbol?)]
              [source-names (hash/c symbol? symbol?)]
              [body (listof (or/c form? any/c))]
@@ -93,7 +93,9 @@ structures that are produced by @racket[zo-parse] and consumed by
  The @racket[exports] list describes the linklet's defined names that
  are exported. The @racket[internals] list describes additional
  definitions within the linket, but they are not accessible from the
- outside of a linklet or one of its instances. The @racket[lifts] list
+ outside of a linklet or one of its instances; a @racket[#f] can appear
+ in place of an unreferenced internal definition that has been removed.
+ The @racket[lifts] list
  is an extension of @racket[internals] for procedures that are lifted
  by the compiler; these procedures have certain properties that can be
  checked by the bytecode validator.

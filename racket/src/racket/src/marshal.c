@@ -994,7 +994,7 @@ static Scheme_Object *write_linklet(Scheme_Object *obj)
 # define return_NULL() return NULL
 #endif
 
-static int is_vector_of_symbols(Scheme_Object *v)
+static int is_vector_of_symbols(Scheme_Object *v, int false_ok)
 {
   int i;
 
@@ -1002,7 +1002,8 @@ static int is_vector_of_symbols(Scheme_Object *v)
     return 0;
   
   for (i = SCHEME_VEC_SIZE(v); i--; ) {
-    if (!SCHEME_SYMBOLP(SCHEME_VEC_ELS(v)[i]))
+    if (!SCHEME_SYMBOLP(SCHEME_VEC_ELS(v)[i])
+        && (!false_ok || !SCHEME_FALSEP(SCHEME_VEC_ELS(v)[i])))
       return 0;
   }
 
@@ -1038,7 +1039,7 @@ static int is_vector_of_vector_of_symbols(Scheme_Object *v)
     return 0;
   
   for (i = SCHEME_VEC_SIZE(v); i--; ) {
-    if (!is_vector_of_symbols(SCHEME_VEC_ELS(v)[i]))
+    if (!is_vector_of_symbols(SCHEME_VEC_ELS(v)[i], 0))
       return 0;
   }
 
@@ -1108,7 +1109,7 @@ static Scheme_Object *read_linklet(Scheme_Object *obj)
 
   if (!SCHEME_PAIRP(obj)) return_NULL();
   a = SCHEME_CAR(obj);
-  if (!is_vector_of_symbols(a)) return_NULL();
+  if (!is_vector_of_symbols(a, 1)) return_NULL();
   linklet->defns = a;
   obj = SCHEME_CDR(obj);
 
