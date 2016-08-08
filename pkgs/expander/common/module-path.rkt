@@ -341,42 +341,43 @@
 (define (resolve-module-path mod-path base)
   ((current-module-name-resolver) mod-path base #f #t))
 
-(define current-module-name-resolver
-  (make-parameter
-   (case-lambda
-     [(name from-namespace)
-      ;; No need to register
-      (void)]
-     [(p enclosing source-stx-stx load?)
-      (unless (module-path? p)
-        (raise-argument-error 'core-module-name-resolver "module-path?" p))
-      (unless (or (not enclosing)
-                  (resolved-module-path? enclosing))
-        (raise-argument-error 'core-module-name-resolver "resolved-module-path?" enclosing))
-      (cond
-       [(and (list? p)
-             (= (length p) 2)
-             (eq? 'quote (car p))
-             (symbol? (cadr p)))
-        (make-resolved-module-path (cadr p))]
-       [(and (list? p)
-             (eq? 'submod (car p))
-             (equal? ".." (cadr p)))
-        (for/fold ([enclosing enclosing]) ([s (in-list (cdr p))])
-          (build-module-name s enclosing #:original p))]
-       [(and (list? p)
-             (eq? 'submod (car p))
-             (equal? "." (cadr p)))
-        (for/fold ([enclosing enclosing]) ([s (in-list (cddr p))])
-          (build-module-name s enclosing #:original p))]
-       [(and (list? p)
-             (eq? 'submod (car p)))
-        (let ([base ((current-module-name-resolver) (cadr p) enclosing #f #f)])
-          (for/fold ([enclosing base]) ([s (in-list (cddr p))])
-            (build-module-name s enclosing #:original p)))]
-       [else
-        (error 'core-module-name-resolver
-               "not a supported module path: ~v" p)])])))
+;; The resolver in "../boot/handler.rkt" replaces this one
+;; as the value of `current-module-name-resolver`
+(define core-module-name-resolver
+  (case-lambda
+    [(name from-namespace)
+     ;; No need to register
+     (void)]
+    [(p enclosing source-stx-stx load?)
+     (unless (module-path? p)
+       (raise-argument-error 'core-module-name-resolver "module-path?" p))
+     (unless (or (not enclosing)
+                 (resolved-module-path? enclosing))
+       (raise-argument-error 'core-module-name-resolver "resolved-module-path?" enclosing))
+     (cond
+      [(and (list? p)
+            (= (length p) 2)
+            (eq? 'quote (car p))
+            (symbol? (cadr p)))
+       (make-resolved-module-path (cadr p))]
+      [(and (list? p)
+            (eq? 'submod (car p))
+            (equal? ".." (cadr p)))
+       (for/fold ([enclosing enclosing]) ([s (in-list (cdr p))])
+         (build-module-name s enclosing #:original p))]
+      [(and (list? p)
+            (eq? 'submod (car p))
+            (equal? "." (cadr p)))
+       (for/fold ([enclosing enclosing]) ([s (in-list (cddr p))])
+         (build-module-name s enclosing #:original p))]
+      [(and (list? p)
+            (eq? 'submod (car p)))
+       (let ([base ((current-module-name-resolver) (cadr p) enclosing #f #f)])
+         (for/fold ([enclosing base]) ([s (in-list (cddr p))])
+           (build-module-name s enclosing #:original p)))]
+      [else
+       (error 'core-module-name-resolver
+              "not a supported module path: ~v" p)])]))
 
 ;; Build a submodule name given an enclosing module name, if cany
 (define (build-module-name name ; a symbol
@@ -395,6 +396,19 @@
       [(= 2 (length enclosing-module-name)) (car enclosing-module-name)]
       [else (reverse (cdr (reverse enclosing-module-name)))])]
     [else (append enclosing-module-name (list name))])))
+
+;; Parameter that can be set externally:
+(define current-module-name-resolver
+  (make-parameter
+   core-module-name-resolver
+   (lambda (v)
+     (unless (and (procedure? v)
+                  (procedure-arity-includes? v 2)
+                  (procedure-arity-includes? v 4))
+       (raise-argument-error 'current-module-name-resolver
+                             "(and/c (procedure-arity-includes/c 2) (procedure-arity-includes/c 4))"
+                             v))
+     v)))
 
 ;; ----------------------------------------
 

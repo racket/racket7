@@ -116,7 +116,7 @@
    ;; specific instance. If we have a hash key for this module, we can
    ;; stash `declare-this-module` for potential reuse later.
    (define declare-this-module
-     (lambda (#:namespace ns) ; namespace for declaration
+     (lambda (ns) ; namespace for declaration
        (define m (make-module #:source-name (current-module-declare-source)
                               #:self original-self
                               #:requires requires
@@ -216,7 +216,7 @@
    (when cache-key
      (module-cache-set! cache-key declare-this-module))
    
-   (declare-this-module #:namespace ns)))
+   (declare-this-module ns)))
 
 ;; ----------------------------------------
 

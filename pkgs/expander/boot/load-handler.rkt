@@ -148,7 +148,7 @@
          ;; instead of loading from scratch and `eval`ing;
          ;; FIXME: go though `current-eval`
          (lambda ()
-           (declare-module #:namespace (current-namespace))))]
+           (declare-module (current-namespace))))]
    [else #f]))
 
 (define (read-number i)
