@@ -9664,6 +9664,13 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
       v = scheme_constant_key;
     else
       v = NULL;
+  } else if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 4)) {
+    if (want_shape)
+      v = scheme_make_struct_property_proc_shape(SCHEME_INT_VAL(SCHEME_VEC_ELS(v)[1]));
+    else if (argc < 0)
+      v = scheme_constant_key;
+    else
+      v = NULL;
   }
 
   if (v && (want_shape || (argc < 0)))

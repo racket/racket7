@@ -518,66 +518,55 @@ scheme_init_list (Scheme_Startup_Env *env)
                                                       3, -1),
                              env);
 
-  scheme_addto_prim_instance("make-hash",
-			     scheme_make_immed_prim(make_hash,
-						    "make-hash",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("make-hasheq",
-			     scheme_make_immed_prim(make_hasheq,
-						    "make-hasheq",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("make-hasheqv",
-			     scheme_make_immed_prim(make_hasheqv,
-						    "make-hasheqv",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("make-weak-hash",
-			     scheme_make_immed_prim(make_weak_hash,
-						    "make-weak-hash",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("make-weak-hasheq",
-			     scheme_make_immed_prim(make_weak_hasheq,
-						    "make-weak-hasheq",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("make-weak-hasheqv",
-			     scheme_make_immed_prim(make_weak_hasheqv,
-						    "make-weak-hasheqv",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("make-immutable-hash",
-			     scheme_make_immed_prim(scheme_make_immutable_hash,
-						    "make-immutable-hash",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("make-immutable-hasheq",
-			     scheme_make_immed_prim(scheme_make_immutable_hasheq,
-						    "make-immutable-hasheq",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("make-immutable-hasheqv",
-			     scheme_make_immed_prim(scheme_make_immutable_hasheqv,
-						    "make-immutable-hasheqv",
-						    0, 1),
-			     env);
-  scheme_addto_prim_instance("hash",
-			     scheme_make_immed_prim(direct_hash,
-						    "hash",
-						    0, -1),
-			     env);
-  scheme_addto_prim_instance("hasheq",
-			     scheme_make_immed_prim(direct_hasheq,
-						    "hasheq",
-						    0, -1),
-			     env);
-  scheme_addto_prim_instance("hasheqv",
-			     scheme_make_immed_prim(direct_hasheqv,
-						    "hasheqv",
-						    0, -1),
-			     env);
+  
+  p = scheme_make_immed_prim(make_hash, "make-hash", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-hash", p, env);
+
+  p = scheme_make_immed_prim(make_hasheq, "make-hasheq", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-hasheq", p, env);
+
+  p = scheme_make_immed_prim(make_hasheqv, "make-hasheqv", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-hasheqv", p, env);
+
+  p = scheme_make_immed_prim(make_weak_hash, "make-weak-hash", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-weak-hash", p, env);
+
+  p = scheme_make_immed_prim(make_weak_hasheq, "make-weak-hasheq", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-weak-hasheq", p, env);
+
+  p = scheme_make_immed_prim(make_weak_hasheqv, "make-weak-hasheqv", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-weak-hasheqv", p, env);
+
+  p = scheme_make_immed_prim(scheme_make_immutable_hash, "make-immutable-hash", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-immutable-hash", p, env);
+
+  p = scheme_make_immed_prim(scheme_make_immutable_hasheq, "make-immutable-hasheq", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-immutable-hasheq", p, env);
+
+  p = scheme_make_immed_prim(scheme_make_immutable_hasheqv, "make-immutable-hasheqv", 0, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("make-immutable-hasheqv", p, env);
+
+  p = scheme_make_immed_prim(direct_hash, "hash", 0, -1);
+  /* not SCHEME_PRIM_IS_OMITABLE_ALLOCATION, because `equal?`-hashing functions are called */
+  scheme_addto_prim_instance("hash", p, env);
+
+  p = scheme_make_immed_prim(direct_hasheq, "hasheq", 0, -1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("hasheq", p, env);
+
+  p = scheme_make_immed_prim(direct_hasheqv, "hasheqv", 0, -1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
+  scheme_addto_prim_instance("hasheqv", p, env);
+  
   scheme_addto_prim_instance("hash?",
 			     scheme_make_folding_prim(hash_p,
 						      "hash?",
