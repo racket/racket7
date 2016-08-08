@@ -2509,6 +2509,7 @@ XFORM_NONGCING static Scheme_Hash_Tree *hamt_assoc(Scheme_Hash_Tree *ht, uintptr
 static Scheme_Hash_Tree *hamt_alloc(int kind, int popcount)
 /* be sure to set `bitmap` field before a GC becomes possible */
 {
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_hash_tree_type));
   return (Scheme_Hash_Tree *)scheme_malloc_small_tagged(HASH_TREE_RECORD_SIZE(kind, popcount));
 }
 

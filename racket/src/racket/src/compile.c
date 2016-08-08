@@ -362,7 +362,8 @@ Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *e
     /* Try harder to synthesize a name */
     char *s;
     int len;
-    s = scheme_write_to_string(code, NULL);
+    s = scheme_write_to_string(scheme_syntax_to_datum(scheme_datum_to_syntax(code, scheme_false, 0)),
+                               NULL);
     len = strlen(s);
     if (len > 100) s[100] = 0;
     name = scheme_make_symbol(s);

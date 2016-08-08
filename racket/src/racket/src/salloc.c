@@ -3277,6 +3277,7 @@ intptr_t scheme_count_envbox(Scheme_Object *root, Scheme_Hash_Table *ht)
 
 static Scheme_Hash_Table *allocs;
 static int alloc_count;
+static int reporting;
 
 #include "../gc2/my_qsort.c"
 typedef struct alloc_count_result { int pos; int count; } alloc_count_result;
@@ -3294,6 +3295,9 @@ void scheme_record_allocation(Scheme_Object *tag)
     allocs = scheme_make_hash_table(SCHEME_hash_ptr);
   }
 
+  if (reporting)
+    return;
+
   c = scheme_hash_get(allocs, tag);
   if (!c) c = scheme_make_integer(0);
   scheme_hash_set(allocs, tag, scheme_make_integer(SCHEME_INT_VAL(c)+1));
@@ -3305,6 +3309,8 @@ void scheme_record_allocation(Scheme_Object *tag)
     int k = 0;
     int i;
     char *s;
+
+    reporting++;
     
     a = MALLOC_N_ATOMIC(alloc_count_result, count);
     printf("\n");
@@ -3319,19 +3325,25 @@ void scheme_record_allocation(Scheme_Object *tag)
     
     for (i = 0; i < count; i++) {
       tag = allocs->keys[a[i].pos];
+
+      if (SCHEME_INTP(tag)) {
+        s = scheme_get_type_name(SCHEME_INT_VAL(tag));
+      } else {
+        if (SAME_TYPE(SCHEME_TYPE(tag), scheme_lambda_type)
+            && ((Scheme_Lambda *)tag)->name)
+          tag = ((Scheme_Lambda*)tag)->name;
+        else if (SAME_TYPE(SCHEME_TYPE(tag), scheme_case_lambda_sequence_type)
+                 && ((Scheme_Case_Lambda *)tag)->name)
+          tag = ((Scheme_Case_Lambda*)tag)->name;
       
-      if (SAME_TYPE(SCHEME_TYPE(tag), scheme_lambda_type)
-          && ((Scheme_Lambda *)tag)->name)
-        tag = ((Scheme_Lambda*)tag)->name;
-      else if (SAME_TYPE(SCHEME_TYPE(tag), scheme_case_lambda_sequence_type)
-          && ((Scheme_Case_Lambda *)tag)->name)
-        tag = ((Scheme_Case_Lambda*)tag)->name;
+        s = scheme_write_to_string(tag, NULL);
+      }
       
-      s = scheme_write_to_string(tag, NULL);
       printf("%d %s\n", a[i].count, s);
     }
     
     alloc_count = 0;
+    --reporting;
   }
 }
 
