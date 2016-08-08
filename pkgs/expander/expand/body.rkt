@@ -274,8 +274,7 @@
                                                 #:frame-id frame-id #:ctx ctx 
                                                 #:source s #:disarmed-source disarmed-s
                                                 #:get-body get-body #:track? track?)
-  (define s-core-stx
-    (syntax-shift-phase-level core-stx (expand-context-phase ctx)))
+  (define phase (expand-context-phase ctx))
   (let loop ([idss idss] [keyss keyss] [rhss rhss] [track-stxs track-stxs]
              [accum-idss null] [accum-rhss null] [accum-track-stxs null]
              [track? track?] [get-list? #f])
@@ -291,8 +290,8 @@
            #:track? track?
            s disarmed-s
            `(,(if (null? accum-idss)
-                  (datum->syntax s-core-stx 'let-values)
-                  (datum->syntax s-core-stx 'letrec-values))
+                  (core-id 'let-values phase)
+                  (core-id 'letrec-values phase))
              ,(build-clauses accum-idss accum-rhss accum-track-stxs)
              ,@(get-body))))
         (when track?
@@ -316,7 +315,7 @@
          (rebuild
           #:track? track?
           s disarmed-s
-          `(,(datum->syntax s-core-stx 'let-values)
+          `(,(core-id 'let-values phase)
             (,(build-clause ids expanded-rhs track-stx))
             ,@(loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
                     null null null
@@ -327,7 +326,7 @@
          (rebuild
           #:track? track?
           s disarmed-s
-          `(,(datum->syntax s-core-stx 'letrec-values)
+          `(,(core-id 'letrec-values phase)
             ,(build-clauses (cons ids accum-idss)
                             (cons expanded-rhs accum-rhss)
                             (cons track-stx accum-track-stxs))
@@ -354,11 +353,10 @@
 ;; Helper to turn an expression into a binding clause with zero
 ;; bindings
 (define (no-binds expr s phase)
-  (define s-core-stx (syntax-shift-phase-level core-stx phase))
   (define s-runtime-stx (syntax-shift-phase-level runtime-stx phase))
   (datum->syntax #f
-                 `(,(datum->syntax s-core-stx 'begin)
+                 `(,(core-id 'begin phase)
                    ,expr
-                   (,(datum->syntax s-core-stx '#%app)
+                   (,(core-id '#%app phase)
                     ,(datum->syntax s-runtime-stx 'values)))
                  s))

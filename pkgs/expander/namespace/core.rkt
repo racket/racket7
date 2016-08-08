@@ -11,6 +11,7 @@
          "module.rkt")
 
 (provide core-stx
+         core-id
          
          add-core-form!
          add-core-primitive!
@@ -28,6 +29,26 @@
 
 (define core-module-name (make-resolved-module-path '#%core))
 (define core-mpi (module-path-index-join ''#%core #f))
+
+;; The expander needs to synthesize some core references
+
+(define id-cache-0 (make-hasheq))
+(define id-cache-1 (make-hasheq))
+
+(define (core-id sym phase)
+  (cond
+   [(eqv? phase 0)
+    (or (hash-ref id-cache-0 sym #f)
+        (let ([s (datum->syntax core-stx sym)])
+          (hash-set! id-cache-0 sym s)
+          s))]
+   [(eq? phase 1)
+    (or (hash-ref id-cache-1 sym #f)
+        (let ([s (datum->syntax (syntax-shift-phase-level core-stx 1) sym)])
+          (hash-set! id-cache-1 sym s)
+          s))]
+   [else
+    (datum->syntax (syntax-shift-phase-level core-stx phase) sym)]))
 
 ;; Core forms and primitives are added by `require`s in "expander.rkt"
 

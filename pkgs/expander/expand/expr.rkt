@@ -202,7 +202,7 @@
                                                 ctx)]))
    (define letrec-values-id
      (if syntaxes?
-         (datum->syntax (syntax-shift-phase-level core-stx phase) 'letrec-values)
+         (core-id 'letrec-values phase)
          (val-m 'let-values)))
    
    (define (get-body)
@@ -265,7 +265,7 @@
    (define-match m disarmed-s '(#%stratified-body body ...+))
    (rebuild
     s disarmed-s
-    `(,(datum->syntax (syntax-shift-phase-level core-stx (expand-context-phase ctx)) 'begin)
+    `(,(core-id 'begin (expand-context-phase ctx))
       ,@(expand-body (m 'body) ctx #:stratified? #t
                      #:source s #:disarmed-source disarmed-s)))))
 
@@ -284,7 +284,7 @@
    (define phase (expand-context-phase ctx))
    (rebuild
     s disarmed-s
-    (list (datum->syntax (syntax-shift-phase-level core-stx phase) 'quote)
+    (list (core-id 'quote phase)
           datum))))
 
 ;; '#%kernel `#%app` treats an empty combination as a literal null
@@ -300,7 +300,7 @@
      (define phase (expand-context-phase ctx))
      (rebuild
       s disarmed-s
-      (list (datum->syntax (syntax-shift-phase-level core-stx phase) 'quote)
+      (list (core-id 'quote phase)
             null))]
     [else
      (define expr-ctx (as-expression-context ctx))
