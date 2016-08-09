@@ -436,36 +436,44 @@
 
 (define (propagation-apply prop scs parent-s)
   (cond
-   [(not prop) scs]
    [(eq? (propagation-prev-scs prop) scs)
     (syntax-scopes parent-s)]
    [else
-    (for/fold ([scs scs]) ([(sc op) (in-immutable-hash (propagation-scope-ops prop))]
-                           #:when (not (shifted-multi-scope? sc)))
-      (case op
-       [(add) (set-add scs sc)]
-       [(remove) (set-remove scs sc)]
-       [else (set-flip scs sc)]))]))
+    (define new-scs
+      (for/fold ([scs scs]) ([(sc op) (in-immutable-hash (propagation-scope-ops prop))]
+                             #:when (not (shifted-multi-scope? sc)))
+        (case op
+          [(add) (set-add scs sc)]
+          [(remove) (set-remove scs sc)]
+          [else (set-flip scs sc)])))
+    ;; Improve sharing if the result matches the parent:
+    (if (set=? new-scs (syntax-scopes parent-s))
+        (syntax-scopes parent-s)
+        new-scs)]))
 
 (define (propagation-apply-shifted prop smss parent-s)
   (cond
-   [(not prop) smss]
    [(eq? (propagation-prev-smss prop) smss)
     (syntax-shifted-multi-scopes parent-s)]
    [else
-    (for/fold ([smss smss]) ([(sms op) (in-immutable-hash (propagation-scope-ops prop))]
-                             #:when (shifted-multi-scope? sms))
-      (fallback-update-first
-       smss
-       (lambda (smss)
-         (case op
-           [(add) (set-add smss sms)]
-           [(remove) (set-remove smss sms)]
-           [else (set-flip smss sms)]))))]))
+    (define new-smss
+      (for/fold ([smss smss]) ([(sms op) (in-immutable-hash (propagation-scope-ops prop))]
+                               #:when (shifted-multi-scope? sms))
+        (fallback-update-first
+         smss
+         (lambda (smss)
+           (case op
+             [(add) (set-add smss sms)]
+             [(remove) (set-remove smss sms)]
+             [else (set-flip smss sms)])))))
+    ;; Improve sharing if the result clearly matches the parent:
+    (if (and (set? new-smss)
+             (set=? new-smss (syntax-shifted-multi-scopes parent-s)))
+        (syntax-shifted-multi-scopes parent-s)
+        new-smss)]))
 
 (define (propagation-merge prop base-prop prev-scs prev-smss)
   (cond
-   [(not prop) base-prop]
    [(not base-prop)
     (cond
      [(and (eq? (propagation-prev-scs prop) prev-scs)

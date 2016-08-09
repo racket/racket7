@@ -2503,7 +2503,7 @@ Scheme_Object *scheme_hash_table_put(int argc, Scheme_Object *argv[])
     scheme_wrong_contract("hash-set", "(and hash? immutable?)", 0, argc, argv);
     return NULL;
   }
-  
+
   return (Scheme_Object *)scheme_hash_tree_set((Scheme_Hash_Tree *)v, argv[1], argv[2]);
 }
 

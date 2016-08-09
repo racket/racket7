@@ -2615,6 +2615,8 @@ static Scheme_Hash_Tree *hamt_set(Scheme_Hash_Tree *ht, uintptr_t code, int shif
   
   if (ht->bitmap & hamt_bit(index)) {
     /* Replacing: */
+    if (SAME_OBJ(ht->els[pos], key) && SAME_OBJ(val, mzHAMT_VAL(ht, pos)))
+      return ht;
     new_ht = hamt_dup(ht, popcount, NOT_IMPLICIT_VALUE(val));
     if (HASHTR_SUBTREEP(ht->els[pos])) {
       ht = (Scheme_Hash_Tree *)ht->els[pos];

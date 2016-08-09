@@ -274,7 +274,7 @@
    (log-expand ctx 'enter-macro s)
    (define disarmed-s (syntax-disarm s))
    (define intro-scope (new-scope 'macro))
-   (define intro-s (add-scope disarmed-s intro-scope))
+   (define intro-s (flip-scope disarmed-s intro-scope))
    ;; In a definition context, we need use-site scopes
    (define-values (use-s use-scopes) (maybe-add-use-site-scope intro-s ctx binding))
    ;; Avoid accidental transfer of taint-controlling properties:
