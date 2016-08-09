@@ -50,8 +50,10 @@
 
   (struct region (path
                   [start #:mutable]        ; start time
-                  [as-nested #:mutable]))  ; time accumulated for nested regions
-  (struct stat ([msecs #:mutable] [count #:mutable]))
+                  [start-memory #:mutable] ; memory allocated before start time
+                  [as-nested #:mutable]    ; time accumulated for nested regions
+                  [as-nested-memory #:mutable])) ; ditto, for memory
+  (struct stat ([msecs #:mutable] [memory #:mutable] [count #:mutable]))
 
   (define stat-key (gensym))
 
@@ -60,16 +62,22 @@
   (define (start-performance-region . path)
     (set! region-stack (cons (region path 
                                      (current-inexact-milliseconds)
-                                     0.0)
+                                     (current-memory-use 'cumulative)
+                                     0.0
+                                     0)
                              region-stack)))
     
   (define (end-performance-region)
     (define now (current-inexact-milliseconds))
+    (define now-memory (current-memory-use 'cumulative))
     (define r (car region-stack))
     (set! region-stack (cdr region-stack))
 
     (define full-delta (- now (region-start r)))
     (define delta (- full-delta (region-as-nested r)))
+
+    (define full-delta-memory (- now-memory (region-start-memory r)))
+    (define delta-memory (- full-delta-memory (region-as-nested-memory r)))
 
     (let loop ([accums accums] [path (region-path r)] [enclosing-path (or (and region-stack
                                                                                (region-path (car region-stack)))
@@ -83,10 +91,11 @@
                          (hash-set! accums key accum)
                          accum))])
         (define s (or (hash-ref accum stat-key #f)
-                      (let ([s (stat 0.0 0)])
+                      (let ([s (stat 0.0 0 0)])
                         (hash-set! accum stat-key s)
                         s)))
         (set-stat-msecs! s (+ delta (stat-msecs s)))
+        (set-stat-memory! s (+ delta-memory (stat-memory s)))
         (set-stat-count! s (add1 (stat-count s)))
         (unless (null? (cdr path))
           (loop accum (cdr path) (if (null? enclosing-path) null (cdr enclosing-path))))))
@@ -94,40 +103,63 @@
     (when region-stack
       (set-region-as-nested! (car region-stack)
                              (+ (region-as-nested (car region-stack))
-                                full-delta))))
+                                full-delta))
+      (set-region-as-nested-memory! (car region-stack)
+                                    (+ (region-as-nested-memory (car region-stack))
+                                       full-delta-memory))))
   
   (void (plumber-add-flush! (current-plumber)
                             (lambda (h)
                               (define (whole-len s)
                                 (caar (or (regexp-match-positions #rx"[.]" s) '(0))))
-                              (define-values (label-max-len value-max-len count-max-len)
-                                (let loop ([accums accums] [label-len 0] [value-len 0] [count-len 0] [indent 2])
-                                  (for/fold ([label-len label-len] [value-len value-len] [count-len count-len]) ([(k v) (in-hash accums)])
+                              (define (kb b)
+                                (define s (number->string (quotient b 1024)))
+                                (list->string
+                                 (for/fold ([l null]) ([c (in-list (reverse (string->list s)))]
+                                                       [i (in-naturals)])
+                                   (cond
+                                    [(and (positive? i) (zero? (modulo i 3)))
+                                     (list* c #\, l)]
+                                    [else (cons c l)]))))
+                              (define-values (label-max-len value-max-len memory-max-len count-max-len)
+                                (let loop ([accums accums] [label-len 0] [value-len 0] [memory-len 0] [count-len 0] [indent 2])
+                                  (for/fold ([label-len label-len]
+                                             [value-len value-len]
+                                             [memory-len memory-len]
+                                             [count-len count-len])
+                                            ([(k v) (in-hash accums)])
                                     (cond
                                      [(eq? k stat-key)
                                       (values label-len
                                               (max value-len (whole-len (format "~a" (stat-msecs v))))
+                                              (max memory-len (string-length (format "~a" (kb (stat-memory v)))))
                                               (max count-len (string-length (format "~a" (stat-count v)))))]
                                      [else (loop v
                                                  (max label-len (+ indent (string-length (format "~a" k))))
                                                  value-len
+                                                 memory-len
                                                  count-len
                                                  (+ 2 indent))]))))
-                              (log-performance-info "REGION   ~a   MSECS~aCOUNT"
+                              (log-performance-info "REGION   ~a   MSECS~aMEM~aCOUNT"
                                                     (make-string (max 0 (- (+ label-max-len value-max-len) 10))
+                                                                 #\space)
+                                                    (make-string memory-max-len
                                                                  #\space)
                                                     (make-string count-max-len
                                                                  #\space))
                               (let loop ([name #f] [accums accums] [indent ""] [newline? #t])
                                 (when name
                                   (define v (hash-ref accums stat-key))
-                                  (log-performance-info "~a~a ~a   ~a     ~a~a"
+                                  (log-performance-info "~a~a ~a   ~a     ~a~a   ~a~a"
                                                         indent
                                                         name
                                                         (make-string (+ (- label-max-len (string-length (format "~a" name)) (string-length indent))
                                                                         (- value-max-len (whole-len (format "~a" (stat-msecs v)))))
                                                                      #\space)
                                                         (regexp-replace #rx"[.](..).*" (format "~a00" (stat-msecs v)) ".\\1")
+                                                        (make-string (- memory-max-len (string-length (format "~a" (kb (stat-memory v)))))
+                                                                     #\space)
+                                                        (kb (stat-memory v))
                                                         (make-string (- count-max-len (string-length (format "~a" (stat-count v))))
                                                                      #\space)
                                                         (stat-count v)))
@@ -152,4 +184,4 @@
 ;; ------------------------------------------------------------
 ;; Select whether to measure (has overhead) or not:
 
-(require (submod "." no-measure-mode))
+(require (submod "." measure-mode))
