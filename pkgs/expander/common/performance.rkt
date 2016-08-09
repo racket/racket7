@@ -184,4 +184,4 @@
 ;; ------------------------------------------------------------
 ;; Select whether to measure (has overhead) or not:
 
-(require (submod "." measure-mode))
+(require (submod "." no-measure-mode))

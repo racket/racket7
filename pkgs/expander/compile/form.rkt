@@ -41,7 +41,8 @@
                        #:definition-callback [definition-callback void]
                        #:other-form-callback [other-form-callback void]
                        #:get-module-linklet-info [get-module-linklet-info (lambda (mod-name p) #f)] ; to support submodules
-                       #:to-source? [to-source? #f])
+                       #:to-source? [to-source? #f]
+                       #:cross-linklet-inlining? [cross-linklet-inlining? #t])
   (define phase (compile-context-phase cctx))
   (define self (compile-context-self cctx))
   
@@ -246,7 +247,7 @@
       ;; means that the set of imports can change:
       (define-values (linklet new-module-uses)
         (performance-region
-         ['compile 'linklet]
+         ['compile '_ 'linklet]
          ((if to-source?
               (lambda (l name keys getter) (values l keys))
               compile-linklet)
@@ -272,9 +273,10 @@
           ;; To complete cross-module support, map a key (which is a `module-use`)
           ;; to a linklet and an optional vector of keys for that linklet's
           ;; imports:
-          (make-module-use-to-linklet (compile-context-namespace cctx)
-                                      get-module-linklet-info
-                                      (link-info-link-module-uses li)))))
+          (and cross-linklet-inlining?
+               (make-module-use-to-linklet (compile-context-namespace cctx)
+                                           get-module-linklet-info
+                                           (link-info-link-module-uses li))))))
       (values phase (cons linklet (list-tail (vector->list new-module-uses)
                                              (length body-imports))))))
   

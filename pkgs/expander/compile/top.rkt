@@ -76,7 +76,8 @@
                         (set! purely-functional? #f)))
                     #:other-form-callback (lambda (s cctx)
                                             (set! purely-functional? #f)
-                                            (compile-top-level-require s cctx))))
+                                            (compile-top-level-require s cctx))
+                    #:cross-linklet-inlining? (not single-expression?)))
 
    (define (add-metadata ht)
      (let* ([ht (hash-set ht 'original-phase phase)]
@@ -102,7 +103,7 @@
 
          (define link-linklet
            ((if to-source? values (lambda (s) (performance-region
-                                          ['compile 'linklet]
+                                          ['compile 'top 'linklet]
                                           (compile-linklet s))))
             `(linklet
               ;; imports

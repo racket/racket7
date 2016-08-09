@@ -162,7 +162,7 @@
    ;; once for a module declaration and shared among instances
    (define declaration-linklet
      ((if to-source? values (lambda (s) (performance-region
-                                    ['compile 'linklet]
+                                    ['compile 'module 'linklet]
                                     (compile-linklet s 'decl))))
       `(linklet
         ;; imports
@@ -183,7 +183,7 @@
    (define syntax-literals-linklet
      (and (not (syntax-literals-empty? syntax-literals))
           ((if to-source? values (lambda (s) (performance-region
-                                         ['compile 'linklet]
+                                         ['compile 'module 'linklet]
                                          (compile-linklet s 'syntax-literals))))
            `(linklet
              ;; imports
@@ -223,7 +223,7 @@
      (and serializable?
           (not (syntax-literals-empty? syntax-literals))
           ((if to-source? values (lambda (s) (performance-region
-                                         ['compile 'linklet]
+                                         ['compile 'module 'linklet]
                                          (compile-linklet s 'syntax-literals-data))))
            `(linklet
              ;; imports
@@ -245,7 +245,7 @@
    (define data-linklet
      (and serializable?
           ((if to-source? values (lambda (s) (performance-region
-                                         ['compile 'linklet]
+                                         ['compile 'module 'linklet]
                                          (compile-linklet s 'data))))
            `(linklet
              ;; imports

@@ -265,11 +265,12 @@ void extract_import_info(const char *who, int argc, Scheme_Object **argv,
     *_import_keys = NULL;
 
   if (argc > 3) {
-    scheme_check_proc_arity(who, 1, 3, argc, argv);
-    if (*_import_keys)
+    scheme_check_proc_arity2(who, 1, 3, argc, argv, 1);
+    if (*_import_keys /* not useful without keys */
+        && SCHEME_TRUEP(argv[3]))
       *_get_import = argv[3];
     else
-      *_get_import = NULL; /* not useful without keys */
+      *_get_import = NULL;
   } else
     *_get_import = NULL;
 }
@@ -956,7 +957,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
 {
   Scheme_Config *config;
   int enforce_const, set_undef, can_inline;
- 
+
   config = scheme_current_config();
   enforce_const = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_COMPILE_MODULE_CONSTS));
   set_undef = SCHEME_TRUEP(scheme_get_param(config, MZCONFIG_ALLOW_SET_UNDEFINED));
@@ -973,6 +974,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
   }
   linklet->name = name;
   linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, _import_keys, get_import);
+
   linklet = scheme_resolve_linklet(linklet, enforce_const);
   linklet = scheme_sfs_linklet(linklet);
   

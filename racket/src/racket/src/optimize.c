@@ -8412,6 +8412,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
           }
         }
       } else {
+        /* XXX */
 	cont = scheme_omittable_expr(e, -1, -1, 0, NULL, NULL);
       }
     } else {
@@ -9494,7 +9495,7 @@ static Scheme_Linklet *get_linklet_for_import_key(Optimize_Info *info, Scheme_Ob
   Cross_Linklet_Info *cross = info->cross;
   Scheme_Hash_Tree *ht;
 
-  if (!cross)
+  if (!cross || !cross->get_import)
     return NULL;
 
   v = scheme_hash_tree_get(cross->linklets, key);
@@ -9687,6 +9688,8 @@ Scheme_Object *scheme_optimize_add_import_variable(Optimize_Info *info, Scheme_O
   Scheme_Hash_Tree *syms, *ht;
   int i;
 
+  return NULL;
+
   if (SCHEME_FALSEP(linklet_key))
     return NULL;
 
@@ -9767,7 +9770,7 @@ static Scheme_Object *get_import_inline(Optimize_Info *info, Scheme_IR_Toplevel 
 
 static void register_import_used(Optimize_Info *info, Scheme_IR_Toplevel *var)
 {
-  if (var->instance_pos >= 0) {
+  if ((var->instance_pos >= 0) && info->imports_used) {
     /* Record that the import is used. The resolve pass can
        drop references that have been optimized away. */
     Scheme_Hash_Tree *ht;
