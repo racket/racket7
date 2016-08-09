@@ -244,6 +244,7 @@ THREAD_LOCAL_DECL(struct Scheme_GC_Pre_Post_Callback_Desc *gc_prepost_callback_d
 ROSYM static Scheme_Object *read_symbol, *write_symbol, *execute_symbol, *delete_symbol, *exists_symbol;
 ROSYM static Scheme_Object *client_symbol, *server_symbol;
 ROSYM static Scheme_Object *major_symbol, *minor_symbol, *incremental_symbol;
+ROSYM static Scheme_Object *cumulative_symbol;
 
 ROSYM static Scheme_Object *initial_compiled_file_check_symbol;
 
@@ -525,6 +526,9 @@ void scheme_init_thread(Scheme_Startup_Env *env)
   minor_symbol = scheme_intern_symbol("minor");
   incremental_symbol  = scheme_intern_symbol("incremental");
 
+  REGISTER_SO(cumulative_symbol);
+  cumulative_symbol = scheme_intern_symbol("cumulative");
+
   ADD_PRIM_W_ARITY("dump-memory-stats"            , scheme_dump_gc_stats, 0, -1, env);
   ADD_PRIM_W_ARITY("vector-set-performance-stats!", current_stats       , 1, 2, env);
 
@@ -721,6 +725,7 @@ static Scheme_Object *collect_garbage(int argc, Scheme_Object *argv[])
 static Scheme_Object *current_memory_use(int argc, Scheme_Object *args[])
 {
   Scheme_Object *arg = NULL;
+  int cumulative = 0;
   uintptr_t retval = 0;
 
   if (argc) {
@@ -728,19 +733,30 @@ static Scheme_Object *current_memory_use(int argc, Scheme_Object *args[])
       arg = args[0];
     } else if (SAME_TYPE(SCHEME_TYPE(args[0]), scheme_custodian_type)) {
       arg = args[0];
+    } else if (SAME_OBJ(args[0], cumulative_symbol)) {
+      cumulative = 1;
+      arg = NULL;
     } else {
       scheme_wrong_contract("current-memory-use", 
-                            "(or/c custodian? #f)", 
+                            "(or/c custodian? 'cumulative #f)", 
                             0, argc, args);
     }
   }
 
+  if (cumulative) {
 #ifdef MZ_PRECISE_GC
-  retval = GC_get_memory_use(arg);
+    retval = GC_get_memory_ever_allocated();
 #else
-  scheme_unused_object(arg);
-  retval = GC_get_memory_use();
+    retval = GC_get_total_bytes();
 #endif
+  } else {
+#ifdef MZ_PRECISE_GC
+    retval = GC_get_memory_use(arg);
+#else
+    scheme_unused_object(arg);
+    retval = GC_get_memory_use();
+#endif
+  }
   
   return scheme_make_integer_value_from_unsigned(retval);
 }
