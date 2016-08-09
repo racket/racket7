@@ -467,9 +467,11 @@
              [(remove) (set-remove smss sms)]
              [else (set-flip smss sms)])))))
     ;; Improve sharing if the result clearly matches the parent:
+    (define parent-smss (syntax-shifted-multi-scopes parent-s))
     (if (and (set? new-smss)
-             (set=? new-smss (syntax-shifted-multi-scopes parent-s)))
-        (syntax-shifted-multi-scopes parent-s)
+             (set? parent-smss)
+             (set=? new-smss parent-smss))
+        parent-smss
         new-smss)]))
 
 (define (propagation-merge prop base-prop prev-scs prev-smss)
