@@ -583,10 +583,10 @@
 
 ;; Generate a fresh binding-layer identity if `ids` contains any
 ;; identifiers
-(define (increment-binding-layer ids ctx)
+(define (increment-binding-layer ids ctx layer-val)
   (if (let loop ([ids ids])
         (or (identifier? ids)
             (and (pair? ids)
                  (or (loop (car ids)) (loop (cdr ids))))))
-      (gensym 'binding-layer)
+      layer-val
       (expand-context-binding-layer ctx)))

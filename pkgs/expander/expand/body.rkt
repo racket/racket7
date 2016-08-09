@@ -60,7 +60,7 @@
   (define (maybe-increment-binding-layer ids body-ctx)
     (if (eq? (expand-context-binding-layer body-ctx)
              (expand-context-binding-layer ctx))
-        (increment-binding-layer ids body-ctx)
+        (increment-binding-layer ids body-ctx inside-sc)
         (expand-context-binding-layer body-ctx)))
   ;; Save the name for the last form
   (define name (expand-context-name ctx))

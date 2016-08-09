@@ -49,7 +49,7 @@
   (define body-ctx (struct-copy expand-context ctx
                                 [env body-env]
                                 [scopes (cons sc (expand-context-scopes ctx))]
-                                [binding-layer (increment-binding-layer ids ctx)]
+                                [binding-layer (increment-binding-layer ids ctx sc)]
                                 [frame-id #:parent root-expand-context #f]))
   (define exp-body (expand-body sc-bodys body-ctx
                                 #:source s #:disarmed-source disarmed-s))
@@ -199,7 +199,8 @@
                                                        orig-rrs)]
                                 [binding-layer (increment-binding-layer
                                                 (cons trans-idss val-idss)
-                                                ctx)]))
+                                                ctx
+                                                sc)]))
    (define letrec-values-id
      (if syntaxes?
          (core-id 'letrec-values phase)

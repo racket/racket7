@@ -668,14 +668,27 @@
            (resolve-cache-get sym phase scopes))
       => (lambda (b) b)]
      [else
+      ;; As we look through all scopes, if we find two where neither
+      ;; is a subset of the other, accumulate them into a list; maybe
+      ;; we find a superset of both, later; if we end with a list,
+      ;; then the binding is ambiguous. We expect that creating a list
+      ;; of ambigious scopes is rare relative to eventual success.
       (define-values (best-scopes best-binding)
         (for*/fold ([best-scopes #f] [best-binding #f])
                    ([sc (in-set scopes)]
                     [(b-scopes binding) (in-binding-table sym (scope-binding-table sc) s extra-shifts)]
                     #:when (and b-scopes binding (subset? b-scopes scopes)))
           (cond
-           [(eq? best-scopes 'ambiguous)
-            (values 'ambiguous #f)]
+           [(pair? best-scopes)
+            ;; We have a list of scopes where none is a superset of the others
+            (cond
+             [(for/and ([amb-scopes (in-list best-scopes)])
+                (subset? amb-scopes b-scopes))
+              ;; Found a superset of all
+              (values b-scopes binding)]
+             [else
+              ;; Accumulate another ambiguous set
+              (values (cons b-scopes best-scopes) #f)])]
            [(not best-scopes)
             (values b-scopes binding)]
            [(subset? b-scopes best-scopes) ; can be `set=?` if binding is overridden
@@ -683,9 +696,10 @@
            [(subset? best-scopes b-scopes)
             (values b-scopes binding)]
            [else
-            (values 'ambiguous #f)])))
+            ;; Switch to ambigous mode
+            (values (list best-scopes b-scopes) #f)])))
       (cond
-       [(eq? best-scopes 'ambiguous)
+       [(pair? best-scopes) ; => ambiguous
         (if (fallback? smss)
             (fallback-loop (fallback-rest smss))
             ambiguous-value)]
