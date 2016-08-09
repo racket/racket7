@@ -27,15 +27,15 @@
                      #:source s #:disarmed-source disarmed-s
                      #:stratified? [stratified? #f])
   (log-expand ctx 'enter-block)
-  ;; The outside-edge scope identifies the original content of the
-  ;; definition context
-  (define outside-sc (new-scope 'local))
+  ;; In principle, we have an outside-edge scope that identifies the
+  ;; original content of the definition context --- but a body always
+  ;; exists inside some binding form, so that form's scope will do
   ;; The inside-edge scope identifiers any form that appears (perhaps
   ;; through macro expansion) in the definition context
   (define inside-sc (new-scope 'intdef))
   (define init-bodys
     (for/list ([body (in-list bodys)])
-      (add-scope (add-scope body outside-sc) inside-sc)))
+      (add-scope body inside-sc)))
   (log-expand ctx 'block-renames (datum->syntax #f init-bodys) (datum->syntax #f bodys))
   (define phase (expand-context-phase ctx))
   (define frame-id (make-reference-record)) ; accumulates info on referenced variables
@@ -50,9 +50,8 @@
                                 [def-ctx-scopes def-ctx-scopes]
                                 [post-expansion-scope #:parent root-expand-context inside-sc]
                                 [post-expansion-scope-action add-scope]
-                                [scopes (list* outside-sc
-                                               inside-sc
-                                               (expand-context-scopes ctx))]
+                                [scopes (cons inside-sc
+                                              (expand-context-scopes ctx))]
                                 [use-site-scopes #:parent root-expand-context (box null)]
                                 [frame-id #:parent root-expand-context frame-id]
                                 [reference-records (cons frame-id
