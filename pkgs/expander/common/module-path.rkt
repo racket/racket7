@@ -313,7 +313,10 @@
         shifted-mpi])])]))
 
 (define (module-path-index-shift-cache! mpi)
-  (or (module-path-index-shift-cache mpi)
+  (or (let ([cache (module-path-index-shift-cache mpi)])
+        (and cache
+             (weak-box-value cache)
+             cache))
       (let ([cache (make-weak-box (box #hasheq()))])
         (set-module-path-index-shift-cache! mpi cache)
         cache)))
