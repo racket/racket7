@@ -1783,6 +1783,8 @@ Scheme_Object *scheme_box(Scheme_Object *v)
 {
   Scheme_Object *obj;
 
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_box_type));
+
   obj = scheme_alloc_small_object();
   obj->type = scheme_box_type;
   SCHEME_BOX_VAL(obj) = v;
@@ -3624,6 +3626,8 @@ Scheme_Object *scheme_make_weak_box(Scheme_Object *v)
   return (Scheme_Object *)GC_malloc_weak_box(v, NULL, 0, 0);
 #else
   Scheme_Small_Object *obj;
+
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_weak_box_type));
 
   obj = MALLOC_ONE_TAGGED_WEAK(Scheme_Small_Object);
 

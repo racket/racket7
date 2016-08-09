@@ -3290,18 +3290,23 @@ void scheme_record_allocation(Scheme_Object *tag)
 {
   Scheme_Object *c;
   
-  if (!allocs) {
-    REGISTER_SO(allocs);
-    allocs = scheme_make_hash_table(SCHEME_hash_ptr);
-  }
-
   if (reporting)
     return;
+
+  alloc_count++;
+  if (alloc_count < 1000)
+    return;
+
+  if (!allocs) {
+    REGISTER_SO(allocs);
+    reporting++;
+    allocs = scheme_make_hash_table(SCHEME_hash_ptr);
+    --reporting;
+  }
 
   c = scheme_hash_get(allocs, tag);
   if (!c) c = scheme_make_integer(0);
   scheme_hash_set(allocs, tag, scheme_make_integer(SCHEME_INT_VAL(c)+1));
-  alloc_count++;
     
   if (alloc_count == NUM_ALLOCS_BEFORE_REPORT) {
     alloc_count_result *a;
