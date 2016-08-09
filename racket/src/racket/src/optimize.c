@@ -9690,8 +9690,6 @@ Scheme_Object *scheme_optimize_add_import_variable(Optimize_Info *info, Scheme_O
   Scheme_Hash_Tree *syms, *ht;
   int i;
 
-  return NULL;
-
   if (SCHEME_FALSEP(linklet_key))
     return NULL;
 
