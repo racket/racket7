@@ -15,7 +15,7 @@
 (struct exn:fail:syntax exn:fail (exprs)
         #:extra-constructor-name make-exn:fail:syntax
         #:transparent
-        #:property prop:exn:srclocs (lambda (e) (exn:fail:syntax-exprs e))
+        #:property prop:exn:srclocs (lambda (e) (map syntax-srcloc (exn:fail:syntax-exprs e)))
         #:guard (lambda (str cm exprs info)
                   (unless (and (list? exprs)
                                (andmap syntax? exprs))

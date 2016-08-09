@@ -17116,7 +17116,7 @@
 " 1"
 " 0"
 " #f"
-"(list(cons prop:exn:srclocs(lambda(e_23)(1/exn:fail:syntax-exprs e_23))))"
+"(list(cons prop:exn:srclocs(lambda(e_23)(map2 syntax-srcloc(1/exn:fail:syntax-exprs e_23)))))"
 " #f"
 " #f"
 " '(0)"
