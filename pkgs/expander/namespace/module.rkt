@@ -401,7 +401,7 @@
      
      ;; If we haven't shifted required mpi's already, do that; ensure that
      ;; each (potentially) shifted module path index is unresolved, so
-     ;; that resoling will trigger module loads
+     ;; that resolving will trigger module loads
      (unless (module-instance-shifted-requires mi)
        (set-module-instance-shifted-requires!
         mi
