@@ -8412,8 +8412,10 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
           }
         }
       } else {
-        /* XXX */
-	cont = scheme_omittable_expr(e, -1, -1, 0, NULL, NULL);
+        if (i_m + 1 == cnt)
+          cont = 0;
+        else
+          cont = scheme_omittable_expr(e, -1, -1, 0, NULL, NULL);
       }
     } else {
       cont = 1;
