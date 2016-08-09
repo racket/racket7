@@ -92,8 +92,10 @@
     (set! submod-name (string->symbol name))]
    #:args args args))
 
-(define cache (make-cache cache-dir (lambda (path)
-                                      (log-status "changed: ~a" path))))
+(define cache
+  (and (or cache-dir extract?)
+       (make-cache cache-dir (lambda (path)
+                               (log-status "changed: ~a" path)))))
 
 (when checkout-directory
   ;; After booting, we're going to change the way module paths
@@ -159,21 +161,25 @@
                                    (check-module-form
                                     (read-syntax (object-name i) i)
                                     path))))))
-                        (define cache-layer (make-cache-layer))
-                        (define c
-                          (parameterize ([current-cache-layer cache-layer])
-                            (compile s)))
-                        (when time-expand?
-                          ;; Re-expanding avoids timing load of required modules
-                          (time (expand s)))
                         (cond
-                         [(and cache
-                               (not cache-read-only?)
-                               (or (not cache-save-only)
-                                   (hash-ref cache-save-only (path->string path) #f)))
-                          (cache-compiled! cache path c cache-layer)
-                          (loop)]
-                         [else (eval c)]))]))]
+                         [(not cache)
+                          (eval s)]
+                         [else
+                          (define cache-layer (make-cache-layer))
+                          (define c
+                            (parameterize ([current-cache-layer cache-layer])
+                              (compile s)))
+                          (when time-expand?
+                            ;; Re-expanding avoids timing load of required modules
+                            (time (expand s)))
+                          (cond
+                           [(and cache
+                                 (not cache-read-only?)
+                                 (or (not cache-save-only)
+                                     (hash-ref cache-save-only (path->string path) #f)))
+                            (cache-compiled! cache path c cache-layer)
+                            (loop)]
+                           [else (eval c)])]))]))]
                  [else (orig-load path #f)])))
 
 (define orig-resolver (current-module-name-resolver))
@@ -183,7 +189,7 @@
    [(r wrt src load?)
     (define p (orig-resolver r wrt src load?))
     (define n (resolved-module-path-name p))
-    (when (path? n)
+    (when (and (path? n) cache)
       (register-dependency! cache n))
     p]))
 
