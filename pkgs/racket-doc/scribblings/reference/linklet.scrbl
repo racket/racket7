@@ -176,7 +176,7 @@ returned linklet.}
                                [get-import (any/c . -> . (values (or/c linklet? #f)
                                                                  (or/c vector? #f)))
                                            (lambda (import-key) (values #f #f))])
-             (values linklet? vector?)])]<{
+             (values linklet? vector?)])]{
 
 Like @racket[compile-linklet], but takes an already-compiled linklet
 and potentially optimizes it further.}
