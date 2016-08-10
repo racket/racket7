@@ -107,7 +107,7 @@
 ;; Returns: `variable` or a compile-time value
 ;;          #f or (for a transformer) an inspector for the defining module
 ;; A binding provided to `binding-lookup` should be obtained either by
-;; passing`#:immediate? #t` to `resolve+shift` or by using `resolve+shift/extra-inspector`,
+;; passing `#:immediate? #t` to `resolve+shift` or by using `resolve+shift/extra-inspector`,
 ;; where the latter checks protected access for `free-identifier=?` equivalence
 ;; chains to provide an inspector associated with the endpoint identifier; using
 ;; just `resolve+shift` may leave the access with a too-weak inspector.
