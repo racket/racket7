@@ -88,7 +88,7 @@ with some exceptions: @racket[quote-syntax] and @racket[#%top] are not allowed;
 @racket[#%plain-app] is omitted (i.e., application is implicit);
 @racket[lambda], @racket[case-lambda], @racket[let-values], and
 @racket[letrec-values] can have only a single body expression; and
-numbers, booleans, strings, and byte-string are self-quoting.
+numbers, booleans, strings, and byte strings are self-quoting.
 Primitives are accessed directly by name, and shadowing is not allowed
 within a @racketidfont{linklet} form for primitive names, imported
 variables, defined variables, or local variables.

@@ -49,11 +49,6 @@
             [else
              empty-syntax-literals-data-instance]))))
    
-   (when (not (load-on-demand-enabled))
-     ;; Since on-demand loading is disabled, force deserialization
-     (let ([deserialize-syntax (instance-variable-value syntax-literals-data-instance deserialize-syntax-id)])
-       (when deserialize-syntax (deserialize-syntax))))
-
    (define (decl key)
      (instance-variable-value declaration-instance key))
    
@@ -99,17 +94,25 @@
    (define create-root-expand-context-from-module ; might be used to create root-expand-context
      (make-create-root-expand-context-from-module requires phases-h))
    
-   (define (declare-submodules ns names declare-name pre?)
-     (when dh
-       (if (compiled-in-memory? c)
-           (for ([c (in-list (if pre?
-                                 (compiled-in-memory-pre-compiled-in-memorys c)
-                                 (compiled-in-memory-post-compiled-in-memorys c)))])
-             (eval-module c #:namespace ns #:supermodule-name declare-name))
-           (for ([name (in-list names)])
-             (define sm-cd (hash-ref dh name #f))
-             (unless sm-cd (error "missing submodule declaration:" name))
-             (eval-module sm-cd #:namespace ns #:supermodule-name declare-name)))))
+   (define declare-submodules
+     ;; If there's no `dh`, then it's important not to retain a reference to
+     ;; `c`, which could cause the serialized form of syntax objects to
+     ;; be retained after deserialization and reachable from the module cache;
+     ;; if it's there's a `dh`, though, then we won't be in the module cache
+     (if dh
+         ;; Callback to declare submodules:
+         (lambda (ns names declare-name pre?)
+           (if (compiled-in-memory? c)
+               (for ([c (in-list (if pre?
+                                     (compiled-in-memory-pre-compiled-in-memorys c)
+                                     (compiled-in-memory-post-compiled-in-memorys c)))])
+                 (eval-module c #:namespace ns #:supermodule-name declare-name))
+               (for ([name (in-list names)])
+                 (define sm-cd (hash-ref dh name #f))
+                 (unless sm-cd (error "missing submodule declaration:" name))
+                 (eval-module sm-cd #:namespace ns #:supermodule-name declare-name))))
+         ;; Dummy callback to avoid retaining anything:
+         void))
 
    ;; At this point, we've prepared everything anout the module that we
    ;; can while staying independent of a specific declaration or
@@ -227,6 +230,9 @@
                              syntax-literals-linklet data-instance syntax-literals-data-instance
                              phase-shift original-self self bulk-binding-registry insp
                              create-root-expand-context-from-module)
+  (when (not (load-on-demand-enabled))
+    (force-syntax-deserialize syntax-literals-data-instance bulk-binding-registry))
+  
   (define inst
     (make-instance-instance
      #:namespace ns
@@ -263,6 +269,16 @@
     ;; from module metadata; do that on demand
     (namespace-set-root-expand-ctx! ns (delay (create-root-expand-context-from-module
                                                ns phase-shift original-self self)))]))
+
+;; ----------------------------------------
+
+(define (force-syntax-deserialize syntax-literals-data-instance bulk-binding-registry)
+    ;; Since on-demand loading is disabled, force deserialization
+    (let ([deserialize-syntax (instance-variable-value syntax-literals-data-instance deserialize-syntax-id)])
+      ;; We need to make sure there's something to deserialize; if it's already done
+      ;; `deserialize-syntax` has been set to #f
+      (when deserialize-syntax
+        (deserialize-syntax bulk-binding-registry))))
 
 ;; ----------------------------------------
 

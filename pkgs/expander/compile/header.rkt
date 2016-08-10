@@ -157,7 +157,7 @@
             (set! ,deserialize-syntax-id #f)))))]))
 
 (define (generate-lazy-syntax-literal-lookup pos)
-  `(,get-syntax-literal!-id ',pos))
+  `(,get-syntax-literal!-id ,pos))
 
 ;; Generate immediate deserializartion and shifting of a set of syntax
 ;; objects across multiple phases; the result is an expression for a
@@ -188,7 +188,7 @@
               (cdr ns+stxss)))))]))
 
 (define (generate-eager-syntax-literal-lookup pos)
-  `(vector-ref ,syntax-literals-id ',pos))
+  `(vector-ref ,syntax-literals-id ,pos))
 
 ;; Genereate a vector for a set of syntax objects; the result is a
 ;; vector like the one generated in expression from by

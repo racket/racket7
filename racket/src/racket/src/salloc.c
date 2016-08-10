@@ -1939,6 +1939,22 @@ static int record_nth_traced(void *p) {
   return 0;
 }
 
+/* A vector with keywords is interesting, because serialized
+   syntax-object literals have that shape. */
+static int vector_has_keywords(void *p)
+{
+  Scheme_Object *vec = (Scheme_Object *)p;
+  int i;
+
+  for (i = SCHEME_VEC_SIZE(vec); i--; ) {
+    if (SCHEME_VEC_ELS(vec)[i])
+      if (SCHEME_KEYWORDP(SCHEME_VEC_ELS(vec)[i]))
+        return 1;
+  }
+  
+  return 0;
+}
+
 static int traced_buffer_counter, traced_buffer_size;
 static void **traced_buffer;
 
@@ -2553,6 +2569,12 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
         }
         break;
       }
+    }
+
+    if (!strcmp("kw-vec", s)) {
+      trace_for_tag = scheme_vector_type;
+      dump_flags |= GC_DUMP_SHOW_TRACE;
+      record_traced_filter = vector_has_keywords;
     }
 
     if (!strcmp("fnl", s))
