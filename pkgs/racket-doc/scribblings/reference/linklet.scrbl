@@ -117,16 +117,14 @@ otherwise.}
 @defproc*[([(compile-linklet [form (or/c correlated? any/c)]
                              [name any/c #f]
                              [import-keys #f #f]
-                             [get-import (any/c . -> . (values (or/c linklet? #f)
-                                                               (or/c vector? #f)))
-                                         (lambda (import-key) (values #f #f))])
+                             [get-import #f #f])
             linklet?]
            [(compile-linklet [form (or/c correlated? any/c)]
                              [name any/c]
                              [import-keys vector?]
-                             [get-import (any/c . -> . (values (or/c linklet? #f)
-                                                               (or/c vector? #f)))
-                                         (lambda (import-key) (values #f #f))])
+                             [get-import (or/c #f (any/c . -> . (values (or/c linklet? #f)
+                                                                        (or/c vector? #f))))
+                                         #f])
            (values linklet? vector?)])]{
 
 Takes an S-expression or @tech{correlated object} for a
@@ -142,7 +140,7 @@ support cross-linklet optimization. If @racket[import-keys] is a
 vector, it must have as many elements as sets of imports in
 @racket[form]. If the compiler becomes interested in optimizing a
 reference to an imported variable, it passes back to
-@racket[get-import] the element of @racket[import-keys] that
+@racket[get-import] (if non-@racket[#f]) the element of @racket[import-keys] that
 corresponds to the variable's import set. The @racket[get-import]
 function can then return a linklet that represents an instance to be
 provided to the compiled linklet when it is eventually instantiated;
@@ -155,7 +153,9 @@ optional vector of keys to provide transitive information on a
 returned linklet's imports; the returned vector must have the same
 number of elements as the linklet has imports. When vector elements
 are @racket[eq?] and non-@racket[#f], the compiler can assume that
-they correspond to the same run-time instance.
+they correspond to the same run-time instance. A @racket[#f]
+value for @racket[get-import] is equivalent to a function that
+always returns two @racket[#f] results.
 
 When @racket[import-keys] is not @racket[#f], then the compiler is
 allowed to grow or shrink the set of imported instances for the

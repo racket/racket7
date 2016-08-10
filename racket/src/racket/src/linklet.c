@@ -266,10 +266,16 @@ void extract_import_info(const char *who, int argc, Scheme_Object **argv,
 
   if (argc > 3) {
     scheme_check_proc_arity2(who, 1, 3, argc, argv, 1);
-    if (*_import_keys /* not useful without keys */
-        && SCHEME_TRUEP(argv[3]))
+    if (SCHEME_TRUEP(argv[3])) {
+      if (!*_import_keys) {
+        scheme_contract_error(who,
+                              "no vector supplied for import keys, but import-getting function provided;\n"
+                              " the function argument must be `#f' when the vector argument is `#f'",
+                              "import-getting function", 1, argv[3],
+                              NULL);
+      }
       *_get_import = argv[3];
-    else
+    } else
       *_get_import = NULL;
   } else
     *_get_import = NULL;
