@@ -2761,7 +2761,6 @@
                (require (submod ".." a))
                (list b c (c)))))
 
-stop
 
 (test-comp `(module m racket/base
              (module a racket/base
