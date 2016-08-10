@@ -96,7 +96,8 @@
                         s)))
         (set-stat-msecs! s (+ delta (stat-msecs s)))
         (set-stat-memory! s (+ delta-memory (stat-memory s)))
-        (set-stat-count! s (add1 (stat-count s)))
+        (when (null? (cdr path))
+         (set-stat-count! s (add1 (stat-count s))))
         (unless (null? (cdr path))
           (loop accum (cdr path) (if (null? enclosing-path) null (cdr enclosing-path))))))
     
@@ -122,7 +123,7 @@
                                      (list* c #\, l)]
                                     [else (cons c l)]))))
                               (define-values (label-max-len value-max-len memory-max-len count-max-len)
-                                (let loop ([accums accums] [label-len 0] [value-len 0] [memory-len 0] [count-len 0] [indent 2])
+                                (let loop ([accums accums] [label-len 6] [value-len 5] [memory-len 4] [count-len 5] [indent 2])
                                   (for/fold ([label-len label-len]
                                              [value-len value-len]
                                              [memory-len memory-len]
@@ -140,17 +141,17 @@
                                                  memory-len
                                                  count-len
                                                  (+ 2 indent))]))))
-                              (log-performance-info "REGION   ~a   MSECS~aMEM~aCOUNT"
-                                                    (make-string (max 0 (- (+ label-max-len value-max-len) 10))
+                              (log-performance-info "REGION      ~aMSECS   ~aMEMK   ~aCOUNT"
+                                                    (make-string (- (+ label-max-len value-max-len) 11)
                                                                  #\space)
-                                                    (make-string memory-max-len
+                                                    (make-string (- memory-max-len 4)
                                                                  #\space)
-                                                    (make-string count-max-len
+                                                    (make-string (- count-max-len 5)
                                                                  #\space))
                               (let loop ([name #f] [accums accums] [indent ""] [newline? #t])
                                 (when name
                                   (define v (hash-ref accums stat-key))
-                                  (log-performance-info "~a~a ~a   ~a     ~a~a   ~a~a"
+                                  (log-performance-info "~a~a   ~a~a   ~a~a   ~a~a"
                                                         indent
                                                         name
                                                         (make-string (+ (- label-max-len (string-length (format "~a" name)) (string-length indent))
