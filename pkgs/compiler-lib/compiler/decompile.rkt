@@ -30,7 +30,7 @@
 (define-struct glob-desc (vars))
 
 ;; Main entry:
-(define (decompile top)
+(define (decompile top #:to-linklets? [to-linklets? #f])
   (cond
    [(linkl-directory? top)
     (cons
@@ -45,7 +45,7 @@
      (apply
       append
       (for/list ([(k v) (in-hash (linkl-bundle-table top))])
-        (case k
+        (case (and (not to-linklets?) k)
           [(stx-data)
            (list '#:stx-data (decompile-data-linklet v))]
           [else
@@ -75,7 +75,7 @@
   (match l
     [(struct linkl (_ _ _ _ _ _ _ (list vec-def (struct def-values (_ deser-lam))) _))
      (match deser-lam
-       [(struct lam (_ _ 0 _ #f _ _ _ _ (struct seq ((list vec-copy! _)))))
+       [(struct lam (_ _ _ _ _ _ _ _ _ (struct seq ((list vec-copy! _)))))
         (match vec-copy!
           [(struct application (_ (list _ _ (struct application (_ (list mpi-vector inspector bulk-binding-registry
                                                                          num-mutables mutable-vec

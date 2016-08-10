@@ -96,10 +96,17 @@
               ;; Check whether we're sharing for all nested syntax objects
               (pop-syntax-context! state)
               (define new-sharing-mode
-                (if (and this-state (syntax-state-all-sharing? this-state))
+                (if (and this-state
+                         (syntax-state-all-sharing? this-state))
                     'share
                     'none))
-              (hash-set! (serialize-state-sharing-syntaxes state) s new-sharing-mode)
+              (hash-set! (serialize-state-sharing-syntaxes state)
+                         s
+                         ;; If the syntax object has only simple content,
+                         ;; it doesn't need any sharing support by itself
+                         (if (datum-has-elements? content)
+                             new-sharing-mode
+                             'none))
               (when (and stx-state (eq? new-sharing-mode 'none))
                 (set-syntax-state-all-sharing?! stx-state #f))]
              [else

@@ -225,6 +225,8 @@
                            (syntax-e orig-id))))
 
 (define (compile-identifier s cctx #:set-to [rhs #f] #:top? [top? #f])
+  (performance-region
+   ['compile '_ 'identifier]
   (define phase (compile-context-phase cctx))
   (define normal-b (resolve+shift s phase))
   (define b
@@ -279,7 +281,7 @@
       (error "not a reference to a module or local binding:" s)]))
   (correlate* s (if rhs
                     `(set! ,sym ,rhs)
-                    sym)))
+                    sym))))
 
 (define (resolve-with-top-level-bind-scope s phase cctx)
   (define top-level-scope (compile-context-top-level-bind-scope cctx))
