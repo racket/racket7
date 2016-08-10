@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/set.rkt"
+         "../common/performance.rkt"
          "../syntax/syntax.rkt"
          "../syntax/to-list.rkt"
          "../common/phase.rkt"

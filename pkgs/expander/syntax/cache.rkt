@@ -16,22 +16,23 @@
     [()
      (set! cache (make-weak-box (make-hasheq)))]))
 
-(struct entry (scopes phase binding))
+(struct entry (scs smss phase binding))
 
-(define (resolve-cache-get sym phase scopes)
+(define (resolve-cache-get sym phase scs smss)
   (define c (weak-box-value cache))
   (and c
        (let ([v (hash-ref c sym #f)])
          (and v
               (eqv? phase (entry-phase v))
-              (set=? scopes (entry-scopes v))
+              (set=? scs (entry-scs v))
+              (set=? smss (entry-smss v))
               (entry-binding v)))))
 
-(define (resolve-cache-set! sym phase scopes b)
+(define (resolve-cache-set! sym phase scs smss b)
   (define c (weak-box-value cache))
   (cond
    [(not c)
     (clear-resolve-cache!)
-    (resolve-cache-set! sym phase scopes b)]
+    (resolve-cache-set! sym phase scs smss b)]
    [else
-    (hash-set! c sym (entry scopes phase b))]))
+    (hash-set! c sym (entry scs smss phase b))]))

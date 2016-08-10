@@ -655,19 +655,15 @@
                  #:get-scopes? [get-scopes? #f] ; gets scope set instead of binding
                  ;; For resolving bulk bindings in `free-identifier=?` chains:
                  #:extra-shifts [extra-shifts null])
-  (unless (identifier? s)
-    (raise-argument-error 'resolve "identifier?" s))
-  (unless (phase? phase)
-    (raise-argument-error 'resolve "phase?" phase))
+  (define sym (syntax-content s))
   (let fallback-loop ([smss (syntax-shifted-multi-scopes s)])
-    (define scopes (scope-set-at-fallback s (fallback-first smss) phase))
-    (define sym (syntax-content s))
     (cond
      [(and (not exactly?)
            (not get-scopes?)
-           (resolve-cache-get sym phase scopes))
+           (resolve-cache-get sym phase (syntax-scopes s) (fallback-first smss)))
       => (lambda (b) b)]
      [else
+      (define scopes (scope-set-at-fallback s (fallback-first smss) phase))
       ;; As we look through all scopes, if we find two where neither
       ;; is a subset of the other, accumulate them into a list; maybe
       ;; we find a superset of both, later; if we end with a list,
@@ -704,7 +700,7 @@
             (fallback-loop (fallback-rest smss))
             ambiguous-value)]
        [best-scopes
-        (resolve-cache-set! sym phase scopes best-binding)
+        (resolve-cache-set! sym phase (syntax-scopes s) (fallback-first smss) best-binding)
         (and (or (not exactly?)
                  (eqv? (set-count scopes)
                        (set-count best-scopes)))
