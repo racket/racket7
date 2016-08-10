@@ -83,7 +83,7 @@ in the @racket[_defn-or-expr]s, respectively.
 
 The grammar of an @racket[_defn-or-expr] is similar to the expander's
 grammar of fully expanded expressions (see @secref["fully-expanded"])
-with some exceptions: @racket[quote-syntax] is not allowed;
+with some exceptions: @racket[quote-syntax] and @racket[#%top] are not allowed;
 @racket[#%plain-lambda] is spelled @racket[lambda];
 @racket[#%plain-app] is omitted (i.e., application is implicit);
 @racket[lambda], @racket[case-lambda], @racket[let-values], and
