@@ -449,14 +449,14 @@
 ;; unreadable symbol that is intended to be specific to a particular
 ;; module, exporting unreadable symbols can create collisions.
 (define (shift-provides-module-path-index provides from-mpi to-mpi)
-  (cond
-   [(eq? from-mpi to-mpi) provides]
-   [else
-    (for/hasheqv ([(phase at-phase) (in-hash provides)])
-      (values phase
-              (for/hasheq ([(sym binding) (in-hash at-phase)]
-                           #:when (symbol-interned? sym))
-                (values sym
+  (for/hasheqv ([(phase at-phase) (in-hash provides)])
+    (values phase
+            (for/hasheq ([(sym binding) (in-hash at-phase)]
+                         #:when (symbol-interned? sym))
+              (values sym
+                      (cond
+                       [(eq? from-mpi to-mpi) binding]
+                       [else
                         (let loop ([binding binding])
                           (cond
                            [(provided? binding)
@@ -464,4 +464,4 @@
                                       (provided-protected? binding)
                                       (provided-syntax? binding))]
                            [else
-                            (binding-module-path-index-shift binding from-mpi to-mpi)]))))))]))
+                            (binding-module-path-index-shift binding from-mpi to-mpi)]))]))))))
