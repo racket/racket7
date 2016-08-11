@@ -873,13 +873,20 @@
          [else
           (define disarmed-body (syntax-disarm body))
           (case (core-form-sym disarmed-body phase)
-            [(#%require #%provide module* #%declare)
+            [(#%require #%provide module*)
              ;; handle earlier or later
              (car bodys)]
             [else
              (performance-region
               ['expand 'form-in-module/2]
-              (expand (car bodys) (as-expression-context body-ctx)))])]))
+              (define exp-body (expand (car bodys) (as-expression-context body-ctx)))
+              (if (expand-context-to-parsed? body-ctx)
+                  ;; Have (and need only) parsed form
+                  exp-body
+                  ;; Expand again to parse it
+                  (expanded+parsed
+                   exp-body
+                   (expand exp-body (as-to-parsed-context body-ctx)))))])]))
       (define lifted-defns
         ;; If there were any lifts, the right-hand sides need to be expanded
         (loop #f (get-and-clear-lifts! (expand-context-lifts body-ctx))))

@@ -203,7 +203,17 @@
                           `',(string->symbol (format "~s" mod-path)))
                         (when (module-declared? mod-path #t)
                           (define rs (dynamic-require mod-path 'read-syntax))
-                          (synthesize-reader-bridge-module mod-path synth-mod-path rs))
+                          (synthesize-reader-bridge-module mod-path synth-mod-path rs)
+                          ;; Also declare the synthesized name in the non-host system,
+                          ;; in case the reader gaurd was called from the hosted system
+                          (unless (module-declared? synth-mod-path #f)
+                            (parameterize ([current-module-declare-name (make-resolved-module-path
+                                                                         (cadr synth-mod-path))])
+                              (eval (check-module-form
+                                     (datum->syntax #f `(module m racket/base
+                                                         (require ,mod-path)
+                                                         (provide (all-from-out ,mod-path))))
+                                     synth-mod-path)))))
                         synth-mod-path))
 
 (define (apply-to-module proc mod-path)
