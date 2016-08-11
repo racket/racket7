@@ -458,7 +458,7 @@
   (define phase (expand-context-phase ctx))
   (define local? (not begin-form?)) ;; see "[*]" below
   ;; Expand `s`, but loop to handle lifted expressions
-  (let loop ([s s] [always-wrap? always-wrap?])
+  (let loop ([s s] [always-wrap? always-wrap?] [ctx ctx])
     (define lift-env (and local? (box empty-env)))
     (define lift-ctx (make-lift-context
                       (if local?
@@ -484,13 +484,7 @@
         (cond
          [(expand-context-to-parsed? ctx)
           (unless expand-lifts? (error "internal error: to-parsed mode without expanding lifts"))
-          (define idss+keyss+rhss (get-lifts-as-lists lifts))
-          (parsed-let-values s
-                             (map car idss+keyss+rhss)
-                             (for/list ([ids+keys+rhs (in-list idss+keyss+rhss)])
-                               (list (cadr ids+keys+rhs)
-                                     (loop (caddr ids+keys+rhs) #f)))
-                             (list exp-s))]
+          (wrap-lifts-as-parsed-let lifts exp-s s ctx (lambda (rhs rhs-ctx) (loop rhs #f rhs-ctx)))]
          [else
           (if begin-form?
               (wrap-lifts-as-begin lifts exp-s s phase)
@@ -503,7 +497,7 @@
      [else
       ;; Expand again...
       (log-expand ctx 'lift-loop with-lifts-s)
-      (loop with-lifts-s #f)])))
+      (loop with-lifts-s #f ctx)])))
 
 ;; [*] Although `(memq context '(top-level module))` makes more sense
 ;;     than `(not begin-form?)`, the latter was used historically; the
@@ -621,3 +615,28 @@
                  (or (loop (car ids)) (loop (cdr ids))))))
       layer-val
       (expand-context-binding-layer ctx)))
+
+;; Wrap lifted forms in a `let` for a mode where we're generating a
+;; parsed result. The body has already been parsed, and the left-hand
+;; sides already have bindings. We need to parse the right-hand sides
+;; as a series of nested `lets`.
+(define (wrap-lifts-as-parsed-let lifts exp-s s ctx parse-rhs)
+  (define idss+keyss+rhss (get-lifts-as-lists lifts))
+  (let lets-loop ([idss+keyss+rhss idss+keyss+rhss] [rhs-ctx ctx])
+    (cond
+     [(null? idss+keyss+rhss) exp-s]
+     [else
+      (define ids (caar idss+keyss+rhss))
+      (define keys (cadar idss+keyss+rhss))
+      (define rhs (caddar idss+keyss+rhss))
+      (define exp-rhs (parse-rhs rhs rhs-ctx))
+      (parsed-let-values
+       s
+       (list ids)
+       (list (list keys exp-rhs))
+       (list
+        (lets-loop (cdr idss+keyss+rhss)
+                   (struct-copy expand-context rhs-ctx
+                                [env (for/fold ([env (expand-context-env rhs-ctx)]) ([id (in-list ids)]
+                                                                                     [key (in-list keys)])
+                                       (env-extend env key (local-variable id)))]))))])))
