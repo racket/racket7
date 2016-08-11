@@ -70,7 +70,7 @@
 
   ;; Keep track of whether any `define-syntaxes` appeared at any phase
   (define saw-define-syntaxes? #f)
-  
+
   (when (compile-context-module-self cctx)
     ;; In a module, select non-conflicting symbols for definitions,
     ;; first, in the hope that we can just the names as-is; and we'll

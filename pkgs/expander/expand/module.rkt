@@ -396,7 +396,7 @@
         [(not (expand-context-in-local-expand? ctx))
          (expanded+parsed mb-result-s
                           (parsed-#%module-begin mb-s (parsed-only fully-expanded-bodys)))]
-        [mb-result-s])]))
+        [else mb-result-s])]))
 
    ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    ;; Actually expand the `#%module-body` form

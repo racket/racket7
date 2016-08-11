@@ -1,6 +1,9 @@
 #lang racket/base
 (require "../syntax/syntax.rkt"
-         "parsed.rkt")
+         "../syntax/taint.rkt"
+         "../syntax/match.rkt"
+         "parsed.rkt"
+         "main.rkt")
 
 (provide (struct-out expanded+parsed)
          (struct-out semi-parsed-define-values)
@@ -34,7 +37,16 @@
 (define (syntax-only l)
   (for/list ([i (in-list l)]
              #:when (or (syntax? i)
-                        (expanded+parsed? i)))
-    (if (expanded+parsed? i)
-        (expanded+parsed-s i)
-        i)))
+                        (expanded+parsed? i)
+                        (semi-parsed-begin-for-syntax? i)))
+    (cond
+     [(expanded+parsed? i) (expanded+parsed-s i)]
+     [(semi-parsed-begin-for-syntax? i)
+      ;; If `l` is after skipping `module*` expansion, then we may
+      ;; still have semi-parsed `begin-for-syntax`
+      (define s (semi-parsed-begin-for-syntax-s i))
+      (define nested-bodys (semi-parsed-begin-for-syntax-body i))
+      (let ([disarmed-s (syntax-disarm s)])
+        (define-match m disarmed-s '(begin-for-syntax _ ...))
+        (rebuild s disarmed-s `(,(m 'begin-for-syntax) ,@(syntax-only nested-bodys))))]
+     [else i])))
