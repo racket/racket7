@@ -36,7 +36,7 @@
          requires+provides-reset!
          add-provide!
          
-         attach-require-provide-properties
+         extract-requires-and-provides
          
          shift-provides-module-path-index)
 
@@ -416,9 +416,7 @@
 
 ;; ----------------------------------------
 
-;; Extract both require and provide information into a syntax property
-;; for use by `compile`
-(define (attach-require-provide-properties r+p s old-self new-self)
+(define (extract-requires-and-provides r+p old-self new-self)
   (define (extract-requires)
     ;; Extract from the in-order record, so that instantiation can use the original order
     (define phase-to-mpis-in-order (requires+provides-require-mpis-in-order r+p))
@@ -432,9 +430,7 @@
     (shift-provides-module-path-index (requires+provides-provides r+p)
                                       old-self
                                       new-self))
-  (let* ([s (syntax-property s 'module-requires (extract-requires))]
-         [s (syntax-property s 'module-provides (extract-provides))])
-    s))
+  (values (extract-requires) (extract-provides)))
 
 ;; ----------------------------------------
 

@@ -3,9 +3,12 @@
          "../syntax/scope.rkt"
          "../syntax/match.rkt"
          "../syntax/binding.rkt"
+         "../syntax/error.rkt"
          "../namespace/core.rkt"
          "../common/module-path.rkt"
-         "../boot/runtime-primitive.rkt")
+         "../boot/runtime-primitive.rkt"
+         "parsed.rkt"
+         "expanded+parsed.rkt")
 
 ;; Check whether a module fits the restricted grammar of a cross-phase
 ;; persistent module
@@ -17,32 +20,34 @@
 
 (define (check-body bodys)
   (for ([body (in-list bodys)])
-    (case (core-form-sym body 0)
-      [(begin)
-       (define-match m body '(begin e ...))
-       (check-body (m 'e))]
-      [(#%declare #%provide #%require module module*)
-       (void)]
-      [(define-values)
-       (define-match m body '(define-values (id ...) rhs))
-       (check-expr (m 'rhs) (length (m 'id)) body)]
-      [else
-       (disallow body)])))
+    (define p (if (expanded+parsed? body)
+                  (expanded+parsed-parsed body)
+                  body))
+    (cond
+     [(semi-parsed-begin-for-syntax? p)
+      (disallow (semi-parsed-begin-for-syntax-s p))]
+     [(parsed-define-values? p)
+      (check-expr (parsed-define-values-rhs p) (length (parsed-define-values-syms p)) p)]
+     [(or (parsed-#%declare? p)
+          (parsed-module? p)
+          (syntax? p)) ;; remaining unparsed forms, such as `#%require` and `#%provide`, are ok
+      (void)]
+     [else
+      (disallow p)])))
 
 (define (check-expr e num-results enclosing)
-  (case (core-form-sym e 0)
-    [(lambda case-lambda)
+  (cond
+    [(or (parsed-lambda? e)
+         (parsed-case-lambda? e))
      (check-count 1 num-results enclosing)]
-    [(quote)
-     (define-match m e '(quote datum))
-     (check-datum (m 'datum))
+    [(parsed-quote? e)
+     (check-datum (parsed-quote-datum e))
      (check-count 1 num-results enclosing)]
-    [(#%app)
-     (define-match m e '(#%app rator rand ...))
-     (define rands (m 'rand))
+    [(parsed-app? e)
+     (define rands (cdr (parsed-app-rator+rands e)))
      (for ([rand (in-list rands)])
        (check-expr rand 1 e))
-     (case (cross-phase-primitive-name (m 'rator))
+     (case (cross-phase-primitive-name (car (parsed-app-rator+rands e)))
        [(cons list)
         (check-count 1 num-results enclosing)]
        [(make-struct-type)
@@ -72,16 +77,21 @@
    [else (disallow datum)]))
 
 (define (quoted-string? e)
-  (and (eq? 'quote (core-form-sym e 0))
-       (let ()
-         (define-match m e '(quote datum))
-         (string? (syntax-e (m 'datum))))))
+  (and (parsed-quote? e)
+       (string? (syntax-e (parsed-quote-datum e)))))
 
 (define (cross-phase-primitive-name id)
-  (define b (resolve+shift id 0))
-  (and (module-binding? b)
-       (eq? runtime-module-name (module-path-index-resolve (module-binding-module b)))
-       (module-binding-sym b)))
+  (cond
+   [(parsed-id? id)
+    (define b (parsed-id-binding id))
+    (and (module-binding? b)
+         (eq? runtime-module-name (module-path-index-resolve (module-binding-module b)))
+         (module-binding-sym b))]
+   [else #f]))
 
 (define (disallow body)
-  (error "not allowed in a cross-phase persistent module:" body))
+  (raise-syntax-error 'module
+                      "not allowed in a cross-phase persistent module"
+                      (if (parsed? body)
+                          (parsed-s body)
+                          body)))

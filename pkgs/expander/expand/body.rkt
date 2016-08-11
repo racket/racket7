@@ -8,6 +8,7 @@
          "env.rkt"
          "../syntax/track.rkt"
          "../syntax/error.rkt"
+         "../expand/parsed.rkt"
          "dup-check.rkt"
          "use-site.rkt"
          "../namespace/core.rkt"
@@ -258,9 +259,11 @@
                    #:frame-id frame-id #:ctx finish-ctx
                    #:source s #:disarmed-source disarmed-s
                    #:get-body finish-bodys #:track? #f))
-    (list (attach-disappeared-transformer-bindings
-           exp-s
-           disappeared-transformer-bindings))]))
+    (if (expand-context-to-parsed? body-ctx)
+        (list exp-s)
+        (list (attach-disappeared-transformer-bindings
+               exp-s
+               disappeared-transformer-bindings)))]))
 
 ;; Roughly, create a `letrec-values` for for the given ids, right-hand sides, and
 ;; body. While expanding right-hand sides, though, keep track of whether any
@@ -275,7 +278,7 @@
                                                 #:get-body get-body #:track? track?)
   (define phase (expand-context-phase ctx))
   (let loop ([idss idss] [keyss keyss] [rhss rhss] [track-stxs track-stxs]
-             [accum-idss null] [accum-rhss null] [accum-track-stxs null]
+             [accum-idss null] [accum-keyss null] [accum-rhss null] [accum-track-stxs null]
              [track? track?] [get-list? #f])
     (cond
      [(null? idss)
@@ -284,15 +287,23 @@
              get-list?)
         (get-body)]
        [else
+        (define exp-body (get-body))
         (define result-s
-          (rebuild
-           #:track? track?
-           s disarmed-s
-           `(,(if (null? accum-idss)
-                  (core-id 'let-values phase)
-                  (core-id 'letrec-values phase))
-             ,(build-clauses accum-idss accum-rhss accum-track-stxs)
-             ,@(get-body))))
+          (if (expand-context-to-parsed? ctx)
+              (if (null? accum-idss)
+                  (parsed-let-values s null null exp-body)
+                  (parsed-letrec-values s 
+                                        (reverse accum-idss)
+                                        (reverse (map list accum-keyss accum-rhss))
+                                        exp-body))
+              (rebuild
+               #:track? track?
+               s disarmed-s
+               `(,(if (null? accum-idss)
+                      (core-id 'let-values phase)
+                      (core-id 'letrec-values phase))
+                 ,(build-clauses accum-idss accum-rhss accum-track-stxs)
+                 ,@exp-body))))
         (when track?
           (log-expand ctx 'tag result-s))
         (if get-list? (list result-s) result-s)])]
@@ -310,31 +321,46 @@
        [(and (not local-or-forward-references?)
              split?)
         (unless (null? accum-idss) (error "internal error: accumulated ids not empty"))
+        (define exp-rest (loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
+                               null null null null
+                               #f #t))
         ((if get-list? list values)
-         (rebuild
-          #:track? track?
-          s disarmed-s
-          `(,(core-id 'let-values phase)
-            (,(build-clause ids expanded-rhs track-stx))
-            ,@(loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
-                    null null null
-                    #f #t))))]
+         (if (expand-context-to-parsed? ctx)
+             (parsed-let-values s
+                                (list ids)
+                                (list (list (car keyss) expanded-rhs))
+                                exp-rest)
+             (rebuild
+              #:track? track?
+              s disarmed-s
+              `(,(core-id 'let-values phase)
+                (,(build-clause ids expanded-rhs track-stx))
+                ,@exp-rest))))]
        [(and (not forward-references?)
              (or split? (null? (cdr idss))))
+        (define exp-rest (loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
+                               null null null null
+                               #f #t))
         ((if get-list? list values)
-         (rebuild
-          #:track? track?
-          s disarmed-s
-          `(,(core-id 'letrec-values phase)
-            ,(build-clauses (cons ids accum-idss)
-                            (cons expanded-rhs accum-rhss)
-                            (cons track-stx accum-track-stxs))
-            ,@(loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
-                    null null null
-                    #f #t))))]
+         (if (expand-context-to-parsed? ctx)
+             (parsed-letrec-values s
+                                   (reverse (cons ids accum-idss))
+                                   (reverse
+                                    (cons (list (car keyss) expanded-rhs)
+                                          (map list accum-keyss accum-rhss)))
+                                   exp-rest)
+             (rebuild
+              #:track? track?
+              s disarmed-s
+              `(,(core-id 'letrec-values phase)
+                ,(build-clauses (cons ids accum-idss)
+                                (cons expanded-rhs accum-rhss)
+                                (cons track-stx accum-track-stxs))
+                ,@exp-rest))))]
        [else
         (loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
-              (cons ids accum-idss) (cons expanded-rhs accum-rhss) (cons track-stx accum-track-stxs)
+              (cons ids accum-idss) (cons (car keyss) accum-keyss)
+              (cons expanded-rhs accum-rhss) (cons track-stx accum-track-stxs)
               track? get-list?)])])))
 
 (define (build-clauses accum-idss accum-rhss accum-track-stxs)

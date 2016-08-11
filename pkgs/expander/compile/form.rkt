@@ -6,10 +6,10 @@
          "../syntax/property.rkt"
          "../syntax/match.rkt"
          "../common/phase.rkt"
-         "../namespace/core.rkt"
          "../namespace/namespace.rkt"
          "../namespace/module.rkt"
          "../expand/root-expand-context.rkt"
+         "../expand/parsed.rkt"
          "../common/module-path.rkt"
          "module-use.rkt"
          "serialize.rkt"
@@ -19,7 +19,6 @@
          "context.rkt"
          "header.rkt"
          "reserved-symbol.rkt"
-         "id-to-symbol.rkt"
          "instance.rkt"
          "namespace-scope.rkt"
          "expr.rkt"
@@ -78,21 +77,19 @@
     ;; rename locals as needed to avoid these names
     (let loop! ([bodys bodys] [phase phase] [header (find-or-create-header! phase)])
       (for ([body (in-list bodys)])
-        (case (core-form-sym body phase)
-          [(define-values)
-           (define-match m body '(define-values (id ...) rhs))
-           (for ([sym (in-list (def-ids-to-binding-syms (m 'id) phase self cctx))])
-             (define def-sym (select-fresh sym header))
-             (hash-set! (header-binding-sym-to-define-sym header)
-                        sym
-                        def-sym)
-             (set-header-binding-syms-in-order! header
-                                                (cons sym
-                                                      (header-binding-syms-in-order header)))
-             (register-as-defined! header def-sym))]
-          [(begin-for-syntax)
-           (define-match m body '(begin-for-syntax e ...))
-           (loop! (m 'e) (add1 phase) (find-or-create-header! (add1 phase)))]))))
+        (cond
+         [(parsed-define-values? body)
+          (for ([sym (in-list (parsed-define-values-syms body))])
+            (define def-sym (select-fresh sym header))
+            (hash-set! (header-binding-sym-to-define-sym header)
+                       sym
+                       def-sym)
+            (set-header-binding-syms-in-order! header
+                                               (cons sym
+                                                     (header-binding-syms-in-order header)))
+            (register-as-defined! header def-sym))]
+         [(parsed-begin-for-syntax? body)
+          (loop! (parsed-begin-for-syntax-body body) (add1 phase) (find-or-create-header! (add1 phase)))]))))
   
   ;; Provided for callbacks to detect required references:
   (define ((as-required? header) sym)
@@ -101,111 +98,107 @@
   ;; Compile each form in `bodys`, recording results in `phase-to-body`
   (define last-i (sub1 (length bodys)))
   (let loop! ([bodys bodys] [phase phase] [header (find-or-create-header! phase)])
-    (for ([in-body (in-list bodys)]
+    (for ([body (in-list bodys)]
           [i (in-naturals)])
-      (define body (syntax-disarm in-body))
-      (case (core-form-sym body phase)
-        [(define-values)
-         (define-match m body '(define-values (id ...) rhs))
-         (define ids (m 'id))
-         (define binding-syms (def-ids-to-binding-syms ids phase self cctx))
-         (define def-syms
-           (cond
-            [(compile-context-module-self cctx)
-             ;; In a module, look up name for local definition:
-             (for/list ([binding-sym (in-list binding-syms)])
-               (hash-ref (header-binding-sym-to-define-sym header)
-                         binding-sym))]
-            [else
-             ;; Outside of a module, look up name to `set!`
-             (for/list ([binding-sym (in-list binding-syms)])
-               (register-required-variable-use! header
-                                                (compile-context-self cctx)
-                                                phase
-                                                binding-sym
-                                                #f
-                                                #:defined? #t))]))
-         (define rhs (compile (m 'rhs)
-                              (struct-copy compile-context cctx
-                                           [phase phase]
-                                           [header header])
-                              (and (= (length ids) 1) (car ids))))
-         (definition-callback)
-         (compiled-expression-callback rhs (length def-syms) phase (as-required? header))
-         ;; Generate a definition:
-         (add-body! phase (propagate-inline-property
-                           (correlate* body `(define-values ,def-syms ,rhs))
-                           body))
-         (unless (or (compile-context-module-self cctx)
-                     (null? ids))
-           ;; Not in a module; ensure that the defined names are
-           ;; treated as mutable
-           (add-body! phase
-                      `(if #f
-                        (begin
-                          ,@(for/list ([def-sym (in-list def-syms)])
-                              `(set! ,def-sym #f)))
-                        (void)))
-           ;; Also, install a binding at run time
-           (add-body! phase (compile-top-level-bind
-                             ids binding-syms
+      (cond
+       [(parsed-define-values? body)
+        (define ids (parsed-define-values-ids body))
+        (define binding-syms (parsed-define-values-syms body))
+        (define def-syms
+          (cond
+           [(compile-context-module-self cctx)
+            ;; In a module, look up name for local definition:
+            (for/list ([binding-sym (in-list binding-syms)])
+              (hash-ref (header-binding-sym-to-define-sym header)
+                        binding-sym))]
+           [else
+            ;; Outside of a module, look up name to `set!`
+            (for/list ([binding-sym (in-list binding-syms)])
+              (register-required-variable-use! header
+                                               (compile-context-self cctx)
+                                               phase
+                                               binding-sym
+                                               #f
+                                               #:defined? #t))]))
+        (define rhs (compile (parsed-define-values-rhs body)
                              (struct-copy compile-context cctx
                                           [phase phase]
                                           [header header])
-                             #f)))]
-        [(define-syntaxes)
-         (define-match m body '(define-syntaxes (id ...) rhs))
-         (define ids (m 'id))
-         (define binding-syms (def-ids-to-binding-syms ids phase self cctx))
-         (define next-header (find-or-create-header! (add1 phase)))
-         (define gen-syms (for/list ([binding-sym (in-list binding-syms)])
-                            (select-fresh binding-sym next-header)))
-         (define rhs (compile (m 'rhs)
-                              (struct-copy compile-context cctx
-                                           [phase (add1 phase)]
-                                           [header next-header])))
-         (definition-callback)
-         (compiled-expression-callback rhs (length gen-syms) (add1 phase) (as-required? header))
-         (define transformer-set!s (for/list ([binding-sym (in-list binding-syms)]
-                                              [gen-sym (in-list gen-syms)])
-                                     `(,set-transformer!-id ',binding-sym ,gen-sym)))
-         (cond
-          [(compile-context-module-self cctx)
-           (add-body! (add1 phase) `(let-values ([,gen-syms ,rhs])
-                                     (begin
-                                       ,@transformer-set!s
-                                       (void))))]
-          [else
-           (add-body! (add1 phase)
-                      (generate-top-level-define-syntaxes
-                       gen-syms rhs transformer-set!s
-                       (compile-top-level-bind
-                        ids binding-syms
-                        (struct-copy compile-context cctx
-                                     [phase phase]
-                                     [header header])
-                        gen-syms)))])
-         (set! saw-define-syntaxes? #t)]
-        [(begin-for-syntax)
-         (define-match m body '(begin-for-syntax e ...))
-         (loop! (m 'e) (add1 phase) (find-or-create-header! (add1 phase)))]
-        [(#%require #%provide #%declare module module*)
-         ;; Must be handled separately, if allowed at all
-         (define e (other-form-callback body (struct-copy compile-context cctx
-                                                          [phase phase]
-                                                          [header header])))
-         (when e
-           (compiled-expression-callback e #f phase (as-required? header))
-           (add-body! phase e))]
-        [else
-         (define e (compile body
+                             (and (= (length ids) 1) (car ids))))
+        (definition-callback)
+        (compiled-expression-callback rhs (length def-syms) phase (as-required? header))
+        ;; Generate a definition:
+        (add-body! phase (propagate-inline-property
+                          (correlate* (parsed-s body) `(define-values ,def-syms ,rhs))
+                          (parsed-s body)))
+        (unless (or (compile-context-module-self cctx)
+                    (null? ids))
+          ;; Not in a module; ensure that the defined names are
+          ;; treated as mutable
+          (add-body! phase
+                     `(if #f
+                       (begin
+                         ,@(for/list ([def-sym (in-list def-syms)])
+                             `(set! ,def-sym #f)))
+                       (void)))
+          ;; Also, install a binding at run time
+          (add-body! phase (compile-top-level-bind
+                            ids binding-syms
                             (struct-copy compile-context cctx
                                          [phase phase]
                                          [header header])
-                            #f
-                            (= i last-i)))
-         (compiled-expression-callback e #f phase (as-required? header))
-         (add-body! phase e)])))
+                            #f)))]
+       [(parsed-define-syntaxes? body)
+        (define ids (parsed-define-syntaxes-ids body))
+        (define binding-syms (parsed-define-syntaxes-syms body))
+        (define next-header (find-or-create-header! (add1 phase)))
+        (define gen-syms (for/list ([binding-sym (in-list binding-syms)])
+                           (select-fresh binding-sym next-header)))
+        (define rhs (compile (parsed-define-syntaxes-rhs body)
+                             (struct-copy compile-context cctx
+                                          [phase (add1 phase)]
+                                          [header next-header])))
+        (definition-callback)
+        (compiled-expression-callback rhs (length gen-syms) (add1 phase) (as-required? header))
+        (define transformer-set!s (for/list ([binding-sym (in-list binding-syms)]
+                                             [gen-sym (in-list gen-syms)])
+                                    `(,set-transformer!-id ',binding-sym ,gen-sym)))
+        (cond
+         [(compile-context-module-self cctx)
+          (add-body! (add1 phase) `(let-values ([,gen-syms ,rhs])
+                                    (begin
+                                      ,@transformer-set!s
+                                      (void))))]
+         [else
+          (add-body! (add1 phase)
+                     (generate-top-level-define-syntaxes
+                      gen-syms rhs transformer-set!s
+                      (compile-top-level-bind
+                       ids binding-syms
+                       (struct-copy compile-context cctx
+                                    [phase phase]
+                                    [header header])
+                       gen-syms)))])
+        (set! saw-define-syntaxes? #t)]
+       [(parsed-begin-for-syntax? body)
+        (loop! (parsed-begin-for-syntax-body body) (add1 phase) (find-or-create-header! (add1 phase)))]
+       [(or (parsed-#%declare? body) (parsed-module? body) (parsed-require? body))
+        ;; Must be handled separately, if allowed at all
+        (define e (other-form-callback body (struct-copy compile-context cctx
+                                                         [phase phase]
+                                                         [header header])))
+        (when e
+          (compiled-expression-callback e #f phase (as-required? header))
+          (add-body! phase e))]
+       [else
+        (define e (compile body
+                           (struct-copy compile-context cctx
+                                        [phase phase]
+                                        [header header])
+                           #f
+                           (= i last-i)))
+        (compiled-expression-callback e #f phase (as-required? header))
+        (add-body! phase e)])))
 
   ;; Register root-expand-context, if any, encoded as a syntax object;
   ;; see also "../eval/root-context.rkt"
@@ -250,7 +243,7 @@
          ['compile '_ 'linklet]
          ((if to-source?
               (lambda (l name keys getter) (values l keys))
-              compile-linklet)
+              (lambda (l name keys getter) (compile-linklet l name keys getter)))
           `(linklet
             ;; imports
             (,@body-imports

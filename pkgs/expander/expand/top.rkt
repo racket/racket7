@@ -8,6 +8,7 @@
          "../namespace/namespace.rkt"
          "require+provide.rkt"
          "main.rkt"
+         "parsed.rkt"
          "context.rkt"
          "require.rkt"
          "def-id.rkt"
@@ -22,11 +23,13 @@
      (raise-syntax-error #f "not allowed in an expression position" s))
    (define disarmed-s (syntax-disarm s))
    (define-match m s '(define-values (id ...) rhs))
-   (define ids (as-expand-time-top-level-bindings (m 'id) s ctx))
+   (define-values (ids syms) (as-expand-time-top-level-bindings (m 'id) s ctx))
    (define exp-rhs (expand (m 'rhs) (as-named-context ctx ids)))
-   (rebuild
-    s disarmed-s
-    `(,(m 'define-values) ,ids ,exp-rhs))))
+   (if (expand-context-to-parsed? ctx)
+       (parsed-define-values s ids syms exp-rhs)
+       (rebuild
+        s disarmed-s
+        `(,(m 'define-values) ,ids ,exp-rhs)))))
 
 (add-core-form!
  'define-syntaxes
@@ -37,11 +40,13 @@
      (raise-syntax-error #f "not allowed in an expression position" s))
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(define-syntaxes (id ...) rhs))
-   (define ids (as-expand-time-top-level-bindings (m 'id) s ctx))
+   (define-values (ids syms) (as-expand-time-top-level-bindings (m 'id) s ctx))
    (define exp-rhs (expand-transformer (m 'rhs) (as-named-context ctx ids)))
-   (rebuild
-    s disarmed-s
-    `(,(m 'define-syntaxes) ,ids ,exp-rhs))))
+   (if (expand-context-to-parsed? ctx)
+       (parsed-define-syntaxes s ids syms exp-rhs)
+       (rebuild
+        s disarmed-s
+        `(,(m 'define-syntaxes) ,ids ,exp-rhs)))))
 
 (add-core-form!
  'begin-for-syntax
@@ -68,7 +73,9 @@
                                 (make-requires+provides #f)
                                 #:who 'require)
    ;; Nothing to expand
-   s))
+   (if (expand-context-to-parsed? ctx)
+       (parsed-require s)
+       s)))
 
 (add-core-form!
  '#%provide

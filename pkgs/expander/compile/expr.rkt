@@ -11,8 +11,8 @@
          "../namespace/module.rkt"
          "../syntax/binding.rkt"
          "../syntax/match.rkt"
-         "../namespace/core.rkt"
          "../common/module-path.rkt"
+         "../expand/parsed.rkt"
          "built-in-symbol.rkt"
          "context.rkt"
          "header.rkt"
@@ -35,131 +35,86 @@
 ;; not be used in the result, so we can avoid serializing them; a value
 ;; of `#f` for `result-used?` means that the expression can be replaced
 ;; by a boolean-equivalent value if it has no side effect.
-(define (compile in-s cctx [name #f] [result-used? #t])
-  (let ([compile (lambda (s name result-used?) (compile s cctx name result-used?))])
-    (define s (syntax-disarm in-s))
+(define (compile p cctx [name #f] [result-used? #t])
+  (let ([compile (lambda (p name result-used?) (compile p cctx name result-used?))])
+    (define s (parsed-s p))
     (cond
-     [(pair? (syntax-e s))
-      (define phase (compile-context-phase cctx))
-      (define core-sym (core-form-sym s phase))
-      (case core-sym
-        [(#f)
-         (error "internal error; not a core form:" s "at phase:" phase)]
-        [(module module*)
-         (error "not a core expression form:" s)]
-        [(lambda)
-         (cond
-          [result-used?
-           (define-match m s '(lambda formals body ...+))
-           (add-lambda-properties
-            (correlate* s `(lambda ,@(compile-lambda (m 'formals) (m 'body) cctx)))
-            name
-            s)]
-          [else (correlate* s `(quote ,(syntax->datum s)))])]
-        [(case-lambda)
-         (cond
-          [result-used?
-           (define-match m s '(case-lambda [formals body ...+] ...))
-           (add-lambda-properties
-            (correlate* s `(case-lambda ,@(for/list ([formals (in-list (m 'formals))]
-                                                [body (in-list (m 'body))])
-                                       (compile-lambda formals body cctx))))
-            name
-            s)]
-          [else (correlate* s `(quote ,(syntax->datum s)))])]
-        [(#%app)
-         (define-match m s '(#%app . rest))
-         (define es (let ([es (m 'rest)])
-                      (if (syntax? es)
-                          (syntax->list (syntax-disarm es))
-                          es)))
-         (for/list ([s (in-list es)])
-           (compile s #f #t))]
-        [(if)
-         (define-match m s '(if tst thn els))
-         (define tst-e (compile (m 'tst) #f #f))
-         ;; Ad hoc optimization of `(if #t ... ...)` or `(if #f ... ...)`
-         ;; happens to help avoid syntax literals in pattern matching.
-         (cond
-          [(eq? (correlated-e tst-e) #t) (compile (m 'thn) name result-used?)]
-          [(eq? (correlated-e tst-e) #f) (compile (m 'els) name result-used?)]
-          [else
-           (correlate* s `(if
-                           ,tst-e
-                           ,(compile (m 'thn) name result-used?)
-                           ,(compile (m 'els) name result-used?)))])]
-        [(with-continuation-mark)
-         (define-match m s '(if key val body))
-         (correlate* s `(with-continuation-mark
-                         ,(compile (m 'key) #f #t)
-                         ,(compile (m 'val) #f #t)
-                         ,(compile (m 'body) name result-used?)))]
-        [(begin0)
-         (define-match m s '(begin0 e ...+))
-         (define es (m 'e))
-         (correlate* s `(begin0
-                         ,(compile (car es) name result-used?)
-                         ,@(for/list ([e (in-list (cdr es))])
-                             (compile e #f #f))))]
-        [(begin)
-         (define-match m s '(begin e ...+))
-         (correlate* s (compile-begin (m 'e) cctx name result-used?))]
-        [(set!)
-         (define-match m s '(set! id rhs))
-         (correlate* s `(,@(compile-identifier (m 'id) cctx
-                                               #:set-to (compile (m 'rhs) (m 'id) #t))))]
-        [(let-values)
-         (compile-let core-sym s cctx name #:rec? #f result-used?)]
-        [(letrec-values)
-         (compile-let core-sym s cctx name #:rec? #f result-used?)]
-        [(#%expression)
-         (define-match m s '(#%expression e))
-         (compile (m 'e) name result-used?)]
-        [(quote)
-         (define-match m s '(quote datum))
-         (define datum (syntax->datum (m 'datum)))
-         (cond
-          [(self-quoting-in-linklet? datum)
-           (correlate* s datum)]
-          [else
-           (correlate* s `(quote ,datum))])]
-        [(quote-syntax)
-         (define-match m s '(quote-syntax datum . _))
-         (if result-used?
-             (compile-quote-syntax (m 'datum) cctx)
-             (correlate* s `(quote ,(syntax->datum (m 'datum)))))]
-        [(#%variable-reference)
-         (define-match id-m s #:try '(#%variable-reference id))
-         (define-match top-m s #:unless (id-m) #:try '(#%variable-reference (#%top . id)))
-         (define id (or (and (id-m) (id-m 'id))
-                        (and (top-m) (top-m 'id))))
-         (correlate* s 
-                     (if id
-                         `(#%variable-reference ,(compile-identifier id cctx))
-                         `(#%variable-reference)))]
-        [(#%top)
-         (when (compile-context-module-self cctx)
-           (error "found `#%top` in a module body:" s))
-         (define-match m s '(#%top . id))
-         (compile-identifier (m 'id) cctx #:top? #t)]
-        [else
-         (error "unrecognized core form:" core-sym)])]
-     [(identifier? s)
-      (compile-identifier s cctx)]
+     [(parsed-id? p)
+      (compile-identifier p cctx)]
+     [(parsed-lambda? p)
+      (cond
+       [result-used?
+        (add-lambda-properties
+         (correlate* s `(lambda ,@(compile-lambda (parsed-lambda-keys p) (parsed-lambda-body p) cctx)))
+         name
+         s)]
+       [else (correlate* s `(quote ,(syntax->datum s)))])]
+     [(parsed-case-lambda? p)
+      (cond
+       [result-used?
+        (add-lambda-properties
+         (correlate* s `(case-lambda ,@(for/list ([clause (in-list (parsed-case-lambda-clauses p))])
+                                    (compile-lambda (car clause) (cadr clause) cctx))))
+         name
+         s)]
+       [else (correlate* s `(quote ,(syntax->datum s)))])]
+     [(parsed-app? p)
+      (for/list ([s (in-list (parsed-app-rator+rands p))])
+        (compile s #f #t))]
+     [(parsed-if? p)
+      (define tst-e (compile (parsed-if-tst p) #f #f))
+      ;; Ad hoc optimization of `(if #t ... ...)` or `(if #f ... ...)`
+      ;; happens to help avoid syntax literals in pattern matching.
+      (cond
+       [(eq? (correlated-e tst-e) #t) (compile (parsed-if-thn p) name result-used?)]
+       [(eq? (correlated-e tst-e) #f) (compile (parsed-if-els p) name result-used?)]
+       [else
+        (correlate* s `(if
+                        ,tst-e
+                        ,(compile (parsed-if-thn p) name result-used?)
+                        ,(compile (parsed-if-els p) name result-used?)))])]
+     [(parsed-with-continuation-mark? p)
+      (correlate* s `(with-continuation-mark
+                      ,(compile (parsed-with-continuation-mark-key p) #f #t)
+                      ,(compile (parsed-with-continuation-mark-val p) #f #t)
+                      ,(compile (parsed-with-continuation-mark-body p) name result-used?)))]
+     [(parsed-begin0? p)
+      (correlate* s `(begin0
+                      ,(compile (car (parsed-begin0-body p)) name result-used?)
+                      ,@(for/list ([e (in-list (cdr (parsed-begin0-body p)))])
+                          (compile e #f #f))))]
+     [(parsed-begin? p)
+      (correlate* s (compile-begin (parsed-begin-body p) cctx name result-used?))]
+     [(parsed-set!? p)
+      (define-match m s '(_ id _))
+      (correlate* s `(,@(compile-identifier (parsed-set!-id p) cctx
+                                            #:set-to (compile (parsed-set!-rhs p) (m 'id) #t))))]
+     [(parsed-let-values? p)
+      (compile-let p cctx name #:rec? #f result-used?)]
+     [(parsed-letrec-values? p)
+      (compile-let p cctx name #:rec? #t result-used?)]
+     [(parsed-quote? p)
+      (define datum (syntax->datum (parsed-quote-datum p)))
+      (cond
+       [(self-quoting-in-linklet? datum)
+        (correlate* s datum)]
+       [else
+        (correlate* s `(quote ,datum))])]
+     [(parsed-quote-syntax? p)
+      (if result-used?
+          (compile-quote-syntax (parsed-quote-syntax-datum p) cctx)
+          (correlate* s `(quote ,(syntax->datum s))))]
+     [(parsed-#%variable-reference? p)
+      (define id (parsed-#%variable-reference-id p))
+      (correlate* s 
+                  (if id
+                      `(#%variable-reference ,(compile-identifier id cctx))
+                      `(#%variable-reference)))]
      [else
-      (error "bad syntax after expansion:" s)])))
+      (error "unrecognized parsed form:" p)])))
 
 (define (compile-lambda formals bodys cctx)
-  (define phase (compile-context-phase cctx))
-  (define gen-formals
-    (let loop ([formals formals])
-      (cond
-       [(identifier? formals) (local-id->symbol formals phase)]
-       [(syntax? formals) (loop (syntax-e formals))]
-       [(pair? formals) (cons (loop (car formals))
-                              (loop (cdr formals)))]
-       [else null])))
-  `(,gen-formals ,(compile-sequence bodys cctx #f #t)))
+  `(,formals ,(compile-sequence bodys cctx #f #t)))
 
 (define (compile-sequence bodys cctx name result-used?)
   (if (null? (cdr bodys))
@@ -198,25 +153,20 @@
       (correlated-property named-s 'method-arity-error as-method)
       named-s))
 
-(define (compile-let core-sym s cctx name #:rec? rec? result-used?)
-  (define rec? (eq? core-sym 'letrec-values))
-  (define-match m s '(let-values ([(id ...) rhs] ...) body ...+))
-  (define phase (compile-context-phase cctx))
-  (define idss (m 'id))
-  (define symss (for/list ([ids (in-list idss)])
-                  (for/list ([id (in-list ids)])
-                    (define sym (local-id->symbol id phase))
-                    (if rec?
-                        (add-undefined-error-name-property sym id)
-                        sym))))
-  (correlate* s
-              `(,core-sym ,(for/list ([syms (in-list symss)]
-                                      [ids (in-list idss)]
-                                      [rhs (in-list (m 'rhs))])
-                             `[,syms ,(compile rhs
-                                               cctx
-                                               (and (= 1 (length ids)) (car ids)))])
-                ,(compile-sequence (m 'body) cctx name result-used?))))
+(define (compile-let p cctx name #:rec? rec? result-used?)
+  (correlate* (parsed-s p)
+              `(,(if rec? 'letrec-values 'let-values)
+                ,(for/list ([clause (in-list (parsed-let_-values-clauses p))]
+                            [ids (in-list (parsed-let_-values-idss p))])
+                   `[,(if rec?
+                          (for/list ([sym (in-list (car clause))]
+                                     [id (in-list ids)])
+                            (add-undefined-error-name-property sym id))
+                          (car clause))
+                     ,(compile (cadr clause)
+                               cctx
+                               (and (= 1 (length ids)) (car ids)))])
+                ,(compile-sequence (parsed-let_-values-body p) cctx name result-used?))))
 
 (define (add-undefined-error-name-property sym orig-id)
   (define id (correlate* orig-id sym))
@@ -224,28 +174,22 @@
                        (or (syntax-property orig-id 'undefined-error-name)
                            (syntax-e orig-id))))
 
-(define (compile-identifier s cctx #:set-to [rhs #f] #:top? [top? #f])
+(define (compile-identifier p cctx #:set-to [rhs #f])
   (performance-region
    ['compile '_ 'identifier]
-  (define phase (compile-context-phase cctx))
-  (define normal-b (resolve+shift s phase))
+  (define normal-b (parsed-id-binding p))
   (define b
     (or normal-b
-        ;; Try adding the temporary scope for top-level expansion:
-        (resolve-with-top-level-bind-scope s phase cctx)
         ;; Assume a variable reference
         (make-module-binding (compile-context-self cctx)
-                             phase
-                             (syntax-e s))))
+                             (compile-context-phase cctx)
+                             (syntax-e (parsed-s p)))))
   (define sym
     (cond
      [(local-binding? b)
-      (define sym (local-key->symbol (local-binding-key b)))
-      (unless sym
-        (error "missing a binding after expansion:" s))
-      sym]
+      (local-binding-key b)]
      [(module-binding? b)
-      (define mpi (if top?
+      (define mpi (if (parsed-top-id? p)
                       (compile-context-self cctx)
                       (module-binding-module b)))
       (define mod-name (module-path-index-resolve mpi))
@@ -257,7 +201,7 @@
         (unless (zero? (module-binding-phase b))
           (error "internal error: non-zero phase for a primitive"))
         (when rhs
-          (error "internal error: cannot assign to a primitive:" s))
+          (error "internal error: cannot assign to a primitive:" (parsed-s p)))
         (namespace-module-instantiate! ns mpi 0)
         (define m-ns (namespace->module-namespace ns mod-name 0))
         ;; Expect each primitive to be bound:
@@ -276,27 +220,12 @@
                                          (module-binding-phase b)
                                          (module-binding-sym b)
                                          (or (module-binding-extra-inspector b)
-                                             (syntax-inspector s)))])]
+                                             (syntax-inspector (parsed-s p))))])]
      [else
-      (error "not a reference to a module or local binding:" s)]))
-  (correlate* s (if rhs
-                    `(set! ,sym ,rhs)
-                    sym))))
-
-(define (resolve-with-top-level-bind-scope s phase cctx)
-  (define top-level-scope (compile-context-top-level-bind-scope cctx))
-  (cond
-   [top-level-scope
-    (define tl-s (add-scope s top-level-scope))
-    (resolve+shift tl-s phase)]
-   [else #f]))
-
-;; Pick a symbol to represent a local binding, given the identifier
-(define (local-id->symbol id phase)
-  (define b (resolve id phase))
-  (unless (local-binding? b)
-    (error "bad binding:" id phase b))
-  (local-key->symbol (local-binding-key b)))
+      (error "not a reference to a module or local binding:" b (parsed-s p))]))
+  (correlate* (parsed-s p) (if rhs
+                               `(set! ,sym ,rhs)
+                               sym))))
 
 (define (compile-quote-syntax q cctx)
   (define pos (add-syntax-literal! (compile-context-header cctx) q))

@@ -9,6 +9,7 @@
          "../namespace/module.rkt"
          "../common/module-path.rkt"
          "../common/performance.rkt"
+         "../expand/parsed.rkt"
          "module-use.rkt"
          "serialize.rkt"
          "side-effect.rkt"
@@ -17,7 +18,6 @@
          "context.rkt"
          "header.rkt"
          "reserved-symbol.rkt"
-         "id-to-symbol.rkt"
          "instance.rkt"
          "form.rkt"
          "compiled-in-memory.rkt")
@@ -27,8 +27,7 @@
 ;; Compiles module to a set of linklets that is returned as a
 ;; `compiled-in-memory` --- or a hash table containing S-expression
 ;; linklets if `to-source?` is true.
-(define (compile-module s cctx
-                        #:self [given-self #f]
+(define (compile-module p cctx
                         #:with-submodules? [with-submodules? #t]
                         #:as-submodule? [as-submodule? #f]
                         #:serializable? [serializable? with-submodules?]
@@ -40,28 +39,22 @@
    
    ;; Some information about a module is commuicated here through syntax
    ;; propertoes, such as 'module-requires
-   (define-match m-m (syntax-disarm s) '(module name initial-require mb))
-   (define-match m (syntax-disarm (m-m 'mb)) '(#%module-begin body ...))
    (define enclosing-self (compile-context-module-self cctx))
-   (define self (or given-self
-                    (make-generic-self-module-path-index
-                     (make-self-module-path-index
-                      (syntax-e (m-m 'name))
-                      enclosing-self))))
+   (define self (parsed-module-self p))
    (define full-module-name (let ([parent-full-name (compile-context-full-module-name cctx)]
-                                  [name (syntax-e (m-m 'name))])
+                                  [name (syntax-e (parsed-module-name-id p))])
                               (if parent-full-name
                                   (append (if (list? parent-full-name)
                                               parent-full-name
                                               (list parent-full-name))
                                           (list name))
                                   name)))
-   (define requires (syntax-property s 'module-requires))
-   (define provides (syntax-property s 'module-provides))
-   (define encoded-root-expand-ctx-box (box (syntax-property s 'module-root-expand-context))) ; for `module->namespace`
-   (define body-context-simple? (syntax-property s 'module-body-context-simple?))
-   (define language-info (filter-language-info (syntax-property s 'module-language)))
-   (define bodys (m 'body))
+   (define requires (parsed-module-requires p))
+   (define provides (parsed-module-provides p))
+   (define encoded-root-expand-ctx-box (box (parsed-module-encoded-root-ctx p))) ; for `module->namespace`
+   (define body-context-simple? (parsed-module-root-ctx-simple? p))
+   (define language-info (filter-language-info (syntax-property (parsed-s p) 'module-language)))
+   (define bodys (parsed-module-body p))
    
    (define empty-result-for-module->namespace? #f)
 
@@ -87,7 +80,7 @@
          (hash-set! side-effects phase #t))))
 
    ;; Compile submodules; each list is (cons linklet-directory-key compiled-in-memory)
-   (define pre-submodules (compile-submodules 'module
+   (define pre-submodules (compile-submodules #:star? #f
                                               #:bodys bodys
                                               #:with-submodules? with-submodules?
                                               #:serializable? serializable?
@@ -113,9 +106,9 @@
                     #:root-ctx-only-if-syntax? body-context-simple?
                     #:compiled-expression-callback check-side-effects!
                     #:other-form-callback (lambda (body cctx)
-                                            (case (core-form-sym body (compile-context-phase cctx))
-                                              [(#%declare)
-                                               (define-match m body '(#%declare kw ...))
+                                            (cond
+                                              [(parsed-#%declare? body)
+                                               (define-match m (parsed-s body) '(_ kw ...))
                                                (for ([kw (in-list (m 'kw))])
                                                  (when (eq? (syntax-e kw) '#:cross-phase-persistent)
                                                    (set! cross-phase-persistent? #t))
@@ -142,7 +135,7 @@
                                                self)))))
    
    ;; Compile submodules; each list is (cons linklet-directory-key compiled-in-memory)
-   (define post-submodules (compile-submodules 'module*
+   (define post-submodules (compile-submodules #:star? #t
                                                #:bodys bodys
                                                #:with-submodules? with-submodules?
                                                #:serializable? serializable?
@@ -331,7 +324,7 @@
 
 ;; Walk though body to extract and compile submodules that are
 ;; declared with `form-name` (which is 'module or 'module*)
-(define (compile-submodules form-name
+(define (compile-submodules #:star? star?
                             #:bodys bodys
                             #:with-submodules? with-submodules?
                             #:serializable? serializable?
@@ -347,27 +340,19 @@
       (cond
        [(null? bodys) null]
        [else
-        (define body (syntax-disarm (car bodys)))
-        (define f (core-form-sym body phase))
+        (define body (car bodys))
         (cond
-         [(eq? f form-name)
-          (define-match sm-m body '(_ name . _))
-          (define-match f-m body #:try '(module* name #f . _))
-          (define s-shifted
-            (cond
-             [(f-m)
-              (syntax-shift-phase-level body (phase- 0 phase))]
-             [else body]))
-          (cons (cons (syntax-e (sm-m 'name))
-                      (compile-module s-shifted body-cctx
+         [(and (parsed-module? body)
+               (eq? (and star? #t) (and (parsed-module-star? body) #t)))
+          (cons (cons (syntax-e (parsed-module-name-id body))
+                      (compile-module body body-cctx
                                       #:as-submodule? #t
                                       #:serializable? serializable?
                                       #:to-source? to-source?
                                       #:modules-being-compiled modules-being-compiled))
                 (loop (cdr bodys) phase))]
-         [(eq? f 'begin-for-syntax)
-          (define-match m body '(begin-for-syntax e ...))
-          (append (loop (m 'e) (add1 phase))
+         [(parsed-begin-for-syntax? body)
+          (append (loop (parsed-begin-for-syntax-body body) (add1 phase))
                   (loop (cdr bodys) phase))]
          [else
           (loop (cdr bodys) phase)])]))]))

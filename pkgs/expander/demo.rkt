@@ -19,12 +19,7 @@
 
 (define (compile+eval-expression e #:namespace [ns demo-ns])
   (define exp-e (expand-expression e #:namespace ns))
-  (define c (compile exp-e ns check-serialize?
-                     (lambda (exp-e ns)
-                       (if check-reexpand?
-                           (parameterize ([current-output-port (open-output-bytes)])
-                             (expand exp-e ns))
-                           exp-e))))
+  (define c (compile (if check-reexpand? exp-e e) ns check-serialize?))
   (define ready-c (if check-serialize?
                       (let ([o (open-output-bytes)])
                         (display c o)
@@ -616,6 +611,14 @@
 (define (eval-module-declaration mod #:namespace [ns demo-ns])
   (parameterize ([current-namespace ns])
     (eval-expression mod #:namespace ns)))
+
+(eval-module-declaration '(module m0 '#%kernel
+                           (define-values (x) 0)
+                           (print x) (newline)))
+
+(check-print
+ (eval-expression '(#%require 'm0))
+ 0)
 
 (eval-module-declaration '(module m1 '#%kernel
                            (#%require (for-syntax '#%kernel))

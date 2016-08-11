@@ -25,6 +25,7 @@
          "../expand/require+provide.rkt"
          "reflect.rkt"
          "../expand/log.rkt"
+         "../expand/parsed.rkt"
          "../common/performance.rkt")
 
 (provide eval
@@ -100,28 +101,26 @@
 (define (compile-to-linklets s [ns (current-namespace)])
   (compile s ns #t expand #t))
 
+;; To communicate lifts from `expand-single` to `compile-single`:
+(struct lifted-parsed-begin (seq last))
+
 (define (compile-single s ns expand serializable? to-source?)
-  (define exp-s (expand s ns))
+  (define exp-s (expand s ns #f #t))
   (let loop ([exp-s exp-s])
-    (define disarmed-exp-s (raw:syntax-disarm exp-s))
-    (case (core-form-sym disarmed-exp-s (namespace-phase ns))
-      [(module)
-       (compile-module exp-s (make-compile-context #:namespace ns
-                                                   #:top-level-bind-scope (root-expand-context-top-level-bind-scope
-                                                                           (namespace-get-root-expand-ctx ns)))
+    (cond
+      [(parsed-module? exp-s)
+       (compile-module exp-s (make-compile-context #:namespace ns)
                        #:serializable? serializable?
                        #:to-source? to-source?)]
-      [(begin)
+      [(lifted-parsed-begin? exp-s)
        ;; expansion must have captured lifts
-       (define-match m disarmed-exp-s '(begin e ...))
        (compiled-tops->compiled-top
-        (for/list ([e (in-list (m 'e))])
+        (for/list ([e (in-list (append (lifted-parsed-begin-seq exp-s)
+                                       (list (lifted-parsed-begin-last exp-s))))])
           (loop e))
         #:to-source? to-source?)]
       [else
-       (compile-top exp-s (make-compile-context #:namespace ns
-                                                   #:top-level-bind-scope (root-expand-context-top-level-bind-scope
-                                                                           (namespace-get-root-expand-ctx ns)))
+       (compile-top exp-s (make-compile-context #:namespace ns)
                     #:serializable? serializable?
                     #:to-source? to-source?)])))
 
@@ -129,21 +128,26 @@
 ;; existed) to be called by `expand` and `expand-syntax`.
 ;; [Don't use keyword arguments here, because the function is
 ;;  exported for use by an embedding runtime system.]
-(define (expand s [ns (current-namespace)] [log-expand? #f])
+(define (expand s [ns (current-namespace)] [log-expand? #f] [to-parsed? #f])
   (when log-expand? (log-expand-start))
   (per-top-level s ns
-                 #:single (lambda (s ns as-tail?) (expand-single s ns))
+                 #:single (lambda (s ns as-tail?) (expand-single s ns to-parsed?))
                  #:combine cons
                  #:wrap re-pair))
 
-(define (expand-single s ns)
+(define (expand-single s ns to-parsed?)
   (define-values (require-lifts lifts exp-s)
-    (expand-capturing-lifts s (make-expand-context ns)))
+    (expand-capturing-lifts s (make-expand-context ns #:to-parsed? to-parsed?)))
   (cond
    [(and (null? require-lifts) (null? lifts)) exp-s]
+   [to-parsed?
+    (wrap-lifts-as-lifted-parsed-begin require-lifts
+                                       lifts
+                                       exp-s s
+                                       #:adjust-form (lambda (form) (expand-single form ns to-parsed?)))]
    [else
     (wrap-lifts-as-begin (append require-lifts lifts)
-                         #:adjust-form (lambda (form) (expand-single form ns))
+                         #:adjust-form (lambda (form) (expand-single form ns to-parsed?))
                          exp-s
                          s (namespace-phase ns))]))
 
@@ -286,3 +290,26 @@
                                  ns phase #:run-phase phase
                                  (make-requires+provides #f)
                                  #:who 'require)))
+
+(define (wrap-lifts-as-lifted-parsed-begin require-lifts
+                                           lifts
+                                           exp-s s
+                                           #:adjust-form adjust-form)
+  (lifted-parsed-begin (append
+                        (for/list ([req (in-list require-lifts)])
+                          (parsed-require req))
+                        (for/list ([ids+syms+rhs (in-list (get-lifts-as-lists lifts))])
+                          (define exp-rhs (adjust-form (caddr ids+syms+rhs)))
+                          (define just-rhs (if (lifted-parsed-begin? exp-rhs)
+                                               (lifted-parsed-begin-last exp-rhs)
+                                               exp-rhs))
+                          (define dv
+                            (parsed-define-values s
+                                                  (car ids+syms+rhs)
+                                                  (cadr ids+syms+rhs)
+                                                  just-rhs))
+                          (if (lifted-parsed-begin? exp-rhs)
+                              (struct-copy lifted-parsed-begin exp-rhs
+                                           [last dv])
+                              dv)))
+                       exp-s))

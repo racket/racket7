@@ -220,8 +220,9 @@
                 (append def-ctx-scopes
                         (expand-context-scopes ctx))]
                [only-immediate? (not stop-ids)] ; def-ctx-scopes is set for the enclosing transformer call
+               [to-parsed? #f]
                [just-once? #f]
-               [preserve-#%expression-and-do-not-add-#%top? #t]
+               [in-local-expand? #t]
                [stops (free-id-set phase (or all-stop-ids null))]
                [current-introduction-scopes null]))
 

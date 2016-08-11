@@ -32,7 +32,8 @@
          "../syntax/debug.rkt"
          "reference-record.rkt"
          "log.rkt"
-         "../common/performance.rkt")
+         "../common/performance.rkt"
+         "parsed.rkt")
 
 (provide expand
          lookup
@@ -151,7 +152,7 @@
        (cond
         [(and (eq? sym '#%top)
               (eq? (core-form-name t) '#%top)
-              (expand-context-preserve-#%expression-and-do-not-add-#%top? ctx))
+              (expand-context-in-local-expand? ctx))
          (dispatch-implicit-#%top-core-form t s ctx)]
         [else
          (dispatch-core-form t (make-explicit sym s disarmed-s) ctx)])]
@@ -160,12 +161,15 @@
          (and (eq? sym '#%top)
               (root-expand-context-top-level-bind-scope ctx)
               (add-scope s (root-expand-context-top-level-bind-scope ctx))))
+       (define tl-b (and tl-id (resolve tl-id (expand-context-phase ctx))))
        (cond
-        [(and tl-id (resolve tl-id (expand-context-phase ctx)))
+        [tl-b
          ;; Special case: the identifier is not bound and its scopes don't
          ;; have a binding for `#%top`, but it's bound temporaily for compilation;
          ;; treat the identifier as a variable reference
-         tl-id]
+         (if (expand-context-to-parsed? ctx)
+             (parsed-id tl-id tl-b)
+             tl-id)]
         [else
          (raise-syntax-implicit-error s sym trigger-id ctx)])])])))
 
@@ -181,7 +185,9 @@
                         (already-expanded-s ae)))
   (define result-s (syntax-track-origin (already-expanded-s ae) s))
   (log-expand* ctx ['tag result-s] ['opaque-expr result-s])
-  result-s)
+  (if (expand-context-to-parsed? ctx)
+      (expand result-s ctx) ; fully expanded to compiled
+      result-s))
 
 (define (make-explicit sym s disarmed-s)
   (syntax-rearm (datum->syntax disarmed-s (cons sym disarmed-s) s s) s))
@@ -258,8 +264,12 @@
     (register-variable-referenced-if-local! binding)
     ;; If the variable is locally bound, replace the use's scopes with the binding's scopes
     (define result-s (substitute-variable id t #:no-stops? (free-id-set-empty-or-just-module*? (expand-context-stops ctx))))
-    (log-expand ctx 'return result-s)
-    result-s]))
+    (cond
+     [(expand-context-to-parsed? ctx)
+      (parsed-id result-s binding)]
+     [else
+      (log-expand ctx 'return result-s)
+      result-s])]))
 
 ;; ----------------------------------------
 
@@ -469,12 +479,23 @@
     (define with-lifts-s
       (cond
        [(or (pair? lifts) always-wrap?)
-        (if begin-form?
-            (wrap-lifts-as-begin lifts exp-s s phase)
-            (wrap-lifts-as-let lifts exp-s s phase))]
+        (cond
+         [(expand-context-to-parsed? ctx)
+          (unless expand-lifts? (error "internal error: to-parsed mode without expanding lifts"))
+          (define idss+keyss+rhss (get-lifts-as-lists lifts))
+          (parsed-let-values s
+                             (map car idss+keyss+rhss)
+                             (for/list ([ids+keys+rhs (in-list idss+keyss+rhss)])
+                               (list (cadr ids+keys+rhs)
+                                     (loop (caddr ids+keys+rhs) #f)))
+                             (list exp-s))]
+         [else
+          (if begin-form?
+              (wrap-lifts-as-begin lifts exp-s s phase)
+              (wrap-lifts-as-let lifts exp-s s phase))])]
        [else exp-s]))
     (cond
-     [(or (not expand-lifts?) (null? lifts))
+     [(or (not expand-lifts?) (null? lifts) (expand-context-to-parsed? ctx))
       ;; Expansion is done
       with-lifts-s]
      [else
@@ -500,25 +521,28 @@
                             #:always-wrap? [always-wrap? #f])
   (performance-region
    ['expand 'transformer]
-   
-   (define phase (add1 (expand-context-phase ctx)))
-   (define ns (namespace->namespace-at-phase (expand-context-namespace ctx)
-                                             phase))
-   (namespace-visit-available-modules! ns phase)
-   (define trans-ctx (struct-copy expand-context ctx
-                                  [context context]
-                                  [scopes null]
-                                  [phase phase]
-                                  [namespace ns]
-                                  [env empty-env]
-                                  [only-immediate? #f]
-                                  [def-ctx-scopes #f]
-                                  [post-expansion-scope #:parent root-expand-context #f]))
+
+   (define trans-ctx (context->transformer-context ctx context))
    (expand/capture-lifts s trans-ctx
                          #:expand-lifts? expand-lifts?
                          #:begin-form? begin-form?
                          #:lift-key lift-key
                          #:always-wrap? always-wrap?)))
+
+(define (context->transformer-context ctx [context 'expression])
+  (define phase (add1 (expand-context-phase ctx)))
+   (define ns (namespace->namespace-at-phase (expand-context-namespace ctx)
+                                             phase))
+   (namespace-visit-available-modules! ns phase)
+   (struct-copy expand-context ctx
+                [context context]
+                [scopes null]
+                [phase phase]
+                [namespace ns]
+                [env empty-env]
+                [only-immediate? #f]
+                [def-ctx-scopes #f]
+                [post-expansion-scope #:parent root-expand-context #f]))
 
 ;; Expand and evaluate `s` as a compile-time expression, ensuring that
 ;; the number of returned values matches the number of target
@@ -526,9 +550,14 @@
 (define (expand+eval-for-syntaxes-binding rhs ids ctx)
   (define exp-rhs (expand-transformer rhs (as-named-context ctx ids)))
   (define phase (add1 (expand-context-phase ctx)))
+  (define parsed-rhs (if (expand-context-to-parsed? ctx)
+                         exp-rhs
+                         (expand exp-rhs (context->transformer-context
+                                          (as-to-parsed-context ctx)))))
   (values exp-rhs
+          parsed-rhs
           (eval-for-bindings ids
-                             exp-rhs
+                             parsed-rhs
                              phase
                              (namespace->namespace-at-phase
                               (expand-context-namespace ctx)
@@ -538,15 +567,15 @@
 ;; Expand and evaluate `s` as a compile-time expression, returning
 ;; only the compile-time values
 (define (eval-for-syntaxes-binding rhs ids ctx)
-  (define-values (exp-rhs vals)
+  (define-values (exp-rhs parsed-rhs vals)
     (expand+eval-for-syntaxes-binding rhs ids ctx))
   vals)
 
 ;; Expand and evaluate `s` as an expression in the given phase;
 ;; ensuring that the number of returned values matches the number of
 ;; target identifiers; return the values
-(define (eval-for-bindings ids s phase ns ctx)
-  (define compiled (compile-single s (make-compile-context
+(define (eval-for-bindings ids p phase ns ctx)
+  (define compiled (compile-single p (make-compile-context
                                       #:namespace ns
                                       #:phase phase)))
   (define vals
@@ -558,7 +587,7 @@
       list))
   (unless (= (length vals) (length ids))
     (error "wrong number of results (" (length vals) "vs." (length ids) ")"
-           "from" s))
+           "from" p))
   vals)
 
 ;; ----------------------------------------

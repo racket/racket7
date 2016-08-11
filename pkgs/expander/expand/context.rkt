@@ -20,10 +20,22 @@
          
          as-expression-context
          as-tail-context
-         as-named-context)
+         as-named-context
+         as-to-parsed-context)
 
-;; An `expand-context` has the rest of the information for an expansion 
-(struct expand-context root-expand-context (context    ; 'expression, 'module, or 'top-level
+;; An `expand-context` controls the process and result of expansion.
+;;
+;; If `to-parsed?` is true, the result is a `parsed` record instead of
+;; an expanded syntax objects. That mode is effectively a fusion of
+;; expansion and parsing, which is useful in the common case that
+;; expanded code is being sent directly the the compiler.
+;;
+;; If only-immediate?` is set, then only immediate macro uses are
+;; expanded. That mode overrides `to-parsed?`, since it's common to
+;; partially expand forms on the way to a parsed result.
+
+(struct expand-context root-expand-context (to-parsed? ; #t => "expand" to a parsed form; #f => normal expand
+                                            context    ; 'expression, 'module, or 'top-level
                                             phase      ; current expansion phase; must match phase of `namespace`
                                             namespace  ; namespace for modules and evaluation
                                             env        ; environment for local bindings
@@ -38,7 +50,7 @@
                                             module-begin-k ; expander for `#%module-begin` in a 'module-begin context
                                             need-eventually-defined ; phase(>=1) -> variables expanded before binding
                                             allow-unbound? ; allow reference to unbound identifiers as variables
-                                            preserve-#%expression-and-do-not-add-#%top? ; #t via `local-expand`
+                                            in-local-expand? ; #t via `local-expand`
                                             stops      ; free-id-set; non-empty => `def-ctx-scopes` is a box
                                             current-introduction-scopes ; scopes for current macro expansion
                                             declared-submodule-names ; mutable hash table: symbol -> 'module or 'module*
@@ -51,7 +63,7 @@
                                             name       ; #f or identifier to name the expression
                                             observer)) ; logging observer (for the macro debugger)
 
-(define (make-expand-context ns)
+(define (make-expand-context ns #:to-parsed? [to-parsed? #f])
   (define root-ctx (namespace-get-root-expand-ctx ns))
   (expand-context (root-expand-context-module-scopes root-ctx)
                   (root-expand-context-post-expansion-scope root-ctx)
@@ -62,6 +74,7 @@
                   (root-expand-context-frame-id root-ctx)
                   (root-expand-context-counter root-ctx)
                   (root-expand-context-lift-key root-ctx)
+                  to-parsed?
                   'top-level
                   (namespace-phase ns)
                   ns
@@ -77,7 +90,7 @@
                   #f   ; module-begin-k
                   #f   ; need-eventually-defined
                   #t   ; allow-unbound?
-                  #f   ; preserve-#%expression?
+                  #f   ; in-local-expand?
                   empty-free-id-set ; stops
                   null ; current-introduction-scopes
                   #hasheq() ; declared-submodule-names
@@ -158,3 +171,8 @@
     (struct-copy expand-context ctx
                  [name (car ids)])]
    [else ctx]))
+
+;; Adjust `ctx` to to generate a parsed result
+(define (as-to-parsed-context ctx)
+  (struct-copy expand-context ctx
+               [to-parsed? #t]))

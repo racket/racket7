@@ -21,6 +21,7 @@
          make-top-level-lift
          wrap-lifts-as-let
          wrap-lifts-as-begin
+         get-lifts-as-lists
          
          make-module-lift-context
          get-and-clear-module-lifts!
@@ -56,7 +57,7 @@
 (struct lift-context (convert       ; takes a list of ids and rhs to produce a lifted-bind
                       lifts         ; box of list of lifted-binds and maybe other forms
                       module*-ok?)) ; if used to capture module lifts, allow `module*`?
-(struct lifted-bind (ids rhs))
+(struct lifted-bind (ids keys rhs))
 
 (define (make-lift-context convert #:module*-ok? [module*-ok? #f])
   (lift-context convert (box null) module*-ok?))
@@ -71,10 +72,12 @@
 
 (define (make-local-lift lift-env counter)
   (lambda (ids rhs phase)
-    (for ([id (in-list ids)])
-      (define key (add-local-binding! id phase counter))
-      (set-box! lift-env (hash-set (unbox lift-env) key variable)))
-    (values ids (lifted-bind ids rhs))))
+    (define keys
+      (for/list ([id (in-list ids)])
+        (define key (add-local-binding! id phase counter))
+        (set-box! lift-env (hash-set (unbox lift-env) key variable))
+        key))
+    (values ids (lifted-bind ids keys rhs))))
 
 (define (make-top-level-lift ctx)
   (lambda (ids rhs phase)
@@ -87,8 +90,8 @@
     (define tl-ids (for/list ([id (in-list ids)])
                      (add-scope id post-scope)))
     ;; Bind the identifier:
-    (select-defined-syms-and-bind!/ctx tl-ids ctx)
-    (values tl-ids (lifted-bind tl-ids rhs))))
+    (define syms (select-defined-syms-and-bind!/ctx tl-ids ctx))
+    (values tl-ids (lifted-bind tl-ids syms rhs))))
 
 (define (wrap-lifts-as-let lifts body s phase)
   (datum->syntax
@@ -124,6 +127,12 @@
                       (lifted-bind-rhs lift)))]
               [else lift])))
           (list body)))))
+
+(define (get-lifts-as-lists lifts)
+   (for/list ([lift (in-list lifts)])
+     (list (lifted-bind-ids lift)
+           (lifted-bind-keys lift)
+           (lifted-bind-rhs lift))))
 
 ;; ----------------------------------------
 

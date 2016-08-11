@@ -1,10 +1,11 @@
 #lang racket/base
 (require "serialize.rkt"
          "../host/linklet.rkt"
-         "../namespace/core.rkt"
          "../syntax/scope.rkt"
+         "../syntax/taint.rkt"
          "../namespace/namespace.rkt"
          "../expand/root-expand-context.rkt"
+         "../expand/parsed.rkt"
          "../compile/reserved-symbol.rkt"
          "../common/performance.rkt"
          "compiled-in-memory.rkt"
@@ -24,8 +25,8 @@
 
 ;; Compile a stand-alone expression, such as the right-hand side of a
 ;; `define-syntaxes` in a module
-(define (compile-single s cctx)
-  (compile-top s cctx
+(define (compile-single p cctx)
+  (compile-top p cctx
                #:serializable? #f
                #:single-expression? #t))
 
@@ -36,7 +37,7 @@
 ;; used. If `to-source?` is true, the result is a hash table containing
 ;; S-expression linkets, instead of a `compiled-in-memory` containing
 ;; compiled linklets.
-(define (compile-top s cctx
+(define (compile-top p cctx
                      #:serializable? [serializable? #t]
                      #:single-expression? [single-expression? #f]
                      #:to-source? [to-source? #f])
@@ -57,7 +58,7 @@
                    phase-to-link-extra-inspectorsss
                    syntax-literals
                    no-root-context-pos)
-     (compile-forms (list s) cctx mpis
+     (compile-forms (list p) cctx mpis
                     #:body-imports (if single-expression?
                                        `([]
                                          [,syntax-literals-id]
@@ -145,10 +146,10 @@
 
 ;; Callback for compiling a sequence of expressions: handle `require`
 ;; (which is handled separately for modules)
-(define (compile-top-level-require s cctx)
+(define (compile-top-level-require p cctx)
   (define phase (compile-context-phase cctx))
-  (case (core-form-sym s phase)
-    [(#%require)
-     (define form-stx (compile-quote-syntax s cctx))
-     `(,top-level-require!-id ,form-stx ,ns-id)]
-    [else #f]))
+  (cond
+   [(parsed-require? p)
+    (define form-stx (compile-quote-syntax (syntax-disarm (parsed-s p)) cctx))
+    `(,top-level-require!-id ,form-stx ,ns-id)]
+   [else #f]))

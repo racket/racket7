@@ -29,5 +29,5 @@
   (define tmp-bind-ids
     (for/list ([id (in-list tl-ids)])
       (add-scope id top-level-bind-scope)))
-  (select-defined-syms-and-bind!/ctx tmp-bind-ids ctx)
-  tl-ids)
+  (values tl-ids
+          (select-defined-syms-and-bind!/ctx tmp-bind-ids ctx)))
