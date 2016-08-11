@@ -11,6 +11,7 @@
 (struct parsed (s) #:transparent)
 
 (struct parsed-id parsed (binding))
+(struct parsed-primitive-id parsed-id ())
 (struct parsed-top-id parsed-id ())
 
 (struct parsed-lambda parsed (keys body))

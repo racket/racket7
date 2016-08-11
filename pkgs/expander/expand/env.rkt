@@ -105,6 +105,7 @@
 ;; ---------------------------------------- 
 
 ;; Returns: `variable` or a compile-time value
+;;          #f or #t indicating whether the binding is to a primitive
 ;;          #f or (for a transformer) an inspector for the defining module
 ;; A binding provided to `binding-lookup` should be obtained either by
 ;; passing `#:immediate? #t` to `resolve+shift` or by using `resolve+shift/extra-inspector`,
@@ -118,13 +119,15 @@
    [(module-binding? b)
     (define top-level? (top-level-module-path-index? (module-binding-module b)))
     (define mi (and (not top-level?) (binding->module-instance b ns phase id)))
+    (define m (and mi (module-instance-module mi)))
+    (define primitive? (and m (module-primitive? m)))
     (define m-ns (if top-level? ns (and mi (module-instance-namespace mi))))
     (check-taint id)
     (define t (namespace-get-transformer m-ns (module-binding-phase b) (module-binding-sym b)
                                          variable))
     (when mi (check-access b mi id in-s (if t "transformer" "variable")))
     (define insp (and mi (module-instance-module mi) (module-inspector (module-instance-module mi))))
-    (values t insp)]
+    (values t primitive? insp)]
    [(local-binding? b)
     (define t (hash-ref env (local-binding-key b) missing))
     (cond
@@ -136,10 +139,11 @@
                (if out-of-context-as-variable?
                    variable
                    (error "identifier used out of context:" id)))
+              #f
               #f)]
      [else
       (check-taint id)
-      (values t #f)])]
+      (values t #f #f)])]
    [else (error "internal error: unknown binding for lookup:" b)]))
 
 ;; Check for taints on a variable reference

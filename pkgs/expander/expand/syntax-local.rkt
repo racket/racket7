@@ -182,7 +182,7 @@
           (failure-thunk)
           (error 'syntax-local-value "unbound identifier: ~v" id))]
      [else
-      (define-values (v insp) (lookup b ctx id #:out-of-context-as-variable? #t))
+      (define-values (v primitive? insp) (lookup b ctx id #:out-of-context-as-variable? #t))
       (cond
        [(or (variable? v) (core-form? v))
         (log-expand ctx 'local-value-result #f)

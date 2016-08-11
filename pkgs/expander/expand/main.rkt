@@ -95,8 +95,8 @@
      (expand-implicit '#%top (substitute-alternate-id s alternate-id) ctx s)]
     [else
      ;; Variable or form as identifier macro
-     (define-values (t insp-of-t) (lookup binding ctx id #:in (and alternate-id s)))
-     (dispatch t insp-of-t s id ctx binding)])))
+     (define-values (t primitive? insp-of-t) (lookup binding ctx id #:in (and alternate-id s)))
+     (dispatch t insp-of-t s id ctx binding primitive?)])))
 
 ;; An "application" form that starts with an identifier
 (define (expand-id-application-form s ctx alternate-id)
@@ -116,14 +116,14 @@
      (expand-implicit '#%app (substitute-alternate-id s alternate-id) ctx id)]
     [else
      ;; Find out whether it's bound as a variable, syntax, or core form
-     (define-values (t insp-of-t) (lookup binding ctx id #:in (and alternate-id (car (syntax-e disarmed-s)))))
+     (define-values (t primitive? insp-of-t) (lookup binding ctx id #:in (and alternate-id (car (syntax-e disarmed-s)))))
      (cond
       [(variable? t)
        ;; Not as syntax or core form, so use implicit `#%app`
        (expand-implicit '#%app (substitute-alternate-id s alternate-id) ctx id)]
       [else
        ;; Syntax or core form as "application"
-       (dispatch t insp-of-t s id ctx binding)])])))
+       (dispatch t insp-of-t s id ctx binding primitive?)])])))
 
 ;; Handle an implicit: `#%app`, `#%top`, or `#%datum`; this is similar
 ;; to handling an id-application form, but there are several little
@@ -141,7 +141,7 @@
     [(eq? b 'ambiguous)
      (raise-ambiguous-error id ctx)]
     [else
-     (define-values (t insp-of-t) (if b (lookup b ctx id) (values #f #f)))
+     (define-values (t primitive? insp-of-t) (if b (lookup b ctx id) (values #f #f #f)))
      (cond
       [(transformer? t)
        (dispatch-transformer t insp-of-t (make-explicit sym s disarmed-s) id ctx b)]
@@ -199,14 +199,14 @@
 ;; other compile-time value (which is an error), or a token
 ;; indicating that the binding is a run-time variable; note that
 ;; `s` is not disarmed
-(define (dispatch t insp-of-t s id ctx binding)
+(define (dispatch t insp-of-t s id ctx binding primitive?)
   (cond
    [(core-form? t)
     (dispatch-core-form t s ctx)]
    [(transformer? t)
     (dispatch-transformer t insp-of-t s id ctx binding)]
    [(variable? t)
-    (dispatch-variable t s id ctx binding)]
+    (dispatch-variable t s id ctx binding primitive?)]
    [else
     ;; Some other compile-time value:
     (raise-syntax-error #f "illegal use of syntax" t)]))
@@ -253,7 +253,7 @@
                                        (rename-transformer-target t)))])]))
 
 ;; Handle the expansion of a variable to itself
-(define (dispatch-variable t s id ctx binding)
+(define (dispatch-variable t s id ctx binding primitive?)
   (cond
    [(expand-context-only-immediate? ctx)
     (log-expand ctx 'exit-check s)
@@ -266,7 +266,9 @@
     (define result-s (substitute-variable id t #:no-stops? (free-id-set-empty-or-just-module*? (expand-context-stops ctx))))
     (cond
      [(expand-context-to-parsed? ctx)
-      (parsed-id result-s binding)]
+      (if primitive?
+          (parsed-primitive-id result-s binding)
+          (parsed-id result-s binding))]
      [else
       (log-expand ctx 'return result-s)
       result-s])]))

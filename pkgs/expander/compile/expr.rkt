@@ -175,8 +175,6 @@
                            (syntax-e orig-id))))
 
 (define (compile-identifier p cctx #:set-to [rhs #f])
-  (performance-region
-   ['compile '_ 'identifier]
   (define normal-b (parsed-id-binding p))
   (define b
     (or normal-b
@@ -192,18 +190,13 @@
       (define mpi (if (parsed-top-id? p)
                       (compile-context-self cctx)
                       (module-binding-module b)))
-      (define mod-name (module-path-index-resolve mpi))
-      (define ns (compile-context-namespace cctx))
-      (define mod (namespace->module ns mod-name))
       (cond
-       [(and mod (module-primitive? mod))
+       [(parsed-primitive-id? p)
         ;; Direct reference to a runtime primitive:
         (unless (zero? (module-binding-phase b))
           (error "internal error: non-zero phase for a primitive"))
         (when rhs
           (error "internal error: cannot assign to a primitive:" (parsed-s p)))
-        (namespace-module-instantiate! ns mpi 0)
-        (define m-ns (namespace->module-namespace ns mod-name 0))
         ;; Expect each primitive to be bound:
         (module-binding-sym b)]
        [(eq? mpi (compile-context-module-self cctx))
@@ -225,7 +218,7 @@
       (error "not a reference to a module or local binding:" b (parsed-s p))]))
   (correlate* (parsed-s p) (if rhs
                                `(set! ,sym ,rhs)
-                               sym))))
+                               sym)))
 
 (define (compile-quote-syntax q cctx)
   (define pos (add-syntax-literal! (compile-context-header cctx) q))

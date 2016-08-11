@@ -565,9 +565,9 @@
                                     #:immediate? #t))
      (when (eq? binding 'ambiguous)
        (raise-ambiguous-error id ctx))
-     (define-values (t insp) (if binding
-                                 (lookup binding ctx s)
-                                 (values #f #f)))
+     (define-values (t primitive? insp) (if binding
+                                            (lookup binding ctx s)
+                                            (values #f #f #f)))
      (log-expand ctx 'resolve id)
      (cond
       [(or (variable? t)

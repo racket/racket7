@@ -177,10 +177,10 @@
                                                   (namespace-phase ns)
                                                   ns))
          (when b (namespace-visit-available-modules! ns))
-         (define-values (v extra-inspector)
+         (define-values (v primitive? extra-inspector)
            (if b
                (binding-lookup b empty-env null ns (namespace-phase ns) id)
-               (values variable #f)))
+               (values variable #f #f)))
          (unless (variable? v)
            (escape
             (or failure-thunk
