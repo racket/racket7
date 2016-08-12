@@ -46,7 +46,8 @@
          expand+eval-for-syntaxes-binding
          eval-for-syntaxes-binding
          eval-for-bindings
-         
+
+         keep-properties-only
          rebuild
          attach-disappeared-transformer-bindings
          increment-binding-layer
@@ -587,6 +588,9 @@
   vals)
 
 ;; ----------------------------------------
+
+(define (keep-properties-only s)
+  (datum->syntax #f 'props s s))
 
 ;; A helper for forms to reconstruct syntax while preserving source
 ;; locations, properties, and arming; if `track?` is #f, then don't keep

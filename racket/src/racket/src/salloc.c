@@ -3293,7 +3293,11 @@ intptr_t scheme_count_envbox(Scheme_Object *root, Scheme_Hash_Table *ht)
    still live) after every `NUM_ALLOCS_BEFORE_REPORT` structure and
    closure allocations. Adjust that constant to match a test program.
    Also, run with `racket -j` so that structure allocation is not
-   inlined, and don't use places. */
+   inlined, and don't use places.
+
+   Allocation countas are not exhaustive. You may need to add more
+   `DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_...._type))`
+   at allocation sites. */
 
 #define NUM_ALLOCS_BEFORE_REPORT 100000
 

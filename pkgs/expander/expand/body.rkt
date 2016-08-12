@@ -291,8 +291,8 @@
         (define result-s
           (if (expand-context-to-parsed? ctx)
               (if (null? accum-idss)
-                  (parsed-let-values s null null exp-body)
-                  (parsed-letrec-values s 
+                  (parsed-let-values (keep-properties-only s) null null exp-body)
+                  (parsed-letrec-values (keep-properties-only s)
                                         (reverse accum-idss)
                                         (reverse (map list accum-keyss accum-rhss))
                                         exp-body))
@@ -326,7 +326,7 @@
                                #f #t))
         ((if get-list? list values)
          (if (expand-context-to-parsed? ctx)
-             (parsed-let-values s
+             (parsed-let-values (keep-properties-only s)
                                 (list ids)
                                 (list (list (car keyss) expanded-rhs))
                                 exp-rest)
@@ -343,7 +343,7 @@
                                #f #t))
         ((if get-list? list values)
          (if (expand-context-to-parsed? ctx)
-             (parsed-letrec-values s
+             (parsed-letrec-values (keep-properties-only s)
                                    (reverse (cons ids accum-idss))
                                    (reverse
                                     (cons (list (car keyss) expanded-rhs)

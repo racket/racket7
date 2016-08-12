@@ -68,7 +68,7 @@
     (define-values (formals body)
       (lambda-clause-expander s disarmed-s (m 'formals) (m 'body) ctx 'lambda-renames))
     (if (expand-context-to-parsed? ctx)
-        (parsed-lambda s formals body)
+        (parsed-lambda (keep-properties-only s) formals body)
         (rebuild
          s disarmed-s
          `(,(get-lambda ctx (m 'lambda)) ,formals ,@body)))))
@@ -104,7 +104,7 @@
            (list exp-formals exp-body)
            (rebuild clause clause `[,exp-formals ,@exp-body]))))
    (if (expand-context-to-parsed? ctx)
-       (parsed-case-lambda s clauses)
+       (parsed-case-lambda (keep-properties-only s) clauses)
        (rebuild
         s disarmed-s
         `(,(m 'case-lambda) ,@clauses)))))
@@ -251,8 +251,8 @@
        (define exp-body (get-body))
        (if (expand-context-to-parsed? ctx)
            (if rec?
-               (parsed-letrec-values s val-idss clauses exp-body)
-               (parsed-let-values s val-idss clauses exp-body))
+               (parsed-letrec-values (keep-properties-only s) val-idss clauses exp-body)
+               (parsed-let-values (keep-properties-only s) val-idss clauses exp-body))
            (rebuild
             s disarmed-s
             `(,letrec-values-id ,clauses ,@exp-body)))]
@@ -298,7 +298,7 @@
    (define exp-body (expand-body (m 'body) ctx #:stratified? #t
                                  #:source s #:disarmed-source disarmed-s))
    (if (expand-context-to-parsed? ctx)
-       (parsed-begin s exp-body)
+       (parsed-begin (keep-properties-only s) exp-body)
        (rebuild
         s disarmed-s
         `(,(core-id 'begin (expand-context-phase ctx))
@@ -318,7 +318,7 @@
      (raise-syntax-error '#%datum "keyword misused as an expression" #f datum))
    (define phase (expand-context-phase ctx))
    (if (expand-context-to-parsed? ctx)
-       (parsed-quote s datum)
+       (parsed-quote (keep-properties-only s) (syntax->datum datum))
        (rebuild
         s disarmed-s
         (list (core-id 'quote phase)
@@ -336,7 +336,7 @@
     [(null? es)
      (define phase (expand-context-phase ctx))
      (if (expand-context-to-parsed? ctx)
-         (parsed-quote s null)
+         (parsed-quote (keep-properties-only s) null)
          (rebuild
           s disarmed-s
           (list (core-id 'quote phase)
@@ -347,7 +347,7 @@
                       (expand e expr-ctx)))
      (define prefixless (cdr (syntax-e disarmed-s)))
      (if (expand-context-to-parsed? ctx)
-         (parsed-app (if (syntax? prefixless) prefixless s) exp-es)
+         (parsed-app  (keep-properties-only (if (syntax? prefixless) prefixless s)) exp-es)
          (rebuild
           s disarmed-s
           (cons (m '#%app)
@@ -361,7 +361,7 @@
    (log-expand ctx 'prim-quote)
    (define-match m (syntax-disarm s) '(quote datum))
    (if (expand-context-to-parsed? ctx)
-       (parsed-quote s (m 'datum))
+       (parsed-quote (keep-properties-only s) (syntax->datum (m 'datum)))
        s)))
 
 (add-core-form!
@@ -378,7 +378,7 @@
      (reference-records-all-used! (expand-context-reference-records ctx))
      (define-match m-kw disarmed-s '(_ _ kw))
      (if (expand-context-to-parsed? ctx)
-         (parsed-quote-syntax s (m-local 'datum))
+         (parsed-quote-syntax (keep-properties-only s) (m-local 'datum))
          (rebuild
           s disarmed-s
           `(,(m-local 'quote-syntax) ,(m-local 'datum) ,(m-kw 'kw))))]
@@ -386,7 +386,7 @@
      ;; otherwise, prune scopes up to transformer boundary:
      (define datum-s (remove-scopes (m 'datum) (expand-context-scopes ctx)))
      (if (expand-context-to-parsed? ctx)
-         (parsed-quote-syntax s datum-s)
+         (parsed-quote-syntax (keep-properties-only s) datum-s)
          (rebuild
           s disarmed-s
           `(,(m 'quote-syntax)
@@ -407,7 +407,7 @@
    (log-expand ctx 'next)
    (define exp-els (expand (m 'els) tail-ctx))
    (if (expand-context-to-parsed? ctx)
-       (parsed-if s exp-tst exp-thn exp-els)
+       (parsed-if (keep-properties-only s) exp-tst exp-thn exp-els)
        (rebuild
         s disarmed-s
         (list (m 'if) exp-tst exp-thn exp-els)))))
@@ -425,7 +425,7 @@
    (log-expand ctx 'next)
    (define exp-body (expand (m 'body) (as-tail-context expr-ctx #:wrt ctx)))
    (if (expand-context-to-parsed? ctx)
-       (parsed-with-continuation-mark s exp-key exp-val exp-body)
+       (parsed-with-continuation-mark (keep-properties-only s) exp-key exp-val exp-body)
        (rebuild
         s disarmed-s
         (list (m 'with-continuation-mark) exp-key exp-val exp-body)))))
@@ -452,7 +452,7 @@
      (log-expand ctx 'enter-list (cdr es)))
    (log-expand ctx 'exit-list (list-tail exp-es list-start-index))
    (if (expand-context-to-parsed? ctx)
-       (parsed-begin s exp-es)
+       (parsed-begin (keep-properties-only s) exp-es)
        (rebuild
         s disarmed-s
         (cons (m 'begin) exp-es)))))
@@ -582,7 +582,7 @@
        (register-variable-referenced-if-local! binding)
        (define exp-rhs (expand (m 'rhs) (as-expression-context ctx)))
        (if (expand-context-to-parsed? ctx)
-           (parsed-set! s (parsed-id id binding) exp-rhs)
+           (parsed-set! (keep-properties-only s) (parsed-id id binding) exp-rhs)
            (rebuild
             s disarmed-s
             (list (m 'set!)
@@ -640,13 +640,14 @@
        (raise-unbound-syntax-error #f "unbound identifier" s var-id null
                                    (syntax-debug-info-string var-id ctx)))
      (if (expand-context-to-parsed? ctx)
-         (parsed-#%variable-reference s (if (top-m)
-                                            (parsed-top-id var-id binding)
-                                            (parsed-id var-id binding)))
+         (parsed-#%variable-reference (keep-properties-only s)
+                                      (if (top-m)
+                                          (parsed-top-id var-id binding)
+                                          (parsed-id var-id binding)))
          s)]
     [else
      (if (expand-context-to-parsed? ctx)
-         (parsed-#%variable-reference s #f)
+         (parsed-#%variable-reference (keep-properties-only s) #f)
          s)])))
 
 (add-core-form!

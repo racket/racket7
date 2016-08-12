@@ -48,7 +48,7 @@
          (correlate* s `(lambda ,@(compile-lambda (parsed-lambda-keys p) (parsed-lambda-body p) cctx)))
          name
          s)]
-       [else (correlate* s `(quote ,(syntax->datum s)))])]
+       [else (correlate* s `(quote unused-lambda))])]
      [(parsed-case-lambda? p)
       (cond
        [result-used?
@@ -57,10 +57,10 @@
                                     (compile-lambda (car clause) (cadr clause) cctx))))
          name
          s)]
-       [else (correlate* s `(quote ,(syntax->datum s)))])]
+       [else (correlate* s `(quote unused-case-lambda))])]
      [(parsed-app? p)
-      (for/list ([s (in-list (parsed-app-rator+rands p))])
-        (compile s #f #t))]
+      (for/list ([r (in-list (parsed-app-rator+rands p))])
+        (compile r #f #t))]
      [(parsed-if? p)
       (define tst-e (compile (parsed-if-tst p) #f #f))
       ;; Ad hoc optimization of `(if #t ... ...)` or `(if #f ... ...)`
@@ -86,15 +86,14 @@
      [(parsed-begin? p)
       (correlate* s (compile-begin (parsed-begin-body p) cctx name result-used?))]
      [(parsed-set!? p)
-      (define-match m s '(_ id _))
       (correlate* s `(,@(compile-identifier (parsed-set!-id p) cctx
-                                            #:set-to (compile (parsed-set!-rhs p) (m 'id) #t))))]
+                                            #:set-to (compile (parsed-set!-rhs p) (parsed-s (parsed-set!-id p)) #t))))]
      [(parsed-let-values? p)
       (compile-let p cctx name #:rec? #f result-used?)]
      [(parsed-letrec-values? p)
       (compile-let p cctx name #:rec? #t result-used?)]
      [(parsed-quote? p)
-      (define datum (syntax->datum (parsed-quote-datum p)))
+      (define datum (parsed-quote-datum p))
       (cond
        [(self-quoting-in-linklet? datum)
         (correlate* s datum)]

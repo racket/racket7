@@ -386,7 +386,7 @@
      ;; Assemble the `#%module-begin` result:
      (cond
       [(expand-context-to-parsed? ctx)
-       (parsed-#%module-begin mb-s (parsed-only fully-expanded-bodys))]
+       (parsed-#%module-begin (keep-properties-only mb-s) (parsed-only fully-expanded-bodys))]
       [else
        (define mb-result-s
          (rebuild
@@ -395,7 +395,7 @@
        (cond
         [(not (expand-context-in-local-expand? ctx))
          (expanded+parsed mb-result-s
-                          (parsed-#%module-begin mb-s (parsed-only fully-expanded-bodys)))]
+                          (parsed-#%module-begin (keep-properties-only mb-s) (parsed-only fully-expanded-bodys)))]
         [else mb-result-s])]))
 
    ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -441,7 +441,7 @@
    (define result-form
      (and (or (expand-context-to-parsed? ctx)
               always-produce-compiled?)
-          (parsed-module s
+          (parsed-module (keep-properties-only s)
                          #f
                          (m 'id:module-name)
                          self
@@ -724,7 +724,7 @@
             (maybe-install-free=id! val id phase)
             (namespace-set-transformer! m-ns phase sym val))
           (log-expand partial-body-ctx 'exit-prim)
-          (define parsed-body (parsed-define-syntaxes exp-body ids syms parsed-rhs))
+          (define parsed-body (parsed-define-syntaxes (keep-properties-only exp-body) ids syms parsed-rhs))
           (cons (if (expand-context-to-parsed? partial-body-ctx)
                     parsed-body
                     (expanded+parsed
@@ -855,7 +855,7 @@
           (define syms (semi-parsed-define-values-syms body))
           (define s (semi-parsed-define-values-s body))
           (define comp-form
-            (parsed-define-values s ids syms
+            (parsed-define-values (keep-properties-only s) ids syms
                                   (if (expand-context-to-parsed? rhs-ctx)
                                       ;; Have (and need only) parsed form
                                       exp-rhs
@@ -1001,7 +1001,7 @@
   (define-values (requires provides) (extract-requires-and-provides requires+provides self self))
 
   (define parsed-mod
-    (parsed-module orig-s
+    (parsed-module (keep-properties-only orig-s)
                    #f
                    module-name-id
                    self
@@ -1061,7 +1061,7 @@
        [(semi-parsed-begin-for-syntax? body)
         (define body-s (semi-parsed-begin-for-syntax-s body))
         (define nested-bodys (loop (semi-parsed-begin-for-syntax-body body) (add1 phase)))
-        (define parsed-bfs (parsed-begin-for-syntax body-s (parsed-only nested-bodys)))
+        (define parsed-bfs (parsed-begin-for-syntax (keep-properties-only body-s) (parsed-only nested-bodys)))
         (cons
          (if (expand-context-to-parsed? submod-ctx)
              parsed-bfs
@@ -1140,8 +1140,7 @@
                   body))
     (cond
      [(parsed-define-values? p)
-      (define-match m (parsed-s p) '(_ (id ...) _))
-      (define ids (m 'id))
+      (define ids (parsed-define-values-ids p))
       (define vals (eval-for-bindings ids (parsed-define-values-rhs p) phase m-ns ctx))
       (for ([id (in-list ids)]
             [sym (in-list (parsed-define-values-syms p))]

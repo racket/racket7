@@ -24,8 +24,6 @@
                   (expanded+parsed-parsed body)
                   body))
     (cond
-     [(semi-parsed-begin-for-syntax? p)
-      (disallow (semi-parsed-begin-for-syntax-s p))]
      [(parsed-define-values? p)
       (check-expr (parsed-define-values-rhs p) (length (parsed-define-values-syms p)) p)]
      [(or (parsed-#%declare? p)
@@ -41,7 +39,7 @@
          (parsed-case-lambda? e))
      (check-count 1 num-results enclosing)]
     [(parsed-quote? e)
-     (check-datum (parsed-quote-datum e))
+     (check-datum (parsed-quote-datum e) e)
      (check-count 1 num-results enclosing)]
     [(parsed-app? e)
      (define rands (cdr (parsed-app-rator+rands e)))
@@ -69,16 +67,15 @@
   (unless (= is-num expected-num)
     (disallow enclosing)))
 
-(define (check-datum datum)
-  (define d (syntax-e datum))
+(define (check-datum d e)
   (cond
    [(or (number? d) (boolean? d) (symbol? d) (string? d) (bytes? d))
     (void)]
-   [else (disallow datum)]))
+   [else (disallow e)]))
 
 (define (quoted-string? e)
   (and (parsed-quote? e)
-       (string? (syntax-e (parsed-quote-datum e)))))
+       (string? (parsed-quote-datum e))))
 
 (define (cross-phase-primitive-name id)
   (cond
@@ -93,5 +90,5 @@
   (raise-syntax-error 'module
                       "not allowed in a cross-phase persistent module"
                       (if (parsed? body)
-                          (parsed-s body)
+                          (datum->syntax #f body (parsed-s body))
                           body)))
