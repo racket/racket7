@@ -3316,8 +3316,6 @@ void scheme_record_allocation(Scheme_Object *tag)
     return;
 
   alloc_count++;
-  if (alloc_count < 1000)
-    return;
 
   if (!allocs) {
     REGISTER_SO(allocs);

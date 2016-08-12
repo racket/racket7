@@ -113,9 +113,8 @@
      #:exists 'truncate
      (build-path (cache-dir cache) key)
      (lambda (o) (write c o)))
-    (call-with-output-file*
-     #:exists 'truncate
+    (call-with-atomic-output-file
      cache-file
-     (lambda (o) (writeln new-table o)))]
+     (lambda (o path) (writeln new-table o)))]
    [else
     (hash-set! (cache-in-memory cache) key c)]))
