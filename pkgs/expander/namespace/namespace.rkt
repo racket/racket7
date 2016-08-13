@@ -67,9 +67,13 @@
           (define n (namespace-source-name ns))
           (when n
             (fprintf port ":~a" (namespace->name ns)))
-          (define phase (namespace-phase ns))
-          (unless (zero-phase? phase)
-            (fprintf port ":~s" phase))
+          (define 0-phase (namespace-0-phase ns))
+          (define phase-level (phase- (namespace-phase ns)
+                                      0-phase))
+          (unless (zero-phase? phase-level)
+            (fprintf port ":~s" phase-level))
+          (unless (zero-phase? 0-phase)
+            (fprintf port "~a~s" (if (positive? 0-phase) "+" "") 0-phase))
           (write-string ">" port)))
 
 (struct definitions (variables      ; linklet instance
