@@ -15,20 +15,20 @@
                                 (module-path-index-resolve (module-binding-module b))
                                 at-phase
                                 #:check-available-at-phase-level (module-binding-phase b)
-                                #:unavailable-callback
-                                (lambda ()
-                                  (raise-syntax-error
-                                   #f
-                                   (format (string-append "module mismatch;\n"
-                                                          " attempted to use a module that is not available\n"
-                                                          "  possible cause:\n"
-                                                          "   using (dynamic-require .... #f)\n"
-                                                          "   but need (dynamic-require .... 0)\n"
-                                                          "  module: ~s\n"
-                                                          "  phase: ~s")
-                                           (module-binding-module b)
-                                           (phase+ at-phase (module-binding-phase b)))
-                                   id))))
+                                #:unavailable-callback (lambda (mi) 'unavailable)))
+  (when (eq? mi 'unavailable)
+    (raise-syntax-error
+     #f
+     (format (string-append "module mismatch;\n"
+                            " attempted to use a module that is not available\n"
+                            "  possible cause:\n"
+                            "   using (dynamic-require .... #f)\n"
+                            "   but need (dynamic-require .... 0)\n"
+                            "  module: ~s\n"
+                            "  phase: ~s")
+             (module-binding-module b)
+             (phase+ at-phase (module-binding-phase b)))
+     id))
   (unless mi
     (error 'expand
            (string-append "namespace mismatch; cannot locate module instance\n"

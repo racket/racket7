@@ -747,7 +747,8 @@
                              (define-values (also-later) 6)
                              (assign-later!)
                              (print later) (newline))))
- 6)
+ 6
+ 6) ; re-expansion
 
 ;; ----------------------------------------
 

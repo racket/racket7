@@ -243,9 +243,9 @@
           (hash-ref (namespace-module-instances c-ns) name #f))
         (and complain-on-failure?
              (error "no module instance found:" name 0-phase))))
-  (when (and mi check-available-at-phase-level)
-    (check-availablilty mi check-available-at-phase-level unavailable-callback))
-  mi)
+  (if (and mi check-available-at-phase-level)
+      (check-availablilty mi check-available-at-phase-level unavailable-callback)
+      mi))
 
 (define (namespace-install-module-namespace! ns name 0-phase m existing-m-ns)
   (define m-ns (struct-copy namespace ns
@@ -313,10 +313,11 @@
 
 (define (check-availablilty mi check-available-at-phase-level unavailable-callback)
   (define m (module-instance-module mi))
-  (when (and m
-             (<= (module-min-phase-level m) (add1 check-available-at-phase-level) (module-max-phase-level m))
-             (not (hash-ref (module-instance-phase-level-to-state mi) (add1 check-available-at-phase-level) #f)))
-    (unavailable-callback)))
+  (if (and m
+           (<= (module-min-phase-level m) (add1 check-available-at-phase-level) (module-max-phase-level m))
+           (not (hash-ref (module-instance-phase-level-to-state mi) (add1 check-available-at-phase-level) #f)))
+      (unavailable-callback mi)
+      mi))
 
 (define (namespace->module-namespace ns name 0-phase
                                      #:complain-on-failure? [complain-on-failure? #f]
