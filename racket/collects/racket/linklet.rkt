@@ -49,6 +49,7 @@
 (define-syntax-rule (bounce id ...)
   (begin (define id (hash-ref kernel 'id)) ...))
 (bounce syntax?
+        syntax-e
         datum->syntax
         syntax->datum
         syntax-property
