@@ -96,7 +96,9 @@
      (expand-implicit '#%top (substitute-alternate-id s alternate-id) ctx s)]
     [else
      ;; Variable or form as identifier macro
-     (define-values (t primitive? insp-of-t) (lookup binding ctx id #:in (and alternate-id s)))
+     (define-values (t primitive? insp-of-t) (lookup binding ctx id
+                                                     #:in (and alternate-id s)
+                                                     #:out-of-context-as-variable? (expand-context-in-local-expand? ctx)))
      (dispatch t insp-of-t s id ctx binding primitive?)])))
 
 ;; An "application" form that starts with an identifier
@@ -117,7 +119,9 @@
      (expand-implicit '#%app (substitute-alternate-id s alternate-id) ctx id)]
     [else
      ;; Find out whether it's bound as a variable, syntax, or core form
-     (define-values (t primitive? insp-of-t) (lookup binding ctx id #:in (and alternate-id (car (syntax-e disarmed-s)))))
+     (define-values (t primitive? insp-of-t) (lookup binding ctx id
+                                                     #:in (and alternate-id (car (syntax-e disarmed-s)))
+                                                     #:out-of-context-as-variable? (expand-context-in-local-expand? ctx)))
      (cond
       [(variable? t)
        ;; Not as syntax or core form, so use implicit `#%app`

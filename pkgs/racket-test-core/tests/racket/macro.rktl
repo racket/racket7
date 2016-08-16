@@ -1666,5 +1666,22 @@
 (test '(1 2 3) dynamic-require ''uses-local-lift-values-at-expansion-time 'l)
 
 ;; ----------------------------------------
+;; Check that `local-expand` tentatively allows out-of-context identifiers
+
+(module tentatively-out-of-context racket/base
+  (require (for-syntax racket/base))
+
+  (define-syntax (new-lam stx)
+    (syntax-case stx ()
+      [(_ x body)
+       (with-syntax ([(_ (x+) body+)
+                      (local-expand #'(lambda (x) body) 'expression null)])
+         (with-syntax ([body++ ;; double-expand body
+                        (local-expand #'body+ 'expression null)])
+           #'(lambda (x+) body++)))]))
+
+  ((new-lam X X) 100))
+
+;; ----------------------------------------
 
 (report-errs)

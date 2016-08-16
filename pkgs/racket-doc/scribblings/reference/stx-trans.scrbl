@@ -264,7 +264,11 @@ wrapped with the explicit form, and @racket[#%top] wrappers are
 never added (even with an empty @racket[stop-ids] list). If @racket[stop-ids] is @racket[#f]
 instead of a list, then @racket[stx] is expanded only as long as the
 outermost form of @racket[stx] is a macro (i.e., expansion does not
-proceed to sub-expressions). A fully expanded form can include the
+proceed to sub-expressions). Independent of @racket[stop-ids], when
+@racket[local-expand] encounters and identifier that has a local binding
+but no binding in the current expansion context, the variable is left
+as-is (as opposed to triggering an ``out of context'' syntax error).
+A fully expanded form can include the
 bindings listed in @secref["fully-expanded"] plus the
 @racket[letrec-syntaxes+values] form and @racket[#%expression]
 in any expression position.
