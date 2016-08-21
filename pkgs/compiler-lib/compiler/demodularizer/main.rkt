@@ -4,10 +4,12 @@
 
 (provide current-excluded-modules
          garbage-collect-toplevels-enabled
+         recompile-enabled
          demodularize)
 
 (define current-excluded-modules (make-parameter null))
 (define garbage-collect-toplevels-enabled (make-parameter #f))
+(define recompile-enabled (make-parameter #f))
 
 (define logger (make-logger 'demodularizer (current-logger)))
 

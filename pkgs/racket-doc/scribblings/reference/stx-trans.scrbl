@@ -232,7 +232,7 @@ identifier, the @racket[exn:fail:contract] exception is raised.
 
 @defproc[(local-expand [stx any/c]
                        [context-v (or/c 'expression 'top-level 'module 'module-begin list?)]
-                       [stop-ids (or/c (listof identifier?) #f)]
+                       [stop-ids (or/c (listof identifier?) empty #f)]
                        [intdef-ctx (or/c internal-definition-context? 
                                          (and/c pair? 
                                                 (listof internal-definition-context?))
@@ -261,13 +261,19 @@ in a sub-expression, expansions stops for the sub-expression. If
 @racket[stop-ids], then application and
 literal data expressions without the respective explicit form are not
 wrapped with the explicit form, and @racket[#%top] wrappers are
-never added (even with an empty @racket[stop-ids] list). If @racket[stop-ids] is @racket[#f]
+never added (even with an empty @racket[stop-ids] list).
+
+If @racket[stop-ids] is an empty list, then @racket[stx] is expanded
+recursively (i.e., expansion proceeds to sub-expressions).
+
+If @racket[stop-ids] is @racket[#f]
 instead of a list, then @racket[stx] is expanded only as long as the
 outermost form of @racket[stx] is a macro (i.e., expansion does not
 proceed to sub-expressions). Independent of @racket[stop-ids], when
-@racket[local-expand] encounters and identifier that has a local binding
+@racket[local-expand] encounters an identifier that has a local binding
 but no binding in the current expansion context, the variable is left
 as-is (as opposed to triggering an ``out of context'' syntax error).
+
 A fully expanded form can include the
 bindings listed in @secref["fully-expanded"] plus the
 @racket[letrec-syntaxes+values] form and @racket[#%expression]
