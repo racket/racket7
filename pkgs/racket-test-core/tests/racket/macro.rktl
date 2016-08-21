@@ -1683,5 +1683,23 @@
   ((new-lam X X) 100))
 
 ;; ----------------------------------------
+;; Check that properties interact properly with the rename transformer
+;; that is used to implement `let-syntax` [example from Stephen Chang]
+
+(define-syntax (test-key-property-as-val stx)
+  (syntax-case stx ()
+    [(_ x)
+     (with-syntax ([x/prop (syntax-property #'x 'key 'val)])
+       (with-syntax ([(lam _ (lv1 _ (lv2 _ x+)))
+                      (local-expand
+                       #'(lambda (x)
+                           (let-syntax ([x (lambda (stx) #'x)])
+                             x/prop))
+                       'expression null)])
+         #`'#,(syntax-property #'x+ 'key)))]))
+
+(test 'val 'let-syntax-rename-transformer-property (test-key-property-as-val stx))
+
+;; ----------------------------------------
 
 (report-errs)

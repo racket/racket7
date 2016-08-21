@@ -249,13 +249,17 @@
     (log-expand* ctx #:when (expand-context-only-immediate? ctx) ['visit s] ['resolves id])
     ;; Apply transformer and expand again
     (define-values (exp-s re-ctx)
-      (apply-transformer t insp-of-t s id ctx binding))
+      (if (rename-transformer? t)
+          (values s ctx)
+          (apply-transformer t insp-of-t s id ctx binding)))
     (log-expand* ctx #:when (expand-context-only-immediate? ctx) ['return exp-s])
     (cond
      [(expand-context-just-once? ctx) exp-s]
      [else (expand exp-s re-ctx
                    #:alternate-id (and (rename-transformer? t)
-                                       (rename-transformer-target t)))])]))
+                                       (syntax-track-origin (rename-transformer-target t)
+                                                            s
+                                                            id)))])]))
 
 ;; Handle the expansion of a variable to itself
 (define (dispatch-variable t s id ctx binding primitive?)
