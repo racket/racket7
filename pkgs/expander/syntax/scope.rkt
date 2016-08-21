@@ -449,7 +449,7 @@
     ;; Improve sharing if the result matches the parent:
     (if (set=? new-scs (syntax-scopes parent-s))
         (syntax-scopes parent-s)
-        new-scs)]))
+        (cache-or-reuse-set new-scs))]))
 
 (define (propagation-apply-shifted prop smss parent-s)
   (cond
@@ -472,7 +472,7 @@
              (set? parent-smss)
              (set=? new-smss parent-smss))
         parent-smss
-        new-smss)]))
+        (cache-or-reuse-hash new-smss))]))
 
 (define (propagation-merge prop base-prop prev-scs prev-smss)
   (cond
