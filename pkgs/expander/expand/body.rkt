@@ -25,7 +25,7 @@
 ;; Expand a sequence of body forms in a definition context; returns a
 ;; list of body forms
 (define (expand-body bodys ctx
-                     #:source s #:disarmed-source disarmed-s
+                     #:source s
                      #:stratified? [stratified? #f])
   (log-expand ctx 'enter-block)
   ;; In principle, we have an outside-edge scope that identifies the
@@ -83,7 +83,7 @@
       (finish-expanding-body body-ctx frame-id def-ctx-scopes
                              (reverse val-idss) (reverse val-keyss) (reverse val-rhss) (reverse track-stxs)
                              (reverse done-bodys)
-                             #:source s #:disarmed-source disarmed-s
+                             #:source s
                              #:stratified? stratified?
                              #:name name
                              #:disappeared-transformer-bindings (reverse trans-idss))]
@@ -213,7 +213,7 @@
 (define (finish-expanding-body body-ctx frame-id def-ctx-scopes
                                val-idss val-keyss val-rhss track-stxs
                                done-bodys
-                               #:source s #:disarmed-source disarmed-s
+                               #:source s
                                #:stratified? stratified?
                                #:name name
                                #:disappeared-transformer-bindings disappeared-transformer-bindings)
@@ -235,14 +235,21 @@
     (unless block->list? (log-expand body-ctx 'next-group)) ; to go with 'block->letrec
     (unless block->list? (log-expand body-ctx 'prim-begin))
     (define last-i (sub1 (length done-bodys)))
-    (log-expand body-ctx 'enter-list exp-bodys)
-    (define exp-bodys (for/list ([body (in-list done-bodys)]
-                                 [i (in-naturals)])
-                        (log-expand body-ctx 'next)
-                        (expand body (if (and name (= i last-i))
-                                         (struct-copy expand-context finish-ctx
-                                                      [name name])
-                                         finish-ctx))))
+    (log-expand body-ctx 'enter-list done-bodys)
+    (define exp-bodys
+      ;; Using `let loop` instead of `for/list` to have more fine-grained control
+      ;; over retention of `done-bodys`:
+      (let loop ([done-bodys done-bodys])
+        (cond
+         [(null? done-bodys) null]
+         [else
+          (define rest-done-bodys (cdr done-bodys)) ; don't retain `done-bodys` for recur
+          (log-expand body-ctx 'next)
+          (cons (expand (car done-bodys) (if (and name (null? rest-done-bodys))
+                                             (struct-copy expand-context finish-ctx
+                                                          [name name])
+                                             finish-ctx))
+                (loop rest-done-bodys))])))
     (log-expand body-ctx 'exit-list exp-bodys)
     exp-bodys)
   (cond
@@ -257,7 +264,7 @@
                    val-idss val-keyss val-rhss track-stxs
                    #:split? (not stratified?)
                    #:frame-id frame-id #:ctx finish-ctx
-                   #:source s #:disarmed-source disarmed-s
+                   #:source s
                    #:get-body finish-bodys #:track? #f))
     (if (expand-context-to-parsed? body-ctx)
         (list exp-s)
@@ -274,7 +281,7 @@
 (define (expand-and-split-bindings-by-reference idss keyss rhss track-stxs
                                                 #:split? split?
                                                 #:frame-id frame-id #:ctx ctx 
-                                                #:source s #:disarmed-source disarmed-s
+                                                #:source s
                                                 #:get-body get-body #:track? track?)
   (define phase (expand-context-phase ctx))
   (let loop ([idss idss] [keyss keyss] [rhss rhss] [track-stxs track-stxs]
@@ -298,7 +305,7 @@
                                         exp-body))
               (rebuild
                #:track? track?
-               s disarmed-s
+               s
                `(,(if (null? accum-idss)
                       (core-id 'let-values phase)
                       (core-id 'letrec-values phase))
@@ -332,7 +339,7 @@
                                 exp-rest)
              (rebuild
               #:track? track?
-              s disarmed-s
+              s
               `(,(core-id 'let-values phase)
                 (,(build-clause ids expanded-rhs track-stx))
                 ,@exp-rest))))]
@@ -351,7 +358,7 @@
                                    exp-rest)
              (rebuild
               #:track? track?
-              s disarmed-s
+              s
               `(,(core-id 'letrec-values phase)
                 ,(build-clauses (cons ids accum-idss)
                                 (cons expanded-rhs accum-rhss)

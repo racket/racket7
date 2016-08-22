@@ -48,5 +48,5 @@
       (define nested-bodys (semi-parsed-begin-for-syntax-body i))
       (let ([disarmed-s (syntax-disarm s)])
         (define-match m disarmed-s '(begin-for-syntax _ ...))
-        (rebuild s disarmed-s `(,(m 'begin-for-syntax) ,@(syntax-only nested-bodys))))]
+        (rebuild s `(,(m 'begin-for-syntax) ,@(syntax-only nested-bodys))))]
      [else i])))

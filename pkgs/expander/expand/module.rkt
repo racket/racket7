@@ -391,7 +391,7 @@
       [else
        (define mb-result-s
          (rebuild
-          mb-s disarmed-mb-s
+          mb-s
           `(,(mb-m '#%module-begin) ,@(syntax-only fully-expanded-bodys))))
        (cond
         [(not (expand-context-in-local-expand? ctx))
@@ -473,7 +473,7 @@
 
        (let* ([result-s
                (rebuild
-                s disarmed-s
+                s
                 `(,(m 'module) ,(m 'id:module-name) ,initial-require-s ,(expanded+parsed-s expanded-mb)))]
               [result-s 
                (syntax-module-path-index-shift result-s self generic-self)]
@@ -730,7 +730,7 @@
                     parsed-body
                     (expanded+parsed
                      (rebuild 
-                      exp-body disarmed-exp-body
+                      exp-body
                       `(,(m 'define-syntaxes) ,ids ,exp-rhs))
                      parsed-body))
                 (loop tail? (cdr bodys)))]
@@ -868,7 +868,7 @@
                (let ([disarmed-s (syntax-disarm s)])
                  (define-match m disarmed-s '(define-values _ _))
                  (rebuild
-                  s disarmed-s
+                  s
                   `(,(m 'define-values) ,ids ,exp-rhs)))
                comp-form))]
          [else
@@ -979,7 +979,7 @@
             (cons (syntax-track-origin*
                    track-stxes
                    (rebuild
-                    (car bodys) disarmed-body
+                    (car bodys)
                     `(,(m '#%provide) ,@specs)))
                   (loop (cdr bodys) phase))])]
          [else
@@ -1069,7 +1069,7 @@
              (expanded+parsed
               (let ([disarmed-body (syntax-disarm body-s)])
                 (define-match m disarmed-body '(begin-for-syntax _ ...))
-                (rebuild body-s disarmed-body `(,(m 'begin-for-syntax) ,@(syntax-only nested-bodys))))
+                (rebuild body-s `(,(m 'begin-for-syntax) ,@(syntax-only nested-bodys))))
               parsed-bfs))
          (loop (cdr bodys) phase))]
        [(or (parsed? body)

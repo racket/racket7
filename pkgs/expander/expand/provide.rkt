@@ -57,7 +57,7 @@
                     (syntax-track-origin*
                      track-stxes
                      (rebuild
-                      spec spec
+                      spec
                       `(,(m 'for-meta) ,(m 'phase-level) ,@exp-specs)))))]
           [(for-syntax)
            (check-nested 'raw)
@@ -72,7 +72,7 @@
                     (syntax-track-origin*
                      track-stxes
                      (rebuild
-                      spec spec
+                      spec
                       `(,(m 'for-syntax) ,@exp-specs)))))]
           [(for-label)
            (check-nested 'raw)
@@ -87,7 +87,7 @@
                     (syntax-track-origin*
                      track-stxes
                      (rebuild
-                      spec spec
+                      spec
                       `(,(m 'for-label) ,@exp-specs)))))]
           [(protect)
            (check-nested 'phaseless)
@@ -104,7 +104,7 @@
                     (syntax-track-origin*
                      track-stxes
                      (rebuild
-                      spec spec
+                      spec
                       `(,(m 'protect) ,@exp-specs)))))]
           [(rename)
            (check-nested 'phaseless)

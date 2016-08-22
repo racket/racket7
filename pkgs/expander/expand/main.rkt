@@ -48,6 +48,7 @@
          eval-for-bindings
 
          keep-properties-only
+         keep-as-needed
          rebuild
          attach-disappeared-transformer-bindings
          increment-binding-layer
@@ -600,12 +601,31 @@
 (define (keep-properties-only s)
   (datum->syntax #f 'props s s))
 
+;; Drop the `syntax-e` part of `s`, and also drop its scopes when
+;; producing a parsed result, producing a result suitable for use with
+;; `rebuild` or including in a `parsed` record. Dropping references in
+;; this way helps the GC not retain too much of an original syntax
+;; object in the process of expanding it, which can matter for deeply
+;; nested expansions.
+(define (keep-as-needed ctx s #:for-track? [for-track? #f])
+  (cond
+   [(expand-context-to-parsed? ctx) (keep-properties-only s)]
+   [else
+    (define d (and for-track? (syntax-e s)))
+    (datum->syntax (syntax-disarm s)
+                   (cond
+                    [(symbol? d) d]
+                    [(and (pair? d) (identifier? (car d))) (syntax-e (car d))]
+                    [else #f])
+                   s
+                   s)]))
+
 ;; A helper for forms to reconstruct syntax while preserving source
 ;; locations, properties, and arming; if `track?` is #f, then don't keep
 ;; properties, because we've kept them in a surrounding form
-(define (rebuild orig-s disarmed-orig-s new
+(define (rebuild orig-s new
                  #:track? [track? #t])
-  (syntax-rearm (datum->syntax disarmed-orig-s new orig-s (and track? orig-s))
+  (syntax-rearm (datum->syntax (syntax-disarm orig-s) new orig-s (and track? orig-s))
                 orig-s))
 
 (define (attach-disappeared-transformer-bindings s trans-idss)

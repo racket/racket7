@@ -52,8 +52,7 @@
                                 [scopes (cons sc (expand-context-scopes ctx))]
                                 [binding-layer (increment-binding-layer ids ctx sc)]
                                 [frame-id #:parent root-expand-context #f]))
-  (define exp-body (expand-body sc-bodys body-ctx
-                                #:source s #:disarmed-source disarmed-s))
+  (define exp-body (expand-body sc-bodys body-ctx #:source (keep-as-needed ctx s)))
   ;; Return formals (with new scope) and expanded body:
   (values (if (expand-context-to-parsed? ctx) 
               (unflatten-like-formals keys formals)
@@ -65,12 +64,13 @@
     (log-expand ctx 'prim-lambda)
     (define disarmed-s (syntax-disarm s))
     (define-match m disarmed-s '(lambda formals body ...+))
+    (define rebuild-s (keep-as-needed ctx s))
     (define-values (formals body)
       (lambda-clause-expander s disarmed-s (m 'formals) (m 'body) ctx 'lambda-renames))
     (if (expand-context-to-parsed? ctx)
-        (parsed-lambda (keep-properties-only s) formals body)
+        (parsed-lambda rebuild-s formals body)
         (rebuild
-         s disarmed-s
+         rebuild-s
          `(,(get-lambda ctx (m 'lambda)) ,formals ,@body)))))
 
 (add-core-form!
@@ -93,6 +93,7 @@
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(case-lambda [formals body ...+] ...))
    (define-match cm disarmed-s '(case-lambda clause ...))
+   (define rebuild-s (keep-as-needed ctx s))
    (define clauses
      (for/list ([formals (in-list (m 'formals))]
                 [body (in-list (m 'body))]
@@ -102,11 +103,11 @@
          (lambda-clause-expander s disarmed-s formals body ctx 'case-lambda-renames))
        (if (expand-context-to-parsed? ctx)
            (list exp-formals exp-body)
-           (rebuild clause clause `[,exp-formals ,@exp-body]))))
+           (rebuild clause `[,exp-formals ,@exp-body]))))
    (if (expand-context-to-parsed? ctx)
-       (parsed-case-lambda (keep-properties-only s) clauses)
+       (parsed-case-lambda rebuild-s clauses)
        (rebuild
-        s disarmed-s
+        rebuild-s
         `(,(m 'case-lambda) ,@clauses)))))
 
 (define (parse-and-flatten-formals all-formals sc s)
@@ -221,22 +222,29 @@
                                                 ctx
                                                 sc)]))
    (define letrec-values-id
-     (if syntaxes?
-         (core-id 'letrec-values phase)
-         (val-m 'let-values)))
+     (and (not (expand-context-to-parsed? ctx))
+          (if syntaxes?
+              (core-id 'letrec-values phase)
+              (val-m 'let-values))))
    
+   (define rebuild-s (keep-as-needed ctx s))
+   (define val-name-idss (if (expand-context-to-parsed? ctx)
+                             (for/list ([val-ids (in-list val-idss)])
+                               (for/list ([val-id (in-list val-ids)])
+                                 (datum->syntax #f (syntax-e val-id) val-id val-id)))
+                             val-idss))
+
    (define (get-body)
      (log-expand ctx 'next-group)
      (define body-ctx (struct-copy expand-context rec-ctx
                                    [reference-records orig-rrs]))
-     (expand-body bodys (as-tail-context body-ctx #:wrt ctx)
-                  #:source s #:disarmed-source disarmed-s))
+     (expand-body bodys (as-tail-context body-ctx #:wrt ctx) #:source rebuild-s))
    
    (define result-s
      (cond
       [(not split-by-reference?)
        (define clauses
-         (for/list ([ids (in-list val-idss)]
+         (for/list ([ids (in-list val-name-idss)]
                     [keys (in-list val-keyss)]
                     [rhs (in-list (if syntaxes? (stx-m 'val-rhs) (val-m 'val-rhs)))])
            (log-expand ctx 'next)
@@ -251,10 +259,10 @@
        (define exp-body (get-body))
        (if (expand-context-to-parsed? ctx)
            (if rec?
-               (parsed-letrec-values (keep-properties-only s) val-idss clauses exp-body)
-               (parsed-let-values (keep-properties-only s) val-idss clauses exp-body))
+               (parsed-letrec-values rebuild-s val-name-idss clauses exp-body)
+               (parsed-let-values rebuild-s val-name-idss clauses exp-body))
            (rebuild
-            s disarmed-s
+            rebuild-s
             `(,letrec-values-id ,clauses ,@exp-body)))]
       [else
        (log-expand ctx 'next-group)
@@ -266,7 +274,7 @@
                                       #f)
         #:split? #t
         #:frame-id frame-id #:ctx rec-ctx
-        #:source s #:disarmed-source disarmed-s
+        #:source rebuild-s
         #:get-body get-body #:track? #t)]))
 
    (if (expand-context-to-parsed? ctx)
@@ -295,12 +303,12 @@
    (log-expand ctx 'prim-#%stratified)
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(#%stratified-body body ...+))
-   (define exp-body (expand-body (m 'body) ctx #:stratified? #t
-                                 #:source s #:disarmed-source disarmed-s))
+   (define rebuild-s (keep-as-needed ctx s))
+   (define exp-body (expand-body (m 'body) ctx #:stratified? #t #:source rebuild-s))
    (if (expand-context-to-parsed? ctx)
-       (parsed-begin (keep-properties-only s) exp-body)
+       (parsed-begin rebuild-s exp-body)
        (rebuild
-        s disarmed-s
+        rebuild-s
         `(,(core-id 'begin (expand-context-phase ctx))
           ,@exp-body)))))
 
@@ -320,7 +328,7 @@
    (if (expand-context-to-parsed? ctx)
        (parsed-quote (keep-properties-only s) (syntax->datum datum))
        (rebuild
-        s disarmed-s
+        s
         (list (core-id 'quote phase)
               datum)))))
 
@@ -338,7 +346,7 @@
      (if (expand-context-to-parsed? ctx)
          (parsed-quote (keep-properties-only s) null)
          (rebuild
-          s disarmed-s
+          s
           (list (core-id 'quote phase)
                 null)))]
     [else
@@ -349,10 +357,10 @@
      (if (expand-context-to-parsed? ctx)
          (parsed-app  (keep-properties-only (if (syntax? prefixless) prefixless s)) exp-es)
          (rebuild
-          s disarmed-s
+          s
           (cons (m '#%app)
                 (if (syntax? prefixless)
-                    (rebuild prefixless prefixless exp-es)
+                    (rebuild prefixless exp-es)
                     exp-es))))])))
 
 (add-core-form!
@@ -380,7 +388,7 @@
      (if (expand-context-to-parsed? ctx)
          (parsed-quote-syntax (keep-properties-only s) (m-local 'datum))
          (rebuild
-          s disarmed-s
+          s
           `(,(m-local 'quote-syntax) ,(m-local 'datum) ,(m-kw 'kw))))]
     [else
      ;; otherwise, prune scopes up to transformer boundary:
@@ -388,7 +396,7 @@
      (if (expand-context-to-parsed? ctx)
          (parsed-quote-syntax (keep-properties-only s) datum-s)
          (rebuild
-          s disarmed-s
+          s
           `(,(m 'quote-syntax)
             ,datum-s)))])))
 
@@ -400,6 +408,7 @@
    (define-match m disarmed-s '(if tst thn els))
    (define expr-ctx (as-expression-context ctx))
    (define tail-ctx (as-tail-context expr-ctx #:wrt ctx))
+   (define rebuild-s (keep-as-needed ctx s))
    (log-expand ctx 'next-group)
    (define exp-tst (expand (m 'tst) expr-ctx))
    (log-expand ctx 'next)
@@ -407,9 +416,9 @@
    (log-expand ctx 'next)
    (define exp-els (expand (m 'els) tail-ctx))
    (if (expand-context-to-parsed? ctx)
-       (parsed-if (keep-properties-only s) exp-tst exp-thn exp-els)
+       (parsed-if rebuild-s exp-tst exp-thn exp-els)
        (rebuild
-        s disarmed-s
+        rebuild-s
         (list (m 'if) exp-tst exp-thn exp-els)))))
 
 (add-core-form!
@@ -419,15 +428,16 @@
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(with-continuation-mark key val body))
    (define expr-ctx (as-expression-context ctx))
+   (define rebuild-s (keep-as-needed ctx s))
    (define exp-key (expand (m 'key) expr-ctx))
    (log-expand ctx 'next)
    (define exp-val (expand (m 'val) expr-ctx))
    (log-expand ctx 'next)
    (define exp-body (expand (m 'body) (as-tail-context expr-ctx #:wrt ctx)))
    (if (expand-context-to-parsed? ctx)
-       (parsed-with-continuation-mark (keep-properties-only s) exp-key exp-val exp-body)
+       (parsed-with-continuation-mark rebuild-s exp-key exp-val exp-body)
        (rebuild
-        s disarmed-s
+        rebuild-s
         (list (m 'with-continuation-mark) exp-key exp-val exp-body)))))
 
 (define (make-begin log-tag parsed-begin #:list-start-index list-start-index)
@@ -436,6 +446,7 @@
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(begin e ...+))
    (define expr-ctx (as-expression-context ctx))
+   (define rebuild-s (keep-as-needed ctx s))
    (define es (m 'e))
    (define last-i (sub1 (length es)))
    (define exp-es
@@ -452,9 +463,9 @@
      (log-expand ctx 'enter-list (cdr es)))
    (log-expand ctx 'exit-list (list-tail exp-es list-start-index))
    (if (expand-context-to-parsed? ctx)
-       (parsed-begin (keep-properties-only s) exp-es)
+       (parsed-begin rebuild-s exp-es)
        (rebuild
-        s disarmed-s
+        rebuild-s
         (cons (m 'begin) exp-es)))))
 
 (add-core-form!
@@ -547,7 +558,7 @@
               [implicit-omitted? id]
               [else
                (define-match m disarmed-s '(#%top . id))
-               (rebuild s disarmed-s (cons (m '#%top) id))]))]
+               (rebuild s (cons (m '#%top) id))]))]
         [else (if (expand-context-to-parsed? ctx)
                   (parsed-top-id id b)
                   s)])])])))
@@ -580,11 +591,12 @@
          (raise-syntax-error #f "cannot mutate module-required identifier" s id))
        (log-expand ctx 'next)
        (register-variable-referenced-if-local! binding)
+       (define rebuild-s (keep-as-needed ctx s))
        (define exp-rhs (expand (m 'rhs) (as-expression-context ctx)))
        (if (expand-context-to-parsed? ctx)
-           (parsed-set! (keep-properties-only s) (parsed-id id binding) exp-rhs)
+           (parsed-set! rebuild-s (parsed-id id binding) exp-rhs)
            (rebuild
-            s disarmed-s
+            rebuild-s
             (list (m 'set!)
                   (substitute-variable id t #:no-stops? (free-id-set-empty-or-just-module*? (expand-context-stops ctx)))
                   exp-rhs)))]
@@ -656,6 +668,7 @@
    (log-expand ctx 'prim-#%expression)
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(#%expression e))
+   (define rebuild-s (keep-as-needed ctx s #:for-track? #t))
    (define exp-e (expand (m 'e) (as-tail-context (as-expression-context ctx)
                                                  #:wrt ctx)))
    (if (expand-context-to-parsed? ctx)
@@ -663,11 +676,11 @@
        (case (and (not (expand-context-in-local-expand? ctx))
                   (expand-context-context ctx))
          [(expression)
-          (define result-s (syntax-track-origin exp-e s))
+          (define result-s (syntax-track-origin exp-e rebuild-s))
           (log-expand ctx 'tag result-s)
           result-s]
          [else (rebuild
-                s disarmed-s
+                rebuild-s
                 `(,(m '#%expression) ,exp-e))]))))
 
 ;; ----------------------------------------

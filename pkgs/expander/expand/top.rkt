@@ -28,7 +28,7 @@
    (if (expand-context-to-parsed? ctx)
        (parsed-define-values s ids syms exp-rhs)
        (rebuild
-        s disarmed-s
+        s
         `(,(m 'define-values) ,ids ,exp-rhs)))))
 
 (add-core-form!
@@ -45,7 +45,7 @@
    (if (expand-context-to-parsed? ctx)
        (parsed-define-syntaxes s ids syms exp-rhs)
        (rebuild
-        s disarmed-s
+        s
         `(,(m 'define-syntaxes) ,ids ,exp-rhs)))))
 
 (add-core-form!
