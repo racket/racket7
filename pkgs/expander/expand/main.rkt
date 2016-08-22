@@ -612,13 +612,14 @@
    [(expand-context-to-parsed? ctx) (keep-properties-only s)]
    [else
     (define d (and for-track? (syntax-e s)))
-    (datum->syntax (syntax-disarm s)
-                   (cond
-                    [(symbol? d) d]
-                    [(and (pair? d) (identifier? (car d))) (syntax-e (car d))]
-                    [else #f])
-                   s
-                   s)]))
+    (syntax-rearm (datum->syntax (syntax-disarm s)
+                                 (cond
+                                  [(symbol? d) d]
+                                  [(and (pair? d) (identifier? (car d))) (syntax-e (car d))]
+                                  [else #f])
+                                 s
+                                 s)
+                  s)]))
 
 ;; A helper for forms to reconstruct syntax while preserving source
 ;; locations, properties, and arming; if `track?` is #f, then don't keep
