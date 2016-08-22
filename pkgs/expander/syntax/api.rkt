@@ -139,15 +139,15 @@
   (check 'free-label-identifier=? identifier? b)
   (raw:free-identifier=? a b #f #f))
 
-(define (identifier-binding id [phase  (syntax-local-phase-level)])
+(define (identifier-binding id [phase  (syntax-local-phase-level)] [top-level-symbol? #f])
   (check 'identifier-binding identifier? id)
   (unless (phase? phase)
     (raise-argument-error 'identifier-binding phase?-string phase))
-  (raw:identifier-binding id phase))
+  (raw:identifier-binding id phase top-level-symbol?))
 
-(define (identifier-transformer-binding id)
+(define (identifier-transformer-binding id [phase  (syntax-local-phase-level)])
   (check 'identifier-transformer-binding identifier? id)
-  (raw:identifier-binding id (add1 (syntax-local-phase-level))))
+  (raw:identifier-binding id (and phase (add1 phase))))
 
 (define (identifier-template-binding id)
   (check 'identifier-template-binding identifier? id)

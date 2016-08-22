@@ -87,12 +87,14 @@
     (local-binding-key b)]
    [else (syntax-e id)]))
 
-(define (identifier-binding id phase)
+(define (identifier-binding id phase [top-level-symbol? #f])
   (define b (resolve+shift id phase))
   (cond
    [(module-binding? b)
     (if (top-level-module-path-index? (module-binding-module b))
-        #f ; => top level, indistinguishable from unbound in this legacy API
+        (if top-level-symbol?
+            (list (module-binding-nominal-sym b))
+            #f)
         (list (module-binding-module b)
               (module-binding-sym b)
               (module-binding-nominal-module b)
