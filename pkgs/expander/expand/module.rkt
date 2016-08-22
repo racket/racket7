@@ -32,7 +32,8 @@
          "cross-phase.rkt"
          "../syntax/debug.rkt"
          "parsed.rkt"
-         "expanded+parsed.rkt")
+         "expanded+parsed.rkt"
+         "append.rkt")
 
 (add-core-form!
  'module
@@ -653,7 +654,7 @@
        [else
         (log-expand partial-body-ctx 'module-lift-end-loop (cons exp-body (cdr bodys)))])
       (log-expand partial-body-ctx 'rename-one exp-body)
-      (append
+      (append/tail-on-null
        ;; Save any requires lifted during partial expansion
        (get-and-clear-require-lifts! (expand-context-require-lifts partial-body-ctx))
        ;; Ditto for expressions
