@@ -1701,5 +1701,59 @@
 (test 'val 'let-syntax-rename-transformer-property (test-key-property-as-val stx))
 
 ;; ----------------------------------------
+;; Check that a chain of rename transformers maintains properties correctly
+
+(module chains-properties-through-two-rename-transformer racket/base
+  (require (for-syntax racket/base))
+  
+  (define a 'a)
+  
+  (define-syntax b (make-rename-transformer (syntax-property #'a 'ids 'b)))
+  (define-syntax c (make-rename-transformer (syntax-property #'b 'ids 'c)))
+  
+  (define-syntax (inspect stx)
+    (syntax-case stx ()
+      [(_ e)
+       (let ([e (local-expand #'e 'expression null)])
+         #`(quote #,(syntax-property e 'ids)))]))
+  
+  (provide prop-val)
+  (define prop-val (inspect c)))
+
+(test '(b . c) dynamic-require ''chains-properties-through-two-rename-transformer 'prop-val)
+
+;; ----------------------------------------
+;; Check that the wrong properties are *not* added when a rename transformer is involed
+
+(module inner-and-outer-properties-around-rename-transformers racket/base
+  (require (for-syntax racket/base))
+
+  (define-syntax (some-define stx)
+    (syntax-case stx ()
+      [(_ x)
+       #'(define-syntax x
+           (make-rename-transformer
+            (syntax-property #'void 'prop 'inner)))]))
+
+  (some-define x)
+
+  (define-syntax (wrapper stx)
+    (syntax-case stx ()
+      [(_ e)
+       (local-expand
+        (syntax-property #'e 'prop 'outer)
+        'expression null)]))
+
+  (define-syntax (#%app stx)
+    (syntax-case stx ()
+      [(_ f)
+       #`(quote #,(syntax-property #'f 'prop))]))
+
+  (provide prop-val)
+  (define prop-val (wrapper (x))))
+
+(test 'inner dynamic-require ''inner-and-outer-properties-around-rename-transformers 'prop-val)
+
+;; ----------------------------------------
 
 (report-errs)
