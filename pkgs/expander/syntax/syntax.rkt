@@ -130,8 +130,8 @@
           (reach (syntax-scopes s))
           (reach (syntax-shifted-multi-scopes s))
           (for ([(k v) (in-immutable-hash (syntax-props s))]
-                #:when (preserved-property-value? (plain-property-value v)))
-            (reach v))))
+                #:when (preserved-property-value? v))
+            (reach (plain-property-value v)))))
 
 ;; Property to abstract over handling of propagation for
 ;; serialization; property value takes a syntax object and
