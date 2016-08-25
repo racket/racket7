@@ -440,12 +440,16 @@
         rebuild-s
         (list (m 'with-continuation-mark) exp-key exp-val exp-body)))))
 
-(define (make-begin log-tag parsed-begin #:list-start-index list-start-index)
+(define (make-begin log-tag parsed-begin
+                    #:list-start-index list-start-index
+                    #:last-is-tail? last-is-tail?)
  (lambda (s ctx)
    (log-expand ctx log-tag)
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(begin e ...+))
-   (define expr-ctx (as-expression-context ctx))
+   (define expr-ctx (if last-is-tail?
+                        (as-begin-expression-context ctx)
+                        (as-expression-context ctx)))
    (define rebuild-s (keep-as-needed ctx s))
    (define es (m 'e))
    (define last-i (sub1 (length es)))
@@ -455,7 +459,8 @@
        (when (= i list-start-index)
          (log-expand ctx 'enter-list (list-tail es i)))
        (log-expand ctx 'next)
-       (expand e (if (= i last-i)
+       (expand e (if (and last-is-tail?
+                          (= i last-i))
                      (as-tail-context expr-ctx #:wrt ctx)
                      expr-ctx))))
    (when (and (= 1 list-start-index)
@@ -470,7 +475,7 @@
 
 (add-core-form!
  'begin
- (let ([nonempty-begin (make-begin 'prim-begin0 parsed-begin #:list-start-index 0)])
+ (let ([nonempty-begin (make-begin 'prim-begin0 parsed-begin #:list-start-index 0 #:last-is-tail? #t)])
    (lambda (s ctx)
      ;; Empty `begin` allowed in 'top-level and 'module contexts,
      ;; which might get here via `local-expand`:
@@ -487,7 +492,7 @@
 
 (add-core-form!
  'begin0
- (make-begin 'prim-begin0 parsed-begin0 #:list-start-index 1))
+ (make-begin 'prim-begin0 parsed-begin0 #:list-start-index 1 #:last-is-tail? #f))
 
 (define (register-eventual-variable!? id ctx)
   (cond

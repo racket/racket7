@@ -19,6 +19,7 @@
          current-expand-observe
          
          as-expression-context
+         as-begin-expression-context
          as-tail-context
          as-named-context
          as-to-parsed-context)
@@ -153,6 +154,16 @@
                       [context 'expression]
                       [name #f]
                       [post-expansion-scope #:parent root-expand-context #f])]))
+
+;; Adjusts `ctx` to make it suitable for a non-tail position
+;; in an `begin` form, possibly in a 'top-level or 'module context
+;; (so don't force it to 'expression mode)
+(define (as-begin-expression-context ctx)
+  (cond
+   [(not (expand-context-name ctx))
+    ctx]
+   [else (struct-copy expand-context ctx
+                      [name #f])]))
 
 ;; Adjusts `ctx` (which should be an expression context) to make it
 ;; suitable for a subexpression in tail position
