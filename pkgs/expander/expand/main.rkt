@@ -259,7 +259,7 @@
      [else (expand exp-s re-ctx
                    #:alternate-id (and (rename-transformer? t)
                                        (syntax-track-origin (rename-transformer-target t)
-                                                            s
+                                                            id
                                                             id)))])]))
 
 ;; Handle the expansion of a variable to itself
