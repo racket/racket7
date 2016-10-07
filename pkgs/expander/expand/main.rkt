@@ -52,7 +52,8 @@
          rebuild
          attach-disappeared-transformer-bindings
          increment-binding-layer
-         accumulate-def-ctx-scopes)
+         accumulate-def-ctx-scopes
+         rename-transformer-target-in-context)
 
 ;; ----------------------------------------
 
@@ -215,7 +216,7 @@
     (dispatch-variable t s id ctx binding primitive?)]
    [else
     ;; Some other compile-time value:
-    (raise-syntax-error #f "illegal use of syntax" t)]))
+    (raise-syntax-error #f "illegal use of syntax" s)]))
 
 ;; Call a core-form expander (e.g., `lambda`)
 (define (dispatch-core-form t s ctx)
@@ -258,7 +259,7 @@
      [(expand-context-just-once? ctx) exp-s]
      [else (expand exp-s re-ctx
                    #:alternate-id (and (rename-transformer? t)
-                                       (syntax-track-origin (rename-transformer-target t)
+                                       (syntax-track-origin (rename-transformer-target-in-context t ctx)
                                                             id
                                                             id)))])]))
 
@@ -673,3 +674,10 @@
                                 [env (for/fold ([env (expand-context-env rhs-ctx)]) ([id (in-list ids)]
                                                                                      [key (in-list keys)])
                                        (env-extend env key (local-variable id)))]))))])))
+
+;; A rename transformer can have a `prop:rename-transformer` property
+;; as a function, and that fnuction might want to use
+;; `syntax-local-value`, etc.
+(define (rename-transformer-target-in-context t ctx)
+  (parameterize ([current-expand-context ctx])
+    (rename-transformer-target t)))

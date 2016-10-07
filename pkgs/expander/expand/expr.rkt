@@ -611,7 +611,7 @@
       [(set!-transformer? t)
        (cond
         [(not-in-this-expand-context? t ctx)
-         (expand (avoid-current-expand-context (substitute-set!-rename s disarmed-s (m 'set!) (m 'rhs) id from-rename?) t ctx)
+         (expand (avoid-current-expand-context (substitute-set!-rename s disarmed-s (m 'set!) (m 'rhs) id from-rename? ctx) t ctx)
                  ctx)]
         [else
          (define-values (exp-s re-ctx)
@@ -622,17 +622,17 @@
       [(rename-transformer? t)
        (cond
         [(not-in-this-expand-context? t ctx)
-         (expand (avoid-current-expand-context (substitute-set!-rename s disarmed-s (m 'set!) (m 'rhs) id from-rename? t) t ctx)
+         (expand (avoid-current-expand-context (substitute-set!-rename s disarmed-s (m 'set!) (m 'rhs) id from-rename? ctx t) t ctx)
                  ctx)]
-        [else (rename-loop (rename-transformer-target t) #t)])]
+        [else (rename-loop (rename-transformer-target-in-context t ctx) #t)])]
       [else
        (raise-syntax-error #f "cannot mutate syntax identifier" s id)]))))
 
-(define (substitute-set!-rename s disarmed-s set!-id id rhs-s from-rename? [t #f])
+(define (substitute-set!-rename s disarmed-s set!-id id rhs-s from-rename? ctx [t #f])
   (cond
    [(or t from-rename?)
     (define new-id (if t
-                       (rename-transformer-target t)
+                       (rename-transformer-target-in-context t ctx)
                        id))
     (syntax-rearm (datum->syntax disarmed-s (list set!-id new-id rhs-s) disarmed-s disarmed-s)
                   s)]
