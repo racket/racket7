@@ -114,7 +114,7 @@
                                                    (set! cross-phase-persistent? #t))
                                                  (when (eq? (syntax-e kw) '#:empty-namespace)
                                                    (set! empty-result-for-module->namespace? #t)
-                                                   (set-box! encoded-root-expand-ctx-box #t)))
+                                                   (set-box! encoded-root-expand-ctx-box #f)))
                                                #f]
                                               [else #f]))
                     #:get-module-linklet-info (lambda (mod-name phase)

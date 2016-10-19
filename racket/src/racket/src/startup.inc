@@ -34611,7 +34611,7 @@
 " #t)"
 "(set-box!"
 " encoded-root-expand-ctx-box_30"
-" #t)))"
+" #f)))"
 "(void))))"
 "(void)))))"
 "(values"
