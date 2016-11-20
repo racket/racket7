@@ -572,7 +572,7 @@ the binding creates a binding alias that effectively routes around the
 @history[#:added "6.3"]}
 
 
-@defproc[(syntax-local-value [id-stx syntax?]
+@defproc[(syntax-local-value [id-stx identifier?]
                              [failure-thunk (or/c (-> any) #f)
                                             #f]
                              [intdef-ctx (or/c internal-definition-context?
@@ -580,12 +580,12 @@ the binding creates a binding alias that effectively routes around the
                                          #f])
          any]{
 
-Returns the @tech{transformer} binding value of @racket[id-stx] in
-either the context associated with @racket[intdef-ctx] (if not
-@racket[#f]) or the context of the expression being expanded (if
-@racket[intdef-ctx] is @racket[#f]).  If @racket[intdef-ctx] is
-provided, it must be an extension of the context of the expression
-being expanded.
+Returns the @tech{transformer} binding value of the identifier
+@racket[id-stx] in either the context associated with
+@racket[intdef-ctx] (if not @racket[#f]) or the context of the
+expression being expanded (if @racket[intdef-ctx] is @racket[#f]). If
+@racket[intdef-ctx] is provided, it must be an extension of the
+context of the expression being expanded.
 
 If @racket[id-stx] is bound to a @tech{rename transformer} created
 with @racket[make-rename-transformer], @racket[syntax-local-value]
@@ -1110,7 +1110,7 @@ import sources.
 See also @racket[define-require-syntax], which supports macro-style
 @racket[require] transformers.
 
-@defproc[(expand-import [stx syntax?])
+@defproc[(expand-import [require-spec syntax?])
          (values (listof import?)
                  (listof import-source?))]{
 
@@ -1310,7 +1310,7 @@ See also @racket[define-provide-syntax], which supports macro-style
 @tech{provide transformers}.
 
 
-@defproc[(expand-export [stx syntax?] [modes (listof (or/c exact-integer? #f))])
+@defproc[(expand-export [provide-spec syntax?] [modes (listof (or/c exact-integer? #f))])
          (listof export?)]{
 
 Expands the given @racket[_provide-spec] to a list of exports. The
@@ -1321,7 +1321,7 @@ form, unless the @racket[modes] list specifies otherwise. Normally,
 @racket[modes] is either empty or contains a single element.}
 
 
-@defproc[(pre-expand-export [stx syntax?] [modes (listof (or/c exact-integer? #f))])
+@defproc[(pre-expand-export [provide-spec syntax?] [modes (listof (or/c exact-integer? #f))])
          syntax?]{
 
 Expands the given @racket[_provide-spec] at the level of @tech{provide
@@ -1341,7 +1341,9 @@ pre-transformers}. The @racket[modes] argument is the same as for
 Creates a @tech{provide transformer} (i.e., a structure with the
 @racket[prop:provide-transformer] property) using the given procedure
 as the transformer. If a @racket[pre-proc] is provided, then the result is also a
-@tech{provide pre-transformer}.}
+@tech{provide pre-transformer}.
+Often used in combination with @racket[expand-export] and/or
+@racket[pre-expand-export].}
 
 
 @defproc[(make-provide-pre-transformer [pre-proc (syntax? (listof (or/c exact-integer? #f))
@@ -1349,7 +1351,33 @@ as the transformer. If a @racket[pre-proc] is provided, then the result is also 
          provide-pre-transformer?]{
 
 Like @racket[make-provide-transformer], but for a value that is a
-@tech{provide pre-transformer}, only.}
+@tech{provide pre-transformer}, only.
+Often used in combination with @racket[pre-expand-export].
+
+@examples[
+#:eval stx-eval
+(module m racket
+  (require
+    (for-syntax racket/provide-transform syntax/parse syntax/stx))
+
+  (define-syntax wrapped-out
+    (make-provide-pre-transformer
+     (lambda (stx modes)
+       (syntax-parse stx
+         [(_ f ...)
+          #:with (wrapped-f ...)
+                 (stx-map
+                  syntax-local-lift-expression
+                  #'((lambda args
+                       (printf "applying ~a, args: ~a\n" 'f args)
+                       (apply f args)) ...))
+          (pre-expand-export
+           #'(rename-out [wrapped-f f] ...) modes)]))))
+
+  (provide (wrapped-out + -)))
+(require 'm)
+(- 1 (+ 2 3))
+]}
 
 
 @defthing[prop:provide-transformer struct-type-property?]{

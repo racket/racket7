@@ -288,6 +288,18 @@
      1
      -2
      -3))
+
+  (test/pos-blame
+   '->i30
+   '((contract (->i () (values))
+               (λ () 1)
+               'pos 'neg)))
+
+  (test/spec-passed
+   '->i31
+   '((contract (->i () (values))
+               values
+               'pos 'neg)))
   
   (test/spec-passed
    '->i-any1

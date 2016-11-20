@@ -29,7 +29,7 @@
                                             #:first-arg [first-arg #f]
                                             #:second-arg [second-arg #f])
 				(unless (memq name '(eq? eqv? equal? 
-                                                         not null? pair? list? k:list-pair?
+                                                         not k:true-object? null? pair? list? k:list-pair?
 							 real? number? boolean?
 							 procedure? symbol? keyword?
 							 string? bytes?
@@ -319,6 +319,10 @@
     (un #t 'not #f)
     (un #f 'not #t)
     (un #f 'not 10)
+
+    (un #f 'k:true-object? #f)
+    (un #t 'k:true-object? #t)
+    (un #f 'k:true-object? 10)
 
     (bin #t '< 100 200)
     (bin #f '< 200 100)

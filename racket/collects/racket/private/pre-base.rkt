@@ -231,7 +231,7 @@
                               chaperone-procedure* impersonate-procedure*
                               assq assv assoc
                               prop:incomplete-arity prop:method-arity-error
-                              list-pair?
+                              list-pair? interned-char? true-object?
                               random)
              (all-from "reqprov.rkt")
              (all-from-except "for.rkt"

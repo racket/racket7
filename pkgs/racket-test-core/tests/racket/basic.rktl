@@ -5,7 +5,7 @@
 
 (require racket/flonum
          racket/function
-         (only-in '#%kernel (list-pair? k:list-pair?)))
+         (prefix-in k: '#%kernel))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -56,6 +56,15 @@
 (test #f not (list))
 (test #f not 'nil)
 (arity-test not 1 1)
+
+(test #t k:true-object? #t)
+(test #f k:true-object? 3)
+(test #f k:true-object? (list 3))
+(test #f k:true-object? #f)
+(test #f k:true-object? '())
+(test #f k:true-object? (list))
+(test #f k:true-object? 'nil)
+(arity-test k:true-object? 1 1)
 
 (test #t boolean? #f)
 (test #t boolean? #t)
@@ -447,7 +456,21 @@
   (test #t char? #\()
   (test #t char? #\ )
   (test #t char? '#\newline)
+  (test #t char? #\u100)
+  (test #f char? 7)
+  (test #f char? #t)
+  (test #f char? 'x)
   (arity-test char? 1 1)
+  (test #t k:interned-char? #\a)
+  (test #t k:interned-char? #\()
+  (test #t k:interned-char? #\ )
+  (test #t k:interned-char? '#\newline)
+  (test #f k:interned-char? #\u100)
+  (test #f k:interned-char? 7)
+  (test #f k:interned-char? #t)
+  (test #f k:interned-char? #t)
+  (test #f k:interned-char? 'x)
+  (arity-test k:interned-char? 1 1)
 
   (test #f char=? #\A #\B)
   (test #f char=? #\A #\A #\B)

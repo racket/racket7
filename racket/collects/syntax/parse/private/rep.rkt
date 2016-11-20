@@ -397,8 +397,7 @@
   (check-pattern
    (cond [(pair? sides)
           (define actions-pattern
-            (create-post-pattern
-             (create-action:and (ord-and-patterns sides (gensym*)))))
+            (create-action:and (ord-and-patterns sides (gensym*))))
           (define and-patterns
             (ord-and-patterns (list pattern (pat:action actions-pattern (pat:any)))
                               (gensym*)))
@@ -422,6 +421,13 @@
 ;; parse-head-pattern : stx DeclEnv -> HeadPattern
 (define (parse-head-pattern stx decls)
   (parse-*-pattern stx decls #t #f))
+
+;; parse-action-pattern : Stx DeclEnv -> ActionPattern
+(define (parse-action-pattern stx decls)
+  (define p (parse-*-pattern stx decls #f #t))
+  (unless (action-pattern? p)
+    (wrong-syntax stx "expected action pattern"))
+  p)
 
 (define ((make-not-shadowed? decls) id)
   ;; Returns #f if id is in literals/datum-literals list.
@@ -459,26 +465,14 @@
      (and (identifier? #'id)
           (not-shadowed? #'id)
           (pattern-expander? (syntax-local-value #'id (λ () #f))))
-     (let* ([proc (pattern-expander-proc (syntax-local-value #'id))]
-            [introducer (make-syntax-introducer)]
-            [mstx (introducer (syntax-local-introduce stx))]
-            [mresult (parameterize ([current-syntax-parse-pattern-introducer introducer])
-                       (proc mstx))]
-            [result (syntax-local-introduce (introducer mresult))])
-       (disappeared! #'id)
-       (recur result))]
+     (begin (disappeared! #'id)
+            (recur (expand-pattern (syntax-local-value #'id) stx)))]
     [(id . rst)
      (and (identifier? #'id)
           (not-shadowed? #'id)
           (pattern-expander? (syntax-local-value #'id (λ () #f))))
-     (let* ([proc (pattern-expander-proc (syntax-local-value #'id))]
-            [introducer (make-syntax-introducer)]
-            [mstx (introducer (syntax-local-introduce stx))]
-            [mresult (parameterize ([current-syntax-parse-pattern-introducer introducer])
-                       (proc mstx))]
-            [result (syntax-local-introduce (introducer mresult))])
-       (disappeared! #'id)
-       (recur result))]
+     (begin (disappeared! #'id)
+            (recur (expand-pattern (syntax-local-value #'id) stx)))]
     [wildcard
      (and (wildcard? #'wildcard)
           (not-shadowed? #'wildcard))
@@ -608,6 +602,16 @@
        (let ([lp (parse-single-pattern (datum->syntax #f contents #'s) decls)])
          (pat:pstruct key lp)))])))
 
+;; expand-pattern : pattern-expander Syntax -> Syntax
+(define (expand-pattern pe stx)
+  (let* ([proc (pattern-expander-proc pe)]
+         [introducer (make-syntax-introducer)]
+         [mstx (introducer (syntax-local-introduce stx))]
+         [mresult (parameterize ([current-syntax-parse-pattern-introducer introducer])
+                    (proc mstx))]
+         [result (syntax-local-introduce (introducer mresult))])
+    result))
+
 ;; parse-ellipsis-head-pattern : stx DeclEnv -> (listof EllipsisHeadPattern)
 (define (parse-ellipsis-head-pattern stx decls)
   (for/list ([ehpat+hstx (in-list (parse*-ellipsis-head-pattern stx decls #t))])
@@ -617,8 +621,22 @@
 ;;                             -> (listof (list EllipsisHeadPattern stx/eh-alternative))
 (define (parse*-ellipsis-head-pattern stx decls allow-or?
                                       #:context [ctx (current-syntax-context)])
+  (define (recur stx) (parse*-ellipsis-head-pattern stx decls allow-or? #:context ctx))
+  (define not-shadowed? (make-not-shadowed? decls))
   (syntax-case* stx (~eh-var ~or ~between ~optional ~once)
                 (make-not-shadowed-id=? decls)
+    [id
+     (and (identifier? #'id)
+          (not-shadowed? #'id)
+          (pattern-expander? (syntax-local-value #'id (lambda () #f))))
+     (begin (disappeared! #'id)
+            (recur (expand-pattern (syntax-local-value #'id) stx)))]
+    [(id . rst)
+     (and (identifier? #'id)
+          (not-shadowed? #'id)
+          (pattern-expander? (syntax-local-value #'id (lambda () #f))))
+     (begin (disappeared! #'id)
+            (recur (expand-pattern (syntax-local-value #'id) stx)))]
     [(~eh-var name eh-alt-set-id)
      (disappeared! stx)
      (let ()
@@ -1201,23 +1219,29 @@
     [(cons (list '#:role role-stx _) rest)
      (wrong-syntax role-stx "#:role can only appear immediately after #:declare clause")]
     [(cons (list '#:fail-when fw-stx when-expr msg-expr) rest)
-     (cons (action:fail when-expr msg-expr)
+     (cons (create-post-pattern (action:fail when-expr msg-expr))
            (parse-pattern-sides rest decls))]
     [(cons (list '#:fail-unless fu-stx unless-expr msg-expr) rest)
-     (cons (action:fail #`(not #,unless-expr) msg-expr)
+     (cons (create-post-pattern (action:fail #`(not #,unless-expr) msg-expr))
            (parse-pattern-sides rest decls))]
     [(cons (list '#:when w-stx unless-expr) rest)
-     (cons (action:fail #`(not #,unless-expr) #'#f)
+     (cons (create-post-pattern (action:fail #`(not #,unless-expr) #'#f))
            (parse-pattern-sides rest decls))]
     [(cons (list '#:with with-stx pattern expr) rest)
      (let-values ([(decls2 rest) (grab-decls rest decls)])
        (let-values ([(decls2a defs) (decls-create-defs decls2)])
-         (cons (create-action:and
-                (list (action:do defs)
-                      (action:parse (parse-whole-pattern pattern decls2a #:kind 'with) expr)))
-               (parse-pattern-sides rest decls))))]
+         (list* (action:do defs)
+                (create-post-pattern
+                 (action:parse (parse-whole-pattern pattern decls2a #:kind 'with) expr))
+                (parse-pattern-sides rest decls))))]
     [(cons (list '#:attr attr-stx a expr) rest)
-     (cons (action:bind a expr)
+     (cons (action:bind a expr) ;; no POST wrapper, cannot fail
+           (parse-pattern-sides rest decls))]
+    [(cons (list '#:post post-stx pattern) rest)
+     (cons (create-post-pattern (parse-action-pattern pattern decls))
+           (parse-pattern-sides rest decls))]
+    [(cons (list '#:and and-stx pattern) rest)
+     (cons (parse-action-pattern pattern decls) ;; no POST wrapper
            (parse-pattern-sides rest decls))]
     [(cons (list '#:do do-stx stmts) rest)
      (cons (action:do stmts)
@@ -1584,6 +1608,8 @@
         (list '#:when check-expression)
         (list '#:with check-expression check-expression)
         (list '#:attr check-attr-arity check-expression)
+        (list '#:and check-expression)
+        (list '#:post check-expression)
         (list '#:do check-stmt-list)))
 
 ;; fail-directive-table

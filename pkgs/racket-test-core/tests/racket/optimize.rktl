@@ -159,18 +159,45 @@
            '(lambda (x) (if (not (not (not x))) 1 2)))
 (test-comp '(lambda (x) (not x))
            '(lambda (x) (if x #f #t)))
-(test-comp '(lambda (x) (not x))
-           '(lambda (x) (eq? x #f)))
-(test-comp '(lambda (x) (not x))
-           '(lambda (x) (eq? #f x)))
-           
-(test-comp '(lambda (x) (null? x))
-           '(lambda (x) (eq? x '())))
-(test-comp '(lambda (x) (null? x))
-           '(lambda (x) (eq? '() x)))
 
-(test-comp '(lambda (x) (eq? x 7))
-           '(lambda (x) (equal? x 7)))
+(let ([test-equal-reduction
+       (lambda (val)
+        (test-comp `(lambda (x) (equal? x ,val))
+                   `(lambda (x) (eq? x ,val)))
+        (test-comp `(lambda (x) (equal? ,val x))
+                   `(lambda (x) (eq? ,val x)))
+        (test-comp `(lambda (x) (eqv? x ,val))
+                   `(lambda (x) (eq? x ,val)))
+        (test-comp `(lambda (x) (eqv? ,val x))
+                   `(lambda (x) (eq? ,val x))))]
+       [test-equal-reduction/only-eqv
+        (lambda (val)
+         (test-comp `(lambda (x) (equal? x ,val))
+                    `(lambda (x) (eqv? x ,val)))
+         (test-comp `(lambda (x) (equal? ,val x))
+                    `(lambda (x) (eqv? ,val x)))
+         (test-comp `(lambda (x) (equal? x ,val))
+                    `(lambda (x) (eq? x ,val))
+                    #f)
+         (test-comp `(lambda (x) (equal? ,val x))
+                    `(lambda (x) (eq? ,val x))
+                    #f)
+         (test-comp `(lambda (x) (eqv? x ,val))
+                    `(lambda (x) (eq? x ,val))
+                    #f)
+         (test-comp `(lambda (x) (eqv? ,val x))
+                   `(lambda (x) (eq? ,val x))
+                   #f))])
+  (test-equal-reduction 7)
+  (test-equal-reduction/only-eqv 7.0)
+  (test-equal-reduction/only-eqv '(expt 2 100))
+  (test-equal-reduction #\a)
+  (test-equal-reduction/only-eqv #\u100)
+  (test-equal-reduction ''a)
+  (test-equal-reduction ''#:a)
+  (test-equal-reduction '(exact-positive-integer? (random 2))))
+  
+  
 (test-comp '(lambda (x) (eq? 7 x))
            '(lambda (x) (equal? 7 x)))
 (test-comp '(lambda (x) (eq? x 7))
@@ -231,7 +258,9 @@
          (test-comp `(lambda (x) (if (,e? x (list 0)) (pair? x) 0))
                     `(lambda (x) (if (,e? x (list 0)) #t 0)))
          (test-comp `(lambda (x y) (car y) (if (,e? x y) (pair? x) 0))
-                    `(lambda (x y) (car y) (if (,e? x y) #t 0))))])
+                    `(lambda (x y) (car y) (if (,e? x y) #t 0)))
+         (test-comp `(lambda (x y) (boolean? (,e? x y)))
+                    `(lambda (x y) (,e? x y) #t)))])
   (test-equal? 'eq?)
   (test-equal? 'eqv?)
   (test-equal? 'equal?))
@@ -519,7 +548,7 @@
 (test-arg-types '(vector-length vector?) 'fixnum? 'may-omit)
 (test-arg-types '(vector->values vector?) #f)
 (test-arg-types '(vector-ref vector? fixnum?) #f)
-(test-arg-types '(vector-set! vector? fixnum? #f) #f)
+(test-arg-types '(vector-set! vector? fixnum? #f) 'void?)
 (test-arg-types '(vector->list vector?) 'list?)
 (test-arg-types '(list->vector list?) 'vector?)
 (test-arg-types '(struct->vector #f) 'vector?)
@@ -546,10 +575,16 @@
            '(lambda (w z) #t)
            #f)
 
+;Test types inference for box?
+(test-arg-types '(box #f) 'box?)
+(test-arg-types '(box-immutable #f) 'box?)
+(test-arg-types '(unbox box?) #f)
+(test-arg-types '(set-box! box? #f) 'void?)
+
 ;Test types inference for string?
 (test-arg-types '(string-length string?) 'fixnum? 'may-omit)
-(test-arg-types '(string-ref string? fixnum?) #f)
-(test-arg-types '(string-set! string? fixnum? #f) #f)
+(test-arg-types '(string-ref string? fixnum?) 'char?)
+(test-arg-types '(string-set! string? fixnum? char?) 'void?)
 (test-arg-types '(string->immutable-string string?) 'string? 'may-omit)
 (test-arg-types '(string-append) string? 'may-omit)
 (test-arg-types '(string-append string?) 'string? 'may-omit)
@@ -559,8 +594,8 @@
 
 ;Test types inference for bytes?
 (test-arg-types '(bytes-length bytes?) 'fixnum? 'may-omit)
-(test-arg-types '(bytes-ref bytes? fixnum?) #f)
-(test-arg-types '(bytes-set! bytes? fixnum? #f) #f)
+(test-arg-types '(bytes-ref bytes? fixnum?) 'fixnum?)
+(test-arg-types '(bytes-set! bytes? fixnum? fixnum?) 'void?)
 (test-arg-types '(bytes->immutable-bytes bytes?) 'bytes? 'may-omit)
 (test-arg-types '(bytes-append) bytes? 'may-omit)
 (test-arg-types '(bytes-append bytes?) 'bytes? 'may-omit)
@@ -580,6 +615,14 @@
 (test-arg-types '(append list? list?) list? 'may-omit 'dont-infer)
 (test-arg-types '(append list? list? list?) list? 'may-omit 'dont-infer)
 (test-arg-types '(append list? list? list? list?) list? 'may-omit 'dont-infer)
+
+;Test types inference for symbol? and keyword?
+(test-arg-types '(symbol->string symbol?) 'string? 'may-omit)
+(test-arg-types '(string->symbol string?) 'symbol? 'may-omit)
+(test-arg-types '(keyword->string keyword?) 'string? 'may-omit)
+(test-arg-types '(string->keyword string?) 'keyword? 'may-omit)
+(test-arg-types '(gensym) 'symbol?)
+(test-arg-types '(gensym #f) 'symbol?)
 
 ;Test the map primitive and the map version defined in private/map.rkt
 ;The optimizer is not capable of figuring out that the result of map is a list?
@@ -1132,6 +1175,18 @@
            '(lambda (x) (let ([n (if (zero? (random 2)) 1 -1)])
                           (list n n #f))))
 
+; Test reductions in expressions that are similar to the expansion of `or`
+(test-comp '(lambda (z)
+              (when (boolean? z)
+                (if z z 0)))
+           '(lambda (z)
+              (when (boolean? z)
+                (if z #t 0))))
+(test-comp '(lambda (z)
+              (let ([r (boolean? z)])
+                (if r r 0)))
+           '(lambda (z)
+              (if (boolean? z) #t 0)))
 (test-comp '(lambda (x) (if (let ([r (something)])
                               (if r r (something-else)))
                             (a1)
@@ -1164,6 +1219,9 @@
                             (a1)
                             (a2))))
 
+(test-comp '(lambda (x) (if (pair? x) #t #f))
+           '(lambda (x) (pair? x)))
+
 (test-comp '(lambda (x) (let ([r (something)])
                           (if r #t (something-else))))
            '(lambda (x) (if (something) #t (something-else))))
@@ -1171,7 +1229,13 @@
 (let ([test-if-if-reduction
        (lambda (dup)
          (test-comp `(lambda (x y z) (if (if x y #f) z ,dup))
-                    `(lambda (x y z) (if x (if y z ,dup) ,dup))))])
+                    `(lambda (x y z) (if x (if y z ,dup) ,dup)))
+         (test-comp `(lambda (x y z) (if (if x #f y) z ,dup))
+                    `(lambda (x y z) (if x ,dup (if y z ,dup))))
+         (test-comp `(lambda (x y z) (if (if x y #t) ,dup z))
+                    `(lambda (x y z) (if x (if y ,dup z) ,dup)))
+         (test-comp `(lambda (x y z) (if (if x #t y) ,dup z))
+                    `(lambda (x y z) (if x ,dup (if y ,dup z)))))])
   (test-if-if-reduction 1)
   (test-if-if-reduction ''x)
   (test-if-if-reduction "x")
@@ -1184,11 +1248,19 @@
 (let ([test-pred-implies-val
        (lambda (pred? val)
          (test-comp `(lambda (x) (if (,pred? x) ,val 0))
-                    `(lambda (x) (if (,pred? x) x 0))))])
+                    `(lambda (x) (if (,pred? x) x 0)))
+         (test-comp `(lambda (x) (eq? x ,val))
+                    `(lambda (x) (,pred? x)))
+         (test-comp `(lambda (x) (eq? ,val x))
+                    `(lambda (x) (,pred? x))))])
   (test-pred-implies-val 'null? 'null)
   (test-pred-implies-val 'void? '(void))
   (test-pred-implies-val 'eof-object? 'eof)
+  (test-pred-implies-val 'k:true-object? '#t)  
   (test-pred-implies-val 'not '#f))
+(test-comp '(lambda (f) (eq? (f) (begin (newline) null)))
+           '(lambda (x) (begin (newline) null) (null? (f)))
+           #f)
 (test-comp '(lambda (x) (if (null? x) 1 0) null)
            '(lambda (x) (if (null? x) 1 0) x)
            #f)
@@ -2120,7 +2192,10 @@
                        (let ([x ',pred-name])
                          (let ([y (,pred-name z)])
                            x)))
-                    `(lambda (z) ',pred-name)))])
+                    `(lambda (z) ',pred-name))
+         (test-comp `(lambda (z)
+                       (boolean? (,pred-name z)))
+                    `(lambda (z) (,pred-name z) #t)))])
   (test-pred 'pair?)
   (test-pred 'mpair?)
   (test-pred 'list?)
@@ -2147,13 +2222,15 @@
   (test-pred 'bytes?)
   (test-pred 'path?)
   (test-pred 'char?)
+  (test-pred 'k:interned-char?)
   (test-pred 'boolean?)
   (test-pred 'chaperone?)
   (test-pred 'impersonator?)
   (test-pred 'procedure?)
   (test-pred 'eof-object?)
   (test-pred 'immutable?)
-  (test-pred 'not))
+  (test-pred 'not)
+  (test-pred 'k:true-object?))
 
 (let ([test-implies
        (lambda (pred1 pred2 [val '=>])
@@ -2194,6 +2271,9 @@
   (test-implies 'k:list-pair? 'pair?)
   (test-implies 'k:list-pair? 'list?)
   (test-implies 'list? 'pair? '?)
+  (test-implies 'k:interned-char? 'char?)
+  (test-implies 'not 'boolean?)
+  (test-implies 'k:true-object? 'boolean?)
 )
 
 (test-comp '(lambda (z)
@@ -2228,7 +2308,23 @@
               (when (and (list? z)
                          (not (k:list-pair? z)))
                 #t)))
-                      
+(test-comp '(lambda (z)
+              (when (and (boolean? z)
+                         (not (k:true-object? z)))
+                (not z)))
+           '(lambda (z)
+              (when (and (boolean? z)
+                         (not (k:true-object? z)))
+                #t)))
+(test-comp '(lambda (z)
+              (when (and (boolean? z)
+                         (not (not z)))
+                (k:true-object? z)))
+           '(lambda (z)
+              (when (and (boolean? z)
+                         (not (not z)))
+                #t)))
+
 
 (let ([test-reduce
        (lambda (pred-name expr [val #t])
@@ -2478,6 +2574,20 @@
               (let ([y (bitwise-and x 2)])
                 #t))
            #f)
+
+;; Make sure that `bitwise-and` is known to return a fixnum for non-negative
+;; fixnum arguments but not for a negative one
+
+(test-comp '(lambda (x)
+             (bitwise-ior (bitwise-and x 7) 1))
+           '(lambda (x)
+             (unsafe-fxior (bitwise-and x 7) 1)))
+(test-comp '(lambda (x)
+             (bitwise-ior (bitwise-and x -7) 1))
+           '(lambda (x)
+             (unsafe-fxior (bitwise-and x -7) 1))
+           #f)
+
 
 (test-comp `(lambda (x)
               (thread (lambda () (set! x 5)))
@@ -3770,6 +3880,22 @@
               (define f 5)
               (error 'error)
               (set! f 0))
+           #f)
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Test that the `if` is not confused by the
+;; predicates that recognize #f.
+
+(test-comp '(lambda (x) (when (boolean? x)
+                          (if x 1 2)))
+           '(lambda (x) (when (boolean? x)
+                          1))
+           #f)
+
+(test-comp '(lambda (x) (when (not x)
+                          (if x 1 2)))
+           '(lambda (x) (when (not x)
+                          1))
            #f)
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -5340,6 +5466,56 @@
     (define ((proc))
       ((proc)))
     (void proc proc)))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure validation doesn't fail for importing a setter of a
+;; structure type that has auto fields:
+
+(module provides-a-mutator-for-a-struct-with-an-auto-field racket/base
+  (provide foo set-foo-y!)
+  (struct foo (x [y #:mutable] [z #:auto])))
+
+(let ([e `(module uses-mutator-with-an-auto-field racket/base
+           (require 'provides-a-mutator-for-a-struct-with-an-auto-field)
+           (provide f)
+           (define (f x)
+             (and x
+                  (set-foo-y! x 1))))]
+      [o (open-output-bytes)])
+  (write (compile e) o)
+  (parameterize ([read-accept-compiled #t])
+    (eval (read (open-input-bytes (get-output-bytes o)))))
+  ((dynamic-require ''uses-mutator-with-an-auto-field 'f) #f))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure that the optimizer doesn't discard a known error on the
+;; right-hand side of a `letrec`
+
+(err/rt-test
+ (letrec-values ([() (list (3) the-val)]
+                 [(the-val) 42])
+                777)
+ exn:fail:contract?)
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; The `let` and `with-continuation-mark` wrappers for `b`
+;; delay the optimizer's detection of the right-hand side as
+;; a closure enough that the resolve pass gets a `letrec`
+;; that is being reinterpreted as a `let*`. But make sure 
+;; that the location of `a` is allocated before the closure
+;; for `b`.
+
+(test (void)
+      'call
+      (let ([f (letrec ([a 0]
+                        [b (let ([t 0])
+                             (with-continuation-mark
+                                 'x
+                               'y
+                               (lambda () (set! a 1))))])
+                 (list b b))])
+        (set! f f)
+        ((car f))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

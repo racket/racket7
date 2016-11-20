@@ -126,18 +126,18 @@ and how they can be used to implement contracts.
 @section[#:tag "data-structure-contracts"]{Data-structure Contracts}
 @declare-exporting-ctc[racket/contract/base]
 
-@defproc[(flat-contract-with-reason [get-reason (-> any/c (or/c boolean? (-> blame? any)))])
+@defproc[(flat-contract-with-explanation [get-explanation (-> any/c (or/c boolean? (-> blame? any)))])
          flat-contract?]{
   Provides a way to use flat contracts that, when a contract fails,
   provide more information about the failure.
 
-  If @racket[get-reason] returns a boolean, then that boolean value is
+  If @racket[get-explanation] returns a boolean, then that boolean value is
   treated as the predicate in a @tech{flat contract}. If it returns
   a procedure, then it is treated similarly to returning @racket[#f],
   except the result procedure is called to actually signal the contract
   violation. 
 
- @racketblock[(flat-contract-with-reason
+ @racketblock[(flat-contract-with-explanation
                (λ (val)
                  (cond
                    [(even? val) #t]
@@ -2098,7 +2098,7 @@ accepted by the third argument to @racket[datum->syntax].
 These functions build simple higher-order contracts, @tech{chaperone contracts},
 and @tech{flat contracts}, respectively.  They both take the same set of three
 optional arguments: a name, a first-order predicate, and a blame-tracking projection.
-For @racket[make-flat-contract], see also @racket[flat-contract-with-reason].
+For @racket[make-flat-contract], see also @racket[flat-contract-with-explanation].
 
 The @racket[name] argument is any value to be rendered using @racket[display] to
 describe the contract when a violation occurs.  The default name for simple
@@ -3036,10 +3036,11 @@ Produces the name used to describe the contract in error messages.
 Makes a contract that accepts no values, and reports the
 name @racket[sexp-name] when signaling a contract violation.}
 
-@defform*[[(recursive-contract contract-expr)
-           (recursive-contract contract-expr #:list-contract?)
-           (recursive-contract contract-expr type)
-           (recursive-contract contract-expr type #:list-contract?)]]{
+@defform*[[(recursive-contract contract-expr recursive-contract-option ...)
+           (recursive-contract contract-expr type recursive-contract-option ...)]
+          #:grammar ([recursive-contract-option
+                      #:list-contract?
+                      #:extra-delay])]{
 
 Delays the evaluation of its argument until the contract is checked,
 making recursive contracts possible.  If @racket[type] is given, it
@@ -3047,11 +3048,19 @@ describes the expected type of contract and must be one of the keywords
 @racket[#:impersonator], @racket[#:chaperone], or @racket[#:flat].  If
 @racket[type] is not given, an impersonator contract is created.
 
-If @racket[#:list-contract?] is returned, then the result is a
-@racket[list-contract?] and the @racket[contract-expr] must evaluate
-to a @racket[list-contract?].
+If the @racket[recursive-contract-option]
+@racket[#:list-contract?] is given, then the result is a
+@racket[list-contract?] and the @racket[contract-expr] must
+evaluate to a @racket[list-contract?].
 
-@history[#:changed "6.0.1.13" @list{Added the @racket[#:list-contract?] argument.}]
+If the @racket[recursive-contract-option] @racket[#:extra-delay] is given,
+then the @racket[contract-expr] expression is evaluated only when the first
+value to be checked against the contract is supplied to the contract.
+Without it, the @racket[contract-expr] is evaluated earlier. This option
+is supported only when @racket[type] is @racket[#:flat].
+
+ @history[#:changed "6.0.1.13" @list{Added the @racket[#:list-contract?] option.}
+          #:changed "6.7.0.3" @list{Added the @racket[#:extra-delay] option.}]
 }
 
 

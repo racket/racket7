@@ -281,12 +281,16 @@ regcomp(char *expstr, rxpos exp, int explen, int pcre, Scheme_Object *handler)
       longest = 0;
       longest_is_ci = 0;
       len = 0;
-      for (; scan != 0; scan = regnext(scan)) {
+      for (; scan != 0; ) {
         int mscan = scan;
         while (1) {
           int mop;
           mop = rOP(mscan);
-          if (((mop == EXACTLY) || (mop == EXACTLY_CI))
+          if ((mop == LOOKF) || (mop == LOOKBF)) {
+            /* skip over part that we don't want to match */
+            mscan = mscan + rOPLEN(OPERAND(mscan));
+            mscan = NEXT_OP(mscan);
+          } else if (((mop == EXACTLY) || (mop == EXACTLY_CI))
               && rOPLEN(OPERAND(mscan)) >= len) {
             /* Skip regmust if it contains a null character: */
             rxpos ls = OPSTR(OPERAND(mscan));
@@ -321,6 +325,13 @@ regcomp(char *expstr, rxpos exp, int explen, int pcre, Scheme_Object *handler)
             break;
         }
         prev_op = rOP(scan);
+        if ((prev_op == LOOKF) || (prev_op == LOOKBF)) {
+          /* skip over part that we don't want to match */
+          scan = scan + rOPLEN(OPERAND(scan));
+          scan = NEXT_OP(scan);
+        } else {
+          scan = regnext(scan);
+        }
       }
       if (longest) {
 	r->regmust = longest;
@@ -2437,7 +2448,8 @@ static void stack_room(Regwork *rw, int amt)
     sz = rw->rewind_stack_size * 2;
     if (!sz) sz = MATCH_STACK_SIZE;
     p = (rxpos *)scheme_malloc_atomic(sizeof(rxpos)*sz);
-    memcpy(p, rw->rewind_stack, rw->rewind_stack_size * sizeof(rxpos));
+    if (rw->rewind_stack_size)
+      memcpy(p, rw->rewind_stack, rw->rewind_stack_size * sizeof(rxpos));
     rw->rewind_stack = p;
     rw->rewind_stack_size = sz;
   }
@@ -2953,7 +2965,8 @@ static void read_more_from_lazy_string(Regwork *rw, rxpos need_total)
                               0 /* not UTF-16 */);
     tlen = blen + ls->blen;
     s = (char *)scheme_malloc_atomic(tlen);
-    memcpy(s, ls->s, ls->blen);
+    if (ls->blen)
+      memcpy(s, ls->s, ls->blen);
     scheme_utf8_encode(ls->chars, ls->start + ls->done, ls->start + ls->done + amt,
                        (unsigned char *)s, ls->blen,
                        0 /* not UTF-16 */);
@@ -3001,7 +3014,8 @@ static void read_more_from_regport(Regwork *rw, rxpos need_total)
       size = 16;
 
     naya = (char *)scheme_malloc_atomic(size);
-    memcpy(naya, rw->instr, rw->input_end);
+    if (rw->input_end)
+      memcpy(naya, rw->instr, rw->input_end);
 
     rw->instr = naya;
     rw->instr_size = size;
@@ -5905,7 +5919,8 @@ static Scheme_Object *gen_replace(const char *name, int argc, Scheme_Object *arg
 	total = len + prefix_len + (startpd - srcoffset);
 	
 	naya = (char *)scheme_malloc_atomic(total + more + 1);
-	memcpy(naya, prefix, prefix_len);
+        if (prefix_len)
+          memcpy(naya, prefix, prefix_len);
 	memcpy(naya + prefix_len, source + srcoffset, startpd - srcoffset);
 	memcpy(naya + prefix_len + (startpd - srcoffset), insert, len);
         if (more) {

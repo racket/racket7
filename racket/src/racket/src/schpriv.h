@@ -494,6 +494,10 @@ Scheme_Object *scheme_get_startup_export(const char *s);
 /*                                constants                               */
 /*========================================================================*/
 
+extern Scheme_Object *scheme_symbol_p_proc;
+extern Scheme_Object *scheme_keyword_p_proc;
+extern Scheme_Object *scheme_char_p_proc;
+extern Scheme_Object *scheme_interned_char_p_proc;
 extern Scheme_Object *scheme_fixnum_p_proc;
 extern Scheme_Object *scheme_flonum_p_proc;
 extern Scheme_Object *scheme_extflonum_p_proc;
@@ -589,6 +593,8 @@ extern Scheme_Object *scheme_unsafe_fx_min_proc;
 extern Scheme_Object *scheme_unsafe_fx_max_proc;
 
 extern Scheme_Object *scheme_not_proc;
+extern Scheme_Object *scheme_true_object_p_proc;
+extern Scheme_Object *scheme_boolean_p_proc;
 extern Scheme_Object *scheme_eq_proc;
 extern Scheme_Object *scheme_eqv_proc;
 extern Scheme_Object *scheme_equal_proc;
@@ -1303,6 +1309,10 @@ typedef struct Scheme_IR_Local
   unsigned int optimize_outside_binding : 1;
   /* Records an anlaysis during the resolve pass: */
   unsigned int resolve_omittable : 1;
+  /* Records whether the variable is mutated and used before
+     the body of its binding, so that itmust be allocated at latest
+     after it's RHS expression is evaluated: */
+  unsigned int must_allocate_immediately : 1;
   /* The type desired by use positions for unboxing purposes;
      set by the optimizer: */
   unsigned int arg_type : SCHEME_MAX_LOCAL_TYPE_BITS;
@@ -2883,7 +2893,7 @@ Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *, int comp_flags);
 Scheme_Object *scheme_optimize_add_import_variable(Optimize_Info *info, Scheme_Object *linklet_key, Scheme_Object *symbol);
 Scheme_Object *scheme_optimize_get_import_key(Optimize_Info *info, Scheme_Object *linklet_key, int instance_pos);
 
-int scheme_check_leaf_rator(Scheme_Object *le, int *_flags);
+int scheme_check_leaf_rator(Scheme_Object *le);
 
 int scheme_is_ir_lambda(Scheme_Object *o, int can_be_closed, int can_be_liftable);
 
@@ -3037,7 +3047,6 @@ int scheme_get_eval_type(Scheme_Object *obj);
 Scheme_Object *scheme_make_application(Scheme_Object *v, Optimize_Info *info);
 Scheme_Object *scheme_try_apply(Scheme_Object *f, Scheme_Object *args, Optimize_Info *info);
 int scheme_is_foldable_prim(Scheme_Object *f);
-int scheme_eq_testable_constant(Scheme_Object *v);
 
 void scheme_define_parse(Scheme_Object *form,
 			 Scheme_Object **vars, Scheme_Object **val,

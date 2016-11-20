@@ -3318,7 +3318,7 @@ int scheme_check_structure_shape(Scheme_Object *e, Scheme_Object *expected)
     return (v == STRUCT_PROC_SHAPE_PRED);
   } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_SETTER) {
     st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
-    return (v == ((st->num_islots << STRUCT_PROC_SHAPE_SHIFT)
+    return (v == ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT)
                   | STRUCT_PROC_SHAPE_SETTER));
   } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_GETTER) {
     int pos = SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(e)[1]);
@@ -4396,11 +4396,13 @@ static Scheme_Object *make_name(const char *pre, const char *tn, int ltn,
   
   memcpy(name, pre, lp);
   total = lp;
-  memcpy(name + total, (ltn < 0) ? SCHEME_SYM_VAL((Scheme_Object *)tn) : tn, xltn);
+  if (xltn)
+    memcpy(name + total, (ltn < 0) ? SCHEME_SYM_VAL((Scheme_Object *)tn) : tn, xltn);
   total += xltn;
   memcpy(name + total, post1, lp1);
   total += lp1;
-  memcpy(name + total, (lfn < 0) ? SCHEME_SYM_VAL((Scheme_Object *)fn) : fn, xlfn);
+  if (xlfn)
+    memcpy(name + total, (lfn < 0) ? SCHEME_SYM_VAL((Scheme_Object *)fn) : fn, xlfn);
   total += xlfn;
   memcpy(name + total, post2, lp2);
   total += lp2;
@@ -4791,7 +4793,8 @@ static Scheme_Object *_make_struct_type(Scheme_Object *base,
       }
       
       pa = MALLOC_N(Scheme_Object *, i + num_props);
-      memcpy(pa, struct_type->props, sizeof(Scheme_Object *) * i);
+      if (i)
+        memcpy(pa, struct_type->props, sizeof(Scheme_Object *) * i);
 
       num_props = i;
 

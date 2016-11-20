@@ -944,6 +944,12 @@ for @nonterm{key}.
         documentation; an empty string, which is the default, disables
         the URL so that the local filesystem is used. This key can be
         set only in @exec{installation} scope.}
+  @item{@exec{git-checkout-credentials} --- A list that starts with a format
+        specification (currently only @racket['basic] is supported), followed
+        by git credentials in the form @nonterm{username}@litchar{:}@nonterm{password}
+        that are tried when downloading packages with git sources using the
+        HTTP or HTTPS protocols. The credentials are currently stored
+        @bold{unencrypted} on the filesystem.}
   @item{@exec{trash-max-packages} --- A limit on the number of package implementations
         that are kept in a trash folder when the package is removed or updated.}
   @item{@exec{trash-max-seconds} --- A limit on the time since a package is removed or
@@ -955,7 +961,8 @@ for @nonterm{key}.
  ]
 
 @history[#:changed "6.1.1.6" @elem{Added @exec{trash-max-packages} and @exec{trash-max-seconds}.}
-         #:changed "6.3" @elem{Added @exec{network-retries}.}]}
+         #:changed "6.3" @elem{Added @exec{network-retries}.}
+         #:changed "6.6.0.5" @elem{Added @exec{git-checkout-credentials}.}]}
 
 
 @subcommand{@command/toc{catalog-show} @nonterm{option} ... @nonterm{package-name} ...
@@ -1432,14 +1439,25 @@ If package is available in the form of a @tech{built package}, then
 you can use @exec{raco pkg install --binary-lib} to strip source,
 tests, and documentation from a package before installing it.
 
-@tech{Built packages} are typically provided by a snapshot or release
-site (where a Racket distribution downloaded from the site is
-configured to consult the site for packages), at least for packages
-associated with the distribution. Beware that
-@url{https://pkgs.racket-lang.org/} generally refers to @tech{source
-packages}, not @tech{built packages}. In the near future, built
-variants of the @url{https://pkgs.racket-lang.org/} packages will be
-provided at @url{https://pkg-build.racket-lang.org/catalog/}.
+The main package catalog at @url{https://pkgs.racket-lang.org/} refers
+to @tech{source packages}, not @tech{built packages}. Other catalogs
+provide @tech{built packages}:
+
+@itemlist[
+
+ @item{For packages associated with a Racket distribution (such as the
+       current release), the site that hosts the distribution will
+       normally also host @tech{built packages}---but only for packages
+       that are already included in the distribution.}
+
+ @item{Built variants of the @url{https://pkgs.racket-lang.org/}
+       packages are currently provided by the catalog
+       @url{https://pkg-build.racket-lang.org/server/built/catalog/}
+       (for the current release only). See
+       @hyperlink["https://pkg-build.racket-lang.org/about.html"]{the
+       package-build service} for more information.}
+
+]
 
 Some packages have been split at the source level into separate
 library, test, and documentation packages. For example,

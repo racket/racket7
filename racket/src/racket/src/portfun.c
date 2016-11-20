@@ -665,7 +665,8 @@ string_write_bytes(Scheme_Output_Port *port,
     memcpy(is->string, old, is->index);
   }
 
-  memcpy(is->string + is->index, str + d, len);
+  if (len)
+    memcpy(is->string + is->index, str + d, len);
   is->index += len;
 
   return len;
@@ -4171,6 +4172,7 @@ write_byte (int argc, GC_CAN_IGNORE Scheme_Object *argv[]) XFORM_ASSERT_NO_CONVE
   if (SCHEME_INTP(argv[0])
       && (SCHEME_INT_VAL(argv[0]) >= 0)
       && (SCHEME_INT_VAL(argv[0]) <= 255)
+      && (argc > 1)
       && SCHEME_OUTPUT_PORTP(argv[1])) {
     char buffer[1];
     buffer[0] = SCHEME_INT_VAL(argv[0]);
@@ -4215,6 +4217,7 @@ write_char (int argc, GC_CAN_IGNORE Scheme_Object *argv[]) XFORM_ASSERT_NO_CONVE
   if (argc
       && SCHEME_CHARP(argv[0])
       && (SCHEME_CHAR_VAL(argv[0]) < 128)
+      && (argc > 1)
       && SCHEME_OUTPUT_PORTP(argv[1])) {
     char buffer[1];
     buffer[0] = SCHEME_CHAR_VAL(argv[0]);
