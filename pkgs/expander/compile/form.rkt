@@ -325,7 +325,8 @@
         (define id-stx
           (compile-quote-syntax (remove-scope id top-level-bind-scope)
                                 cctx))
-        `(,top-level-bind!-id ,id-stx ,self-expr ,phase ,phase-shift-id ,ns-id ',binding-sym ,trans-expr))))
+        `(,top-level-bind!-id ,id-stx ,self-expr ,phase ,phase-shift-id ,ns-id ',binding-sym
+          ,(and trans-exprs #t) ,trans-expr))))
 
 ;; To support namespace-relative binding, bundle scope information for
 ;; the current namespace into a syntax object

@@ -1787,5 +1787,12 @@
     (test 'two values also-x)))
 
 ;; ----------------------------------------
+;; Make sure top-level definition replaces a macro binding
+
+(define-syntax-rule (something-previously-bound-as-syntax) 1)
+(define something-previously-bound-as-syntax 5)
+(test 5 values something-previously-bound-as-syntax)
+
+;; ----------------------------------------
 
 (report-errs)

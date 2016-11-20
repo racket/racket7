@@ -20,14 +20,18 @@
    'top-level #f
    
    top-level-bind!-id
-   (lambda (id mpi orig-phase phase-shift ns sym trans-val)
+   (lambda (id mpi orig-phase phase-shift ns sym trans? trans-val)
      (define phase (phase+ orig-phase phase-shift))
      (define b (make-module-binding mpi phase sym
                                     #:frame-id (root-expand-context-frame-id
                                                 (namespace-get-root-expand-ctx ns))))
      (add-binding! id b phase)
-     (when trans-val
-       (maybe-install-free=id! trans-val id phase)))
+     (cond
+      [trans?
+       (when trans-val
+         (maybe-install-free=id! trans-val id phase))]
+      [else
+       (namespace-unset-transformer! ns phase sym)]))
    
    top-level-require!-id
    (lambda (stx ns)
