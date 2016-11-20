@@ -1870,5 +1870,26 @@ case of module-leve bindings; it doesn't cover local bindings.
              (for-syntax 'module-that-exports-at-phase-0-only)))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check that a top-level binding doesn't interefere
+;; with reference
+
+(define very-confused-x 1)
+
+(module m-that-defines-very-confused-x racket
+  ;; this line is necessary, but you can require anything
+  ;;(require (only-in racket/base))
+  
+  (define very-confused-x 10))
+
+(require 'm-that-defines-very-confused-x)
+
+(test 10
+      'very-confused-x
+      (parameterize ([current-namespace (module->namespace ''m-that-defines-very-confused-x)])
+        ;; Note: #'very-confused-x will have top-level context
+        ;; as well as the module context
+        (eval #'very-confused-x)))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)

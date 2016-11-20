@@ -114,9 +114,9 @@
        (define module-uses (hash-ref phase-to-link-modules phase null))
        (define-values (import-module-instances import-instances)
          (for/lists (mis is) ([mu (in-list module-uses)])
-                    (namespace-module-use->module+linklet-instances
-                     ns mu #:phase-shift (phase- (phase+ phase phase-shift)
-                                                 (module-use-phase mu)))))
+           (namespace-module-use->module+linklet-instances
+            ns mu #:phase-shift (phase- (phase+ phase phase-shift)
+                                        (module-use-phase mu)))))
 
        (define phase-ns (namespace->namespace-at-phase ns (phase+ phase phase-shift)))
        

@@ -261,7 +261,8 @@
       (define mu (variable-use-module-use vu))
       (if (or (hash-ref ht mu #f)
               (eq? (module-use-module mu)
-                   (compile-context-self cctx)))
+                   (compile-context-self cctx))
+              (top-level-module-path-index? (module-use-module mu)))
           ht
           (hash-set ht mu (string->symbol
                            (format "~a_~a_~a"
@@ -294,8 +295,9 @@
           extra-inspectorss))
    ;; Declarations (for non-module contexts)
    (for/list ([vu (in-list (header-require-vars-in-order header))]
-              #:when (eq? (module-use-module (variable-use-module-use vu))
-                          (compile-context-self cctx)))
+              #:when (let ([mod (module-use-module (variable-use-module-use vu))])
+                       (or (eq? mod (compile-context-self cctx))
+                           (top-level-module-path-index? mod))))
      (define var-sym (hash-ref (header-require-var-to-import-sym header) vu))
      (define ex-sym (variable-use-sym vu))
      (if (eq? var-sym ex-sym)
