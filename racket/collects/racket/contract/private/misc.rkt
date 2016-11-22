@@ -349,7 +349,9 @@
                 (values (λ (val) (with-contract-continuation-mark
                                   blame+neg-party
                                   (p-app val neg-party)))
-                        promise)))))
+                        promise))))
+           impersonator-prop:contracted ctc
+           impersonator-prop:blame blame)
           (raise-blame-error
            blame #:missing-party neg-party
            val
@@ -764,7 +766,10 @@
          '(expected: "~s" given: "~e")
          (contract-name evt-ctc)
          val))
-      (chaperone-evt val (generator (cons blame neg-party))))))
+      (chaperone-evt val
+                     (generator (cons blame neg-party))
+                     impersonator-prop:contracted evt-ctc
+                     impersonator-prop:blame (blame-add-missing-party blame neg-party)))))
 
 ;; evt/c-first-order : Contract -> Any -> Boolean
 ;; First order check for evt/c

@@ -5518,5 +5518,19 @@
         ((car f))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Regression test to check that `values` is
+;; handled correctly for estimating clock advances
+
+(module triggers-optimizer-clock-estimation '#%kernel
+  
+  (define-values (make-sequence) (lambda (_) 3))
+  
+  (define-values (string>) (lambda (s) s))
+  
+  (values
+   (let-values (((_1 _2) (make-sequence (string>))))
+     (void))))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)
