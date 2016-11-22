@@ -68,7 +68,8 @@
                                         other-namespace-scopes)
                             (root-expand-context-all-scopes-stx root-ctx)
                             (or (namespace-declaration-inspector ns)
-                                (current-code-inspector))))
+                                (current-code-inspector))
+                            #:non-source? #t))
   (define maybe-module-id
     (and (pair? (syntax-e s))
          (identifier? (car (syntax-e s)))

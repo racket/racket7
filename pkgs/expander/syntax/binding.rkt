@@ -124,19 +124,30 @@
 
 ; ----------------------------------------
 
+;; To tag shifts that should not count as a module source
+;; in the sense of `syntax-source-module`:
+(struct non-source-shift (from to) #:prefab)
+(define (shift-from s)
+  (if (pair? s) (car s) (non-source-shift-from s)))
+(define (shift-to s)
+  (if (pair? s) (cdr s) (non-source-shift-to s)))
+
 ;; Adjust `s` (recursively) so that if `resolve+shift` would
 ;; report `form-mpi`, the same operation on the result will
 ;; report `to-mpi`. A non-#f `inspector` is provided when shifting
 ;; syntax literals in a module to match the module's declaration-time
 ;; inspector.
-(define (syntax-module-path-index-shift s from-mpi to-mpi [inspector #f])
+(define (syntax-module-path-index-shift s from-mpi to-mpi [inspector #f]
+                                        #:non-source? [non-source? #f])
   (cond
    [(eq? from-mpi to-mpi)
     (if inspector
         (syntax-set-inspector s inspector)
         s)]
    [else
-    (let ([shift (cons from-mpi to-mpi)])
+    (let ([shift (if non-source?
+                     (non-source-shift from-mpi to-mpi)
+                     (cons from-mpi to-mpi))])
       (define-memo-lite (add-shift shifts)
         (cons shift shifts))
       (syntax-map s
@@ -210,7 +221,8 @@
    [(null? shifts) mpi]
    [else
     (define shifted-mpi (apply-syntax-shifts mpi (cdr shifts)))
-    (module-path-index-shift shifted-mpi (caar shifts) (cdar shifts))]))
+    (define shift (car shifts))
+    (module-path-index-shift shifted-mpi (shift-from shift) (shift-to shift))]))
 
 ;; Apply accumulated module path index shifts to a module binding
 (define (apply-syntax-shifts-to-binding b shifts)
@@ -218,7 +230,9 @@
    [(null? shifts) b]
    [else
     (define shifted-b (apply-syntax-shifts-to-binding b (cdr shifts)))
-    (binding-module-path-index-shift shifted-b (caar shifts) (cdar shifts))]))
+    (define shift (car shifts))
+    (binding-module-path-index-shift shifted-b (shift-from shift) (shift-to shift))]))
+        
 
 ;; Apply a syntax object's shifts to a given module path index
 (define (syntax-apply-shifts s mpi)
@@ -239,7 +253,7 @@
                                                       (binding-module-path-index-shift b from-mpi to-mpi)))]
    [else b]))
 
-(define (syntax-transfer-shifts to-s from-s [inspector #f])
+(define (syntax-transfer-shifts to-s from-s [inspector #f] #:non-source? [non-source? #f])
   (define shifts (syntax-mpi-shifts from-s))
   (cond
    [(and (null? shifts) inspector)
@@ -247,7 +261,8 @@
    [else
     (for/fold ([s to-s]) ([shift (in-list (reverse shifts))]
                           [i (in-naturals)])
-      (syntax-module-path-index-shift s (car shift) (cdr shift) (and (zero? i) inspector)))]))
+      (syntax-module-path-index-shift s (shift-from shift) (shift-to shift) (and (zero? i) inspector)
+                                      #:non-source? non-source?))]))
 
 (define (syntax-set-inspector s insp)
   (syntax-map s
@@ -261,14 +276,22 @@
 
 ;; ----------------------------------------
 
+;; We can imagine that a syntax object's source module is determined
+;; by adding a module's path index as it is expanded to everything
+;; that starts out in the module. It turns out that we're already
+;; adding a module path index like that in the form of a shift. So, we
+;; infer a source module from the module-path-index shifts that are
+;; attached to the syntax object by starting with the initial shift
+;; and working our way back.
+;;
+;; Shifts added for a `module->namespace` context shouldn't count
+;; toward a module source, so those are added as `non-source-shift`
+;; records, and we skip them here.
 (define (syntax-source-module s [source? #f])
   (unless (syntax? s)
     (raise-argument-error 'syntax-track-origin "syntax?" s))
-  ;; The concept of a source module is a hack. We try to infer
-  ;; a module from the module-path-index shifts that are attached
-  ;; to the syntax object by starting with the initial shift and
-  ;; working our way back.
-  (for/or ([shift (in-list (reverse (syntax-mpi-shifts s)))])
+  (for/or ([shift (in-list (reverse (syntax-mpi-shifts s)))]
+           #:unless (non-source-shift? shift))
     (define from-mpi (car shift))
     (define-values (path base) (module-path-index-split from-mpi))
     (and (not path)
