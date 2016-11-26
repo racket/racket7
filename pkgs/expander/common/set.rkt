@@ -27,17 +27,21 @@
          for*/seteq
          in-set)
 
+(define the-empty-hash #hash())
+(define the-empty-hasheq #hasheq())
+(define the-empty-hasheqv #hasheqv())
+
 (define set
   (case-lambda
-    [() #hash()]
-    [l (for/fold ([s #hash()]) ([e (in-list l)])
+    [() the-empty-hash]
+    [l (for/fold ([s the-empty-hash]) ([e (in-list l)])
          (hash-set s e #t))]))
 (define seteq
   (case-lambda
-    [() #hasheq()]
-    [l (for/fold ([s #hasheq()]) ([e (in-list l)])
+    [() the-empty-hasheq]
+    [l (for/fold ([s the-empty-hasheq]) ([e (in-list l)])
          (hash-set s e #t))]))
-(define (seteqv) #hasheqv())
+(define (seteqv) the-empty-hasheqv)
 
 (define (set? s) (hash? s))
 
