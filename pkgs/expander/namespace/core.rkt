@@ -89,12 +89,20 @@
                                         [sym (in-hash-keys syms)])
                              (define b (make-module-binding core-mpi 0 sym))
                              (values sym (if syntax? (provided b #f #t) b))))
+                #:phase-level-linklet-info-callback
+                (lambda (phase-level ns)
+                  (and (zero? phase-level)
+                       (let ([ns (namespace->module-namespace ns core-module-name 0)])
+                         (and ns
+                              (module-linklet-info (namespace->instance ns 0)
+                                                   #f
+                                                   core-mpi)))))
                 #:instantiate-phase-callback
                 (lambda (data-box ns phase phase-level self bulk-binding-registry insp)
                   (case phase-level
                     [(0)
                      (for ([(sym val) (in-hash core-primitives)])
-                       (namespace-set-variable! ns 0 sym val))
+                       (namespace-set-consistent! ns 0 sym val))
                      (for ([(sym proc) (in-hash core-forms)])
                        (namespace-set-transformer! ns 0 sym (core-form proc sym)))])))
    core-module-name))

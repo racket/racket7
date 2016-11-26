@@ -122,10 +122,10 @@ otherwise.}
            [(compile-linklet [form (or/c correlated? any/c)]
                              [name any/c]
                              [import-keys vector?]
-                             [get-import (or/c #f (any/c . -> . (values (or/c linklet? #f)
+                             [get-import (or/c #f (any/c . -> . (values (or/c linklet? instance? #f)
                                                                         (or/c vector? #f))))
                                          #f])
-           (values linklet? vector?)])]{
+            (values linklet? vector?)])]{
 
 Takes an S-expression or @tech{correlated object} for a
 @schemeidfont{linklet} form and produces a @tech{linklet}. The
@@ -142,15 +142,16 @@ vector, it must have as many elements as sets of imports in
 reference to an imported variable, it passes back to
 @racket[get-import] (if non-@racket[#f]) the element of @racket[import-keys] that
 corresponds to the variable's import set. The @racket[get-import]
-function can then return a linklet that represents an instance to be
+function can then return a linklet or instance that represents an instance to be
 provided to the compiled linklet when it is eventually instantiated;
-ensuring consistency between reported linklet and the eventual
+ensuring consistency between reported linklet or instance and the eventual
 instance is up to the caller of @racket[compile-linklet]. If
 @racket[get-import] returns @racket[#f] as its first value, the
 compiler will be prevented from make any assumptions about the
 imported instance. The second result from @racket[get-import] is an
 optional vector of keys to provide transitive information on a
-returned linklet's imports; the returned vector must have the same
+returned linklet's imports (and is not allowed for a returned instance);
+the returned vector must have the same
 number of elements as the linklet has imports. When vector elements
 are @racket[eq?] and non-@racket[#f], the compiler can assume that
 they correspond to the same run-time instance. A @racket[#f]
@@ -338,7 +339,7 @@ Returns the value of the variable exported as @racket[name] from
 @defproc[(instance-set-variable-value! [instance instance?]
                                        [name symbol?]
                                        [v any/c]
-                                       [constant? any/c #f])
+                                       [mode (or/c #f 'constant 'consistent) #f])
           void?]{
 
 Sets or creates the variable exported as @racket[name] in
@@ -346,8 +347,11 @@ Sets or creates the variable exported as @racket[name] in
 variable does not exist already as constant. If a variable for
 @racket[name] exists as constant, the @exnraise[exn:fail:contract].
 
-If @racket[constant?] is true, then the variable is creates or changed
-to be constant.}
+If @racket[mode] is a single, then the variable is created or changed
+to be constant. If @racket[mode] is @racket['consistent], then
+the optimizer can assume that the value has the same shape in all
+instances that are used to satisfy a linklet's imports.}
+
 
 @defproc[(instance-unset-variable! [instance instance?]
                                    [name symbol?])

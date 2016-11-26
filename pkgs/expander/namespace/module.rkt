@@ -63,7 +63,7 @@
                 language-info   ; #f or vector
                 min-phase-level ; phase-level
                 max-phase-level ; phase-level
-                phase-level-linklet-info-callback ; phase-level -> module-linklet-info-or-#f
+                phase-level-linklet-info-callback ; phase-level namespace -> module-linklet-info-or-#f
                 prepare-instance  ; box namespace phase-shift bulk-binding-registry inspector -> any
                 instantiate-phase ; box namespace phase-shift phase-level bulk-binding-registry inspector -> any
                 primitive?      ; inline variable values in compiled code?
@@ -75,7 +75,10 @@
                 supermodule-name ; associated supermodule (i.e, when declared together)
                 get-all-variables)) ; for `module->indirect-exports`
 
-(struct module-linklet-info (linklet module-uses self) #:transparent)
+(struct module-linklet-info (linklet-or-instance ; #f, linklet, or instance supplied for cross-linking optimization
+                             module-uses         ; #f or vector for linklet's imports
+                             self)               ; self modidx
+        #:transparent)
 
 (define (make-module #:source-name [source-name #f]
                      #:self self
@@ -86,7 +89,7 @@
                      #:instantiate-phase-callback instantiate-phase
                      #:prepare-instance-callback [prepare-instance void]
                      #:phase-level-linklet-info-callback [phase-level-linklet-info-callback
-                                                          (lambda (phase-level) #f)]
+                                                          (lambda (phase-level ns) #f)]
                      #:language-info [language-info #f]
                      #:primitive? [primitive? #f]
                      #:predefined? [predefined? #f]
@@ -227,7 +230,7 @@
 (define (namespace->module-linklet-info ns name phase-level)
   (define m (namespace->module ns name))
   (and m
-       ((module-phase-level-linklet-info-callback m) phase-level)))
+       ((module-phase-level-linklet-info-callback m) phase-level ns)))
 
 ;; ----------------------------------------
 

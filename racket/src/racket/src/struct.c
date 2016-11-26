@@ -3289,48 +3289,58 @@ int scheme_decode_struct_shape(Scheme_Object *expected, intptr_t *_v)
   return 1;
 }
 
-int scheme_check_structure_shape(Scheme_Object *e, Scheme_Object *expected)
+intptr_t scheme_get_or_check_structure_shape(Scheme_Object *e, Scheme_Object *expected)
 {
-  intptr_t _v, v;
+  intptr_t _v, v, want_v;
   int i;
   Scheme_Struct_Type *st;
 
-  if (!scheme_decode_struct_shape(expected, &_v))
-    return 0;
-  v = _v;
+  if (expected) {
+    if (!scheme_decode_struct_shape(expected, &_v))
+      return 0;
+    v = _v;
+  } else
+    v = 0;
 
   if (SCHEME_STRUCT_TYPEP(e)) {
     st = (Scheme_Struct_Type *)e;
     if (st->num_slots != st->num_islots)
-      return (v == STRUCT_PROC_SHAPE_OTHER);
-    return (v == ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT) 
-                  | STRUCT_PROC_SHAPE_STRUCT));
-  } else if (!SCHEME_PRIMP(e))
-    return 0;
+      want_v = STRUCT_PROC_SHAPE_OTHER;
+    else
+      want_v = ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT) 
+                | STRUCT_PROC_SHAPE_STRUCT);
+  } else if (!SCHEME_PRIMP(e)) {
+    want_v = -1;
+  } else {
+    i = (((Scheme_Primitive_Proc *)e)->pp.flags & SCHEME_PRIM_OTHER_TYPE_MASK);
+    if ((i == SCHEME_PRIM_STRUCT_TYPE_CONSTR)
+        || (i == SCHEME_PRIM_STRUCT_TYPE_SIMPLE_CONSTR)) {
+      st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
+      want_v = ((st->num_islots << STRUCT_PROC_SHAPE_SHIFT) 
+                | STRUCT_PROC_SHAPE_CONSTR);
+    } else if (i == SCHEME_PRIM_STRUCT_TYPE_PRED) {
+      want_v = STRUCT_PROC_SHAPE_PRED;
+    } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_SETTER) {
+      st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
+      want_v = ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT)
+                | STRUCT_PROC_SHAPE_SETTER);
+    } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_GETTER) {
+      int pos = SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(e)[1]);
+      st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
+      want_v = ((pos << STRUCT_PROC_SHAPE_SHIFT) 
+                | STRUCT_PROC_SHAPE_GETTER);
+    } else if ((i == SCHEME_PRIM_STRUCT_TYPE_INDEXLESS_SETTER)
+               || (i == SCHEME_PRIM_STRUCT_TYPE_BROKEN_INDEXED_SETTER)
+               || (i == SCHEME_PRIM_STRUCT_TYPE_INDEXLESS_GETTER)) {
+      want_v = STRUCT_PROC_SHAPE_OTHER;
+    } else
+      want_v = -1;
+  }
 
-  i = (((Scheme_Primitive_Proc *)e)->pp.flags & SCHEME_PRIM_OTHER_TYPE_MASK);
-  if ((i == SCHEME_PRIM_STRUCT_TYPE_CONSTR)
-      || (i == SCHEME_PRIM_STRUCT_TYPE_SIMPLE_CONSTR)) {
-    st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
-    return (v == ((st->num_islots << STRUCT_PROC_SHAPE_SHIFT) 
-                  | STRUCT_PROC_SHAPE_CONSTR));
-  } else if (i == SCHEME_PRIM_STRUCT_TYPE_PRED) {
-    return (v == STRUCT_PROC_SHAPE_PRED);
-  } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_SETTER) {
-    st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
-    return (v == ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT)
-                  | STRUCT_PROC_SHAPE_SETTER));
-  } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_GETTER) {
-    int pos = SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(e)[1]);
-    st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
-    return (v == ((pos << STRUCT_PROC_SHAPE_SHIFT) 
-                  | STRUCT_PROC_SHAPE_GETTER));
-  } else if ((i == SCHEME_PRIM_STRUCT_TYPE_INDEXLESS_SETTER)
-             || (i == SCHEME_PRIM_STRUCT_TYPE_BROKEN_INDEXED_SETTER)
-             || (i == SCHEME_PRIM_STRUCT_TYPE_INDEXLESS_GETTER))
-    return (v == STRUCT_PROC_SHAPE_OTHER);
-
-  return 0;
+  if (expected)
+    return (v == want_v);
+  else
+    return want_v;
 }
 
 int scheme_decode_struct_prop_shape(Scheme_Object *expected, intptr_t *_v)
@@ -3342,7 +3352,7 @@ int scheme_decode_struct_prop_shape(Scheme_Object *expected, intptr_t *_v)
     return 0;
 
   if ((SCHEME_SYM_VAL(expected)[0] != 'p')
-      || (SCHEME_SYM_LEN(expected)  < 4))
+      || (SCHEME_SYM_LEN(expected) < 4))
     return 0;
   
   for (i = 4, v = 0; SCHEME_SYM_VAL(expected)[i]; i++) {
@@ -3354,30 +3364,43 @@ int scheme_decode_struct_prop_shape(Scheme_Object *expected, intptr_t *_v)
   return 1;
 }
 
-int scheme_check_structure_property_shape(Scheme_Object *e, Scheme_Object *expected)
+intptr_t scheme_get_or_check_structure_property_shape(Scheme_Object *e, Scheme_Object *expected)
 {
-  intptr_t _v, v;
+  intptr_t _v, v, want_v;
   int i;
 
-  if (!scheme_decode_struct_prop_shape(expected, &_v))
-    return 0;
-  v = _v;
+  if (expected) {
+    if (!scheme_decode_struct_prop_shape(expected, &_v))
+      return 0;
+    v = _v;
+  } else
+    v = 0;
 
   if (SAME_TYPE(SCHEME_TYPE(e), scheme_struct_property_type)) {
     if (((Scheme_Struct_Property *)e)->guard)
-      return (v == STRUCT_PROP_PROC_SHAPE_GUARDED_PROP);
-    return ((v == STRUCT_PROP_PROC_SHAPE_PROP)
-            || (v == STRUCT_PROP_PROC_SHAPE_GUARDED_PROP));
-  } else if (!SCHEME_PRIMP(e))
-    return 0;
+      want_v = STRUCT_PROP_PROC_SHAPE_GUARDED_PROP;
+    else {
+      want_v = STRUCT_PROP_PROC_SHAPE_PROP;
+      if (expected)
+        return ((v == STRUCT_PROP_PROC_SHAPE_PROP)
+                || (v == STRUCT_PROP_PROC_SHAPE_GUARDED_PROP));
+    }
+  } else if (!SCHEME_PRIMP(e)) {
+    want_v = -1;
+  } else {
+    i = (((Scheme_Primitive_Proc *)e)->pp.flags & SCHEME_PRIM_OTHER_TYPE_MASK);
+    if (i == SCHEME_PRIM_STRUCT_TYPE_STRUCT_PROP_PRED)
+      want_v = STRUCT_PROP_PROC_SHAPE_PRED;
+    else if (i == SCHEME_PRIM_TYPE_STRUCT_PROP_GETTER)
+      want_v = STRUCT_PROP_PROC_SHAPE_GETTER;
+    else
+      want_v = -1;
+  }
 
-  i = (((Scheme_Primitive_Proc *)e)->pp.flags & SCHEME_PRIM_OTHER_TYPE_MASK);
-  if (i == SCHEME_PRIM_STRUCT_TYPE_STRUCT_PROP_PRED)
-    return (v == STRUCT_PROP_PROC_SHAPE_PRED);
-  else if (i == SCHEME_PRIM_TYPE_STRUCT_PROP_GETTER)
-    return (v == STRUCT_PROP_PROC_SHAPE_GETTER);
-
-  return 0;
+  if (expected)
+    return v == want_v;
+  else
+    return want_v;
 }
 
 static Scheme_Object *make_struct_field_xxor(const char *who, int getter,

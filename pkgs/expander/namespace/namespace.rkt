@@ -25,6 +25,7 @@
          namespace-bulk-binding-registry
          
          namespace-set-variable!
+         namespace-set-consistent!
          namespace-unset-variable!
          namespace-set-transformer!
          namespace-unset-transformer!
@@ -167,7 +168,11 @@
 
 (define (namespace-set-variable! ns phase-level name val [as-constant? #f])
   (define d (namespace->definitions ns phase-level))
-  (instance-set-variable-value! (definitions-variables d) name val as-constant?))
+  (instance-set-variable-value! (definitions-variables d) name val (and as-constant? 'constant)))
+
+(define (namespace-set-consistent! ns phase-level name val)
+  (define d (namespace->definitions ns phase-level))
+  (instance-set-variable-value! (definitions-variables d) name val 'consistent))
 
 (define (namespace-unset-variable! ns phase-level name)
   (define d (namespace->definitions ns phase-level))

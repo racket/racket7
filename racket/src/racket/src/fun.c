@@ -2216,11 +2216,11 @@ Scheme_Object *scheme_get_or_check_procedure_shape(Scheme_Object *e, Scheme_Obje
   if (expected 
       && SCHEME_SYMBOLP(expected)) {
     if (SCHEME_SYM_VAL(expected)[0] == 's') {
-      return (scheme_check_structure_shape(e, expected)
+      return (scheme_get_or_check_structure_shape(e, expected)
               ? expected
               : NULL);
     } else if (SCHEME_SYM_VAL(expected)[0] == 'p') {
-      return (scheme_check_structure_property_shape(e, expected)
+      return (scheme_get_or_check_structure_property_shape(e, expected)
               ? expected
               : NULL);
     }

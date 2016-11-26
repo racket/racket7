@@ -57,7 +57,7 @@ typedef struct Cross_Linklet_Info
   Scheme_Object *get_import; /* NULL or (key -> linklet (vector key ...)) */
   Scheme_Hash_Tree *import_keys; /* import-position -> key */
   Scheme_Hash_Tree *rev_import_keys; /* key -> import-position */
-  Scheme_Hash_Tree *linklets; /* key -> linklet */
+  Scheme_Hash_Tree *linklets; /* key -> linklet-or-instance */
   Scheme_Hash_Tree *import_next_keys; /* key -> (vector key ...) */
   Scheme_Hash_Tree *inline_variants; /* key -> symbol -> value */
   Scheme_Hash_Tree *import_syms; /* import-position -> ((symbol -> variable-position)
@@ -187,6 +187,7 @@ static Scheme_Object *get_import_shape(Optimize_Info *info, Scheme_IR_Toplevel *
 static Scheme_Object *get_import_inline(Optimize_Info *info, Scheme_IR_Toplevel *var, int argc);
 static void register_import_used(Optimize_Info *info, Scheme_IR_Toplevel *expr);
 static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet, Scheme_Object **_import_keys);
+static Scheme_Object *get_value_shape(Scheme_Object *v);
 
 XFORM_NONGCING static int relevant_predicate(Scheme_Object *pred);
 XFORM_NONGCING static int predicate_implies(Scheme_Object *pred1, Scheme_Object *pred2);
@@ -1732,7 +1733,7 @@ Scheme_Object *scheme_make_struct_property_proc_shape(intptr_t k)
 
 XFORM_NONGCING static int is_struct_identity_subtype(Scheme_Object *sub, Scheme_Object *sup)
 {
-  /* A structure identity is a list of symbols, but the symbols are
+  /* A structure identity is typically a list of symbols, but the symbols are
      just for debugging. Instead, the address of each pair forming the
      list represents an identiity. */
   while (SCHEME_PAIRP(sub)) {
@@ -4323,7 +4324,7 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
 
       /* Register type based on getter succeeding: */
       if ((mode == STRUCT_PROC_SHAPE_GETTER)
-          && SCHEME_PAIRP(SCHEME_PROC_SHAPE_IDENTITY(alt))
+          && !SCHEME_NULLP(SCHEME_PROC_SHAPE_IDENTITY(alt))
           && SAME_TYPE(SCHEME_TYPE(rand), scheme_ir_local_type))
         add_type(info, rand, scheme_make_struct_proc_shape(STRUCT_PROC_SHAPE_PRED,
                                                            SCHEME_PROC_SHAPE_IDENTITY(alt)));
@@ -5388,7 +5389,7 @@ static void add_types_for_t_branch(Scheme_Object *t, Optimize_Info *info, int fu
       shape = get_struct_proc_shape(app->rator, info, 0);
       if (shape
           && ((SCHEME_PROC_SHAPE_MODE(shape) & STRUCT_PROC_SHAPE_MASK) == STRUCT_PROC_SHAPE_PRED)
-          && SCHEME_PAIRP(SCHEME_PROC_SHAPE_IDENTITY(shape))) {
+          && !SCHEME_NULLP(SCHEME_PROC_SHAPE_IDENTITY(shape))) {
         add_type(info, app->rand, shape);
       }
     }
@@ -9745,7 +9746,7 @@ static void linklet_setup_constants(Scheme_Linklet *linklet)
   }
 }
 
-static Scheme_Linklet *get_linklet_for_import_key(Optimize_Info *info, Scheme_Object *key)
+static Scheme_Object *get_linklet_or_instance_for_import_key(Optimize_Info *info, Scheme_Object *key)
 {
   Scheme_Object *v, *next_keys, *a[1];
   Cross_Linklet_Info *cross = info->cross;
@@ -9779,15 +9780,17 @@ static Scheme_Linklet *get_linklet_for_import_key(Optimize_Info *info, Scheme_Ob
     cross->linklets = ht;
 
     if (!SCHEME_FALSEP(v)) {
-      if (!SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_type))
-        scheme_wrong_contract("compile-linklet", "(or/c linklet? #f)", -1, 0, &v);
+      if (!SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_type)
+          && !SAME_TYPE(SCHEME_TYPE(v), scheme_instance_type))
+        scheme_wrong_contract("compile-linklet", "(or/c linklet? instance? #f)", -1, 0, &v);
 
       if (!SCHEME_FALSEP(next_keys)
           && (!SCHEME_VECTORP(next_keys)
+              || !SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_type)
               || SCHEME_VEC_SIZE(next_keys) != SCHEME_VEC_SIZE(((Scheme_Linklet *)v)->importss)))
         scheme_contract_error("compile-linklet",
                               "result is not #f or a vector of keys that match the result linklet's import count",
-                              "linklet", 1, v,
+                              (SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_type) ? "linklet" : "instance"), 1, v,
                               "import count", 1, scheme_make_integer(SCHEME_VEC_SIZE(((Scheme_Linklet *)v)->importss)),
                               "invalid as vector of keys", 1, next_keys,
                               NULL);
@@ -9802,7 +9805,7 @@ static Scheme_Linklet *get_linklet_for_import_key(Optimize_Info *info, Scheme_Ob
   if (SCHEME_FALSEP(v))
     return NULL;
 
-  return (Scheme_Linklet *)v;
+  return v;
 }
 
 static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_Toplevel *var, int argc, int want_shape)
@@ -9813,7 +9816,7 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
    and a non-NULL value is returned, then `info` records the fact that
    shape information is used. */
 {
-  Scheme_Object *key, *v, *name;
+  Scheme_Object *key, *v, *name, *l_or_i;
   Scheme_Hash_Table *iv_ht;
   Scheme_Linklet *linklet;
 
@@ -9824,13 +9827,11 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
   if (!key)
     return NULL;
 
-  linklet = get_linklet_for_import_key(info, key);
+  l_or_i = get_linklet_or_instance_for_import_key(info, key);
 
-  if (!linklet)
+  if (!l_or_i)
     return NULL;
 
-  if (!linklet->constants)
-    linklet_setup_constants(linklet);
   if ((var->instance_pos < SCHEME_VEC_SIZE(info->linklet->importss))
       && (var->variable_pos < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(info->linklet->importss)[var->instance_pos])))
     name = SCHEME_VEC_ELS(SCHEME_VEC_ELS(info->linklet->importss)[var->instance_pos])[var->variable_pos];
@@ -9843,90 +9844,110 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
   }
   MZ_ASSERT(name);
   MZ_ASSERT(SCHEME_SYMBOLP(name));
-
-  if (!want_shape && (argc >= 0)) {
-    /* check for previously unresolved for this linklet: */
-    iv_ht = (Scheme_Hash_Table *)scheme_eq_hash_tree_get(info->cross->inline_variants, key);
-    if (iv_ht) {
-      v = scheme_hash_get(iv_ht, name);
-      if (v) {
-        /* We have previously unresolved to `v` */
-        if (SCHEME_HASHTP(v)) {
-          /* It's a `case-lambda`, so try to get the right clause */
-          v = scheme_hash_get((Scheme_Hash_Table *)v, scheme_make_integer(argc));
-          if (v)
-            return v;
-          /* Try to unresolve the right arity */
-        } else if (SCHEME_FALSEP(v)) {
-          /* previous unresove attempt failed */
-          return NULL;
-        } else
-          return v;
-      }
-    }
-    /* Otherwise, not yet unresolved (maybe because it doesn't need to be) */
-  }
-
-  v = scheme_hash_get(linklet->constants, name);
-
-  if (!v)
-    return NULL;
-
-  if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 2)) {
-    /* a procedure */
-    if (want_shape)
-      v = scheme_get_or_check_procedure_shape(SCHEME_VEC_ELS(v)[0], NULL);
-    else if (argc < 0)
-      v = scheme_constant_key;
-    else
-      v = NULL;
-  } else if (SAME_TYPE(SCHEME_TYPE(v), scheme_inline_variant_type)) {
-    /* a procedure that can be inlined (if unresolve succeeds) */
-    if (want_shape) {
-      v = scheme_get_or_check_procedure_shape(v, NULL);
-      if (v)
-        info->cross->used_import_shape = 1;
-    } else if (argc >= 0) {
-      int has_cases = 0;
-
-      v = scheme_unresolve(v, argc, &has_cases, linklet, key, info);
-
-      if (!iv_ht) {
-        Scheme_Hash_Tree *ht;
-        iv_ht = scheme_make_hash_table(SCHEME_hash_ptr);
-        ht = scheme_hash_tree_set(info->cross->inline_variants, key, (Scheme_Object *)iv_ht);
-        info->cross->inline_variants = ht;
-      }
+  
+  if (SAME_TYPE(SCHEME_TYPE(l_or_i), scheme_linklet_type)) {
+    linklet = (Scheme_Linklet *)l_or_i;
     
-      /* Save unresolved */
-      if (has_cases) {
-        Scheme_Hash_Table *cl_ht;
-        cl_ht = (Scheme_Hash_Table *)scheme_hash_get(iv_ht, name);
-        if (!cl_ht) {
-          cl_ht = scheme_make_hash_table(SCHEME_hash_ptr);
-          scheme_hash_set(iv_ht, name, (Scheme_Object *)cl_ht);
+    if (!linklet->constants)
+      linklet_setup_constants(linklet);
+
+    if (!want_shape && (argc >= 0)) {
+      /* check for previously unresolved for this linklet: */
+      iv_ht = (Scheme_Hash_Table *)scheme_eq_hash_tree_get(info->cross->inline_variants, key);
+      if (iv_ht) {
+        v = scheme_hash_get(iv_ht, name);
+        if (v) {
+          /* We have previously unresolved to `v` */
+          if (SCHEME_HASHTP(v)) {
+            /* It's a `case-lambda`, so try to get the right clause */
+            v = scheme_hash_get((Scheme_Hash_Table *)v, scheme_make_integer(argc));
+            if (v)
+              return v;
+            /* Try to unresolve the right arity */
+          } else if (SCHEME_FALSEP(v)) {
+            /* previous unresove attempt failed */
+            return NULL;
+          } else
+            return v;
         }
-        scheme_hash_set(cl_ht, scheme_make_integer(argc), v);
-      } else if (v)
-        scheme_hash_set(iv_ht, name, v);
+      }
+      /* Otherwise, not yet unresolved (maybe because it doesn't need to be) */
+    }
+
+    v = scheme_hash_get(linklet->constants, name);
+
+    if (!v)
+      return NULL;
+
+    if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 2)) {
+      /* a procedure */
+      if (want_shape)
+        v = scheme_get_or_check_procedure_shape(SCHEME_VEC_ELS(v)[0], NULL);
+      else if (argc < 0)
+        v = scheme_constant_key;
       else
-        scheme_hash_set(iv_ht, name, scheme_false); /* record that it won't work */
+        v = NULL;
+    } else if (SAME_TYPE(SCHEME_TYPE(v), scheme_inline_variant_type)) {
+      /* a procedure that can be inlined (if unresolve succeeds) */
+      if (want_shape) {
+        v = scheme_get_or_check_procedure_shape(v, NULL);
+        if (v)
+          info->cross->used_import_shape = 1;
+      } else if (argc >= 0) {
+        int has_cases = 0;
+
+        v = scheme_unresolve(v, argc, &has_cases, linklet, key, info);
+
+        if (!iv_ht) {
+          Scheme_Hash_Tree *ht;
+          iv_ht = scheme_make_hash_table(SCHEME_hash_ptr);
+          ht = scheme_hash_tree_set(info->cross->inline_variants, key, (Scheme_Object *)iv_ht);
+          info->cross->inline_variants = ht;
+        }
+    
+        /* Save unresolved */
+        if (has_cases) {
+          Scheme_Hash_Table *cl_ht;
+          cl_ht = (Scheme_Hash_Table *)scheme_hash_get(iv_ht, name);
+          if (!cl_ht) {
+            cl_ht = scheme_make_hash_table(SCHEME_hash_ptr);
+            scheme_hash_set(iv_ht, name, (Scheme_Object *)cl_ht);
+          }
+          scheme_hash_set(cl_ht, scheme_make_integer(argc), v);
+        } else if (v)
+          scheme_hash_set(iv_ht, name, v);
+        else
+          scheme_hash_set(iv_ht, name, scheme_false); /* record that it won't work */
+      } else
+        v = scheme_constant_key;
+    } else if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 3)) {
+      if (want_shape)
+        v = scheme_make_struct_proc_shape(SCHEME_INT_VAL(SCHEME_VEC_ELS(v)[1]),
+                                          SCHEME_VEC_ELS(v)[2]);
+      else if (argc < 0)
+        v = scheme_constant_key;
+      else
+        v = NULL;
+    } else if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 4)) {
+      if (want_shape)
+        v = scheme_make_struct_property_proc_shape(SCHEME_INT_VAL(SCHEME_VEC_ELS(v)[1]));
+      else if (argc < 0)
+        v = scheme_constant_key;
+      else
+        v = NULL;
+    }
+  } else {
+    Scheme_Bucket *b;
+    b = scheme_instance_variable_bucket_or_null(name, (Scheme_Instance *)l_or_i);
+    if (b && b->val && (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_IS_CONSISTENT)) {
+      v = b->val;
+      if (want_shape)
+        v = get_value_shape(v);
+      else if (argc < 0)
+        v = scheme_constant_key;
+      else
+        v = NULL;
     } else
-      v = scheme_constant_key;
-  } else if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 3)) {
-    if (want_shape)
-      v = scheme_make_struct_proc_shape(SCHEME_INT_VAL(SCHEME_VEC_ELS(v)[1]),
-                                        SCHEME_VEC_ELS(v)[2]);
-    else if (argc < 0)
-      v = scheme_constant_key;
-    else
-      v = NULL;
-  } else if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 4)) {
-    if (want_shape)
-      v = scheme_make_struct_property_proc_shape(SCHEME_INT_VAL(SCHEME_VEC_ELS(v)[1]));
-    else if (argc < 0)
-      v = scheme_constant_key;
-    else
       v = NULL;
   }
 
@@ -10042,9 +10063,11 @@ static void register_import_used(Optimize_Info *info, Scheme_IR_Toplevel *var)
 static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet, Scheme_Object **_import_keys)
 {
   int i, j, k, used, total, added_imports = 0, dropped_imports = 0, total_used;
-  Scheme_Object *shapes, *v;
+  Scheme_Object *shapes, *v, *name;
   Scheme_Linklet *in_linklet;
+  Scheme_Instance *in_instance;
   Scheme_Hash_Tree *ht;
+  Scheme_Bucket *b;
 
   if (info->cross) {
     /* Add new imported instances */
@@ -10126,12 +10149,15 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
         v = scheme_hash_tree_get(info->cross->import_keys, scheme_make_integer(i));
         if (v)
           v = scheme_hash_tree_get(info->cross->linklets, v);
-        in_linklet = ((v && !SCHEME_FALSEP(v)) ? (Scheme_Linklet *)v : NULL);
-        MZ_ASSERT(!in_linklet || SAME_TYPE(linklet->so.type, scheme_linklet_type));
+        in_linklet = ((v && SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_type)) ? (Scheme_Linklet *)v : NULL);
+        in_instance = ((v && SAME_TYPE(SCHEME_TYPE(v), scheme_instance_type)) ? (Scheme_Instance *)v : NULL);
+        MZ_ASSERT(!in_linklet || SAME_TYPE(in_linklet->so.type, scheme_linklet_type));
+        MZ_ASSERT(!in_instance || SAME_TYPE(in_instance->so.type, scheme_instance_type));
         for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
-          if (SCHEME_TRUEP(SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j])) {
+          name = SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j];
+          if (SCHEME_TRUEP(name)) {
             if (in_linklet && in_linklet->constants) {
-              v = scheme_hash_get(in_linklet->constants, SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j]);
+              v = scheme_hash_get(in_linklet->constants, name);
               if (v) {
                 if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 3)) {
                   v = scheme_intern_struct_proc_shape(SCHEME_INT_VAL(SCHEME_VEC_ELS(v)[1]));
@@ -10152,6 +10178,19 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
                   /* anything else is constant-propagated or irrelevant */
                 }
               }
+            } else if (in_instance) {
+              b = scheme_instance_variable_bucket_or_null(name, in_instance);
+              if (b && b->val && (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_IS_CONSISTENT)) {
+                v = get_value_shape(b->val);
+                if (v) {
+                  if (SAME_TYPE(SCHEME_TYPE(v), scheme_struct_proc_shape_type))
+                    v = scheme_intern_struct_proc_shape(SCHEME_PROC_SHAPE_MODE(v));
+                  else if (SAME_TYPE(SCHEME_TYPE(v), scheme_struct_prop_proc_shape_type))
+                    v = scheme_intern_struct_prop_proc_shape(SCHEME_PROP_PROC_SHAPE_MODE(v));
+                  SCHEME_VEC_ELS(shapes)[k] = v;
+                } else
+                  SCHEME_VEC_ELS(shapes)[k] = scheme_void;
+              }
             }
             k++;
           }
@@ -10160,6 +10199,27 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
     }
     MZ_ASSERT(k == total_used);
   }
+}
+
+static Scheme_Object *get_value_shape(Scheme_Object *v)
+{
+  intptr_t s;
+  Scheme_Object *identity;
+
+  s = scheme_get_or_check_structure_shape(v, NULL);
+  if (s != -1) {
+    if (SCHEME_STRUCT_TYPEP(v))
+      identity = v;
+    else
+      identity = SCHEME_PRIM_CLOSURE_ELS(v)[0];
+    return scheme_make_struct_proc_shape(s, identity);
+  }
+
+  s = scheme_get_or_check_structure_property_shape(v, NULL);
+  if (s != -1)
+    return scheme_make_struct_property_proc_shape(s);
+
+  return scheme_get_or_check_procedure_shape(v, NULL);
 }
 
 /*========================================================================*/

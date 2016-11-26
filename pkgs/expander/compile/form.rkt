@@ -390,7 +390,7 @@
                                                       (module-use-phase mu))))
       (if mli
           ;; Found info for inlining:
-          (values (module-linklet-info-linklet mli)
+          (values (module-linklet-info-linklet-or-instance mli)
                   (and (module-linklet-info-module-uses mli)
                        (list->vector
                         (append

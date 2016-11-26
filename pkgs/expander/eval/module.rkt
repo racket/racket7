@@ -132,7 +132,7 @@
                               #:supermodule-name supermodule-name
                               #:get-all-variables (lambda () (get-all-variables phases-h))
                               #:phase-level-linklet-info-callback
-                              (lambda (phase-level)
+                              (lambda (phase-level ns)
                                 (module-linklet-info (hash-ref phases-h phase-level #f)
                                                      (hash-ref phase-to-link-modules phase-level #f)
                                                      original-self))

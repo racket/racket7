@@ -31,6 +31,9 @@ SHARED_OK Scheme_Hash_Tree *empty_hash_tree;
 SHARED_OK static int validate_compile_result = 0;
 SHARED_OK static int recompile_every_compile = 0;
 
+static Scheme_Object *constant_symbol;
+static Scheme_Object *consistent_symbol;
+
 THREAD_LOCAL_DECL(Scheme_Hash_Table *local_primitive_tables);
 
 static Scheme_Object *primitive_table(int argc, Scheme_Object **argv);
@@ -103,6 +106,11 @@ void scheme_init_linklet(Scheme_Startup_Env *env)
 #ifdef MZ_PRECISE_GC
   register_traversers();
 #endif
+
+  REGISTER_SO(constant_symbol);
+  REGISTER_SO(consistent_symbol);
+  constant_symbol = scheme_intern_symbol("constant");
+  consistent_symbol = scheme_intern_symbol("consistent");
 
   scheme_switch_prim_instance(env, "#%linklet");
 
@@ -582,23 +590,28 @@ static Scheme_Object *instance_variable_value(int argc, Scheme_Object **argv)
 static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object **argv)
 {
   Scheme_Bucket *b;
-  int set_as_constant = 0;
+  int set_flags = 0;
   
   if (!SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_instance_type))
     scheme_wrong_contract("instance-set-variable-value!", "instance?", 0, argc, argv);
   if (!SCHEME_SYMBOLP(argv[1]))
     scheme_wrong_contract("instance-set-variable-value!", "symbol?", 1, argc, argv);
+  if ((argc > 3) && !SCHEME_FALSEP(argv[3])) {
+    if (SAME_OBJ(argv[3], constant_symbol))
+      set_flags = GLOB_IS_IMMUTATED;
+    else if (SAME_OBJ(argv[3], consistent_symbol))
+      set_flags = GLOB_IS_IMMUTATED | GLOB_IS_CONSISTENT;
+    else
+      scheme_wrong_contract("instance-set-variable-value!", "(or/c #f 'constant 'consistent)", 3, argc, argv);
+  }
 
   b = scheme_instance_variable_bucket(argv[1], (Scheme_Instance *)argv[0]);
-
-  if ((argc > 3) && SCHEME_TRUEP(argv[3]))
-    set_as_constant = 1;
 
   scheme_set_global_bucket("instance-set-variable-value!", b, argv[2], 1);
     
   b->val = argv[2];
-  if (set_as_constant)
-    ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_IS_IMMUTATED;
+  if (set_flags)
+    ((Scheme_Bucket_With_Flags *)b)->flags |= set_flags;
 
   return scheme_void;
 }

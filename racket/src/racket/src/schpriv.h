@@ -3034,9 +3034,9 @@ Scheme_Object *scheme_make_struct_property_proc_shape(intptr_t k);
 #define SCHEME_PROP_PROC_SHAPE_MODE(obj) ((Scheme_Small_Object *)obj)->u.int_val
 
 Scheme_Object *scheme_get_or_check_procedure_shape(Scheme_Object *e, Scheme_Object *expected);
-int scheme_check_structure_shape(Scheme_Object *e, Scheme_Object *expected);
+intptr_t scheme_get_or_check_structure_shape(Scheme_Object *e, Scheme_Object *expected);
 int scheme_decode_struct_shape(Scheme_Object *shape, intptr_t *_v);
-int scheme_check_structure_property_shape(Scheme_Object *e, Scheme_Object *expected);
+intptr_t scheme_get_or_check_structure_property_shape(Scheme_Object *e, Scheme_Object *expected);
 int scheme_decode_struct_prop_shape(Scheme_Object *shape, intptr_t *_v);
 int scheme_closure_preserves_marks(Scheme_Object *p);
 int scheme_native_closure_preserves_marks(Scheme_Object *p);
