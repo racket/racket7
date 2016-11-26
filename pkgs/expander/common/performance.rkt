@@ -60,7 +60,21 @@
   (define-logger performance)
 
   (define (start-performance-region . path)
-    (set! region-stack (cons (region path 
+    (set! region-stack (cons (region (if region-stack
+                                         ;; Replace '_ elements:
+                                         (let loop ([path path]
+                                                    [enclosing-path (region-path (car region-stack))])
+                                           (if (null? path)
+                                               null
+                                               (cons (if (and (eq? '_ (car path))
+                                                              (pair? enclosing-path))
+                                                         (car enclosing-path)
+                                                         (car path))
+                                                     (loop (cdr path)
+                                                           (if (pair? enclosing-path)
+                                                               (cdr enclosing-path)
+                                                               null)))))
+                                         path)
                                      (current-inexact-milliseconds)
                                      (current-memory-use 'cumulative)
                                      0.0
@@ -79,13 +93,8 @@
     (define full-delta-memory (- now-memory (region-start-memory r)))
     (define delta-memory (- full-delta-memory (region-as-nested-memory r)))
 
-    (let loop ([accums accums] [path (region-path r)] [enclosing-path (or (and region-stack
-                                                                               (region-path (car region-stack)))
-                                                                          null)])
-      (define key (if (and (eq? '_ (car path))
-                           (pair? enclosing-path))
-                      (car enclosing-path)
-                      (car path)))
+    (let loop ([accums accums] [path (region-path r)])
+      (define key (car path))
       (let ([accum (or (hash-ref accums key #f)
                        (let ([accum (make-hasheq)])
                          (hash-set! accums key accum)
@@ -99,7 +108,7 @@
         (when (null? (cdr path))
          (set-stat-count! s (add1 (stat-count s))))
         (unless (null? (cdr path))
-          (loop accum (cdr path) (if (null? enclosing-path) null (cdr enclosing-path))))))
+          (loop accum (cdr path)))))
     
     (when region-stack
       (set-region-as-nested! (car region-stack)

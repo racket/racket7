@@ -134,7 +134,7 @@
                ;; need to turn each into the equivalent of
                ;;  (defined-values () (begin <expr> (values)))
                ;; form so it can be kept with definitions to
-               ;; preserved order
+               ;; preserve order
                (cons ids (append
                           (for/list ([done-body (in-list done-bodys)])
                             null)
