@@ -647,7 +647,7 @@
 
 ;; ----------------------------------------
 
-;; Result is #f for no binding, `ambigious-value` for an ambigious binding,
+;; Result is #f for no binding, `ambiguous-value` for an ambiguous binding,
 ;; or binding value
 (define (resolve s phase
                  #:ambiguous-value [ambiguous-value #f]
@@ -668,7 +668,7 @@
       ;; is a subset of the other, accumulate them into a list; maybe
       ;; we find a superset of both, later; if we end with a list,
       ;; then the binding is ambiguous. We expect that creating a list
-      ;; of ambigious scopes is rare relative to eventual success.
+      ;; of ambiguous scopes is rare relative to eventual success.
       (define-values (best-scopes best-binding)
         (for*/fold ([best-scopes #f] [best-binding #f])
                    ([sc (in-set scopes)]
@@ -692,7 +692,7 @@
            [(subset? best-scopes b-scopes)
             (values b-scopes binding)]
            [else
-            ;; Switch to ambigous mode
+            ;; Switch to ambiguous mode
             (values (list best-scopes b-scopes) #f)])))
       (cond
        [(pair? best-scopes) ; => ambiguous

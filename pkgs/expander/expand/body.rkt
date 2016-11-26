@@ -30,8 +30,8 @@
   (log-expand ctx 'enter-block)
   ;; In principle, we have an outside-edge scope that identifies the
   ;; original content of the definition context --- but a body always
-  ;; exists inside some binding form, so that form's scope will do
-  ;; The inside-edge scope identifiers any form that appears (perhaps
+  ;; exists inside some binding form, so that form's scope will do;
+  ;; the inside-edge scope identifies any form that appears (perhaps
   ;; through macro expansion) in the definition context
   (define inside-sc (new-scope 'intdef))
   (define init-bodys
