@@ -89,10 +89,10 @@
                              #:disappeared-transformer-bindings (reverse trans-idss))]
      [else
       (log-expand body-ctx 'next)
-      (define exp-body (expand (syntax-disarm (car bodys)) (if (and name (null? (cdr bodys)))
-                                                               (struct-copy expand-context body-ctx
-                                                                            [name name])
-                                                               body-ctx)))
+      (define exp-body (expand (car bodys) (if (and name (null? (cdr bodys)))
+                                               (struct-copy expand-context body-ctx
+                                                            [name name])
+                                               body-ctx)))
       (define disarmed-exp-body (syntax-disarm exp-body))
       (case (core-form-sym disarmed-exp-body phase)
         [(begin)

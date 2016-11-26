@@ -69,8 +69,8 @@
    [(and (pair? (syntax-e/no-taint s))
          (identifier? (car (syntax-e/no-taint s))))
     (expand-id-application-form s ctx alternate-id)]
-   [(or (pair? (syntax-e (syntax-disarm s)))
-        (null? (syntax-e (syntax-disarm s))))
+   [(or (pair? (syntax-e/no-taint s))
+        (null? (syntax-e/no-taint s)))
     ;; An "application" form that doesn't start with an identifier, so
     ;; use implicit `#%app`
     (expand-implicit '#%app s ctx #f)]
@@ -105,8 +105,7 @@
 
 ;; An "application" form that starts with an identifier
 (define (expand-id-application-form s ctx alternate-id)
-  (define disarmed-s (syntax-disarm s #f))
-  (define id (or alternate-id (car (syntax-e disarmed-s))))
+  (define id (or alternate-id (car (syntax-e/no-taint s))))
   (guard-stop
    id ctx s
    (define binding (resolve+shift id (expand-context-phase ctx)
@@ -122,7 +121,7 @@
     [else
      ;; Find out whether it's bound as a variable, syntax, or core form
      (define-values (t primitive? insp-of-t) (lookup binding ctx id
-                                                     #:in (and alternate-id (car (syntax-e disarmed-s)))
+                                                     #:in (and alternate-id (car (syntax-e/no-taint s)))
                                                      #:out-of-context-as-variable? (expand-context-in-local-expand? ctx)))
      (cond
       [(variable? t)
