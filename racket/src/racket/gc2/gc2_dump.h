@@ -6,7 +6,7 @@
 
 typedef char *(*GC_get_type_name_proc)(short t);
 typedef void (*GC_for_each_found_proc)(void *p);
-typedef void (*GC_for_each_struct_proc)(void *p);
+typedef void (*GC_for_each_struct_proc)(void *p, int sz);
 
 typedef int (*GC_record_traced_filter_proc)(void *p);
 typedef void (*GC_print_tagged_value_proc)(const char *prefix, 
