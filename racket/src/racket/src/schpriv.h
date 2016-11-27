@@ -1061,6 +1061,7 @@ typedef struct Scheme_Struct_Type {
 
 #if defined(MZ_GC_BACKTRACE) && defined(MZ_PRECISE_GC)
   intptr_t instance_count;
+  intptr_t instance_sizes;
 #endif
 
   struct Scheme_Struct_Type *parent_types[mzFLEX_ARRAY_DECL];

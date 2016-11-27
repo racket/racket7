@@ -5981,7 +5981,8 @@ void GC_dump_with_traces(int flags,
             sizes[tag] += info->size;
           }
           if ((tag == scheme_proc_struct_type) || (tag == scheme_structure_type)) {
-            if (for_each_struct) for_each_struct(obj_start);
+            if (for_each_struct)
+              for_each_struct(obj_start, gcWORDS_TO_BYTES(info->size));
           }
           if ((tag >= min_trace_for_tag) && (tag <= max_trace_for_tag)) {
             register_traced_object(obj_start);
@@ -6004,7 +6005,8 @@ void GC_dump_with_traces(int flags,
         sizes[tag] += gcBYTES_TO_WORDS(page->size);
       }
       if ((tag == scheme_proc_struct_type) || (tag == scheme_structure_type)) {
-        if (for_each_struct) for_each_struct(obj_start);
+        if (for_each_struct)
+          for_each_struct(obj_start, page->size);
       }
       if (((tag >= min_trace_for_tag) && (tag <= max_trace_for_tag))
           || ((-tag >= min_trace_for_tag) && (-tag <= max_trace_for_tag))) {
@@ -6032,7 +6034,8 @@ void GC_dump_with_traces(int flags,
                 sizes[tag] += info->size;
               }
               if ((tag == scheme_proc_struct_type) || (tag == scheme_structure_type)) {
-                if (for_each_struct) for_each_struct(obj_start);
+                if (for_each_struct)
+                  for_each_struct(obj_start, gcWORDS_TO_BYTES(info->size));
               }
               if ((tag >= min_trace_for_tag) && (tag <= max_trace_for_tag)) {
                 register_traced_object(obj_start);

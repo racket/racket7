@@ -1973,9 +1973,10 @@ static void increment_found_counter(void *p)
 #endif
 
 #if MZ_PRECISE_GC_TRACE
-static void count_struct_instance(void *p) {
+static void count_struct_instance(void *p, int sz) {
   Scheme_Structure *s = (Scheme_Structure *)p;
   s->stype->instance_count++;
+  s->stype->instance_sizes += sz;
 }
 #endif
 
@@ -2661,8 +2662,12 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
     while (SCHEME_PAIRP(cons_accum_result)) {
       Scheme_Struct_Type *stype = (Scheme_Struct_Type *)SCHEME_CAR(cons_accum_result);
       if (stype->instance_count) {
-        scheme_console_printf(" %32.32s: %10" PRIdPTR "\n", SCHEME_SYM_VAL(stype->name), stype->instance_count);
+        scheme_console_printf(" %32.32s: %10" PRIdPTR " %12" PRIdPTR "\n",
+                              SCHEME_SYM_VAL(stype->name),
+                              stype->instance_count,
+                              stype->instance_sizes);
         stype->instance_count = 0;
+        stype->instance_sizes = 0;
       }
       cons_accum_result = SCHEME_CDR(cons_accum_result);
     }
