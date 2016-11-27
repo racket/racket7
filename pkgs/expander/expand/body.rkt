@@ -251,6 +251,7 @@
                                              finish-ctx))
                 (loop rest-done-bodys))])))
     (log-expand body-ctx 'exit-list exp-bodys)
+    (reference-record-clear! frame-id)
     exp-bodys)
   (cond
    [(and (null? val-idss)

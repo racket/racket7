@@ -257,6 +257,8 @@
                (list keys exp-rhs)
                `[,ids ,exp-rhs])))
        (define exp-body (get-body))
+       (when frame-id
+         (reference-record-clear! frame-id))
        (if (expand-context-to-parsed? ctx)
            (if rec?
                (parsed-letrec-values rebuild-s val-name-idss clauses exp-body)

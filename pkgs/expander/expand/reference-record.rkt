@@ -12,7 +12,8 @@
          reference-record-used!
          reference-records-all-used!
          reference-record-bound!
-         reference-record-forward-references?)
+         reference-record-forward-references?
+         reference-record-clear!)
 
 (struct reference-record ([already-bound #:mutable]
                           [reference-before-bound #:mutable]
@@ -48,3 +49,7 @@
 (define (reference-record-forward-references? rr)
   (or (reference-record-all-referenced? rr)
       (positive? (set-count (reference-record-reference-before-bound rr)))))
+
+(define (reference-record-clear! rr)
+  (set-reference-record-already-bound! rr #f)
+  (set-reference-record-reference-before-bound! rr #f))
