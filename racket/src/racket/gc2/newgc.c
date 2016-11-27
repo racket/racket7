@@ -6076,14 +6076,28 @@ void GC_dump_with_traces(int flags,
             (uintptr_t) gen_half_size_in_use(gc)));
 
     for(i = 0; i < PAGE_TYPES; i++) {
-      uintptr_t total_use = 0, count = 0;
+      uintptr_t total_use = 0, count = 0, allocated = 0;
 
       for(page = gc->gen1_pages[i]; page; page = page->next) {
         total_use += page->size;
         count++;
+
+        if (i < PAGE_BIG) {
+          void **start = PAGE_START_VSS(page);
+          void **end = PAGE_END_VSS(page);
+
+          while(start < end) {
+            objhead *info = (objhead *)start;
+            if(!info->dead) {
+              allocated += gcWORDS_TO_BYTES(info->size);
+            }
+            start += info->size;
+          }
+        } else
+          allocated += page->size;
       }
-      GCWARN((GCOUTF, "Generation 1 [%s]: %" PRIdPTR " bytes used in %" PRIdPTR " pages\n",
-              type_name[i], total_use, count));
+      GCWARN((GCOUTF, "Generation 1 [%s]: %" PRIdPTR " bytes used of %" PRIdPTR " in %" PRIdPTR " pages\n",
+              type_name[i], allocated, total_use, count));
     }
 
     for (ty = 0; ty < MED_PAGE_TYPES; ty++) {
