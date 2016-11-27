@@ -66,15 +66,15 @@
   (cond
    [(identifier? s)
     (expand-identifier s ctx alternate-id)]
-   [(and (pair? (syntax-e/no-taint s))
-         (identifier? (car (syntax-e/no-taint s))))
+   [(and (pair? (syntax-content s))
+         (identifier? (car (syntax-content s))))
     (expand-id-application-form s ctx alternate-id)]
-   [(or (pair? (syntax-e/no-taint s))
-        (null? (syntax-e/no-taint s)))
+   [(or (pair? (syntax-content s))
+        (null? (syntax-content s)))
     ;; An "application" form that doesn't start with an identifier, so
     ;; use implicit `#%app`
     (expand-implicit '#%app s ctx #f)]
-   [(already-expanded? (syntax-e/no-taint s))
+   [(already-expanded? (syntax-content s))
     (expand-already-expanded s ctx)]
    [else
     ;; Anything other than an identifier or parens triggers the
