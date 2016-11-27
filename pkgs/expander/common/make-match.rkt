@@ -177,11 +177,11 @@
      
      (define (to-syntax-list s)
        (cond
+        [(list? s) s]
         [(pair? s)
          (define r (to-syntax-list (cdr s)))
          (and r (cons (car s) r))]
         [(rt-syntax? s) (to-syntax-list (rt-syntax-e s))]
-        [(list? s) s]
         [else #f]))
      
      (define-syntax (define-match stx)
