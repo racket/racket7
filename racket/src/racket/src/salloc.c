@@ -3302,17 +3302,23 @@ intptr_t scheme_count_envbox(Scheme_Object *root, Scheme_Hash_Table *ht)
 #define NUM_ALLOCS_BEFORE_REPORT 100000
 
 static Scheme_Hash_Table *allocs;
+static Scheme_Hash_Table *sizes;
 static int alloc_count;
 static int reporting;
 
 #include "../gc2/my_qsort.c"
-typedef struct alloc_count_result { int pos; int count; } alloc_count_result;
+typedef struct alloc_count_result { int pos; int count; intptr_t amt; } alloc_count_result;
 
 static int smaller_alloc_count(const void *a, const void *b) {
-  return ((alloc_count_result*)a)->count - ((alloc_count_result*)b)->count;
+  if (((alloc_count_result*)a)->amt < ((alloc_count_result*)b)->amt)
+    return -1;
+  else if (((alloc_count_result*)a)->amt > ((alloc_count_result*)b)->amt)
+    return 1;
+  else
+    return 0;
 }
 
-void scheme_record_allocation(Scheme_Object *tag)
+void scheme_record_allocation(Scheme_Object *tag, intptr_t sz)
 {
   Scheme_Object *c;
   
@@ -3323,14 +3329,20 @@ void scheme_record_allocation(Scheme_Object *tag)
 
   if (!allocs) {
     REGISTER_SO(allocs);
+    REGISTER_SO(sizes);
     reporting++;
     allocs = scheme_make_hash_table(SCHEME_hash_ptr);
+    sizes = scheme_make_hash_table(SCHEME_hash_ptr);
     --reporting;
   }
 
   c = scheme_hash_get(allocs, tag);
   if (!c) c = scheme_make_integer(0);
   scheme_hash_set(allocs, tag, scheme_make_integer(SCHEME_INT_VAL(c)+1));
+  c = scheme_hash_get(sizes, tag);
+  if (!c) c = scheme_make_integer(0);
+  scheme_hash_set(sizes, tag, scheme_make_integer(SCHEME_INT_VAL(c)+sz+sizeof(void*)));
+  /* size above includes an extra pointer to stay more in sync with newgc block header */
     
   if (alloc_count == NUM_ALLOCS_BEFORE_REPORT) {
     alloc_count_result *a;
@@ -3347,6 +3359,11 @@ void scheme_record_allocation(Scheme_Object *tag)
       if (allocs->vals[i]) {
         a[k].pos = i;
         a[k].count = SCHEME_INT_VAL(allocs->vals[i]);
+        c = scheme_hash_get(sizes, allocs->keys[i]);
+        if (c)
+          a[k].amt = SCHEME_INT_VAL(c);
+        else
+          a[k].amt = 0;
         k++;
       }
     }
@@ -3368,7 +3385,7 @@ void scheme_record_allocation(Scheme_Object *tag)
         s = scheme_write_to_string(tag, NULL);
       }
       
-      printf("%d %s\n", a[i].count, s);
+      printf("%" PRIdPTR " %d %s\n", a[i].amt, a[i].count, s);
     }
     
     alloc_count = 0;

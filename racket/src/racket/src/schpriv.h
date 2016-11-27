@@ -4430,10 +4430,10 @@ void scheme_count_generic(Scheme_Object *o, intptr_t *s, intptr_t *e, Scheme_Has
 #endif
 
 #if RECORD_ALLOCATION_COUNTS
-extern void scheme_record_allocation(Scheme_Object *key);
-# define DEBUG_COUNT_ALLOCATION(x) scheme_record_allocation(x);
+extern void scheme_record_allocation(Scheme_Object *key, intptr_t sz);
+# define DEBUG_COUNT_ALLOCATION(x, amt) scheme_record_allocation(x, amt);
 #else 
-# define DEBUG_COUNT_ALLOCATION(x) /* empty */
+# define DEBUG_COUNT_ALLOCATION(x, amt) /* empty */
 #endif
 
 /*========================================================================*/

@@ -2252,8 +2252,6 @@ scheme_case_lambda_execute(Scheme_Object *expr)
   int i, cnt;
   Scheme_Thread *p = scheme_current_thread;
 
-  DEBUG_COUNT_ALLOCATION(expr);
-
   seqin = (Scheme_Case_Lambda *)expr;
 
 #ifdef MZ_USE_JIT
@@ -2296,6 +2294,10 @@ scheme_case_lambda_execute(Scheme_Object *expr)
   seqout->so.type = scheme_case_closure_type;
   seqout->count = seqin->count;
   seqout->name = seqin->name;
+
+  DEBUG_COUNT_ALLOCATION(expr,
+                         (sizeof(Scheme_Case_Lambda)
+                          + (seqin->count - mzFLEX_DELTA) * sizeof(Scheme_Object *)));
 
   cnt = seqin->count;
   for (i = 0; i < cnt; i++) {
@@ -2505,10 +2507,8 @@ scheme_make_closure(Scheme_Thread *p, Scheme_Object *code, int close)
   GC_CAN_IGNORE mzshort *map;
   int i;
 
-  DEBUG_COUNT_ALLOCATION(code);
-
   data = (Scheme_Lambda *)code;
-  
+
 #ifdef MZ_USE_JIT
   if (data->u.native_code
       /* If the union points to a another Scheme_Lambda*, then it's not actually
@@ -2540,6 +2540,10 @@ scheme_make_closure(Scheme_Thread *p, Scheme_Object *code, int close)
   closure = (Scheme_Closure *)
     scheme_malloc_tagged(sizeof(Scheme_Closure)
 			 + (i - mzFLEX_DELTA) * sizeof(Scheme_Object *));
+
+  DEBUG_COUNT_ALLOCATION(code,
+                         (sizeof(Scheme_Closure)
+                          + (i - mzFLEX_DELTA) * sizeof(Scheme_Object *)));
 
   closure->so.type = scheme_closure_type;
   SCHEME_CLOSURE_CODE(closure) = data;
