@@ -1988,6 +1988,16 @@ static int record_traced_and_print_new(void *p)
 
   return record_traced(p);
 }
+
+static char struct_name_to_match[64];
+static int record_if_matching_struct_name(void *p)
+{
+  Scheme_Struct_Type *stype = ((Scheme_Structure *)p)->stype;
+  if (!strcmp(SCHEME_SYM_VAL(stype->name), struct_name_to_match))
+    return 1;
+  else
+    return 0;
+}
 #endif
 
 #if MZ_PRECISE_GC
@@ -2615,6 +2625,17 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
       scheme_end_atomic();      
       return scheme_make_integer_value((intptr_t)p[1]);
     }
+  } else if (c
+             && SCHEME_PAIRP(p[0])
+             && SCHEME_PAIRP(SCHEME_CDR(p[0]))
+             && SCHEME_NULLP(SCHEME_CDR(SCHEME_CDR(p[0])))
+             && SCHEME_SYMBOLP(SCHEME_CAR(p[0]))
+             && SCHEME_SYMBOLP(SCHEME_CADR(p[0]))
+             && !strcmp(SCHEME_SYM_VAL(SCHEME_CAR(p[0])), "struct")) {
+    trace_for_tag = scheme_structure_type;
+    dump_flags |= GC_DUMP_SHOW_TRACE;
+    record_traced_filter = record_if_matching_struct_name;
+    strncpy(struct_name_to_match, SCHEME_SYM_VAL(SCHEME_CADR(p[0])), sizeof(struct_name_to_match));
   } else if (c && SCHEME_INTP(p[0])) {
     trace_for_tag = SCHEME_INT_VAL(p[0]);
     dump_flags |= GC_DUMP_SHOW_TRACE;
@@ -2740,11 +2761,11 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
   }
 
   scheme_console_printf("Begin Help\n");
-  scheme_console_printf(" (dump-memory-stats sym) - prints paths to instances of type named by sym.\n");
-  scheme_console_printf("   Examples: (dump-memory-stats '<pair>), (dump-memory-stats 'frame).\n");
-  scheme_console_printf("   If sym is 'stack, prints paths to thread stacks.\n");
-  scheme_console_printf(" (dump-memory-stats sym 'objects) - prints all instances of type named by sym.\n");
-  scheme_console_printf(" (dump-memory-stats sym 'from from-v) - prints paths, paths through from-v first.\n");
+  scheme_console_printf(" (dump-memory-stats sym) - prints paths to instances of type named by sym\n");
+  scheme_console_printf("   Examples: (dump-memory-stats '<pair>), (dump-memory-stats 'frame)\n");
+  scheme_console_printf("   If sym is 'stack, prints paths to thread stacks\n");
+  scheme_console_printf(" (dump-memory-stats sym 'objects) - prints all instances of type named by sym\n");
+  scheme_console_printf(" (dump-memory-stats sym 'from from-v) - prints paths, paths through from-v first\n");
   scheme_console_printf("End Help\n");
 
   if (obj_type >= 0) {
@@ -2758,23 +2779,23 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
   if (!skip_summary) {
 #ifdef MZ_PRECISE_GC
     scheme_console_printf("Begin Help\n");
-    scheme_console_printf(" (dump-memory-stats 'count sym) - return number of instances of type named by sym.\n");
+    scheme_console_printf(" (dump-memory-stats 'count sym) - return number of instances of type named by sym\n");
     scheme_console_printf("   Example: (dump-memory-stats 'count '<pair>)\n");
 # if MZ_PRECISE_GC_TRACE
-    scheme_console_printf(" (dump-memory-stats sym ['new]) - prints paths to instances of type named by sym.\n");
+    scheme_console_printf(" (dump-memory-stats sym ['new]) - prints paths to instances of type named by sym\n");
     scheme_console_printf("   Example: (dump-memory-stats '<pair>)\n");
     scheme_console_printf("   If 'new, all will be retried, only new paths will be shown\n");
-    scheme_console_printf(" (dump-memory-stats 'struct) - show counts for specific structure types.\n");
-    scheme_console_printf(" (dump-memory-stats 'fnl) - prints not-yet-finalized objects.\n");
-    scheme_console_printf(" (dump-memory-stats num) - prints paths to objects with tag num.\n");
-    scheme_console_printf(" (dump-memory-stats -num) - prints paths to objects of size num.\n");
-    scheme_console_printf(" (dump-memory-stats sym/num len) - limits path to size len.\n");
-    scheme_console_printf(" (dump-memory-stats sym/num 'cons) - builds list instead of showing paths.\n");
-    scheme_console_printf(" (dump-memory-stats sym/num any num) - record only each numth object.\n");
-    scheme_console_printf(" (dump-memory-stats 'peek num v) - returns value if num is address of object, v otherwise.\n");
-    scheme_console_printf(" (dump-memory-stats 'next v) - next tagged object after v, #f if none; start with #f.\n");
-    scheme_console_printf(" (dump-memory-stats 'addr v) - returns the address of v.\n");
-    scheme_console_printf(" (dump-memory-stats thread) - shows information about the thread.\n");
+    scheme_console_printf(" (dump-memory-stats 'struct) - show counts for specific structure types\n");
+    scheme_console_printf(" (dump-memory-stats 'fnl) - prints not-yet-finalized objects\n");
+    scheme_console_printf(" (dump-memory-stats num) - prints paths to objects with tag num\n");
+    scheme_console_printf(" (dump-memory-stats -num) - prints paths to objects of size num\n");
+    scheme_console_printf(" (dump-memory-stats (list 'struct sym) len) - print paths to named structs\n");
+    scheme_console_printf(" (dump-memory-stats sym/num 'cons) - builds list instead of showing paths\n");
+    scheme_console_printf(" (dump-memory-stats sym/num any num) - record only each numth object\n");
+    scheme_console_printf(" (dump-memory-stats 'peek num v) - returns value if num is address of object, v otherwise\n");
+    scheme_console_printf(" (dump-memory-stats 'next v) - next tagged object after v, #f if none; start with #f\n");
+    scheme_console_printf(" (dump-memory-stats 'addr v) - returns the address of v\n");
+    scheme_console_printf(" (dump-memory-stats thread) - shows information about the thread\n");
 # endif
     scheme_console_printf("End Help\n");
 #endif
