@@ -161,7 +161,8 @@ Scheme_Object *scheme_make_stx(Scheme_Object *val,
 {
   Scheme_Stx *stx;
 
-  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_stx_type));
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_stx_type),
+                         sizeof(Scheme_Stx));
 
   stx = MALLOC_ONE_TAGGED(Scheme_Stx);
   stx->so.type = scheme_stx_type;

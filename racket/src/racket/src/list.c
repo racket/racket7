@@ -1039,11 +1039,11 @@ scheme_init_unsafe_hash (Scheme_Startup_Env *env)
 Scheme_Object *scheme_make_pair(Scheme_Object *car, Scheme_Object *cdr)
 {
 #ifdef MZ_PRECISE_GC
-  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_pair_type));
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_pair_type), sizeof(Scheme_Simple_Object));
   return GC_malloc_pair(car, cdr);
 #else
   Scheme_Object *cons;
-  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_pair_type));
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_pair_type), sizeof(Scheme_Simple_Object));
   cons = scheme_alloc_object();
   cons->type = scheme_pair_type;
   SCHEME_CAR(cons) = car;
@@ -1784,7 +1784,7 @@ Scheme_Object *scheme_box(Scheme_Object *v)
 {
   Scheme_Object *obj;
 
-  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_box_type));
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_box_type), sizeof(Scheme_Small_Object));
 
   obj = scheme_alloc_small_object();
   obj->type = scheme_box_type;
@@ -3623,15 +3623,13 @@ static Scheme_Object *eqv_hash_code(int argc, Scheme_Object *argv[])
 
 Scheme_Object *scheme_make_weak_box(Scheme_Object *v)
 {
-  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_weak_box_type));
-
 #ifdef MZ_PRECISE_GC
-  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_weak_box_type));
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_weak_box_type), sizeof(Scheme_Small_Object));
   return (Scheme_Object *)GC_malloc_weak_box(v, NULL, 0, 0);
 #else
   Scheme_Small_Object *obj;
 
-  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_weak_box_type));
+  DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_weak_box_type), sizeof(Scheme_Small_Object));
   
   obj = MALLOC_ONE_TAGGED_WEAK(Scheme_Small_Object);
   obj->iso.so.type = scheme_weak_box_type;
