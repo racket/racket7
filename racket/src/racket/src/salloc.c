@@ -2792,7 +2792,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
     scheme_console_printf(" (dump-memory-stats (list 'struct sym) len) - print paths to named structs\n");
     scheme_console_printf(" (dump-memory-stats sym/num 'cons) - builds list instead of showing paths\n");
     scheme_console_printf(" (dump-memory-stats sym/num any num) - record only each numth object\n");
-    scheme_console_printf(" (dump-memory-stats 'peek num v) - returns value if num is address of object, v otherwise\n");
+    scheme_console_printf(" (dump-memory-stats 'peek num v) - returns value if num is address of object, else v\n");
     scheme_console_printf(" (dump-memory-stats 'next v) - next tagged object after v, #f if none; start with #f\n");
     scheme_console_printf(" (dump-memory-stats 'addr v) - returns the address of v\n");
     scheme_console_printf(" (dump-memory-stats thread) - shows information about the thread\n");
