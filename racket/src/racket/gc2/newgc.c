@@ -2021,6 +2021,73 @@ inline static void clean_gen_half(NewGC *gc)
   gc->gen_half.curr_alloc_page = NULL;
 }
 
+
+  
+#if MZ_GC_BACKTRACE
+static GC_allocated_object_callback_proc GC_allocated_object_callback;
+static void count_object(void *p, intptr_t size, int tagged, int atomic);
+
+GC2_EXTERN void GC_set_allocated_object_callback(GC_allocated_object_callback_proc cb)
+{
+  GC_allocated_object_callback = cb;
+}
+
+static void report_gen0_objects(NewGC *gc) {
+  if (!postmaster_and_master_gc(gc)) {
+    mpage *p;
+    int ty, i;
+
+    gen0_sync_page_size_from_globals(gc);
+    
+    for (p = gc->gen0.pages; p; p = p->next) {
+      void **start = p->addr;
+      void **end = (void**)((char *)start + p->size);
+      while (start < end) {
+        objhead *info = (objhead *)start;
+        count_object(OBJHEAD_TO_OBJPTR(info),
+                     gcWORDS_TO_BYTES(info->size),
+                     ((info->type == PAGE_TAGGED)
+                      || (info->type == PAGE_PAIR)),
+                     (info->type == PAGE_ATOMIC));
+        start += info->size;
+      }
+    }
+
+    for (p = gc->gen0.big_pages; p; p = p->next) {
+      count_object(BIG_PAGE_TO_OBJECT(p),
+                   p->size,
+                   p->page_type == PAGE_TAGGED,
+                   p->page_type == PAGE_ATOMIC);
+    }
+    
+    for (ty = 0; ty < MED_PAGE_TYPES; ty++) {
+      for (i = 0; i < NUM_MED_PAGE_SIZES; i++) {
+        for (p = gc->med_pages[ty][i]; p; p = p->next) {
+          if (p->generation == AGE_GEN_0) {
+            void **start = PPTR(NUM(p->addr) + PREFIX_SIZE);
+            void **end = PPTR(NUM(p->addr) + APAGE_SIZE - p->obj_size);
+            
+            while (start < end) {
+              objhead *info = (objhead *)start;
+              if (!info->dead) {
+                count_object(OBJHEAD_TO_OBJPTR(info),
+                             gcWORDS_TO_BYTES(info->size),
+                             ((info->type == PAGE_TAGGED)
+                              || (info->type == PAGE_PAIR)),
+                             ty == MED_PAGE_ATOMIC_INDEX);
+              }
+              start += info->size;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+#else
+static void report_gen0_objects(NewGC *gc) { /* no-op */ }
+#endif
+
 /*****************************************************************************/
 /* Message allocator (intended for places)                                   */
 /*                                                                           */
@@ -5440,6 +5507,8 @@ static void garbage_collect(NewGC *gc, int force_full, int no_full,
 
   TIME_INIT();
 
+  report_gen0_objects(gc);
+
   /* inform the system (if it wants us to) that we're starting collection */
   if(gc->GC_collect_start_callback)
     gc->GC_collect_start_callback();
@@ -5940,7 +6009,38 @@ const char *trace_source_kind(int kind)
 # define print_traced_objects(x, q, z, w) /* */
 #endif
 
-#define MAX_DUMP_TAG 256
+#define MAX_DUMP_TAG 512
+
+#ifdef MZ_GC_BACKTRACE
+static uintptr_t alloc_counts[MAX_DUMP_TAG], alloc_sizes[MAX_DUMP_TAG];
+static uintptr_t tagged_sizes;
+static uintptr_t non_atomic_sizes;
+static uintptr_t atomic_sizes;
+
+static void count_object(void *p, intptr_t size, int tagged, int atomic)
+{
+  if (tagged) {
+    short t = *(short *)p;
+    if ((t >= 0) && (t < MAX_DUMP_TAG)) {
+      alloc_counts[t]++;
+      alloc_sizes[t] += size;
+    }
+    tagged_sizes += size;
+  } else if (atomic)
+    atomic_sizes += size;
+  else
+    non_atomic_sizes += size;
+  
+  if (GC_allocated_object_callback)
+    GC_allocated_object_callback(p, size, tagged, atomic);
+}
+
+#define SUMMARY_SUFFIX "/BT"
+#define BT_ALLOC_COUNTS alloc_counts
+#else
+#define SUMMARY_SUFFIX ""
+#define BT_ALLOC_COUNTS counts
+#endif
 
 void GC_dump_with_traces(int flags,
                          GC_get_type_name_proc get_type_name,
@@ -6059,9 +6159,12 @@ void GC_dump_with_traces(int flags,
     num_immobiles++;
 
   if (!(flags & GC_DUMP_SUPPRESS_SUMMARY)) {
-    GCPRINT(GCOUTF, "Begin Racket3m\n");
+    GCPRINT(GCOUTF, "Begin Racket3m" SUMMARY_SUFFIX "\n");
+#ifdef MZ_GC_BACKTRACE
+    GCPRINT(GCOUTF, "                   tag  live count  live size   past count  past size\n");
+#endif
     for (i = 0; i < MAX_DUMP_TAG; i++) {
-      if (counts[i]) {
+      if (counts[i] || BT_ALLOC_COUNTS[i]) {
         char *tn, buf[256];
         if (get_type_name)
           tn = get_type_name((Type_Tag)i);
@@ -6071,11 +6174,34 @@ void GC_dump_with_traces(int flags,
           sprintf(buf, "unknown,%d", i);
           tn = buf;
         }
-        GCPRINT(GCOUTF, "  %20.20s: %10" PRIdPTR " %10" PRIdPTR "\n",
-                tn, counts[i], gcWORDS_TO_BYTES(sizes[i]));
+        GCPRINT(GCOUTF, "  %20.20s: %10" PRIdPTR " %10" PRIdPTR
+#ifdef MZ_GC_BACKTRACE
+                "   %10" PRIdPTR " %10" PRIdPTR
+#endif
+                "\n",
+                tn, counts[i], gcWORDS_TO_BYTES(sizes[i])
+#ifdef MZ_GC_BACKTRACE
+                , alloc_counts[i], alloc_sizes[i]
+#endif
+                );
       }
     }
-    GCPRINT(GCOUTF, "End Racket3m\n");
+#ifdef MZ_GC_BACKTRACE
+    {
+      intptr_t tc = 0, ts = 0, tac = 0, tas = 0;
+      for (i = 0; i < MAX_DUMP_TAG; i++) {
+        tc += counts[i];
+        ts += gcWORDS_TO_BYTES(sizes[i]);
+        tac += alloc_counts[i];
+        tas += alloc_sizes[i];
+      }
+      GCPRINT(GCOUTF, "  %20.20s: %10" PRIdPTR " %10" PRIdPTR
+              "   %10" PRIdPTR " %10" PRIdPTR
+              "\n",
+              "TOTAL", tc, ts, tac, tas);
+    }
+#endif
+    GCPRINT(GCOUTF, "End Racket3m" SUMMARY_SUFFIX "\n");
 
     GCWARN((GCOUTF, "Generation 0: %" PRIdPTR " of %" PRIdPTR " bytes used\n",
             (uintptr_t) gen0_size_in_use(gc), gc->gen0.max_size));
@@ -6141,6 +6267,13 @@ void GC_dump_with_traces(int flags,
             gc->used_pages * APAGE_SIZE,
             mmu_memory_allocated(gc->mmu) - (gc->used_pages * APAGE_SIZE)));
     GCWARN((GCOUTF,"Phantom bytes: %" PRIdPTR "\n", (gc->phantom_count + gc->gen0_phantom_count)));
+    
+    GCWARN((GCOUTF,"Past allocated memory: %10" PRIdPTR "\n", gc->total_memory_allocated));
+ #ifdef MZ_GC_BACKTRACE
+    GCWARN((GCOUTF,"Past allocated tagged: %10" PRIdPTR "\n", tagged_sizes));
+    GCWARN((GCOUTF,"Past allocated array:  %10" PRIdPTR "\n", non_atomic_sizes));
+    GCWARN((GCOUTF,"Past allocated atomic: %10" PRIdPTR "\n", atomic_sizes));
+#endif
     GCWARN((GCOUTF,"# of major collections: %" PRIdPTR "\n", gc->num_major_collects));
     GCWARN((GCOUTF,"# of minor collections: %" PRIdPTR "\n", gc->num_minor_collects));
     GCWARN((GCOUTF,"# of installed finalizers: %i\n", gc->num_fnls));

@@ -1053,8 +1053,10 @@ typedef struct Scheme_Struct_Type {
   Scheme_Object *guard;
 
 #if defined(MZ_GC_BACKTRACE) && defined(MZ_PRECISE_GC)
-  intptr_t instance_count;
-  intptr_t instance_sizes;
+  intptr_t current_instance_count;
+  intptr_t current_instance_sizes;
+  intptr_t total_instance_count;
+  intptr_t total_instance_sizes;
 #endif
 
   struct Scheme_Struct_Type *parent_types[mzFLEX_ARRAY_DECL];
@@ -3602,18 +3604,6 @@ void scheme_count_class(Scheme_Object *o, intptr_t *s, intptr_t *e, Scheme_Hash_
 void scheme_count_class_data(Scheme_Object *o, intptr_t *s, intptr_t *e, Scheme_Hash_Table *ht);
 void scheme_count_generic(Scheme_Object *o, intptr_t *s, intptr_t *e, Scheme_Hash_Table *ht);
 #endif
-#endif
-
-/* See "salloc.c": */
-#ifndef RECORD_ALLOCATION_COUNTS
-# define RECORD_ALLOCATION_COUNTS 0
-#endif
-
-#if RECORD_ALLOCATION_COUNTS
-extern void scheme_record_allocation(Scheme_Object *key, intptr_t sz);
-# define DEBUG_COUNT_ALLOCATION(x, amt) scheme_record_allocation(x, amt);
-#else 
-# define DEBUG_COUNT_ALLOCATION(x, amt) /* empty */
 #endif
 
 /*========================================================================*/

@@ -40,4 +40,8 @@ GC2_EXTERN int GC_is_tagged(void *p);
 GC2_EXTERN int GC_is_tagged_start(void *p);
 GC2_EXTERN void *GC_next_tagged_start(void *p);
 
+typedef void (*GC_allocated_object_callback_proc)(void *, intptr_t size, int tagged, int atomic);
+
+GC2_EXTERN void GC_set_allocated_object_callback(GC_allocated_object_callback_proc proc);
+
 #endif

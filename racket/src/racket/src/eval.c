@@ -1875,10 +1875,6 @@ scheme_case_lambda_execute(Scheme_Object *expr)
   seqout->count = seqin->count;
   seqout->name = seqin->name;
 
-  DEBUG_COUNT_ALLOCATION(expr,
-                         (sizeof(Scheme_Case_Lambda)
-                          + (seqin->count - mzFLEX_DELTA) * sizeof(Scheme_Object *)));
-
   cnt = seqin->count;
   for (i = 0; i < cnt; i++) {
     if (SAME_TYPE(SCHEME_TYPE(seqin->array[i]), scheme_closure_type)) {
@@ -2003,10 +1999,6 @@ scheme_make_closure(Scheme_Thread *p, Scheme_Object *code, int close)
   closure = (Scheme_Closure *)
     scheme_malloc_tagged(sizeof(Scheme_Closure)
 			 + (i - mzFLEX_DELTA) * sizeof(Scheme_Object *));
-
-  DEBUG_COUNT_ALLOCATION(code,
-                         (sizeof(Scheme_Closure)
-                          + (i - mzFLEX_DELTA) * sizeof(Scheme_Object *)));
 
   closure->so.type = scheme_closure_type;
   SCHEME_CLOSURE_CODE(closure) = data;

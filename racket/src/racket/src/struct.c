@@ -2259,8 +2259,6 @@ scheme_make_struct_instance(Scheme_Object *_stype, int argc, Scheme_Object **arg
   inst = (Scheme_Structure *)
     scheme_malloc_tagged(STRUCT_BYTES(c));
   
-  DEBUG_COUNT_ALLOCATION((Scheme_Object *)stype, STRUCT_BYTES(c));
-
   inst->so.type = (stype->proc_attr ? scheme_proc_struct_type : scheme_structure_type);
   inst->stype = stype;
 
@@ -2308,8 +2306,6 @@ Scheme_Object *scheme_make_blank_prefab_struct_instance(Scheme_Struct_Type *styp
   inst = (Scheme_Structure *)
     scheme_malloc_tagged(STRUCT_BYTES(c));
   
-  DEBUG_COUNT_ALLOCATION((Scheme_Object *)stype, STRUCT_BYTES(c));
-
   inst->so.type = scheme_structure_type;
   inst->stype = stype;
   
@@ -2342,8 +2338,6 @@ Scheme_Object *scheme_make_prefab_struct_instance(Scheme_Struct_Type *stype,
   inst = (Scheme_Structure *)
     scheme_malloc_tagged(STRUCT_BYTES(c));
   
-  DEBUG_COUNT_ALLOCATION((Scheme_Object *)stype, STRUCT_BYTES(c));
-
   inst->so.type = scheme_structure_type;
   inst->stype = stype;
   
@@ -2399,8 +2393,6 @@ make_simple_struct_instance(int argc, Scheme_Object **args, Scheme_Object *prim)
   inst = (Scheme_Structure *)
     scheme_malloc_tagged(STRUCT_BYTES(c));
   
-  DEBUG_COUNT_ALLOCATION((Scheme_Object *)stype, STRUCT_BYTES(c));
-
   inst->so.type = scheme_structure_type;
   inst->stype = stype;
 

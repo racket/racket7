@@ -95,6 +95,10 @@ extern MZGC_DLLIMPORT void GC_register_late_disappearing_link(void **link, void 
 extern MZGC_DLLIMPORT void GC_register_indirect_disappearing_link(void **link, void *obj);
 #endif
 
+#ifdef MZ_GC_BACKTRACE
+static void init_allocation_callback(void);
+#endif
+
 SHARED_OK static int use_registered_statics;
 
 /************************************************************************/
@@ -143,6 +147,9 @@ void scheme_set_stack_base(void *base, int no_auto_statics) XFORM_SKIP_PROC
   use_registered_statics = no_auto_statics;
 #if defined(MZ_PRECISE_GC)
   GC_report_out_of_memory = scheme_out_of_memory_abort;
+# ifdef MZ_GC_BACKTRACE
+  init_allocation_callback();
+# endif
 #endif
 }
 
@@ -1989,6 +1996,7 @@ static int record_traced_and_print_new(void *p)
   return record_traced(p);
 }
 
+
 static char struct_name_to_match[64];
 static int record_if_matching_struct_name(void *p)
 {
@@ -1998,6 +2006,24 @@ static int record_if_matching_struct_name(void *p)
   else
     return 0;
 }
+
+static void record_allocated_object(void *p, intptr_t size, int tagged, int atomic)
+{
+  if (tagged) {
+    Scheme_Type t = *(Scheme_Type *)p;
+    if (SAME_TYPE(t, scheme_structure_type)
+        || SAME_TYPE(t, scheme_proc_struct_type)) {
+      Scheme_Structure *s = (Scheme_Structure *)p;
+      s->stype->total_instance_count++;
+      s->stype->total_instance_sizes += size;
+    }
+  }
+}
+
+static void init_allocation_callback() {
+  GC_set_allocated_object_callback(record_allocated_object);
+}
+
 #endif
 
 #if MZ_PRECISE_GC
@@ -2011,8 +2037,8 @@ static void increment_found_counter(void *p)
 #if MZ_PRECISE_GC_TRACE
 static void count_struct_instance(void *p, int sz) {
   Scheme_Structure *s = (Scheme_Structure *)p;
-  s->stype->instance_count++;
-  s->stype->instance_sizes += sz;
+  s->stype->current_instance_count++;
+  s->stype->current_instance_sizes += sz;
 }
 #endif
 
@@ -2707,13 +2733,15 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
     scheme_console_printf("Begin Struct\n");
     while (SCHEME_PAIRP(cons_accum_result)) {
       Scheme_Struct_Type *stype = (Scheme_Struct_Type *)SCHEME_CAR(cons_accum_result);
-      if (stype->instance_count) {
-        scheme_console_printf(" %32.32s: %10" PRIdPTR " %12" PRIdPTR "\n",
+      if (stype->total_instance_count) {
+        scheme_console_printf(" %32.32s: %10" PRIdPTR " %12" PRIdPTR "   %10" PRIdPTR " %12" PRIdPTR "\n",
                               SCHEME_SYM_VAL(stype->name),
-                              stype->instance_count,
-                              stype->instance_sizes);
-        stype->instance_count = 0;
-        stype->instance_sizes = 0;
+                              stype->current_instance_count,
+                              stype->current_instance_sizes,
+                              stype->total_instance_count,
+                              stype->total_instance_sizes);
+        stype->current_instance_count = 0;
+        stype->current_instance_sizes = 0;
       }
       cons_accum_result = SCHEME_CDR(cons_accum_result);
     }
@@ -2822,8 +2850,6 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
 
   return result;
 }
-
-
 
 #ifdef MEMORY_COUNTING_ON
 
@@ -3307,116 +3333,6 @@ intptr_t scheme_count_envbox(Scheme_Object *root, Scheme_Hash_Table *ht)
     return scheme_count_memory(SCHEME_ENVBOX_VAL(root), ht) + 4;
   else
     return 4;
-}
-
-#endif
-
-/**********************************************************************/
-
-#if RECORD_ALLOCATION_COUNTS
- 
-/* Allocation profiling --- prints allocated counts (not necessarily
-   still live) after every `NUM_ALLOCS_BEFORE_REPORT` structure and
-   closure allocations. Adjust that constant to match a test program.
-   Also, run with `racket -j` so that structure allocation is not
-   inlined, and don't use places.
-
-   Allocation countas are not exhaustive. You may need to add more
-   `DEBUG_COUNT_ALLOCATION(scheme_make_integer(scheme_...._type))`
-   at allocation sites. */
-
-#define NUM_ALLOCS_BEFORE_REPORT 100000
-
-static Scheme_Hash_Table *allocs;
-static Scheme_Hash_Table *sizes;
-static int alloc_count;
-static int reporting;
-
-#include "../gc2/my_qsort.c"
-typedef struct alloc_count_result { int pos; int count; intptr_t amt; } alloc_count_result;
-
-static int smaller_alloc_count(const void *a, const void *b) {
-  if (((alloc_count_result*)a)->amt < ((alloc_count_result*)b)->amt)
-    return -1;
-  else if (((alloc_count_result*)a)->amt > ((alloc_count_result*)b)->amt)
-    return 1;
-  else
-    return 0;
-}
-
-void scheme_record_allocation(Scheme_Object *tag, intptr_t sz)
-{
-  Scheme_Object *c;
-  
-  if (reporting)
-    return;
-
-  alloc_count++;
-
-  if (!allocs) {
-    REGISTER_SO(allocs);
-    REGISTER_SO(sizes);
-    reporting++;
-    allocs = scheme_make_hash_table(SCHEME_hash_ptr);
-    sizes = scheme_make_hash_table(SCHEME_hash_ptr);
-    --reporting;
-  }
-
-  c = scheme_hash_get(allocs, tag);
-  if (!c) c = scheme_make_integer(0);
-  scheme_hash_set(allocs, tag, scheme_make_integer(SCHEME_INT_VAL(c)+1));
-  c = scheme_hash_get(sizes, tag);
-  if (!c) c = scheme_make_integer(0);
-  scheme_hash_set(sizes, tag, scheme_make_integer(SCHEME_INT_VAL(c)+sz+sizeof(void*)));
-  /* size above includes an extra pointer to stay more in sync with newgc block header */
-    
-  if (alloc_count == NUM_ALLOCS_BEFORE_REPORT) {
-    alloc_count_result *a;
-    int count = allocs->count;
-    int k = 0;
-    int i;
-    char *s;
-
-    reporting++;
-    
-    a = MALLOC_N_ATOMIC(alloc_count_result, count);
-    printf("\n");
-    for (i = allocs->size; i--; ) {
-      if (allocs->vals[i]) {
-        a[k].pos = i;
-        a[k].count = SCHEME_INT_VAL(allocs->vals[i]);
-        c = scheme_hash_get(sizes, allocs->keys[i]);
-        if (c)
-          a[k].amt = SCHEME_INT_VAL(c);
-        else
-          a[k].amt = 0;
-        k++;
-      }
-    }
-    my_qsort(a, allocs->count, sizeof(alloc_count_result), smaller_alloc_count);
-    
-    for (i = 0; i < count; i++) {
-      tag = allocs->keys[a[i].pos];
-
-      if (SCHEME_INTP(tag)) {
-        s = scheme_get_type_name(SCHEME_INT_VAL(tag));
-      } else {
-        if (SAME_TYPE(SCHEME_TYPE(tag), scheme_lambda_type)
-            && ((Scheme_Lambda *)tag)->name)
-          tag = ((Scheme_Lambda*)tag)->name;
-        else if (SAME_TYPE(SCHEME_TYPE(tag), scheme_case_lambda_sequence_type)
-                 && ((Scheme_Case_Lambda *)tag)->name)
-          tag = ((Scheme_Case_Lambda*)tag)->name;
-      
-        s = scheme_write_to_string(tag, NULL);
-      }
-      
-      printf("%" PRIdPTR " %d %s\n", a[i].amt, a[i].count, s);
-    }
-    
-    alloc_count = 0;
-    --reporting;
-  }
 }
 
 #endif
