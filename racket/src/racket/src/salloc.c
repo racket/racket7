@@ -2734,7 +2734,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
     while (SCHEME_PAIRP(cons_accum_result)) {
       Scheme_Struct_Type *stype = (Scheme_Struct_Type *)SCHEME_CAR(cons_accum_result);
       if (stype->total_instance_count) {
-        scheme_console_printf(" %32.32s: %10" PRIdPTR " %12" PRIdPTR "   %10" PRIdPTR " %12" PRIdPTR "\n",
+        scheme_console_printf(" %32.32s: %10" PRIdPTR " %10" PRIdPTR "   %10" PRIdPTR " %10" PRIdPTR "\n",
                               SCHEME_SYM_VAL(stype->name),
                               stype->current_instance_count,
                               stype->current_instance_sizes,
