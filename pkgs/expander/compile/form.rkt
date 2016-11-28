@@ -395,7 +395,7 @@
                        (list->vector
                         (append
                          '(#f #f) ; boilerplate imports common to all modules
-                         (for/list ([sub-mu (module-linklet-info-module-uses mli)])
+                         (for/list ([sub-mu (in-list (module-linklet-info-module-uses mli))])
                            (intern-module-use
                             (module-use (module-path-index-shift
                                          (module-use-module sub-mu)

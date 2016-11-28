@@ -75,7 +75,7 @@
    [(symbol? p) (format "'~s" p)]
    [else (format "(submod ~a~a)"
                  (format-resolved-module-path-name (car p))
-                 (apply string-append (for/list ([i (cdr p)])
+                 (apply string-append (for/list ([i (in-list (cdr p))])
                                         (format " ~s" i))))]))
 
 (define (resolved-module-path-root-name r)
