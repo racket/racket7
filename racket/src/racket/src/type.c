@@ -302,7 +302,11 @@ scheme_init_type ()
 
   set_name(scheme_environment_variables_type, "<environment-variables>");
 
-#ifdef MZ_GC_BACKTRACE
+  set_name(scheme_prompt_type, "<prompt>");
+  set_name(scheme_startup_env_type, "<startup-env>");
+  set_name(scheme_ctype_type, "<ctype>");
+
+#ifdef MZ_PRECISE_GC
   set_name(scheme_rt_runstack, "<runstack>");
   set_name(scheme_rt_meta_cont, "<meta-continuation>");
   set_name(scheme_rt_weak_array, "<weak-array>");
@@ -319,6 +323,29 @@ scheme_init_type ()
   set_name(scheme_rt_native_code_plus_case, "<native-code+case>");
   set_name(scheme_rt_sfs_info, "<compile-safe-for-space-frame>");
   set_name(scheme_rt_letrec_check_frame, "<compile-letrec-check-frame>");
+  set_name(scheme_rt_saved_stack, "<saved-stack>");
+  set_name(scheme_rt_overflow_jmp, "<overflow-jump>");
+  set_name(scheme_rt_dyn_wind, "<dynamic-wind>");
+  set_name(scheme_rt_dyn_wind_info, "<dynamic-wind-info>");
+  set_name(scheme_rt_dyn_wind_cell, "<dynamic-wind-cell>");
+  set_name(scheme_rt_input_fd, "<input-fd>");
+  set_name(scheme_rt_pipe, "<pipe>");
+  set_name(scheme_rt_param_data, "<param-data>");
+  set_name(scheme_rt_will, "<will>");
+  set_name(scheme_rt_finalization, "<finalization>");
+  set_name(scheme_rt_finalizations, "<finalizations>");
+  set_name(scheme_thread_hop_type, "<thread-hop>");
+  set_name(scheme_rt_evt, "<internal-evt>");
+  set_name(scheme_rt_syncing, "<syncing-evt>");
+  set_name(scheme_rt_user_input, "<user-input>");
+  set_name(scheme_rt_user_output, "<user-output>");
+  set_name(scheme_rt_compact_port, "<compact-port>");
+  set_name(scheme_rt_rx_lazy_string, "<rx-lazy-string>");
+  set_name(scheme_rt_parameterization, "<internal-parameterization>");
+  set_name(scheme_rt_delay_load_info, "<delay-load-info>");
+  set_name(scheme_rt_validate_clearing, "<validate-clearing>");
+  set_name(scheme_rt_print_params, "<print-params>");
+  set_name(scheme_rt_comp_env, "<compiler-env>");
 #endif
 }
 
