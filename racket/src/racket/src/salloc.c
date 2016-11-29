@@ -1996,7 +1996,6 @@ static int record_traced_and_print_new(void *p)
   return record_traced(p);
 }
 
-
 static char struct_name_to_match[64];
 static int record_if_matching_struct_name(void *p)
 {
