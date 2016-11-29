@@ -2918,6 +2918,24 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
       print(scheme_protect_quote(b->tbranch), notdisplay, 1, NULL, mt, pp);
       closed = print(scheme_protect_quote(b->fbranch), notdisplay, 1, NULL, mt, pp);
     }
+#ifdef MZ_PRECISE_GC
+  else if (SAME_TYPE(SCHEME_TYPE(obj), scheme_rt_delay_load_info))
+    {
+      Scheme_Load_Delay *ld;
+      int l;
+      ld = (Scheme_Load_Delay *)obj;
+      print_utf8_string(pp, "#<delay-load-info:", 0, 18);
+      if (SCHEME_PATHP(ld->path)) {
+        l = SCHEME_PATH_LEN(ld->path);
+        print_this_string(pp, SCHEME_PATH_VAL(ld->path), 0, l);
+      }
+      else {
+        print_utf8_string(pp, "???", 0, 3);
+      }
+      print_utf8_string(pp, ">", 0, 1);
+
+    }
+#endif
   else if (SAME_TYPE(SCHEME_TYPE(obj), scheme_quote_compilation_type))
     {
       Scheme_Hash_Table *q_ht;

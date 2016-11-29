@@ -4521,26 +4521,6 @@ static void pop_indentation(Scheme_Object *indentation)
 /*                               .zo reader                               */
 /*========================================================================*/
 
-typedef struct Scheme_Load_Delay {
-  MZTAG_IF_REQUIRED
-  Scheme_Object *path;
-  intptr_t file_offset, size;
-  uintptr_t symtab_size;
-  Scheme_Object **symtab;
-  intptr_t *shared_offsets;
-  Scheme_Hash_Table *symtab_entries; /* `symtab` content to be skipped by resolve_references */
-  Scheme_Object *relto;
-  Scheme_Unmarshal_Tables *ut;
-  struct CPort *current_rp;
-  int perma_cache;
-  unsigned char *cached;
-  Scheme_Object *cached_port;
-  struct Scheme_Load_Delay *clear_bytes_prev;
-  struct Scheme_Load_Delay *clear_bytes_next;
-  int unsafe_ok;
-  mzlonglong bytecode_hash;
-} Scheme_Load_Delay;
-
 #define ZO_CHECK(x) if (!(x)) scheme_ill_formed_code(port);
 #define RANGE_CHECK(x, y) ZO_CHECK (x y)
 #define RANGE_POS_CHECK(x, y) ZO_CHECK ((x > 0) && (x y))
