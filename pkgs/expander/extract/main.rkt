@@ -100,7 +100,11 @@
                 #:needed needed
                 #:exports exports))
     
-    (define simplified-expr (simplify-definitions flattened-linklet-expr))
+    (define simplified-expr
+      flattened-linklet-expr
+      #;
+      ;; Not yet ready:
+      (simplify-definitions flattened-linklet-expr))
     
     ;; Remove unreferenced definitions
     (define gced-linklet-expr
