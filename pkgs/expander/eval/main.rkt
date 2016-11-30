@@ -55,14 +55,14 @@
    [else
     (per-top-level s ns 
                    #:single (lambda (s ns tail?)
-                              (eval-compiled (compile s ns) ns #:as-tail? tail?)))]))
+                              (eval-compiled (compile s ns) ns tail?)))]))
 
-(define (eval-compiled c ns #:as-tail? [as-tail? #t])
+(define (eval-compiled c ns [as-tail? #t])
   (cond
    [(compiled-module-expression? c)
     (eval-module c #:namespace ns)]
    [else
-    (eval-top c ns eval-compiled #:as-tail? as-tail?)]))
+    (eval-top c ns eval-compiled as-tail?)]))
 
 ;; This `compile` is suitable as a compile handler that will be called
 ;; by the `compile` and `compile-syntax` of '#%kernel

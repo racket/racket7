@@ -36,21 +36,21 @@
   (and (linklet-directory? ld)
        (not (hash-ref (linklet-directory->hash ld) #f #f))))
 
-(define (eval-top c ns [eval-compiled eval-top] #:as-tail? [as-tail? #t])
+(define (eval-top c ns [eval-compiled eval-top] [as-tail? #t])
   (if (compiled-multiple-top? c)
-      (eval-multiple-tops c ns eval-compiled #:as-tail? as-tail?)
-      (eval-one-top c ns #:as-tail? as-tail?)))
+      (eval-multiple-tops c ns eval-compiled as-tail?)
+      (eval-one-top c ns as-tail?)))
 
-(define (eval-multiple-tops c ns eval-compiled #:as-tail? as-tail?)
+(define (eval-multiple-tops c ns eval-compiled as-tail?)
   (define (eval-compiled-parts l)
     (let loop ([l l])
       (cond
        [(null? l) void]
        [(null? (cdr l))
         ;; Tail call:
-        (eval-compiled (car l) ns #:as-tail? as-tail?)]
+        (eval-compiled (car l) ns as-tail?)]
        [else
-        (eval-compiled (car l) ns #:as-tail? #f)
+        (eval-compiled (car l) ns #f)
         (loop (cdr l))])))
   
   (cond
@@ -68,9 +68,8 @@
     ;; No shared data? Strage, but we can carry on, anyway:
     (eval-compiled-parts (compiled-top->compiled-tops c))]))
 
-(define (eval-one-top c ns
-                      #:single-expression? [single-expression? #f]
-                      #:as-tail? [as-tail? #t])
+(define (eval-one-top c ns [as-tail? #t]
+                      #:single-expression? [single-expression? #f])
   (performance-region
    ['eval (if single-expression? 'transformer 'top)]
    

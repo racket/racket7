@@ -59,6 +59,9 @@
         [(make-struct-field-mutator)
          (and (ok-make-struct-field-accessor/mutator? e locals 'mutator)
               1)]
+        [(make-struct-type-property)
+         (and (ok-make-struct-type-property? e)
+              3)]
         [else
          (define v (correlated-e e))
          (and
@@ -99,6 +102,18 @@
         [else
          (for/fold ([locals locals]) ([id (in-list (correlated->list ids))])
            (hash-set locals (correlated-e id) #t))]))))
+
+;; ----------------------------------------
+
+(define (ok-make-struct-type-property? e)
+  (define l (correlated->list e))
+  (and (or ((length l) . = . 3)
+           ((length l) . = . 2))
+       (for/and ([arg (cdr l)]
+                 [pred (list
+                        (lambda (v) (quoted? symbol? v))
+                        (lambda (v) (is-lambda? v 2)))])
+         (pred arg))))
 
 ;; ----------------------------------------
 
@@ -171,10 +186,24 @@
                            (correlated-e (list-ref (correlated->list prop+val) 1))))))))
 
 (define (known-good-struct-property+value? prop-expr val-expr immutables-expr)
-  (case (correlated-e prop-expr)
-    [(prop:evt) (immutable-field? val-expr immutables-expr)]
-    [(prop:procedure) (immutable-field? val-expr immutables-expr)]
+  (define prop-name (correlated-e prop-expr))
+  (case prop-name
+    [(prop:evt) (or (is-lambda? val-expr 1)
+                    (immutable-field? val-expr immutables-expr))]
+    [(prop:procedure) (or (is-lambda? val-expr)
+                          (immutable-field? val-expr immutables-expr))]
+    [(prop:custom-write) (is-lambda? val-expr 3)]
+    [(prop:method-arity-error) #t]
     [else #f]))
+
+;; is expr a procedure of specified arity? (arity irrelevant if not specified)
+(define (is-lambda? expr [arity #f])
+  (and (pair? (correlated-e expr))
+       (eq? 'lambda (car (correlated-e expr)))
+       (or (not arity)
+           (= arity (length (correlated->list (cadr (correlated->list expr))))))))
+       
+    
 
 (define (immutable-field? val-expr immutables-expr)
   (and (quoted? exact-nonnegative-integer? val-expr)

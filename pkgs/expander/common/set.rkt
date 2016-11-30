@@ -75,7 +75,7 @@
 
 (define (set-intersect s1 s2)
   (if ((set-count s1) . < . (set-count s2))
-      (set-union s2 s1)
+      (set-intersect s2 s1)
       (for/fold ([s s2]) ([k (in-set s2)])
         (if (hash-ref s1 k #f)
             s
