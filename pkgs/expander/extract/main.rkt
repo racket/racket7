@@ -8,6 +8,7 @@
          "check-and-report.rkt"
          "flatten.rkt"
          "gc-defn.rkt"
+         "simplify-defn.rkt"
          "decompile.rkt"
          "save-and-report.rkt"
          racket/pretty)
@@ -101,19 +102,12 @@
                 #:exports exports))
     
     (define simplified-expr
-      flattened-linklet-expr
-      #;
-      ;; Not yet ready:
+      ;flattened-linklet-expr #;
       (simplify-definitions flattened-linklet-expr))
     
     ;; Remove unreferenced definitions
     (define gced-linklet-expr
-      (for/fold ([simplified-expr simplified-expr]) ([_ 5])
-        (garbage-collect-definitions simplified-expr)))
-    
-
-    (with-output-to-file "/tmp/linklet.rkt" #:exists 'truncate
-        (lambda () (pretty-print gced-linklet-expr)))
+      (garbage-collect-definitions simplified-expr))
     
     (cond
      [as-decompiled?
