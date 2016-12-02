@@ -6,7 +6,7 @@
          "../run/status.rkt"
          (prefix-in bootstrap: "../run/linklet.rkt")
          "symbol.rkt"
-         "utils.rkt")
+         "defn-utils.rkt")
 
 (provide garbage-collect-definitions)
 
@@ -17,20 +17,17 @@
 
   (define used-syms (make-hasheq))
 
-  ;; maps known definitions to one of:
-  ;; #s(def) -- all we know is that it's defined
-  ;; #s(lam n pure?) -- function of arity n, may be pure (b/c constructor), pure must return 1 val
-  ;; #s(property) -- struct property with no guard
-  ;; #s(struct-ty n) -- struct type with n fields
+  ;; See "../compile/side-effect.rkt" for the meaning of
+  ;; values in `seen-defns`
   (define seen-defns (make-hasheq))
-  (hash-set! seen-defns 'struct:exn:fail (struct-op 'struct-type 2))
-  (hash-set! seen-defns 'make-thread-cell (struct-op 'constructor 1))
-  (hash-set! seen-defns 'make-continuation-prompt-tag (struct-op 'constructor 1))
-  (hash-set! seen-defns 'make-weak-hash (struct-op 'constructor 0))
-  (hash-set! seen-defns 'gensym (struct-op 'constructor 0))
-  (hash-set! seen-defns 'string (struct-op 'constructor 2))
-  (hash-set! seen-defns 'cons (struct-op 'constructor 2))
-
+  ;; Register some core primitives that have specific properties:
+  (hash-set! seen-defns 'struct:exn:fail (known-struct-op 'struct-type 2))
+  (hash-set! seen-defns 'make-thread-cell (known-struct-op 'constructor 1))
+  (hash-set! seen-defns 'make-continuation-prompt-tag (known-struct-op 'constructor 1))
+  (hash-set! seen-defns 'make-weak-hash (known-struct-op 'constructor 0))
+  (hash-set! seen-defns 'gensym (known-struct-op 'constructor 0))
+  (hash-set! seen-defns 'string (known-struct-op 'constructor 2))
+  (hash-set! seen-defns 'cons (known-struct-op 'constructor 2))
 
   ;; Map symbols to definition right-hand sides
   (define sym-to-rhs (make-hasheq))
@@ -63,7 +60,7 @@
                     #:break (not (safe-defn? d))
                     [s (in-list (defn-syms d))])
              (unless (hash-ref seen-defns s #f)
-               (hash-set! seen-defns s #s(def))))
+               (hash-set! seen-defns s (known-defined))))
            (define e (car body))
            (define s
              (cond [(any-side-effects? (defn-rhs e) (length (defn-syms e)) ref? #:known-defns seen-defns)

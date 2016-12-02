@@ -7,7 +7,7 @@
          "../run/status.rkt"
          (prefix-in bootstrap: "../run/linklet.rkt")
          "symbol.rkt"
-         "utils.rkt")
+         "defn-utils.rkt")
 
 (provide simplify-definitions simplify-expr)
 
@@ -135,7 +135,7 @@
              (for* ([d (in-list body)]
                     #:break (not (safe-defn? d))
                     [s (in-list (defn-syms d))])
-               (hash-set! seen-defns s #s(def)))
+               (hash-set! seen-defns s (known-defined)))
              (define e (car body))
              (define new-defn 
                (list 'define-values (defn-syms e) (simplify-expr (defn-rhs e) all-mutated-vars ref?)))
@@ -146,4 +146,3 @@
 
   (append (take linklet-expr 3)
           new-body))
-

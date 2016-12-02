@@ -102,7 +102,6 @@
                 #:exports exports))
     
     (define simplified-expr
-      ;flattened-linklet-expr #;
       (simplify-definitions flattened-linklet-expr))
     
     ;; Remove unreferenced definitions

@@ -9,18 +9,26 @@
 ;; improved by a simple analysis of whether a module body has any
 ;; side-effects.
 
-(provide any-side-effects?)
+(provide any-side-effects?
+         (struct-out known-defined)
+         (struct-out known-property)
+         (struct-out known-function)
+         (struct-out known-struct-op))
 
 ;; known definitions map to one of
-;; #s(def) -- all we know is that it's defined
-;; #s(lam arity pure?) -- function of known arity, may be pure (b/c constructor), pure must return 1 value
-;; #s(property) -- struct property with no guard
-;; #s(struct-ty n) -- struct type with n fields
-;; #s(struct-op type n) -- struct operation for a type with n fields
-(struct property () #:prefab)
-(struct def () #:prefab)
-(struct lam (arity pure?) #:prefab)
-(struct struct-op (type field-count) #:prefab)
+;; #s(known-defined) -- all we know is that it's defined
+;; #s(known-property) -- defined as a struct property with no guard
+;; #s(known-function arity pure?) -- function of known arity and maybe known pure, where
+;;                                   pure must return 1 value
+;; #s(known-struct-op type n) -- struct operation for a type with n fields
+;;                               where type is one of: 'struct-type, 'constructor
+;;                                                     'predicate, 'accessor, or 'mutator 
+;;                               and the 'constructor mode can be used for things that
+;;                               construct built-in datatypes
+(struct known-defined () #:prefab)
+(struct known-property () #:prefab)
+(struct known-function (arity pure?) #:prefab)
+(struct known-struct-op (type field-count) #:prefab)
 
 (define (any-side-effects? e ; compiled expression
                            expected-results ; number of expected results, or #f if any number is ok
@@ -77,25 +85,27 @@
               3)]
         [else
          (define v (correlated-e e))
-         (cond [(or (string? v) (number? v) (boolean? v) (char? v))
-                1] ;; unquoted vals
-               [(and (pair? v) (hash-ref defns (correlated-e (car v)) #f))
-                =>
-                (lambda (d)
-                  (define-correlated-match m e '(_ e ...))
-                  (and (struct-op? d) (eq? 'constructor (struct-op-type d))
-                       (= (struct-op-field-count d) (length (m 'e)))
-                       (for/and ([e (in-list (m 'e))])
-                         (not (any-side-effects? e 1 required-reference? #:locals locals #:known-defns defns)))
-                       1))]
-               [else
-                (and
-                 (or (self-quoting-in-linklet? v)
-                     (and (symbol? v)
-                          (or (hash-ref locals v #f)
-                              (built-in-symbol? v)
-                              (required-reference? v))))
-                 1)])])))
+         (cond
+          [(or (string? v) (number? v) (boolean? v) (char? v))
+           1] ;; unquoted vals
+          [(and (pair? v) (hash-ref defns (correlated-e (car v)) #f))
+           =>
+           (lambda (d)
+             (define-correlated-match m e '(_ e ...))
+             (and (known-struct-op? d)
+                  (eq? 'constructor (known-struct-op-type d))
+                  (= (known-struct-op-field-count d) (length (m 'e)))
+                  (for/and ([e (in-list (m 'e))])
+                    (not (any-side-effects? e 1 required-reference? #:locals locals #:known-defns defns)))
+                  1))]
+          [else
+           (and
+            (or (self-quoting-in-linklet? v)
+                (and (symbol? v)
+                     (or (hash-ref locals v #f)
+                         (built-in-symbol? v)
+                         (required-reference? v))))
+            1)])])))
   (not (and actual-results
             (or (not expected-results)
                 (= actual-results expected-results)))))
@@ -117,7 +127,7 @@
                                                        predicate
                                                        accessor
                                                        mutator))])
-           (hash-set locals (correlated-e id) (struct-op type field-count)))]
+           (hash-set locals (correlated-e id) (known-struct-op type field-count)))]
         [(let-values)
          (if (null? (correlated-e (correlated-cadr rhs)))
              (loop (caddr (correlated->list rhs)))
@@ -150,7 +160,7 @@
                     (and (eq? 'cons (correlated-e (car prop+val)))
                          (or (memq (correlated-e (list-ref prop+val 1))
                                    '(prop:procedure prop:equal+hash prop:custom-write))
-                             (property? (hash-ref defns (correlated-e (list-ref prop+val 1)) #f)))
+                             (known-property? (hash-ref defns (correlated-e (list-ref prop+val 1)) #f)))
                          (not (any-side-effects? (list-ref prop+val 2) 1 (lambda (x) #f) #:known-defns defns))))))
            ;; All properties must be distinct
            (= (sub1 (correlated-length v))
@@ -193,7 +203,8 @@
   (or (quoted? false? e)
       (let ([o (hash-ref defns (correlated-e e) #f)])
         (and o
-             (struct-op? o) (eq? 'struct-type (struct-op-type o))))))
+             (known-struct-op? o)
+             (eq? 'struct-type (known-struct-op-type o))))))
 
 (define (extract-struct-field-count-lower-bound e)
   ;; e is already checked by `ok-make-struct-type?`
@@ -270,15 +281,16 @@
           (immutable-field? 1 immutables-expr))]
     [else
      (define o (hash-ref defns prop-name #f))
-     (and o (property? o)
+     (and o
+          (known-property? o)
           (not (any-side-effects? val-expr 1 (lambda (x) (hash-ref defns x #f)) #:known-defns defns)))]))
 
 ;; is expr a procedure of specified arity? (arity irrelevant if #f)
 (define (is-lambda? expr arity defns)
   (define lookup (hash-ref defns expr #f))
-  (or (and lookup (lam? lookup) ;; is it a known procedure?
+  (or (and lookup (known-function? lookup) ;; is it a known procedure?
            (or (not arity) ;; arity doesn't matter
-               (equal? arity (lam-arity lookup)))) ;; arity the same
+               (equal? arity (known-function-arity lookup)))) ;; arity the same
       (and (pair? (correlated-e expr))
            (eq? 'case-lambda (car (correlated-e expr)))
            (not arity))
@@ -328,9 +340,9 @@
                  (hash-ref locals (correlated-e (list-ref l 1))
                            (lambda ()
                              (hash-ref defns (correlated-e (list-ref l 1)) #f)))))
-  (and (struct-op? a)
-       (eq? (struct-op-type a) type)
-       ((field-count-expr-to-field-count (list-ref l 2)) . < . (struct-op-field-count a))
+  (and (known-struct-op? a)
+       (eq? (known-struct-op-type a) type)
+       ((field-count-expr-to-field-count (list-ref l 2)) . < . (known-struct-op-field-count a))
        (or (= (length l) 3) (quoted? symbol? (list-ref l 3)))))
 
 ;; ----------------------------------------

@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/match
-         "../run/status.rkt")
+         "../run/status.rkt"
+         "../compile/side-effect.rkt")
 (provide (all-defined-out))
 
 (define (defn? e)
@@ -19,9 +20,9 @@
      i]
     [`(make-struct-type ,_ ,s ,i 0 #f . ,_)
      (define h (hash-ref defns s #f))
-     (and (struct-op? h)
-          (eq? (struct-op-type h) 'struct-type)
-          (+ i (struct-op-field-count h)))]
+     (and (known-struct-op? h)
+          (eq? (known-struct-op-type h) 'struct-type)
+          (+ i (known-struct-op-field-count h)))]
     [`(let-values (((,ty ,mk ,pred ,ref ,mut)
                     (let-values ()
                       (let-values ()
@@ -35,26 +36,15 @@
           f)]
     [_ #f]))
 
-;; checks for properties without guards
-(define (simple-property e)
-  (match e
-    [`(make-struct-type-property ,_) #t]
-    [_ #f]))
-
-(struct def () #:prefab)
-(struct property () #:prefab)
-(struct lam (arity pure?) #:prefab)
-(struct struct-op (type field-count) #:prefab)
-
 (define (add-defn-types! seen-defns syms rhs)
   (for ([s (in-list syms)])
     (unless (hash-ref seen-defns s #f)
-      (hash-set! seen-defns s (def))))
+      (hash-set! seen-defns s (known-defined))))
   (cond 
    ;; known-arity lambda, not known to be pure
    [(and (= 1 (length syms)) (lambda-arity rhs))
     =>
-    (lambda (a) (hash-set! seen-defns (car syms) (lam a #f)))]
+    (lambda (a) (hash-set! seen-defns (car syms) (known-function a #f)))]
    [(and (= 5 (length syms)) (struct-arity rhs seen-defns))
     =>
     (lambda (a)
@@ -64,7 +54,7 @@
                              predicate
                              accessor
                              mutator))])
-        (hash-set! seen-defns sym (struct-op type a))))]
+        (hash-set! seen-defns sym (known-struct-op type a))))]
    [(and (>= 3 (length syms)) (struct-arity rhs seen-defns))
     =>
     (lambda (a) 
@@ -72,8 +62,15 @@
             [type (in-list '(struct-type
                              constructor
                              predicate))])
-        (hash-set! seen-defns sym (struct-op type a))))]
-   [(and (= 3 (length syms)) (simple-property rhs))
-    (hash-set! seen-defns (list-ref syms 0) (property))
-    (hash-set! seen-defns (list-ref syms 1) (lam 1 #t))
-    (hash-set! seen-defns (list-ref syms 2) (lam 1 #t))]))
+        (hash-set! seen-defns sym (known-struct-op type a))))]
+   [(and (= 3 (length syms)) (simple-property? rhs))
+    (hash-set! seen-defns (list-ref syms 0) (known-property))
+    (hash-set! seen-defns (list-ref syms 1) (known-function 1 #t))
+    (hash-set! seen-defns (list-ref syms 2) (known-function 1 #t))]))
+
+;; checks for properties without guards
+(define (simple-property? e)
+  (match e
+    [`(make-struct-type-property ,_) #t]
+    [_ #f]))
+
