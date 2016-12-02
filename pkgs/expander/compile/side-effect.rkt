@@ -176,8 +176,8 @@
   (define auto-field-count-expr (and ((length l) . > . 4)
                                      (list-ref l 4)))
   (define num-fields
-    (+ (field-count-expr-to-field-count init-field-count-expr)
-       (field-count-expr-to-field-count auto-field-count-expr)))
+    (maybe+ (field-count-expr-to-field-count init-field-count-expr)
+            (field-count-expr-to-field-count auto-field-count-expr)))
   (define immutables-expr (or (and ((length l) . > . 9)
                                    (list-ref l 9))
                               'null))
@@ -322,6 +322,7 @@
 (define (procedure-spec? e field-count)
   (or (quoted? false? e)
       (and (quoted? exact-nonnegative-integer? e)
+           field-count
            (< (quoted-value e) field-count))
       (is-lambda? e #f #hasheq())))
 
@@ -344,6 +345,11 @@
        (eq? (known-struct-op-type a) type)
        ((field-count-expr-to-field-count (list-ref l 2)) . < . (known-struct-op-field-count a))
        (or (= (length l) 3) (quoted? symbol? (list-ref l 3)))))
+
+;; ----------------------------------------
+
+(define (maybe+ x y)
+  (and x y (+ x y)))
 
 ;; ----------------------------------------
 
