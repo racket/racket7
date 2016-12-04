@@ -46,6 +46,9 @@
      [to-source? ht]
      [else
       (compiled-in-memory (hash->linklet-directory ht)
+                          #f
+                          null
+                          null
                           #hasheqv()
                           #f
                           #hasheqv()

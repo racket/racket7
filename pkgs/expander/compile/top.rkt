@@ -134,6 +134,9 @@
      ;; If the compiled code is executed directly, it must be in its
      ;; original phase, and we'll share the original values
      (compiled-in-memory (hash->linklet-directory (hasheq #f bundle))
+                         #f ; self
+                         null ; requires
+                         null ; provides
                          phase-to-link-module-uses
                          (current-code-inspector)
                          phase-to-link-extra-inspectorsss

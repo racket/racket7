@@ -61,6 +61,7 @@
 (define (correlated->list e)
   (let loop ([e e])
     (cond
+     [(list? e) e]
      [(pair? e) (cons (car e) (loop (cdr e)))]
      [(null? e) null]
      [(syntax? e) (loop (syntax-e e))]

@@ -328,9 +328,11 @@
                              (list deserialize-instance))))
 
   (define declaration-instance
-    (instantiate-linklet (eval-linklet (hash-ref h 'decl))
-                         (list deserialize-instance
-                               data-instance)))
+    (if (compiled-in-memory? c)
+        (make-declaration-instance-from-compiled-in-memory c)
+        (instantiate-linklet (eval-linklet (hash-ref h 'decl))
+                             (list deserialize-instance
+                                   data-instance))))
   
   (values dh h data-instance declaration-instance))
 
@@ -349,6 +351,13 @@
 (define (make-data-instance-from-compiled-in-memory cim)
   (make-instance 'data #f
                  mpi-vector-id (compiled-in-memory-mpis cim)))
+
+(define (make-declaration-instance-from-compiled-in-memory cim)
+  (make-instance 'decl #f
+                 'self-mpi (compiled-in-memory-original-self cim)
+                 'requires (compiled-in-memory-requires cim)
+                 'provides (compiled-in-memory-provides cim)
+                 'phase-to-link-modules (compiled-in-memory-phase-to-link-module-uses cim)))
 
 (define (make-syntax-literal-data-instance-from-compiled-in-memory cim)
   (make-instance 'syntax-literal-data #f

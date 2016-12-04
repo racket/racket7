@@ -143,31 +143,28 @@
                                                #:cctx body-cctx
                                                #:modules-being-compiled modules-being-compiled))
 
-   ;; Generate module-declaration info, which includes linking
-   ;; information for each phase
-   (define declaration-body
-     `((define-values (self-mpi) ,(add-module-path-index! mpis self))
-       (define-values (requires) ,(generate-deserialize requires mpis #:syntax-support? #f))
-       (define-values (provides) ,(generate-deserialize provides mpis #:syntax-support? #f))
-       (define-values (phase-to-link-modules) ,phase-to-link-module-uses-expr)))
-
-   ;; Assemble the declaration linking unit, which is instanted
-   ;; once for a module declaration and shared among instances
+   ;; Assemble the declaration linking unit, which includes linking
+   ;; information for each phase, is instanted once for a module
+   ;; declaration, and is shared among instances
    (define declaration-linklet
-     ((if to-source? values (lambda (s) (performance-region
-                                    ['compile 'module 'linklet]
-                                    (compile-linklet s 'decl))))
-      `(linklet
-        ;; imports
-        (,deserialize-imports
-         [,mpi-vector-id])
-        ;; exports
-        (self-mpi
-         requires
-         provides
-         phase-to-link-modules)
-        ;; body
-        ,@declaration-body)))
+     (and serializable?
+          ((if to-source? values (lambda (s) (performance-region
+                                         ['compile 'module 'linklet]
+                                         (compile-linklet s 'decl))))
+           `(linklet
+             ;; imports
+             (,deserialize-imports
+              [,mpi-vector-id])
+             ;; exports
+             (self-mpi
+              requires
+              provides
+              phase-to-link-modules)
+             ;; body
+             (define-values (self-mpi) ,(add-module-path-index! mpis self))
+             (define-values (requires) ,(generate-deserialize requires mpis #:syntax-support? #f))
+             (define-values (provides) ,(generate-deserialize provides mpis #:syntax-support? #f))
+             (define-values (phase-to-link-modules) ,phase-to-link-module-uses-expr)))))
    
    ;; Assemble a linklet that shifts syntax objects on demand.
    ;; Include an encoding of the root expand context, if any, so that
@@ -253,7 +250,10 @@
    ;; Combine linklets with other metadata as the bundle:
    (define bundle
      (let* ([bundle (hash-set body-linklets 'name full-module-name)]
-            [bundle (hash-set bundle 'decl declaration-linklet)]
+            [bundle (hash-set bundle 'decl (or declaration-linklet 
+                                               ;; Need a 'decl mapping to indicate
+                                               ;; that bundle is a module:
+                                               'in-memory))]
             [bundle (if data-linklet
                         (hash-set bundle 'data data-linklet)
                         bundle)]
@@ -310,6 +310,9 @@
     [else
      ;; Save mpis and syntax for direct evaluation, instead of unmarshaling:
      (compiled-in-memory ld
+                         self
+                         requires
+                         provides
                          phase-to-link-module-uses
                          (current-code-inspector)
                          phase-to-link-extra-inspectorsss

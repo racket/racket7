@@ -9,7 +9,10 @@
 (provide (struct-out compiled-in-memory))
 
 (struct compiled-in-memory (linklet-directory ;; includes content of `{pre,post}-compiled-tops`; may be just a bundle
-                            ;; Shortcut, instead of using the metadata linklet:
+                            ;; Shortcuts, instead of using the metadata linklet:
+                            original-self
+                            requires
+                            provides
                             phase-to-link-module-uses
                             ;; Maybe provide more capability than the module's declaration inspector:
                             compile-time-inspector
