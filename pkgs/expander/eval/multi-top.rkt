@@ -58,8 +58,8 @@
                                       syntax-literals-tree)))
     (compiled-in-memory ld
                         #f ; self
-                        null ; requires
-                        null ; provides
+                        #f ; requires
+                        #f ; provides
                         (vector-ref phase-to-link-modules-vector (vector-ref phase-to-link-modules-tree 0))
                         #f ; compile-time-inspector
                         #hasheqv() ; phase-to-link-extra-inspectorsss

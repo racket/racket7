@@ -105,7 +105,7 @@
 (struct lifted-parsed-begin (seq last))
 
 (define (compile-single s ns expand serializable? to-source?)
-  (define exp-s (expand s ns #f #t))
+  (define exp-s (expand s ns #f #t serializable?))
   (let loop ([exp-s exp-s])
     (cond
       [(parsed-module? exp-s)
@@ -128,26 +128,30 @@
 ;; existed) to be called by `expand` and `expand-syntax`.
 ;; [Don't use keyword arguments here, because the function is
 ;;  exported for use by an embedding runtime system.]
-(define (expand s [ns (current-namespace)] [log-expand? #f] [to-parsed? #f])
+(define (expand s [ns (current-namespace)] [log-expand? #f] [to-parsed? #f] [serializable? #f])
   (when log-expand? (log-expand-start))
   (per-top-level s ns
-                 #:single (lambda (s ns as-tail?) (expand-single s ns to-parsed?))
+                 #:single (lambda (s ns as-tail?) (expand-single s ns to-parsed? serializable?))
                  #:combine cons
                  #:wrap re-pair))
 
-(define (expand-single s ns to-parsed?)
+(define (expand-single s ns to-parsed? serializable?)
   (define-values (require-lifts lifts exp-s)
-    (expand-capturing-lifts s (make-expand-context ns #:to-parsed? to-parsed?)))
+    (expand-capturing-lifts s (make-expand-context ns
+                                                   #:to-parsed? to-parsed?
+                                                   #:for-serializable? serializable?)))
   (cond
    [(and (null? require-lifts) (null? lifts)) exp-s]
    [to-parsed?
     (wrap-lifts-as-lifted-parsed-begin require-lifts
                                        lifts
                                        exp-s s
-                                       #:adjust-form (lambda (form) (expand-single form ns to-parsed?)))]
+                                       #:adjust-form (lambda (form)
+                                                       (expand-single form ns to-parsed? serializable?)))]
    [else
     (wrap-lifts-as-begin (append require-lifts lifts)
-                         #:adjust-form (lambda (form) (expand-single form ns to-parsed?))
+                         #:adjust-form (lambda (form)
+                                         (expand-single form ns to-parsed? serializable?))
                          exp-s
                          s (namespace-phase ns))]))
 
@@ -183,7 +187,8 @@
                        #:single single        ; handle discovered form; #f => stop after immediate
                        #:combine [combine #f] ; how to cons a recur result, or not
                        #:wrap [wrap #f]       ; how to wrap a list of recur results, or not
-                       #:just-once? [just-once? #f]) ; single expansion step
+                       #:just-once? [just-once? #f] ; single expansion step
+                       #:serializable? [serializable? #f]) ; for module+submodule expansion
   (define s (maybe-intro given-s ns))
   (define ctx (make-expand-context ns))
   (define phase (namespace-phase ns))
@@ -191,7 +196,8 @@
     (define tl-ctx (struct-copy expand-context ctx
                                 [phase phase]
                                 [namespace ns]
-                                [just-once? just-once?]))
+                                [just-once? just-once?]
+                                [for-serializable? serializable?]))
     (define-values (require-lifts lifts exp-s)
       (expand-capturing-lifts s (struct-copy expand-context tl-ctx
                                              [only-immediate? #t]

@@ -20,7 +20,9 @@
          "reserved-symbol.rkt"
          "instance.rkt"
          "form.rkt"
-         "compiled-in-memory.rkt")
+         "compiled-in-memory.rkt"
+         "../eval/reflect.rkt"
+         "../eval/reflect-name.rkt")
 
 (provide compile-module)
 
@@ -28,27 +30,73 @@
 ;; `compiled-in-memory` --- or a hash table containing S-expression
 ;; linklets if `to-source?` is true.
 (define (compile-module p cctx
-                        #:with-submodules? [with-submodules? #t]
-                        #:as-submodule? [as-submodule? #f]
-                        #:serializable? [serializable? with-submodules?]
+                        #:force-linklet-directory? [force-linklet-directory? #f]
+                        #:serializable? [serializable? #f]
                         #:to-source? [to-source? #f]
-                        #:modules-being-compiled [modules-being-compiled (and with-submodules?
-                                                                              (make-hasheq))])
+                        #:modules-being-compiled [modules-being-compiled (make-hasheq)]
+                        #:need-compiled-submodule-rename? [need-compiled-submodule-rename? #t])
+
+  (define full-module-name (let ([parent-full-name (compile-context-full-module-name cctx)]
+                                 [name (syntax-e (parsed-module-name-id p))])
+                             (if parent-full-name
+                                 (append (if (list? parent-full-name)
+                                             parent-full-name
+                                             (list parent-full-name))
+                                         (list name))
+                                 name)))
+  
+  ;; Extract submodules; each list is (cons linklet-directory-key compiled-in-memory)
+  (define compiled-submodules (parsed-module-compiled-submodules p))
+  (define (get-submodules star?)
+    (for/list ([(name star?+compiled) (in-hash compiled-submodules)]
+               #:when (eq? star? (car star?+compiled)))
+      (cons name (if (and need-compiled-submodule-rename?
+                          (not (parsed-module-compiled-module p)))
+                     (update-submodule-names (cdr star?+compiled) name full-module-name)
+                     (cdr star?+compiled)))))
+  (define pre-submodules (get-submodules #f))
+  (define post-submodules (get-submodules #t))
+  
+  (cond
+   [(parsed-module-compiled-module p)
+    => (lambda (c)
+         ;; We've already compiled the module body during expansion.
+         ;; Update the name in the compiled form and add in submodules.
+         (define-values (name prefix) (if (symbol? full-module-name)
+                                          (values full-module-name null)
+                                          (let ([r (reverse full-module-name)])
+                                            (values (car r) (reverse (cdr r))))))
+         (define m (change-module-name c name prefix))
+         (module-compiled-submodules (module-compiled-submodules m #t (map cdr pre-submodules))
+                                     #f
+                                     (map cdr post-submodules)))]
+   [else
+    (compile-module-from-parsed p cctx
+                                #:full-module-name full-module-name
+                                #:force-linklet-directory? force-linklet-directory?
+                                #:serializable? serializable?
+                                #:to-source? to-source?
+                                #:modules-being-compiled modules-being-compiled
+                                #:pre-submodules pre-submodules
+                                #:post-submodules post-submodules
+                                #:need-compiled-submodule-rename? need-compiled-submodule-rename?)]))
+  
+;; ------------------------------------------------------------
+   
+(define (compile-module-from-parsed p cctx
+                                    #:full-module-name full-module-name
+                                    #:force-linklet-directory? force-linklet-directory?
+                                    #:serializable? serializable?
+                                    #:to-source? to-source?
+                                    #:modules-being-compiled modules-being-compiled
+                                    #:pre-submodules pre-submodules
+                                    #:post-submodules post-submodules
+                                    #:need-compiled-submodule-rename? need-compiled-submodule-rename?)
   (performance-region
    ['compile 'module]
    
-   ;; Some information about a module is commuicated here through syntax
-   ;; propertoes, such as 'module-requires
    (define enclosing-self (compile-context-module-self cctx))
    (define self (parsed-module-self p))
-   (define full-module-name (let ([parent-full-name (compile-context-full-module-name cctx)]
-                                  [name (syntax-e (parsed-module-name-id p))])
-                              (if parent-full-name
-                                  (append (if (list? parent-full-name)
-                                              parent-full-name
-                                              (list parent-full-name))
-                                          (list name))
-                                  name)))
    (define requires (parsed-module-requires p))
    (define provides (parsed-module-provides p))
    (define encoded-root-expand-ctx-box (box (parsed-module-encoded-root-ctx p))) ; for `module->namespace`
@@ -78,16 +126,15 @@
      (unless (hash-ref side-effects phase #f)
        (when (any-side-effects? e expected-results required-reference?)
          (hash-set! side-effects phase #t))))
-
-   ;; Compile submodules; each list is (cons linklet-directory-key compiled-in-memory)
-   (define pre-submodules (compile-submodules #:star? #f
-                                              #:bodys bodys
-                                              #:with-submodules? with-submodules?
-                                              #:serializable? serializable?
-                                              #:to-source? to-source?
-                                              #:cctx body-cctx
-                                              #:modules-being-compiled modules-being-compiled))
-
+   
+   (when (and need-compiled-submodule-rename?
+              modules-being-compiled)
+     ;; Re-register submodules, since they're so far registered under
+     ;; the expand-time module path.
+     (unless (null? post-submodules)
+       (error "internal error: have post submodules, but not already compiled"))
+     (register-compiled-submodules modules-being-compiled pre-submodules self))
+   
    ;; Compile the sequence of body forms:
    (define-values (body-linklets
                    min-phase
@@ -123,7 +170,7 @@
                                                 (and ht (hash-ref ht phase #f)))
                     #:to-source? to-source?))
    
-   (when with-submodules?
+   (when modules-being-compiled
      ;; Record this module's linklets for cross-module inlining among (sub)modules
      ;; that are compiled together
      (hash-set! modules-being-compiled
@@ -134,15 +181,6 @@
                                                (hash-ref phase-to-link-module-uses phase #f)
                                                self)))))
    
-   ;; Compile submodules; each list is (cons linklet-directory-key compiled-in-memory)
-   (define post-submodules (compile-submodules #:star? #t
-                                               #:bodys bodys
-                                               #:with-submodules? with-submodules?
-                                               #:serializable? serializable?
-                                               #:to-source? to-source?
-                                               #:cctx body-cctx
-                                               #:modules-being-compiled modules-being-compiled))
-
    ;; Assemble the declaration linking unit, which includes linking
    ;; information for each phase, is instanted once for a module
    ;; declaration, and is shared among instances
@@ -294,7 +332,7 @@
      (cond
       [(and (null? pre-submodules)
             (null? post-submodules)
-            (not as-submodule?))
+            (not force-linklet-directory?))
        ;; Just use the bundle representation directly:
        bundle]
       [else
@@ -325,40 +363,31 @@
 
 ;; ----------------------------------------
 
-;; Walk though body to extract and compile submodules that are
-;; declared with `form-name` (which is 'module or 'module*)
-(define (compile-submodules #:star? star?
-                            #:bodys bodys
-                            #:with-submodules? with-submodules?
-                            #:serializable? serializable?
-                            #:to-source? to-source?
-                            #:cctx body-cctx
-                            #:modules-being-compiled modules-being-compiled)
-  (cond
-   [(not with-submodules?)
-    null]
-   [else
-    (let loop ([bodys bodys]
-               [phase 0])
-      (cond
-       [(null? bodys) null]
-       [else
-        (define body (car bodys))
-        (cond
-         [(and (parsed-module? body)
-               (eq? (and star? #t) (and (parsed-module-star? body) #t)))
-          (cons (cons (syntax-e (parsed-module-name-id body))
-                      (compile-module body body-cctx
-                                      #:as-submodule? #t
-                                      #:serializable? serializable?
-                                      #:to-source? to-source?
-                                      #:modules-being-compiled modules-being-compiled))
-                (loop (cdr bodys) phase))]
-         [(parsed-begin-for-syntax? body)
-          (append (loop (parsed-begin-for-syntax-body body) (add1 phase))
-                  (loop (cdr bodys) phase))]
-         [else
-          (loop (cdr bodys) phase)])]))]))
+;; When a submodule is compiled while expanding a module, then it has a base
+;; module name that is an uninterned symbol. 
+(define (update-submodule-names cim name full-module-name)
+  (change-module-name cim name (if (symbol? full-module-name)
+                                   (list full-module-name)
+                                   (reverse (cdr (reverse full-module-name))))))
+
+(define (register-compiled-submodules modules-being-compiled pre-submodules self)
+  (for ([s (in-list pre-submodules)])
+    (define name (car s))
+    (define cim (cdr s))
+    (define phase-to-link-module-uses (compiled-in-memory-phase-to-link-module-uses cim))
+    (define ld (compiled-in-memory-linklet-directory cim))
+    (define sm-self (module-path-index-join `(submod "." ,name) self))
+    (hash-set! modules-being-compiled
+               (module-path-index-resolve sm-self)
+               (for/hasheq ([(phase linklet) (in-hash (linklet-bundle->hash
+                                                       (if (linklet-directory? ld)
+                                                           (hash-ref (linklet-directory->hash ld) #f)
+                                                           ld)))]
+                            #:when (number? phase))
+                 (values phase
+                         (module-linklet-info linklet
+                                              (hash-ref phase-to-link-module-uses phase #f)
+                                              self))))))
 
 ;; ----------------------------------------
 

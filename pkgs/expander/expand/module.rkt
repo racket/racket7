@@ -82,7 +82,9 @@
                        #:enclosing-all-scopes-stx [enclosing-all-scopes-stx #f]
                        #:enclosing-is-cross-phase-persistent? [enclosing-is-cross-phase-persistent? #f]
                        #:enclosing-requires+provides [enclosing-r+p #f]
-                       #:mpis-for-enclosing-reset [mpis-for-enclosing-reset #f])
+                       #:mpis-for-enclosing-reset [mpis-for-enclosing-reset #f]
+                       ;; For cross-linklet inlining among submodules compiled together:
+                       #:modules-being-compiled [modules-being-compiled (make-hasheq)])
    (log-expand init-ctx 'prim-module)
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(module id:module-name initial-require body ...))
@@ -165,9 +167,17 @@
    ;; Table of symbols picked for each binding in this module:
    (define defined-syms (root-expand-context-defined-syms root-ctx)) ; phase -> sym -> id
 
+   ;; So that compilations of submodules can be preserved for
+   ;; inclusion in an overall compiled module:
+   (define compiled-submodules (make-hasheq))
+
+   ;; If we compile the module for use by `module*` submodules, keep that
+   ;; compiled form to possibly avoid compiling again.
+   (define compiled-module-box (box #f))
+   
    ;; Accumulate module path indexes used by submodules to refer to this module
    (define mpis-to-reset (box null))
-     
+
    ;; Initial require
    (define (initial-require!)
      (cond
@@ -204,7 +214,9 @@
      ;; the requires, provides and definitions information each time
      (when again?
        (requires+provides-reset! requires+provides)
-       (initial-require!))
+       (initial-require!)
+       (hash-clear! compiled-submodules)
+       (set-box! compiled-module-box #f))
      (set! again? #t)
      
      ;; In case `#%module-begin` expansion is forced on syntax that
@@ -294,6 +306,8 @@
                                    #:defined-syms defined-syms
                                    #:declared-keywords declared-keywords
                                    #:declared-submodule-names declared-submodule-names
+                                   #:compiled-submodules compiled-submodules
+                                   #:modules-being-compiled modules-being-compiled
                                    #:mpis-to-reset mpis-to-reset
                                    #:loop pass-1-and-2-loop))
 
@@ -316,6 +330,8 @@
                                            #:ctx body-ctx
                                            #:self self
                                            #:declared-submodule-names declared-submodule-names
+                                           #:compiled-submodules compiled-submodules
+                                           #:modules-being-compiled modules-being-compiled
                                            #:mpis-to-reset mpis-to-reset)))
 
      ;; Check that any tentatively allowed reference at phase >= 1 is ok
@@ -362,7 +378,10 @@
                                             #:namespace m-ns
                                             #:self self
                                             #:enclosing enclosing-self
-                                            #:root-ctx root-ctx)))
+                                            #:root-ctx root-ctx
+                                            #:ctx ctx
+                                            #:modules-being-compiled modules-being-compiled
+                                            #:fill compiled-module-box)))
      
      (define fully-expanded-bodys
        (cond
@@ -379,6 +398,8 @@
                                  #:all-scopes-s all-scopes-s
                                  #:mpis-to-reset mpis-to-reset
                                  #:declared-submodule-names declared-submodule-names
+                                 #:compiled-submodules compiled-submodules
+                                 #:modules-being-compiled modules-being-compiled
                                  #:ctx ctx)]))
      
      ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -453,7 +474,9 @@
                          (parsed-#%module-begin-body
                           (if (expanded+parsed? expanded-mb)
                               (expanded+parsed-parsed expanded-mb)
-                              expanded-mb)))))
+                              expanded-mb))
+                         (unbox compiled-module-box)
+                         compiled-submodules)))
    
    (define result-s
      (cond
@@ -622,6 +645,8 @@
                                 #:defined-syms defined-syms
                                 #:declared-keywords declared-keywords
                                 #:declared-submodule-names declared-submodule-names
+                                #:compiled-submodules compiled-submodules
+                                #:modules-being-compiled modules-being-compiled
                                 #:mpis-to-reset mpis-to-reset
                                 #:loop pass-1-and-2-loop)
   (namespace-visit-available-modules! m-ns phase)
@@ -758,7 +783,9 @@
             (expand-submodule ready-body self partial-body-ctx
                               #:is-star? #f
                               #:declared-submodule-names declared-submodule-names
-                              #:mpis-to-reset mpis-to-reset))
+                              #:mpis-to-reset mpis-to-reset
+                              #:compiled-submodules compiled-submodules
+                              #:modules-being-compiled modules-being-compiled))
           (cons submod
                 (loop tail? (cdr bodys)))]
          [(module*)
@@ -821,6 +848,8 @@
                                           #:ctx body-ctx
                                           #:self self
                                           #:declared-submodule-names declared-submodule-names
+                                          #:compiled-submodules compiled-submodules
+                                          #:modules-being-compiled modules-being-compiled
                                           #:mpis-to-reset mpis-to-reset)
   (let loop ([tail? tail?] [bodys partially-expanded-bodys])
     (cond
@@ -903,7 +932,9 @@
                                        self
                                        body-ctx
                                        #:mpis-to-reset mpis-to-reset
-                                       #:declared-submodule-names declared-submodule-names))
+                                       #:declared-submodule-names declared-submodule-names
+                                       #:compiled-submodules compiled-submodules
+                                       #:modules-being-compiled modules-being-compiled))
       (cond
        [(null? lifted-defns)
         (log-expand body-ctx 'module-lift-loop lifted-defns)]
@@ -997,7 +1028,10 @@
                                       #:namespace m-ns
                                       #:self self
                                       #:enclosing enclosing-self
-                                      #:root-ctx root-ctx)
+                                      #:root-ctx root-ctx
+                                      #:ctx ctx
+                                      #:modules-being-compiled modules-being-compiled
+                                      #:fill compiled-module-box)
   
   (define-values (requires provides) (extract-requires-and-provides requires+provides self self))
 
@@ -1010,20 +1044,27 @@
                    provides
                    (requires+provides-all-bindings-simple? requires+provides)
                    (root-expand-context-encode-for-module root-ctx self self)
-                   (parsed-only fully-expanded-bodys-except-post-submodules)))
+                   (parsed-only fully-expanded-bodys-except-post-submodules)
+                   #f
+                   (hasheq)))
 
   (define module-name (module-path-index-resolve (or enclosing-self self)))
+  (define compiled-module
+    (compile-module parsed-mod
+                    (make-compile-context #:namespace m-ns
+                                          #:module-self enclosing-self
+                                          #:full-module-name (and enclosing-self
+                                                                  (resolved-module-path-name module-name)))
+                    #:serializable? (expand-context-for-serializable? ctx)
+                    #:modules-being-compiled modules-being-compiled
+                    #:need-compiled-submodule-rename? #f))
+  (set-box! compiled-module-box compiled-module)
+  
   (define root-module-name (resolved-module-path-root-name module-name))
   (parameterize ([current-namespace m-ns]
                  [current-module-declare-name (make-resolved-module-path root-module-name)])
-    (eval-module
-     (compile-module parsed-mod
-                     (make-compile-context #:namespace m-ns
-                                           #:module-self enclosing-self
-                                           #:full-module-name (and enclosing-self
-                                                                   (resolved-module-path-name module-name)))
-                     #:with-submodules? #f)
-     #:with-submodules? #f)))
+    (eval-module compiled-module
+                 #:with-submodules? #f)))
 
 (define (attach-root-expand-context-properties s root-ctx orig-self new-self)
   ;; Original API:
@@ -1052,6 +1093,8 @@
                                 #:all-scopes-s all-scopes-s
                                 #:mpis-to-reset mpis-to-reset
                                 #:declared-submodule-names declared-submodule-names
+                                #:compiled-submodules compiled-submodules
+                                #:modules-being-compiled modules-being-compiled
                                 #:ctx submod-ctx)
   (let loop ([bodys fully-expanded-bodys-except-post-submodules] [phase phase])
     (cond
@@ -1099,7 +1142,9 @@
                                    #:enclosing-requires+provides requires+provides
                                    #:enclosing-is-cross-phase-persistent? enclosing-is-cross-phase-persistent?
                                    #:mpis-to-reset mpis-to-reset
-                                   #:declared-submodule-names declared-submodule-names))
+                                   #:declared-submodule-names declared-submodule-names
+                                   #:compiled-submodules compiled-submodules
+                                   #:modules-being-compiled modules-being-compiled))
                (cond
                 [(parsed? submod) submod]
                 [(expanded+parsed? submod)
@@ -1110,7 +1155,9 @@
                (expand-submodule ready-body self submod-ctx
                                  #:is-star? #t
                                  #:mpis-to-reset mpis-to-reset
-                                 #:declared-submodule-names declared-submodule-names)]))
+                                 #:declared-submodule-names declared-submodule-names
+                                 #:compiled-submodules compiled-submodules
+                                 #:modules-being-compiled modules-being-compiled)]))
            (cons submod
                  (loop (cdr bodys) phase))]
           [else
@@ -1174,7 +1221,9 @@
                           #:enclosing-is-cross-phase-persistent? [enclosing-is-cross-phase-persistent? #f]
                           #:enclosing-all-scopes-stx [enclosing-all-scopes-stx #f]
                           #:mpis-to-reset mpis-to-reset
-                          #:declared-submodule-names declared-submodule-names)
+                          #:declared-submodule-names declared-submodule-names
+                          #:compiled-submodules compiled-submodules
+                          #:modules-being-compiled modules-being-compiled)
   (log-expand ctx 'enter-prim s)
   (log-expand ctx (if is-star? 'enter-prim-submodule* 'enter-prim-submodule))
   
@@ -1197,24 +1246,30 @@
                    #:enclosing-all-scopes-stx enclosing-all-scopes-stx
                    #:enclosing-requires+provides enclosing-r+p
                    #:enclosing-is-cross-phase-persistent? enclosing-is-cross-phase-persistent?
-                   #:mpis-for-enclosing-reset mpis-to-reset))
+                   #:mpis-for-enclosing-reset mpis-to-reset
+                   #:modules-being-compiled modules-being-compiled))
   
   ;; Compile and declare the submodule for use by later forms
   ;; in the enclosing module:
   (define ns (expand-context-namespace ctx))
   (define module-name (module-path-index-resolve self))
   (define root-module-name (resolved-module-path-root-name module-name))
+  (define compiled-submodule
+    (compile-module (if (expanded+parsed? submod)
+                        (expanded+parsed-parsed submod)
+                        submod)
+                    (make-compile-context #:namespace ns
+                                          #:module-self self
+                                          #:full-module-name (resolved-module-path-name module-name))
+                    #:force-linklet-directory? #t
+                    #:serializable? (expand-context-for-serializable? ctx)
+                    #:modules-being-compiled modules-being-compiled
+                    #:need-compiled-submodule-rename? #f))
+  (hash-set! compiled-submodules name (cons is-star? compiled-submodule))
   (parameterize ([current-namespace ns]
                  [current-module-declare-name (make-resolved-module-path root-module-name)])
-    (eval-module
-     (compile-module (if (expanded+parsed? submod)
-                         (expanded+parsed-parsed submod)
-                         submod)
-                     (make-compile-context #:namespace ns
-                                           #:module-self self
-                                           #:full-module-name (resolved-module-path-name module-name))
-                     #:with-submodules? #f)
-     #:with-submodules? #f))
+    (eval-module compiled-submodule
+                 #:with-submodules? #f))
   
   (log-expand ctx 'exit-prim submod)
 
@@ -1233,14 +1288,18 @@
 ;; Expand `module` forms, leave `module*` forms alone:
 (define (expand-non-module*-submodules bodys phase self ctx
                                        #:mpis-to-reset mpis-to-reset
-                                       #:declared-submodule-names declared-submodule-names)
+                                       #:declared-submodule-names declared-submodule-names
+                                       #:compiled-submodules compiled-submodules
+                                       #:modules-being-compiled modules-being-compiled)
   (for/list ([body (in-list bodys)])
     (case (core-form-sym (syntax-disarm body) phase)
       [(module)
        (expand-submodule body self ctx
                          #:is-star? #f
                          #:mpis-to-reset mpis-to-reset
-                         #:declared-submodule-names declared-submodule-names)]
+                         #:declared-submodule-names declared-submodule-names
+                         #:compiled-submodules compiled-submodules
+                         #:modules-being-compiled modules-being-compiled)]
       [else body])))
 
 ;; ----------------------------------------

@@ -203,7 +203,7 @@
        
        (when with-submodules?
          (declare-submodules ns pre-submodule-names declare-name #t))
-       
+
        (declare-module! ns
                         m
                         declare-name
@@ -328,7 +328,8 @@
                              (list deserialize-instance))))
 
   (define declaration-instance
-    (if (compiled-in-memory? c)
+    (if (and (compiled-in-memory? c)
+             (compiled-in-memory-original-self c))
         (make-declaration-instance-from-compiled-in-memory c)
         (instantiate-linklet (eval-linklet (hash-ref h 'decl))
                              (list deserialize-instance

@@ -4,7 +4,8 @@
          "../common/contract.rkt"
          "module.rkt"
          "../namespace/provided.rkt"
-         "../namespace/provide-for-api.rkt")
+         "../namespace/provide-for-api.rkt"
+         "reflect-name.rkt")
 
 (provide compiled-expression?
 
@@ -30,11 +31,6 @@
       (linklet-directory? c)
       (linklet-bundle? c)))
 
-(define (compiled->linklet-directory-or-bundle c)
-  (if (compiled-in-memory? c)
-      (compiled-in-memory-linklet-directory c)
-      c))
-
 (define (compiled-module-expression? c)
   (define ld (compiled->linklet-directory-or-bundle c))
   (or (and (linklet-directory? ld)
@@ -49,11 +45,7 @@
   (case-lambda
     [(c)
      (check 'module-compiled-name compiled-module-expression? c)
-     (define ld (compiled->linklet-directory-or-bundle c))
-     (define b (if (linklet-bundle? ld)
-                   ld
-                   (hash-ref (linklet-directory->hash ld) #f)))
-     (hash-ref (linklet-bundle->hash b) 'name)]
+     (module-compiled-current-name c)]
     [(c name)
      (check 'module-compiled-name compiled-module-expression? c)
      (unless (or (symbol? name)
@@ -63,10 +55,12 @@
        (raise-argument-error 'module-compiled-name
                              "(or/c symbol? (cons/c symbol? (non-empty-listof symbol?)))"
                              name))
-     (define prefix (if (symbol? name)
-                        null
-                        (reverse (cdr (reverse name)))))
-     (change-module-name c name prefix)]))
+     (define-values (i-name prefix) 
+       (if (symbol? name)
+           (values name null)
+           (let ([r (reverse name)])
+             (values (car r) (reverse (cdr r))))))
+     (change-module-name c i-name prefix)]))
 
 (define module-compiled-submodules
   (case-lambda
@@ -98,7 +92,11 @@
        (raise-argument-error 'module-compiled-submodules "(listof compiled-module-expression?)" submods))
      (cond
       [(and (null? submods)
-            (linklet-bundle? (compiled->linklet-directory-or-bundle c)))
+            (or (linklet-bundle? (compiled->linklet-directory-or-bundle c))
+                (and (compiled-in-memory? c)
+                     (null? (if non-star?
+                                (compiled-in-memory-pre-compiled-in-memorys c)
+                                (compiled-in-memory-post-compiled-in-memorys c))))))
        ;; No change to a module without submodules
        c]
       [(and (compiled-in-memory? c)
@@ -120,6 +118,7 @@
                                           (hash-ref (linklet-directory->hash (compiled->linklet-directory-or-bundle n-c)) #f)
                                           non-star?
                                           submods)
+                                         #:bundle-ok? (symbol? (module-compiled-current-name c))
                                          (append pre-compiled-in-memorys
                                                  post-compiled-in-memorys))]))]
       [else
@@ -188,69 +187,11 @@
 
 ;; ----------------------------------------
 
-(define (module-compiled-immediate-name c)
-  (define n (module-compiled-name c))
-  (if (pair? n)
-      (car (reverse n))
-      n))
-
-(define (change-module-name c name prefix)
-  (define full-name (if (null? prefix) name (append prefix (list name))))
-  (define next-prefix (if (null? prefix) (list name) full-name))
-  (define (recur sub-c name)
-    (if (equal? (module-compiled-name sub-c) (append next-prefix (list name)))
-        sub-c
-        (change-module-name sub-c name next-prefix)))
-  (cond
-   [(compiled-in-memory? c)
-    (define (change-submodule-name sub-c)
-      (recur sub-c (module-compiled-immediate-name sub-c)))
-    (define pre-compiled-in-memorys (map change-submodule-name
-                                         (compiled-in-memory-pre-compiled-in-memorys c)))
-    (define post-compiled-in-memorys (map change-submodule-name
-                                          (compiled-in-memory-post-compiled-in-memorys c)))
-    (struct-copy compiled-in-memory c
-                 [pre-compiled-in-memorys pre-compiled-in-memorys]
-                 [post-compiled-in-memorys post-compiled-in-memorys]
-                 [linklet-directory (rebuild-linklet-directory
-                                     (update-one-name
-                                      (hash-ref (linklet-directory->hash (compiled->linklet-directory-or-bundle c)) #f)
-                                      full-name)
-                                     (append pre-compiled-in-memorys
-                                             post-compiled-in-memorys))])]
-   [(linklet-directory? c)
-    (hash->linklet-directory
-     (for/hasheq ([(key val) (in-hash (linklet-directory->hash c))])
-       (values key
-               (if (not key)
-                   (update-one-name val full-name)
-                   (recur val key)))))]
-   [else
-    ;; linklet bundle
-    (update-one-name c full-name)]))
-
-(define (update-one-name lb name)
-  (hash->linklet-bundle (hash-set (linklet-bundle->hash lb) 'name name)))
-
 (define (fixup-submodule-names c)
   ;; Although this looks like a no-op, it forces a reset on submodule
   ;; names, except where the names already match (short-circuited in
   ;; `change-module-name`).
   (module-compiled-name c (module-compiled-name c)))
-
-(define (rebuild-linklet-directory main submods)
-  (hash->linklet-directory
-   (hash-set (for/fold ([ht #hasheq()]) ([submod (in-list submods)])
-               (define name (module-compiled-immediate-name submod))
-               (cond
-                [(hash-ref ht name #f)
-                 (raise-arguments-error 'module-compiled-submodules
-                                        "change would result in duplicate submodule name"
-                                        "name" name)]
-                [else
-                 (hash-set ht name submod)]))
-             #f
-             main)))
 
 (define (reset-submodule-names b pre? submods)
   (hash->linklet-bundle

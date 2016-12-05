@@ -62,9 +62,12 @@
                                             to-module-lifts ; lifted `provide` and end declarations
                                             requires+provides ; enclosing module's requires+provides during `provide`
                                             name       ; #f or identifier to name the expression
-                                            observer)) ; logging observer (for the macro debugger)
+                                            observer   ; logging observer (for the macro debugger)
+                                            for-serializable?)) ; accumulate submodules as serializable?
 
-(define (make-expand-context ns #:to-parsed? [to-parsed? #f])
+(define (make-expand-context ns
+                             #:to-parsed? [to-parsed? #f]
+                             #:for-serializable? [for-serializable? #f])
   (define root-ctx (namespace-get-root-expand-ctx ns))
   (expand-context (root-expand-context-module-scopes root-ctx)
                   (root-expand-context-post-expansion-scope root-ctx)
@@ -102,7 +105,8 @@
                   #f   ; to-module-lifts
                   #f   ; requires+provides
                   #f   ; name
-                  (current-expand-observe)))
+                  (current-expand-observe)
+                  for-serializable?))
 
 (define (copy-root-expand-context ctx root-ctx)
   (struct-copy expand-context ctx

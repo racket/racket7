@@ -135,8 +135,8 @@
      ;; original phase, and we'll share the original values
      (compiled-in-memory (hash->linklet-directory (hasheq #f bundle))
                          #f ; self
-                         null ; requires
-                         null ; provides
+                         #f ; requires
+                         #f ; provides
                          phase-to-link-module-uses
                          (current-code-inspector)
                          phase-to-link-extra-inspectorsss

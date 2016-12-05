@@ -45,4 +45,6 @@
                               provides
                               root-ctx-simple?
                               encoded-root-ctx
-                              body))
+                              body
+                              compiled-module       ; #f or already-compiled module
+                              compiled-submodules)) ; already-compiled submodules
