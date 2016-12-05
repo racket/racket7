@@ -235,7 +235,8 @@
                     three/normal
                     get-one-inspector get-three-inspector fail-pnab? fail-prot? fail-three? np-ok? fail-three-comp?
                     #:via-2-ok? [via-2-ok? #f]
-                    #:unprot-ok? [unprot-ok? #f])
+                    #:unprot-ok? [unprot-ok? #f]
+                    #:early-ok? [early-ok? #f])
   (let ([try
          (lambda (two three v fail-three?)
            (let ([ns (make-base-namespace)]
@@ -258,11 +259,11 @@
              (test #t regexp-match?
                    (if (byte-regexp? v) v (byte-regexp (string->bytes/utf-8 (format "~a\n" v))))
                    (get-output-bytes p))))])
-    (try two/no-protect three/nabbed (if fail-prot? #rx#"unexported" #rx#"one .5.") fail-three?)
+    (try two/no-protect three/nabbed (if (and fail-prot? (not early-ok?)) #rx#"unexported" #rx#"one .5.") fail-three?)
     (try two/no-protect three/nfnabbed (if (and fail-prot? (not np-ok?) (not unprot-ok?)) #rx#"unexported .* unexp" #rx#"two .5.") fail-three?)
-    (try two/no-protect three/pnabbed (if fail-pnab? #rx#"protected" #rx#"zero .8.") fail-three?)
+    (try two/no-protect three/pnabbed (if (and fail-pnab? (not early-ok?)) #rx#"protected" #rx#"zero .8.") fail-three?)
     (try two/no-protect three/nfpnabbed (if (and fail-pnab? (not np-ok?) (not unprot-ok?)) #rx#"protected .* prot" #rx#"two .8.") (or fail-three? fail-three-comp?))
-    (try two/no-protect three/snabbed (if (and fail-prot? (not np-ok?) (not via-2-ok?)) #rx#"unexported .* stx" #rx#"one .13.") fail-three?)
+    (try two/no-protect three/snabbed (if (and fail-prot? (not np-ok?) (not via-2-ok?) (not early-ok?)) #rx#"unexported .* stx" #rx#"one .13.") fail-three?)
     (try two/no-protect three/nfsnabbed #rx#"two .13." fail-three?)
     (try two/no-protect three/normal #rx#"two .10." fail-three?)
     (try two/protect three/nabbed (if fail-prot? #rx#"unexported" #rx#"one .5.") fail-three?)
@@ -380,7 +381,8 @@
 (mp-try-all zero one two/no-protect two/protect 
             three/nabbed three/pnabbed three/snabbed-zo three/nfnabbed three/nfpnabbed three/nfsnabbed-zo 
             three/normal
-            current-code-inspector make-inspector #t #t #t #t #t)
+            current-code-inspector make-inspector #t #t #t #t #t
+            #:early-ok? #t)
 (unsafe-try unsafe make-inspector #t #t #f)
 
 (displayln "zo, change inspector:")
@@ -393,7 +395,7 @@
 (mp-try-all zero one two/no-protect two/protect 
             three/nabbed three/pnabbed three/snabbed three/nfnabbed three/nfpnabbed three/nfsnabbed 
             three/normal
-            current-code-inspector make-inspector #t #t #t #f #f #:unprot-ok? #t)
+            current-code-inspector make-inspector #t #t #t #f #f #:unprot-ok? #t #:early-ok? #t)
 
 ;; ----------------------------------------
 
