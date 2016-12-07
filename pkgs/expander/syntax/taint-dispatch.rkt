@@ -34,7 +34,7 @@
           [(or (pair? cd)
                (and (syntax? cd) (pair? (syntax-e cd))))
            (define d (if (syntax? cd) (syntax-e cd) cd))
-           (datum->syntax s
+           (datum->syntax #f
                           (cons (loop (car c) (syntax-taint-mode-property (car c)))
                                 (cons (loop (car d) 'transparent)
                                       (non-syntax-map (or (syntax->list (cdr d))
@@ -42,7 +42,9 @@
                                                       (lambda (tail? d) d)
                                                       (lambda (s) (loop s (syntax-taint-mode-property s))))))
                           s
-                          s)]
+                          (if (syntax-any-macro-scopes? s)
+                              (syntax-property-remove s original-property-sym)
+                              s))]
           [else (loop s 'transparent)])]
         [else (loop s 'transparent)])]
       [else
