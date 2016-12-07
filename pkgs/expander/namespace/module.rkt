@@ -374,7 +374,7 @@
 ;; The `instance-phase` corresponds to the phase shift for the module
 ;; instances. The module may have content at different phase levels,
 ;; which are all consistently shifted. The `run-phase` is an absolute
-;; phase that should be immediately run, unless `skip-run?` is treu;
+;; phase that should be immediately run, unless `skip-run?` is true;
 ;; to put it another way, phase level `(phase- instance-phase
 ;; run-phase)` within the instance should be run immediately.
 ;; Normally, the instance is made available at all other non-negative
