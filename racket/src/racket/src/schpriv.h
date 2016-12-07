@@ -3674,6 +3674,7 @@ Scheme_Object *scheme_checked_make_flrectangular (int argc, Scheme_Object *argv[
 Scheme_Object *scheme_procedure_arity_includes(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_char_to_integer (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_integer_to_char (int argc, Scheme_Object *argv[]);
+Scheme_Object *scheme_checked_make_vector (int argc, Scheme_Object *argv[]);
 
 Scheme_Object *scheme_check_not_undefined (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_check_assign_not_undefined (int argc, Scheme_Object *argv[]);

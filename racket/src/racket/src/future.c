@@ -433,6 +433,12 @@ static void init_cpucount(void);
 # define scheme_future_longjmp(newbuf, v) scheme_longjmp(newbuf, v)
 #endif
 
+#ifndef MZ_PRECISE_GC
+# define GC_set_accounting_custodian(c) /* nothing */
+# define GC_register_thread(t, c) /* nothing */
+# define GC_register_new_thread(t, c) /* nothing */
+#endif
+
 /**********************************************************************/
 /* Arguments for a newly created future thread                        */
 /**********************************************************************/
@@ -655,9 +661,12 @@ static void init_future_thread(Scheme_Future_State *fs, int i)
   params.fts = fts;
   params.fs = fs;
 
-  /* Make enough of a thread record to deal with multiple values. */
+  /* Make enough of a thread record to deal with multiple values
+     and to support GC and memory accounting. */
   skeleton = MALLOC_ONE_TAGGED(Scheme_Thread);
   skeleton->so.type = scheme_thread_type;
+  GC_register_new_thread(skeleton, main_custodian);
+  skeleton->running = MZTHREAD_RUNNING;
 
   fts->thread = skeleton;
 
@@ -772,6 +781,8 @@ static void check_future_thread_creation(Scheme_Future_State *fs)
 static void start_gc_not_ok(Scheme_Future_State *fs)
 /* must have mutex_lock */
 {
+  Scheme_Thread *p;
+
   while (fs->wait_for_gc) {
     int quit = fs->abort_all_futures;
     fs->need_gc_done_post++;
@@ -796,6 +807,10 @@ static void start_gc_not_ok(Scheme_Future_State *fs)
     }
   }
 #endif
+
+  p = scheme_current_thread;
+  MZ_RUNSTACK = p->runstack;
+  MZ_RUNSTACK_START = p->runstack_start;
 }
 
 static void end_gc_not_ok(Scheme_Future_Thread_State *fts, 
@@ -816,6 +831,11 @@ static void end_gc_not_ok(Scheme_Future_Thread_State *fts,
   p->runstack_start = MZ_RUNSTACK_START;
   p->cont_mark_stack = MZ_CONT_MARK_STACK;
   p->cont_mark_pos = MZ_CONT_MARK_POS;
+
+  /* To ensure that memory accounting goes through the thread
+     record, clear these roots: */
+  MZ_RUNSTACK = NULL;
+  MZ_RUNSTACK_START = NULL;
 
   /* FIXME: clear scheme_current_thread->ku.multiple.array ? */
 
@@ -2270,6 +2290,9 @@ void *worker_thread_future_loop(void *arg)
 
   mzrt_sema_post(params->ready_sema);
 
+  scheme_current_thread->runstack = MZ_RUNSTACK;
+  scheme_current_thread->runstack_start = MZ_RUNSTACK_START;
+
   while (1) {
     mzrt_sema_wait(fs->future_pending_sema);
     mzrt_mutex_lock(fs->future_mutex);
@@ -2298,6 +2321,7 @@ void *worker_thread_future_loop(void *arg)
       scheme_jit_fill_threadlocal_table();
 
       fts->thread->current_ft = ft;
+      GC_register_thread(fts->thread, ft->cust);
 
       MZ_RUNSTACK = MZ_RUNSTACK_START + fts->runstack_size;
       MZ_CONT_MARK_STACK = 0;
@@ -2397,6 +2421,7 @@ void *worker_thread_future_loop(void *arg)
         }
 
         fts->thread->current_ft = NULL;
+        GC_register_thread(fts->thread, main_custodian);
       }
 
       /* Clear stacks */
@@ -2519,6 +2544,7 @@ static int capture_future_continuation(Scheme_Future_State *fs, future_t *ft, vo
    
   ft->fts->thread->current_ft = NULL; /* tells worker thread that it no longer
                                          needs to handle the future */
+  GC_register_thread(ft->fts->thread, main_custodian);
   
   ft->suspended_lw = lw;
   ft->maybe_suspended_lw = 1;
@@ -3130,6 +3156,35 @@ Scheme_Structure *scheme_rtcall_allocate_structure(int count, Scheme_Struct_Type
   return (Scheme_Structure *)retval;
 }
 
+Scheme_Object *scheme_rtcall_allocate_vector(int count)
+  XFORM_SKIP_PROC
+/* Called in future thread */
+{
+  Scheme_Future_Thread_State *fts = scheme_future_thread_state;
+  future_t *future = fts->thread->current_ft;
+  Scheme_Object *retval;
+
+  future->prim_protocol = SIG_ALLOC_VECTOR;
+
+  future->arg_i0 = count;
+
+  future->time_of_request = get_future_timestamp();
+  future->source_of_request = "[allocate_structure]";
+  future->source_type = FSRC_OTHER;
+
+  future_do_runtimecall(fts, NULL, 1, 0, 0);
+
+  /* Fetch the future again, in case moved by a GC */
+  future = fts->thread->current_ft;
+
+  future->arg_s0 = NULL;
+
+  retval = future->retval_s;
+  future->retval_s = NULL;
+
+  return retval;
+}
+
 Scheme_Object *scheme_rtcall_tail_apply(Scheme_Object *rator, int argc, Scheme_Object **argv)
   XFORM_SKIP_PROC
 /* Called in future thread */
@@ -3519,6 +3574,28 @@ static void do_invoke_rtcall(Scheme_Future_State *fs, future_t *future)
         res = scheme_jit_allocate_structure(future->arg_i0, (Scheme_Struct_Type *)arg_s0);
 
         future->retval_s = (Scheme_Object *)res;
+
+        break;
+      }
+    case SIG_ALLOC_VECTOR:
+      {
+        GC_CAN_IGNORE Scheme_Object *res;
+        intptr_t count = future->arg_i0;
+
+        future->arg_s0 = NULL;
+
+        GC_set_accounting_custodian(future->cust);
+
+        res = scheme_malloc_tagged(sizeof(Scheme_Vector)
+                                   + ((count - mzFLEX_DELTA) * sizeof(Scheme_Object *)));
+        if (res) {
+          res->type = scheme_vector_type;
+          SCHEME_VEC_SIZE(res) = count;
+        }
+
+        GC_set_accounting_custodian(NULL);
+
+        future->retval_s = res;
 
         break;
       }
