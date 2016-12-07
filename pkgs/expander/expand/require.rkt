@@ -40,6 +40,7 @@
                                      #:copy-variable-phase-level [copy-variable-phase-level #f]
                                      #:copy-variable-as-constant? [copy-variable-as-constant? #f]
                                      #:skip-variable-phase-level [skip-variable-phase-level #f]
+                                     #:initial-require? [initial-require? #f]
                                      #:who who)
   (let loop ([reqs reqs]
              [top-req #f]
@@ -177,7 +178,9 @@
                            #:copy-variable-phase-level copy-variable-phase-level
                            #:copy-variable-as-constant? copy-variable-as-constant?
                            #:skip-variable-phase-level skip-variable-phase-level
-                           #:who who)]))))
+                           #:initial-require? initial-require?
+                           #:who who)
+         (set! initial-require? #f)]))))
 
 (define (ids->sym-set ids)
   (for/set ([id (in-list ids)])

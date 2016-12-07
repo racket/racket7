@@ -71,7 +71,9 @@
                                 (expand-context-namespace ctx)
                                 (expand-context-phase ctx)
                                 (make-requires+provides #f)
-                                #:who 'require)
+                                #:who 'require
+                                ;; We don't need to check for conflicts:
+                                #:initial-require? #t)
    ;; Nothing to expand
    (if (expand-context-to-parsed? ctx)
        (parsed-require s)

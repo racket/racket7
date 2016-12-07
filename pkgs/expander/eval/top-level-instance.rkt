@@ -43,4 +43,7 @@
                                   ns
                                   (namespace-phase ns)
                                   (make-requires+provides #f)
-                                  #:who 'require))))
+                                  #:who 'require
+                                  ;; We don't need to check for conflicts
+                                  ;; or adjust the requires+provides:
+                                  #:initial-require? #t))))
