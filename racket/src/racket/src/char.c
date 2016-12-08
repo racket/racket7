@@ -120,10 +120,22 @@ void scheme_init_char (Scheme_Startup_Env *env)
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
   scheme_addto_prim_instance("char=?", p, env);
 
-  ADD_FOLDING_PRIM("char<?",                char_lt,               2, -1, 1, env);
-  ADD_FOLDING_PRIM("char>?",                char_gt,               2, -1, 1, env);
-  ADD_FOLDING_PRIM("char<=?",               char_lt_eq,            2, -1, 1, env);
-  ADD_FOLDING_PRIM("char>=?",               char_gt_eq,            2, -1, 1, env);
+  p = scheme_make_folding_prim(char_lt, "char<?", 2, -1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  scheme_addto_prim_instance("char<?", p, env);
+
+  p = scheme_make_folding_prim(char_gt, "char>?", 2, -1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  scheme_addto_prim_instance("char>?", p, env);
+
+  p = scheme_make_folding_prim(char_lt_eq, "char<=?", 2, -1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  scheme_addto_prim_instance("char<=?", p, env);
+
+  p = scheme_make_folding_prim(char_gt_eq, "char>=?", 2, -1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  scheme_addto_prim_instance("char>=?", p, env);
+
   ADD_FOLDING_PRIM("char-ci=?",             char_eq_ci,            2, -1, 1, env);
   ADD_FOLDING_PRIM("char-ci<?",             char_lt_ci,            2, -1, 1, env);
   ADD_FOLDING_PRIM("char-ci>?",             char_gt_ci,            2, -1, 1, env);

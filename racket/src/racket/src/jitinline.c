@@ -1285,10 +1285,10 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
     generate_inlined_type_test(jitter, app, SCHEME_PLATFORM_PATH_KIND, SCHEME_PLATFORM_PATH_KIND, 0, for_branch, branch_short, dest);
     return 1;
   } else if (IS_NAMED_PRIM(rator, "hash?")) {
-    generate_inlined_type_test(jitter, app, scheme_hash_table_type, scheme_hash_tree_indirection_type, 1, for_branch, branch_short, dest);
+    generate_inlined_type_test(jitter, app, scheme_hash_table_type, scheme_bucket_table_type, 1, for_branch, branch_short, dest);
     return 1;
   } else if (IS_NAMED_PRIM(rator, "syntax?")) {
-    generate_inlined_type_test(jitter, app, scheme_primitive_syntax_type, scheme_primitive_syntax_type, 0, for_branch, branch_short, dest);
+    generate_inlined_type_test(jitter, app, scheme_stx_type, scheme_stx_type, 0, for_branch, branch_short, dest);
     return 1;
   } else if (IS_NAMED_PRIM(rator, "eof-object?")) {
     generate_inlined_constant_test(jitter, app, scheme_eof, NULL, for_branch, branch_short, dest);
@@ -1630,7 +1630,6 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       __START_TINY_JUMPS__(1);
       mz_patch_branch(ref);
       (void)mz_bnei_t(reffail, JIT_R0, scheme_primitive_syntax_type, JIT_R1);
-      /* FIXME: do we have to care about scheme_delay_syntax_type ?*/
       (void)jit_ldxi_p(dest, JIT_R0, &(SCHEME_STX_VAL((Scheme_Stx *)0x0)));
       VALIDATE_RESULT(dest);
       CHECK_LIMIT();
@@ -2570,7 +2569,6 @@ static int generate_binary_char(mz_jit_state *jitter, Scheme_App3_Rec *app, int 
     jit_ldxi_i(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CHAR_VAL((Scheme_Object *)0x0));
     jit_ldxi_i(JIT_R1, JIT_R1, (intptr_t)&SCHEME_CHAR_VAL((Scheme_Object *)0x0));
 
-    /* FIXME: why are these tests all inverted? */
     switch (cmp) {
     case CMP_EQUAL:
       ref = jit_bner_i(jit_forward(), JIT_R0, JIT_R1);

@@ -398,7 +398,7 @@ static int common1(mz_jit_state *jitter, void *_data)
       (void)mz_finish_lwe(ts_apply_prim_to_fail, ref);
       break;
     case 13:
-      (void)mz_finish_lwe(ts_scheme_syntax_e, ref);
+      (void)mz_finish_lwe(ts_scheme_checked_syntax_e, ref);
       break;
     }
     CHECK_LIMIT();
