@@ -2614,8 +2614,6 @@ static Scheme_Hash_Tree *hamt_set(Scheme_Hash_Tree *ht, uintptr_t code, int shif
   
   if (ht->bitmap & hamt_bit(index)) {
     /* Replacing: */
-    if (SAME_OBJ(ht->els[pos], key) && SAME_OBJ(val, mzHAMT_VAL(ht, pos)))
-      return ht;
     new_ht = hamt_dup(ht, popcount, NOT_IMPLICIT_VALUE(val));
     if (HASHTR_SUBTREEP(ht->els[pos])) {
       ht = (Scheme_Hash_Tree *)ht->els[pos];
@@ -3254,6 +3252,9 @@ Scheme_Hash_Tree *scheme_hash_tree_set_w_key_wraps(Scheme_Hash_Tree *tree, Schem
         }
       } else {
         /* update collision */
+        /* (we're not looking for a shortcut here if the current value
+            matched the new value, but we could do that if it seems
+            worthwhile; hopefully, collisions are relatively rare) */
         in_tree = hamt_set(in_tree, code, 0, key, val, 0);
         inc = 0;
       }
@@ -3293,6 +3294,9 @@ Scheme_Hash_Tree *scheme_hash_tree_set_w_key_wraps(Scheme_Hash_Tree *tree, Schem
           return tree;
         } else
           return tree;
+      } else if (SAME_OBJ(val, mzHAMT_VAL(in_tree, pos))) {
+        /* Shortcut: setting to the current value */
+        return tree;
       } else
         return hamt_set(tree, h, 0, key, val, 0);
     } else {
