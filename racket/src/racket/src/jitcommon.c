@@ -290,7 +290,7 @@ static int common1(mz_jit_state *jitter, void *_data)
 
   /* *** [bad_][m]{car,cdr,...,{imag,real}_part}_code *** */
   /* Argument is in R2 for cXX+r, R0 otherwise */
-  for (i = 0; i < 13; i++) {
+  for (i = 0; i < 14; i++) {
     void *code;
     
     code = jit_get_ip();
@@ -333,6 +333,9 @@ static int common1(mz_jit_state *jitter, void *_data)
       break;
     case 12:
       sjc.bad_cXr_code = code;
+      break;
+    case 13:
+      sjc.bad_syntax_e_code = code;
       break;
     }
     mz_prolog(JIT_R1);
@@ -393,6 +396,9 @@ static int common1(mz_jit_state *jitter, void *_data)
       break;
     case 12:
       (void)mz_finish_lwe(ts_apply_prim_to_fail, ref);
+      break;
+    case 13:
+      (void)mz_finish_lwe(ts_scheme_syntax_e, ref);
       break;
     }
     CHECK_LIMIT();

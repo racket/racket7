@@ -75,6 +75,7 @@ define_ts_iS_s(scheme_checked_byte_string_ref, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_byte_string_set, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_flvector_ref, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_flvector_set, FSRC_MARKS)
+define_ts_iS_s(scheme_syntax_e, FSRC_MARKS)
 #ifdef MZ_LONG_DOUBLE
 define_ts_iS_s(scheme_checked_extflvector_ref, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_extflvector_set, FSRC_MARKS)
