@@ -120,12 +120,12 @@
                                self enclosing-self enclosing-mod))
 
    ;; Initial require name provides the module's base scopes
-   (define all-scopes-s (apply-module-scopes 
-                         (if enclosing-all-scopes-stx
-                             (syntax-shift-phase-level enclosing-all-scopes-stx
-                                                       keep-enclosing-scope-at-phase)
-                             (m 'initial-require))))
    (define initial-require-s (apply-module-scopes (m 'initial-require)))
+   (define all-scopes-s (if enclosing-all-scopes-stx
+                            (apply-module-scopes
+                             (syntax-shift-phase-level enclosing-all-scopes-stx
+                                                       keep-enclosing-scope-at-phase))
+                            initial-require-s))
 
    (define root-ctx (make-root-expand-context
                      #:initial-scopes (if keep-enclosing-scope-at-phase
@@ -600,8 +600,7 @@
            ;; Remove the scopes of the top level or a module outside of
            ;; this module, as well as any relevant use-site scopes
            (remove-use-site-scopes
-            (for/fold ([s s]) ([sc (in-list (root-expand-context-module-scopes init-ctx))])
-              (remove-scope s sc))
+            (remove-scopes s (root-expand-context-module-scopes init-ctx))
             init-ctx)))
      ;; Add outside- and inside-edge scopes
      (define s-with-edges
