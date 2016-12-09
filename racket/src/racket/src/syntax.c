@@ -43,7 +43,7 @@ static Scheme_Object *syntax_p(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_to_datum(int argc, Scheme_Object **argv);
 static Scheme_Object *datum_to_syntax(int argc, Scheme_Object **argv);
 
-static Scheme_Object *syntax_e(int argc, Scheme_Object **argv);
+Scheme_Object *scheme_checked_syntax_e(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_line(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_col(int argc, Scheme_Object **argv);
 static Scheme_Object *syntax_pos(int argc, Scheme_Object **argv);
@@ -107,7 +107,10 @@ void scheme_init_stx(Scheme_Startup_Env *env)
   ADD_FOLDING_PRIM("syntax->datum", syntax_to_datum, 1, 1, 1, env);
   ADD_IMMED_PRIM("datum->syntax", datum_to_syntax, 2, 5, env);
   
-  ADD_FOLDING_PRIM("syntax-e", syntax_e, 1, 1, 1, env);
+  REGISTER_SO(scheme_checked_syntax_e);
+  o = scheme_make_folding_prim(scheme_checked_syntax_e, "syntax-e", 1, 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  scheme_addto_prim_instance("syntax-e", o, env);
 
   ADD_FOLDING_PRIM("syntax-line"    , syntax_line   , 1, 1, 1, env);
   ADD_FOLDING_PRIM("syntax-column"  , syntax_col    , 1, 1, 1, env);
@@ -777,7 +780,7 @@ static Scheme_Object *datum_to_syntax(int argc, Scheme_Object **argv)
   return src;
 }
 
-static Scheme_Object *syntax_e(int argc, Scheme_Object **argv)
+Scheme_Object *scheme_checked_syntax_e(int argc, Scheme_Object **argv)
 {
   if (!SCHEME_STXP(argv[0]))
     scheme_wrong_contract("syntax-e", "syntax?", 0, argc, argv);

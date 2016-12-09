@@ -272,6 +272,7 @@ static int generate_inlined_constant_test(mz_jit_state *jitter, Scheme_App2_Rec 
   return 1;
 }
 
+/* -1 for can_chaperone for `chaperone?` test */
 static int generate_inlined_type_test(mz_jit_state *jitter, Scheme_App2_Rec *app,
 				      Scheme_Type lo_ty, Scheme_Type hi_ty, int can_chaperone,
 				      Branch_Info *for_branch, int branch_short,
@@ -1283,6 +1284,12 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
   } else if (IS_NAMED_PRIM(rator, "path?")) {
     generate_inlined_type_test(jitter, app, SCHEME_PLATFORM_PATH_KIND, SCHEME_PLATFORM_PATH_KIND, 0, for_branch, branch_short, dest);
     return 1;
+  } else if (IS_NAMED_PRIM(rator, "hash?")) {
+    generate_inlined_type_test(jitter, app, scheme_hash_table_type, scheme_bucket_table_type, 1, for_branch, branch_short, dest);
+    return 1;
+  } else if (IS_NAMED_PRIM(rator, "syntax?")) {
+    generate_inlined_type_test(jitter, app, scheme_stx_type, scheme_stx_type, 0, for_branch, branch_short, dest);
+    return 1;
   } else if (IS_NAMED_PRIM(rator, "eof-object?")) {
     generate_inlined_constant_test(jitter, app, scheme_eof, NULL, for_branch, branch_short, dest);
     return 1;
@@ -1598,6 +1605,35 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       mz_rs_sync();
       (void)jit_calli(sjc.list_length_code);
       jit_movr_p(dest, JIT_R0);
+
+      return 1;
+    } else if (IS_NAMED_PRIM(rator, "syntax-e")) {
+      GC_CAN_IGNORE jit_insn *reffail = NULL, *ref;
+
+      LOG_IT("inlined syntax-e\n");
+
+      mz_runstack_skipped(jitter, 1);
+
+      scheme_generate_non_tail(app->rand, jitter, 0, 1, 0);
+      CHECK_LIMIT();
+
+      mz_runstack_unskipped(jitter, 1);
+
+      mz_rs_sync_fail_branch();
+
+      __START_TINY_JUMPS__(1);
+
+      ref = jit_bmci_ul(jit_forward(), JIT_R0, 0x1);
+      reffail = jit_get_ip();
+      __END_TINY_JUMPS__(1);
+      (void)jit_calli(sjc.bad_syntax_e_code);
+      __START_TINY_JUMPS__(1);
+      mz_patch_branch(ref);
+      (void)mz_bnei_t(reffail, JIT_R0, scheme_primitive_syntax_type, JIT_R1);
+      (void)jit_ldxi_p(dest, JIT_R0, &(SCHEME_STX_VAL((Scheme_Stx *)0x0)));
+      VALIDATE_RESULT(dest);
+      CHECK_LIMIT();
+      __END_TINY_JUMPS__(1);
 
       return 1;
     } else if (IS_NAMED_PRIM(rator, "vector-length")
@@ -2461,7 +2497,7 @@ int scheme_generate_two_args(Scheme_Object *rand1, Scheme_Object *rand2, mz_jit_
   return direction;
 }
 
-static int generate_binary_char(mz_jit_state *jitter, Scheme_App3_Rec *app,
+static int generate_binary_char(mz_jit_state *jitter, Scheme_App3_Rec *app, int cmp,
                                 Branch_Info *for_branch, int branch_short, int dest)
 /* de-sync'd ok */
 {
@@ -2532,9 +2568,46 @@ static int generate_binary_char(mz_jit_state *jitter, Scheme_App3_Rec *app,
     /* Extract character value */
     jit_ldxi_i(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CHAR_VAL((Scheme_Object *)0x0));
     jit_ldxi_i(JIT_R1, JIT_R1, (intptr_t)&SCHEME_CHAR_VAL((Scheme_Object *)0x0));
-    ref = jit_bner_i(jit_forward(), JIT_R0, JIT_R1);
+
+    switch (cmp) {
+    case CMP_EQUAL:
+      ref = jit_bner_i(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    case CMP_LEQ:
+      ref = jit_bgtr_i(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    case CMP_GEQ:
+      ref = jit_bltr_i(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    case CMP_GT:
+      ref = jit_bler_i(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    case CMP_LT:
+      ref = jit_bger_i(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    default:
+      ref = NULL; /* never happens */
+    }
   } else {
-    ref = jit_bner_p(jit_forward(), JIT_R0, JIT_R1);
+    switch(cmp) {
+    case CMP_EQUAL:
+      ref = jit_bner_p(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    case CMP_LEQ:
+      ref = jit_bgtr_p(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    case CMP_GEQ:
+      ref = jit_bltr_p(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    case CMP_GT:
+      ref = jit_bler_p(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    case CMP_LT:
+      ref = jit_bger_p(jit_forward(), JIT_R0, JIT_R1);
+      break;
+    default:
+      ref = NULL; /* never happens */
+    }
   }
   CHECK_LIMIT();
   if (for_branch) {
@@ -3294,7 +3367,19 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
     scheme_generate_arith(jitter, rator, app->rand1, app->rand2, 2, 0, CMP_BIT, 0, for_branch, branch_short, 0, 0, NULL, dest);
     return 1;
   } else if (IS_NAMED_PRIM(rator, "char=?")) {
-    generate_binary_char(jitter, app, for_branch, branch_short, dest);
+    generate_binary_char(jitter, app, CMP_EQUAL, for_branch, branch_short, dest);
+    return 1;
+  } else if (IS_NAMED_PRIM(rator, "char<=?")) {
+    generate_binary_char(jitter, app, CMP_LEQ, for_branch, branch_short, dest);
+    return 1;
+  } else if (IS_NAMED_PRIM(rator, "char>=?")) {
+    generate_binary_char(jitter, app, CMP_GEQ, for_branch, branch_short, dest);
+    return 1;
+  } else if (IS_NAMED_PRIM(rator, "char>?")) {
+    generate_binary_char(jitter, app, CMP_GT, for_branch, branch_short, dest);
+    return 1;
+  } else if (IS_NAMED_PRIM(rator, "char<?")) {
+    generate_binary_char(jitter, app, CMP_LT, for_branch, branch_short, dest);
     return 1;
   } else if (!for_branch) {
     if (IS_NAMED_PRIM(rator, "+")) {

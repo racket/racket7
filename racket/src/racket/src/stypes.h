@@ -108,6 +108,9 @@ enum {
   scheme_thread_type,                   /* 75 */
   scheme_cont_mark_set_type,            /* 76 */
   scheme_sema_type,                     /* 77 */
+
+  /* hash table types (must be together for hash?
+   * implementation */
   scheme_hash_table_type,               /* 78 */
   scheme_hash_tree_type,                /* 79 */
   scheme_eq_hash_tree_type,             /* 80 */
@@ -115,23 +118,24 @@ enum {
   scheme_hash_tree_subtree_type,        /* 82 */
   scheme_hash_tree_collision_type,      /* 83 */
   scheme_hash_tree_indirection_type,    /* 84 */
-  scheme_cpointer_type,                 /* 85 */
-  scheme_prefix_type,                   /* 86 */
-  scheme_weak_box_type,                 /* 87 */
-  scheme_ephemeron_type,                /* 88 */
-  scheme_struct_type_type,              /* 89 */
-  scheme_set_macro_type,                /* 90 */
-  scheme_listener_type,                 /* 91 */
-  scheme_env_type,                      /* 92 */
-  scheme_startup_env_type,              /* 93 */
-  scheme_config_type,                   /* 94 */
-  scheme_stx_type,                      /* 95 */
-  scheme_will_executor_type,            /* 96 */
-  scheme_custodian_type,                /* 97 */
-  scheme_random_state_type,             /* 98 */
-  scheme_regexp_type,                   /* 99 */
-  scheme_bucket_type,                   /* 100 */
-  scheme_bucket_table_type,             /* 101 */
+  scheme_bucket_type,                   /* 85 */
+  scheme_bucket_table_type,             /* 86 */
+
+  scheme_cpointer_type,                 /* 87 */
+  scheme_prefix_type,                   /* 88 */
+  scheme_weak_box_type,                 /* 89 */
+  scheme_ephemeron_type,                /* 90 */
+  scheme_struct_type_type,              /* 91 */
+  scheme_set_macro_type,                /* 92 */
+  scheme_listener_type,                 /* 93 */
+  scheme_env_type,                      /* 94 */
+  scheme_startup_env_type,              /* 95 */
+  scheme_config_type,                   /* 96 */
+  scheme_stx_type,                      /* 97 */
+  scheme_will_executor_type,            /* 98 */
+  scheme_custodian_type,                /* 99 */
+  scheme_random_state_type,             /* 100 */
+  scheme_regexp_type,                   /* 101 */
   scheme_subprocess_type,               /* 102 */
   scheme_eval_waiting_type,             /* 103 */
   scheme_tail_call_waiting_type,        /* 104 */

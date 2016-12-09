@@ -1240,6 +1240,8 @@ Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o, Scheme_Object *stx_src, 
 
 Scheme_Object *scheme_syntax_to_datum(Scheme_Object *stx);
 
+Scheme_Object *scheme_checked_syntax_e(int argc, Scheme_Object **argv);
+
 Scheme_Object *scheme_stx_property(Scheme_Object *_stx,
 				   Scheme_Object *key,
 				   Scheme_Object *val);

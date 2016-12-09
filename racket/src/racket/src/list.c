@@ -567,11 +567,13 @@ scheme_init_list (Scheme_Startup_Env *env)
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
   scheme_addto_prim_instance("hasheqv", p, env);
   
-  scheme_addto_prim_instance("hash?",
-			     scheme_make_folding_prim(hash_p,
-						      "hash?",
-						      1, 1, 1),
-			     env);
+  REGISTER_SO(hash_p);
+  p = scheme_make_folding_prim(hash_p, "hash?", 1, 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
+                                                            | SCHEME_PRIM_IS_OMITABLE);
+  scheme_addto_prim_instance ("hash?", p, env);
+
+
   scheme_addto_prim_instance("hash-eq?",
 			     scheme_make_folding_prim(scheme_hash_eq_p,
 						      "hash-eq?",
