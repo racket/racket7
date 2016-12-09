@@ -726,6 +726,97 @@ static Scheme_Object *ensure_single_value(Scheme_Object *e)
   return (Scheme_Object *)app2;
 }
 
+static int escapes_or_noncm_function(Scheme_Object *rator)
+{
+  if (SCHEME_PRIMP(rator)) {
+    int opt;
+    opt = ((Scheme_Prim_Proc_Header *)rator)->flags & SCHEME_PRIM_OPT_MASK;
+    if (opt >= SCHEME_PRIM_OPT_NONCM)
+      return 1;
+    if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_ALWAYS_ESCAPES)
+      return 1;
+  }
+
+  return 0;
+}
+
+/* Check whether `e` definitely has no `with-continuation-mark` form
+   in tail position. The conservative answer is 0. */
+static int definitely_no_wcm_in_tail(Scheme_Object *e, int fuel)
+{
+  int definitely_not_wcm = 0;
+  
+  while (fuel) {
+    switch (SCHEME_TYPE(e)) {
+    case scheme_branch_type:
+      if (definitely_no_wcm_in_tail(((Scheme_Branch_Rec *)e)->tbranch, fuel-1)
+          && definitely_no_wcm_in_tail(((Scheme_Branch_Rec *)e)->fbranch, fuel-1))
+        definitely_not_wcm = 1;
+      fuel = 0;
+      break;
+    case scheme_application_type:
+      if (escapes_or_noncm_function(((Scheme_App_Rec *)e)->args[0]))
+        definitely_not_wcm = 1;
+      fuel = 0;
+      break;
+    case scheme_application2_type:
+      if (escapes_or_noncm_function(((Scheme_App2_Rec *)e)->rator))
+        definitely_not_wcm = 1;
+      fuel = 0;
+      break;
+    case scheme_application3_type:
+      if (escapes_or_noncm_function(((Scheme_App3_Rec *)e)->rator))
+        definitely_not_wcm = 1;
+      fuel = 0;
+      break;
+    case scheme_ir_let_header_type:
+      e = ((Scheme_IR_Let_Header *)e)->body;
+      fuel--;
+      break;
+    case scheme_ir_let_value_type:
+      e = ((Scheme_IR_Let_Value *)e)->body;
+      fuel--;
+      break;
+    case scheme_sequence_type:
+      {
+        Scheme_Sequence *seq;
+        seq = (Scheme_Sequence *)e;
+        e  = seq->array[seq->count-1];
+        fuel--;
+      }
+      break;
+    default:
+      if (SCHEME_TYPE(e) > _scheme_ir_values_types_)
+        definitely_not_wcm = 1;
+      fuel = 0;
+      break;
+    }
+  }
+
+  return definitely_not_wcm;
+}
+
+static Scheme_Object *escaping_as_non_tail(Scheme_Object *expr)
+/* The expression `expr` escapes, and dscarding surrounding
+   expressions would lift `expr` out of a nested position. That's ok
+   unless `expr` has a `with-continuation-mark` form in tail position,
+   in which case the shift out of a nested position is observable. 
+   Add a wrapping `(begin ... <void>)` if necessary to avoid that. */
+{
+  Scheme_Sequence *seq;
+
+  if (!definitely_no_wcm_in_tail(expr, 5)) {
+    seq = scheme_malloc_sequence(2);
+    seq->so.type = scheme_sequence_type;
+    seq->count = 2;
+    seq->array[0] = expr;
+    seq->array[1] = scheme_void;
+    
+    return (Scheme_Object *)seq;
+  } else
+    return expr;
+}
+
 static Scheme_Object *do_make_discarding_sequence(Scheme_Object *e1, Scheme_Object *e2,
                                                   Optimize_Info *info,
                                                   int ignored, int rev)
@@ -3565,7 +3656,7 @@ static Scheme_Object *optimize_application(Scheme_Object *o, Optimize_Info *info
           l = scheme_make_pair(e, l);
         }
       }
-      return scheme_make_sequence_compilation(l, 1, 0);
+      return escaping_as_non_tail(scheme_make_sequence_compilation(l, 1, 0));
     }
 
     if (!i) {
@@ -4051,7 +4142,7 @@ static Scheme_Object *optimize_application2(Scheme_Object *o, Optimize_Info *inf
   app->rator = le;
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
-    return app->rator;
+    return escaping_as_non_tail(app->rator);
   }
 
   {
@@ -4077,7 +4168,7 @@ static Scheme_Object *optimize_application2(Scheme_Object *o, Optimize_Info *inf
   optimize_info_seq_done(info, &info_seq);
   if (info->escapes) {
     info->size += 1;
-    return make_discarding_first_sequence(app->rator, app->rand, info);
+    return escaping_as_non_tail(make_discarding_first_sequence(app->rator, app->rand, info));
   }
 
   if (rator_apply_escapes) {
@@ -4450,7 +4541,7 @@ static Scheme_Object *optimize_application3(Scheme_Object *o, Optimize_Info *inf
   app->rator = le;
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
-    return app->rator;
+    return escaping_as_non_tail(app->rator);
   }
 
   {
@@ -4477,7 +4568,7 @@ static Scheme_Object *optimize_application3(Scheme_Object *o, Optimize_Info *inf
   app->rand1 = le;
   if (info->escapes) {
     info->size += 1;
-    return make_discarding_first_sequence(app->rator, app->rand1, info);
+    return escaping_as_non_tail(make_discarding_first_sequence(app->rator, app->rand1, info));
   }
 
   /* 2nd arg */
@@ -4495,10 +4586,11 @@ static Scheme_Object *optimize_application3(Scheme_Object *o, Optimize_Info *inf
   optimize_info_seq_done(info, &info_seq);
   if (info->escapes) {
     info->size += 1;
-    return make_discarding_first_sequence(app->rator,
-                                          make_discarding_first_sequence(app->rand1, app->rand2,
-                                                                         info),
-                                          info);
+    le = make_discarding_first_sequence(app->rator,
+                                        make_discarding_first_sequence(app->rand1, app->rand2,
+                                                                       info),
+                                        info);
+    return escaping_as_non_tail(le);
   }
 
   /* Check for (apply ... (list ...)) after some optimizations: */
@@ -5084,8 +5176,12 @@ static Scheme_Object *optimize_sequence(Scheme_Object *o, Optimize_Info *info, i
   info->preserves_marks = preserves_marks;
   info->single_result = single_result;
 
-  if (drop + 1 == s->count)
-    return s->array[drop];
+  if (drop + 1 == s->count) {
+    le = s->array[drop];
+    if (info->escapes)
+      le = escaping_as_non_tail(le);
+    return le;
+  }
 
   if (drop) {
     Scheme_Sequence *s2;
@@ -5572,7 +5668,7 @@ static Scheme_Object *optimize_branch(Scheme_Object *o, Optimize_Info *info, int
 
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
-    return t;
+    return escaping_as_non_tail(t);
   }
 
   /* Try to lift out `let`s and `begin`s around a test: */
@@ -5843,7 +5939,7 @@ static Scheme_Object *optimize_wcm(Scheme_Object *o, Optimize_Info *info, int co
 
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
-    return k;
+    return escaping_as_non_tail(k);
   }
 
   optimize_info_seq_step(info, &info_seq);
@@ -5853,7 +5949,7 @@ static Scheme_Object *optimize_wcm(Scheme_Object *o, Optimize_Info *info, int co
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
     info->size += 1;
-    return make_discarding_first_sequence(k, v, info);
+    return escaping_as_non_tail(make_discarding_first_sequence(k, v, info));
   }
 
   /* The presence of a key can be detected by other expressions,
@@ -5933,7 +6029,7 @@ set_optimize(Scheme_Object *data, Optimize_Info *info, int context)
   val = optimize_expr(val, info, OPT_CONTEXT_SINGLED);
 
   if (info->escapes)
-      return val;
+    return escaping_as_non_tail(val);
 
   info->preserves_marks = 1;
   info->single_result = 1;
@@ -6043,7 +6139,7 @@ apply_values_optimize(Scheme_Object *data, Optimize_Info *info, int context)
 
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
-    return f;
+    return escaping_as_non_tail(f);
   }
   optimize_info_seq_step(info, &info_seq);
 
@@ -6053,7 +6149,7 @@ apply_values_optimize(Scheme_Object *data, Optimize_Info *info, int context)
 
   if (info->escapes) {
     info->size += 1;
-    return make_discarding_first_sequence(f, e, info);
+    return escaping_as_non_tail(make_discarding_first_sequence(f, e, info));
   }
 
   info->size += 1;
@@ -6100,14 +6196,14 @@ with_immed_mark_optimize(Scheme_Object *data, Optimize_Info *info, int context)
   optimize_info_seq_step(info, &info_seq);
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
-    return key;
+    return escaping_as_non_tail(key);
   }
 
   val = optimize_expr(wcm->val, info, OPT_CONTEXT_SINGLED);
   optimize_info_seq_step(info, &info_seq);
   if (info->escapes) {
     optimize_info_seq_done(info, &info_seq);
-    return make_discarding_first_sequence(key, val, info);
+    return escaping_as_non_tail(make_discarding_first_sequence(key, val, info));
   }
 
   optimize_info_seq_done(info, &info_seq);
@@ -6278,7 +6374,7 @@ static Scheme_Object *begin0_optimize(Scheme_Object *obj, Optimize_Info *info, i
 
     if ((count - drop) == 1) {
       /* If it's only one expression we can drop the begin0 */
-      return s->array[i];
+      return escaping_as_non_tail(s->array[i]);
     }
 
     s2 = scheme_malloc_sequence(count - drop);
@@ -7840,9 +7936,12 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
         body = make_discarding_sequence(pre_body->value, body, info);
       } else {
         /* Special case for (let ([x E]) x) and (let ([x <error>]) #f) */
-        found_escapes = 0; /* Perhaps the error is moved to the body. */
         body = pre_body->value;
         body = ensure_single_value(body);
+        if (found_escapes) {
+          found_escapes = 0; /* Perhaps the error is moved to the body. */
+          body = escaping_as_non_tail(body);
+        }
       }
 
       if (head->num_clauses == 1)
@@ -7886,7 +7985,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
           seq->array[1] = (Scheme_Object *)head;
         else if (found_escapes) {
           /* don't need the body, because some RHS escapes */
-          new_body = rhs;
+          new_body = escaping_as_non_tail(rhs);
         } else
           seq->array[1] = head->body;
                 
