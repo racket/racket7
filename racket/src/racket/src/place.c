@@ -2785,8 +2785,6 @@ static void *place_start_proc_after_stack(void *data_arg, void *stack_base) {
     saved_error_buf = p->error_buf;
     p->error_buf = &new_error_buf;
     if (!scheme_setjmp(new_error_buf)) {
-      Scheme_Object *dynamic_require;
-
       scheme_check_place_port_ok();
 
       place_main = scheme_dynamic_require(2, a);

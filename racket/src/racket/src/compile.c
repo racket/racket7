@@ -1555,9 +1555,7 @@ compile_list(Scheme_Object *form,
     return scheme_null;
   } else if (len > 0) {
     int i;
-    Scheme_Object *c, *p, *comp_first, *comp_last, *name, *first, *rest;
-
-    name = env->value_name;
+    Scheme_Object *c, *p, *comp_first, *comp_last, *first, *rest;
 
     comp_first = comp_last = NULL;
 

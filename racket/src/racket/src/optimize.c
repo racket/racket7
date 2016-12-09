@@ -9939,7 +9939,8 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
         }
       }
       /* Otherwise, not yet unresolved (maybe because it doesn't need to be) */
-    }
+    } else
+      iv_ht = NULL;
 
     v = scheme_hash_get(linklet->constants, name);
 

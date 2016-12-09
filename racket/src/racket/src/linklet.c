@@ -1306,6 +1306,7 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
           Scheme_Object *shape = SCHEME_VEC_ELS(linklet->import_shapes)[pos-1];
           if (SAME_OBJ(shape, scheme_void)) {
             /* Optimizer assumed constant; if it isn't, too bad */
+            bad_reason = NULL;
           } else if (SAME_OBJ(shape, scheme_true)) {
             if (!(((Scheme_Bucket_With_Flags *)v)->flags & GLOB_IS_CONSISTENT)) {
               bad_reason = "is not a procedure or structure-type constant across all instantiations";

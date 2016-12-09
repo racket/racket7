@@ -3004,7 +3004,7 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
 {
   Scheme_Object *v;
   int pos = SCHEME_TOPLEVEL_POS(rdata);
-  int flags, is_constant;
+  int flags;
   
   /* Create a reference that works for the optimization context. */
   
@@ -3051,10 +3051,8 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
   flags = SCHEME_TOPLEVEL_FLAGS(rdata) & SCHEME_TOPLEVEL_FLAGS_MASK;
   switch (flags) {
   case SCHEME_TOPLEVEL_CONST:
-    is_constant = 2;
     break;
   case SCHEME_TOPLEVEL_FIXED:
-    is_constant = 1;
     break;
   case SCHEME_TOPLEVEL_READY:
   default:
@@ -3063,7 +3061,6 @@ static Scheme_Object *unresolve_toplevel(Scheme_Object *rdata, Unresolve_Info *u
          variable is now at least ready: */
       flags = SCHEME_TOPLEVEL_READY;
     }
-    is_constant = 0;
   }
   
   v = (Scheme_Object *)ui->toplevels[pos];
