@@ -9474,10 +9474,9 @@ Scheme_Object *optimize_clone(int single_use, Scheme_Object *expr, Optimize_Info
 /*                 compile-time env for optimization                      */
 /*========================================================================*/
 
-static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_const, int can_inline)
+static Optimize_Info *optimize_info_allocate(Scheme_Linklet *linklet, int enforce_const, int can_inline)
 {
   Optimize_Info *info;
-  Scheme_Logger *logger;
 
   info = MALLOC_ONE_RT(Optimize_Info);
 #ifdef MZTAG_REQUIRED
@@ -9487,13 +9486,23 @@ static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_
   info->flatten_fuel = INITIAL_FLATTENING_FUEL;
   info->linklet = linklet;
 
-  logger = (Scheme_Logger *)scheme_get_param(scheme_current_config(), MZCONFIG_LOGGER);
-  logger = scheme_make_logger(logger, scheme_intern_symbol("optimizer"));
-  info->logger = logger;
-
   info->enforce_const = enforce_const;
   if (!can_inline)
     info->inline_fuel = -1;
+
+  return info;
+}
+
+static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_const, int can_inline)
+{
+  Optimize_Info *info;
+  Scheme_Logger *logger;
+
+  info = optimize_info_allocate(linklet, enforce_const, can_inline);
+
+  logger = (Scheme_Logger *)scheme_get_param(scheme_current_config(), MZCONFIG_LOGGER);
+  logger = scheme_make_logger(logger, scheme_intern_symbol("optimizer"));
+  info->logger = logger;
 
   return info;
 }
@@ -9753,7 +9762,7 @@ static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int orig, int
 {
   Optimize_Info *naya;
 
-  naya = optimize_info_create(info->linklet, 0, 0);
+  naya = optimize_info_allocate(info->linklet, 0, 0);
   naya->flags = (short)flags;
   naya->next = info;
   naya->original_frame = orig;
