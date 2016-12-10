@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../common/set.rkt"
+(require "../common/struct-star.rkt"
+         "../common/set.rkt"
          "../syntax/syntax.rkt"
          "../syntax/property.rkt"
          "../syntax/scope.rkt"
@@ -47,11 +48,11 @@
   (define sc-bodys (for/list ([body (in-list bodys)]) (add-scope body sc)))
   (log-expand ctx log-renames-tag sc-formals (datum->syntax #f sc-bodys))
   ;; Expand the function body:
-  (define body-ctx (struct-copy expand-context ctx
-                                [env body-env]
-                                [scopes (cons sc (expand-context-scopes ctx))]
-                                [binding-layer (increment-binding-layer ids ctx sc)]
-                                [frame-id #:parent root-expand-context #f]))
+  (define body-ctx (struct*-copy expand-context ctx
+                                 [env body-env]
+                                 [scopes (cons sc (expand-context-scopes ctx))]
+                                 [binding-layer (increment-binding-layer ids ctx sc)]
+                                 [frame-id #:parent root-expand-context #f]))
   (define exp-body (expand-body sc-bodys body-ctx #:source (keep-as-needed ctx s)))
   ;; Return formals (with new scope) and expanded body:
   (values (if (expand-context-to-parsed? ctx) 
@@ -211,16 +212,16 @@
    ;; Expand right-hand sides and body
    (define expr-ctx (as-expression-context ctx))
    (define orig-rrs (expand-context-reference-records expr-ctx))
-   (define rec-ctx (struct-copy expand-context expr-ctx
-                                [env rec-env]
-                                [scopes (cons sc (expand-context-scopes ctx))]
-                                [reference-records (if split-by-reference?
-                                                       (cons frame-id orig-rrs)
-                                                       orig-rrs)]
-                                [binding-layer (increment-binding-layer
-                                                (cons trans-idss val-idss)
-                                                ctx
-                                                sc)]))
+   (define rec-ctx (struct*-copy expand-context expr-ctx
+                                 [env rec-env]
+                                 [scopes (cons sc (expand-context-scopes ctx))]
+                                 [reference-records (if split-by-reference?
+                                                        (cons frame-id orig-rrs)
+                                                        orig-rrs)]
+                                 [binding-layer (increment-binding-layer
+                                                 (cons trans-idss val-idss)
+                                                 ctx
+                                                 sc)]))
    (define letrec-values-id
      (and (not (expand-context-to-parsed? ctx))
           (if syntaxes?
@@ -236,8 +237,8 @@
 
    (define (get-body)
      (log-expand ctx 'next-group)
-     (define body-ctx (struct-copy expand-context rec-ctx
-                                   [reference-records orig-rrs]))
+     (define body-ctx (struct*-copy expand-context rec-ctx
+                                    [reference-records orig-rrs]))
      (expand-body bodys (as-tail-context body-ctx #:wrt ctx) #:source rebuild-s))
    
    (define result-s

@@ -1,5 +1,6 @@
 #lang racket/base
 (require racket/promise
+         "../common/struct-star.rkt"
          "../common/performance.rkt"
          "../syntax/syntax.rkt"
          "../syntax/property.rkt"
@@ -64,8 +65,8 @@
    ;; expansion
    ((expand-context-module-begin-k ctx)
     s
-    (struct-copy expand-context ctx
-                 [module-begin-k #f]))))
+    (struct*-copy expand-context ctx
+                  [module-begin-k #f]))))
 
 (add-core-form!
  '#%declare
@@ -148,12 +149,12 @@
                                        #:for-submodule? (and enclosing-self #t)))
    
    ;; Initial context for all body expansions:
-   (define ctx (struct-copy expand-context (copy-root-expand-context init-ctx root-ctx)
-                            [allow-unbound? #f]
-                            [namespace m-ns]
-                            [post-expansion-scope-action add-scope]
-                            [phase phase]
-                            [just-once? #f]))
+   (define ctx (struct*-copy expand-context (copy-root-expand-context init-ctx root-ctx)
+                             [allow-unbound? #f]
+                             [namespace m-ns]
+                             [post-expansion-scope-action add-scope]
+                             [phase phase]
+                             [just-once? #f]))
    
    ;; Add the module's scope to the body forms; use `disarmed-s` and
    ;; re-match to extract the body forms, because that improves sharing
@@ -267,27 +268,27 @@
          ;; partial expansion:
          (define def-ctx-scopes (box null))
          
-         (define partial-body-ctx (struct-copy expand-context ctx
-                                               [context 'module]
-                                               [phase phase]
-                                               [namespace (namespace->namespace-at-phase m-ns phase)]
-                                               [only-immediate? #t]
-                                               [def-ctx-scopes def-ctx-scopes]
-                                               [need-eventually-defined need-eventually-defined] ; used only at phase 1 and up
-                                               [declared-submodule-names declared-submodule-names]
-                                               [lifts (make-lift-context
-                                                       (make-wrap-as-definition self frame-id
-                                                                                inside-scope all-scopes-s
-                                                                                defined-syms requires+provides))]
-                                               [module-lifts (make-module-lift-context phase #t)]
-                                               [require-lifts (make-require-lift-context
-                                                               phase
-                                                               (make-parse-lifted-require m-ns self requires+provides
-                                                                                          #:declared-submodule-names declared-submodule-names))]
-                                               [to-module-lifts (make-to-module-lift-context
-                                                                 phase
-                                                                 #:shared-module-ends module-ends
-                                                                 #:end-as-expressions? #f)]))
+         (define partial-body-ctx (struct*-copy expand-context ctx
+                                                [context 'module]
+                                                [phase phase]
+                                                [namespace (namespace->namespace-at-phase m-ns phase)]
+                                                [only-immediate? #t]
+                                                [def-ctx-scopes def-ctx-scopes]
+                                                [need-eventually-defined need-eventually-defined] ; used only at phase 1 and up
+                                                [declared-submodule-names declared-submodule-names]
+                                                [lifts (make-lift-context
+                                                        (make-wrap-as-definition self frame-id
+                                                                                 inside-scope all-scopes-s
+                                                                                 defined-syms requires+provides))]
+                                                [module-lifts (make-module-lift-context phase #t)]
+                                                [require-lifts (make-require-lift-context
+                                                                phase
+                                                                (make-parse-lifted-require m-ns self requires+provides
+                                                                                           #:declared-submodule-names declared-submodule-names))]
+                                                [to-module-lifts (make-to-module-lift-context
+                                                                  phase
+                                                                  #:shared-module-ends module-ends
+                                                                  #:end-as-expressions? #f)]))
          
          ;; Result is mostly a list of S-expressions, but can also
          ;; contain `compile-form` or `expanded+parsed` structures:
@@ -316,13 +317,13 @@
          
          (log-expand partial-body-ctx 'next-group)
          
-         (define body-ctx (struct-copy expand-context (accumulate-def-ctx-scopes partial-body-ctx def-ctx-scopes)
-                                       [only-immediate? #f]
-                                       [def-ctx-scopes #f]
-                                       [post-expansion-scope #:parent root-expand-context #f]
-                                       [to-module-lifts (make-to-module-lift-context phase
-                                                                                     #:shared-module-ends module-ends
-                                                                                     #:end-as-expressions? #t)]))
+         (define body-ctx (struct*-copy expand-context (accumulate-def-ctx-scopes partial-body-ctx def-ctx-scopes)
+                                        [only-immediate? #f]
+                                        [def-ctx-scopes #f]
+                                        [post-expansion-scope #:parent root-expand-context #f]
+                                        [to-module-lifts (make-to-module-lift-context phase
+                                                                                      #:shared-module-ends module-ends
+                                                                                      #:end-as-expressions? #t)]))
          
          (finish-expanding-body-expressons partially-expanded-bodys
                                            #:tail? (zero? phase)
@@ -365,9 +366,9 @@
      
      (log-expand ctx 'next)
 
-     (define submod-ctx (struct-copy expand-context ctx
-                                     [frame-id #:parent root-expand-context #f]
-                                     [post-expansion-scope #:parent root-expand-context #f]))
+     (define submod-ctx (struct*-copy expand-context ctx
+                                      [frame-id #:parent root-expand-context #f]
+                                      [post-expansion-scope #:parent root-expand-context #f]))
      
      (define declare-enclosing-module
        ;; Ensure this module on demand for `module*` submodules that might use it
@@ -427,10 +428,10 @@
    ;; trigger it
    
    (define mb-ctx
-     (struct-copy expand-context ctx
-                  [context 'module-begin]
-                  [module-begin-k module-begin-k]
-                  [in-local-expand? #f]))
+     (struct*-copy expand-context ctx
+                   [context 'module-begin]
+                   [module-begin-k module-begin-k]
+                   [in-local-expand? #f]))
    
    (define mb-scopes-s
      (if keep-enclosing-scope-at-phase
@@ -524,9 +525,9 @@
                              #:phase phase
                              #:s s)
   (define (make-mb-ctx)
-    (struct-copy expand-context ctx
-                 [context 'module-begin]
-                 [only-immediate? #t]))
+    (struct*-copy expand-context ctx
+                  [context 'module-begin]
+                  [only-immediate? #t]))
   (define mb
     (cond
      [(= 1 (length bodys))
@@ -740,8 +741,8 @@
           ;; Expand and evaluate RHS:
           (define-values (exp-rhs parsed-rhs vals)
             (expand+eval-for-syntaxes-binding (m 'rhs) ids
-                                              (struct-copy expand-context partial-body-ctx
-                                                           [need-eventually-defined need-eventually-defined])))
+                                              (struct*-copy expand-context partial-body-ctx
+                                                            [need-eventually-defined need-eventually-defined])))
           ;; Install transformers in the namespace for expansion:
           (for ([sym (in-list syms)]
                 [val (in-list vals)]
@@ -995,12 +996,12 @@
           (define-values (track-stxes specs)
             (parse-and-expand-provides! (m 'spec) (car bodys)
                                         requires+provides self
-                                        phase (struct-copy expand-context ctx
-                                                           [context 'top-level]
-                                                           [phase phase]
-                                                           [namespace (namespace->namespace-at-phase m-ns phase)]
-                                                           [requires+provides requires+provides]
-                                                           [declared-submodule-names declared-submodule-names])))
+                                        phase (struct*-copy expand-context ctx
+                                                            [context 'top-level]
+                                                            [phase phase]
+                                                            [namespace (namespace->namespace-at-phase m-ns phase)]
+                                                            [requires+provides requires+provides]
+                                                            [declared-submodule-names declared-submodule-names])))
           (log-expand ctx 'exit-prim)
           (cond
            [(expand-context-to-parsed? ctx)
@@ -1235,10 +1236,10 @@
 
   (define submod
     (expand-module s
-                   (struct-copy expand-context ctx
-                                [context 'module]
-                                [only-immediate? #f]
-                                [post-expansion-scope #:parent root-expand-context #f])
+                   (struct*-copy expand-context ctx
+                                 [context 'module]
+                                 [only-immediate? #f]
+                                 [post-expansion-scope #:parent root-expand-context #f])
                    self
                    #:always-produce-compiled? #t
                    #:keep-enclosing-scope-at-phase keep-enclosing-scope-at-phase

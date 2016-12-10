@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../syntax/syntax.rkt"
+(require "../common/struct-star.rkt"
+         "../syntax/syntax.rkt"
          "../common/phase.rkt"
          "../syntax/scope.rkt"
          "../syntax/binding.rkt"
@@ -81,8 +82,8 @@
       (define tmp-env (for/fold ([env intdef-env]) ([sym (in-list syms)])
                         (hash-set env sym variable)))
       (eval-for-syntaxes-binding input-s ids
-                                 (make-local-expand-context (struct-copy expand-context ctx
-                                                                         [env tmp-env])
+                                 (make-local-expand-context (struct*-copy expand-context ctx
+                                                                          [env tmp-env])
                                                             #:context 'expression
                                                             #:intdefs intdef))]
      [else
@@ -183,48 +184,48 @@
   (define def-ctx-scopes (if (expand-context-def-ctx-scopes ctx)
                              (unbox (expand-context-def-ctx-scopes ctx))
                              null))
-  (struct-copy expand-context ctx
-               [context context]
-               [env (add-intdef-bindings (expand-context-env ctx)
-                                         intdefs)]
-               [use-site-scopes
-                #:parent root-expand-context
-                (and (or (eq? context 'module)
-                         (list? context))
-                     (or (root-expand-context-use-site-scopes ctx)
-                         (box null)))]
-               [frame-id #:parent root-expand-context
-                         ;; If there are multiple definition contexts in `intdefs`
-                         ;; and if they have different frame IDs, then we conservatively
-                         ;; turn on use-site scopes for all frame IDs
-                         (for/fold ([frame-id (root-expand-context-frame-id ctx)]) ([intdef (in-intdefs intdefs)])
-                           (define i-frame-id (internal-definition-context-frame-id intdef))
-                           (cond
-                            [(and frame-id i-frame-id (not (eq? frame-id i-frame-id)))
-                             ;; Special ID 'all means "use-site scopes for all expansions"
-                             'all]
-                            [else (or frame-id i-frame-id)]))]
-               [post-expansion-scope
-                #:parent root-expand-context
-                (if intdefs
-                    (new-scope 'macro) ; placeholder; action uses `indefs`
-                    (and same-kind?
-                         (memq context '(module module-begin top-level))
-                         (root-expand-context-post-expansion-scope ctx)))]
-               [post-expansion-scope-action
-                (if intdefs
-                    (lambda (s placeholder-sc)
-                      (add-intdef-scopes s intdefs))
-                    (expand-context-post-expansion-scope-action ctx))]
-               [scopes
-                (append def-ctx-scopes
-                        (expand-context-scopes ctx))]
-               [only-immediate? (not stop-ids)] ; def-ctx-scopes is set for the enclosing transformer call
-               [to-parsed? #f]
-               [just-once? #f]
-               [in-local-expand? #t]
-               [stops (free-id-set phase (or all-stop-ids null))]
-               [current-introduction-scopes null]))
+  (struct*-copy expand-context ctx
+                [context context]
+                [env (add-intdef-bindings (expand-context-env ctx)
+                                          intdefs)]
+                [use-site-scopes
+                 #:parent root-expand-context
+                 (and (or (eq? context 'module)
+                          (list? context))
+                      (or (root-expand-context-use-site-scopes ctx)
+                          (box null)))]
+                [frame-id #:parent root-expand-context
+                          ;; If there are multiple definition contexts in `intdefs`
+                          ;; and if they have different frame IDs, then we conservatively
+                          ;; turn on use-site scopes for all frame IDs
+                          (for/fold ([frame-id (root-expand-context-frame-id ctx)]) ([intdef (in-intdefs intdefs)])
+                            (define i-frame-id (internal-definition-context-frame-id intdef))
+                            (cond
+                             [(and frame-id i-frame-id (not (eq? frame-id i-frame-id)))
+                              ;; Special ID 'all means "use-site scopes for all expansions"
+                              'all]
+                             [else (or frame-id i-frame-id)]))]
+                [post-expansion-scope
+                 #:parent root-expand-context
+                 (if intdefs
+                     (new-scope 'macro) ; placeholder; action uses `indefs`
+                     (and same-kind?
+                          (memq context '(module module-begin top-level))
+                          (root-expand-context-post-expansion-scope ctx)))]
+                [post-expansion-scope-action
+                 (if intdefs
+                     (lambda (s placeholder-sc)
+                       (add-intdef-scopes s intdefs))
+                     (expand-context-post-expansion-scope-action ctx))]
+                [scopes
+                 (append def-ctx-scopes
+                         (expand-context-scopes ctx))]
+                [only-immediate? (not stop-ids)] ; def-ctx-scopes is set for the enclosing transformer call
+                [to-parsed? #f]
+                [just-once? #f]
+                [in-local-expand? #t]
+                [stops (free-id-set phase (or all-stop-ids null))]
+                [current-introduction-scopes null]))
 
 ;; ----------------------------------------
 

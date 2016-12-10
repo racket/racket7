@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../syntax/syntax.rkt"
+(require "../common/struct-star.rkt"
+         "../syntax/syntax.rkt"
          "../syntax/scope.rkt"
          "../syntax/taint.rkt"
          "../syntax/match.rkt"
@@ -44,19 +45,19 @@
   ;; Create an expansion context for expanding only immediate macros;
   ;; this partial-expansion phase uncovers macro- and variable
   ;; definitions in the definition context
-  (define body-ctx (struct-copy expand-context ctx
-                                [context (list (make-liberal-define-context))]
-                                [name #f]
-                                [only-immediate? #t]
-                                [def-ctx-scopes def-ctx-scopes]
-                                [post-expansion-scope #:parent root-expand-context inside-sc]
-                                [post-expansion-scope-action add-scope]
-                                [scopes (cons inside-sc
-                                              (expand-context-scopes ctx))]
-                                [use-site-scopes #:parent root-expand-context (box null)]
-                                [frame-id #:parent root-expand-context frame-id]
-                                [reference-records (cons frame-id
-                                                         (expand-context-reference-records ctx))]))
+  (define body-ctx (struct*-copy expand-context ctx
+                                 [context (list (make-liberal-define-context))]
+                                 [name #f]
+                                 [only-immediate? #t]
+                                 [def-ctx-scopes def-ctx-scopes]
+                                 [post-expansion-scope #:parent root-expand-context inside-sc]
+                                 [post-expansion-scope-action add-scope]
+                                 [scopes (cons inside-sc
+                                               (expand-context-scopes ctx))]
+                                 [use-site-scopes #:parent root-expand-context (box null)]
+                                 [frame-id #:parent root-expand-context frame-id]
+                                 [reference-records (cons frame-id
+                                                          (expand-context-reference-records ctx))]))
   ;; Increment the binding layer relative to `ctx` when we encounter a binding
   (define (maybe-increment-binding-layer ids body-ctx)
     (if (eq? (expand-context-binding-layer body-ctx)
@@ -90,8 +91,8 @@
      [else
       (log-expand body-ctx 'next)
       (define exp-body (expand (car bodys) (if (and name (null? (cdr bodys)))
-                                               (struct-copy expand-context body-ctx
-                                                            [name name])
+                                               (struct*-copy expand-context body-ctx
+                                                             [name name])
                                                body-ctx)))
       (define disarmed-exp-body (syntax-disarm exp-body))
       (case (core-form-sym disarmed-exp-body phase)
@@ -125,9 +126,9 @@
          (define extended-env (for/fold ([env (expand-context-env body-ctx)]) ([key (in-list keys)]
                                                                                [id (in-list ids)])
                                 (env-extend env key (local-variable id))))
-         (loop (struct-copy expand-context body-ctx
-                            [env extended-env]
-                            [binding-layer (maybe-increment-binding-layer ids body-ctx)])
+         (loop (struct*-copy expand-context body-ctx
+                             [env extended-env]
+                             [binding-layer (maybe-increment-binding-layer ids body-ctx)])
                (cdr bodys)
                null
                ;; If we had accumulated some expressions, we
@@ -172,9 +173,9 @@
                                                                                [id (in-list ids)])
                                 (maybe-install-free=id! val id phase)
                                 (env-extend env key val)))
-         (loop (struct-copy expand-context body-ctx
-                            [env extended-env]
-                            [binding-layer (maybe-increment-binding-layer ids body-ctx)])
+         (loop (struct*-copy expand-context body-ctx
+                             [env extended-env]
+                             [binding-layer (maybe-increment-binding-layer ids body-ctx)])
                (cdr bodys)
                done-bodys
                val-idss
@@ -220,15 +221,15 @@
   (when (null? done-bodys)
     (raise-syntax-error #f "no expression after a sequence of internal definitions" s))
   ;; As we finish expanding, we're no longer in a definition context
-  (define finish-ctx (struct-copy expand-context (accumulate-def-ctx-scopes body-ctx def-ctx-scopes)
-                                  [context 'expression]
-                                  [use-site-scopes #:parent root-expand-context (box null)]
-                                  [scopes (append
-                                           (unbox (root-expand-context-use-site-scopes body-ctx))
-                                           (expand-context-scopes body-ctx))]
-                                  [only-immediate? #f]
-                                  [def-ctx-scopes #f]
-                                  [post-expansion-scope #:parent root-expand-context #f]))
+  (define finish-ctx (struct*-copy expand-context (accumulate-def-ctx-scopes body-ctx def-ctx-scopes)
+                                   [context 'expression]
+                                   [use-site-scopes #:parent root-expand-context (box null)]
+                                   [scopes (append
+                                            (unbox (root-expand-context-use-site-scopes body-ctx))
+                                            (expand-context-scopes body-ctx))]
+                                   [only-immediate? #f]
+                                   [def-ctx-scopes #f]
+                                   [post-expansion-scope #:parent root-expand-context #f]))
   ;; Helper to expand and wrap the ending expressions in `begin`, if needed:
   (define (finish-bodys)
     (define block->list? (null? val-idss))
@@ -246,8 +247,8 @@
           (define rest-done-bodys (cdr done-bodys)) ; don't retain `done-bodys` for recur
           (log-expand body-ctx 'next)
           (cons (expand (car done-bodys) (if (and name (null? rest-done-bodys))
-                                             (struct-copy expand-context finish-ctx
-                                                          [name name])
+                                             (struct*-copy expand-context finish-ctx
+                                                           [name name])
                                              finish-ctx))
                 (loop rest-done-bodys))])))
     (log-expand body-ctx 'exit-list exp-bodys)

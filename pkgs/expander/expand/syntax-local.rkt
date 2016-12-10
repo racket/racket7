@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/set.rkt"
+         "../common/struct-star.rkt"
          "../syntax/syntax.rkt"
          "../common/phase.rkt"
          "../syntax/scope.rkt"
@@ -164,9 +165,9 @@
                           failure-thunk))
   (define current-ctx (get-current-expand-context who))
   (define ctx (if intdef
-                  (struct-copy expand-context current-ctx
-                               [env (add-intdef-bindings (expand-context-env current-ctx)
-                                                         intdef)])
+                  (struct*-copy expand-context current-ctx
+                                [env (add-intdef-bindings (expand-context-env current-ctx)
+                                                          intdef)])
                   current-ctx))
   (log-expand ctx 'local-value id)
   (define phase (expand-context-phase ctx))

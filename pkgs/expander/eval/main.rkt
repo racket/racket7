@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../syntax/module-binding.rkt"
+(require "../common/struct-star.rkt"
+         "../syntax/module-binding.rkt"
          "../syntax/api.rkt"
          (only-in "../syntax/taint.rkt"
                   [syntax-disarm raw:syntax-disarm]
@@ -164,8 +165,8 @@
 
 (define (expand-single-once s ns)
   (define-values (require-lifts lifts exp-s)
-    (expand-capturing-lifts s (struct-copy expand-context (make-expand-context ns)
-                                           [just-once? #t])))
+    (expand-capturing-lifts s (struct*-copy expand-context (make-expand-context ns)
+                                            [just-once? #t])))
   (cond
    [(and (null? require-lifts) (null? lifts)) exp-s]
    [else
@@ -193,17 +194,17 @@
   (define ctx (make-expand-context ns))
   (define phase (namespace-phase ns))
   (let loop ([s s] [phase phase] [ns ns] [as-tail? #t])
-    (define tl-ctx (struct-copy expand-context ctx
-                                [phase phase]
-                                [namespace ns]
-                                [just-once? just-once?]
-                                [for-serializable? serializable?]))
+    (define tl-ctx (struct*-copy expand-context ctx
+                                 [phase phase]
+                                 [namespace ns]
+                                 [just-once? just-once?]
+                                 [for-serializable? serializable?]))
     (define-values (require-lifts lifts exp-s)
-      (expand-capturing-lifts s (struct-copy expand-context tl-ctx
-                                             [only-immediate? #t]
-                                             [def-ctx-scopes (box null)] ; discarding is ok
-                                             [phase phase]
-                                             [namespace ns])))
+      (expand-capturing-lifts s (struct*-copy expand-context tl-ctx
+                                              [only-immediate? #t]
+                                              [def-ctx-scopes (box null)] ; discarding is ok
+                                              [phase phase]
+                                              [namespace ns])))
     (define disarmed-exp-s (raw:syntax-disarm exp-s))
     (cond
      [(or (pair? require-lifts) (pair? lifts))
@@ -278,10 +279,10 @@
                              (namespace-phase ns)
                              (make-parse-top-lifted-require ns)))
    (define exp-s
-     (expand-in-context s (struct-copy expand-context ctx
-                                       [lifts lift-ctx]
-                                       [module-lifts lift-ctx]
-                                       [require-lifts require-lift-ctx])))
+     (expand-in-context s (struct*-copy expand-context ctx
+                                        [lifts lift-ctx]
+                                        [module-lifts lift-ctx]
+                                        [require-lifts require-lift-ctx])))
    (values (get-and-clear-require-lifts! require-lift-ctx)
            (get-and-clear-lifts! lift-ctx)
            exp-s)))

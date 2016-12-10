@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../syntax/syntax.rkt"
+(require "../common/struct-star.rkt"
+         "../syntax/syntax.rkt"
          "../common/phase.rkt"
          "../syntax/scope.rkt"
          "../syntax/binding.rkt"
@@ -120,10 +121,11 @@
                                                      #:phase phase
                                                      #:intdefs intdefs
                                                      #:stop-ids stop-ids))
-   (define local-ctx (struct-copy expand-context base-local-ctx
-                                  [user-env (for/fold ([user-env (expand-context-user-env base-local-ctx)]) ([key (in-list local-keys)]
-                                                                                                             [value (in-list local-values)])
-                                              (hash-set user-env key value))]))
+   (define local-ctx (struct*-copy expand-context base-local-ctx
+                                   [user-env (let ([user-env (expand-context-user-env base-local-ctx)])
+                                               (for/fold ([user-env user-env]) ([key (in-list local-keys)]
+                                                                                [value (in-list local-values)])
+                                                 (hash-set user-env key value)))]))
 
    (define input-s (add-intdef-scopes (flip-introduction-scopes s ctx) intdefs))
 

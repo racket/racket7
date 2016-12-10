@@ -1,5 +1,6 @@
 #lang racket/base
 (require racket/promise
+         "../common/struct-star.rkt"
          "../syntax/syntax.rkt"
          "../syntax/scope.rkt"
          "../syntax/binding.rkt"
@@ -9,7 +10,7 @@
          "root-expand-context.rkt"
          "lift-key.rkt")
 
-(provide (struct-out expand-context)
+(provide (struct*-out expand-context)
          (all-from-out "root-expand-context.rkt")
          make-expand-context
          copy-root-expand-context
@@ -35,35 +36,36 @@
 ;; expanded. That mode overrides `to-parsed?`, since it's common to
 ;; partially expand forms on the way to a parsed result.
 
-(struct expand-context root-expand-context (to-parsed? ; #t => "expand" to a parsed form; #f => normal expand
-                                            context    ; 'expression, 'module, or 'top-level
-                                            phase      ; current expansion phase; must match phase of `namespace`
-                                            namespace  ; namespace for modules and evaluation
-                                            env        ; environment for local bindings
-                                            user-env   ; for `syntax-local-environment-ref`
-                                            post-expansion-scope-action ; function to apply with `post-expansion-scope`
-                                            scopes     ; list of scopes that should be pruned by `quote-syntax`
-                                            def-ctx-scopes ; #f or box of list of scopes; transformer-created def-ctxes
-                                            binding-layer ; changed when a binding is nested; to check already-expanded
-                                            reference-records ; list of reference records for enclosing
-                                            only-immediate? ; #t => stop at core forms; #t => `def-ctx-scopes` is a box
-                                            just-once? ; #t => stop (a given subform) after any expansion
-                                            module-begin-k ; expander for `#%module-begin` in a 'module-begin context
-                                            need-eventually-defined ; phase(>=1) -> variables expanded before binding
-                                            allow-unbound? ; allow reference to unbound identifiers as variables
-                                            in-local-expand? ; #t via `local-expand`
-                                            stops      ; free-id-set; non-empty => `def-ctx-scopes` is a box
-                                            current-introduction-scopes ; scopes for current macro expansion
-                                            declared-submodule-names ; mutable hash table: symbol -> 'module or 'module*
-                                            lifts      ; #f or lift-context, which contains a list of lifteds
-                                            lift-envs  ; list of box of env for lifts to locals
-                                            module-lifts    ; lifted `module`s
-                                            require-lifts   ; lifted `require`s
-                                            to-module-lifts ; lifted `provide` and end declarations
-                                            requires+provides ; enclosing module's requires+provides during `provide`
-                                            name       ; #f or identifier to name the expression
-                                            observer   ; logging observer (for the macro debugger)
-                                            for-serializable?)) ; accumulate submodules as serializable?
+(struct* expand-context root-expand-context
+         (to-parsed? ; #t => "expand" to a parsed form; #f => normal expand
+          * context    ; 'expression, 'module, or 'top-level
+          * phase      ; current expansion phase; must match phase of `namespace`
+          * namespace  ; namespace for modules and evaluation
+          * env        ; environment for local bindings
+          user-env   ; for `syntax-local-environment-ref`
+          * post-expansion-scope-action ; function to apply with `post-expansion-scope`
+          * scopes     ; list of scopes that should be pruned by `quote-syntax`
+          * def-ctx-scopes ; #f or box of list of scopes; transformer-created def-ctxes
+          * binding-layer ; changed when a binding is nested; to check already-expanded
+          * reference-records ; list of reference records for enclosing
+          * only-immediate? ; #t => stop at core forms; #t => `def-ctx-scopes` is a box
+          just-once? ; #t => stop (a given subform) after any expansion
+          module-begin-k ; expander for `#%module-begin` in a 'module-begin context
+          * need-eventually-defined ; phase(>=1) -> variables expanded before binding
+          allow-unbound? ; allow reference to unbound identifiers as variables
+          in-local-expand? ; #t via `local-expand`
+          stops      ; free-id-set; non-empty => `def-ctx-scopes` is a box
+          * current-introduction-scopes ; scopes for current macro expansion
+          declared-submodule-names ; mutable hash table: symbol -> 'module or 'module*
+          lifts      ; #f or lift-context, which contains a list of lifteds
+          lift-envs  ; list of box of env for lifts to locals
+          module-lifts    ; lifted `module`s
+          require-lifts   ; lifted `require`s
+          to-module-lifts ; lifted `provide` and end declarations
+          requires+provides ; enclosing module's requires+provides during `provide`
+          * name       ; #f or identifier to name the expression
+          observer   ; logging observer (for the macro debugger)
+          for-serializable?)) ; accumulate submodules as serializable?
 
 (define (make-expand-context ns
                              #:to-parsed? [to-parsed? #f]
@@ -109,17 +111,17 @@
                   for-serializable?))
 
 (define (copy-root-expand-context ctx root-ctx)
-  (struct-copy expand-context ctx
-               [module-scopes #:parent root-expand-context (root-expand-context-module-scopes root-ctx)]
-               [post-expansion-scope #:parent root-expand-context (root-expand-context-post-expansion-scope root-ctx)]
-               [top-level-bind-scope #:parent root-expand-context (root-expand-context-top-level-bind-scope root-ctx)]
-               [all-scopes-stx #:parent root-expand-context (root-expand-context-all-scopes-stx root-ctx)]
-               [use-site-scopes #:parent root-expand-context (root-expand-context-use-site-scopes root-ctx)]
-               [defined-syms #:parent root-expand-context (root-expand-context-defined-syms root-ctx)]
-               [frame-id #:parent root-expand-context (root-expand-context-frame-id root-ctx)]
-               [counter #:parent root-expand-context (root-expand-context-counter root-ctx)]
-               [lift-key #:parent root-expand-context (root-expand-context-lift-key root-ctx)]
-               [binding-layer (root-expand-context-frame-id root-ctx)]))
+  (struct*-copy expand-context ctx
+                [module-scopes #:parent root-expand-context (root-expand-context-module-scopes root-ctx)]
+                [post-expansion-scope #:parent root-expand-context (root-expand-context-post-expansion-scope root-ctx)]
+                [top-level-bind-scope #:parent root-expand-context (root-expand-context-top-level-bind-scope root-ctx)]
+                [all-scopes-stx #:parent root-expand-context (root-expand-context-all-scopes-stx root-ctx)]
+                [use-site-scopes #:parent root-expand-context (root-expand-context-use-site-scopes root-ctx)]
+                [defined-syms #:parent root-expand-context (root-expand-context-defined-syms root-ctx)]
+                [frame-id #:parent root-expand-context (root-expand-context-frame-id root-ctx)]
+                [counter #:parent root-expand-context (root-expand-context-counter root-ctx)]
+                [lift-key #:parent root-expand-context (root-expand-context-lift-key root-ctx)]
+                [binding-layer (root-expand-context-frame-id root-ctx)]))
 
 ;; An expand-context or a delayed expand context (so use `force`):
 (define current-expand-context (make-parameter #f))
@@ -154,10 +156,10 @@
    [(and (eq? 'expression (expand-context-context ctx))
          (not (expand-context-name ctx)))
     ctx]
-   [else (struct-copy expand-context ctx
-                      [context 'expression]
-                      [name #f]
-                      [post-expansion-scope #:parent root-expand-context #f])]))
+   [else (struct*-copy expand-context ctx
+                       [context 'expression]
+                       [name #f]
+                       [post-expansion-scope #:parent root-expand-context #f])]))
 
 ;; Adjusts `ctx` to make it suitable for a non-tail position
 ;; in an `begin` form, possibly in a 'top-level or 'module context
@@ -166,16 +168,16 @@
   (cond
    [(not (expand-context-name ctx))
     ctx]
-   [else (struct-copy expand-context ctx
-                      [name #f])]))
+   [else (struct*-copy expand-context ctx
+                       [name #f])]))
 
 ;; Adjusts `ctx` (which should be an expression context) to make it
 ;; suitable for a subexpression in tail position
 (define (as-tail-context ctx #:wrt wrt-ctx)
   (cond
    [(expand-context-name wrt-ctx)
-    (struct-copy expand-context ctx
-                 [name (expand-context-name wrt-ctx)])]
+    (struct*-copy expand-context ctx
+                  [name (expand-context-name wrt-ctx)])]
    [else ctx]))
 
 ;; Adjust `ctx` to make it suitable for a context in the right-hand
@@ -183,11 +185,11 @@
 (define (as-named-context ctx ids)
   (cond
    [(and (pair? ids) (null? (cdr ids)))
-    (struct-copy expand-context ctx
-                 [name (car ids)])]
+    (struct*-copy expand-context ctx
+                  [name (car ids)])]
    [else ctx]))
 
 ;; Adjust `ctx` to to generate a parsed result
 (define (as-to-parsed-context ctx)
-  (struct-copy expand-context ctx
-               [to-parsed? #t]))
+  (struct*-copy expand-context ctx
+                [to-parsed? #t]))

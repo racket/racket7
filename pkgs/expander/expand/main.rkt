@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/set.rkt"
+         "../common/struct-star.rkt"
          "../syntax/syntax.rkt"
          "../syntax/property.rkt"
          "../syntax/scope.rkt"
@@ -340,16 +341,16 @@
              (not (null? (unbox (expand-context-def-ctx-scopes ctx)))))
         (accumulate-def-ctx-scopes ctx (expand-context-def-ctx-scopes ctx))
         ctx))
-  (define m-ctx (struct-copy expand-context accum-ctx
-                             [current-introduction-scopes (cons intro-scope
-                                                                use-scopes)]
-                             [def-ctx-scopes
-                               (if confine-def-ctx-scopes?
-                                   ;; Can confine tracking to this call
-                                   def-ctx-scopes
-                                   ;; Keep old def-ctx-scopes box, so that we don't
-                                   ;; lose them at the point where expansion stops
-                                   (expand-context-def-ctx-scopes ctx))]))
+  (define m-ctx (struct*-copy expand-context accum-ctx
+                              [current-introduction-scopes (cons intro-scope
+                                                                 use-scopes)]
+                              [def-ctx-scopes
+                                (if confine-def-ctx-scopes?
+                                    ;; Can confine tracking to this call
+                                    def-ctx-scopes
+                                    ;; Keep old def-ctx-scopes box, so that we don't
+                                    ;; lose them at the point where expansion stops
+                                    (expand-context-def-ctx-scopes ctx))]))
   (define transformed-s
     (parameterize ([current-expand-context m-ctx]
                    [current-namespace (namespace->namespace-at-phase
@@ -404,9 +405,9 @@
   ;; list for further expansion:
   (if (null? (unbox def-ctx-scopes))
       ctx
-      (struct-copy expand-context ctx
-                   [scopes (append (unbox def-ctx-scopes)
-                                   (expand-context-scopes ctx))])))
+      (struct*-copy expand-context ctx
+                    [scopes (append (unbox def-ctx-scopes)
+                                    (expand-context-scopes ctx))])))
 
 ;; ----------------------------------------
 
@@ -475,17 +476,17 @@
                           (make-local-lift lift-env (root-expand-context-counter ctx))
                           (make-top-level-lift ctx))
                       #:module*-ok? (and (not local?) (eq? context 'module))))
-    (define capture-ctx (struct-copy expand-context ctx
-                                     [lift-key #:parent root-expand-context lift-key]
-                                     [lifts lift-ctx]
-                                     [lift-envs (if local?
-                                                    (cons lift-env
-                                                          (expand-context-lift-envs ctx))
-                                                    (expand-context-lift-envs ctx))]
-                                     [module-lifts (if (or local?
-                                                           (not (memq context '(top-level module))))
-                                                       (expand-context-module-lifts ctx)
-                                                       lift-ctx)]))
+    (define capture-ctx (struct*-copy expand-context ctx
+                                      [lift-key #:parent root-expand-context lift-key]
+                                      [lifts lift-ctx]
+                                      [lift-envs (if local?
+                                                     (cons lift-env
+                                                           (expand-context-lift-envs ctx))
+                                                     (expand-context-lift-envs ctx))]
+                                      [module-lifts (if (or local?
+                                                            (not (memq context '(top-level module))))
+                                                        (expand-context-module-lifts ctx)
+                                                        lift-ctx)]))
     (define exp-s (expand s capture-ctx))
     (define lifts (get-and-clear-lifts! (expand-context-lifts capture-ctx)))
     (define with-lifts-s
@@ -540,15 +541,15 @@
    (define ns (namespace->namespace-at-phase (expand-context-namespace ctx)
                                              phase))
    (namespace-visit-available-modules! ns phase)
-   (struct-copy expand-context ctx
-                [context context]
-                [scopes null]
-                [phase phase]
-                [namespace ns]
-                [env empty-env]
-                [only-immediate? #f]
-                [def-ctx-scopes #f]
-                [post-expansion-scope #:parent root-expand-context #f]))
+   (struct*-copy expand-context ctx
+                 [context context]
+                 [scopes null]
+                 [phase phase]
+                 [namespace ns]
+                 [env empty-env]
+                 [only-immediate? #f]
+                 [def-ctx-scopes #f]
+                 [post-expansion-scope #:parent root-expand-context #f]))
 
 ;; Expand and evaluate `s` as a compile-time expression, ensuring that
 ;; the number of returned values matches the number of target
@@ -669,10 +670,10 @@
        (list (list keys exp-rhs))
        (list
         (lets-loop (cdr idss+keyss+rhss)
-                   (struct-copy expand-context rhs-ctx
-                                [env (for/fold ([env (expand-context-env rhs-ctx)]) ([id (in-list ids)]
-                                                                                     [key (in-list keys)])
-                                       (env-extend env key (local-variable id)))]))))])))
+                   (struct*-copy expand-context rhs-ctx
+                                 [env (for/fold ([env (expand-context-env rhs-ctx)]) ([id (in-list ids)]
+                                                                                      [key (in-list keys)])
+                                        (env-extend env key (local-variable id)))]))))])))
 
 ;; A rename transformer can have a `prop:rename-transformer` property
 ;; as a function, and that fnuction might want to use
