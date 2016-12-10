@@ -2246,14 +2246,14 @@ static void do_wrong_syntax(const char *where,
       pform = scheme_syntax_to_datum(form);
 
       /* Try to extract syntax name from syntax */
-      if (!who && (SCHEME_SYMBOLP(SCHEME_STX_VAL(form)) || SCHEME_STX_PAIRP(form))) {
+      if (!who && (SCHEME_STX_SYMBOLP(form) || SCHEME_STX_PAIRP(form))) {
 	Scheme_Object *first;
 	if (SCHEME_STX_PAIRP(form))
 	  first = SCHEME_STX_CAR(form);
 	else
 	  first = form;
-	if (SCHEME_SYMBOLP(SCHEME_STX_VAL(first)))
-	  who = SCHEME_STX_VAL(first); /* printed name is local name */
+	if (SCHEME_STX_SYMBOLP(first))
+	  who = SCHEME_STX_SYM(first); /* printed name is local name */
       }
     } else {
       pform = form;
@@ -2276,9 +2276,8 @@ static void do_wrong_syntax(const char *where,
     if (SCHEME_STXP(detail_form)) {
       if (((Scheme_Stx *)detail_form)->srcloc->line >= 0)
 	p = make_stx_srcloc_string(((Scheme_Stx *)detail_form)->srcloc, &plen);
-      pform = scheme_syntax_to_datum(detail_form);
-    } else
-      pform = detail_form;
+    }
+    pform = scheme_syntax_to_datum(detail_form);
 
     /* don't use error_write_to_string_w_max since this is code */
     if (show_src)

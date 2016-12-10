@@ -26,14 +26,7 @@
          correlated-span)
 
 (define (correlate src-e s-exp)
-  (define e
-    (cond
-     [(datum-has-elements? s-exp)
-      ;; Avoid pushing source locations to nested objects
-      (datum->correlated (correlated-e (datum->correlated s-exp))
-                         src-e)]
-     [else
-      (datum->correlated s-exp src-e)]))
+  (define e (datum->correlated s-exp src-e))
   (define maybe-n (syntax-property src-e 'inferred-name))
   (if maybe-n
       (syntax-property e 'inferred-name maybe-n)

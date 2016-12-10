@@ -56,7 +56,8 @@ representation of its source. Since linklets exist below the layer of
 macros and syntax objects, linklet compilation does not use
 @tech{syntax objects}. Instead, linklet compilation uses
 @deftech{correlated objects}, which are like @tech{syntax objects}
-without lexical-context information. Using an S-expression or
+without lexical-context information and without the constraint that
+content is coerced to correlated objects. Using an S-expression or
 @tech{correlated object}, the grammar of a linklet as recognized by
 @racket[compile-linklet] is
 
@@ -383,7 +384,7 @@ module instance.}
 @defproc[(correlated-span [stx correlated?])
          (or/c exact-nonnegative-integer? #f)]
 @defproc[(correlated-e [stx correlated?]) any]
-@defproc[(correlated->datum [stx correlated?]) any]
+@defproc[(correlated->datum [stx (or/c correlated? any/c)]) any]
 @defproc[(datum->correlated [v any/c]
                         [srcloc (or/c correlated? #f
                                       (list/c any/c
@@ -410,5 +411,12 @@ Like @racket[syntax?], @racket[syntax-source], @racket[syntax-line],
 @racket[syntax-span], @racket[syntax-e], @racket[syntax->datum],
 @racket[datum->syntax], @racket[syntax-property], and
 @racket[syntax-property-symbol-keys], but for @tech{correlated
-objects}.}
+objects}.
 
+Unlike @racket[datum->syntax], @racket[datum->correlated] does not
+recur through the given S-expression and convert pieces to
+@tech{correlated objects}. Instead, a @tech{correlated object} is
+simply wrapped around the immediate value. In contrast,
+@racket[correlated->datum] recurs through its argument (which is not
+necessarily a @tech{correlated object}) to discover any
+@tech{correlated objects} and convert them to plain S-expressions.}

@@ -323,7 +323,7 @@ Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id,
   Scheme_Hash_Tree *vars;
 
   MZ_ASSERT(SCHEME_STX_SYMBOLP(id));
-  id = SCHEME_STX_VAL(id);
+  id = SCHEME_STX_SYM(id);
 
   if (mutate)
     env2 = env;
@@ -376,7 +376,7 @@ static Scheme_Object *get_local_name(Scheme_Object *id)
   if (name && SCHEME_SYMBOLP(name))
     return name;
   else
-    return SCHEME_STX_VAL(id);
+    return SCHEME_STX_SYM(id);
 }
 
 Scheme_IR_Local *scheme_make_ir_local(Scheme_Object *id)
@@ -414,10 +414,10 @@ scheme_compile_lookup(Scheme_Object *find_id, Scheme_Comp_Env *env, int flags)
 {
   Scheme_Object *v;
 
-  v = scheme_hash_tree_get(env->vars, SCHEME_STX_VAL(find_id));
+  v = scheme_hash_tree_get(env->vars, SCHEME_STX_SYM(find_id));
 
   if (!v) {
-    v = scheme_hash_get(scheme_startup_env->all_primitives_table, SCHEME_STX_VAL(find_id));
+    v = scheme_hash_get(scheme_startup_env->all_primitives_table, SCHEME_STX_SYM(find_id));
 
     if (v && (flags & SCHEME_REFERENCING))
       return scheme_true; /* => kernel primitive */
@@ -466,7 +466,7 @@ void scheme_dup_symbol_check(DupCheckRecord *r, const char *where,
 
   if (r->count <= 5) {
     for (i = 0; i < r->count; i++) {
-      if (SAME_OBJ(SCHEME_STX_VAL(symbol), SCHEME_STX_VAL(r->syms[i])))
+      if (SAME_OBJ(SCHEME_STX_SYM(symbol), SCHEME_STX_SYM(r->syms[i])))
 	scheme_wrong_syntax(where, symbol, form,
 			    "duplicate %s name", what);
     }
@@ -479,19 +479,19 @@ void scheme_dup_symbol_check(DupCheckRecord *r, const char *where,
       ht = scheme_make_hash_table(SCHEME_hash_ptr);
       r->ht = ht;
       for (i = 0; i < r->count; i++) {
-	scheme_hash_set(ht, SCHEME_STX_VAL(r->syms[i]), r->syms[i]);
+	scheme_hash_set(ht, SCHEME_STX_SYM(r->syms[i]), r->syms[i]);
       }
       r->count++;
     }
   }
 
-  if (scheme_hash_get(r->ht, SCHEME_STX_VAL(symbol))) {
+  if (scheme_hash_get(r->ht, SCHEME_STX_SYM(symbol))) {
     scheme_wrong_syntax(where, symbol, form,
                         "duplicate %s name", what);
     return;
   }
 
-  scheme_hash_set(r->ht, SCHEME_STX_VAL(symbol), symbol);
+  scheme_hash_set(r->ht, SCHEME_STX_SYM(symbol), symbol);
 }
 
 

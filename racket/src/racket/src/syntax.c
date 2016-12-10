@@ -297,8 +297,9 @@ static Scheme_Object *syntax_to_datum_k(void)
 #endif
 
 static Scheme_Object *syntax_to_datum_inner(Scheme_Object *o)
+/* Recurs through `o` to find syntax objects and strip them away, or
+   returns `o` if no syntax objects are inside. */
 {
-  Scheme_Stx *stx = (Scheme_Stx *)o;
   Scheme_Object *v, *result;
 
 #ifdef DO_STACK_CHECK
@@ -313,41 +314,93 @@ static Scheme_Object *syntax_to_datum_inner(Scheme_Object *o)
 #endif
   SCHEME_USE_FUEL(1);
 
-  v = stx->val;
+  if (SCHEME_STXP(o))
+    o = SCHEME_STX_VAL(o);
+  v = o;
   
   if (SCHEME_PAIRP(v)) {
     Scheme_Object *first = NULL, *last = NULL, *p;
     Scheme_Object *a;
+    int same = 0;
     
     while (SCHEME_PAIRP(v)) {
       a = syntax_to_datum_inner(SCHEME_CAR(v));
 
-      p = CONS(a, scheme_null);
+      if (!first && SAME_OBJ(a, SCHEME_CAR(v))) {
+        same++;
+        v = SCHEME_CDR(v);
+      } else {
+        if (!first && (same > 0)) {
+          v = o;
+          while (same--) {
+            p = CONS(SCHEME_CAR(v), scheme_null);
+            if (last)
+              SCHEME_CDR(last) = p;
+            else
+              first = p;
+            last = p;
+            v = SCHEME_CDR(v);
+          }
+        }
+        
+        p = CONS(a, scheme_null);
       
-      if (last)
-	SCHEME_CDR(last) = p;
-      else
-	first = p;
-      last = p;
-      v = SCHEME_CDR(v);
+        if (last)
+          SCHEME_CDR(last) = p;
+        else
+          first = p;
+        last = p;
+        v = SCHEME_CDR(v);
+      }
     }
     if (!SCHEME_NULLP(v)) {
-      v = syntax_to_datum_inner(v);
-      SCHEME_CDR(last) = v;
-    }
+      a = syntax_to_datum_inner(v);
+      if (!first && SAME_OBJ(v, a))
+        return o;
+      else {
+        v = o;
+        while (same--) {
+          p = CONS(SCHEME_CAR(v), scheme_null);
+          if (last)
+            SCHEME_CDR(last) = p;
+          else
+            first = p;
+          last = p;
+          v = SCHEME_CDR(v);
+        }
+        
+        SCHEME_CDR(last) = a;
+      }
+    } else if (!first)
+      return o;
 
     result = first;
   } else if (SCHEME_BOXP(v)) {
     v = syntax_to_datum_inner(SCHEME_BOX_VAL(v));
+    if (v == SCHEME_BOX_VAL(o))
+      return o;
     result = scheme_box(v);
     SCHEME_SET_IMMUTABLE(result);
   } else if (SCHEME_VECTORP(v)) {
-    int size = SCHEME_VEC_SIZE(v), i;
+    int size = SCHEME_VEC_SIZE(v), i, j;
     Scheme_Object *r, *a;
+
+    for (i = 0; i < size; i++) {
+      a = syntax_to_datum_inner(SCHEME_VEC_ELS(v)[i]);
+      if (!SAME_OBJ(a, SCHEME_VEC_ELS(v)[i]))
+        break;
+    }
+
+    if (i >= size)
+      return o;
     
     r = scheme_make_vector(size, NULL);
-    
-    for (i = 0; i < size; i++) {
+
+    for (j = 0; j < i; j++) {
+      SCHEME_VEC_ELS(r)[j] = SCHEME_VEC_ELS(v)[j];
+    }
+    SCHEME_VEC_ELS(r)[i] = a;
+    for (i++; i < size; i++) {
       a = syntax_to_datum_inner(SCHEME_VEC_ELS(v)[i]);
       SCHEME_VEC_ELS(r)[i] = a;
     }
@@ -356,12 +409,34 @@ static Scheme_Object *syntax_to_datum_inner(Scheme_Object *o)
     SCHEME_SET_IMMUTABLE(result);
   } else if (SCHEME_HASHTRP(v)) {
     Scheme_Hash_Tree *ht = (Scheme_Hash_Tree *)v, *ht2;
-    Scheme_Object *key, *val;
-    mzlonglong i;
+    Scheme_Object *key, *val, *val2;
+    mzlonglong i, j;
+
+    i = scheme_hash_tree_next(ht, -1);
+    while (i != -1) {
+      scheme_hash_tree_index(ht, i, &key, &val);
+      val2 = syntax_to_datum_inner(val);
+      if (!SAME_OBJ(val, val2))
+        break;
+      i = scheme_hash_tree_next(ht, i);
+    }
+    if (i == -1)
+      return o;
     
     ht2 = scheme_make_hash_tree_of_type(SCHEME_HASHTR_TYPE(ht));
+
+    j = scheme_hash_tree_next(ht, -1);
+    while (j != i) {
+      scheme_hash_tree_index(ht, i, &key, &val);
+      val = syntax_to_datum_inner(val);
+      ht2 = scheme_hash_tree_set(ht2, key, val);
+      i = scheme_hash_tree_next(ht, i);
+    }
     
-    i = scheme_hash_tree_next(ht, -1);
+    scheme_hash_tree_index(ht, i, &key, &val);
+    ht2 = scheme_hash_tree_set(ht2, key, val2);
+    
+    i = scheme_hash_tree_next(ht, i);
     while (i != -1) {
       scheme_hash_tree_index(ht, i, &key, &val);
       val = syntax_to_datum_inner(val);
@@ -374,9 +449,18 @@ static Scheme_Object *syntax_to_datum_inner(Scheme_Object *o)
     Scheme_Structure *s = (Scheme_Structure *)v;
     Scheme_Object *a;
     int size = s->stype->num_slots, i;
-    
-    s = (Scheme_Structure *)scheme_clone_prefab_struct_instance(s);
+
     for (i = 0; i < size; i++) {
+      a = syntax_to_datum_inner(s->slots[i]);
+      if (!SAME_OBJ(a, s->slots[i]))
+        break;
+    }
+    if (i >= size)
+      return o;
+
+    s = (Scheme_Structure *)scheme_clone_prefab_struct_instance(s);
+    s->slots[i] = a;
+    for (i++; i < size; i++) {
       a = syntax_to_datum_inner(s->slots[i]);
       s->slots[i] = a;
     }
@@ -602,7 +686,6 @@ Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o,
                                       Scheme_Object *stx_src,
                                       int flags)
 {
-  Scheme_Hash_Table *ht;
   Scheme_Object *v;
 
   if (!SCHEME_FALSEP(stx_src) && !SCHEME_STXP(stx_src))
@@ -611,21 +694,28 @@ Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o,
   if (SCHEME_STXP(o))
     return o;
 
-  if ((flags & DTS_CAN_GRAPH) && !quick_check_graph(o, 10))
-    ht = scheme_make_hash_table(SCHEME_hash_ptr);
+  if (flags & DTS_RECUR) {
+    Scheme_Hash_Table *ht;
+
+    if ((flags & DTS_CAN_GRAPH) && !quick_check_graph(o, 10))
+      ht = scheme_make_hash_table(SCHEME_hash_ptr);
+    else
+      ht = NULL;
+
+    v = datum_to_syntax_inner(o, (Scheme_Stx *)stx_src, ht);
+
+    if (!v) {
+      /* only happens with cycles: */
+      scheme_contract_error("datum->syntax",
+                            "cannot create syntax from cyclic datum",
+                            "datum", 1, o,
+                            NULL);
+      return NULL;
+    }
+  } else if (SCHEME_FALSEP(stx_src))
+    v = scheme_make_stx(o, empty_srcloc, NULL);
   else
-    ht = NULL;
-
-  v = datum_to_syntax_inner(o, (Scheme_Stx *)stx_src, ht);
-
-  if (!v) {
-    /* only happens with cycles: */
-    scheme_contract_error("datum->syntax",
-                          "cannot create syntax from cyclic datum",
-                          "datum", 1, o,
-                          NULL);
-    return NULL;
-  }
+    v = scheme_make_stx(o, ((Scheme_Stx *)stx_src)->srcloc, NULL);
 
   if (flags & DTS_COPY_PROPS)
     ((Scheme_Stx *)v)->props = ((Scheme_Stx *)stx_src)->props;
@@ -856,6 +946,9 @@ Scheme_Object *scheme_stx_property(Scheme_Object *_stx,
 {
   Scheme_Stx *stx;
   Scheme_Hash_Tree *props;
+
+  if (!SCHEME_STXP(_stx))
+    return scheme_false;
 
   stx = (Scheme_Stx *)_stx;
 

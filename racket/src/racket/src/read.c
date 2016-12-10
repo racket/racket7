@@ -2029,7 +2029,7 @@ read_inner_inner_inner(Scheme_Object *port, Scheme_Object *stxsrc, Scheme_Hash_T
       } else if (stxsrc) {
         Scheme_Object *s;
         s = scheme_make_stx_w_offset(scheme_false, line, col, pos, SPAN(port, pos), stxsrc, STX_SRCTAG);
-        v = scheme_datum_to_syntax(v, s, DTS_CAN_GRAPH);
+        v = scheme_datum_to_syntax(v, s, DTS_CAN_GRAPH | DTS_RECUR);
       }
       if (special_value_need_copy && !stxsrc) {
         set_need_copy(ht);
@@ -6362,7 +6362,7 @@ static Scheme_Object *readtable_call(int w_char, int ch, Scheme_Object *proc, Re
       }
 
       s = scheme_make_stx_w_offset(scheme_false, line, col, pos, SPAN(port, pos), src, STX_SRCTAG);
-      v = scheme_datum_to_syntax(v, s, DTS_CAN_GRAPH);
+      v = scheme_datum_to_syntax(v, s, DTS_CAN_GRAPH | DTS_RECUR);
     }
 
     if (!src)

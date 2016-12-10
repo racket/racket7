@@ -87,6 +87,7 @@
       (correlate* s (compile-begin (parsed-begin-body p) cctx name result-used?))]
      [(parsed-set!? p)
       (correlate* s `(,@(compile-identifier (parsed-set!-id p) cctx
+                                            #:set-to? #t
                                             #:set-to (compile (parsed-set!-rhs p) (parsed-s (parsed-set!-id p)) #t))))]
      [(parsed-let-values? p)
       (compile-let p cctx name #:rec? #f result-used?)]
@@ -143,13 +144,13 @@
                           v))
                    inferred-name))
   (define named-s (if name
-                      (correlated-property s
+                      (correlated-property (->correlated s)
                                            'inferred-name
                                            (if (syntax? name) (syntax-e name) name))
                       s))
   (define as-method (syntax-property orig-s 'method-arity-error))
   (if as-method
-      (correlated-property named-s 'method-arity-error as-method)
+      (correlated-property (->correlated named-s) 'method-arity-error as-method)
       named-s))
 
 (define (compile-let p cctx name #:rec? rec? result-used?)
@@ -169,11 +170,11 @@
 
 (define (add-undefined-error-name-property sym orig-id)
   (define id (correlate* orig-id sym))
-  (correlated-property id 'undefined-error-name
+  (correlated-property (->correlated id) 'undefined-error-name
                        (or (syntax-property orig-id 'undefined-error-name)
                            (syntax-e orig-id))))
 
-(define (compile-identifier p cctx #:set-to [rhs #f])
+(define (compile-identifier p cctx #:set-to? [set-to? #f] #:set-to [rhs #f])
   (define normal-b (parsed-id-binding p))
   (define b
     (or normal-b
@@ -194,7 +195,7 @@
         ;; Direct reference to a runtime primitive:
         (unless (zero? (module-binding-phase b))
           (error "internal error: non-zero phase for a primitive"))
-        (when rhs
+        (when set-to?
           (error "internal error: cannot assign to a primitive:" (parsed-s p)))
         ;; Expect each primitive to be bound:
         (module-binding-sym b)]
@@ -215,7 +216,7 @@
                                              (syntax-inspector (parsed-s p))))])]
      [else
       (error "not a reference to a module or local binding:" b (parsed-s p))]))
-  (correlate* (parsed-s p) (if rhs
+  (correlate* (parsed-s p) (if set-to?
                                `(set! ,sym ,rhs)
                                sym)))
 

@@ -1235,6 +1235,7 @@ Scheme_Object *scheme_make_stx_w_offset(Scheme_Object *val,
 
 #define DTS_COPY_PROPS 0x1
 #define DTS_CAN_GRAPH  0x2
+#define DTS_RECUR      0x4
 
 Scheme_Object *scheme_datum_to_syntax(Scheme_Object *o, Scheme_Object *stx_src, int flags);
 
@@ -1254,7 +1255,7 @@ Scheme_Object *scheme_resolve_placeholders(Scheme_Object *obj);
 #define SCHEME_STX_VAL(s) ((Scheme_Stx *)s)->val
 
 #define SCHEME_STX_PAIRP(o) (SCHEME_PAIRP(o) || (SCHEME_STXP(o) && SCHEME_PAIRP(SCHEME_STX_VAL(o))))
-#define SCHEME_STX_SYMBOLP(o) (SCHEME_STXP(o) && SCHEME_SYMBOLP(SCHEME_STX_VAL(o)))
+#define SCHEME_STX_SYMBOLP(o) (SCHEME_SYMBOLP(o) || ((SCHEME_STXP(o) && SCHEME_SYMBOLP(SCHEME_STX_VAL(o)))))
 #define SCHEME_STX_NULLP(o) (SCHEME_NULLP(o) || (SCHEME_STXP(o) && SCHEME_NULLP(SCHEME_STX_VAL(o))))
 
 #define SCHEME_STX_CAR(o) (SCHEME_PAIRP(o) ? SCHEME_CAR(o) : SCHEME_CAR(SCHEME_STX_VAL(o)))

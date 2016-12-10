@@ -247,6 +247,10 @@ Scheme_Object *scheme_source_to_name(Scheme_Object *code)
 /* Makes up a procedure name when there's not a good one in the source */
 {
   Scheme_Stx *cstx = (Scheme_Stx *)code;
+
+  if (!SCHEME_STXP(code))
+    return NULL;
+  
   if ((cstx->srcloc->col >= 0) || (cstx->srcloc->pos >= 0)) {
     char buf[50], src[20];
     Scheme_Object *name, *bstr;
@@ -304,6 +308,9 @@ Scheme_Object *combine_name_with_srcloc(Scheme_Object *name, Scheme_Object *code
 {
   Scheme_Stx *cstx = (Scheme_Stx *)code;
 
+  if (!SCHEME_STXP(code))
+    return name;
+
   if (((cstx->srcloc->col >= 0) || (cstx->srcloc->pos >= 0))
       && cstx->srcloc->src) {
     Scheme_Object *vec;
@@ -346,8 +353,8 @@ Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *e
       name = combine_name_with_srcloc(name, code, 1);
   } else {
     name = env->value_name;
-    if (name && SCHEME_STXP(name))
-      name = SCHEME_STX_VAL(name);
+    if (name)
+      name = SCHEME_STX_SYM(name);
     if (!name || SCHEME_FALSEP(name)) {
       name = scheme_source_to_name(code);
       if (name)
@@ -362,7 +369,7 @@ Scheme_Object *scheme_build_closure_name(Scheme_Object *code, Scheme_Comp_Env *e
     /* Try harder to synthesize a name */
     char *s;
     int len;
-    s = scheme_write_to_string(scheme_syntax_to_datum(scheme_datum_to_syntax(code, scheme_false, 0)),
+    s = scheme_write_to_string(scheme_syntax_to_datum(code),
                                NULL);
     len = strlen(s);
     if (len > 100) s[100] = 0;
@@ -431,8 +438,6 @@ static Scheme_Object *make_lambda(Scheme_Comp_Env *env, Scheme_Object *code)
   if (SCHEME_STX_NULLP(forms))
     scheme_wrong_syntax(NULL, NULL, code, "empty body not allowed");
 
-  forms = scheme_datum_to_syntax(forms, code, 0);
-
   {
     Scheme_Object *body;
     body = compile_expr(SCHEME_STX_CAR(forms), env, 0);
@@ -491,10 +496,7 @@ static Scheme_Object *quote_compile (Scheme_Object *form, Scheme_Comp_Env *env)
 
   v = SCHEME_STX_CAR(rest);
 
-  if (SCHEME_STXP(v))
-    return scheme_syntax_to_datum(v);
-  else
-    return v;
+  return scheme_syntax_to_datum(v);
 }
 
 /**********************************************************************/
@@ -659,7 +661,7 @@ static Scheme_Object *set_compile (Scheme_Object *form, Scheme_Comp_Env *env)
   env = scheme_set_comp_env_name(env, SCHEME_STX_SYM(name));
 
   val = compile_expr(body, env, 0);
-  
+
   set_undef = (env->flags & COMP_ENV_ALLOW_SET_UNDEFINED);
  
   sb = MALLOC_ONE_TAGGED(Scheme_Set_Bang);  
@@ -832,8 +834,7 @@ static Scheme_Object *case_lambda_compile (Scheme_Object *form, Scheme_Comp_Env 
 
     case_lambda_check_line(c, orig_form, env);
 
-    c = cons(scheme_datum_to_syntax(lambda_symbol, scheme_false, 0),
-             c);
+    c = cons(lambda_symbol, c);
     c = scheme_datum_to_syntax(c, orig_form, DTS_COPY_PROPS);
     
     return lambda_compile(c, env);
@@ -1679,7 +1680,7 @@ static Scheme_Object *compile_app(Scheme_Object *orig_form, Scheme_Comp_Env *env
     origname = name;
 
     /* look for ((lambda (x ...) ....) ....) or ((lambda x ....) ....) */
-    if (SAME_OBJ(SCHEME_STX_VAL(name), lambda_symbol)) {
+    if (SAME_OBJ(SCHEME_STX_SYM(name), lambda_symbol)) {
       Scheme_Object *argsnbody;
 
       argsnbody = SCHEME_STX_CDR(name);
@@ -1719,7 +1720,6 @@ static Scheme_Object *compile_app(Scheme_Object *orig_form, Scheme_Comp_Env *env
   
                 if (pl < 0) {
                   v = scheme_intern_symbol("list");
-                  v = scheme_datum_to_syntax(v, scheme_false, 0);
                   v = cons(v, rest);
                 } else
                   v = SCHEME_STX_CAR(rest);
@@ -1756,7 +1756,7 @@ static Scheme_Object *compile_app(Scheme_Object *orig_form, Scheme_Comp_Env *env
     orig_rest_form = SCHEME_STX_CDR(form);
 
     /* Look for (call-with-values (lambda () M) (lambda (id ...) N)) */
-    if (SAME_OBJ(SCHEME_STX_VAL(name), call_with_values_symbol)) {
+    if (SAME_OBJ(SCHEME_STX_SYM(name), call_with_values_symbol)) {
       Scheme_Object *at_first, *at_second, *the_end;
       at_first = SCHEME_STX_CDR(form);
       if (SCHEME_STX_PAIRP(at_first)) {
@@ -1767,12 +1767,12 @@ static Scheme_Object *compile_app(Scheme_Object *orig_form, Scheme_Comp_Env *env
             Scheme_Object *first;
             first = SCHEME_STX_CAR(at_first);
             if (SCHEME_STX_PAIRP(first)
-                && SAME_OBJ(SCHEME_STX_VAL(SCHEME_STX_CAR(first)), lambda_symbol)
+                && SAME_OBJ(SCHEME_STX_SYM(SCHEME_STX_CAR(first)), lambda_symbol)
                 && (arg_count(first) == 0)) {
               Scheme_Object *second;
               second = SCHEME_STX_CAR(at_second);
               if (SCHEME_STX_PAIRP(second)
-                  && SAME_OBJ(SCHEME_STX_VAL(SCHEME_STX_CAR(second)), lambda_symbol)
+                  && SAME_OBJ(SCHEME_STX_SYM(SCHEME_STX_CAR(second)), lambda_symbol)
                   && (arg_count(second) >= 0)) {
                 Scheme_Object *lhs;
                 second = SCHEME_STX_CDR(second);
@@ -1846,10 +1846,8 @@ Scheme_Object *compile_expr(Scheme_Object *form, Scheme_Comp_Env *env, int app_p
 
   DO_CHECK_FOR_BREAK(scheme_current_thread, ;);
 
-  MZ_ASSERT(SCHEME_STXP(form));
-
   if (!SCHEME_STX_PAIRP(form)) {
-    Scheme_Object *val = SCHEME_STX_VAL(form);
+    Scheme_Object *val = SCHEME_STX_SYM(form);
     if (SCHEME_SYMBOLP(val))
       return scheme_compile_lookup(form, env, (app_position ? SCHEME_APP_POS : 0));
     else if (SCHEME_NUMBERP(val)
@@ -1864,7 +1862,7 @@ Scheme_Object *compile_expr(Scheme_Object *form, Scheme_Comp_Env *env, int app_p
     Scheme_Object *name = SCHEME_STX_CAR(form);
     if (SCHEME_STX_SYMBOLP(name)) {
       /* check for primitive expression forms */
-      name = SCHEME_STX_VAL(name);
+      name = SCHEME_STX_SYM(name);
       if (SAME_OBJ(name, quote_symbol))
         return quote_compile(form, env);
       else if (SAME_OBJ(name, let_values_symbol))
@@ -1907,7 +1905,7 @@ static int is_define_values(Scheme_Object *form)
     return 0;
 
   rest = SCHEME_STX_CAR(form);
-  if (!SAME_OBJ(SCHEME_STX_VAL(rest), define_values_symbol))
+  if (!SAME_OBJ(SCHEME_STX_SYM(rest), define_values_symbol))
     return 0;
 
   return 1;
@@ -1986,10 +1984,10 @@ static void check_import_export_clause(Scheme_Object *e, Scheme_Object *orig_for
 Scheme_Object *extract_source_name(Scheme_Object *e)
 {
   Scheme_Object *a;
-  
+
   a = scheme_stx_property(e, source_name_symbol, NULL);
   if (!a || !SCHEME_SYMBOLP(a))
-    a = SCHEME_STX_VAL(e);
+    a = SCHEME_STX_SYM(e);
 
   return a;
 }
@@ -2005,7 +2003,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Schem
   int body_len, len, islen, i, j, extra_vars_pos;
   Scheme_Comp_Env *env, *d_env;
   DupCheckRecord r;
-  
+
   body_len = check_form(form, form);
   if (body_len < 3)
     bad_form(form, body_len);
@@ -2049,9 +2047,9 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Schem
       e = SCHEME_STX_CAR(a);
       check_import_export_clause(e, orig_form);
       if (SCHEME_STX_SYMBOLP(e)) {
-        SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(e);
+        SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_SYM(e);
       } else {
-        SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CAR(e));
+        SCHEME_VEC_ELS(import_syms)[j] = SCHEME_STX_SYM(SCHEME_STX_CAR(e));
         e = SCHEME_STX_CADR(e);
       }
       tl = scheme_make_ir_toplevel(i, j, SCHEME_TOPLEVEL_READY);
@@ -2078,9 +2076,9 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Schem
     e = SCHEME_STX_CAR(exports);
     check_import_export_clause(e, orig_form);
     if (SCHEME_STX_SYMBOLP(e)) {
-      SCHEME_VEC_ELS(defn_syms)[j] = SCHEME_STX_VAL(e);
+      SCHEME_VEC_ELS(defn_syms)[j] = SCHEME_STX_SYM(e);
     } else {
-      SCHEME_VEC_ELS(defn_syms)[j] = SCHEME_STX_VAL(SCHEME_STX_CADR(e));
+      SCHEME_VEC_ELS(defn_syms)[j] = SCHEME_STX_SYM(SCHEME_STX_CADR(e));
       e = SCHEME_STX_CAR(e);
     }
     a = extract_source_name(e);
@@ -2121,7 +2119,7 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Schem
     all_extra_vars = scheme_reverse(all_extra_vars);
     for (i = len; i < extra_vars_pos; i++, all_extra_vars = SCHEME_CDR(all_extra_vars)) {
       e = SCHEME_CAR(all_extra_vars);
-      a = SCHEME_STX_VAL(e);
+      a = SCHEME_STX_SYM(e);
       if (scheme_hash_tree_get(source_names, a) || scheme_hash_tree_get(also_used_names, a)) {
         /* Internal name conflicts with an exported name --- which is allowed, but means
            that we need to pick a different name for the bucket */
