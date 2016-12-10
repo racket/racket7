@@ -36,6 +36,8 @@
          add-binding-in-scopes!
          add-bulk-binding-in-scopes!
 
+         propagation-mpi-shift ; for use by "binding.rkt"
+
          resolve
 
          bound-identifier=?
@@ -296,14 +298,16 @@
                                             (prop-op (syntax-scope-propagations s)
                                                      sc
                                                      (syntax-scopes s)
-                                                     (syntax-shifted-multi-scopes s)))])
+                                                     (syntax-shifted-multi-scopes s)
+                                                     (syntax-mpi-shifts s)))])
       (struct-copy syntax s
                    [scopes (op (syntax-scopes s) sc)]
                    [scope-propagations (and (datum-has-elements? (syntax-content s))
                                             (prop-op (syntax-scope-propagations s)
                                                      sc
                                                      (syntax-scopes s)
-                                                     (syntax-shifted-multi-scopes s)))])))
+                                                     (syntax-shifted-multi-scopes s)
+                                                     (syntax-mpi-shifts s)))])))
 
 (define (syntax-e/no-taint s)
   (propagate-taint! s)
@@ -322,11 +326,19 @@
                                                                    prop
                                                                    (syntax-shifted-multi-scopes sub-s)
                                                                    s)]
+                                            [mpi-shifts (propagation-apply-mpi-shifts
+                                                         prop
+                                                         (syntax-mpi-shifts sub-s)
+                                                         s)]
+                                            [inspector (propagation-apply-inspector
+                                                        prop
+                                                        (syntax-inspector sub-s))]
                                             [scope-propagations (propagation-merge
                                                                  prop
                                                                  (syntax-scope-propagations sub-s)
                                                                  (syntax-scopes sub-s)
-                                                                 (syntax-shifted-multi-scopes sub-s))])))])
+                                                                 (syntax-shifted-multi-scopes sub-s)
+                                                                 (syntax-mpi-shifts sub-s))])))])
         (set-syntax-content! s new-content)
         (set-syntax-scope-propagations! s #f)
         new-content)
@@ -395,32 +407,44 @@
 
 ;; ----------------------------------------
 
-(struct propagation (prev-scs prev-smss scope-ops)
+(struct propagation (prev-scs   ; owner's scopes before ops
+                     prev-smss  ; owner's shifted multi scopes before ops
+                     scope-ops  ; scope -> (or/c 'add 'remove 'flip)
+                     ;; mpi-shifts and inspectors are mostly
+                     ;; implemented at the "binding.rkt" layer,
+                     ;; but we accomodate them here
+                     prev-mss   ; owner's mpi-shifts before adds
+                     add-mpi-shifts ; #f or (mpi-shifts -> mpi-shifts)
+                     inspector) ; #f or inspector
         #:property prop:propagation syntax-e)
 
-(define (propagation-add prop sc prev-scs prev-smss)
+(define (propagation-add prop sc prev-scs prev-smss prev-mss)
   (if prop
       (struct-copy propagation prop
                    [scope-ops (hash-set (propagation-scope-ops prop)
                                         sc
                                         'add)])
-      (propagation prev-scs prev-smss (hasheq sc 'add))))
+      (propagation prev-scs prev-smss (hasheq sc 'add) 
+                   prev-mss #f #f)))
 
-(define (propagation-remove prop sc prev-scs prev-smss)
+(define (propagation-remove prop sc prev-scs prev-smss prev-mss)
   (if prop
       (struct-copy propagation prop
                    [scope-ops (hash-set (propagation-scope-ops prop)
                                         sc
                                         'remove)])
-      (propagation prev-scs prev-smss (hasheq sc 'remove))))
+      (propagation prev-scs prev-smss (hasheq sc 'remove)
+                   prev-mss #f #f)))
 
-(define (propagation-flip prop sc prev-scs prev-smss)
+(define (propagation-flip prop sc prev-scs prev-smss prev-mss)
   (if prop
       (let* ([ops (propagation-scope-ops prop)]
              [current-op (hash-ref ops sc #f)])
         (cond
          [(and (eq? current-op 'flip)
-               (= 1 (hash-count ops)))
+               (= 1 (hash-count ops))
+               (not (propagation-inspector prop))
+               (not (propagation-add-mpi-shifts prop)))
           ;; Nothing left to propagate
           #f]
          [else
@@ -432,7 +456,20 @@
                                                [(add) 'remove]
                                                [(remove) 'add]
                                                [else 'flip])))])]))
-      (propagation prev-scs prev-smss (hasheq sc 'flip))))
+      (propagation prev-scs prev-smss (hasheq sc 'flip)
+                   prev-mss #f #f)))
+
+(define (propagation-mpi-shift prop add inspector prev-scs prev-smss prev-mss)
+  (if prop
+      (struct-copy propagation prop
+                   [add-mpi-shifts (let ([base-add (propagation-add-mpi-shifts prop)])
+                                     (if (and add base-add)
+                                         (lambda (mss) (add (base-add mss)))
+                                         (or add base-add)))]
+                   [inspector (or (propagation-inspector prop)
+                                  inspector)])
+      (propagation prev-scs prev-smss #hasheq()
+                   prev-mss add inspector)))
 
 (define (propagation-apply prop scs parent-s)
   (cond
@@ -474,17 +511,34 @@
         parent-smss
         (cache-or-reuse-hash new-smss))]))
 
-(define (propagation-merge prop base-prop prev-scs prev-smss)
+(define (propagation-apply-mpi-shifts prop mss parent-s)
+  (cond
+   [(eq? (propagation-prev-mss prop) mss)
+    (syntax-mpi-shifts parent-s)]
+   [else
+    (define add (propagation-add-mpi-shifts prop))
+    (if add
+        (add mss)
+        mss)]))
+
+(define (propagation-apply-inspector prop i)
+  (or i (propagation-inspector prop)))
+
+(define (propagation-merge prop base-prop prev-scs prev-smss prev-mss)
   (cond
    [(not base-prop)
     (cond
      [(and (eq? (propagation-prev-scs prop) prev-scs)
-           (eq? (propagation-prev-smss prop) prev-smss))
+           (eq? (propagation-prev-smss prop) prev-smss)
+           (eq? (propagation-prev-mss prop) prev-mss))
       prop]
      [else
       (propagation prev-scs
                    prev-smss
-                   (propagation-scope-ops prop))])]
+                   (propagation-scope-ops prop)
+                   prev-mss
+                   (propagation-add-mpi-shifts prop)
+                   (propagation-inspector prop))])]
    [else
     (define new-ops
       (for/fold ([ops (propagation-scope-ops base-prop)]) ([(sc op) (in-immutable-hash (propagation-scope-ops prop))])
@@ -498,10 +552,21 @@
              [(remove) (hash-set ops sc 'add)]
              [(flip) (hash-remove ops sc)]
              [else (hash-set ops sc 'flip)])])))
-    (if (zero? (hash-count new-ops))
+    (define add (propagation-add-mpi-shifts prop))
+    (define base-add (propagation-add-mpi-shifts base-prop))
+    (if (and (zero? (hash-count new-ops))
+             (not add)
+             (not base-add)
+             (not (propagation-inspector prop))
+             (not (propagation-inspector base-prop)))
         #f
         (struct-copy propagation base-prop
-                     [scope-ops new-ops]))]))
+                     [scope-ops new-ops]
+                     [add-mpi-shifts (if (and add base-add)
+                                         (lambda (mss) (add (base-add mss)))
+                                         (or add base-add))]
+                     [inspector (or (propagation-inspector base-prop)
+                                    (propagation-inspector prop))]))]))
 
 ;; ----------------------------------------
 

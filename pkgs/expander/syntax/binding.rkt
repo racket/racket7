@@ -10,6 +10,7 @@
          "full-binding.rkt"
          "module-binding.rkt"
          "local-binding.rkt"
+         "datum-map.rkt"
          "../expand/rename-trans.rkt"
          "../common/module-path.rkt")
 
@@ -145,20 +146,20 @@
         (syntax-set-inspector s inspector)
         s)]
    [else
-    (let ([shift (if non-source?
-                     (non-source-shift from-mpi to-mpi)
-                     (cons from-mpi to-mpi))])
-      (define-memo-lite (add-shift shifts)
-        (cons shift shifts))
-      (syntax-map s
-                  (lambda (tail? d) d)
-                  (lambda (s d)
-                    (struct-copy syntax s
-                                 [content d]
-                                 [mpi-shifts (add-shift (syntax-mpi-shifts s))]
-                                 [inspector (or (syntax-inspector s)
-                                                inspector)]))
-                  syntax-e/no-taint))]))
+    (define shift (if non-source?
+                      (non-source-shift from-mpi to-mpi)
+                      (cons from-mpi to-mpi)))
+    (struct-copy syntax s
+                 [mpi-shifts (cons shift (syntax-mpi-shifts s))]
+                 [inspector (or (syntax-inspector s)
+                                inspector)]
+                 [scope-propagations (and (datum-has-elements? (syntax-content s))
+                                          (propagation-mpi-shift (syntax-scope-propagations s)
+                                                                 (lambda (s) (cons shift s))
+                                                                 inspector
+                                                                 (syntax-scopes s)
+                                                                 (syntax-shifted-multi-scopes s)
+                                                                 (syntax-mpi-shifts s)))])]))
 
 ;; Use `resolve` instead of `resolve+shift` when the module of a
 ;; module binding is relevant or when `free-identifier=?` equivalences
@@ -265,14 +266,17 @@
                                       #:non-source? non-source?))]))
 
 (define (syntax-set-inspector s insp)
-  (syntax-map s
-              (lambda (tail? d) d)
-              (lambda (s d)
-                (struct-copy syntax s
-                             [content d]
-                             [inspector (or (syntax-inspector s)
-                                            insp)]))
-              syntax-content))
+  ;; This inspector merging is also implemented via propagations in "syntax.rkt"
+  (struct-copy syntax s
+               [inspector (or (syntax-inspector s)
+                              insp)]
+               [scope-propagations (and (datum-has-elements? (syntax-content s))
+                                        (propagation-mpi-shift (syntax-scope-propagations s)
+                                                               #f
+                                                               insp
+                                                               (syntax-scopes s)
+                                                               (syntax-shifted-multi-scopes s)
+                                                               (syntax-mpi-shifts s)))]))
 
 ;; ----------------------------------------
 
