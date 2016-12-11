@@ -59,8 +59,8 @@
          s)]
        [else (correlate* s `(quote unused-case-lambda))])]
      [(parsed-app? p)
-      (for/list ([r (in-list (parsed-app-rator+rands p))])
-        (compile r #f #t))]
+      (correlate* s (for/list ([r (in-list (parsed-app-rator+rands p))])
+                      (compile r #f #t)))]
      [(parsed-if? p)
       (define tst-e (compile (parsed-if-tst p) #f #f))
       ;; Ad hoc optimization of `(if #t ... ...)` or `(if #f ... ...)`

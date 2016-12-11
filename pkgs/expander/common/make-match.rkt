@@ -107,7 +107,8 @@
                          (rt-raise-syntax-error #f "bad syntax" orig-s)]
                         [else
                          #,(if (and (symbol? (car pattern))
-                                    (not (identifier-pattern? (car pattern))))
+                                    (or (not (identifier-pattern? (car pattern)))
+                                        already-checked?))
                                #`flat-s
                                #`(for/lists (pattern-id ...) ([s (in-list flat-s)])
                                             #,(compile-pattern (car pattern) already-checked?)))])))]
