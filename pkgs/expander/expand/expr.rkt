@@ -357,18 +357,22 @@
           (list (core-id 'quote phase)
                 null)))]
     [else
+     (define rebuild-s (keep-as-needed ctx s))
+     (define prefixless (cdr (syntax-e disarmed-s)))
+     (define rebuild-prefixless (if (syntax? prefixless)
+                                    (keep-as-needed ctx prefixless)
+                                    prefixless))
      (define expr-ctx (as-expression-context ctx))
      (define exp-es (adjust-for-loop-head-retention
                      (for/list ([e (in-list es)])
                        (expand e expr-ctx))))
-     (define prefixless (cdr (syntax-e disarmed-s)))
      (if (expand-context-to-parsed? ctx)
-         (parsed-app  (keep-properties-only (if (syntax? prefixless) prefixless s)) exp-es)
+         (parsed-app (if (syntax? rebuild-prefixless) rebuild-prefixless rebuild-s) exp-es)
          (rebuild
-          s
+          rebuild-s
           (cons (m '#%app)
-                (if (syntax? prefixless)
-                    (rebuild prefixless exp-es)
+                (if (syntax? rebuild-prefixless)
+                    (rebuild rebuild-prefixless exp-es)
                     exp-es))))])))
 
 (add-core-form!

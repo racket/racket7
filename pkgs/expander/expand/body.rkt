@@ -90,6 +90,7 @@
                              #:name name
                              #:disappeared-transformer-bindings (reverse trans-idss))]
      [else
+      (define rest-bodys (cdr bodys))
       (log-expand body-ctx 'next)
       (define exp-body (expand (car bodys) (if (and name (null? (cdr bodys)))
                                                (struct*-copy expand-context body-ctx
@@ -102,7 +103,7 @@
          (log-expand body-ctx 'prim-begin)
          (define-match m disarmed-exp-body '(begin e ...))
          (define (track e) (syntax-track-origin e exp-body))
-         (define splice-bodys (append (map track (m 'e)) (cdr bodys)))
+         (define splice-bodys (append (map track (m 'e)) rest-bodys))
          (log-expand body-ctx 'splice splice-bodys)
          (loop body-ctx
                splice-bodys
@@ -130,7 +131,7 @@
          (loop (struct*-copy expand-context body-ctx
                              [env extended-env]
                              [binding-layer (maybe-increment-binding-layer ids body-ctx)])
-               (cdr bodys)
+               rest-bodys
                null
                ;; If we had accumulated some expressions, we
                ;; need to turn each into the equivalent of
@@ -177,7 +178,7 @@
          (loop (struct*-copy expand-context body-ctx
                              [env extended-env]
                              [binding-layer (maybe-increment-binding-layer ids body-ctx)])
-               (cdr bodys)
+               rest-bodys
                done-bodys
                val-idss
                val-keyss
@@ -191,7 +192,7 @@
            ;; Found an expression, so no more definitions are allowed
            (loop body-ctx
                  null
-                 (append (reverse bodys) (cons exp-body done-bodys))
+                 (append (reverse rest-bodys) (cons exp-body done-bodys))
                  val-idss
                  val-keyss
                  val-rhss
@@ -201,7 +202,7 @@
           [else
            ;; Found an expression; accumulate it and continue
            (loop body-ctx
-                 (cdr bodys)
+                 rest-bodys
                  (cons exp-body done-bodys)
                  val-idss
                  val-keyss
