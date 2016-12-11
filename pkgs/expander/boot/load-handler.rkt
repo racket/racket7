@@ -62,11 +62,11 @@
                                 (string-append "could not find main module\n"
                                                "  in: ~e")
                                 (object-name i))]))]
-                 [(cached-bundle i)
-                  => (lambda (thunk) thunk)]
                  [(and (pair? expected-mod) (not (car expected-mod)))
                   ;; Cannot load submodule independently, so do nothing
                   void]
+                 [(cached-bundle i)
+                  => (lambda (thunk) thunk)]
                  [else
                   (define s (read-syntax (object-name i) i))
                   (when (eof-object? s)
