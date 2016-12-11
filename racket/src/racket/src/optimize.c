@@ -77,7 +77,6 @@ struct Optimize_Info
   MZTAG_IF_REQUIRED
   short flags;
   struct Optimize_Info *next;
-  int original_frame, new_frame;
   struct Scheme_Linklet *linklet;
   int init_kclock;
 
@@ -169,7 +168,7 @@ static Scheme_IR_Local *clone_variable(Scheme_IR_Local *var);
 static void increment_use_count(Scheme_IR_Local *var, int as_rator);
 
 static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_const, int can_inline);
-static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int orig, int current, int flags);
+static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int flags);
 static void optimize_info_done(Optimize_Info *info, Optimize_Info *parent);
 
 static void register_transitive_uses(Scheme_IR_Local *var, Optimize_Info *info);
@@ -2408,7 +2407,7 @@ static Scheme_Object *apply_inlined(Scheme_Lambda *lam, Optimize_Info *info,
 
   if (!expected) {
     /* No arguments, so no need for a `let` wrapper: */
-    sub_info = optimize_info_add_frame(info, 0, 0, 0);
+    sub_info = optimize_info_add_frame(info, 0);
     if (!single_use || lam->ir_info->is_dup)
       sub_info->inline_fuel >>= 1;
     p = optimize_expr(p, sub_info, context);
@@ -2474,7 +2473,7 @@ static Scheme_Object *apply_inlined(Scheme_Lambda *lam, Optimize_Info *info,
   else
     lh->body = p;
 
-  sub_info = optimize_info_add_frame(info, 0, 0, 0);
+  sub_info = optimize_info_add_frame(info, 0);
   if (!single_use || lam->ir_info->is_dup)
     sub_info->inline_fuel >>= 1;
 
@@ -5751,9 +5750,9 @@ static Scheme_Object *optimize_branch(Scheme_Object *o, Optimize_Info *info, int
   init_kclock = info->kclock;
   init_sclock = info->sclock;
 
-  then_info = optimize_info_add_frame(info, 0, 0, 0);
+  then_info = optimize_info_add_frame(info, 0);
   add_types_for_t_branch(t, then_info, 5);
-  then_info_init = optimize_info_add_frame(then_info, 0, 0, 0);
+  then_info_init = optimize_info_add_frame(then_info, 0);
   tb = optimize_expr(tb, then_info, scheme_optimize_tail_context(context));
   optimize_info_done(then_info, NULL);
 
@@ -5765,9 +5764,9 @@ static Scheme_Object *optimize_branch(Scheme_Object *o, Optimize_Info *info, int
 
   optimize_info_seq_step(info, &info_seq);
 
-  else_info = optimize_info_add_frame(info, 0, 0, 0);
+  else_info = optimize_info_add_frame(info, 0);
   add_types_for_f_branch(t, else_info, 5);
-  else_info_init = optimize_info_add_frame(else_info, 0, 0, 0);
+  else_info_init = optimize_info_add_frame(else_info, 0);
   fb = optimize_expr(fb, else_info, scheme_optimize_tail_context(context));
   optimize_info_done(else_info, NULL);
 
@@ -6208,7 +6207,7 @@ with_immed_mark_optimize(Scheme_Object *data, Optimize_Info *info, int context)
 
   optimize_info_seq_done(info, &info_seq);
   
-  body_info = optimize_info_add_frame(info, 1, 1, 0);
+  body_info = optimize_info_add_frame(info, 0);
   var = SCHEME_VAR(SCHEME_CAR(wcm->body));
   set_optimize_mode(var);
   var->optimize.lambda_depth = body_info->lambda_depth;
@@ -7248,7 +7247,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
     } while (try_again);
   }
 
-  body_info = optimize_info_add_frame(info, head->count, head->count, 0);
+  body_info = optimize_info_add_frame(info, 0);
   rhs_info = body_info;
 
   merge_skip_vars = scheme_make_hash_tree(SCHEME_hashtr_eq);
@@ -8026,8 +8025,7 @@ optimize_lambda(Scheme_Object *_lam, Optimize_Info *info, int context)
   info->single_result = 1;
   info->preserves_marks = 1;
 
-  info = optimize_info_add_frame(info, lam->num_params, lam->num_params,
-                                 SCHEME_LAMBDA_FRAME);
+  info = optimize_info_add_frame(info, SCHEME_LAMBDA_FRAME);
 
   ht = scheme_make_hash_table(SCHEME_hash_ptr);
   info->uses = ht;
@@ -9762,15 +9760,13 @@ Scheme_Object *optimize_get_predicate(Optimize_Info *info, Scheme_Object *var, i
   return NULL;
 }
 
-static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int orig, int current, int flags)
+static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int flags)
 {
   Optimize_Info *naya;
 
   naya = optimize_info_allocate(info->linklet, 0, 0);
   naya->flags = (short)flags;
   naya->next = info;
-  naya->original_frame = orig;
-  naya->new_frame = current;
   naya->inline_fuel = info->inline_fuel;
   naya->flatten_fuel = info->flatten_fuel;
   naya->letrec_not_twice = info->letrec_not_twice;
