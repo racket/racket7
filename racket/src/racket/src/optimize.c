@@ -8490,7 +8490,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
   Scheme_Object *cl_first = NULL, *cl_last = NULL;
   Scheme_Hash_Table *consts = NULL, *fixed_table = NULL, *re_consts = NULL;
   Scheme_Hash_Table *originals = NULL;
-  int cont, inline_fuel, is_proc_def;
+  int cont, inline_fuel, is_proc_def, any_defns = 0;
   Optimize_Info *info;
   Optimize_Info *limited_info;
   Optimize_Info_Sequence info_seq;
@@ -8498,10 +8498,6 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
 
   info = optimize_info_create(linklet, enforce_const, can_inline);
   info->context = (Scheme_Object *)linklet;
-
-  iu = MALLOC_N(Scheme_Hash_Tree*, 1);
-  *iu = empty_eq_hash_tree;
-  info->imports_used = iu;
 
   /* Less inlining for a large module: */
   if (SCHEME_VEC_SIZE(linklet->bodies) > 128)
@@ -8511,6 +8507,10 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
     Cross_Linklet_Info *cross;
     Scheme_Hash_Tree *ht;
     int i;
+
+    iu = MALLOC_N(Scheme_Hash_Tree*, 1);
+    *iu = empty_eq_hash_tree;
+    info->imports_used = iu;
 
     cross = (Cross_Linklet_Info *)scheme_malloc(sizeof(Cross_Linklet_Info));
     info->cross = cross;    
@@ -8537,16 +8537,6 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
 
   optimize_info_seq_init(info, &info_seq);
 
-  /* Use `limited_info` for optimization decisions that need to be
-     rediscovered by the validator. The validator knows shape
-     information for imported variables, and it knows about structure
-     bindings for later forms. */
-  limited_info = MALLOC_ONE_RT(Optimize_Info);
-#ifdef MZTAG_REQUIRED
-  limited_info->type = scheme_rt_optimize_info;
-#endif
-  limited_info->linklet = info->linklet;
-
   cnt = SCHEME_VEC_SIZE(linklet->bodies);
 
   /* First, flatten `(define-values (x ...) (values e ...))'
@@ -8562,6 +8552,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
           if (split_define_values(e, n, NULL, 0))
             inc += (n - 1);
         }
+        any_defns = 1;
       }
     }
 
@@ -8589,7 +8580,20 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
     }
   }
 
-  if (OPT_ESTIMATE_FUTURE_SIZES) {
+  if (any_defns) {
+    /* Use `limited_info` for optimization decisions that need to be
+       rediscovered by the validator. The validator knows shape
+       information for imported variables, and it knows about structure
+       bindings for later forms. */
+    limited_info = MALLOC_ONE_RT(Optimize_Info);
+#ifdef MZTAG_REQUIRED
+    limited_info->type = scheme_rt_optimize_info;
+#endif
+    limited_info->linklet = info->linklet;
+  } else
+    limited_info = NULL;
+
+  if (OPT_ESTIMATE_FUTURE_SIZES && any_defns) {
     if (info->enforce_const) {
       /* For each identifier bound to a procedure, register an initial
          size estimate, which is used to discourage early loop unrolling
@@ -10280,15 +10284,18 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
     used = 0;
     k = SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]);
     total += k;
-    ht = (Scheme_Hash_Tree *)scheme_eq_hash_tree_get(*info->imports_used, scheme_make_integer(i));
-    if (!ht) ht = empty_eq_hash_tree;
-    for (j = 0; j < k; j++) {
-      if (!scheme_eq_hash_tree_get(ht, scheme_make_integer(j))) {
-        /* Set symbol to #f to communicate non-use to the resolve pass: */
-        SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j] = scheme_false;
-      } else
-        used++;
-    }
+    if (info->imports_used) {
+      ht = (Scheme_Hash_Tree *)scheme_eq_hash_tree_get(*info->imports_used, scheme_make_integer(i));
+      if (!ht) ht = empty_eq_hash_tree;
+      for (j = 0; j < k; j++) {
+        if (!scheme_eq_hash_tree_get(ht, scheme_make_integer(j))) {
+          /* Set symbol to #f to communicate non-use to the resolve pass: */
+          SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j] = scheme_false;
+        } else
+          used++;
+      }
+    } else
+      used += k;
     total_used += used;
     if (!used && _import_keys && SCHEME_TRUEP(SCHEME_VEC_ELS(*_import_keys)[i])) {
       dropped_imports++;

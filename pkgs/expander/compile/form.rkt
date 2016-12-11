@@ -243,7 +243,10 @@
          ['compile '_ 'linklet]
          ((if to-source?
               (lambda (l name keys getter) (values l keys))
-              (lambda (l name keys getter) (compile-linklet l name keys getter)))
+              (lambda (l name keys getter)
+                (if cross-linklet-inlining?
+                    (compile-linklet l name keys getter)
+                    (values (compile-linklet l name) keys))))
           `(linklet
             ;; imports
             (,@body-imports
