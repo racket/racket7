@@ -1937,7 +1937,10 @@ static void cons_onto_list(void *p)
 static int print_all_traced(void *p) { return 1; }
 
 static int record_nth_counter, record_nth_target;
+static GC_record_traced_filter_proc record_nth_traced_filter;
 static int record_nth_traced(void *p) {
+  if (!record_nth_traced_filter(p))
+    return 0;
   record_nth_counter++;
   if (record_nth_counter == record_nth_target) {
     record_nth_counter = 0;
@@ -2705,6 +2708,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
   if ((c > 2) && SCHEME_INTP(p[2])) {
     record_nth_target = SCHEME_INT_VAL(p[2]);
     record_nth_counter = 0;
+    record_nth_traced_filter = record_traced_filter;
     record_traced_filter = record_nth_traced;
   }
 #endif
