@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/struct-star.rkt"
+         "../common/head-retention.rkt"
          "../syntax/syntax.rkt"
          "../syntax/scope.rkt"
          "../syntax/taint.rkt"
@@ -238,19 +239,14 @@
     (define last-i (sub1 (length done-bodys)))
     (log-expand body-ctx 'enter-list done-bodys)
     (define exp-bodys
-      ;; Using `let loop` instead of `for/list` to have more fine-grained control
-      ;; over retention of `done-bodys`:
-      (let loop ([done-bodys done-bodys])
-        (cond
-         [(null? done-bodys) null]
-         [else
-          (define rest-done-bodys (cdr done-bodys)) ; don't retain `done-bodys` for recur
-          (log-expand body-ctx 'next)
-          (cons (expand (car done-bodys) (if (and name (null? rest-done-bodys))
-                                             (struct*-copy expand-context finish-ctx
-                                                           [name name])
-                                             finish-ctx))
-                (loop rest-done-bodys))])))
+      (adjust-for-loop-head-retention
+       (for/list ([done-body (in-list done-bodys)]
+                  [i (in-naturals)])
+         (log-expand body-ctx 'next)
+         (expand done-body (if (and name (= i last-i))
+                               (struct*-copy expand-context finish-ctx
+                                             [name name])
+                               finish-ctx)))))
     (log-expand body-ctx 'exit-list exp-bodys)
     (reference-record-clear! frame-id)
     exp-bodys)
