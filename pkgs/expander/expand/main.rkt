@@ -224,11 +224,14 @@
    [(expand-context-only-immediate? ctx)
     (log-expand ctx 'exit-check s)
     s]
-   [else
+   [(expand-context-observer ctx)
     (log-expand ctx 'enter-prim s)
     (define result-s ((core-form-expander t) s ctx))
     (log-expand* ctx ['exit-prim result-s] ['return result-s])
-    result-s]))
+    result-s]
+   [else
+    ;; As previous case, but as a fail call:
+    ((core-form-expander t) s ctx)]))
 
 ;; Special favor to `local-expand` from `expand-implicit`: call
 ;; `#%top` form without making `#%top` explicit in the form
@@ -604,22 +607,21 @@
 
 ;; Drop the `syntax-e` part of `s`, and also drop its scopes when
 ;; producing a parsed result, producing a result suitable for use with
-;; `rebuild` or including in a `parsed` record. Dropping references in
-;; this way helps the GC not retain too much of an original syntax
-;; object in the process of expanding it, which can matter for deeply
-;; nested expansions.
+;; `rebuild`, including in a `parsed` record, or to provide a form
+;; name for error reporting. Dropping references in this way helps the
+;; GC not retain too much of an original syntax object in the process
+;; of expanding it, which can matter for deeply nested expansions.
 (define (keep-as-needed ctx s #:for-track? [for-track? #f])
+  (define d (syntax-e s))
+  (define keep-e (cond
+                  [(symbol? d) d]
+                  [(and (pair? d) (identifier? (car d))) (syntax-e (car d))]
+                  [else #f]))
   (cond
-   [(expand-context-to-parsed? ctx) (keep-properties-only s)]
+   [(expand-context-to-parsed? ctx)
+    (datum->syntax #f keep-e s s)]
    [else
-    (define d (and for-track? (syntax-e s)))
-    (syntax-rearm (datum->syntax (syntax-disarm s)
-                                 (cond
-                                  [(symbol? d) d]
-                                  [(and (pair? d) (identifier? (car d))) (syntax-e (car d))]
-                                  [else #f])
-                                 s
-                                 s)
+    (syntax-rearm (datum->syntax (syntax-disarm s) keep-e s s)
                   s)]))
 
 ;; A helper for forms to reconstruct syntax while preserving source
