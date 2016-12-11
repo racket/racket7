@@ -230,7 +230,7 @@
     (log-expand* ctx ['exit-prim result-s] ['return result-s])
     result-s]
    [else
-    ;; As previous case, but as a fail call:
+    ;; As previous case, but as a tail call:
     ((core-form-expander t) s ctx)]))
 
 ;; Special favor to `local-expand` from `expand-implicit`: call

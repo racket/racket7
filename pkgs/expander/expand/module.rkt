@@ -89,7 +89,9 @@
    (log-expand init-ctx 'prim-module)
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(module id:module-name initial-require body ...))
-   
+
+   (define rebuild-s (keep-as-needed init-ctx s))
+
    (define initial-require (syntax->datum (m 'initial-require)))
    (unless (or keep-enclosing-scope-at-phase
                (module-path? initial-require))
@@ -143,10 +145,12 @@
    (define frame-id (root-expand-context-frame-id root-ctx))
 
    ;; Make a namespace for module expansion
-   (define m-ns (make-module-namespace (expand-context-namespace init-ctx)
-                                       #:mpi self
-                                       #:root-expand-context root-ctx
-                                       #:for-submodule? (and enclosing-self #t)))
+   (define (make-m-ns ns #:for-submodule? [for-submodule? (and enclosing-self #t)])
+     (make-module-namespace ns
+                            #:mpi self
+                            #:root-expand-context root-ctx
+                            #:for-submodule? for-submodule?))
+   (define m-ns (make-m-ns (expand-context-namespace init-ctx)))
    
    ;; Initial context for all body expansions:
    (define ctx (struct*-copy expand-context (copy-root-expand-context init-ctx root-ctx)
@@ -230,6 +234,8 @@
      (define-match mb-m disarmed-mb-s '(#%module-begin body ...))
      (define bodys (mb-m 'body))
      
+     (define rebuild-mb-s (keep-as-needed ctx mb-s))
+     
      ;; For variable repeferences before corresponding binding (phase >= 1)
      (define need-eventually-defined (make-hasheqv)) ; phase -> list of id
      
@@ -294,7 +300,6 @@
          ;; contain `compile-form` or `expanded+parsed` structures:
          (define partially-expanded-bodys
            (partially-expand-bodys bodys
-                                   #:original s
                                    #:tail? (zero? phase)
                                    #:phase phase
                                    #:ctx partial-body-ctx
@@ -345,7 +350,6 @@
      
      (define fully-expanded-bodys-except-post-submodules
        (resolve-provides expression-expanded-bodys
-                         #:original s
                          #:requires-and-provides requires+provides
                          #:declared-submodule-names declared-submodule-names
                          #:namespace m-ns
@@ -365,33 +369,37 @@
      ;; Pass 4: expand `module*` submodules
      
      (log-expand ctx 'next)
-
+     
+     ;; Create a new namespace to avoid retaining the instance that
+     ;; was needed to expand this module body:
+     (define submod-m-ns (make-m-ns m-ns #:for-submodule? #t))
+     
      (define submod-ctx (struct*-copy expand-context ctx
                                       [frame-id #:parent root-expand-context #f]
-                                      [post-expansion-scope #:parent root-expand-context #f]))
+                                      [post-expansion-scope #:parent root-expand-context #f]
+                                      [namespace submod-m-ns]))
      
      (define declare-enclosing-module
        ;; Ensure this module on demand for `module*` submodules that might use it
        (delay (declare-module-for-expansion fully-expanded-bodys-except-post-submodules
                                             #:module-name-id (m 'id:module-name)
-                                            #:orig-s s
+                                            #:rebuild-s rebuild-s
                                             #:requires-and-provides requires+provides
-                                            #:namespace m-ns
+                                            #:namespace submod-m-ns
                                             #:self self
                                             #:enclosing enclosing-self
                                             #:root-ctx root-ctx
-                                            #:ctx ctx
+                                            #:ctx submod-ctx
                                             #:modules-being-compiled modules-being-compiled
                                             #:fill compiled-module-box)))
      
      (define fully-expanded-bodys
        (cond
-        [(stop-at-module*? ctx)
+        [(stop-at-module*? submod-ctx)
          fully-expanded-bodys-except-post-submodules]
         [else
          (expand-post-submodules fully-expanded-bodys-except-post-submodules
                                  #:declare-enclosing declare-enclosing-module
-                                 #:original s
                                  #:phase phase
                                  #:self self
                                  #:requires-and-provides requires+provides
@@ -401,24 +409,24 @@
                                  #:declared-submodule-names declared-submodule-names
                                  #:compiled-submodules compiled-submodules
                                  #:modules-being-compiled modules-being-compiled
-                                 #:ctx ctx)]))
+                                 #:ctx submod-ctx)]))
      
      ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      ;; Finish
      
      ;; Assemble the `#%module-begin` result:
      (cond
-      [(expand-context-to-parsed? ctx)
-       (parsed-#%module-begin (keep-properties-only mb-s) (parsed-only fully-expanded-bodys))]
+      [(expand-context-to-parsed? submod-ctx)
+       (parsed-#%module-begin rebuild-mb-s (parsed-only fully-expanded-bodys))]
       [else
        (define mb-result-s
          (rebuild
-          mb-s
+          rebuild-mb-s
           `(,(mb-m '#%module-begin) ,@(syntax-only fully-expanded-bodys))))
        (cond
-        [(not (expand-context-in-local-expand? ctx))
+        [(not (expand-context-in-local-expand? submod-ctx))
          (expanded+parsed mb-result-s
-                          (parsed-#%module-begin (keep-properties-only mb-s) (parsed-only fully-expanded-bodys)))]
+                          (parsed-#%module-begin rebuild-mb-s (parsed-only fully-expanded-bodys)))]
         [else mb-result-s])]))
 
    ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -462,9 +470,9 @@
    (define-values (requires provides) (extract-requires-and-provides requires+provides self self))
    
    (define result-form
-     (and (or (expand-context-to-parsed? ctx)
+     (and (or (expand-context-to-parsed? init-ctx)
               always-produce-compiled?)
-          (parsed-module (keep-properties-only s)
+          (parsed-module rebuild-s
                          #f
                          (m 'id:module-name)
                          self
@@ -481,7 +489,7 @@
    
    (define result-s
      (cond
-      [(not (expand-context-to-parsed? ctx))
+      [(not (expand-context-to-parsed? init-ctx))
        ;; Shift the "self" reference that we have been using for expansion
        ;; to a generic and constant (for a particualr submodule path)
        ;; "self", so that we can reocognize it for compilation or to shift
@@ -497,7 +505,7 @@
 
        (let* ([result-s
                (rebuild
-                s
+                rebuild-s
                 `(,(m 'module) ,(m 'id:module-name) ,initial-require-s ,(expanded+parsed-s expanded-mb)))]
               [result-s 
                (syntax-module-path-index-shift result-s self generic-self)]
@@ -505,11 +513,11 @@
               [result-s (if (requires+provides-all-bindings-simple? requires+provides)
                             (syntax-property result-s 'module-body-context-simple? #t)
                             result-s)])
-         (log-expand ctx 'rename-one result-s)
+         (log-expand init-ctx 'rename-one result-s)
          result-s)]))
    
    (cond
-    [(expand-context-to-parsed? ctx) result-form]
+    [(expand-context-to-parsed? init-ctx) result-form]
     [always-produce-compiled?
      (expanded+parsed result-s result-form)]
     [else result-s]))
@@ -632,7 +640,6 @@
 ;; Pass 1 of `module` expansion, which uncovers definitions,
 ;; requires, and `module` submodules
 (define (partially-expand-bodys bodys
-                                #:original s
                                 #:tail? tail?
                                 #:phase phase
                                 #:ctx partial-body-ctx
@@ -964,7 +971,6 @@
 ;; Pass 3 of `module` expansion, which parses `provide` forms and
 ;; matches them up with defintiions and requires
 (define (resolve-provides expression-expanded-bodys
-                          #:original s
                           #:requires-and-provides requires+provides
                           #:declared-submodule-names declared-submodule-names
                           #:namespace m-ns
@@ -1023,7 +1029,7 @@
 ;; before any `module*` submodule is expanded
 (define (declare-module-for-expansion fully-expanded-bodys-except-post-submodules
                                       #:module-name-id module-name-id
-                                      #:orig-s orig-s
+                                      #:rebuild-s rebuild-s
                                       #:requires-and-provides requires+provides
                                       #:namespace m-ns
                                       #:self self
@@ -1036,7 +1042,7 @@
   (define-values (requires provides) (extract-requires-and-provides requires+provides self self))
 
   (define parsed-mod
-    (parsed-module (keep-properties-only orig-s)
+    (parsed-module rebuild-s
                    #f
                    module-name-id
                    self
@@ -1085,7 +1091,6 @@
 ;; forms
 (define (expand-post-submodules fully-expanded-bodys-except-post-submodules
                                 #:declare-enclosing declare-enclosing-module
-                                #:original s
                                 #:phase phase
                                 #:self self
                                 #:requires-and-provides requires+provides
