@@ -280,9 +280,10 @@
     (define result-s (substitute-variable id t #:no-stops? (free-id-set-empty-or-just-module*? (expand-context-stops ctx))))
     (cond
      [(expand-context-to-parsed? ctx)
+      (define prop-s (keep-properties-only result-s))
       (if primitive?
-          (parsed-primitive-id result-s binding)
-          (parsed-id result-s binding))]
+          (parsed-primitive-id prop-s binding)
+          (parsed-id prop-s binding))]
      [else
       (log-expand ctx 'return result-s)
       result-s])]))
