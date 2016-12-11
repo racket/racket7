@@ -175,7 +175,7 @@
          ;; have a binding for `#%top`, but it's bound temporaily for compilation;
          ;; treat the identifier as a variable reference
          (if (expand-context-to-parsed? ctx)
-             (parsed-id tl-id tl-b)
+             (parsed-id tl-id tl-b #f)
              tl-id)]
         [else
          (raise-syntax-implicit-error s sym trigger-id ctx)])])])))
@@ -281,9 +281,10 @@
     (cond
      [(expand-context-to-parsed? ctx)
       (define prop-s (keep-properties-only result-s))
+      (define insp (syntax-inspector result-s))
       (if primitive?
-          (parsed-primitive-id prop-s binding)
-          (parsed-id prop-s binding))]
+          (parsed-primitive-id prop-s binding insp)
+          (parsed-id prop-s binding insp))]
      [else
       (log-expand ctx 'return result-s)
       result-s])]))

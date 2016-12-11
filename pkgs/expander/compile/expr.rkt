@@ -213,6 +213,7 @@
                                          (module-binding-phase b)
                                          (module-binding-sym b)
                                          (or (module-binding-extra-inspector b)
+                                             (parsed-id-inspector p)
                                              (syntax-inspector (parsed-s p))))])]
      [else
       (error "not a reference to a module or local binding:" b (parsed-s p))]))

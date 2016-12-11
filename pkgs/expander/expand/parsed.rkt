@@ -10,7 +10,7 @@
 
 (struct parsed (s) #:transparent)
 
-(struct parsed-id parsed (binding))
+(struct parsed-id parsed (binding inspector))
 (struct parsed-primitive-id parsed-id ())
 (struct parsed-top-id parsed-id ())
 

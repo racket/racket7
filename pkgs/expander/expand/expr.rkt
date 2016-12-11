@@ -545,14 +545,14 @@
      ;; thing that the identifier by itself would refer to; in that case
      ;; `#%top` can be stripped within a module
      (if (expand-context-to-parsed? ctx)
-         (parsed-id id b)
+         (parsed-id id b #f)
          (cond
           [(top-level-module-path-index? (module-binding-module b)) s]
           [else id]))]
     [(register-eventual-variable!? id ctx)
      ;; Must be in a module, and we'll check the binding later, so strip `#%top`:
      (if (expand-context-to-parsed? ctx)
-         (parsed-id id b)
+         (parsed-id id b #f)
          id)]
     [else
      (cond
@@ -571,14 +571,14 @@
          ;; binding scope in an expansion, though, in the same way that
          ;; `define-values` expands without it
          (if (expand-context-to-parsed? ctx)
-             (parsed-top-id tl-id tl-b)
+             (parsed-top-id tl-id tl-b #f)
              (cond
               [implicit-omitted? id]
               [else
                (define-match m disarmed-s '(#%top . id))
                (rebuild s (cons (m '#%top) id))]))]
         [else (if (expand-context-to-parsed? ctx)
-                  (parsed-top-id id b)
+                  (parsed-top-id id b #f)
                   s)])])])))
 
 (add-core-form!
@@ -612,7 +612,7 @@
        (define rebuild-s (keep-as-needed ctx s))
        (define exp-rhs (expand (m 'rhs) (as-expression-context ctx)))
        (if (expand-context-to-parsed? ctx)
-           (parsed-set! rebuild-s (parsed-id id binding) exp-rhs)
+           (parsed-set! rebuild-s (parsed-id id binding #f) exp-rhs)
            (rebuild
             rebuild-s
             (list (m 'set!)
@@ -672,8 +672,8 @@
      (if (expand-context-to-parsed? ctx)
          (parsed-#%variable-reference (keep-properties-only s)
                                       (if (top-m)
-                                          (parsed-top-id var-id binding)
-                                          (parsed-id var-id binding)))
+                                          (parsed-top-id var-id binding #f)
+                                          (parsed-id var-id binding #f)))
          s)]
     [else
      (if (expand-context-to-parsed? ctx)
