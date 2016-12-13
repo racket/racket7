@@ -110,6 +110,7 @@ READ_ONLY static Scheme_Object *call_with_prompt_proc;
 READ_ONLY static Scheme_Object *abort_continuation_proc;
 READ_ONLY static Scheme_Object *internal_call_cc_prim;
 READ_ONLY static Scheme_Object *finish_call_cc_prim;
+READ_ONLY static Scheme_Object *propagate_abort_prim;
 
 /* Caches need to be thread-local: */
 THREAD_LOCAL_DECL(static Scheme_Prompt *available_prompt);
@@ -137,6 +138,7 @@ static Scheme_Object *ormap (int argc, Scheme_Object *argv[]);
 static Scheme_Object *call_cc (int argc, Scheme_Object *argv[]);
 static Scheme_Object *internal_call_cc (int argc, Scheme_Object *argv[]);
 static Scheme_Object *finish_call_cc (int argc, Scheme_Object *argv[]);
+static Scheme_Object *propagate_abort (int argc, Scheme_Object *argv[]);
 static Scheme_Object *continuation_p (int argc, Scheme_Object *argv[]);
 static Scheme_Object *call_with_continuation_barrier (int argc, Scheme_Object *argv[]);
 static Scheme_Object *call_with_prompt (int argc, Scheme_Object *argv[]);
@@ -337,6 +339,8 @@ scheme_init_fun (Scheme_Startup_Env *env)
                                                   "finish-call-with-current-continuation",
                                                   2, 2,
                                                   0, -1);
+  REGISTER_SO(propagate_abort_prim);
+  propagate_abort_prim = scheme_make_prim_w_arity(propagate_abort, "propagate-abort", 0, -1);
 
 # define MAX_CALL_CC_ARG_COUNT 2
   o = scheme_make_prim_w_arity2(call_cc,
@@ -7103,7 +7107,7 @@ static Scheme_Object *do_call_with_prompt(Scheme_Closed_Prim f, void *data,
   prim = scheme_make_closed_prim(f, data);
   a[0] = prim;
   a[1] = scheme_default_prompt_tag;
-  a[2] = scheme_make_prim(propagate_abort);
+  a[2] = propagate_abort_prim;
 
   if (multi) {
     if (top_level)
