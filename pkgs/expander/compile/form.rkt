@@ -28,6 +28,8 @@
 
          compile-namespace-scopes)
 
+(struct link-info (link-module-uses imports extra-inspectorsss def-decls))
+
 ;; Compiles a module body or sequence of top-level forms, returning a
 ;; linklet directory to cover all phases covered by the forms
 (define (compile-forms bodys cctx mpis
@@ -220,7 +222,6 @@
                         phase))
 
   ;; Compute linking info for each phase
-  (struct link-info (link-module-uses imports extra-inspectorsss def-decls))
   (define phase-to-link-info
     (for/hash ([phase (in-list phases-in-order)])
       (define header (hash-ref phase-to-header phase #f))
