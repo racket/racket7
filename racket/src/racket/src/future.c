@@ -558,7 +558,7 @@ void scheme_init_futures_once()
   init_cpucount();
 
   REGISTER_SO(bad_multi_result_proc);
-  bad_multi_result_proc = scheme_make_prim(bad_multi_result);
+  bad_multi_result_proc = scheme_make_prim_w_arity(bad_multi_result, "bad-multi-result", 0, -1);
 }
 
 void scheme_init_futures_per_place()

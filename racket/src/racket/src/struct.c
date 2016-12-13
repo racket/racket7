@@ -260,7 +260,7 @@ scheme_init_struct (Scheme_Startup_Env *env)
   REGISTER_SO(scheme_arity_at_least);
   REGISTER_SO(scheme_make_arity_at_least);
   scheme_arity_at_least = scheme_make_struct_type_from_string("arity-at-least", NULL, 1, NULL, 
-                                                              scheme_make_prim(check_arity_at_least_fields), 1);
+                                                              scheme_make_prim_w_arity(check_arity_at_least_fields, "check_arity_at_least_fields", 0, -1), 1);
   as_names = scheme_make_struct_names_from_array("arity-at-least",
 						 1, arity_fields,
 						 BUILTIN_STRUCT_FLAGS, 
@@ -276,7 +276,7 @@ scheme_init_struct (Scheme_Startup_Env *env)
   /* Add date structure: */
   REGISTER_SO(scheme_date);
   scheme_date = scheme_make_struct_type_from_string("date", NULL, 10, NULL,
-                                                    scheme_make_prim(check_date_fields), 1);
+                                                    scheme_make_prim_w_arity(check_date_fields, "check-date-fields", 0, -1), 1);
   
   ts_names = scheme_make_struct_names_from_array("date",
 						 10, date_fields,
@@ -290,7 +290,7 @@ scheme_init_struct (Scheme_Startup_Env *env)
   }
 
   scheme_date = scheme_make_struct_type_from_string("date*", scheme_date, 2, NULL,
-                                                    scheme_make_prim(check_date_star_fields), 1);
+                                                    scheme_make_prim_w_arity(check_date_star_fields, "check_date_star_fields", 0, -1), 1);
   
   ts_names = scheme_make_struct_names_from_array("date*",
 						 2, date_star_fields,
@@ -308,7 +308,7 @@ scheme_init_struct (Scheme_Startup_Env *env)
   /* Add location structure: */
   REGISTER_SO(location_struct);
   location_struct = scheme_make_struct_type_from_string("srcloc", NULL, 5, NULL, 
-                                                        scheme_make_prim(check_location_fields), 1);
+                                                        scheme_make_prim_w_arity(check_location_fields, "check_location_fields", 0, -1), 1);
   
   loc_names = scheme_make_struct_names_from_array("srcloc",
 						  5, location_fields,

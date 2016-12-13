@@ -4629,7 +4629,7 @@ Scheme_Object *scheme_load(const char *file)
   if (scheme_setjmp(newbuf)) {
     val = NULL;
   } else {
-    val = scheme_apply_multi(scheme_make_prim((Scheme_Prim *)load),
+    val = scheme_apply_multi(scheme_make_prim_w_arity((Scheme_Prim *)load, "internal-load", 0, -1),
                              1, p);
   }
   scheme_current_thread->error_buf = savebuf;
