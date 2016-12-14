@@ -829,7 +829,7 @@ void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Instance *e)
 static Scheme_Bucket *make_bucket(Scheme_Object *key, Scheme_Object *val, Scheme_Instance *inst)
 {
   Scheme_Bucket *b;
-  
+
   b = (Scheme_Bucket *)MALLOC_ONE_TAGGED(Scheme_Bucket_With_Home);
   b->so.type = scheme_variable_type;
   b->key = (char *)key;
@@ -1289,6 +1289,8 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
   rs[0] = (Scheme_Object *)pf;
 
   pos = 0;
+
+  /* Initial bucket, key by #f, provides access to the instance */
   v = (Scheme_Object *)scheme_instance_variable_bucket(scheme_false, instance);
   pf->a[pos++] = v;
   
