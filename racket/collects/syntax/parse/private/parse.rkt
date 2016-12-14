@@ -68,10 +68,8 @@
                                    'attrs
                                    (quote-syntax parser)
                                    '#,splicing?
-                                   'commit?
-                                   'delimit-cut?
-                                   #f
-                                   'desc))
+                                   (scopts (length 'attrs) 'commit? 'delimit-cut? desc)
+                                   #f))
                        (define-values (parser)
                          (parser/rhs name formals attrs rhss #,splicing? #,stx)))))))])))
 
@@ -89,15 +87,13 @@
                   (stxclass 'name no-arity '()
                             (quote-syntax parser)
                             #f
-                            #t
-                            #t
-                            (quote-syntax predicate)
-                            'description))
+                            (scopts 0 #t #t 'description)
+                            (quote-syntax predicate)))
                 (define (parser x cx pr es fh0 cp0 rl success)
                   (if (predicate x)
                       (success fh0)
                       (let ([es (es-add-thing pr 'description #t rl es)])
-                        (fh0 (failure pr es)))))))]))
+                        (fh0 (failure* pr es)))))))]))
 
 (define-syntax (parser/rhs stx)
   (syntax-case stx ()
@@ -108,23 +104,27 @@
           (parameterize ((current-syntax-context #'ctx))
             (parse-rhs #'rhss (syntax->datum #'relsattrs) (syntax-e #'splicing?)
                        #:context #'ctx)))
-        (rhs->parser #'name #'formals #'relsattrs the-rhs (syntax-e #'splicing?))))]))
+        (rhs->parser #'name #'formals #'relsattrs the-rhs (syntax-e #'splicing?) #'ctx)))]))
 
 (begin-for-syntax
- (define (rhs->parser name formals relsattrs the-rhs splicing?)
+ (define (rhs->parser name formals relsattrs the-rhs splicing? [ctx #f])
    (define-values (transparent? description variants defs commit? delimit-cut?)
      (match the-rhs
        [(rhs _ transparent? description variants defs commit? delimit-cut?)
         (values transparent? description variants defs commit? delimit-cut?)]))
    (define vdefss (map variant-definitions variants))
    (define formals* (rewrite-formals formals #'x #'rl))
+   (define patterns (map variant-pattern variants))
+   (define no-fail?
+     (and (not splicing?) ;; FIXME: commit? needed?
+          (patterns-cannot-fail? patterns)))
+   (when no-fail? (log-syntax-parse-debug "(stxclass) cannot fail: ~e" ctx))
    (define body
-     (cond [(null? variants)
-            #'(fail (failure pr es))]
+     (cond [(null? patterns)
+            #'(fail (failure* pr es))]
            [splicing?
             (with-syntax ([(alternative ...)
-                           (for/list ([variant (in-list variants)])
-                             (define pattern (variant-pattern variant))
+                           (for/list ([pattern (in-list patterns)])
                              (with-syntax ([pattern pattern]
                                            [relsattrs relsattrs]
                                            [iattrs (pattern-attrs pattern)]
@@ -140,8 +140,7 @@
            [else
             (with-syntax ([matrix
                            (optimize-matrix
-                            (for/list ([variant (in-list variants)])
-                              (define pattern (variant-pattern variant))
+                            (for/list ([pattern (in-list patterns)])
                               (with-syntax ([iattrs (pattern-attrs pattern)]
                                             [relsattrs relsattrs]
                                             [commit? commit?])
@@ -165,7 +164,8 @@
                 (syntax-parameterize ((this-context-syntax
                                        (syntax-rules ()
                                          [(tbs) (ps-context-syntax pr)])))
-                  (let ([es (es-add-thing pr description 'transparent? rl es)]
+                  (let ([es (es-add-thing pr description 'transparent? rl
+                                          #,(if no-fail? #'#f #'es))]
                         [pr (if 'transparent? pr (ps-add-opaque pr))])
                     (with ([fail-handler fh0]
                            [cut-prompt cp0])
@@ -274,6 +274,7 @@ Some optimizations:
   - commit protocol for stxclasses (but not ~commit, no point)
   - avoid continue-vs-end choice point in (EH ... . ()) by eager pair check
   - integrable stxclasses, specialize ellipses of integrable stxclasses
+  - pattern lists that cannot fail set es=#f to disable ExpectStack allocation
 |#
 
 ;; ----
@@ -425,10 +426,12 @@ Conventions:
         (define-values (patterns body-exprs defs2s)
           (for/lists (patterns body-exprs defs2s) ([clause (in-list (stx->list clauses-stx))])
             (for-clause clause)))
+        (define no-fail? (patterns-cannot-fail? patterns))
+        (when no-fail? (log-syntax-parse-debug "cannot fail: ~e" #'ctx))
         (with-syntax ([(def ...) (apply append (get-txlifts-as-definitions) defs defs2s)])
           #`(let* ([ctx0 (normalize-context '#,who #,context x)]
                    [pr (ps-empty x (cadr ctx0))]
-                   [es #f]
+                   [es #,(if no-fail? #'#f #'#t)]
                    [cx x]
                    [fh0 (syntax-patterns-fail ctx0)])
               def ...
@@ -450,7 +453,7 @@ Conventions:
                              #`(try alternative ...))
                            |#]
                           [else
-                           #`(fail (failure pr es))]))))))))]))
+                           #`(fail (failure* pr es))]))))))))]))
 
 ;; ----
 
@@ -488,7 +491,7 @@ Conventions:
                    [tpr (ps-add-cdr pr)])
                (parse:matrix ((hx hcx hpr es) (tx tcx tpr es) . ins) inner))
              (let ([es* (if (null? datum) (es-add-proper-pair (first-desc:matrix inner) es) es)])
-               (fail (failure pr es*)))))]
+               (fail (failure* pr es*)))))]
     [(parse:pk (in1 . ins) #s(pk/and inner))
      #'(parse:matrix (in1 in1 . ins) inner)]))
 
@@ -519,7 +522,8 @@ Conventions:
        [#s(pat:svar name)
         #'(let-attributes ([#s(attr name 0 #t) (datum->syntax cx x cx)])
             k)]
-       [#s(pat:var/p name parser argu (nested-a ...) attr-count commit? role _desc)
+       [#s(pat:var/p name parser argu (nested-a ...) role
+                     #s(scopts attr-count commit? _delimit? _desc))
         (with-syntax ([(av ...) (generate-n-temporaries (syntax-e #'attr-count))]
                       [(name-attr ...)
                        (if (identifier? #'name)
@@ -569,12 +573,12 @@ Conventions:
           #`(let ([d unwrap-x])
               (if (equal? d (quote datum))
                   k
-                  (fail (failure pr (es-add-atom 'datum es))))))]
+                  (fail (failure* pr (es-add-atom 'datum es))))))]
        [#s(pat:literal literal input-phase lit-phase)
         #`(if (and (identifier? x)
                    (free-identifier=? x (quote-syntax literal) input-phase lit-phase))
               k
-              (fail (failure pr (es-add-literal (quote-syntax literal) es))))]
+              (fail (failure* pr (es-add-literal (quote-syntax literal) es))))]
        [#s(pat:action action subpattern)
         #'(parse:A x cx action pr es (parse:S x cx subpattern pr es k))]
        [#s(pat:head head tail)
@@ -607,7 +611,7 @@ Conventions:
             (with ([fail-handler fail-to-succeed]
                    [cut-prompt fail-to-succeed]) ;; to be safe
               (parse:S x cx subpattern pr es
-                       (fh0 (failure pr0 es0)))))]
+                       (fh0 (failure* pr0 es0)))))]
        [#s(pat:pair head tail)
         #`(let ([datum (if (syntax? x) (syntax-e x) x)]
                 [cx (if (syntax? x) x cx)])  ;; FIXME: shadowing cx?!
@@ -620,7 +624,7 @@ Conventions:
                   (parse:S hx hcx head hpr es
                            (parse:S tx cx tail tpr es k)))
                 (let ([es* (if (null? datum) (es-add-proper-pair (first-desc:S head) es) es)])
-                  (fail (failure pr es*)))))]
+                  (fail (failure* pr es*)))))]
        [#s(pat:vector subpattern)
         #`(let ([datum (if (syntax? x) (syntax-e x) x)])
             (if (vector? datum)
@@ -628,7 +632,7 @@ Conventions:
                       [vcx (if (syntax? x) x cx)] ;; FIXME: (vector? datum) => (syntax? x) ???
                       [pr* (ps-add-unvector pr)])
                   (parse:S datum vcx subpattern pr* es k))
-                (fail (failure pr es))))]
+                (fail (failure* pr es))))]
        [#s(pat:box subpattern)
         #`(let ([datum (if (syntax? x) (syntax-e x) x)])
             (if (box? datum)
@@ -636,7 +640,7 @@ Conventions:
                       [bcx (if (syntax? x) x cx)] ;; FIXME: (box? datum) => (syntax? x) ???
                       [pr* (ps-add-unbox pr)])
                   (parse:S datum bcx subpattern pr* es k))
-                (fail (failure pr es))))]
+                (fail (failure* pr es))))]
        [#s(pat:pstruct key subpattern)
         #`(let ([datum (if (syntax? x) (syntax-e x) x)])
             (if (let ([xkey (prefab-struct-key datum)])
@@ -645,7 +649,7 @@ Conventions:
                       [scx (if (syntax? x) x cx)] ;; FIXME: (struct? datum) => (syntax? x) ???
                       [pr* (ps-add-unpstruct pr)])
                   (parse:S datum scx subpattern pr* es k))
-                (fail (failure pr es))))]
+                (fail (failure* pr es))))]
        [#s(pat:describe pattern description transparent? role)
         #`(let ([es* (es-add-thing pr description transparent? role es)]
                 [pr* (if 'transparent? pr (ps-add-opaque pr))])
@@ -677,7 +681,7 @@ Conventions:
               (if (predicate x*)
                   (let-attributes (name-attr ...) k)
                   (let ([es* (es-add-thing pr 'description #t role es)])
-                    (fail (failure pr es*))))))])]))
+                    (fail (failure* pr es*))))))])]))
 
 ;; (first-desc:S S-pattern) : expr[FirstDesc]
 (define-syntax (first-desc:S stx)
@@ -688,8 +692,8 @@ Conventions:
         #''(any)]
        [#s(pat:svar name)
         #''(any)]
-       [#s(pat:var/p _ ...)
-        #`(quote #,(pat:var/p-desc (syntax-e #'p)))]
+       [#s(pat:var/p _ _ _ _ _ #s(scopts _ _ _ desc))
+        #'(quote desc)]
        [#s(pat:datum d)
         #''(datum d)]
        [#s(pat:literal id _ip _lp)
@@ -713,7 +717,7 @@ Conventions:
   (syntax-case stx ()
     [(fdh hpat)
      (syntax-case #'hpat ()
-       [#s(hpat:var/p _n _p _a _na _ac _c? _r desc) #'desc]
+       [#s(hpat:var/p _ _ _ _ _ #s(scopts _ _ _ desc)) #'(quote desc)]
        [#s(hpat:seq lp) #'(first-desc:L lp)]
        [#s(hpat:describe _hp desc _t? _r)
         #`(quote #,(or (constant-desc #'desc) #'#f))]
@@ -758,7 +762,7 @@ Conventions:
             (if c
                 (let ([pr* (if (syntax? c) (ps-add-stx pr c) pr)]
                       [es* (es-add-message message es)])
-                  (fail (failure pr* es*)))
+                  (fail (failure* pr* es*)))
                 k))]
        [#s(action:parse pattern expr)
         #`(let* ([y (datum->syntax/with-clause (wrap-user-code expr))]
@@ -807,7 +811,8 @@ Conventions:
             (parse:H x cx rest-x rest-cx rest-pr pattern pr* es*
                      (let ([rest-pr (if 'transparent? rest-pr (ps-pop-opaque rest-pr))])
                        k)))]
-       [#s(hpat:var/p name parser argu (nested-a ...) attr-count commit? role _desc)
+       [#s(hpat:var/p name parser argu (nested-a ...) role
+                      #s(scopts attr-count commit? _delimit? _desc))
         (with-syntax ([(av ...) (generate-n-temporaries (syntax-e #'attr-count))]
                       [(name-attr ...)
                        (if (identifier? #'name)
@@ -917,7 +922,7 @@ Conventions:
             (with ([fail-handler fail-to-succeed]
                    [cut-prompt fail-to-succeed]) ;; to be safe
               (parse:H x cx rest-x rest-cx rest-pr subpattern pr es
-                       (fh0 (failure pr0 es0)))))]
+                       (fh0 (failure* pr0 es0)))))]
        [_
         #'(parse:S x cx
                    ;; FIXME: consider proper-list-pattern? (yes is consistent with ~seq)
@@ -995,7 +1000,7 @@ Conventions:
                         ...)
                    (cond [(< rel-rep (rep:min-number rel-repc))
                           (let ([es (expectation-of-reps/too-few es rel-rep rel-repc rel-head)])
-                            (fail (failure loop-pr es)))]
+                            (fail (failure* loop-pr es)))]
                          ...
                          [else
                           (let-attributes ([a (rep:finalize a attr-repc alt-id)] ...)
@@ -1010,7 +1015,7 @@ Conventions:
     [(topc #t x cx pr es pair-alt null-alt)
      (cond [(stx-pair? x) pair-alt]
            [(stx-null? x) null-alt]
-           [else (fail (failure pr es))])]
+           [else (fail (failure* pr es))])]
     [(topc _ x cx pr es alt1 alt2)
      (try alt1 alt2)]))
 
@@ -1041,7 +1046,7 @@ Conventions:
                         (if (< rep (rep:max-number repc))
                             (let ([rep (add1 rep)]) k*)
                             (let ([es* (expectation-of-reps/too-many es rep repc)])
-                              (fail (failure pr* es*)))))]))]))
+                              (fail (failure* pr* es*)))))]))]))
 
 ;; (rep:initial-value RepConstraint) : expr
 (define-syntax (rep:initial-value stx)
