@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/set.rkt"
+         "../common/list-tilde.rkt"
          "../syntax/syntax.rkt"
          "../syntax/property.rkt"
          "../common/phase.rkt"
@@ -45,7 +46,7 @@
 (struct requires+provides (self       ; module-path-index to recognize definitions among requires
                            require-mpis ; intern table
                            require-mpis-in-order ; require-phase -> list of module-path-index
-                           requires   ; mpi [interned] -> require-phase -> sym -> list of [bulk-]required
+                           requires   ; mpi [interned] -> require-phase -> sym -> list~ of [bulk-]required
                            provides   ; phase -> sym -> binding or protected
                            phase-to-defined-syms ; phase -> sym -> boolean
                            [can-cross-phase-persistent? #:mutable]
@@ -135,8 +136,8 @@
   (define sym-to-reqds (hash-ref! at-mod nominal-require-phase make-hasheq))
   (define sym (syntax-e id))
   ;; Record that the identifier is required
-  (hash-set! sym-to-reqds sym (cons (required id phase can-be-shadowed? as-transformer?)
-                                    (hash-ref sym-to-reqds sym null))))
+  (hash-set! sym-to-reqds sym (cons~ (required id phase can-be-shadowed? as-transformer?)
+                                     (hash-ref sym-to-reqds sym null))))
 
 ;; Like `add-defined-or-required-id!`, but faster for bindings that
 ;; all have the same scope, etc.
@@ -180,7 +181,7 @@
                            #:remove-shadowed!? #t
                            #:accum-update-nominals accum-update-nominals
                            #:who who))
-      (hash-set! sym-to-reqds sym (cons br (hash-ref sym-to-reqds sym null))))))
+      (hash-set! sym-to-reqds sym (cons~ br (hash-ref sym-to-reqds sym null))))))
 
 ;; Convert a combination of a symbol and `bulk-required` to a
 ;; `required` on demand
@@ -209,7 +210,7 @@
   (for ([(mod-name at-mod) (in-hash (requires+provides-requires enclosing-r+p))])
     (for* ([(phase at-phase) (in-hash at-mod)]
            [(sym reqds) (in-hash at-phase)]
-           [reqd/maybe-bulk (in-list reqds)])
+           [reqd/maybe-bulk (in-list~ reqds)])
       (define reqd (normalize-required reqd/maybe-bulk mod-name phase sym))
       (add-defined-or-required-id-at-nominal! r+p
                                               (syntax-shift-phase-level
@@ -246,7 +247,8 @@
 
 ;; Prune a list of `required`s t remove any with a different binding
 (define (remove-non-matching-requireds reqds id phase mpi nominal-phase sym)
-  (for*/list ([r (in-list reqds)]
+  ;; Ok to produce a list~ instead of a list, but we don't have `for*/list~`:
+  (for*/list ([r (in-list~ reqds)]
               [r (in-value (normalize-required r mpi nominal-phase sym))]
               #:unless (free-identifier=? (required-id r) id phase phase))
     r))
@@ -319,7 +321,7 @@
         (define nominal-phase (module-binding-nominal-require-phase b))
         (define sym-to-reqds (hash-ref at-mod nominal-phase #hasheq()))
         (define reqds (hash-ref sym-to-reqds (syntax-e id) null))
-        (for ([r (in-list reqds)])
+        (for ([r (in-list~ reqds)])
           (cond
            [(if (bulk-required? r)
                 (bulk-required-can-be-shadowed? r)
@@ -337,7 +339,7 @@
                                                 [else (format " for phase ~a" phase)]))
                                 orig-s
                                 id)]))
-        (when (and remove-shadowed!? (pair? reqds))
+        (when (and remove-shadowed!? (not (null? reqds)))
           ;; Same work as in `remove-required-id!`
           (hash-set! sym-to-reqds (syntax-e id)
                      (remove-non-matching-requireds reqds id phase mpi nominal-phase (syntax-e id))))])])]))
@@ -356,7 +358,7 @@
   (define at-mod (hash-ref (requires+provides-requires r+p) mpi #f))
   (and at-mod
        (for*/list ([(sym reqds) (in-hash (hash-ref at-mod phase #hasheq()))]
-                   [reqd (in-list reqds)])
+                   [reqd (in-list~ reqds)])
          (normalize-required reqd mpi phase sym))))
 
 ;; Get all the definitions
@@ -383,7 +385,7 @@
                               (hash-ref phase-to-requireds phase
                                         ;; failure => not required at that phase
                                         (lambda () (esc #f))))]
-                [reqd (in-list reqds)])
+                [reqd (in-list~ reqds)])
       (normalize-required reqd mod-name phase sym))))
 
 ;; ----------------------------------------
