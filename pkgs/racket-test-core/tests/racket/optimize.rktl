@@ -1733,6 +1733,17 @@
                                   #f
                                   (add1 c))))))
 
+;; Don't move a branch that selects a variable past an
+;; expression that can inspect space consumption:
+(test-comp '(lambda (a b c f)
+              (let ((d (if a b c)))
+                (f)
+                d))
+           '(lambda (a b c f)
+             (f)
+             (if a b c))
+           #f)
+
 (test-comp '(lambda (x y q)
               (let ([z (+ x y)])
                 (list (if q x y) z)))

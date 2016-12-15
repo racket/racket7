@@ -13,7 +13,7 @@ Uses Arguments from kws.rkt
 A SinglePattern is one of
   (pat:any)
   (pat:svar id)  -- "simple" var, no stxclass
-  (pat:var/p Id Id Arguments (Listof IAttr) Nat/#f Bool Stx String/#f) -- var with parser
+  (pat:var/p Id Id Arguments (Listof IAttr) Stx scopts) -- var with parser
   (pat:literal identifier Stx Stx)
   (pat:datum datum)
   (pat:action ActionPattern SinglePattern)
@@ -44,7 +44,7 @@ A ListPattern is a subtype of SinglePattern; one of
 
 (define-struct pat:any () #:prefab)
 (define-struct pat:svar (name) #:prefab)
-(define-struct pat:var/p (name parser argu nested-attrs attr-count commit? role desc) #:prefab)
+(define-struct pat:var/p (name parser argu nested-attrs role opts) #:prefab)
 (define-struct pat:literal (id input-phase lit-phase) #:prefab)
 (define-struct pat:datum (datum) #:prefab)
 (define-struct pat:action (action inner) #:prefab)
@@ -91,7 +91,7 @@ A SideClause is just an ActionPattern
 
 #|
 A HeadPattern is one of 
-  (hpat:var/p Id Id Arguments (Listof IAttr) Nat/#f Bool Stx String/#f)
+  (hpat:var/p Id Id Arguments (Listof IAttr) Stx scopts)
   (hpat:seq ListPattern)
   (hpat:action ActionPattern HeadPattern)
   (hpat:and HeadPattern SinglePattern)
@@ -106,7 +106,7 @@ A HeadPattern is one of
   (hpat:peek-not HeadPattern)
 |#
 
-(define-struct hpat:var/p (name parser argu nested-attrs attr-count commit? role desc) #:prefab)
+(define-struct hpat:var/p (name parser argu nested-attrs role scopts) #:prefab)
 (define-struct hpat:seq (inner) #:prefab)
 (define-struct hpat:action (action inner) #:prefab)
 (define-struct hpat:and (head single) #:prefab)
@@ -214,7 +214,7 @@ A RepConstraint is one of
      null]
     [(pat:svar name)
      (list (attr name 0 #t))]
-    [(pat:var/p name _ _ nested-attrs _ _ _ _)
+    [(pat:var/p name _ _ nested-attrs _ _)
      (if name (cons (attr name 0 #t) nested-attrs) nested-attrs)]
     [(pat:reflect _ _ _ name nested-attrs)
      (if name (cons (attr name 0 #t) nested-attrs) nested-attrs)]
@@ -274,7 +274,7 @@ A RepConstraint is one of
      (pattern-attrs sp)]
 
     ;; -- H patterns
-    [(hpat:var/p name _ _ nested-attrs _ _ _ _)
+    [(hpat:var/p name _ _ nested-attrs _ _)
      (if name (cons (attr name 0 #t) nested-attrs) nested-attrs)]
     [(hpat:reflect _ _ _ name nested-attrs)
      (if name (cons (attr name 0 #t) nested-attrs) nested-attrs)]
@@ -304,6 +304,65 @@ A RepConstraint is one of
     ;; EH patterns
     [(ehpat iattrs _ _ _)
      iattrs]
+    ))
+
+;; ----
+
+;; pattern-has-cut? : *Pattern -> Boolean
+;; Returns #t if p *might* cut (~!, not within ~delimit-cut).
+(define (pattern-has-cut? p)
+  (match p
+    ;; -- S patterns
+    [(pat:any) #f]
+    [(pat:svar name) #f]
+    [(pat:var/p _ _ _ _ _ opts) (not (scopts-delimit-cut? opts))]
+    [(pat:reflect _ _ _ name nested-attrs) #f]
+    [(pat:datum _) #f]
+    [(pat:literal _ _ _) #f]
+    [(pat:action a sp) (or (pattern-has-cut? a) (pattern-has-cut? sp))]
+    [(pat:head headp tailp) (or (pattern-has-cut? headp) (pattern-has-cut? tailp))]
+    [(pat:pair headp tailp) (or (pattern-has-cut? headp) (pattern-has-cut? tailp))]
+    [(pat:vector sp) (pattern-has-cut? sp)]
+    [(pat:box sp) (pattern-has-cut? sp)]
+    [(pat:pstruct key sp) (pattern-has-cut? sp)]
+    [(pat:describe sp _ _ _) (pattern-has-cut? sp)]
+    [(pat:and ps) (ormap pattern-has-cut? ps)]
+    [(pat:or _ ps _) (ormap pattern-has-cut? ps)]
+    [(pat:not _) #f]
+    [(pat:dots headps tailp) (or (ormap pattern-has-cut? headps) (pattern-has-cut? tailp))]
+    [(pat:delimit sp) #f]
+    [(pat:commit sp) #f]
+    [(pat:ord sp _ _) (pattern-has-cut? sp)]
+    [(pat:post sp) (pattern-has-cut? sp)]
+    [(pat:integrated name _ _ _) #f]
+
+    ;; -- A patterns
+    [(action:cut) #t]
+    [(action:fail _ _) #f]
+    [(action:bind attr expr) #f]
+    [(action:and ps) (ormap pattern-has-cut? ps)]
+    [(action:parse sp _) (pattern-has-cut? sp)]
+    [(action:do _) #f]
+    [(action:ord sp _ _) (pattern-has-cut? sp)]
+    [(action:post sp) (pattern-has-cut? sp)]
+
+    ;; -- H patterns
+    [(hpat:var/p _ _ _ _ _ opts) (not (scopts-delimit-cut? opts))]
+    [(hpat:reflect _ _ _ name nested-attrs) #f]
+    [(hpat:seq lp) (pattern-has-cut? lp)]
+    [(hpat:action a hp) (or (pattern-has-cut? a) (pattern-has-cut? hp))]
+    [(hpat:describe hp _ _ _) (pattern-has-cut? hp)]
+    [(hpat:and hp sp) (or (pattern-has-cut? hp) (pattern-has-cut? sp))]
+    [(hpat:or _ ps _) (ormap pattern-has-cut? ps)]
+    [(hpat:delimit hp) #f]
+    [(hpat:commit hp) #f]
+    [(hpat:ord hp _ _) (pattern-has-cut? hp)]
+    [(hpat:post hp) (pattern-has-cut? hp)]
+    [(hpat:peek hp) (pattern-has-cut? hp)]
+    [(hpat:peek-not hp) (pattern-has-cut? hp)]
+
+    ;; EH patterns
+    [(ehpat _ hp _ _) (pattern-has-cut? hp)]
     ))
 
 ;; ----
@@ -445,6 +504,15 @@ A RepConstraint is one of
   (for/fold ([af AF-NONE]) ([p (in-list ps)])
     (define afp (pattern-AF p))
     (and af (AF<? af afp) (bitwise-ior af afp))))
+
+;; ----
+
+;; patterns-cannot-fail? : (Listof SinglePattern) -> Boolean
+;; Returns true if the disjunction of the patterns always succeeds---and thus no
+;; failure-tracking needed. Note: beware cut!
+(define (patterns-cannot-fail? patterns)
+  (and (not (ormap pattern-has-cut? patterns))
+       (ormap pattern-cannot-fail? patterns)))
 
 ;; ----
 

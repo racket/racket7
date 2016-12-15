@@ -2153,10 +2153,17 @@ static void print_tagged_value(const char *prefix,
       char *t2;
       int len2;
 
-      len2 = SCHEME_SYM_LEN(bsym);
+      if (SCHEME_FALSEP(bsym))
+        len2 = 2;
+      else
+        len2 = SCHEME_SYM_LEN(bsym);
+
       t2 = scheme_malloc_atomic(len + len2 + 3);
       memcpy(t2, type, len);
-      memcpy(t2 + len + 1, SCHEME_SYM_VAL(bsym), len2);
+      if (SCHEME_FALSEP(bsym))
+        memcpy(t2 + len + 1, "#f", len2);
+      else
+        memcpy(t2 + len + 1, SCHEME_SYM_VAL(bsym), len2);
       t2[len] = '[';
       t2[len + 1 + len2] = ']';
       t2[len + 1 + len2 + 1] = 0;

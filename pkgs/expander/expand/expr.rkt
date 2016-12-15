@@ -1,7 +1,6 @@
 #lang racket/base
 (require "../common/struct-star.rkt"
          "../common/set.rkt"
-         "../common/head-retention.rkt"
          "../syntax/syntax.rkt"
          "../syntax/property.rkt"
          "../syntax/scope.rkt"
@@ -97,17 +96,16 @@
    (define-match cm disarmed-s '(case-lambda clause ...))
    (define rebuild-s (keep-as-needed ctx s))
    (define clauses
-     (adjust-for-loop-head-retention
-      (for/list ([formals (in-list (m 'formals))]
-                 [body (in-list (m 'body))]
-                 [clause (in-list (cm 'clause))])
-        (log-expand ctx 'next)
-        (define rebuild-clause (keep-as-needed ctx clause))
-        (define-values (exp-formals exp-body)
-          (lambda-clause-expander s disarmed-s formals body ctx 'case-lambda-renames))
-        (if (expand-context-to-parsed? ctx)
-            (list exp-formals exp-body)
-            (rebuild rebuild-clause `[,exp-formals ,@exp-body])))))
+     (for/list ([formals (in-list (m 'formals))]
+                [body (in-list (m 'body))]
+                [clause (in-list (cm 'clause))])
+       (log-expand ctx 'next)
+       (define rebuild-clause (keep-as-needed ctx clause))
+       (define-values (exp-formals exp-body)
+         (lambda-clause-expander s disarmed-s formals body ctx 'case-lambda-renames))
+       (if (expand-context-to-parsed? ctx)
+           (list exp-formals exp-body)
+           (rebuild rebuild-clause `[,exp-formals ,@exp-body]))))
    (if (expand-context-to-parsed? ctx)
        (parsed-case-lambda rebuild-s clauses)
        (rebuild
@@ -248,19 +246,18 @@
      (cond
       [(not split-by-reference?)
        (define clauses
-         (adjust-for-loop-head-retention
-          (for/list ([ids (in-list val-name-idss)]
-                     [keys (in-list val-keyss)]
-                     [rhs (in-list (if syntaxes? (stx-m 'val-rhs) (val-m 'val-rhs)))])
-            (log-expand ctx 'next)
-            (define exp-rhs (if rec?
-                                (expand (add-scope rhs sc)
-                                        (as-named-context rec-ctx ids))
-                                (expand rhs
-                                        (as-named-context expr-ctx ids))))
-            (if (expand-context-to-parsed? ctx)
-                (list keys exp-rhs)
-                `[,ids ,exp-rhs]))))
+         (for/list ([ids (in-list val-name-idss)]
+                    [keys (in-list val-keyss)]
+                    [rhs (in-list (if syntaxes? (stx-m 'val-rhs) (val-m 'val-rhs)))])
+           (log-expand ctx 'next)
+           (define exp-rhs (if rec?
+                               (expand (add-scope rhs sc)
+                                       (as-named-context rec-ctx ids))
+                               (expand rhs
+                                       (as-named-context expr-ctx ids))))
+           (if (expand-context-to-parsed? ctx)
+               (list keys exp-rhs)
+               `[,ids ,exp-rhs])))
        (define exp-body (get-body))
        (when frame-id
          (reference-record-clear! frame-id))
@@ -363,9 +360,8 @@
                                     (keep-as-needed ctx prefixless)
                                     prefixless))
      (define expr-ctx (as-expression-context ctx))
-     (define exp-es (adjust-for-loop-head-retention
-                     (for/list ([e (in-list es)])
-                       (expand e expr-ctx))))
+     (define exp-es (for/list ([e (in-list es)])
+                      (expand e expr-ctx)))
      (if (expand-context-to-parsed? ctx)
          (parsed-app (if (syntax? rebuild-prefixless) rebuild-prefixless rebuild-s) exp-es)
          (rebuild
@@ -466,16 +462,15 @@
    (define es (m 'e))
    (define last-i (sub1 (length es)))
    (define exp-es
-     (adjust-for-loop-head-retention
-      (for/list ([e (in-list es)]
-                 [i (in-naturals)])
-        (when (= i list-start-index)
-          (log-expand ctx 'enter-list (list-tail es i)))
-        (log-expand ctx 'next)
-        (expand e (if (and last-is-tail?
-                           (= i last-i))
-                      (as-tail-context expr-ctx #:wrt ctx)
-                      expr-ctx)))))
+     (for/list ([e (in-list es)]
+                [i (in-naturals)])
+       (when (= i list-start-index)
+         (log-expand ctx 'enter-list (list-tail es i)))
+       (log-expand ctx 'next)
+       (expand e (if (and last-is-tail?
+                          (= i last-i))
+                     (as-tail-context expr-ctx #:wrt ctx)
+                     expr-ctx))))
    (when (and (= 1 list-start-index)
               (null? (cdr es)))
      (log-expand ctx 'enter-list (cdr es)))
