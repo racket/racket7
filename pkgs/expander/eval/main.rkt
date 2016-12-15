@@ -229,7 +229,12 @@
             [(and (not combine) (null? (cdr es)))
              (loop (car es) phase ns as-tail?)]
             [else
-             (define a (loop (car es) phase ns #f))
+             (define a (if combine
+                           (loop (car es) phase ns #f)
+                           (begin
+                             ;; Allow any number of results:
+                             (loop (car es) phase ns #f)
+                             (void))))
              (if combine
                  (combine a (begin-loop (cdr es)))
                  (begin-loop (cdr es)))]))
