@@ -1,20 +1,20 @@
 #lang racket/base
 (require (for-syntax racket/base))
 
-;; A `list~` is like a `list`, but it can be an "improper list" that
-;; doesn't end in null. Using `cons~` on an eement and `null` returns
-;; just the element. A `list~` makes sense when lists of length 1
+;; A `list-ish` is like a `list`, but it can be an "improper list" that
+;; doesn't end in null. Using `cons-ish` on an element and `null` returns
+;; just the element. A `list-ish` makes sense when lists of length 1
 ;; would otherwise be common, but only when elements are never lists.
 
-(provide cons~
-         in-list~)
+(provide cons-ish
+         in-list-ish)
 
-(define (cons~ a b)
+(define (cons-ish a b)
   (if (null? b)
       a
       (cons a b)))
 
-(define-sequence-syntax in-list~
+(define-sequence-syntax in-list-ish
   (lambda (stx) (raise-syntax-error #f "only allowed in a `for` form" stx))
   (lambda (stx)
     (syntax-case stx ()
