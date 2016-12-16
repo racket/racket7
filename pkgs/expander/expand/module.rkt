@@ -34,7 +34,8 @@
          "../syntax/debug.rkt"
          "parsed.rkt"
          "expanded+parsed.rkt"
-         "append.rkt")
+         "append.rkt"
+         "save-and-restore.rkt")
 
 (add-core-form!
  'module
@@ -214,7 +215,7 @@
    
    ;; The primitive `#%module-body` form calls this function to expand the
    ;; current module's body
-   (define (module-begin-k mb-s ctx)
+   (define (module-begin-k mb-s mb-init-ctx)
      ;; In case the module body is expanded multiple times, we clear
      ;; the requires, provides and definitions information each time
      (when again?
@@ -223,6 +224,16 @@
        (hash-clear! compiled-submodules)
        (set-box! compiled-module-box #f))
      (set! again? #t)
+     
+     ;; In case a nested `#%module-begin` expansion is forced, save
+     ;; and restore the module-expansion state:
+     (define ctx (struct*-copy expand-context mb-init-ctx
+                               [module-begin-k 
+                                (lambda (s ctx)
+                                  (with-save-and-restore ([requires+provides (make-requires+provides self)] 
+                                                          [compiled-submodules (make-hasheq)]
+                                                          [compiled-module-box (box #f)])
+                                    (module-begin-k s ctx)))]))
      
      ;; In case `#%module-begin` expansion is forced on syntax that
      ;; that wasn't already introduced into the mdoule's inside scope,
