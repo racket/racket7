@@ -90,9 +90,8 @@
                              (cond
                               [(set-member? t from-i) t]
                               [(any-superior? t from-i) t]
-                              [else (set-add
-                                     (set-add (remove-inferior t from-i)
-                                              from-i))]))])])]))
+                              [else (set-add (remove-inferior t from-i)
+                                             from-i)]))])])]))
 
 (define (syntax-taint s)
   (if (tamper-tainted? (syntax-tamper s))

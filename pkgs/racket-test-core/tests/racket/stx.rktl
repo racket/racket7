@@ -1852,6 +1852,21 @@
                                      (syntax-arm #'(begin (define-values (x y z) (values 1 2 3)))
                                                  #f #t)))))))
 
+(let ()
+  (define i1 (make-inspector))
+  (define i2 (make-inspector))
+  
+  (define x (syntax-arm #'(x) i1))
+  
+  (test #f syntax-tainted? (car (syntax-e (syntax-disarm x i1))))
+  (test #t syntax-tainted? (car (syntax-e (syntax-disarm x i2))))
+  
+  (define y (syntax-rearm (syntax-arm #'(y) i2) x))
+  
+  (test #t syntax-tainted? (car (syntax-e (syntax-disarm y i1))))
+  (test #t syntax-tainted? (car (syntax-e (syntax-disarm y i2))))
+  (test #f syntax-tainted? (car (syntax-e (syntax-disarm (syntax-disarm y i1) i2)))))
+
 (let ([round-trip
        (lambda (stx)
          (parameterize ([current-namespace (make-base-namespace)])
