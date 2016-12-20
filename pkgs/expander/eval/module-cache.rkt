@@ -12,9 +12,15 @@
 (define module-cache (make-weak-hash))
 
 (define (make-module-cache-key hash-code)
-  ;; The result is preserved to ratin the cache entry, and
-  ;; found in `module-cache-ref` by `equal?` comparsion
-  (and hash-code (list hash-code)))
+  ;; The result is preserved to retain the cache entry, and
+  ;; found in `module-cache-ref` by `equal?` comparsion.
+  ;; The current load-relative directory is part of the
+  ;; key because the bytecode form can have bulk bindings
+  ;; in syntax objects that refer to `require`s that are
+  ;; relative to the enclosing module, and that part of
+  ;; the syntax object is unmarshaled once and used for
+  ;; all instances of the module.
+  (and hash-code (list hash-code (current-load-relative-directory))))
 
 (define (module-cache-set! key proc)
   (hash-set! module-cache key (make-ephemeron key proc)))
