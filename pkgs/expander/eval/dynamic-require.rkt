@@ -85,7 +85,7 @@
                       (not (and (module-binding-extra-inspector binding)
                                 (inspector-superior? (module-binding-extra-inspector binding)
                                                      (namespace-inspector m-ns))))))
-        (raise-arguments-error 'dynamc-require
+        (raise-arguments-error 'dynamic-require
                                "name is protected"
                                "name" sym
                                "module" mod-name))
