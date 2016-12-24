@@ -81,7 +81,8 @@
 #define SCHEME_PRIM_IS_NARY_INLINED        (1 << 2)
 /* indicates that a primitive call can be dropped if it's result is not used;
    although the function never raises an exception, it should not be reordered
-   past a test that might be a guard: */
+   past a test that might be a guard or past an expression that might
+   have a side effect: */
 #define SCHEME_PRIM_IS_UNSAFE_OMITABLE     (1 << 3)
 /* indicates that a primitive call can be dropped if it's result is not used,
    because it has no side-effect and never raises an exception: */
@@ -487,6 +488,7 @@ Scheme_Linklet *scheme_startup_linklet();
 void *scheme_get_os_thread_like();
 void scheme_init_os_thread_like(void *);
 void scheme_done_os_thread();
+int scheme_is_place_main_os_thread();
 
 Scheme_Object *scheme_get_startup_export(const char *s);
 
@@ -2877,11 +2879,6 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
 #define scheme_optimize_result_context(c) (c & (~(OPT_CONTEXT_TYPE_MASK | OPT_CONTEXT_NO_SINGLE | OPT_CONTEXT_SINGLED)))
 #define scheme_optimize_tail_context(c)   scheme_optimize_result_context(c) 
 
-Scheme_Object *scheme_optimize_apply_values(Scheme_Object *f, Scheme_Object *e, 
-                                            Optimize_Info *info,
-                                            int e_single_result,
-                                            int context);
-
 int scheme_ir_duplicate_ok(Scheme_Object *o, int cross_mod);
 int scheme_ir_propagate_ok(Scheme_Object *o, Optimize_Info *info);
 int scheme_is_statically_proc(Scheme_Object *value, Optimize_Info *info, int flags);
@@ -3379,6 +3376,11 @@ void scheme_write_proc_context(Scheme_Object *port, int print_width,
                                Scheme_Object *src, Scheme_Object *line, 
                                Scheme_Object *col, Scheme_Object *pos,
                                int generated);
+
+#ifdef MZ_USE_MZRT
+void scheme_init_glib_log_queue(void);
+void scheme_check_glib_log_messages(void);
+#endif
 
 /*========================================================================*/
 /*                         filesystem utilities                           */

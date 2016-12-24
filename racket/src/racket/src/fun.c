@@ -2481,7 +2481,8 @@ const char *scheme_get_proc_name(Scheme_Object *p, int *len, int for_error)
   } else {
     Scheme_Object *name;
 
-    if (type == scheme_ir_lambda_type) {
+    if ((type == scheme_ir_lambda_type)
+        || (type == scheme_lambda_type)) {
       name = ((Scheme_Lambda *)p)->name;
     } else if (type == scheme_closure_type) {
       name = SCHEME_CLOSURE_CODE(p)->name;

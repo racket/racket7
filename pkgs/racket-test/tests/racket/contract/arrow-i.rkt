@@ -174,6 +174,11 @@
    '->i8
    '((contract (->i ([x number?] [y (x) (<=/c x)]) () [r (x) (<=/c x)]) 
                (lambda (x y) (+ x 1)) 'pos 'neg) 1 2))
+
+  (test/neg-blame
+   '->i8b
+   '((contract (->i ([x number?] [y (x) number?]) any)
+               (lambda (x y) y) 'pos 'neg) "1" 2))
   
   (test/spec-passed
    '->i9
@@ -948,6 +953,82 @@
                'pos 'neg)
      #:one 1 #:two 2 #:three 3)
    '(1 2 3))
+
+  (test/spec-passed/result
+   '->i55
+   '(let ([b '()])
+      ((contract (->i ([y () (begin (set! b (cons 1 b)) any/c)]
+                       [z (y) (begin (set! b (cons 2 b)) any/c)])
+                      any)
+                 (λ args (set! b (cons 3 b)) 0)
+                 'pos 'neg)
+       1 2)
+      b)
+   '(3 2 1)
+
+   ;; this is probably right (but not what we really really want, of course)
+   '(3 2 1 2 1))
+
+  (test/spec-passed/result
+   '->i56
+   '(let ([b '()])
+      ((contract (->i ([y () (begin (set! b (cons 1 b)) any/c)]
+                       [z (y) (begin (set! b (cons 2 b)) any/c)])
+                      (values
+                       [a () (begin (set! b (cons 4 b)) any/c)]
+                       [b (a) (begin (set! b (cons 5 b)) any/c)]))
+                 (λ args (set! b (cons 3 b)) (values 0 0))
+                 'pos 'neg)
+       1 2)
+      b)
+   '(5 4 3 2 1)
+
+   ;; this is probably right (but not what we really really want, of course)
+   '(5 4 5 4 3 2 1 2 1))
+
+  (test/spec-passed/result
+   '->i57
+   '(let ([b '()])
+      ((contract (->i ([y () (begin (set! b (cons 1 b))
+                                    (λ (y) (set! b (cons 2 b)) #t))]
+                       [z (y) (begin (set! b (cons 3 b))
+                                     (λ (y) (set! b (cons 4 b)) #t))])
+                      (values
+                       [a () (begin (set! b (cons 6 b))
+                                    (λ (a) (set! b (cons 7 b)) #t))]
+                       [b (a) (begin (set! b (cons 8 b))
+                                     (λ (a) (set! b (cons 9 b)) #t))]))
+                 (λ args (set! b (cons 5 b)) (values 0 0))
+                 'pos 'neg)
+       1 2)
+      b)
+   '(9 8 7 6 5 4 3 2 1)
+
+   ;; this is probably right (but not what we really really want, of course)
+   '(9 8 7 6 9 8 7 6 5 4 3 2 1 4 3 2 1))
+
+  (test/spec-passed/result
+   '->i58
+   '((contract (->i ()
+                    ([x integer?]
+                     [y (x) (>=/c x)])
+                    [result any/c])
+               (λ ([x 0] [y 1]) 2)
+               'pos 'neg))
+   2)
+
+  (test/spec-passed/result
+   '->i59
+   '(let ([b '()])
+      ((contract (->i ()
+                      ([x (begin (set! b (cons 1 b)) integer?)]
+                       [y (x) (begin (set! b (cons 'nope b)) (>=/c x))])
+                      [result (begin (set! b (cons 2 b)) any/c)])
+                 (λ ([x #f] [y #f]) (set! b (cons 3 b)) 0)
+                 'pos 'neg))
+      b)
+   '(3 2 1)
+   '(3 2 1 2 1))
   
   (test/pos-blame
    '->i-arity1

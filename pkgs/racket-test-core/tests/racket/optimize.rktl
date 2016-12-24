@@ -340,6 +340,24 @@
                  g
                  g))))
 
+;; Check reduction of single-use lambdas
+;; this test uses that a lambda with a '(1) can't be duplicated
+(test-comp '((lambda (x) '(1)) 5)
+           ''(1))
+(test-comp '((case-lambda [(x) '(1)] [(x y) 0]) 5)
+           ''(1))
+(test-comp '(let ([f (lambda (x) '(1))])
+              (f 5))
+           ''(1))
+(test-comp '(let ([f (case-lambda [(x) '(1)] [(x y) 0])])
+              (f 5))
+           ''(1))
+(test #t (lambda () (let ([f (lambda (x) '(1))])
+                      (eq? (f 5) (f 5)))))
+(test #t (lambda () (let ([f (case-lambda [(x) '(1)] [(x y) 0])])
+                      (eq? (f 5) (f 5)))))
+
+
 (test-comp '(lambda (w z)
               (let ([x (cons w z)])
                 (car x)))
@@ -1007,6 +1025,15 @@
                 (list (cons y x)
                       (set! x x))))
             #f)
+
+;; Don't move a side-effecting experssion past an unsafe operation
+;; that observes effects:
+(test-comp '(lambda (b f)
+             (let* ([x (f (lambda () b))])
+               (cons (unsafe-unbox b) x)))
+           '(lambda (b f)
+             (cons (unsafe-unbox b) (f (lambda () b))))
+           #f)
 
 (test-comp '(module m racket/base
              (define (true) #t)
@@ -2004,16 +2031,6 @@
 (test-comp '(lambda (x) #f)
            '(lambda (x) (procedure? (if x 2 3))))
 
-(test-comp '(procedure-arity-includes? integer? 1)
-           #t)
-
-(test-comp '(module m racket/base
-              (define foo integer?)
-              (display (procedure-arity-includes? foo 1)))
-           '(module m racket/base
-              (define foo integer?)
-              (display #t)))
-
 (test-comp '(lambda ()
               (let ([is3 (lambda () 3)])
                 (letrec ([g (lambda () 3)]
@@ -2152,14 +2169,24 @@
                 (+ 1 (+ 1 (+ 1 (+ 1 (+ 1 (+ 1 (+ 1 (+ 1 (+ 1 (+ 1 (+ x 10))))))))))))))
 
 (let ([check (lambda (proc arities non-arities)
+               (test-comp `(procedure? ,proc)
+                            #t)
                (test-comp `(module m racket/base
                              (define f ,proc)
                              (print (procedure? f)))
                           `(module m racket/base
                              (define f ,proc)
                              (print #t)))
+               (test-comp `(procedure-arity-includes? ,proc -1)
+                          #t
+                          #f)
+               (test-comp `(procedure-arity-includes? ,proc -1)
+                          #f
+                          #f)
                (for-each
                 (lambda (a)
+                  (test-comp `(procedure-arity-includes? ,proc ,a)
+                             #t)
                   (test-comp `(module m racket/base
                                 (define f ,proc)
                                 (print (procedure-arity-includes? f ,a)))
@@ -2169,6 +2196,8 @@
                 arities)
                (for-each
                 (lambda (a)
+                  (test-comp `(procedure-arity-includes? ,proc ,a)
+                             #f)
                   (test-comp `(module m racket/base
                                 (define f ,proc)
                                 (print (procedure-arity-includes? f ,a)))
@@ -2176,10 +2205,31 @@
                                 (define f ,proc)
                                 (print #f))))
                 non-arities))])
-  (check '(lambda (x) x) '(1) '(0 2))
+  (check '(lambda (x) x) '(1) '(0 2 3))
+  (check '(lambda (x y) x) '(2) '(0 1 3))
   (check '(lambda (x . y) x) '(1 2 3) '(0))
   (check '(case-lambda [() 1] [(x y) x]) '(0 2) '(1 3))
-  (check '(lambda (x [y #f]) y) '(1 2) '(0 3)))
+  (check '(lambda (x [y #f]) y) '(1 2) '(0 3))
+  (check 'integer? '(1) '(0 2 3))
+  (check 'cons '(2) '(0 1 3))
+  (check 'list '(0 1 2 3) '()))
+
+(test-comp '(lambda () (primitive? car))
+           '(lambda () #t))
+(test-comp '(lambda () (procedure-arity-includes? car 1))
+           '(lambda () #t))
+(test-comp '(lambda () (procedure-arity-includes? car 2))
+           '(lambda () #f))
+(test-comp '(lambda () (procedure-arity-includes? (begin (random) car) 1))
+           '(lambda () (random) #t))
+(test-comp '(lambda () (procedure-arity-includes? (begin (random) car) 2))
+           '(lambda () (random) #f))
+(test-comp '(lambda () (procedure-arity-includes? (begin (random) car) 1))
+           '(lambda () #t)
+           #f)
+(test-comp '(lambda () (procedure-arity-includes? (begin (random) car) 2))
+           '(lambda () #f)
+           #f)
 
 (test-comp '(lambda ()
               (let ([l '(1 2)])

@@ -54,6 +54,8 @@
 # include <windows.h>
 #endif
 
+THREAD_LOCAL_DECL(uintptr_t scheme_os_thread_id);
+
 THREAD_LOCAL_DECL(static void **dgc_array);
 THREAD_LOCAL_DECL(static int *dgc_count);
 THREAD_LOCAL_DECL(static int dgc_size);
@@ -319,6 +321,9 @@ int scheme_main_stack_setup(int no_auto_statics, Scheme_Nested_Main _main, void 
 {
   scheme_setup_thread_local_key_if_needed();
   scheme_init_os_thread();
+#ifdef MZ_USE_MZRT
+  scheme_init_glib_log_queue();
+#endif
   return do_main_stack_setup(no_auto_statics, _main, data);
 }
 
@@ -412,6 +417,9 @@ void scheme_init_os_thread_like(void *other) XFORM_SKIP_PROC
 void scheme_init_os_thread(void) XFORM_SKIP_PROC
 {
   scheme_init_os_thread_like(NULL);
+#ifdef MZ_USE_MZRT
+  scheme_os_thread_id = (uintptr_t)mz_proc_os_thread_self();
+#endif
 }
 
 void scheme_done_os_thread() XFORM_SKIP_PROC
@@ -424,6 +432,19 @@ void scheme_done_os_thread() XFORM_SKIP_PROC
   GC_detach_current_thread_exceptions_from_handler();
 # endif
 #endif
+}
+
+int scheme_is_place_main_os_thread() XFORM_SKIP_PROC
+{
+#if defined(IMPLEMENT_THREAD_LOCAL_VIA_PTHREADS) || defined(IMPLEMENT_THREAD_LOCAL_VIA_WIN_TLS)
+  if (!scheme_get_thread_local_variables())
+    return 0;
+#endif
+#ifdef MZ_USE_MZRT
+  if (scheme_os_thread_id != (uintptr_t)mz_proc_os_thread_self())
+    return 0;
+#endif
+  return 1;
 }
 
 /************************************************************************/
