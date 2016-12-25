@@ -19,7 +19,8 @@
 ;; case, a `compiled-in-memory` record holds extra-inspector
 ;; information that is propagated to here.
 
-(provide check-require-access)
+(provide check-require-access
+         check-single-require-access)
 
 (define (check-require-access linklet #:skip-imports skip-num-imports
                               import-module-uses import-module-instances insp
@@ -62,3 +63,22 @@
                    a
                    import-sym
                    (module-path-index-resolve (namespace-mpi (module-instance-namespace mi))))))))))
+
+(define (check-single-require-access mi phase sym insp)
+  (define m (module-instance-module mi))
+  (cond
+   [(module-no-protected? m) #t]
+   [else
+    (define access (or (module-access m) (module-compute-access! m)))
+    (define a
+      (hash-ref (hash-ref access phase #hasheq())
+                sym
+                'unexported))
+    (cond
+     [(or (eq? a 'unexported) ; not provided => implicitly protected
+          (eq? a 'protected))
+      (define guard-insp (namespace-inspector (module-instance-namespace mi)))
+      (or (and insp
+               (inspector-superior? insp guard-insp))
+          (inspector-superior? (current-code-inspector) guard-insp))]
+     [else #t])]))

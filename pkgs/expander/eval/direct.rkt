@@ -6,7 +6,8 @@
          "../expand/parsed.rkt"
          "../namespace/namespace.rkt"
          "../namespace/module.rkt"
-         "../host/linklet.rkt")
+         "../host/linklet.rkt"
+         "protect.rkt")
 
 ;; Instead of going through all the work to compile, optimize, and
 ;; evaluate a compile-time expression, it might be easier and faster
@@ -58,14 +59,18 @@
      (if b (module-binding-sym b) (syntax-e (parsed-s p)))
      get-not-available)]
    [else
-    (define other-ns
-      (namespace->module-namespace ns
-                                   (module-path-index-resolve (module-binding-module b))
-                                   (phase- (namespace-phase ns) (module-binding-phase b))))
+    (define mi
+      (namespace->module-instance ns
+                                  (module-path-index-resolve (module-binding-module b))
+                                  (phase- (namespace-phase ns) (module-binding-phase b))))
     (cond
-     [(not other-ns) not-available]
-     [else (namespace-get-variable
-            other-ns
-            (module-binding-phase b)
-            (module-binding-sym b)
-            get-not-available)])]))
+     [(not mi) not-available]
+     [(check-single-require-access mi
+                                   (module-binding-phase b)
+                                   (module-binding-sym b)
+                                   (module-binding-extra-inspector b))
+      (namespace-get-variable (module-instance-namespace mi)
+                              (module-binding-phase b)
+                              (module-binding-sym b)
+                              get-not-available)]
+     [else not-available])]))
