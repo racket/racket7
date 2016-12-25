@@ -48,7 +48,7 @@
          (correlate* s `(lambda ,@(compile-lambda (parsed-lambda-keys p) (parsed-lambda-body p) cctx)))
          name
          s)]
-       [else (correlate* s `(quote unused-lambda))])]
+       [else (correlate~ s `(quote unused-lambda))])]
      [(parsed-case-lambda? p)
       (cond
        [result-used?
@@ -57,9 +57,9 @@
                                     (compile-lambda (car clause) (cadr clause) cctx))))
          name
          s)]
-       [else (correlate* s `(quote unused-case-lambda))])]
+       [else (correlate~ s `(quote unused-case-lambda))])]
      [(parsed-app? p)
-      (correlate* s (for/list ([r (in-list (parsed-app-rator+rands p))])
+      (correlate~ s (for/list ([r (in-list (parsed-app-rator+rands p))])
                       (compile r #f #t)))]
      [(parsed-if? p)
       (define tst-e (compile (parsed-if-tst p) #f #f))
@@ -69,24 +69,24 @@
        [(eq? (correlated-e tst-e) #t) (compile (parsed-if-thn p) name result-used?)]
        [(eq? (correlated-e tst-e) #f) (compile (parsed-if-els p) name result-used?)]
        [else
-        (correlate* s `(if
+        (correlate~ s `(if
                         ,tst-e
                         ,(compile (parsed-if-thn p) name result-used?)
                         ,(compile (parsed-if-els p) name result-used?)))])]
      [(parsed-with-continuation-mark? p)
-      (correlate* s `(with-continuation-mark
+      (correlate~ s `(with-continuation-mark
                       ,(compile (parsed-with-continuation-mark-key p) #f #t)
                       ,(compile (parsed-with-continuation-mark-val p) #f #t)
                       ,(compile (parsed-with-continuation-mark-body p) name result-used?)))]
      [(parsed-begin0? p)
-      (correlate* s `(begin0
+      (correlate~ s `(begin0
                       ,(compile (car (parsed-begin0-body p)) name result-used?)
                       ,@(for/list ([e (in-list (cdr (parsed-begin0-body p)))])
                           (compile e #f #f))))]
      [(parsed-begin? p)
-      (correlate* s (compile-begin (parsed-begin-body p) cctx name result-used?))]
+      (correlate~ s (compile-begin (parsed-begin-body p) cctx name result-used?))]
      [(parsed-set!? p)
-      (correlate* s `(,@(compile-identifier (parsed-set!-id p) cctx
+      (correlate~ s `(,@(compile-identifier (parsed-set!-id p) cctx
                                             #:set-to? #t
                                             #:set-to (compile (parsed-set!-rhs p) (parsed-s (parsed-set!-id p)) #t))))]
      [(parsed-let-values? p)
@@ -97,16 +97,16 @@
       (define datum (parsed-quote-datum p))
       (cond
        [(self-quoting-in-linklet? datum)
-        (correlate* s datum)]
+        (correlate~ s datum)]
        [else
-        (correlate* s `(quote ,datum))])]
+        (correlate~ s `(quote ,datum))])]
      [(parsed-quote-syntax? p)
       (if result-used?
           (compile-quote-syntax (parsed-quote-syntax-datum p) cctx)
-          (correlate* s `(quote ,(syntax->datum s))))]
+          (correlate~ s `(quote ,(syntax->datum s))))]
      [(parsed-#%variable-reference? p)
       (define id (parsed-#%variable-reference-id p))
-      (correlate* s 
+      (correlate~ s 
                   (if id
                       `(#%variable-reference ,(compile-identifier id cctx))
                       `(#%variable-reference)))]
@@ -154,7 +154,7 @@
       named-s))
 
 (define (compile-let p cctx name #:rec? rec? result-used?)
-  (correlate* (parsed-s p)
+  (correlate~ (parsed-s p)
               `(,(if rec? 'letrec-values 'let-values)
                 ,(for/list ([clause (in-list (parsed-let_-values-clauses p))]
                             [ids (in-list (parsed-let_-values-idss p))])
@@ -169,7 +169,7 @@
                 ,(compile-sequence (parsed-let_-values-body p) cctx name result-used?))))
 
 (define (add-undefined-error-name-property sym orig-id)
-  (define id (correlate* orig-id sym))
+  (define id (correlate~ orig-id sym))
   (correlated-property (->correlated id) 'undefined-error-name
                        (or (syntax-property orig-id 'undefined-error-name)
                            (syntax-e orig-id))))
@@ -217,7 +217,7 @@
                                              (syntax-inspector (parsed-s p))))])]
      [else
       (error "not a reference to a module or local binding:" b (parsed-s p))]))
-  (correlate* (parsed-s p) (if set-to?
+  (correlate~ (parsed-s p) (if set-to?
                                `(set! ,sym ,rhs)
                                sym)))
 

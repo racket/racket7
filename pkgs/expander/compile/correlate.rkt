@@ -10,12 +10,19 @@
 ;; a "correlated")
 
 (provide correlate*
+         correlate~
          ->correlated)
 
 (define (correlate* stx s-exp)
   (if (syntax-srcloc stx)
       (datum->correlated s-exp (srcloc->vector (syntax-srcloc stx)))
       s-exp))
+
+;; For terms where we know the compiler currently doesn't
+;; pay attention to source locations, so there's no reason
+;; to keep them:
+(define (correlate~ stx s-exp)
+  s-exp)
 
 (define (->correlated s)
   (datum->correlated s #f))
