@@ -21,6 +21,7 @@
          "use-site.rkt"
          "../compile/main.rkt"
          "../eval/top.rkt"
+         "../eval/direct.rkt"
          "../namespace/core.rkt"
          "../boot/runtime-primitive.rkt"
          "context.rkt"
@@ -587,15 +588,19 @@
 ;; ensuring that the number of returned values matches the number of
 ;; target identifiers; return the values
 (define (eval-for-bindings ids p phase ns ctx)
-  (define compiled (compile-single p (make-compile-context
-                                      #:namespace ns
-                                      #:phase phase)))
+  (define compiled (if (can-direct-eval? p ns)
+                       #f
+                       (compile-single p (make-compile-context
+                                          #:namespace ns
+                                          #:phase phase))))
   (define vals
     (call-with-values (lambda ()
                         (parameterize ([current-expand-context ctx]
                                        [current-namespace ns]
                                        [eval-jit-enabled #f])
-                          (eval-single-top compiled ns)))
+                          (if compiled
+                              (eval-single-top compiled ns)
+                              (direct-eval p ns))))
       list))
   (unless (= (length vals) (length ids))
     (error "wrong number of results (" (length vals) "vs." (length ids) ")"
