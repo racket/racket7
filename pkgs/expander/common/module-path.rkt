@@ -72,11 +72,20 @@
 (define (format-resolved-module-path-name p)
   (cond
    [(path? p) (string-append "\"" (path->string p) "\"")]
-   [(symbol? p) (format "'~s" p)]
-   [else (format "(submod ~a~a)"
-                 (format-resolved-module-path-name (car p))
-                 (apply string-append (for/list ([i (in-list (cdr p))])
-                                        (format " ~s" i))))]))
+   [(symbol? p) (format-symbol p)]
+   [else (format-submod (format-resolved-module-path-name (car p))
+                        (cdr p))]))
+
+(define (format-symbol p)
+  (format "'~s~a" p (if (symbol-interned? p)
+                        ""
+                        (format "[~a]" (eq-hash-code p)))))
+
+(define (format-submod base syms)
+  (format "(submod ~a~a)"
+          base
+          (apply string-append (for/list ([i (in-list syms)])
+                                 (format " ~s" i)))))
 
 (define (resolved-module-path-root-name r)
   (define name (resolved-module-path-name r))
@@ -146,7 +155,17 @@
                            "+"
                            (format "~a" r))]
                          [(module-path-index-path r)
-                          (cons (format "~.s" (module-path-index-path r))
+                          (cons (let loop ([v (module-path-index-path r)])
+                                  (cond
+                                   [(and (pair? v)
+                                         (eq? 'quote (car v))
+                                         (null? (cddr v)))
+                                    (format-symbol (cadr v))]
+                                   [(and (pair? v)
+                                         (eq? 'submod (car v)))
+                                    (format-submod (loop (cadr v)) (cddr v))]
+                                   [else
+                                    (format "~.s" (module-path-index-path r))]))
                                 (loop (module-path-index-base r)))]
                          [(module-path-index-resolved r)
                           (list

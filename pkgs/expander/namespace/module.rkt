@@ -100,7 +100,7 @@
                      #:get-all-variables [get-all-variables (lambda () null)]) ; ok to omit exported
   (module source-name
           self
-          requires
+          (unresolve-requires requires)
           provides
           #f ; access
           language-info
@@ -403,19 +403,16 @@
      (when (hash-ref seen mi #f)
        (error 'require "import cycle detected during module instantiation"))
      
-     ;; If we haven't shifted required mpi's already, do that; ensure that
-     ;; each (potentially) shifted module path index is unresolved, so
-     ;; that resolving will trigger module loads
+     ;; If we haven't shifted required mpi's already, do that
      (unless (module-instance-shifted-requires mi)
        (set-module-instance-shifted-requires!
         mi
         (for/list ([phase+mpis (in-list (module-requires m))])
           (cons (car phase+mpis)
                 (for/list ([req-mpi (in-list (cdr phase+mpis))])
-                  (module-path-index-unresolve
-                   (module-path-index-shift req-mpi
-                                            (module-self m)
-                                            mpi)))))))
+                  (module-path-index-shift req-mpi
+                                           (module-self m)
+                                           mpi))))))
      
      ;; Recur for required modules:
      (for ([phase+mpis (in-list (module-instance-shifted-requires mi))])
@@ -505,6 +502,16 @@
   (if d
       (values mi (definitions-variables d))
       (error "namespace mismatch: phase level not found" mu)))
+
+;; ----------------------------------------
+
+;; ensure that each module path index is unresolved, so that resolving
+;; on instantiation will trigger module loads
+(define (unresolve-requires requires)
+  (for/list ([phase+mpis (in-list requires)])
+    (cons (car phase+mpis)
+          (for/list ([req-mpi (in-list (cdr phase+mpis))])
+            (module-path-index-unresolve req-mpi)))))
 
 ;; ----------------------------------------
 
