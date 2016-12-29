@@ -5,8 +5,8 @@
          "../common/memo.rkt"
          "syntax.rkt"
          "binding-table.rkt"
-         "taint.rkt"
          "tamper.rkt"
+         "taint.rkt"
          "../common/phase.rkt"
          "fallback.rkt"
          "datum-map.rkt"
@@ -294,53 +294,62 @@
                    [shifted-multi-scopes (fallback-update-first (syntax-shifted-multi-scopes s)
                                                                 (lambda (smss)
                                                                   (op (fallback-first smss) sc)))]
-                   [scope-propagations (and (datum-has-elements? (syntax-content s))
-                                            (prop-op (syntax-scope-propagations s)
-                                                     sc
-                                                     (syntax-scopes s)
-                                                     (syntax-shifted-multi-scopes s)
-                                                     (syntax-mpi-shifts s)))])
+                   [scope-propagations+tamper (if (datum-has-elements? (syntax-content s))
+                                                  (prop-op (syntax-scope-propagations+tamper s)
+                                                           sc
+                                                           (syntax-scopes s)
+                                                           (syntax-shifted-multi-scopes s)
+                                                            (syntax-mpi-shifts s))
+                                                  (syntax-scope-propagations+tamper s))])
       (struct-copy syntax s
                    [scopes (op (syntax-scopes s) sc)]
-                   [scope-propagations (and (datum-has-elements? (syntax-content s))
-                                            (prop-op (syntax-scope-propagations s)
-                                                     sc
-                                                     (syntax-scopes s)
-                                                     (syntax-shifted-multi-scopes s)
-                                                     (syntax-mpi-shifts s)))])))
+                   [scope-propagations+tamper (if (datum-has-elements? (syntax-content s))
+                                                  (prop-op (syntax-scope-propagations+tamper s)
+                                                           sc
+                                                           (syntax-scopes s)
+                                                           (syntax-shifted-multi-scopes s)
+                                                           (syntax-mpi-shifts s))
+                                                  (syntax-scope-propagations+tamper s))])))
 
 (define (syntax-e/no-taint s)
-  (propagate-taint! s)
-  (define prop (syntax-scope-propagations s))
-  (if prop
+  (define prop (syntax-scope-propagations+tamper s))
+  (if (or (propagation? prop)
+          (tamper-needs-propagate? prop))
       (let ([new-content
              (non-syntax-map (syntax-content s)
                              (lambda (tail? x) x)
                              (lambda (sub-s)
-                               (struct-copy syntax sub-s
-                                            [scopes (propagation-apply
-                                                     prop
-                                                     (syntax-scopes sub-s)
-                                                     s)]
-                                            [shifted-multi-scopes (propagation-apply-shifted
-                                                                   prop
-                                                                   (syntax-shifted-multi-scopes sub-s)
-                                                                   s)]
-                                            [mpi-shifts (propagation-apply-mpi-shifts
+                               (if (propagation? prop)
+                                   (struct-copy syntax sub-s
+                                                [scopes (propagation-apply
                                                          prop
-                                                         (syntax-mpi-shifts sub-s)
+                                                         (syntax-scopes sub-s)
                                                          s)]
-                                            [inspector (propagation-apply-inspector
-                                                        prop
-                                                        (syntax-inspector sub-s))]
-                                            [scope-propagations (propagation-merge
-                                                                 prop
-                                                                 (syntax-scope-propagations sub-s)
-                                                                 (syntax-scopes sub-s)
-                                                                 (syntax-shifted-multi-scopes sub-s)
-                                                                 (syntax-mpi-shifts sub-s))])))])
+                                                [shifted-multi-scopes (propagation-apply-shifted
+                                                                       prop
+                                                                       (syntax-shifted-multi-scopes sub-s)
+                                                                       s)]
+                                                [mpi-shifts (propagation-apply-mpi-shifts
+                                                             prop
+                                                             (syntax-mpi-shifts sub-s)
+                                                             s)]
+                                                [inspector (propagation-apply-inspector
+                                                            prop
+                                                            (syntax-inspector sub-s))]
+                                                [scope-propagations+tamper (propagation-merge
+                                                                            (syntax-content sub-s)
+                                                                            prop
+                                                                            (syntax-scope-propagations+tamper sub-s)
+                                                                            (syntax-scopes sub-s)
+                                                                            (syntax-shifted-multi-scopes sub-s)
+                                                                            (syntax-mpi-shifts sub-s))])
+                                   (struct-copy syntax sub-s
+                                                [scope-propagations+tamper (tamper-tainted-for-content
+                                                                            (syntax-content sub-s))]))))])
         (set-syntax-content! s new-content)
-        (set-syntax-scope-propagations! s #f)
+        (set-syntax-scope-propagations+tamper! s (tamper-propagated (if (propagation? prop)
+                                                                        (propagation-tamper prop)
+                                                                        prop)))
         new-content)
       (syntax-content s)))
 
@@ -415,29 +424,34 @@
                      ;; but we accomodate them here
                      prev-mss   ; owner's mpi-shifts before adds
                      add-mpi-shifts ; #f or (mpi-shifts -> mpi-shifts)
-                     inspector) ; #f or inspector
-        #:property prop:propagation syntax-e)
+                     inspector  ; #f or inspector
+                     tamper)    ; see "tamper.rkt"
+        #:property prop:propagation syntax-e
+        #:property prop:propagation-tamper (lambda (p) (propagation-tamper p))
+        #:property prop:propagation-set-tamper (lambda (p v) (propagation-set-tamper p v)))
 
 (define (propagation-add prop sc prev-scs prev-smss prev-mss)
-  (if prop
+  (if (propagation? prop)
       (struct-copy propagation prop
                    [scope-ops (hash-set (propagation-scope-ops prop)
                                         sc
                                         'add)])
       (propagation prev-scs prev-smss (hasheq sc 'add) 
-                   prev-mss #f #f)))
+                   prev-mss #f #f
+                   prop)))
 
 (define (propagation-remove prop sc prev-scs prev-smss prev-mss)
-  (if prop
+  (if (propagation? prop)
       (struct-copy propagation prop
                    [scope-ops (hash-set (propagation-scope-ops prop)
                                         sc
                                         'remove)])
       (propagation prev-scs prev-smss (hasheq sc 'remove)
-                   prev-mss #f #f)))
+                   prev-mss #f #f
+                   prop)))
 
 (define (propagation-flip prop sc prev-scs prev-smss prev-mss)
-  (if prop
+  (if (propagation? prop)
       (let* ([ops (propagation-scope-ops prop)]
              [current-op (hash-ref ops sc #f)])
         (cond
@@ -457,10 +471,11 @@
                                                [(remove) 'add]
                                                [else 'flip])))])]))
       (propagation prev-scs prev-smss (hasheq sc 'flip)
-                   prev-mss #f #f)))
+                   prev-mss #f #f
+                   prop)))
 
 (define (propagation-mpi-shift prop add inspector prev-scs prev-smss prev-mss)
-  (if prop
+  (if (propagation? prop)
       (struct-copy propagation prop
                    [add-mpi-shifts (let ([base-add (propagation-add-mpi-shifts prop)])
                                      (if (and add base-add)
@@ -469,7 +484,8 @@
                    [inspector (or (propagation-inspector prop)
                                   inspector)])
       (propagation prev-scs prev-smss #hasheq()
-                   prev-mss add inspector)))
+                   prev-mss add inspector
+                   prop)))
 
 (define (propagation-apply prop scs parent-s)
   (cond
@@ -524,13 +540,24 @@
 (define (propagation-apply-inspector prop i)
   (or i (propagation-inspector prop)))
 
-(define (propagation-merge prop base-prop prev-scs prev-smss prev-mss)
+(define (propagation-set-tamper prop t)
+  (if (propagation? prop)
+      (struct-copy propagation prop
+                   [tamper t])
+      t))
+
+(define (propagation-merge content prop base-prop prev-scs prev-smss prev-mss)
   (cond
-   [(not base-prop)
+   [(not (datum-has-elements? content))
+    (if (tamper-tainted? (propagation-tamper prop))
+        'tainted
+        base-prop)]
+   [(not (propagation? base-prop))
     (cond
      [(and (eq? (propagation-prev-scs prop) prev-scs)
            (eq? (propagation-prev-smss prop) prev-smss)
-           (eq? (propagation-prev-mss prop) prev-mss))
+           (eq? (propagation-prev-mss prop) prev-mss)
+           (eq? (propagation-tamper prop) base-prop))
       prop]
      [else
       (propagation prev-scs
@@ -538,7 +565,10 @@
                    (propagation-scope-ops prop)
                    prev-mss
                    (propagation-add-mpi-shifts prop)
-                   (propagation-inspector prop))])]
+                   (propagation-inspector prop)
+                   (if (tamper-tainted? (propagation-tamper prop))
+                       'tainted/need-propagate
+                       base-prop))])]
    [else
     (define new-ops
       (for/fold ([ops (propagation-scope-ops base-prop)]) ([(sc op) (in-immutable-hash (propagation-scope-ops prop))])
@@ -554,19 +584,25 @@
              [else (hash-set ops sc 'flip)])])))
     (define add (propagation-add-mpi-shifts prop))
     (define base-add (propagation-add-mpi-shifts base-prop))
+    (define new-tamper
+      (if (or (tamper-tainted? (propagation-tamper prop))
+              (tamper-tainted? (propagation-tamper base-prop)))
+          'tainted/need-propagate
+          (propagation-tamper base-prop)))
     (if (and (zero? (hash-count new-ops))
              (not add)
              (not base-add)
              (not (propagation-inspector prop))
              (not (propagation-inspector base-prop)))
-        #f
+        new-tamper
         (struct-copy propagation base-prop
                      [scope-ops new-ops]
                      [add-mpi-shifts (if (and add base-add)
                                          (lambda (mss) (add (base-add mss)))
                                          (or add base-add))]
                      [inspector (or (propagation-inspector base-prop)
-                                    (propagation-inspector prop))]))]))
+                                    (propagation-inspector prop))]
+                     [tamper new-tamper]))]))
 
 ;; ----------------------------------------
 

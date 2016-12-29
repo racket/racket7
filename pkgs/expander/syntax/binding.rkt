@@ -153,13 +153,14 @@
                  [mpi-shifts (cons shift (syntax-mpi-shifts s))]
                  [inspector (or (syntax-inspector s)
                                 inspector)]
-                 [scope-propagations (and (datum-has-elements? (syntax-content s))
-                                          (propagation-mpi-shift (syntax-scope-propagations s)
-                                                                 (lambda (s) (cons shift s))
-                                                                 inspector
-                                                                 (syntax-scopes s)
-                                                                 (syntax-shifted-multi-scopes s)
-                                                                 (syntax-mpi-shifts s)))])]))
+                 [scope-propagations+tamper (if (datum-has-elements? (syntax-content s))
+                                                (propagation-mpi-shift (syntax-scope-propagations+tamper s)
+                                                                       (lambda (s) (cons shift s))
+                                                                       inspector
+                                                                       (syntax-scopes s)
+                                                                       (syntax-shifted-multi-scopes s)
+                                                                       (syntax-mpi-shifts s))
+                                                (syntax-scope-propagations+tamper s))])]))
 
 ;; Use `resolve` instead of `resolve+shift` when the module of a
 ;; module binding is relevant or when `free-identifier=?` equivalences
@@ -270,13 +271,14 @@
   (struct-copy syntax s
                [inspector (or (syntax-inspector s)
                               insp)]
-               [scope-propagations (and (datum-has-elements? (syntax-content s))
-                                        (propagation-mpi-shift (syntax-scope-propagations s)
-                                                               #f
-                                                               insp
-                                                               (syntax-scopes s)
-                                                               (syntax-shifted-multi-scopes s)
-                                                               (syntax-mpi-shifts s)))]))
+               [scope-propagations+tamper (if (datum-has-elements? (syntax-content s))
+                                              (propagation-mpi-shift (syntax-scope-propagations+tamper s)
+                                                                     #f
+                                                                     insp
+                                                                     (syntax-scopes s)
+                                                                     (syntax-shifted-multi-scopes s)
+                                                                     (syntax-mpi-shifts s))
+                                              (syntax-scope-propagations+tamper s))]))
 
 ;; ----------------------------------------
 

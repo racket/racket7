@@ -3,8 +3,7 @@
          "tamper.rkt"
          "../common/set.rkt")
 
-(provide propagate-taint!
-         taint-content
+(provide taint-content
          
          syntax-tainted?
          syntax-clean?
@@ -13,10 +12,17 @@
          syntax-rearm
          syntax-taint)
 
-(define (propagate-taint! s)
-  (when (eq? (syntax-tamper s) 'tainted/need-propagate)
-    (set-syntax-content! s (taint-content (syntax-content s)))
-    (set-syntax-tamper! s 'tainted)))
+(define-syntax struct-copy/t
+  (syntax-rules (syntax tamper)
+    [(struct-copy/t syntax s [tamper v])
+     (let ([stx s])
+       (struct-copy syntax stx
+                    [scope-propagations+tamper
+                     (let ([t v]
+                           [p (syntax-scope-propagations+tamper stx)])
+                       (if (tamper? p)
+                           t
+                           ((propagation-set-tamper-ref p) p t)))]))]))
 
 (define (taint-content d)
   (non-syntax-map d
@@ -24,8 +30,9 @@
                   (lambda (sub-s)
                     (cond
                      [(tamper-tainted? (syntax-tamper sub-s)) sub-s]
-                     [else (struct-copy syntax sub-s
-                                        [tamper (tamper-tainted-for-content (syntax-content sub-s))])]))))
+                     [else (struct-copy/t syntax sub-s
+                                          [tamper
+                                           (tamper-tainted-for-content (syntax-content sub-s))])]))))
 
 (define (syntax-tainted? s)
   (tamper-tainted? (syntax-tamper s)))
@@ -43,12 +50,12 @@
                (inspector-superior-or-same? already-insp insp))))
     s]
    [else
-    (struct-copy syntax s
-                 [tamper (set-add
-                          (if t
-                              (remove-inferior t insp)
-                              (seteq))
-                          insp)])]))
+    (struct-copy/t syntax s
+                   [tamper (set-add
+                            (if t
+                                (remove-inferior t insp)
+                                (seteq))
+                            insp)])]))
 
 
 (define (remove-inferior t insp)
@@ -62,13 +69,13 @@
   (cond
    [(not (tamper-armed? t)) s]
    [(not insp)
-    (struct-copy syntax s
-                 [tamper #f])]
+    (struct-copy/t syntax s
+                   [tamper #f])]
    [else      
     (define new-t (remove-inferior t insp))
-    (struct-copy syntax s
-                 [tamper (and (not (set-empty? new-t))
-                              new-t)])]))
+    (struct-copy/t syntax s
+                   [tamper (and (not (set-empty? new-t))
+                                new-t)])]))
 
 (define (syntax-rearm s from-s)
   (define t (syntax-tamper s))
@@ -79,25 +86,25 @@
     (cond
      [(tamper-clean? from-t) s]
      [(tamper-tainted? from-t)
-      (struct-copy syntax s
-                   [tamper (tamper-tainted-for-content (syntax-content s))])]
+      (struct-copy/t syntax s
+                     [tamper (tamper-tainted-for-content (syntax-content s))])]
      [(tamper-clean? t)
-      (struct-copy syntax s
-                   [tamper from-t])]
+      (struct-copy/t syntax s
+                     [tamper from-t])]
      [else
-      (struct-copy syntax s
-                   [tamper (for/fold ([t t]) ([from-i (in-set from-t)])
-                             (cond
-                              [(set-member? t from-i) t]
-                              [(any-superior? t from-i) t]
-                              [else (set-add (remove-inferior t from-i)
-                                             from-i)]))])])]))
+      (struct-copy/t syntax s
+                     [tamper (for/fold ([t t]) ([from-i (in-set from-t)])
+                               (cond
+                                [(set-member? t from-i) t]
+                                [(any-superior? t from-i) t]
+                                [else (set-add (remove-inferior t from-i)
+                                               from-i)]))])])]))
 
 (define (syntax-taint s)
   (if (tamper-tainted? (syntax-tamper s))
       s
-      (struct-copy syntax s
-                   [tamper (tamper-tainted-for-content (syntax-content s))])))
+      (struct-copy/t syntax s
+                     [tamper (tamper-tainted-for-content (syntax-content s))])))
 
 ;; ----------------------------------------
 

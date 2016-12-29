@@ -9,6 +9,7 @@
 
 (provide
  (struct-out syntax) ; includes `syntax?`
+ syntax-tamper
  empty-syntax
  identifier?
  
@@ -19,6 +20,10 @@
  non-syntax-map
  
  prop:propagation
+ prop:propagation-tamper
+ prop:propagation-set-tamper
+ propagation-set-tamper?
+ propagation-set-tamper-ref
  
  deserialize-syntax
  deserialize-datum->syntax
@@ -27,12 +32,11 @@
 (struct syntax ([content #:mutable] ; datum and nested syntax objects; mutated for lazy propagation
                 scopes  ; scopes that apply at all phases
                 shifted-multi-scopes ; scopes with a distinct identity at each phase; maybe a fallback search
-                [scope-propagations #:mutable] ; lazy propogation info
+                [scope-propagations+tamper #:mutable] ; lazy propagation info and/or tamper state
                 mpi-shifts ; chain of module-path-index substitutions
                 srcloc  ; source location
                 props   ; properties
-                inspector ; inspector for access to protected bindings
-                [tamper #:mutable]) ; see "tamper.rkt"
+                inspector) ; inspector for access to protected bindings
         ;; Custom printer:
         #:property prop:custom-write
         (lambda (s port mode)
@@ -46,9 +50,9 @@
           (write-string ">" port))
         #:property prop:serialize
         (lambda (s ser-push! state)
-          (define prop (syntax-scope-propagations s))
+          (define prop (syntax-scope-propagations+tamper s))
           (define content
-            (if prop
+            (if (propagation? prop)
                 ((propagation-ref prop) s)
                 (syntax-content s)))
           (define properties
@@ -123,8 +127,8 @@
                 (set-syntax-state-all-sharing?! stx-state #f)))]))
         #:property prop:reach-scopes
         (lambda (s reach)
-          (define prop (syntax-scope-propagations s))
-          (reach (if prop
+          (define prop (syntax-scope-propagations+tamper s))
+          (reach (if (propagation? prop)
                      ((propagation-ref prop) s)
                      (syntax-content s)))
           (reach (syntax-scopes s))
@@ -139,6 +143,18 @@
 (define-values (prop:propagation propagation? propagation-ref)
   (make-struct-type-property 'propagation))
 
+;; Property to abstract over extraction of tamper from propagation
+(define-values (prop:propagation-tamper propagation-tamper? propagation-tamper-ref)
+  (make-struct-type-property 'propagation-tamper))
+(define-values (prop:propagation-set-tamper propagation-set-tamper? propagation-set-tamper-ref)
+  (make-struct-type-property 'propagation-set-tamper))
+
+(define (syntax-tamper s)
+  (define v (syntax-scope-propagations+tamper s))
+  (if (propagation-tamper? v)
+      ((propagation-tamper-ref v) v)
+      v))
+
 ;; ----------------------------------------
 
 (define empty-scopes (seteq))
@@ -150,12 +166,11 @@
   (syntax #f
           empty-scopes
           empty-shifted-multi-scopes
-          #f   ; scope-propogations
+          #f   ; scope-propogations+tamper (clean)
           empty-mpi-shifts
           #f   ; srcloc
           empty-props
-          #f   ; inspector
-          #f)) ; tamper (clean)
+          #f)) ; inspector
 
 (define (identifier? s)
   (and (syntax? s) (symbol? (syntax-content s))))
@@ -172,17 +187,16 @@
             (if stx-c
                 (syntax-shifted-multi-scopes stx-c)
                 empty-shifted-multi-scopes)
-            #f
+            (and stx-c
+                 (syntax-tamper stx-c)
+                 (tamper-tainted-for-content content))
             (if stx-c
                 (syntax-mpi-shifts stx-c)
                 empty-mpi-shifts)
             (and stx-l (syntax-srcloc stx-l))
             (if stx-p (syntax-props stx-p) empty-props)
             (and stx-c
-                 (syntax-inspector stx-c))
-            (and stx-c
-                 (syntax-tamper stx-c)
-                 (tamper-tainted-for-content content))))
+                 (syntax-inspector stx-c))))
   (non-syntax-map s
                   (lambda (tail? x) (if tail? x (wrap x)))
                   (lambda (s) s)
@@ -259,15 +273,14 @@
   (syntax content
           (vector-ref context-triple 0)
           (vector-ref context-triple 1)
-          #f
+          (deserialize-tamper tamper)
           (vector-ref context-triple 2)
           srcloc
           (if props
               (for/hasheq ([(k v) (in-immutable-hash props)])
                 (values k (preserved-property-value v)))
               empty-props)
-          inspector
-          (deserialize-tamper tamper)))
+          inspector))
 
 (define (deserialize-datum->syntax content context-triple srcloc inspector)
   (define s (deserialize-syntax #f context-triple srcloc #f #f inspector))
