@@ -6,12 +6,12 @@
          struct*-copy
          struct*-out)
 
-;; The `struct*` form is like `struct`, but a field can be
-;; have a `*` before it or not: the fields without `*` are
-;; moved into a nested structure, and the ones with `*` are
-;; kept immediate. This distinction is useful is `struct*-copy`
-;; is used often to asjust some fields and not others in a
-;; relatively larger struct.
+;; The `struct*` form is like `struct`, but a field can be have a `*`
+;; before it or not: the fields without `*` are moved into a nested
+;; structure (and cannot be mutable), and the ones with `*` are kept
+;; immediate. This distinction is useful is `struct*-copy` is used
+;; often to asjust some fields and not others in a relatively larger
+;; struct.
 
 ;; Example:
 #;
@@ -26,15 +26,13 @@
 
 ;; Currently doesn't support:
 ;;  * Subtypes deeper than one
-;;  * Mutable fields (where the right interaction with `struct*-copy`
-;;                    would not be clear for non-`*` fields)
 
 (begin-for-syntax
   (struct struct*-shape (constructor
                          parent
                          outer-name inner-name outer-name-inner
                          all-fields ; including parent fields
-                         outer-fields inner-fields)
+                         outer-fields inner-fields mutators)
           #:property prop:procedure (lambda (shape stx)
                                       (with-syntax ([make-id (struct*-shape-constructor shape)])
                                         (syntax-case stx ()
@@ -44,19 +42,20 @@
                                            (syntax/loc stx make-id)])))))
 
 (define-syntax (struct* stx)
-  (let-values ([(name parent-name fields)
+  (let-values ([(name parent-name fields options)
                 (syntax-case stx ()
-                  [(_ name parent-name (field ...))
-                   (values #'name #'parent-name #'(field ...))]
-                  [(_ name (field ...))
-                   (values #'name #f #'(field ...))])])
+                  [(_ name parent-name (field ...) options ...)
+                   (values #'name #'parent-name #'(field ...) #'(options ...))]
+                  [(_ name (field ...) options ...)
+                   (values #'name #f #'(field ...) #'(options ...))])])
     (define parent-shape (and parent-name
                               (syntax-local-value parent-name (lambda () #f))))
     (when parent-name
       (check-struct* parent-shape stx parent-name))
     (with-syntax ([((outer-field ...) (inner-field ...)) (split-star-fields fields)]
                   [outer-name (make-id name '/outer)]
-                  [inner-name (make-id name '/inner)])
+                  [inner-name (make-id name '/inner)]
+                  [(option ...) options])
       (with-syntax ([(outer-field-name ...) (map field-id (syntax->list #'(outer-field ...)))]
                     [(inner-field-name ...) (map field-id (syntax->list #'(inner-field ...)))]
                     [(outer-parent-name ...)
@@ -81,8 +80,10 @@
                                                   (struct*-shape-inner-fields parent-shape)
                                                   null)]
                     [(name-outer-field ...) (make-accessor-ids name #'(outer-field ...))]
+                    [(set-name-outer-field! ...) (make-mutator-ids name #'(outer-field ...))]
                     [(name-inner-field ...) (make-accessor-ids name #'(inner-field ...))]
                     [(outer-name-outer-field ...) (make-accessor-ids #'outer-name #'(outer-field ...))]
+                    [(set-outer-name-outer-field! ...) (make-mutator-ids #'outer-name #'(outer-field ...))]
                     [(inner-name-inner-field ...) (make-accessor-ids #'inner-name #'(inner-field ...))]
                     [outer-name-inner (if parent-shape
                                           (struct*-shape-outer-name-inner parent-shape)
@@ -96,7 +97,9 @@
                                              #'quote-syntax
                                              #'quote)])
         #`(begin
-            (struct outer-name outer-parent-name ... (chain-field ... outer-field ...))
+            (struct outer-name outer-parent-name ... (chain-field ... outer-field ...)
+                    option ...
+                    #:reflection-name 'name)
             (struct inner-name inner-parent-name ... (inner-field ...))
             (define-syntax name (struct*-shape
                                  (quote-syntax make-name)
@@ -105,13 +108,15 @@
                                  (quote-syntax inner-name)
                                  (quote-syntax outer-name-inner)
                                  '(every-field ...)
-                                 '(outer-field ...)
-                                 '(inner-field ...)))
+                                 '(outer-field-name ...)
+                                 '(inner-field-name ...)
+                                 '(set-name-outer-field! ...)))
             (define (name? v) (outer-name? v))
             (define (make-name every-field ...)
               (outer-name (inner-name parent-inner-field ... inner-field-name ...)
                           parent-outer-field ... outer-field-name ...))
             (define (name-outer-field v) (outer-name-outer-field v)) ...
+            (define (set-name-outer-field! v f) (set-outer-name-outer-field! v f)) ...
             (define (name-inner-field v) (inner-name-inner-field (outer-name-inner v))) ...)))))          
 
 ;; ----------------------------------------
@@ -170,8 +175,11 @@
                       (for/list ([field (in-list (append
                                                   (struct*-shape-outer-fields shape)
                                                   (struct*-shape-inner-fields shape)))])
-                        (make-id #'name (string->symbol (format "-~a" field))))])
-         #'(provide name name? name-field ...)))]))
+                        (make-id #'name (string->symbol (format "-~a" field))))]
+                     [(mutator ...)
+                      (for/list ([mutator (in-list (struct*-shape-mutators shape))])
+                        (datum->syntax #'name mutator))])
+         #'(provide name name? name-field ... mutator ...)))]))
 
 ;; ----------------------------------------
 
@@ -186,6 +194,14 @@
   (for/list ([f (in-list (syntax->list fields))])
     (define id (field-id f))
     (datum->syntax id (string->symbol (format "~a-~a" (syntax-e name) (syntax-e id))))))
+
+(define-for-syntax (make-mutator-ids name fields)
+  (for/list ([f (in-list (syntax->list fields))]
+             #:when (syntax-case f ()
+                      [(_ #:mutable) #t]
+                      [_ #f]))
+    (define id (field-id f))
+    (datum->syntax id (string->symbol (format "set-~a-~a!" (syntax-e name) (syntax-e id))))))
 
 (define-for-syntax (field-id f)
   (syntax-case f ()
