@@ -11,6 +11,7 @@
          "simplify-defn.rkt"
          "decompile.rkt"
          "save-and-report.rkt"
+         "underscore.rkt"
          racket/pretty)
 
 (provide extract)
@@ -107,10 +108,15 @@
     ;; Remove unreferenced definitions
     (define gced-linklet-expr
       (garbage-collect-definitions simplified-expr))
+
+    ;; Avoid gratuitous differences due to names generated during
+    ;; expansion
+    (define re-renamed-linklet-expr
+      (simplify-underscore-numbers gced-linklet-expr))
     
     (cond
      [as-decompiled?
-      (compile-and-decompile gced-linklet-expr print-extracted-to)]
+      (compile-and-decompile re-renamed-linklet-expr print-extracted-to)]
      [else
-      (save-and-report-flattened! gced-linklet-expr print-extracted-to
+      (save-and-report-flattened! re-renamed-linklet-expr print-extracted-to
                                   #:as-c? as-c?)])))
