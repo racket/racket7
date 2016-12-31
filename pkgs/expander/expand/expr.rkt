@@ -356,18 +356,17 @@
     [else
      (define rebuild-s (keep-as-needed ctx s))
      (define prefixless (cdr (syntax-e disarmed-s)))
-     (define rebuild-prefixless (if (syntax? prefixless)
-                                    (keep-as-needed ctx prefixless)
-                                    prefixless))
+     (define rebuild-prefixless (and (syntax? prefixless)
+                                     (keep-as-needed ctx prefixless)))
      (define expr-ctx (as-expression-context ctx))
      (define exp-es (for/list ([e (in-list es)])
                       (expand e expr-ctx)))
      (if (expand-context-to-parsed? ctx)
-         (parsed-app (if (syntax? rebuild-prefixless) rebuild-prefixless rebuild-s) exp-es)
+         (parsed-app (or rebuild-prefixless rebuild-s) exp-es)
          (rebuild
           rebuild-s
           (cons (m '#%app)
-                (if (syntax? rebuild-prefixless)
+                (if rebuild-prefixless
                     (rebuild rebuild-prefixless exp-es)
                     exp-es))))])))
 
@@ -459,21 +458,19 @@
                         (as-begin-expression-context ctx)
                         (as-expression-context ctx)))
    (define rebuild-s (keep-as-needed ctx s))
-   (define es (m 'e))
-   (define last-i (sub1 (length es)))
    (define exp-es
-     (for/list ([e (in-list es)]
-                [i (in-naturals)])
-       (when (= i list-start-index)
-         (log-expand ctx 'enter-list (list-tail es i)))
-       (log-expand ctx 'next)
-       (expand e (if (and last-is-tail?
-                          (= i last-i))
-                     (as-tail-context expr-ctx #:wrt ctx)
-                     expr-ctx))))
-   (when (and (= 1 list-start-index)
-              (null? (cdr es)))
-     (log-expand ctx 'enter-list (cdr es)))
+     (let loop ([es (m 'e)] [list-start-index list-start-index])
+       (when (zero? list-start-index)
+         (log-expand ctx 'enter-list es))
+       (cond
+        [(null? es) null]
+        [else
+         (define rest-es (cdr es))
+         (log-expand ctx 'next)
+         (cons (expand (car es) (if (and last-is-tail? (null? rest-es))
+                                    (as-tail-context expr-ctx #:wrt ctx)
+                                    expr-ctx))
+               (loop rest-es (sub1 list-start-index)))])))
    (log-expand ctx 'exit-list (list-tail exp-es list-start-index))
    (if (expand-context-to-parsed? ctx)
        (parsed-begin rebuild-s exp-es)

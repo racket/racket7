@@ -684,6 +684,7 @@
             (loop #t (add-post-expansion-scope bodys partial-body-ctx)))]
        [else null])]
      [else
+      (define rest-bodys (cdr bodys))
       (log-expand partial-body-ctx 'next)
       (define exp-body (performance-region
                         ['expand 'form-in-module/1]
@@ -693,9 +694,9 @@
       (cond
        [(null? lifted-defns)
         (log-expand partial-body-ctx 'rename-list lifted-defns)
-        (log-expand partial-body-ctx 'module-lift-loop (append lifted-defns (cons exp-body (cdr bodys))))]
+        (log-expand partial-body-ctx 'module-lift-loop (append lifted-defns (cons exp-body rest-bodys)))]
        [else
-        (log-expand partial-body-ctx 'module-lift-end-loop (cons exp-body (cdr bodys)))])
+        (log-expand partial-body-ctx 'module-lift-end-loop (cons exp-body rest-bodys))])
       (log-expand partial-body-ctx 'rename-one exp-body)
       (append/tail-on-null
        ;; Save any requires lifted during partial expansion
@@ -709,7 +710,7 @@
          [(begin)
           (define-match m disarmed-exp-body '(begin e ...))
           (define (track e) (syntax-track-origin e exp-body))
-          (define spliced-bodys (append (map track (m 'e)) (cdr bodys)))
+          (define spliced-bodys (append (map track (m 'e)) rest-bodys))
           (log-expand partial-body-ctx 'splice spliced-bodys)
           (loop tail? spliced-bodys)]
          [(begin-for-syntax)
@@ -724,7 +725,7 @@
           (log-expand partial-body-ctx 'exit-prim)
           (cons
            (semi-parsed-begin-for-syntax exp-body nested-bodys)
-           (loop tail? (cdr bodys)))]
+           (loop tail? rest-bodys))]
          [(define-values)
           (log-expand partial-body-ctx 'enter-prim exp-body)
           (log-expand partial-body-ctx 'enter-prim-define-values)
@@ -741,7 +742,7 @@
           (log-expand partial-body-ctx 'exit-prim)
           (cons
            (semi-parsed-define-values exp-body syms ids (m 'rhs))
-           (loop tail? (cdr bodys)))]
+           (loop tail? rest-bodys))]
          [(define-syntaxes)
           (log-expand partial-body-ctx 'enter-prim exp-body)
           (log-expand partial-body-ctx 'enter-prim-define-syntaxes)
@@ -776,7 +777,7 @@
                       exp-body
                       `(,(m 'define-syntaxes) ,ids ,exp-rhs))
                      parsed-body))
-                (loop tail? (cdr bodys)))]
+                (loop tail? rest-bodys))]
          [(#%require)
           (log-expand partial-body-ctx 'enter-prim exp-body)
           (log-expand partial-body-ctx 'enter-prim-require)
@@ -789,11 +790,11 @@
                                        #:who 'module)
           (log-expand partial-body-ctx 'exit-prim)
           (cons exp-body
-                (loop tail? (cdr bodys)))]
+                (loop tail? rest-bodys))]
          [(#%provide)
           ;; save for last pass
           (cons exp-body
-                (loop tail? (cdr bodys)))]
+                (loop tail? rest-bodys))]
          [(module)
           ;; Submodule to parse immediately
           (define ready-body (remove-use-site-scopes exp-body partial-body-ctx))
@@ -805,11 +806,11 @@
                               #:compiled-submodules compiled-submodules
                               #:modules-being-compiled modules-being-compiled))
           (cons submod
-                (loop tail? (cdr bodys)))]
+                (loop tail? rest-bodys))]
          [(module*)
           ;; Submodule to save for after this module
           (cons exp-body
-                (loop tail? (cdr bodys)))]
+                (loop tail? rest-bodys))]
          [(#%declare)
           (define-match m disarmed-exp-body '(#%declare kw ...))
           (for ([kw (in-list (m 'kw))])
@@ -824,11 +825,11 @@
           (cons (if (expand-context-to-parsed? partial-body-ctx)
                     parsed-body
                     (expanded+parsed exp-body parsed-body))
-                (loop tail? (cdr bodys)))]
+                (loop tail? rest-bodys))]
          [else
           ;; save expression for next pass
           (cons exp-body
-                (loop tail? (cdr bodys)))]))])))
+                (loop tail? rest-bodys))]))])))
 
 ;; Convert lifted identifiers plus expression to a `define-values` form:
 (define (make-wrap-as-definition self frame-id
@@ -887,6 +888,7 @@
      [else
       (log-expand body-ctx 'next)
       (define body (car bodys))
+      (define rest-bodys (cdr bodys))
       (define exp-body
         (cond
          [(or (parsed? body)
@@ -897,13 +899,15 @@
          [(semi-parsed-define-values? body)
           (define ids (semi-parsed-define-values-ids body))
           (define rhs-ctx (as-named-context (as-expression-context body-ctx) ids))
+          (define syms (semi-parsed-define-values-syms body))
+          (define s (semi-parsed-define-values-s body))
+          (define-match m (syntax-disarm s) '(define-values _ _))
+          (define rebuild-s (keep-as-needed rhs-ctx s))
           (define exp-rhs (performance-region
                            ['expand 'form-in-module/2]
                            (expand (semi-parsed-define-values-rhs body) rhs-ctx)))
-          (define syms (semi-parsed-define-values-syms body))
-          (define s (semi-parsed-define-values-s body))
           (define comp-form
-            (parsed-define-values (keep-properties-only s) ids syms
+            (parsed-define-values rebuild-s ids syms
                                   (if (expand-context-to-parsed? rhs-ctx)
                                       ;; Have (and need only) parsed form
                                       exp-rhs
@@ -912,22 +916,20 @@
           (if (expand-context-to-parsed? rhs-ctx)
               comp-form
               (expanded+parsed
-               (let ([disarmed-s (syntax-disarm s)])
-                 (define-match m disarmed-s '(define-values _ _))
-                 (rebuild
-                  s
-                  `(,(m 'define-values) ,ids ,exp-rhs)))
+               (rebuild
+                rebuild-s
+                `(,(m 'define-values) ,ids ,exp-rhs))
                comp-form))]
          [else
           (define disarmed-body (syntax-disarm body))
           (case (core-form-sym disarmed-body phase)
             [(#%require #%provide module*)
              ;; handle earlier or later
-             (car bodys)]
+             body]
             [else
              (performance-region
               ['expand 'form-in-module/2]
-              (define exp-body (expand (car bodys) (as-expression-context body-ctx)))
+              (define exp-body (expand body (as-expression-context body-ctx)))
               (if (expand-context-to-parsed? body-ctx)
                   ;; Have (and need only) parsed form
                   exp-body
@@ -957,13 +959,13 @@
        [(null? lifted-defns)
         (log-expand body-ctx 'module-lift-loop lifted-defns)]
        [else
-        (log-expand body-ctx 'module-lift-end-loop (cons exp-body (cdr bodys)))])
+        (log-expand body-ctx 'module-lift-end-loop (cons exp-body rest-bodys))])
       (append
        lifted-requires
        lifted-defns
        lifted-modules
        (cons exp-body
-             (loop tail? (cdr bodys))))])))
+             (loop tail? rest-bodys)))])))
 
 (define (check-defined-by-now need-eventually-defined self)
   ;; If `need-eventually-defined` is not empty, report an error
@@ -1117,6 +1119,7 @@
      [(null? bodys) null]
      [else
       (define body (car bodys))
+      (define rest-bodys (cdr bodys))
       (cond
        [(semi-parsed-begin-for-syntax? body)
         (define body-s (semi-parsed-begin-for-syntax-s body))
@@ -1130,19 +1133,19 @@
                 (define-match m disarmed-body '(begin-for-syntax _ ...))
                 (rebuild body-s `(,(m 'begin-for-syntax) ,@(syntax-only nested-bodys))))
               parsed-bfs))
-         (loop (cdr bodys) phase))]
+         (loop rest-bodys phase))]
        [(or (parsed? body)
             (expanded+parsed? body))
         ;; We can skip any other parsed form
         (cons body
-              (loop (cdr bodys) phase))]
+              (loop rest-bodys phase))]
        [else
-        (define disarmed-body (syntax-disarm (car bodys)))
+        (define disarmed-body (syntax-disarm body))
         (case (core-form-sym disarmed-body phase)
           [(module*)
            ;; Ensure that the enclosing module is declared:
            (force declare-enclosing-module)
-           (define ready-body (remove-use-site-scopes (car bodys) submod-ctx))
+           (define ready-body (remove-use-site-scopes body submod-ctx))
            (define-match f-m  disarmed-body #:try '(module* name #f . _))
            (define submod
              (cond
@@ -1175,11 +1178,11 @@
                                  #:compiled-submodules compiled-submodules
                                  #:modules-being-compiled modules-being-compiled)]))
            (cons submod
-                 (loop (cdr bodys) phase))]
+                 (loop rest-bodys phase))]
           [else
            ;; We can skip any other unparsed form
-           (cons (car bodys)
-                 (loop (cdr bodys) phase))])])])))
+           (cons body
+                 (loop rest-bodys phase))])])])))
 
 (define (stop-at-module*? ctx)
   (free-id-set-member? (expand-context-stops ctx)
