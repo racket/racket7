@@ -170,6 +170,9 @@ void scheme_validate_linklet(Mz_CPort *port, Scheme_Linklet *linklet)
   tl_state = MALLOC_N_ATOMIC(mzshort, num_toplevels);
   memset(tl_state, 0, sizeof(mzshort) * num_toplevels);
 
+  if (linklet->need_instance_access)
+    tl_state[0] = 1;
+
   pos = SCHEME_LINKLET_PREFIX_PREFIX;
   for (i = 0; i < SCHEME_VEC_SIZE(linklet->importss); i++) {
     for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++, pos++) {
@@ -1219,7 +1222,11 @@ static int validate_expr(Mz_CPort *port, Scheme_Object *expr,
       }
 
       if ((flags > SCHEME_TOPLEVEL_UNKNOWN) && tl_state && (p < num_toplevels)) {
-        if (tl_state[p] <= 0) {
+        if (p < SCHEME_LINKLET_PREFIX_PREFIX) {
+          /* instance-access toplevel available? */
+          if (!tl_state[p])
+            scheme_ill_formed_code(port);
+        } else if (tl_state[p] <= 0) {
           /* record expectation */
           int s = -tl_state[p];
           int new_flags;
@@ -1234,7 +1241,6 @@ static int validate_expr(Mz_CPort *port, Scheme_Object *expr,
           /* check expectation */
           if (((tl_state[p] & SCHEME_TOPLEVEL_FLAGS_MASK) < flags)
               || ((tl_state[p] >> 2) > tl_timestamp)) {
-            printf("?? %d\n", p);
             scheme_ill_formed_code(port);
           }
         }

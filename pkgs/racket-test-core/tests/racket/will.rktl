@@ -357,5 +357,41 @@
   (test #t 'many-vectors-in-reasonable-space? done?))
 
 ;; ----------------------------------------
+;; Check that a thread that has a reference to
+;; module-level variables doesn't retain the
+;; namespace strongly
+
+(when (eq? '3m (system-type 'gc))
+  (define-values (f w)
+    (parameterize ([current-namespace (make-base-namespace)])
+      (define g (gensym 'gensym-via-namespace))
+      (eval `(module n racket/base
+              ;; If the namespace is retained strongly, then
+              ;; the symbol is reachable through this definition:
+              (define anchor (quote ,g))))
+      (eval `(module m racket/base
+              (require 'n)
+              (provide f sema)
+              (define sema (make-semaphore))
+              (define (f)
+                (thread
+                 (lambda ()
+                   ;; Ideally, this loop retains only `loop`
+                   ;; and `sema`. If it retains everything refereneced
+                   ;; or defined in the module, though, at least make
+                   ;; sure it doesn't retain the whole namespace
+                   (let loop () (sync sema) (loop)))))))
+      (namespace-require ''m)
+      (values (dynamic-require ''m 'f)
+              (make-weak-box g))))
+
+  (define t (f))
+  (sync (system-idle-evt))
+
+  (collect-garbage)
+  (test #f weak-box-value w)
+  (kill-thread t))
+
+;; ----------------------------------------
 
 (report-errs)

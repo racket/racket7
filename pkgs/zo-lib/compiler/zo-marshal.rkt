@@ -810,9 +810,10 @@
 (define (convert-linklet linklet-form)
   (match linklet-form
     [(struct linkl (name importss import-shapess exports internals lifts
-                         source-names body max-let-depth))
+                         source-names body max-let-depth need-instance-access?))
      (define names-count (* 2 (hash-count source-names)))
      (list name
+           need-instance-access?
            max-let-depth
            (length lifts)
            (length exports)

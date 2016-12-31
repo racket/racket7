@@ -44,7 +44,7 @@
 struct Resolve_Info
 {
   MZTAG_IF_REQUIRED
-  char in_module, in_proc, enforce_const, no_lift;
+  char in_module, in_proc, enforce_const, no_lift, need_instance_access;
   int current_depth; /* tracks the stack depth, so variables can be
                         resolved relative to it; this depth is reset
                         on entry to `lambda` forms */
@@ -2079,6 +2079,7 @@ Scheme_Linklet *scheme_resolve_linklet(Scheme_Linklet *linklet, int enforce_cons
     body = scheme_reverse(body);
 
   linklet->max_let_depth = rslv->max_let_depth;
+  linklet->need_instance_access = rslv->need_instance_access;
 
   lift_vec = rslv->lifts;
   num_lifts = SCHEME_INT_VAL(SCHEME_VEC_ELS(lift_vec)[1]);
@@ -2616,6 +2617,9 @@ static void merge_resolve_tl_map(Resolve_Info *info, Resolve_Info *new_info)
     tl_map = merge_tl_map(info->tl_map, new_info->tl_map);
     info->tl_map = tl_map;
   }
+
+  if (new_info->need_instance_access)
+    info->need_instance_access = 1;
 }
 
 static void merge_resolve(Resolve_Info *info, Resolve_Info *new_info)
@@ -2708,8 +2712,9 @@ static Scheme_Object *resolve_toplevel(Resolve_Info *info, Scheme_Object *expr, 
 
   if (SCHEME_IR_TOPLEVEL_INSTANCE(expr) == -1) {
     if (SCHEME_IR_TOPLEVEL_POS(expr) == -1) {
-      /* (-1, -1) is the prefix slot */
+      /* (-1, -1) is the instance-access prefix slot */
       pos = 0;
+      info->need_instance_access = 1;
     } else
       pos = info->toplevel_starts[0] + SCHEME_IR_TOPLEVEL_POS(expr);
   } else {

@@ -1291,7 +1291,10 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
   pos = 0;
 
   /* Initial bucket, key by #f, provides access to the instance */
-  v = (Scheme_Object *)scheme_instance_variable_bucket(scheme_false, instance);
+  if (linklet->need_instance_access)
+    v = (Scheme_Object *)scheme_instance_variable_bucket(scheme_false, instance);
+  else
+    v = NULL;
   pf->a[pos++] = v;
   
   for (j = 0; j < num_importss; j++) {
@@ -1342,7 +1345,9 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
 
   starts_empty = (!instance->array_size && !instance->variables.bt);
 
-  if (starts_empty && (num_defns < 10)) {
+  if (!num_defns) {
+    /* don't allocate empty array, etc. */
+  } else if (starts_empty && (num_defns < 10)) {
     /* Faster to build an array-shaped instance (which will be
        converted to a bucket table on demand, if necessary) */
     Scheme_Bucket **a, *b;

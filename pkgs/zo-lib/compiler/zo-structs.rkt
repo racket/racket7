@@ -65,7 +65,8 @@
                                 [lifts (listof symbol?)]
                                 [source-names (hash/c symbol? symbol?)]
                                 [body (listof (or/c form? any/c))]
-                                [max-let-depth exact-nonnegative-integer?]))
+                                [max-let-depth exact-nonnegative-integer?]
+                                [need-instance-access? boolean?]))
 
 (define-form-struct (linkl-directory zo) ([table (hash/c (listof symbol?) linkl-bundle?)]))
 (define-form-struct (linkl-bundle zo)    ([table (hash/c (or/c symbol? fixnum?)
@@ -135,7 +136,8 @@
                                                                   _ ; lifts
                                                                   _ ; source-names
                                                                   (list code) ; body
-                                                                  max-let-depth))
+                                                                  max-let-depth
+                                                                  _))
                                                         _ (... ...))))
                                       _ (... ...)))]))
   (lambda (stx)
@@ -150,4 +152,5 @@
                                                         '()
                                                         #hasheq()
                                                         (list code)
-                                                        (add1 max-let-depth))))))])))
+                                                        (add1 max-let-depth)
+                                                        #f)))))])))

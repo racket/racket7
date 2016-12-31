@@ -3179,7 +3179,6 @@ Scheme_Bucket *scheme_instance_variable_bucket_or_null(Scheme_Object *symbol, Sc
 struct Scheme_Linklet
 {
   Scheme_Object so; /* scheme_linklet_type */
-  char jitted;
 
   Scheme_Object *name; /* for reporting purposes; FIXME: doesn't belong here? */
 
@@ -3206,6 +3205,7 @@ struct Scheme_Linklet
   Scheme_Object *bodies; /* vector of definition or expression */
 
   int max_let_depth;
+  int need_instance_access; /* whether the instance-access toplevel is needed */
 
   int jit_ready; /* true if the linklet is in has been prepared for the JIT */
 

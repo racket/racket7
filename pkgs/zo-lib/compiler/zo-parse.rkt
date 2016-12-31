@@ -163,7 +163,7 @@
       
 (define (read-linklet v)
   (match v
-    [`(,name ,max-let-depth ,num-lifts ,num-exports
+    [`(,name ,need-instance-access? ,max-let-depth ,num-lifts ,num-exports
        ,body
        ,source-names ,defns-vec ,imports-vec ,shapes-vec)
      (define defns (vector->list defns-vec))
@@ -186,7 +186,8 @@
               (values (vector-ref source-names i)
                       (vector-ref source-names (add1 i))))
             (vector->list body)
-            max-let-depth)]))
+            max-let-depth
+            need-instance-access?)]))
 
 (define (read-inline-variant v)
   (make-inline-variant (car v) (cdr v)))

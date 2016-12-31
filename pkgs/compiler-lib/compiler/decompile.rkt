@@ -56,7 +56,7 @@
 
 (define (decompile-linklet l)
   (match l
-    [(struct linkl (name importss import-shapess exports internals lifts source-names body max-let-depth))
+    [(struct linkl (name importss import-shapess exports internals lifts source-names body max-let-depth needs-instance?))
      (define closed (make-hasheq))
      (define globs (glob-desc
                     (append
@@ -73,7 +73,7 @@
 
 (define (decompile-data-linklet l)
   (match l
-    [(struct linkl (_ _ _ _ _ _ _ (list vec-def (struct def-values (_ deser-lam))) _))
+    [(struct linkl (_ _ _ _ _ _ _ (list vec-def (struct def-values (_ deser-lam))) _ _))
      (match deser-lam
        [(struct lam (_ _ _ _ _ _ _ _ _ (struct seq ((list vec-copy! _)))))
         (match vec-copy!
