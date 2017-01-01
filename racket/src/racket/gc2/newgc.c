@@ -6322,7 +6322,11 @@ int GC_is_tagged(void *p)
   }
 #endif
   return page && ((page->page_type == PAGE_TAGGED)
-                  || (page->page_type == PAGE_PAIR));
+                  || (page->page_type == PAGE_PAIR)
+                  || ((page->page_type == PAGE_BIG)
+                      && (BIG_PAGE_TO_OBJHEAD(page)->type == PAGE_TAGGED))
+                  || ((page->page_type == PAGE_MED_NONATOMIC)
+                      && (MED_OBJHEAD(p, page->obj_size)->type == PAGE_TAGGED)));
 }
 
 int GC_is_tagged_start(void *p)

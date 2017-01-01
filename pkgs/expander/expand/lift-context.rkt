@@ -93,7 +93,7 @@
     (define syms (select-defined-syms-and-bind!/ctx tl-ids ctx))
     (values tl-ids (lifted-bind tl-ids syms rhs))))
 
-(define (wrap-lifts-as-let lifts body s phase)
+(define (wrap-lifts-as-let lifts body phase)
   (datum->syntax
    #f
    (for/fold ([body body]) ([lift (in-list (reverse lifts))])
@@ -106,7 +106,7 @@
                        (lifted-bind-rhs lift)))
            body))))
 
-(define (wrap-lifts-as-begin lifts body s phase
+(define (wrap-lifts-as-begin lifts body phase
                              #:adjust-form [adjust-form values])
   (datum->syntax
    #f

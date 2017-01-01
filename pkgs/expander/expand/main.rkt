@@ -494,6 +494,7 @@
                                                             (not (memq context '(top-level module))))
                                                         (expand-context-module-lifts ctx)
                                                         lift-ctx)]))
+    (define rebuild-s (keep-properties-only s))
     (define exp-s (expand s capture-ctx))
     (define lifts (get-and-clear-lifts! (expand-context-lifts capture-ctx)))
     (define with-lifts-s
@@ -502,11 +503,11 @@
         (cond
          [(expand-context-to-parsed? ctx)
           (unless expand-lifts? (error "internal error: to-parsed mode without expanding lifts"))
-          (wrap-lifts-as-parsed-let lifts exp-s s ctx (lambda (rhs rhs-ctx) (loop rhs #f rhs-ctx)))]
+          (wrap-lifts-as-parsed-let lifts exp-s rebuild-s ctx (lambda (rhs rhs-ctx) (loop rhs #f rhs-ctx)))]
          [else
           (if begin-form?
-              (wrap-lifts-as-begin lifts exp-s s phase)
-              (wrap-lifts-as-let lifts exp-s s phase))])]
+              (wrap-lifts-as-begin lifts exp-s phase)
+              (wrap-lifts-as-let lifts exp-s phase))])]
        [else exp-s]))
     (cond
      [(or (not expand-lifts?) (null? lifts) (expand-context-to-parsed? ctx))
@@ -673,7 +674,7 @@
 ;; parsed result. The body has already been parsed, and the left-hand
 ;; sides already have bindings. We need to parse the right-hand sides
 ;; as a series of nested `lets`.
-(define (wrap-lifts-as-parsed-let lifts exp-s s ctx parse-rhs)
+(define (wrap-lifts-as-parsed-let lifts exp-s rebuild-s ctx parse-rhs)
   (define idss+keyss+rhss (get-lifts-as-lists lifts))
   (let lets-loop ([idss+keyss+rhss idss+keyss+rhss] [rhs-ctx ctx])
     (cond
@@ -684,7 +685,7 @@
       (define rhs (caddar idss+keyss+rhss))
       (define exp-rhs (parse-rhs rhs rhs-ctx))
       (parsed-let-values
-       s
+       rebuild-s
        (list ids)
        (list (list keys exp-rhs))
        (list

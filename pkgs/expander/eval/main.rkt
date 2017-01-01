@@ -137,6 +137,7 @@
                  #:wrap re-pair))
 
 (define (expand-single s ns to-parsed? serializable?)
+  (define rebuild-s (keep-properties-only s))
   (define-values (require-lifts lifts exp-s)
     (expand-capturing-lifts s (make-expand-context ns
                                                    #:to-parsed? to-parsed?
@@ -146,7 +147,7 @@
    [to-parsed?
     (wrap-lifts-as-lifted-parsed-begin require-lifts
                                        lifts
-                                       exp-s s
+                                       exp-s rebuild-s
                                        #:adjust-form (lambda (form)
                                                        (expand-single form ns to-parsed? serializable?)))]
    [else
@@ -154,7 +155,7 @@
                          #:adjust-form (lambda (form)
                                          (expand-single form ns to-parsed? serializable?))
                          exp-s
-                         s (namespace-phase ns))]))
+                         (namespace-phase ns))]))
 
 (define (expand-once s [ns (current-namespace)])
   (per-top-level s ns
@@ -172,7 +173,7 @@
    [else
     (wrap-lifts-as-begin (append require-lifts lifts)
                          exp-s
-                         s (namespace-phase ns))]))
+                         (namespace-phase ns))]))
 
 (define (expand-to-top-form s [ns (current-namespace)])
   ;; Use `per-top-level` for immediate expansion and lift handling,
@@ -199,6 +200,7 @@
                                  [namespace ns]
                                  [just-once? just-once?]
                                  [for-serializable? serializable?]))
+    (define wb-s (and just-once? s))
     (define-values (require-lifts lifts exp-s)
       (expand-capturing-lifts s (struct*-copy expand-context tl-ctx
                                               [only-immediate? #t]
@@ -211,12 +213,12 @@
       ;; Fold in lifted definitions and try again
       (define new-s (wrap-lifts-as-begin (append require-lifts lifts)
                                          exp-s
-                                         s phase))
+                                         phase))
       (if just-once?
           new-s
           (loop new-s phase ns as-tail?))]
      [(not single) exp-s]
-     [(and just-once? (not (eq? exp-s s))) exp-s]
+     [(and just-once? (not (eq? exp-s wb-s))) exp-s]
      [else
       (case (core-form-sym disarmed-exp-s phase)
         [(begin)
@@ -305,7 +307,7 @@
 
 (define (wrap-lifts-as-lifted-parsed-begin require-lifts
                                            lifts
-                                           exp-s s
+                                           exp-s rebuild-s
                                            #:adjust-form adjust-form)
   (lifted-parsed-begin (append
                         (for/list ([req (in-list require-lifts)])
@@ -316,7 +318,7 @@
                                                (lifted-parsed-begin-last exp-rhs)
                                                exp-rhs))
                           (define dv
-                            (parsed-define-values s
+                            (parsed-define-values rebuild-s
                                                   (car ids+syms+rhs)
                                                   (cadr ids+syms+rhs)
                                                   just-rhs))
