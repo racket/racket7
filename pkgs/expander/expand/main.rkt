@@ -623,13 +623,15 @@
 ;; producing a parsed result, producing a result suitable for use with
 ;; `rebuild`, including in a `parsed` record, or to provide a form
 ;; name for error reporting. In fact, when producing a parsed value
-;; and `keep-for-prased?` is false, keep nothing (because the compiler
-;; idn't going to use it). Dropping references in this way helps the
+;; and `keep-for-parsed?` and `keep-for-error?` are both false, then
+;; keep nothing (because the compiler isn't going to use it).
+;; Dropping references in this way helps the
 ;; GC not retain too much of an original syntax object in the process
 ;; of expanding it, which can matter for deeply nested expansions.
 (define (keep-as-needed ctx s
                         #:for-track? [for-track? #f]
-                        #:keep-for-parsed? [keep-for-parsed? #f])
+                        #:keep-for-parsed? [keep-for-parsed? #f]
+                        #:keep-for-error? [keep-for-error? #f])
   (define d (syntax-e s))
   (define keep-e (cond
                   [(symbol? d) d]
@@ -637,7 +639,7 @@
                   [else #f]))
   (cond
    [(expand-context-to-parsed? ctx)
-    (and keep-for-parsed? (datum->syntax #f keep-e s s))]
+    (and (or keep-for-parsed? keep-for-error?) (datum->syntax #f keep-e s s))]
    [else
     (syntax-rearm (datum->syntax (syntax-disarm s) keep-e s s)
                   s)]))

@@ -53,7 +53,7 @@
                                  [scopes (cons sc (expand-context-scopes ctx))]
                                  [binding-layer (increment-binding-layer ids ctx sc)]
                                  [frame-id #:parent root-expand-context #f]))
-  (define exp-body (expand-body sc-bodys body-ctx #:source (keep-as-needed ctx s)))
+  (define exp-body (expand-body sc-bodys body-ctx #:source (keep-as-needed ctx s #:keep-for-error? #t)))
   ;; Return formals (with new scope) and expanded body:
   (values (if (expand-context-to-parsed? ctx) 
               (unflatten-like-formals keys formals)
@@ -229,7 +229,7 @@
               (core-id 'letrec-values phase)
               (val-m 'let-values))))
    
-   (define rebuild-s (keep-as-needed ctx s))
+   (define rebuild-s (keep-as-needed ctx s #:keep-for-error? #t))
    (define val-name-idss (if (expand-context-to-parsed? ctx)
                              (for/list ([val-ids (in-list val-idss)])
                                (for/list ([val-id (in-list val-ids)])
@@ -307,7 +307,7 @@
    (log-expand ctx 'prim-#%stratified)
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(#%stratified-body body ...+))
-   (define rebuild-s (keep-as-needed ctx s))
+   (define rebuild-s (keep-as-needed ctx s #:keep-for-error? #t))
    (define exp-body (expand-body (m 'body) ctx #:stratified? #t #:source rebuild-s))
    (if (expand-context-to-parsed? ctx)
        (parsed-begin rebuild-s exp-body)

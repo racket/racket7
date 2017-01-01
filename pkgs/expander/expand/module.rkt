@@ -91,7 +91,7 @@
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(module id:module-name initial-require body ...))
 
-   (define rebuild-s (keep-as-needed init-ctx s #:keep-for-parsed? #t))
+   (define rebuild-s (keep-as-needed init-ctx s #:keep-for-parsed? #t #:keep-for-error? #t))
 
    (define initial-require (syntax->datum (m 'initial-require)))
    (unless (or keep-enclosing-scope-at-phase
@@ -373,6 +373,7 @@
      (when is-cross-phase-persistent?
        (unless (requires+provides-can-cross-phase-persistent? requires+provides)
          (raise-syntax-error #f "cannot be cross-phase persistent due to required modules"
+                             rebuild-s
                              (hash-ref declared-keywords '#:cross-phase-persistent)))
        (check-cross-phase-persistent-form fully-expanded-bodys-except-post-submodules))
 
