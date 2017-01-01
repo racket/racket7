@@ -39,6 +39,16 @@
 (syntax-test #'(quote-syntax))
 (syntax-test #'(quote-syntax . 7))
 
+;; Property is attached only to immediate syntax object:
+(test #f
+      syntax-property
+      (car (syntax-e (datum->syntax #f '(a) #f (syntax-property #'x 'ok 'value))))
+      'ok)
+(test 'value
+      syntax-property
+      (datum->syntax #f '(a) #f (syntax-property #'x 'ok 'value))
+      'ok)
+
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; some syntax-case patterns
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

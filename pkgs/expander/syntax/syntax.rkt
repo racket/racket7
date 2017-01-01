@@ -151,9 +151,9 @@
 
 (define (syntax-tamper s)
   (define v (syntax-scope-propagations+tamper s))
-  (if (propagation-tamper? v)
-      ((propagation-tamper-ref v) v)
-      v))
+  (if (tamper? v)
+      v
+      ((propagation-tamper-ref v) v)))
 
 ;; ----------------------------------------
 
@@ -179,28 +179,36 @@
   (syntax-map s (lambda (tail? x) x) (lambda (s d) d) syntax-content))
 
 (define (datum->syntax stx-c s [stx-l #f] [stx-p #f])
-  (define (wrap content)
-    (syntax content
-            (if stx-c
-                (syntax-scopes stx-c)
-                empty-scopes)
-            (if stx-c
-                (syntax-shifted-multi-scopes stx-c)
-                empty-shifted-multi-scopes)
-            (and stx-c
-                 (syntax-tamper stx-c)
-                 (tamper-tainted-for-content content))
-            (if stx-c
-                (syntax-mpi-shifts stx-c)
-                empty-mpi-shifts)
-            (and stx-l (syntax-srcloc stx-l))
-            (if stx-p (syntax-props stx-p) empty-props)
-            (and stx-c
-                 (syntax-inspector stx-c))))
-  (non-syntax-map s
-                  (lambda (tail? x) (if tail? x (wrap x)))
-                  (lambda (s) s)
-                  disallow-cycles))
+  (cond
+   [(syntax? s) s]
+   [else
+    (define (wrap content)
+      (syntax content
+              (if stx-c
+                  (syntax-scopes stx-c)
+                  empty-scopes)
+              (if stx-c
+                  (syntax-shifted-multi-scopes stx-c)
+                  empty-shifted-multi-scopes)
+              (and stx-c
+                   (syntax-tamper stx-c)
+                   (tamper-tainted-for-content content))
+              (if stx-c
+                  (syntax-mpi-shifts stx-c)
+                  empty-mpi-shifts)
+              (and stx-l (syntax-srcloc stx-l))
+              empty-props
+              (and stx-c
+                   (syntax-inspector stx-c))))
+    (define result-s
+      (non-syntax-map s
+                      (lambda (tail? x) (if tail? x (wrap x)))
+                      (lambda (s) s)
+                      disallow-cycles))
+    (if (and stx-p (not (eq? (syntax-props stx-p) empty-props)))
+        (struct-copy syntax result-s
+                     [props (syntax-props stx-p)])
+        result-s)]))
 
 ;; `(syntax-map s f d->s)` walks over `s`:
 ;; 
