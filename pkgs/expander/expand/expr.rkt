@@ -65,7 +65,7 @@
     (log-expand ctx 'prim-lambda)
     (define disarmed-s (syntax-disarm s))
     (define-match m disarmed-s '(lambda formals body ...+))
-    (define rebuild-s (keep-as-needed ctx s))
+    (define rebuild-s (keep-as-needed ctx s #:keep-for-parsed? #t))
     (define-values (formals body)
       (lambda-clause-expander s disarmed-s (m 'formals) (m 'body) ctx 'lambda-renames))
     (if (expand-context-to-parsed? ctx)
@@ -94,7 +94,7 @@
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(case-lambda [formals body ...+] ...))
    (define-match cm disarmed-s '(case-lambda clause ...))
-   (define rebuild-s (keep-as-needed ctx s))
+   (define rebuild-s (keep-as-needed ctx s #:keep-for-parsed? #t))
    (define clauses
      (for/list ([formals (in-list (m 'formals))]
                 [body (in-list (m 'body))]
@@ -330,7 +330,7 @@
      (raise-syntax-error '#%datum "keyword misused as an expression" #f datum))
    (define phase (expand-context-phase ctx))
    (if (expand-context-to-parsed? ctx)
-       (parsed-quote (keep-properties-only s) (syntax->datum datum))
+       (parsed-quote (keep-properties-only~ s) (syntax->datum datum))
        (rebuild
         s
         (list (core-id 'quote phase)
@@ -348,7 +348,7 @@
     [(null? es)
      (define phase (expand-context-phase ctx))
      (if (expand-context-to-parsed? ctx)
-         (parsed-quote (keep-properties-only s) null)
+         (parsed-quote (keep-properties-only~ s) null)
          (rebuild
           s
           (list (core-id 'quote phase)
@@ -376,7 +376,7 @@
    (log-expand ctx 'prim-quote)
    (define-match m (syntax-disarm s) '(quote datum))
    (if (expand-context-to-parsed? ctx)
-       (parsed-quote (keep-properties-only s) (syntax->datum (m 'datum)))
+       (parsed-quote (keep-properties-only~ s) (syntax->datum (m 'datum)))
        s)))
 
 (add-core-form!
@@ -393,7 +393,7 @@
      (reference-records-all-used! (expand-context-reference-records ctx))
      (define-match m-kw disarmed-s '(_ _ kw))
      (if (expand-context-to-parsed? ctx)
-         (parsed-quote-syntax (keep-properties-only s) (m-local 'datum))
+         (parsed-quote-syntax (keep-properties-only~ s) (m-local 'datum))
          (rebuild
           s
           `(,(m-local 'quote-syntax) ,(m-local 'datum) ,(m-kw 'kw))))]
@@ -401,7 +401,7 @@
      ;; otherwise, prune scopes up to transformer boundary:
      (define datum-s (remove-scopes (m 'datum) (expand-context-scopes ctx)))
      (if (expand-context-to-parsed? ctx)
-         (parsed-quote-syntax (keep-properties-only s) datum-s)
+         (parsed-quote-syntax (keep-properties-only~ s) datum-s)
          (rebuild
           s
           `(,(m 'quote-syntax)
@@ -662,14 +662,14 @@
        (raise-unbound-syntax-error #f "unbound identifier" s var-id null
                                    (syntax-debug-info-string var-id ctx)))
      (if (expand-context-to-parsed? ctx)
-         (parsed-#%variable-reference (keep-properties-only s)
+         (parsed-#%variable-reference (keep-properties-only~ s)
                                       (if (top-m)
                                           (parsed-top-id var-id binding #f)
                                           (parsed-id var-id binding #f)))
          s)]
     [else
      (if (expand-context-to-parsed? ctx)
-         (parsed-#%variable-reference (keep-properties-only s) #f)
+         (parsed-#%variable-reference (keep-properties-only~ s) #f)
          s)])))
 
 (add-core-form!

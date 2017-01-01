@@ -50,6 +50,7 @@
          eval-for-bindings
 
          keep-properties-only
+         keep-properties-only~
          keep-as-needed
          rebuild
          attach-disappeared-transformer-bindings
@@ -612,13 +613,22 @@
 (define (keep-properties-only s)
   (datum->syntax #f 'props s s))
 
+;; For cases where we don't actually keep properties, because
+;; the compiler doesn't currently use them:
+(define (keep-properties-only~ s)
+  #f)
+
 ;; Drop the `syntax-e` part of `s`, and also drop its scopes when
 ;; producing a parsed result, producing a result suitable for use with
 ;; `rebuild`, including in a `parsed` record, or to provide a form
-;; name for error reporting. Dropping references in this way helps the
+;; name for error reporting. In fact, when producing a parsed value
+;; and `keep-for-prased?` is false, keep nothing (because the compiler
+;; idn't going to use it). Dropping references in this way helps the
 ;; GC not retain too much of an original syntax object in the process
 ;; of expanding it, which can matter for deeply nested expansions.
-(define (keep-as-needed ctx s #:for-track? [for-track? #f])
+(define (keep-as-needed ctx s
+                        #:for-track? [for-track? #f]
+                        #:keep-for-parsed? [keep-for-parsed? #f])
   (define d (syntax-e s))
   (define keep-e (cond
                   [(symbol? d) d]
@@ -626,7 +636,7 @@
                   [else #f]))
   (cond
    [(expand-context-to-parsed? ctx)
-    (datum->syntax #f keep-e s s)]
+    (and keep-for-parsed? (datum->syntax #f keep-e s s))]
    [else
     (syntax-rearm (datum->syntax (syntax-disarm s) keep-e s s)
                   s)]))

@@ -91,7 +91,7 @@
    (define disarmed-s (syntax-disarm s))
    (define-match m disarmed-s '(module id:module-name initial-require body ...))
 
-   (define rebuild-s (keep-as-needed init-ctx s))
+   (define rebuild-s (keep-as-needed init-ctx s #:keep-for-parsed? #t))
 
    (define initial-require (syntax->datum (m 'initial-require)))
    (unless (or keep-enclosing-scope-at-phase
@@ -901,8 +901,9 @@
           (define rhs-ctx (as-named-context (as-expression-context body-ctx) ids))
           (define syms (semi-parsed-define-values-syms body))
           (define s (semi-parsed-define-values-s body))
-          (define-match m (syntax-disarm s) '(define-values _ _))
-          (define rebuild-s (keep-as-needed rhs-ctx s))
+          (define-match m (syntax-disarm s) #:unless (expand-context-to-parsed? rhs-ctx)
+            '(define-values _ _))
+          (define rebuild-s (keep-as-needed rhs-ctx s #:keep-for-parsed? #t))
           (define exp-rhs (performance-region
                            ['expand 'form-in-module/2]
                            (expand (semi-parsed-define-values-rhs body) rhs-ctx)))
