@@ -1148,6 +1148,10 @@ Scheme_Object *scheme_extract_checked_procedure(int argc, Scheme_Object **argv);
 
 Scheme_Object *scheme_rename_struct_proc(Scheme_Object *p, Scheme_Object *sym);
 
+#if defined(MZ_GC_BACKTRACE) && defined(MZ_PRECISE_GC)
+Scheme_Object *scheme_add_builtin_struct_types(Scheme_Object *accum);
+#endif
+
 typedef struct Scheme_Chaperone {
   Scheme_Inclhash_Object iso; /* 0x1 => impersonator, rather than a checking chaperone */
   Scheme_Object *val;  /* root object */

@@ -2762,6 +2762,7 @@ Scheme_Object *scheme_dump_gc_stats(int c, Scheme_Object *p[])
 #if MZ_PRECISE_GC_TRACE
   if (for_each_struct) {
     scheme_console_printf("Begin Struct\n");
+    cons_accum_result = scheme_add_builtin_struct_types(cons_accum_result);
     while (SCHEME_PAIRP(cons_accum_result)) {
       Scheme_Struct_Type *stype = (Scheme_Struct_Type *)SCHEME_CAR(cons_accum_result);
       if (stype->total_instance_count) {

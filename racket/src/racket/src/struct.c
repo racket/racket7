@@ -821,6 +821,13 @@ void scheme_init_struct_wait()
 		 NULL, NULL, 1);
 }
 
+#if defined(MZ_GC_BACKTRACE) && defined(MZ_PRECISE_GC)
+Scheme_Object *scheme_add_builtin_struct_types(Scheme_Object *accum) {
+  accum = scheme_make_pair(location_struct, accum);
+  return accum;
+}
+#endif
+
 /*========================================================================*/
 /*                             inspectors                                 */
 /*========================================================================*/
