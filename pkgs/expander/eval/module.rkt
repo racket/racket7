@@ -230,7 +230,9 @@
                              syntax-literals-linklet data-instance syntax-literals-data-instance
                              phase-shift original-self self bulk-binding-registry insp
                              create-root-expand-context-from-module)
-  (when (not (load-on-demand-enabled))
+  (when (and (not (load-on-demand-enabled))
+             (not (eq? syntax-literals-data-instance empty-syntax-literals-data-instance))
+             (not (eq? syntax-literals-data-instance empty-syntax-literals-instance/empty-namespace)))
     (force-syntax-deserialize syntax-literals-data-instance bulk-binding-registry))
   
   (define inst
