@@ -201,10 +201,14 @@
                                      [that that])
                          (syntax (<= this that))))))
               #:chaperone #t
-              #:name #'(if (= n m)
-                           n
-                           '(between/c n m)))))))]
+              #:name #'(between/c-opt-name n m))))))]
     [_ (opt/unknown opt/i opt/info stx)]))
+
+(define (between/c-opt-name n m)
+  (cond
+    [(= n m) n]
+    [(and (= n -inf.0) (= m +inf.0)) 'real?]
+    [else `(between/c ,n ,m)]))
 
 (define (raise-opt-between/c-error blame val lo hi)
   (raise-blame-error
@@ -213,7 +217,8 @@
    '(expected: "a number between ~a and ~a" given: "~e")
    lo hi val))
 
-(define-for-syntax (single-comparison-opter opt/info stx check-arg comparison arg name predicate?)
+(define-for-syntax (single-comparison-opter opt/info stx check-arg comparison arg name predicate?
+                                            special-name)
   (with-syntax ([comparison comparison]
                 [predicate? predicate?])
     (let*-values ([(lift-low lifts2) (lift/binding arg 'single-comparison-val empty-lifts)])
@@ -243,7 +248,9 @@
                                     [that that])
                         (syntax (comparison this that))))))
              #:chaperone #t
-             #:name #`'(#,name m))))))))
+             #:name #`(if (= m 0)
+                          '#,special-name
+                          '(#,name m)))))))))
 
 (define (raise-opt-single-comparison-opter-error blame val comparison m predicate?)
   (raise-blame-error
@@ -267,7 +274,8 @@
       #'=
       #'x
       '=/c
-      #'number?)]))
+      #'number?
+      '(= 0))]))
 
 (define/opter (>=/c opt/i opt/info stx)
   (syntax-case stx (>=/c)
@@ -280,7 +288,8 @@
       #'>=
       #'low
       '>=/c
-      #'real?)]))
+      #'real?
+      '(and/c real? (not/c negative?)))]))
 
 (define/opter (<=/c opt/i opt/info stx)
   (syntax-case stx (<=/c)
@@ -293,7 +302,8 @@
       #'<=
       #'high
       '<=/c
-      #'real?)]))
+      #'real?
+      '(and/c real? (not/c positive?)))]))
 
 (define/opter (>/c opt/i opt/info stx)
   (syntax-case stx (>/c)
@@ -306,7 +316,8 @@
       #'>
       #'low
       '>/c
-      #'real?)]))
+      #'real?
+      '(and/c real? positive?))]))
 
 (define/opter (</c opt/i opt/info stx)
   (syntax-case stx (</c)
@@ -319,7 +330,8 @@
       #'<
       #'high
       '</c
-      #'real?)]))
+      #'real?
+      '(and/c real? negative?))]))
 
 (define/opter (cons/c opt/i opt/info stx)
   (define (opt/cons-ctc hdp tlp)

@@ -1,6 +1,6 @@
 /*
   Racket
-  Copyright (c) 2004-2016 PLT Design Inc.
+  Copyright (c) 2004-2017 PLT Design Inc.
   Copyright (c) 1995-2001 Matthew Flatt
 
     This library is free software; you can redistribute it and/or
@@ -7346,10 +7346,11 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
            we can conservatively assume the clock before the whole group
            for the purpose of registering once-used variables,
            but we can also conservatively advance the clock: */
-        advance_clocks_for_optimized(value,
-                                     &pre_vclock, &pre_aclock, &pre_kclock, &pre_sclock,
-                                     rhs_info,
-                                     ADVANCE_CLOCKS_INIT_FUEL);
+        if (!found_escapes)
+          advance_clocks_for_optimized(value,
+                                       &pre_vclock, &pre_aclock, &pre_kclock, &pre_sclock,
+                                       rhs_info,
+                                       ADVANCE_CLOCKS_INIT_FUEL);
         once_vclock = pre_vclock;
         once_aclock = pre_aclock;
         once_kclock = pre_kclock;
@@ -7447,10 +7448,11 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
 
           if (skip_opts) {
             /* Use "pre" clocks: */
-            advance_clocks_for_optimized(value,
-                                         &pre_vclock, &pre_aclock, &pre_kclock, &pre_sclock,
-                                         rhs_info,
-                                         ADVANCE_CLOCKS_INIT_FUEL);
+            if (!found_escapes)
+              advance_clocks_for_optimized(value,
+                                           &pre_vclock, &pre_aclock, &pre_kclock, &pre_sclock,
+                                           rhs_info,
+                                           ADVANCE_CLOCKS_INIT_FUEL);
             once_vclock = pre_vclock;
             once_aclock = pre_aclock;
             once_kclock = pre_kclock;

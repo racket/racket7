@@ -1,7 +1,7 @@
 /* 
    Racket's garbage collector
    By Adam Wick, Matthew Flatt, and Kevin Tew
-   Copyright (c) 2004-2016 PLT Design Inc.
+   Copyright (c) 2004-2017 PLT Design Inc.
    Copyright (C) 2001, 2002 Matthew Flatt and Adam Wick
 */
 
@@ -726,7 +726,7 @@ static void NewGC_initialize(NewGC *newgc, NewGC *inheritgc, NewGC *parentgc) {
       memcpy(newgc->mark_table, inheritgc->mark_table, newgc->number_of_tags * sizeof(Mark2_Proc));
       memcpy(newgc->fixup_table, inheritgc->fixup_table, newgc->number_of_tags * sizeof(Fixup2_Proc));
     }
-    newgc->avoid_collection = 0;
+    newgc->avoid_collection = inheritgc->avoid_collection;
 #ifdef MZ_USE_PLACES
     newgc->parent_gc = parentgc;
 #endif

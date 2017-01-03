@@ -1,6 +1,6 @@
 /*
   Racket
-  Copyright (c) 2006-2016 PLT Design Inc.
+  Copyright (c) 2006-2017 PLT Design Inc.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Library General Public
@@ -289,7 +289,7 @@ Scheme_Object *scheme_native_stack_trace(void)
 	  first = name;
 	last = name;
 	if (shift_cache_to_next) {
-	  stack_cache_stack[stack_cache_stack_pos].cache = last;
+          set_cache_last = last;
 	  shift_cache_to_next = 0;
 	}
       }

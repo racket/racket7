@@ -1,6 +1,6 @@
 /*
   Racket
-  Copyright (c) 2004-2016 PLT Design Inc.
+  Copyright (c) 2004-2017 PLT Design Inc.
   Copyright (c) 1995-2001 Matthew Flatt
 
     This library is free software; you can redistribute it and/or
@@ -3012,7 +3012,7 @@ void scheme_write_proc_context(Scheme_Object *port, int print_width,
 static void write_context_repeats(int repeats, Scheme_Object *port)
 {
   char buf[64];
-  sprintf(buf, "[repeats %d times]", repeats);
+  sprintf(buf, "[repeats %d more time%s]", repeats, (repeats == 1) ? "" : "s");
   scheme_write_byte_string(buf, strlen(buf), port);
 }
 

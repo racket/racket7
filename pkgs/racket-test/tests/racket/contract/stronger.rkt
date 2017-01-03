@@ -20,6 +20,8 @@
   (ctest #f contract-stronger? (char-in #\a #\z) (char-in #\f #\q))
   (ctest #t contract-stronger? (between/c 1 3) (between/c 0 4))
   (ctest #f contract-stronger? (between/c 0 4) (between/c 1 3))
+  (ctest #t contract-stronger? (between/c -inf.0 +inf.0) real?)
+  (ctest #t contract-stronger? real? (between/c -inf.0 +inf.0))
   (ctest #t contract-stronger? (>=/c 3) (>=/c 2))
   (ctest #f contract-stronger? (>=/c 2) (>=/c 3))
   (ctest #f contract-stronger? (<=/c 3) (<=/c 2))
@@ -40,6 +42,16 @@
   (ctest #f contract-stronger? (<=/c 2) (>/c 2))
   (ctest #f contract-stronger? (>=/c 2) (>/c 2))
   (ctest #t contract-stronger? (>=/c 3) (>/c 2))
+
+  (ctest #t contract-stronger? (>/c 0) (and/c real? positive?))
+  (ctest #t contract-stronger? (and/c real? positive?) (>/c 0))
+  (ctest #t contract-stronger? (</c 0) (and/c real? negative?))
+  (ctest #t contract-stronger? (and/c real? negative?) (</c 0))
+  (ctest #t contract-stronger? (<=/c 0) (and/c real? (not/c positive?)))
+  (ctest #t contract-stronger? (and/c real? (not/c positive?)) (<=/c 0))
+  (ctest #t contract-stronger? (>=/c 0) (and/c real? (not/c negative?)))
+  (ctest #t contract-stronger? (and/c real? (not/c negative?)) (>=/c 0))
+
   (ctest #t contract-stronger? (recursive-contract (<=/c 2)) (recursive-contract (<=/c 3)))
   (ctest #f contract-stronger? (recursive-contract (<=/c 3)) (recursive-contract (<=/c 2)))
   (let ([f (contract-eval '(λ (x) (recursive-contract (<=/c x))))])
@@ -280,6 +292,7 @@
   (ctest #f contract-stronger? string? "x")
 
   (ctest #t contract-stronger? 1 real?)
+  (ctest #t contract-stronger? 1 (between/c -10 10))
   (ctest #f contract-stronger? real? 1)
 
   (ctest #t contract-stronger? 'x symbol?)
