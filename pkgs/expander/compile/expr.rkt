@@ -176,6 +176,7 @@
 
 (define (compile-identifier p cctx #:set-to? [set-to? #f] #:set-to [rhs #f])
   (define normal-b (parsed-id-binding p))
+  ;; If `normal-b`, then `(parsed-s p)` might be #f
   (define b
     (or normal-b
         ;; Assume a variable reference
@@ -196,7 +197,7 @@
         (unless (zero? (module-binding-phase b))
           (error "internal error: non-zero phase for a primitive"))
         (when set-to?
-          (error "internal error: cannot assign to a primitive:" (parsed-s p)))
+          (error "internal error: cannot assign to a primitive:" (module-binding-sym b)))
         ;; Expect each primitive to be bound:
         (module-binding-sym b)]
        [(eq? mpi (compile-context-module-self cctx))
@@ -214,7 +215,8 @@
                                          (module-binding-sym b)
                                          (or (module-binding-extra-inspector b)
                                              (parsed-id-inspector p)
-                                             (syntax-inspector (parsed-s p))))])]
+                                             (and (parsed-s p)
+                                                  (syntax-inspector (parsed-s p)))))])]
      [else
       (error "not a reference to a module or local binding:" b (parsed-s p))]))
   (correlate~ (parsed-s p) (if set-to?

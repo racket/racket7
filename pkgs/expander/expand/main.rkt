@@ -282,7 +282,7 @@
     (define result-s (substitute-variable id t #:no-stops? (free-id-set-empty-or-just-module*? (expand-context-stops ctx))))
     (cond
      [(expand-context-to-parsed? ctx)
-      (define prop-s (keep-properties-only result-s))
+      (define prop-s (keep-properties-only~ result-s))
       (define insp (syntax-inspector result-s))
       (if primitive?
           (parsed-primitive-id prop-s binding insp)
