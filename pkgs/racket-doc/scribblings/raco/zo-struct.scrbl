@@ -176,6 +176,108 @@ binding, constructor, etc.}
  The first variant is used for normal calls to the function. The second may
  be used for cross-module inlining of the function.}
 
+<<<<<<< HEAD
+=======
+@defstruct+[(mod form)
+            ([name (or/c symbol? (listof symbol?))]
+             [srcname symbol?]
+             [self-modidx module-path-index?]
+             [prefix prefix?]
+             [provides (listof (list/c (or/c exact-integer? #f)
+                                       (listof provided?)
+                                       (listof provided?)))]
+             [requires (listof (cons/c (or/c exact-integer? #f)
+                                       (listof module-path-index?)))]
+             [body (listof (or/c form? any/c))]
+             [syntax-bodies  (listof (cons/c exact-positive-integer?
+                                             (listof (or/c def-syntaxes? 
+                                                           seq-for-syntax?))))]
+             [unexported (listof (list/c exact-nonnegative-integer?
+                                         (listof symbol?)
+                                         (listof symbol?)))]
+             [max-let-depth exact-nonnegative-integer?]
+             [dummy toplevel?]
+             [lang-info (or/c #f (vector/c module-path? symbol? any/c))]
+             [internal-context (or/c #f #t stx? (vectorof stx?))]
+             [binding-names (hash/c exact-integer?
+                                    (hash/c symbol? (or/c #t stx?)))]
+             [flags (listof (or/c 'cross-phase))]
+             [pre-submodules (listof mod?)]
+             [post-submodules (listof mod?)])]{
+  Represents a @racket[module] declaration.
+
+  The @racket[provides] and @racket[requires] lists are each an
+  association list from phases to exports or imports.  In the case of
+  @racket[provides], each phase maps to two lists: one for exported
+  variables, and another for exported syntax.  In the case of
+  @racket[requires], each phase maps to a list of imported module paths.
+
+  The @racket[body] field contains the module's run-time (i.e., phase
+  0) code. The @racket[syntax-bodies] list has a list of forms for
+  each higher phase in the module body; the phases are in order
+  starting with phase 1.  The @racket[body] forms use @racket[prefix],
+  rather than any prefix in place for the module declaration itself,
+  while members of lists in @racket[syntax-bodies] have their own
+  prefixes. After each form in @racket[body] or @racket[syntax-bodies]
+  is evaluated, the stack is restored to its depth from before
+  evaluating the form.
+
+  The @racket[unexported] list contains lists of symbols for
+  unexported definitions that can be accessed through macro expansion
+  and that are implemented through the forms in @racket[body] and
+  @racket[syntax-bodies].  Each list in @racket[unexported] starts
+  with a phase level.
+
+  The @racket[max-let-depth] field indicates the maximum stack depth
+  created by @racket[body] forms (not counting the @racket[prefix]
+  array).
+  
+  The @racket[dummy] variable is used to access the top-level
+  namespace.
+
+  The @racket[lang-info] value specifies an optional module path that
+  provides information about the module's implementation language.
+
+  The @racket[internal-context] value describes the lexical context of
+  the body of the module. This value is used by
+  @racket[module->namespace]. A @racket[#f] value means that the
+  context is unavailable or empty. A @racket[#t] value means that the
+  context is computed by re-importing all required modules. A
+  syntax-object value embeds lexical information; the syntax object
+  should contain a vector of two elements, where the first element of
+  the vector is a syntax object for the module's body, which includes
+  the outside-edge and inside-edge scopes, and the second element of
+  the vector is a syntax object that has just the module's inside-edge
+  scope.
+
+  The @racket[binding-names] value provides additional information to
+  @racket[module->namespace] to correlate symbol names for variables
+  and syntax definitions to identifiers that map to those variables. A
+  separate table of names exists for each phase, and a @racket[#t]
+  mapping for a name indicates that it is mapped but inaccessible
+  (because the relevant scopes are inaccessible).
+
+  The @racket[flags] field records certain properties of the module.
+  The @racket['cross-phase] flag indicates that the module body is
+  evaluated once and the results shared across instances for all phases; such a
+  module contains only definitions of functions, structure types, and
+  structure type properties.
+
+  The @racket[pre-submodules] field records @racket[module]-declared
+  submodules, while the @racket[post-submodules] field records
+  @racket[module*]-declared submodules.}
+
+@defstruct+[(provided zo)
+            ([name symbol?]
+             [src (or/c module-path-index? #f)]
+             [src-name symbol?]
+             [nom-src (or/c module-path-index? #f)]
+             [src-phase exact-nonnegative-integer?]
+             [protected? boolean?])]{
+  Describes an individual provided identifier within a @racket[mod]
+  instance.}
+
+>>>>>>> 67da8dbaf02edb3f4da7bcbe1d4616d05585da01
 @; --------------------------------------------------
 @section{Expressions}
 
@@ -463,5 +565,213 @@ binding, constructor, etc.}
   Represents a direct reference to a variable imported from the run-time
   kernel.}
 
+<<<<<<< HEAD
+=======
+@; --------------------------------------------------
+@section{Syntax Objects}
+
+@defstruct+[(stx-obj zo)
+            ([datum any/c]
+             [wrap wrap?]
+             [srcloc (or/c #f srcloc?)]
+             [props (hash/c symbol? any/c)]
+             [tamper-status (or/c 'clean 'armed 'tainted)])]{
+  Represents a syntax object, where @racket[wrap] contains lexical
+  information, @racket[srcloc] is the source location,
+  @racket[props] contains preserved properties,
+  and @racket[tamper-status] is taint information. When the
+  @racket[datum] part is itself compound, its pieces are wrapped
+  as @racket[stx-obj]s, too.
+
+  The content of @racket[wrap] is typically cyclic, since it includes
+  scopes that contain bindings that refer to scopes.}
+
+@defstruct+[(wrap zo) ([shifts (listof module-shift?)]
+                       [simple-scopes (listof scope?)]
+                       [multi-scopes (listof (list/c multi-scope? (or/c #f exact-integer?)))])]{
+  Lexical information for a syntax object. The @racket[shifts] field
+  allows binding information to be relative to the enclosing module's
+  run-time path. The @racket[simple-scopes] field records scopes that
+  are attached to the syntax object at all phases, and @racket[multi-scopes]
+  records phase-specific scopes (which are always attached as a group)
+  along with a phase shift for every scope within the group.}
+
+@defstruct+[(module-shift zo) ([from (or/c #f module-path-index?)]
+                               [to (or/c #f module-path-index?)]
+                               [from-inspector-desc (or/c #f symbol?)]
+                               [to-inspector-desc (or/c #f symbol?)])]{
+
+Records a history of module path index replacements. These replacements
+are applied in reverse order, and a module instantiation typically adds
+one more shift to replace the current ``self'' module path index
+with a run-time module path. The @racket[from] and @racket[to]
+fields should be both @racket[#f] or both non-@racket[#f].
+
+The @racket[from-inspector-desc] and @racket[to-inspector-desc] fields
+similarly should be both @racket[#f] or both non-@racket[#f]. They
+record a history of code-inspector replacements.}
+
+
+@defstruct+[(scope zo) ([name (or/c 'root exact-nonnegative-integer?)]
+                        [kind symbol?]
+                        [bindings (listof (list/c symbol? (listof scope?) binding?)) #;#:mutable]
+                        [bulk-bindings (listof (list/c (listof scope?) all-from-module?)) #;#:mutable]
+                        [multi-owner (or/c #f multi-scope?) #;#:mutable])]{
+
+Represents a scope. When @racket[name] is @racket['root] then the
+scope represents the unique all-phases scope that is shared among
+non-module namespaces. Otherwise, @racket[name] is intended to be
+distinct for each @racket[scope] instance within a module or top-level
+compilation, but the @racket[eq?]-identity of the @racket[scope]
+instance ultimately determines its identity. The @racket[kind] symbol
+similarly acts as a debugging hint in the same way as for
+@racket[syntax-debug-info].
+
+The @racket[bindings] list indicates some bindings that are associated
+with the scope. Each element of the list includes a symbolic name, a
+list of scopes (including the enclosing one), and the binding for the
+combination of name and scope set. A given symbol can appear in
+multiple elements of @racket[bindings], but the combination of the
+symbol and scope set are unique within @racket[bindings] and across
+all scopes. The mapping of a symbol and scope set to a binding is
+recorded with an arbitrary member of the scope set.
+
+The @racket[bulk-bindings] field lists bindings of all exports from a
+given module, which is an optimization over including each export in
+@racket[bindings]. Elements of @racket[bindings] take precedence over
+elements of @racket[bulk-bindings], and earlier elements of
+@racket[bulk-bindings] take precedence over later elements.
+
+If the @racket[scope] represents a scope at a particular phase for a
+group of phase-specific scopes, @racket[mark-owner] refers to the
+group.}
+
+
+@defstruct+[(multi-scope zo) ([name exact-nonnegative-integer?]
+                              [src-name any/c]
+                              [scopes (listof (list/c (or/c #f exact-integer?) scope?)) #;#:mutable])]{
+
+Represents a set of phase-specific scopes that are added or removed
+from lexical information as a group. As for @racket[scope], the
+@racket[name] field is intended to be distinct for different groups,
+but the @racket[eq?] identity of the @racket[multi-scope] record
+ultimately determines its identity. The @racket[src-name] field
+similarly acts as a debugging hint in the same way as for
+@racket[syntax-debug-info].
+
+Scopes within the group are instantiated at different phases on
+demand. The @racket[scopes] field lists all of the scopes instantiated
+for the group, and the phase at which it is instantiated. Each element
+of @racket[scopes] must have a @racketidfont{multi-owner} field
+value that refers back to the @racket[multi-scope].}
+
+
+@defstruct+[(binding zo) ()]{
+
+A supertype for all binding representations.}
+
+
+@defstruct+[(module-binding binding) ([encoded any/c])]{
+
+Represents a binding to a module or top-level definition. The
+@racket[encoded] field can be unpacked using
+@racket[decode-module-binding], providing the symbol name for which
+the binding is the target (since @racket[encoded] can be relative to
+that name).}
+
+
+@defstruct+[(decoded-module-binding binding) ([path (or/c #f module-path-index?)]
+                                              [name symbol?]
+                                              [phase exact-integer?]
+                                              [nominal-path (or/c #f module-path-index?)]
+                                              [nominal-export-name symbol?]
+                                              [nominal-phase (or/c #f exact-integer?)]
+                                              [import-phase (or/c #f exact-integer?)]
+                                              [inspector-desc (or/c #f symbol?)])]{
+
+Represents a binding to a module or top-level definition---like
+@racket[module-binding], but in normalized form:
+
+@itemlist[
+
+ @item{@racket[path]: the referenced module.}
+
+ @item{@racket[name]: the referenced definition within its module.}
+
+ @item{@racket[phase]: the phase of the referenced definition within
+       its module.}
+
+ @item{@racket[nominal-path]: the module that was explicitly imported
+       into the binding context; this path can be different from
+       @racket[path] when a definition is re-exported.}
+
+ @item{@racket[nominal-export-name]: the name of the binding as
+       exported from @racket[nominal-path], which can be different from
+       @racket[name] due to renaming on export.}
+
+ @item{@racket[nominal-phase]: the phase of the export from
+       @racket[nominal-path], which can be different from @racket[phase]
+       due to re-export from a module that imports at a phase level other
+       than @racket[0].}
+
+ @item{@racket[import-phase]: the phase of the import of
+       @racket[nominal-path], which shifted (if non-@racket[0]) the
+       binding phase relative to the export phase from
+       @racket[nominal-path].}
+
+ @item{@racket[inspector-desc]: a name for an inspector (mapped to a
+       specific inspector at run time) that determines access to the
+       definition.}
+
+]}
+
+@defstruct+[(local-binding binding) ([name symbol?])]{
+
+Represents a local binding (i.e., not at the top level or module level).
+Such bindings rarely appear in bytecode, since @racket[quote-syntax]
+prunes them.}
+
+
+@defstruct+[(free-id=?-binding binding) ([base (and/c binding?
+                                                      (not/c free-id=?-binding?))]
+                                         [id stx-obj?]
+                                         [phase (or/c #f exact-integer?)])]{
+
+Represents a binding that includes a @racket[free-identifier=?] alias
+(to an identifier with a particular phase shift) as well as a base binding.}
+
+
+@defstruct+[(all-from-module zo) ([path module-path-index?] 
+                                  [phase (or/c exact-integer? #f)] 
+                                  [src-phase (or/c exact-integer? #f)]
+                                  [inspector-desc symbol?]
+                                  [exceptions (listof symbol?)]
+                                  [prefix (or/c symbol? #f)])]{
+
+Describes a bulk import as an optimization over individual imports of
+a module's exports:
+
+@itemlist[
+
+ @item{@racket[path]: the imported module.}
+ 
+ @item{@racket[phase]: the phase of the import module's exports.}
+
+ @item{@racket[src-phase]: the phase at which @racket[path] was
+       imported; @racket[src-phase] combined with @racket[phase]
+       determines the phase of the bindings.}
+
+ @item{@racket[inspector-desc]: a name for an inspector (mapped to a
+       specific inspector at run time) that determines access to the
+       definition.}
+
+ @item{@racket[exceptions]: exports of @racket[path] that are omitted
+       from the bulk import.}
+ 
+ @item{@racket[prefix]: a prefix, if any, applied (after
+       @racket[exceptions]) to each of the imported names.}
+
+]}
+>>>>>>> 67da8dbaf02edb3f4da7bcbe1d4616d05585da01
 
  
