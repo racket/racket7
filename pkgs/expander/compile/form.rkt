@@ -257,7 +257,9 @@
              ,@(for/list ([binding-sym (in-list (header-binding-syms-in-order
                                                  (hash-ref phase-to-header phase)))])
                  (define def-sym (hash-ref binding-sym-to-define-sym binding-sym))
-                 `[,def-sym ,binding-sym]))
+                 (if (eq? def-sym binding-sym)
+                     def-sym
+                     `[,def-sym ,binding-sym])))
             ;; body
             ,@(reverse bodys)
             ,@body-suffix-forms)
