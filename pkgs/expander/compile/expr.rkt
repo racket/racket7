@@ -157,6 +157,7 @@
       named-s))
 
 (define (compile-let p cctx name #:rec? rec? result-used?)
+  (define body (parsed-let_-values-body p))
   (correlate~ (parsed-s p)
               `(,(if rec? 'letrec-values 'let-values)
                 ,(for/list ([clause (in-list (parsed-let_-values-clauses p))]
@@ -169,7 +170,7 @@
                      ,(compile (cadr clause)
                                cctx
                                (and (= 1 (length ids)) (car ids)))])
-                ,(compile-sequence (parsed-let_-values-body p) cctx name result-used?))))
+                ,(compile-sequence body cctx name result-used?))))
 
 (define (add-undefined-error-name-property sym orig-id)
   (define id (correlate~ orig-id sym))
