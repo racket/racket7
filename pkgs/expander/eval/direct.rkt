@@ -22,8 +22,9 @@
 (define (can-direct-eval? p ns)
   (cond
    [(parsed-app? p)
-    (for/and ([r (in-list (parsed-app-rator+rands p))])
-      (can-direct-eval? r ns))]
+    (and (can-direct-eval? (parsed-app-rator p) ns)
+         (for/and ([r (in-list (parsed-app-rands p))])
+           (can-direct-eval? r ns)))]
    [(parsed-id? p) (not (eq? (get-id-value p ns) not-available))]
    [(parsed-quote? p) #t]
    [(parsed-quote-syntax? p) #t]
@@ -32,10 +33,9 @@
 (define (direct-eval p ns)
   (cond
    [(parsed-app? p)
-    (let ([r (parsed-app-rator+rands p)])
-      (apply (direct-eval (car r) ns)
-             (for/list ([r (in-list (cdr r))])
-               (direct-eval r ns))))]
+    (apply (direct-eval (parsed-app-rator p) ns)
+           (for/list ([r (in-list (parsed-app-rands p))])
+             (direct-eval r ns)))]
    [(parsed-id? p) (get-id-value p ns)]
    [(parsed-quote? p) (parsed-quote-datum p)]
    [(parsed-quote-syntax? p) (parsed-quote-syntax-datum p)]

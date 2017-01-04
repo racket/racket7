@@ -16,7 +16,7 @@
 
 (struct parsed-lambda parsed (keys body))
 (struct parsed-case-lambda parsed (clauses))
-(struct parsed-app parsed (rator+rands))
+(struct parsed-app parsed (rator rands))
 (struct parsed-if parsed (tst thn els))
 (struct parsed-set! parsed (id rhs))
 (struct parsed-with-continuation-mark parsed (key val body))

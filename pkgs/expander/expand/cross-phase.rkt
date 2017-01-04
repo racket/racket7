@@ -42,10 +42,10 @@
      (check-datum (parsed-quote-datum e) e)
      (check-count 1 num-results enclosing)]
     [(parsed-app? e)
-     (define rands (cdr (parsed-app-rator+rands e)))
+     (define rands (parsed-app-rands e))
      (for ([rand (in-list rands)])
        (check-expr rand 1 e))
-     (case (cross-phase-primitive-name (car (parsed-app-rator+rands e)))
+     (case (cross-phase-primitive-name (parsed-app-rator e))
        [(cons list)
         (check-count 1 num-results enclosing)]
        [(make-struct-type)

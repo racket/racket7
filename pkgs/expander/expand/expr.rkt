@@ -359,16 +359,19 @@
      (define rebuild-prefixless (and (syntax? prefixless)
                                      (keep-as-needed ctx prefixless)))
      (define expr-ctx (as-expression-context ctx))
-     (define exp-es (for/list ([e (in-list es)])
+     (define rest-es (cdr es))
+     (define exp-rator (expand (car es) expr-ctx))
+     (define exp-es (for/list ([e (in-list rest-es)])
                       (expand e expr-ctx)))
      (if (expand-context-to-parsed? ctx)
-         (parsed-app (or rebuild-prefixless rebuild-s) exp-es)
+         (parsed-app (or rebuild-prefixless rebuild-s) exp-rator exp-es)
          (rebuild
           rebuild-s
-          (cons (m '#%app)
-                (if rebuild-prefixless
-                    (rebuild rebuild-prefixless exp-es)
-                    exp-es))))])))
+          (let ([exp-es (cons exp-rator exp-es)])
+            (cons (m '#%app)
+                  (if rebuild-prefixless
+                      (rebuild rebuild-prefixless exp-es)
+                      exp-es)))))])))
 
 (add-core-form!
  'quote
