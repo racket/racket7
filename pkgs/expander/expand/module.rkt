@@ -1125,15 +1125,15 @@
       (cond
        [(semi-parsed-begin-for-syntax? body)
         (define body-s (semi-parsed-begin-for-syntax-s body))
+        (define-match m (syntax-disarm body-s) '(begin-for-syntax _ ...))
+        (define rebuild-body-s (keep-as-needed submod-ctx body-s))
         (define nested-bodys (loop (semi-parsed-begin-for-syntax-body body) (add1 phase)))
-        (define parsed-bfs (parsed-begin-for-syntax (keep-properties-only body-s) (parsed-only nested-bodys)))
+        (define parsed-bfs (parsed-begin-for-syntax rebuild-body-s (parsed-only nested-bodys)))
         (cons
          (if (expand-context-to-parsed? submod-ctx)
              parsed-bfs
              (expanded+parsed
-              (let ([disarmed-body (syntax-disarm body-s)])
-                (define-match m disarmed-body '(begin-for-syntax _ ...))
-                (rebuild body-s `(,(m 'begin-for-syntax) ,@(syntax-only nested-bodys))))
+              (rebuild rebuild-body-s `(,(m 'begin-for-syntax) ,@(syntax-only nested-bodys)))
               parsed-bfs))
          (loop rest-bodys phase))]
        [(or (parsed? body)
