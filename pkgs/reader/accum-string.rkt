@@ -1,0 +1,50 @@
+#lang racket/base
+(require "config.rkt")
+
+;; An `accum-string` is a buffer for accumulating characters.
+;; We cache the buffer in the config record so that it can
+;; be reused after the buffered results are extracted.
+
+(provide accum-string-init!
+         accum-string-add!
+         accum-string-get!
+         accum-string-abandon!)
+
+(struct accum-string ([pos #:mutable]
+                      [str #:mutable]))
+
+(define (accum-string-init! config)
+  (define st (read-config-st config))
+  (define a (read-config-state-accum-str st))
+  (cond
+   [a
+    (set-read-config-state-accum-str! st #f)
+    (set-accum-string-pos! a 0)
+    a]
+   [else
+    (accum-string 0 (make-string 32))]))
+
+(define (accum-string-add! a c)
+  (define pos (accum-string-pos a))
+  (define str (accum-string-str a))
+  (define str2
+    (cond
+     [(pos . < . (string-length str))
+      str]
+     [else
+      (define str2 (make-string (* (string-length str) 2)))
+      (string-copy! str2 0 str)
+      (set-accum-string-str! a str2)
+      str2]))
+  (string-set! str2 pos c)
+  (set-accum-string-pos! a (add1 pos)))
+
+(define (accum-string-get! a config)
+  (define s (substring (accum-string-str a)
+                       0
+                       (accum-string-pos a)))
+  (accum-string-abandon! a config)
+  s)
+
+(define (accum-string-abandon! a config)
+  (set-read-config-state-accum-str! (read-config-st config) a))
