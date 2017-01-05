@@ -5,11 +5,15 @@
          "delimiter.rkt"
          "consume.rkt"
          "error.rkt"
-         "indentation.rkt")
+         "indentation.rkt"
+         "parameter.rkt"
+         "wrap.rkt")
 
 (provide read-unwrapped-sequence)
 
-(define (read-unwrapped-sequence read-one opener closer in seq-config #:dot-mode [dot-mode 'all])
+(define (read-unwrapped-sequence read-one opener closer in seq-config
+                                 #:dot-mode [dot-mode 'all]
+                                 #:shape-tag? [shape-tag? #f])
   (define head #f)
   (define indentation (make-indentation closer in seq-config))
   (define config (struct-copy read-config seq-config
@@ -33,7 +37,8 @@
         (consume-char in ec)
         null]
        [(and (eqv? ec #\.)
-             (char-delimiter? (peek-char in 1) config))
+             (check-parameter read-accept-dot config)
+             (char-delimiter? (peek-char-or-special in 1) config))
         ;; Found a `.`: maybe improper or maybe infix
         (define-values (dot-line dot-col dot-pos) (port-next-location in))
         (consume-char in c)
@@ -58,7 +63,8 @@
           (consume-char in rest-c)
           v]
          [(and (eqv? rest-ec #\.)
-               (char-delimiter? (peek-char in 1) config))
+               (check-parameter read-accept-dot config)
+               (char-delimiter? (peek-char-or-special in 1) config))
           ;; Infix mode
           (set! head (box v))
           (consume-char in rest-c)
@@ -83,6 +89,21 @@
                         "illegal use of `.`")])]
        [else
         (cons (read-one/not-eof) (loop))])))
-  (if head
-      (cons (unbox head) seq)
+  (define full-seq (if head
+                       (cons (unbox head) seq)
+                       seq))
+  (if shape-tag?
+      (add-shape-tag opener in config full-seq)
+      full-seq))
+
+;; ----------------------------------------
+
+(define (add-shape-tag opener in config seq)
+  (define tag
+    (case opener
+      [(#\[) (and (check-parameter read-square-bracket-with-tag config) '#%brackets)]
+      [(#\{) (and (check-parameter read-curly-brace-with-tag config) '#%braces)]
+      [else #f]))
+  (if tag
+      (cons (wrap tag in config #f) seq)
       seq))

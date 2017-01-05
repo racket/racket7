@@ -3,7 +3,7 @@
 
 (provide wrap)
 
-(define (wrap s-exp in config)
+(define (wrap s-exp in config rep)
   (define wrap (read-config-wrap config))
   (if wrap
       (wrap s-exp (port+config->srcloc in config))

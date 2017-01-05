@@ -3,7 +3,7 @@
 (provide char-delimiter?)
 
 (define (char-delimiter? c config)
-  (or (eof-object? c)
+  (or (not (char? c))
       (char-whitespace? c)
       (char=? c #\()
       (char=? c #\))

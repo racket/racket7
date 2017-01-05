@@ -9,13 +9,11 @@
 (struct read-config (readtable
                      source
                      wrap
-                     
                      line
                      col
                      pos
-                     
-                     indentations
-                     
+                     indentations  ; stack of `indentation` records
+                     parameter-cache   ; hash of parameter -> value
                      st)) ; shared mutable state
 
 (struct read-config-state ([accum-str #:mutable])) ; string-buffer cache
@@ -30,6 +28,7 @@
                #f ; col
                #f ; pos
                null ; indentations
+               (make-hasheq)
                (read-config-state #f))) ; accum-str
 
 (define (port+config->srcloc in config)
