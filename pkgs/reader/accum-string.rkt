@@ -11,6 +11,7 @@
          accum-string-count
          set-accum-string-count!
          accum-string-get!
+         accum-string-get-bytes!
          accum-string-abandon!)
 
 (struct accum-string ([pos #:mutable]
@@ -70,6 +71,14 @@
                        (accum-string-pos a)))
   (accum-string-abandon! a config)
   s)
+
+(define (accum-string-get-bytes! a config #:start-pos [start-pos 0])
+  (define bstr (string->bytes/latin-1 (accum-string-str a)
+                                      #f
+                                      start-pos
+                                      (accum-string-pos a)))
+  (accum-string-abandon! a config)
+  bstr)
 
 (define (accum-string-abandon! a config)
   (set-read-config-state-accum-str! (read-config-st config) a))

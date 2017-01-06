@@ -6,16 +6,17 @@
          "accum-string.rkt"
          "error.rkt")
 
-(provide read-string)
+(provide read-string
+         read-here-string)
 
-(define (read-string in config)
+(define (read-string in config #:mode [mode 'string])
   (define accum-str (accum-string-init! config))
   (define (bad-end c)
     (cond
      [(eof-object? c)
       (reader-error in config #:eof? #t "expected a closing `\"`")]
      [else
-      (reader-error in config "found non-character while reading a string")]))
+      (reader-error in config "found non-character while reading a ~a" mode)]))
   (let loop ()
     (define c (read-char-or-special in))
     (define ec (effective-char c config))
@@ -27,6 +28,11 @@
       (define escaped-c (read-char-or-special in))
       (when (not (char? escaped-c))
         (bad-end escaped-c))
+      (define (unknown-error)
+        (reader-error in config
+                      "unknown escape sequence `~a~a` in ~a"
+                      escaping-c escaped-c
+                      mode))
       (case escaped-c
         [(#\\ #\" #\')
          (accum-string-add! accum-str escaped-c)]
@@ -54,8 +60,9 @@
                                 #:zero-digits-result init-v))
          (unless (v . <= . 255)
            (reader-error in config
-                         "escape sequence `~a~a` is out of range in string"
-                         escaping-c (accum-string-get! accum-str #:start-pos pos)))
+                         "escape sequence `~a~a` is out of range in ~a"
+                         escaping-c (accum-string-get! accum-str #:start-pos pos)
+                         mode))
          (set-accum-string-count! accum-str pos)
          (accum-string-add! accum-str (integer->char v))]
         [(#\x)
@@ -67,6 +74,7 @@
          (accum-string-add! accum-str (integer->char v))]
         [(#\u)
          ;; Hex, four characters (valid if not surrogate or if surrogate pair)
+         (unless (eq? mode 'string) (unknown-error))
          (define pos (accum-string-count accum-str))
          (define v (read-digits in config accum-str #:base 16 #:max-count 4))
          (unless (integer? v) (no-hex-digits in config v escaping-c escaped-c))
@@ -117,6 +125,7 @@
                            "bad or incomplete surrogate-style encoding at `~au~a`"
                            escaping-c (accum-string-get! accum-str config #:start-pos pos))])])]
         [(#\U)
+         (unless (eq? mode 'string) (unknown-error))
          (define pos (accum-string-count accum-str))
          (define v (read-digits in config accum-str #:base 16 #:max-count 8))
          (unless (integer? v) (no-hex-digits in config v escaping-c escaped-c))
@@ -129,16 +138,71 @@
            (reader-error in config
                          "escape sequence `~aU~a` is out of range in string"
                          escaping-c (accum-string-get! accum-str config #:start-pos pos))])]
-        [else
-         (reader-error in config
-                       "unknown escape sequence `~a~a` in string"
-                       escaping-c escaped-c)])
+        [else (unknown-error)])
       (loop)]
      [(char=? #\" ec)
       null]
      [else
+      (when (eq? mode '|byte string|)
+        (unless (byte? (char->integer c))
+          (reader-error in config
+                        "character `~a` is out of range in byte string"
+                        c)))
       (accum-string-add! accum-str c)
       (loop)]))
+  (define str (if (eq? mode '|byte string|)
+                  (accum-string-get-bytes! accum-str config)
+                  (accum-string-get! accum-str config)))
+  (wrap str
+        in
+        config
+        str))
+
+;; ----------------------------------------
+
+(define (read-here-string in config)
+  (define accum-str (accum-string-init! config))
+  
+  ;; Parse terminator
+  (define full-terminator
+    (let loop ()
+      (define c (read-char-or-special in))
+      (cond
+       [(eof-object? c)
+        (reader-error in config #:eof? #t
+                      "found end-of-file after `#<<` and before a newline")]
+       [(not (char? c))
+        (reader-error in config #:eof? #t
+                      "found non-character while reading `#<<`")]
+       [(char=? c #\newline) null]
+       [else (cons c (loop))])))
+  
+  ;; Get string content
+  (let loop ([terminator full-terminator] [terminator-accum null])
+    (define c (read-char-or-special in))
+    (cond
+     [(eof-object? c)
+      (unless (null? terminator)
+        (reader-error in config #:eof? #t
+                      "found end-of-file before terminating `~a`"
+                      (list->string full-terminator)))]
+     [(not (char? c))
+      (reader-error in config #:eof? #t
+                    "found non-character while reading `#<<`")]
+     [(and (pair? terminator)
+           (char=? c (car terminator)))
+      (loop (cdr terminator) (cons (car terminator) terminator-accum))]
+     [(and (null? terminator)
+           (char=? c #\newline))
+      (void)]
+     [else
+      (unless (null? terminator-accum)
+        (for ([c (in-list (reverse terminator-accum))])
+          (accum-string-add! accum-str c)))
+      (accum-string-add! accum-str c)
+      (loop full-terminator null)]))
+
+  ;; Done
   (define str (accum-string-get! accum-str config))
   (wrap str
         in

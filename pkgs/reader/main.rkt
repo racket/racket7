@@ -111,6 +111,15 @@
        (guard-legal
         (check-parameter read-curly-brace-as-paren config)
         (wrap (list->vector (read-unwrapped-sequence read-one #\{ #\} in config #:dot-mode #f)) in config c))]
+      [(#\")
+       (read-string in config #:mode '|byte string|)]
+      [(#\<)
+       (cond
+        [(eqv? #\< (peek-char-or-special in))
+         (consume-char in #\<)
+         (read-here-string in config)]
+        [else
+         (reader-error in config "bad syntax `#<`")])]
       [(#\t #\T)
        (define c2 (peek-char-or-special in))
        (cond
