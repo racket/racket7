@@ -11,7 +11,11 @@
          "indentation.rkt"
          "parameter.rkt"
          "sequence.rkt"
-         "symbol.rkt")
+         "symbol.rkt"
+         "string.rkt")
+
+(provide read-one
+         make-read-config)
 
 (define (read-one in config)
   (skip-whitespace-and-comments! in config)
@@ -147,27 +151,6 @@
       (reader-error "bad syntax `#~a`" (accum-string-get! accum-str config))]))
   (wrap val in config (accum-string-get! accum-str config)))
 
-(define (read-string in config)
-  (define accum-str (accum-string-init! config))
-  (let loop ()
-    (define c (read-char-or-special in))
-    (define ec (effective-char c config))
-    (cond
-     [(eof-object? ec)
-      (reader-error in config #:eof? #t "expected a closing `\"`")]
-     [(not (char? ec))
-      (reader-error in config "found non-character while reading a string")]
-     [(char=? #\" ec)
-      null]
-     [else
-      (accum-string-add! accum-str c)
-      (loop)]))
-  (define str (accum-string-get! accum-str config))
-  (wrap str
-        in
-        config
-        str))
-
 (define (read-quote sym desc c in config)
   (define wrapped-sym (wrap sym in config c))
   (define e (read-one in config))
@@ -175,37 +158,3 @@
     (reader-error in config #:eof? #t
                   "expected an element for ~a (found end-of-file)"))
   (wrap (list wrapped-sym e) in config #f))
-
-;; ----------------------------------------
-
-(define (s->p s)
-  (define p (open-input-string s))
-  (port-count-lines! p)
-  p)
-
-(define (mrc)
-  (make-read-config #:source "input"))
-
-(read-one (s->p "#:a") (mrc))
-(read-one (s->p "|ap ple|Pie") (mrc))
-(read-one (s->p "(a b c)") (mrc))
-(read-one (s->p "(a b . c)") (mrc))
-(read-one (s->p "(b . a #| a |# . c)") (mrc))
-(read-one (s->p "(a 1.0 ; comment\n c)") (mrc))
-(read-one (s->p "(a \"1.0\" c)") (mrc))
-(read-one (s->p "'('a `b ,c ,@d ,@ e)") (mrc))
-(read-one (s->p "(#t)") (mrc))
-(read-one (s->p "(#TRUE)") (mrc))
-(read-one (s->p "(#fAlSe)") (mrc))
-(read-one (s->p "#(fAl Se)") (mrc))
-(read-one (s->p "{fAl Se}") (mrc))
-(parameterize ([read-curly-brace-with-tag #t])
-  (read-one (s->p "{fAl Se}") (mrc)))
-(parameterize ([read-case-sensitive #f])
-  (read-one (s->p "Case\\InSens") (mrc)))
-(with-handlers ([exn:fail:read? exn-message])
-  (read-one (s->p "{  fAl\n Se)") (mrc)))
-
-(define s (format "~a" (for/list ([i 100000]) i)))
-(void (time (read-one (s->p s) (mrc))))
-(void (time (read (s->p s))))

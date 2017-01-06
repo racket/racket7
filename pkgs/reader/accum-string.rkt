@@ -9,6 +9,7 @@
          accum-string-add!
          accum-string-convert!
          accum-string-count
+         set-accum-string-count!
          accum-string-get!
          accum-string-abandon!)
 
@@ -44,6 +45,9 @@
 (define (accum-string-count a)
   (accum-string-pos a))
 
+(define (set-accum-string-count! a pos)
+  (set-accum-string-pos! a pos))
+
 ;; Replace `start-pos` up to `pos` with a converted
 ;; string. Case folding can change the string length.
 (define (accum-string-convert! a convert start-pos)
@@ -60,9 +64,9 @@
   (string-copy! (accum-string-str a) start-pos s)
   (set-accum-string-pos! a (+ start-pos len)))
 
-(define (accum-string-get! a config)
+(define (accum-string-get! a config #:start-pos [start-pos 0])
   (define s (substring (accum-string-str a)
-                       0
+                       start-pos
                        (accum-string-pos a)))
   (accum-string-abandon! a config)
   s)
