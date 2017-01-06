@@ -8,9 +8,10 @@
          "consume.rkt"
          "accum-string.rkt"
          "error.rkt"
-         "sequence.rkt"
          "indentation.rkt"
-         "parameter.rkt")
+         "parameter.rkt"
+         "sequence.rkt"
+         "symbol.rkt")
 
 (define (read-one in config)
   (skip-whitespace-and-comments! in config)
@@ -78,6 +79,8 @@
         (reader-error in r-config (indentation-unexpected-closer-message ec c r-config)))]
       [(#\")
        (read-string in r-config)]
+      [(#\|)
+       (read-number-or-symbol c in r-config #:initial-pipe-quote? #t #:mode 'symbol)]
       [else
        (read-number-or-symbol c in r-config)])]))
 
@@ -114,6 +117,8 @@
        (cond
         [(char-delimiter? c2 config) (wrap #t in config c)]
         [else (read-delimited-constant c '(#\a #\l #\s #\e) #f in config)])]
+      [(#\:)
+       (read-number-or-symbol #f in config #:mode 'keyword)]
       [else
        (reader-error in config "bad syntax `#~a`" c)])]))
 
@@ -141,25 +146,6 @@
       (accum-string-add! accum-str c)
       (reader-error "bad syntax `#~a`" (accum-string-get! accum-str config))]))
   (wrap val in config (accum-string-get! accum-str config)))
-
-(define (read-number-or-symbol c in config)
-  (define accum-str (accum-string-init! config))
-  (accum-string-add! accum-str c)
-  (let loop ()
-    (define c (peek-char-or-special in))
-    (define ec (effective-char c config))
-    (cond
-     [(char-delimiter? ec config) (void)]
-     [else
-      (consume-char in c)
-      (accum-string-add! accum-str c)
-      (loop)]))
-  (define str (accum-string-get! accum-str config))
-  (wrap (or (string->number str)
-            (string->symbol str))
-        in
-        config
-        str))
 
 (define (read-string in config)
   (define accum-str (accum-string-init! config))
@@ -192,25 +178,34 @@
 
 ;; ----------------------------------------
 
-(read-one (open-input-string "(a b c)") (make-read-config))
-(read-one (open-input-string "(a b . c)") (make-read-config))
-(read-one (open-input-string "(b . a #| a |# . c)") (make-read-config))
-(read-one (open-input-string "(a 1.0 ; comment\n c)") (make-read-config))
-(read-one (open-input-string "(a \"1.0\" c)") (make-read-config))
-(read-one (open-input-string "'('a `b ,c ,@d ,@ e)") (make-read-config))
-(read-one (open-input-string "(#t)") (make-read-config))
-(read-one (open-input-string "(#TRUE)") (make-read-config))
-(read-one (open-input-string "(#fAlSe)") (make-read-config))
-(read-one (open-input-string "#(fAl Se)") (make-read-config))
-(read-one (open-input-string "{fAl Se}") (make-read-config))
+(define (s->p s)
+  (define p (open-input-string s))
+  (port-count-lines! p)
+  p)
+
+(define (mrc)
+  (make-read-config #:source "input"))
+
+(read-one (s->p "#:a") (mrc))
+(read-one (s->p "|ap ple|Pie") (mrc))
+(read-one (s->p "(a b c)") (mrc))
+(read-one (s->p "(a b . c)") (mrc))
+(read-one (s->p "(b . a #| a |# . c)") (mrc))
+(read-one (s->p "(a 1.0 ; comment\n c)") (mrc))
+(read-one (s->p "(a \"1.0\" c)") (mrc))
+(read-one (s->p "'('a `b ,c ,@d ,@ e)") (mrc))
+(read-one (s->p "(#t)") (mrc))
+(read-one (s->p "(#TRUE)") (mrc))
+(read-one (s->p "(#fAlSe)") (mrc))
+(read-one (s->p "#(fAl Se)") (mrc))
+(read-one (s->p "{fAl Se}") (mrc))
 (parameterize ([read-curly-brace-with-tag #t])
-  (read-one (open-input-string "{fAl Se}") (make-read-config)))
+  (read-one (s->p "{fAl Se}") (mrc)))
+(parameterize ([read-case-sensitive #f])
+  (read-one (s->p "Case\\InSens") (mrc)))
 (with-handlers ([exn:fail:read? exn-message])
-  (read-one (let ([p (open-input-string "{  fAl\n Se)")])
-              (port-count-lines! p)
-              p)
-            (make-read-config)))
+  (read-one (s->p "{  fAl\n Se)") (mrc)))
 
 (define s (format "~a" (for/list ([i 100000]) i)))
-(void (time (read-one (open-input-string s) (make-read-config))))
-(void (time (read (open-input-string s))))
+(void (time (read-one (s->p s) (mrc))))
+(void (time (read (s->p s))))
