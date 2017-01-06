@@ -10,6 +10,9 @@
   (make-read-config #:source "input"))
 
 (read-one (s->p "#:a") (mrc))
+(read-one (s->p "#\\a") (mrc))
+(read-one (s->p "#\\U3BB") (mrc))
+(read-one (s->p "#\\\u3BB") (mrc))
 (read-one (s->p "|ap ple|Pie") (mrc))
 (read-one (s->p "(a b c)") (mrc))
 (read-one (s->p "(a b . c)") (mrc))

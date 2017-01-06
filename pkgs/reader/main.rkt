@@ -12,7 +12,8 @@
          "parameter.rkt"
          "sequence.rkt"
          "symbol.rkt"
-         "string.rkt")
+         "string.rkt"
+         "char.rkt")
 
 (provide read-one
          make-read-config)
@@ -111,6 +112,8 @@
        (guard-legal
         (check-parameter read-curly-brace-as-paren config)
         (wrap (list->vector (read-unwrapped-sequence read-one #\{ #\} in config #:dot-mode #f)) in config c))]
+      [(#\\)
+       (read-character in config)]
       [(#\")
        (read-string in config #:mode '|byte string|)]
       [(#\<)
