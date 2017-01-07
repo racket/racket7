@@ -12,10 +12,13 @@
 
 (define (read-number-or-symbol c in config
                                #:mode [mode 'number-or-symbol]
-                               #:initial-pipe-quote? [initial-pipe-quote? #f])
+                               #:initial-pipe-quote? [initial-pipe-quote? #f]
+                               #:extra-prefix [extra-prefix #f])
   (define accum-str (accum-string-init! config))
   (define quoted-ever? initial-pipe-quote?)
   (define case-sens? (check-parameter read-case-sensitive config))
+  (when extra-prefix
+    (accum-string-add! accum-str extra-prefix))
   (unless (or (not c) initial-pipe-quote?)
     (accum-string-add! accum-str c))
   

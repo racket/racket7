@@ -11,5 +11,8 @@
       (char=? c #\])
       (char=? c #\{)
       (char=? c #\})
+      (char=? c #\')
+      (char=? c #\`)
       (char=? c #\,)
+      (char=? c #\;)
       (char=? c #\")))

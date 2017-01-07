@@ -42,7 +42,7 @@
     ;; Dispatch on character:
     (case ec
       [(#\#)
-       (read-dispatch in r-config)]
+       (read-dispatch c in r-config)]
       [(#\')
        (read-quote 'quote "quoting '" c in r-config)]
       [(#\`)
@@ -89,18 +89,19 @@
       [else
        (read-number-or-symbol c in r-config)])]))
 
-(define (read-dispatch in config)
+;; Dispatch on `#` character
+(define (read-dispatch dispatch-c in config)
   (define c (read-char-or-special in))
   (cond
    [(eof-object? c)
-    (reader-error in config "bad syntax `#`" #:eof? #t)]
+    (reader-error in config #:eof? #t "bad syntax `~a`" dispatch-c)]
    [(not (char? c))
-    (reader-error in config "bad syntax `#`")]
+    (reader-error in config "bad syntax `~a`" dispatch-c)]
    [else
     (define-syntax-rule (guard-legal e body ...)
       (cond
        [e body ...]
-       [else (reader-error in config "bad syntax `#~a`" c)]))
+       [else (reader-error in config "bad syntax `~a~a`" dispatch-c c)]))
     (case c
       [(#\()
        (wrap (list->vector (read-unwrapped-sequence read-one #\( #\) in config #:dot-mode #f)) in config c)]
@@ -112,6 +113,17 @@
        (guard-legal
         (check-parameter read-curly-brace-as-paren config)
         (wrap (list->vector (read-unwrapped-sequence read-one #\{ #\} in config #:dot-mode #f)) in config c))]
+      [(#\')
+       (read-quote 'syntax "quoting #'" c in config)]
+      [(#\`)
+       (read-quote 'quasisyntax "quasiquoting #`" c in config)]
+      [(#\,)
+       (define c2 (peek-char-or-special in))
+       (if (eqv? c2 #\@)
+           (begin
+             (consume-char in c2)
+             (read-quote 'unsyntax-splicing "unquoting #,@" c in config))
+           (read-quote 'unsyntax "unquoting #," c in config))]
       [(#\\)
        (read-character in config)]
       [(#\")
@@ -122,7 +134,11 @@
          (consume-char in #\<)
          (read-here-string in config)]
         [else
-         (reader-error in config "bad syntax `#<`")])]
+         (reader-error in config "bad syntax `~a<`" dispatch-c)])]
+      [(#\%)
+       (read-number-or-symbol c in config #:extra-prefix dispatch-c #:mode 'symbol)]
+      [(#\:)
+       (read-number-or-symbol #f in config #:mode 'keyword)]
       [(#\t #\T)
        (define c2 (peek-char-or-special in))
        (cond
@@ -133,10 +149,8 @@
        (cond
         [(char-delimiter? c2 config) (wrap #t in config c)]
         [else (read-delimited-constant c '(#\a #\l #\s #\e) #f in config)])]
-      [(#\:)
-       (read-number-or-symbol #f in config #:mode 'keyword)]
       [else
-       (reader-error in config "bad syntax `#~a`" c)])]))
+       (reader-error in config "bad syntax `~a~a`" dispatch-c c)])]))
 
 (define (read-delimited-constant init-c chars val in config)
   (define accum-str (accum-string-init! config))
