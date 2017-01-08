@@ -5,6 +5,7 @@
 
 (provide read-digits
          digit?
+         decimal-digit?
          octal-digit?
          hex-digit?
          digit->number)
@@ -38,7 +39,10 @@
    [(not (char? c)) #f]
    [(= base 8) (octal-digit? c)]
    [(= base 16) (hex-digit? c)]
-   [else (and (char>=? c #\0) (char<=? c #\9))]))
+   [else (decimal-digit? c)]))
+
+(define (decimal-digit? c)
+  (and (char>=? c #\0) (char<=? c #\9)))
 
 (define (octal-digit? c)
   (and (char>=? c #\0) (char<=? c #\7)))

@@ -11,6 +11,9 @@
 (provide read-number-or-symbol)
 
 (define (read-number-or-symbol c in config
+                               ;; `mode` can be 'number-or-symbol,
+                               ;; 'symbol, 'keyword, or a number
+                               ;; prefix string like "#e"
                                #:mode [mode 'number-or-symbol]
                                #:initial-pipe-quote? [initial-pipe-quote? #f]
                                #:extra-prefix [extra-prefix #f])
@@ -27,7 +30,10 @@
     (reader-error in config #:eof? (eof-object? c)
                   "~a following `~a` in ~a"
                   (if (eof-object? c) "end-of-file" "non-character")
-                  after-c mode))
+                  after-c (cond
+                           [(eq? mode 'keyword) "keyword"]
+                           [(string? mode) "number"]
+                           [else "symbol"])))
   
   (let loop ([pipe-quote-c (and initial-pipe-quote? c)] ; currently quoting?
              [foldcase-from 0]) ; keep track of range to foldcase for case-insens
@@ -78,9 +84,21 @@
              (char=? #\. (effective-char (string-ref str 0) config)))
     (reader-error in config "illegal use of `.`"))
   
-  (wrap (or (and (eq? mode 'number-or-symbol)
-                 (not quoted-ever?)
-                 (string->number str))
+  (define num
+    (and (or (eq? mode 'number-or-symbol)
+             (string? mode))
+         (not quoted-ever?)
+         (string->number (if (string? mode)
+                             (string-append mode str)
+                             str))))
+
+  (when (and (not num)
+             (string? mode))
+    (reader-error in config
+                  "bad number: `~a`"
+                  (string-append mode str)))
+  
+  (wrap (or num
             (and (eq? mode 'keyword)
                  (string->keyword str))
             (string->symbol str))

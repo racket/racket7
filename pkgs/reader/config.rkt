@@ -8,7 +8,8 @@
 
 (struct read-config (readtable
                      source
-                     wrap
+                     wrap          ; wrapper applied to each datum, intended for syntax objects
+                     for-syntax?   ; impose restrictions on graphs, fxvectors, etc?
                      line
                      col
                      pos
@@ -20,10 +21,12 @@
 
 (define (make-read-config
          #:source [source #f]
-         #:wrap [wrap #f #;(lambda (s-exp srcloc) s-exp)])
+         #:wrap [wrap #f #;(lambda (s-exp srcloc) s-exp)]
+         #:for-syntax? [for-syntax? #f])
   (read-config #f
                source
                wrap
+               for-syntax?
                #f ; line
                #f ; col
                #f ; pos

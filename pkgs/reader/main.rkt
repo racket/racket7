@@ -10,7 +10,9 @@
          "error.rkt"
          "indentation.rkt"
          "parameter.rkt"
+         "digit.rkt"
          "sequence.rkt"
+         "vector.rkt"
          "symbol.rkt"
          "string.rkt"
          "char.rkt")
@@ -98,21 +100,23 @@
    [(not (char? c))
     (reader-error in config "bad syntax `~a`" dispatch-c)]
    [else
-    (define-syntax-rule (guard-legal e body ...)
+    (define-syntax-rule (guard-legal e c body ...)
       (cond
        [e body ...]
-       [else (reader-error in config "bad syntax `~a~a`" dispatch-c c)]))
+       [else (reader-error in config "bad syntax `~a~a`" dispatch-c)]))
     (case c
       [(#\()
-       (wrap (list->vector (read-unwrapped-sequence read-one #\( #\) in config #:dot-mode #f)) in config c)]
+       (read-vector read-one #\( #\) in config)]
       [(#\[)
        (guard-legal
         (check-parameter read-square-bracket-as-paren config)
-        (wrap (list->vector (read-unwrapped-sequence read-one #\[ #\] in config #:dot-mode #f)) in config c))]
+        c
+        (read-vector read-one #\[ #\] in config))]
       [(#\{)
        (guard-legal
         (check-parameter read-curly-brace-as-paren config)
-        (wrap (list->vector (read-unwrapped-sequence read-one #\{ #\} in config #:dot-mode #f)) in config c))]
+        c
+        (read-vector read-one #\{ #\} in config))]
       [(#\')
        (read-quote 'syntax "quoting #'" c in config)]
       [(#\`)
@@ -148,7 +152,46 @@
        (define c2 (peek-char-or-special in))
        (cond
         [(char-delimiter? c2 config) (wrap #t in config c)]
+        [(or (char=? c2 #\x) (char=? c2 #\l))
+         (define vector-mode (if (char=? c2 #\x) 'fixnum 'flonum))
+         (consume-char in c2)
+         (when (read-config-for-syntax? config)
+           (reader-error in config "literal f~avectors not allowed" c2))
+         (define c3 (read-char-or-special in))
+         (define-values (vector-len len-str c4)
+           (cond
+            [(decimal-digit? c3) (read-simple-number in config c3)]
+            [else (values #f "" c3)]))
+         (case c4
+           [(#\()
+            (read-vector read-one #\{ #\} in config #:mode vector-mode #:length vector-len)]
+           [(#\[)
+            (guard-legal
+             (check-parameter read-square-bracket-as-paren config)
+             (format "~a~a" c c2)
+             (read-vector read-one #\[ #\] in config #:mode vector-mode #:length vector-len))]
+           [(#\{)
+            (guard-legal
+             (check-parameter read-curly-brace-as-paren config)
+             (format "~a~a" c c2)
+             (read-vector read-one #\{ #\} in config #:mode vector-mode #:length vector-len))]
+           [else
+            (reader-error in config #:eof (eof-object? c4)
+                          "expected `(`, `[`, or `{` after `#~a~a~a`"
+                          c c2 len-str)])]
         [else (read-delimited-constant c '(#\a #\l #\s #\e) #f in config)])]
+      [(#\e) (read-number-or-symbol #f in config #:mode "#e")]
+      [(#\E) (read-number-or-symbol #f in config #:mode "#E")]
+      [(#\i) (read-number-or-symbol #f in config #:mode "#i")]
+      [(#\I) (read-number-or-symbol #f in config #:mode "#I")]
+      [(#\d) (read-number-or-symbol #f in config #:mode "#d")]
+      [(#\B) (read-number-or-symbol #f in config #:mode "#B")]
+      [(#\o) (read-number-or-symbol #f in config #:mode "#o")]
+      [(#\O) (read-number-or-symbol #f in config #:mode "#O")]
+      [(#\D) (read-number-or-symbol #f in config #:mode "#D")]
+      [(#\b) (read-number-or-symbol #f in config #:mode "#b")]
+      [(#\x) (read-number-or-symbol #f in config #:mode "#x")]
+      [(#\X) (read-number-or-symbol #f in config #:mode "#X")]
       [else
        (reader-error in config "bad syntax `~a~a`" dispatch-c c)])]))
 
@@ -184,3 +227,14 @@
     (reader-error in config #:eof? #t
                   "expected an element for ~a (found end-of-file)"))
   (wrap (list wrapped-sym e) in config #f))
+
+(define (read-simple-number in config init-c)
+  (define accum-str (accum-string-init! config))
+  (define v (read-digits in config accum-str
+                         #:base 10 #:max-count +inf.0))
+  (values v
+          (accum-string-get! accum-str config)
+          ;; We could avoid some peeks vising init-c
+          ;; and having `read-digit` return its peek
+          ;; result, but we don't for now
+          (peek-char-or-special in)))
