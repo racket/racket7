@@ -2,7 +2,7 @@
 (require "config.rkt"
          "error.rkt"
          "whitespace.rkt"
-         "symbol.rkt")
+         "symbol-or-number.rkt")
 
 (provide read-fixnum
          read-flonum)

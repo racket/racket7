@@ -15,9 +15,10 @@
                      pos
                      indentations  ; stack of `indentation` records
                      parameter-cache   ; hash of parameter -> value
-                     st)) ; shared mutable state
+                     st)) ; other shared mutable state
 
-(struct read-config-state ([accum-str #:mutable])) ; string-buffer cache
+(struct read-config-state ([accum-str #:mutable] ; string-buffer cache
+                           [graph #:mutable]))   ; #f or hash of number -> value
 
 (define (make-read-config
          #:source [source #f]
@@ -32,7 +33,8 @@
                #f ; pos
                null ; indentations
                (make-hasheq)
-               (read-config-state #f))) ; accum-str
+               (read-config-state #f    ; accum-str
+                                  #f))) ; graph
 
 (define (port+config->srcloc in config)
   (define-values (end-line end-col end-pos) (port-next-location in))

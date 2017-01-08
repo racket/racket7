@@ -32,7 +32,7 @@
       (define len (length seq))
       (cond
        [(= expected-len len) (list->vector seq)]
-       [(expected-len . > . len)
+       [(expected-len . < . len)
         (reader-error in config
                       "~avector length ~a is too small, ~a values provided"
                       (case vector-mode
@@ -41,11 +41,16 @@
                         [(flonum) "fl"])
                       expected-len len)]
        [else
+        (define (last-or v)
+          (if (null? seq)
+              v
+              (let loop ([seq seq])
+                (if (null? (cdr seq)) (car seq) (loop (cdr seq))))))
         (define vec
           (case vector-mode
-            [(any) (make-vector expected-len 0)]
-            [(fixnum) (make-fxvector expected-len)]
-            [(flonum) (make-flvector expected-len)]))
+            [(any) (make-vector expected-len (last-or 0))]
+            [(fixnum) (make-fxvector expected-len (last-or 0))]
+            [(flonum) (make-flvector expected-len (last-or 0.0))]))
         (case vector-mode
           [(any) (for ([e (in-list seq)]
                        [i (in-naturals)])

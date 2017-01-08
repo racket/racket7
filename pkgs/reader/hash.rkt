@@ -80,10 +80,23 @@
                        "bad syntax `~a`"
                        (accum-string-get! accum-str config))])))
   
+  (define graph? (and (read-config-state-graph
+                       (read-config-st config))
+                      #t))
+  
   (wrap (case mode
-          [(equal) (make-immutable-hash content)]
-          [(eq) (make-immutable-hasheq content)]
-          [(eqv) (make-immutable-hasheqv content)])
+          [(equal)
+           (if graph?
+               (make-hash-placeholder content)
+               (make-immutable-hash content))]
+          [(eq)
+           (if graph?
+               (make-hasheq-placeholder content)
+               (make-immutable-hasheq content))]
+          [(eqv)
+           (if graph?
+               (make-hasheqv-placeholder content)
+               (make-immutable-hasheqv content))])
         in
         config
         opener))
