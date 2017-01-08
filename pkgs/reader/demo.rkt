@@ -24,6 +24,7 @@
 (read-one (s->p "(#TRUE)") (mrc))
 (read-one (s->p "(#fAlSe)") (mrc))
 (read-one (s->p "#(fAl Se)") (mrc))
+(read-one (s->p "#hash{(fAl . Se) (7 . 9)}") (mrc))
 (read-one (s->p "{fAl Se}") (mrc))
 (read-one @s->p{"apple\n\"\x30\7\07\u3BB\U1F600\uD83D\uDE00"} (mrc))
 (read-one @s->p{#"apple\n\"\x30\7\07"} (mrc))

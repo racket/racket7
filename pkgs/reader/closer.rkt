@@ -3,13 +3,14 @@
 (provide char-closer?
          closer-name
          closer->opener
-         opener-name)
+         opener-name
+         dot-name)
 
-(define (char-closer? c config)
-  (and (not (eof-object? c))
-       (or (char=? c #\))
-           (char=? c #\])
-           (char=? c #\}))))
+(define (char-closer? ec config)
+  (and (not (eof-object? ec))
+       (or (char=? ec #\))
+           (char=? ec #\])
+           (char=? ec #\}))))
 
 (define (closer-name c config)
   (format "`~a`" c))
@@ -23,3 +24,6 @@
 
 (define (opener-name c config)
   (format "`~a`" c))
+
+(define (dot-name config)
+  "`.`")

@@ -13,6 +13,7 @@
          "digit.rkt"
          "sequence.rkt"
          "vector.rkt"
+         "hash.rkt"
          "symbol.rkt"
          "string.rkt"
          "char.rkt")
@@ -63,7 +64,7 @@
       [(#\()
        (wrap (read-unwrapped-sequence read-one #\( #\) in r-config #:shape-tag? #t) in r-config ec)]
       [(#\))
-       (reader-error in r-config (indentation-unexpected-closer-message ec c r-config))]
+       (reader-error in r-config "~a" (indentation-unexpected-closer-message ec c r-config))]
       [(#\[)
        (guard-legal
         (or (check-parameter read-square-bracket-as-paren config)
@@ -73,7 +74,7 @@
        (guard-legal
         (or (check-parameter read-square-bracket-as-paren config)
             (check-parameter read-square-bracket-with-tag config))
-        (reader-error in r-config (indentation-unexpected-closer-message ec c r-config)))]
+        (reader-error in r-config "~a" (indentation-unexpected-closer-message ec c r-config)))]
       [(#\{)
        (guard-legal
         (or (check-parameter read-curly-brace-as-paren config)
@@ -83,7 +84,7 @@
        (guard-legal
         (or (check-parameter read-curly-brace-as-paren config)
             (check-parameter read-curly-brace-with-tag config))
-        (reader-error in r-config (indentation-unexpected-closer-message ec c r-config)))]
+        (reader-error in r-config "~a" (indentation-unexpected-closer-message ec c r-config)))]
       [(#\")
        (read-string in r-config)]
       [(#\|)
@@ -192,6 +193,7 @@
       [(#\b) (read-number-or-symbol #f in config #:mode "#b")]
       [(#\x) (read-number-or-symbol #f in config #:mode "#x")]
       [(#\X) (read-number-or-symbol #f in config #:mode "#X")]
+      [(#\h #\H) (read-hash read-one dispatch-c c in config)]
       [else
        (reader-error in config "bad syntax `~a~a`" dispatch-c c)])]))
 
