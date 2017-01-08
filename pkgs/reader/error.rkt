@@ -1,7 +1,8 @@
 #lang racket/base
 (require "config.rkt")
 
-(provide reader-error)
+(provide reader-error
+         bad-syntax-error)
 
 (define (reader-error in config
                       #:eof? [eof? #f]
@@ -17,3 +18,6 @@
           msg))
     (current-continuation-marks)
     (list srcloc))))
+
+(define (bad-syntax-error in config str)
+  (reader-error in config "bad syntax `~a`" str))

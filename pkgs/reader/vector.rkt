@@ -14,7 +14,7 @@
 (provide read-vector
          read-fixnum-or-flonum-vector)
 
-(define (read-vector read-one opener closer in config 
+(define (read-vector read-one opener-c opener closer in config 
                      #:mode [vector-mode 'any]
                      #:length [expected-len #f])
   (define read-one-element
@@ -23,7 +23,7 @@
       [(fixnum) read-fixnum]
       [(flonum) read-flonum]))
   
-  (define seq (read-unwrapped-sequence read-one-element #\( #\) in config
+  (define seq (read-unwrapped-sequence read-one-element opener-c #\( #\) in config
                                        #:dot-mode #f))
   
   ;; Extend `seq` as needed to match the declared length
@@ -91,7 +91,7 @@
   (define-syntax-rule (guard-legal e c body ...)
     (cond
      [e body ...]
-     [else (reader-error in config "bad syntax `~a~a`" dispatch-c c)]))
+     [else (bad-syntax-error in config (format "~a~a" dispatch-c c))]))
   
   (case c4
     [(#\()

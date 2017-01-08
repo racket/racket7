@@ -12,6 +12,7 @@
          "parameter.rkt"
          "sequence.rkt"
          "vector.rkt"
+         "struct.rkt"
          "graph.rkt"
          "hash.rkt"
          "symbol-or-number.rkt"
@@ -97,14 +98,14 @@
               (read-quote read-one 'unquote-splicing "unquoting ,@" c in r-config))
             (read-quote read-one 'unquote "unquoting ," c in r-config)))]
       [(#\()
-       (wrap (read-unwrapped-sequence read-one #\( #\) in r-config #:shape-tag? #t) in r-config ec)]
+       (wrap (read-unwrapped-sequence read-one ec #\( #\) in r-config #:shape-tag? #t) in r-config ec)]
       [(#\))
        (reader-error in r-config "~a" (indentation-unexpected-closer-message ec c r-config))]
       [(#\[)
        (guard-legal
         (or (check-parameter read-square-bracket-as-paren config)
             (check-parameter read-square-bracket-with-tag config))
-        (wrap (read-unwrapped-sequence read-one #\[ #\] in r-config #:shape-tag? #t) in r-config ec))]
+        (wrap (read-unwrapped-sequence read-one ec #\[ #\] in r-config #:shape-tag? #t) in r-config ec))]
       [(#\])
        (guard-legal
         (or (check-parameter read-square-bracket-as-paren config)
@@ -114,7 +115,7 @@
        (guard-legal
         (or (check-parameter read-curly-brace-as-paren config)
             (check-parameter read-curly-brace-with-tag config))
-        (wrap (read-unwrapped-sequence read-one #\{ #\} in r-config #:shape-tag? #t) in r-config ec))]
+        (wrap (read-unwrapped-sequence read-one ec #\{ #\} in r-config #:shape-tag? #t) in r-config ec))]
       [(#\})
        (guard-legal
         (or (check-parameter read-curly-brace-as-paren config)
@@ -139,23 +140,25 @@
     (define-syntax-rule (guard-legal e c body ...)
       (cond
        [e body ...]
-       [else (reader-error in config "bad syntax `~a~a`" dispatch-c c)]))
+       [else (bad-syntax-error in config (format "~a~a" dispatch-c c))]))
     (case c
       [(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
        ;; Vector, graph definition, or graph reference
        (read-vector-or-graph read-one dispatch-c c in config)]
       [(#\()
-       (read-vector read-one #\( #\) in config)]
+       (read-vector read-one #\( #\( #\) in config)]
       [(#\[)
        (guard-legal
         (check-parameter read-square-bracket-as-paren config)
         c
-        (read-vector read-one #\[ #\] in config))]
+        (read-vector read-one #\[ #\[ #\] in config))]
       [(#\{)
        (guard-legal
         (check-parameter read-curly-brace-as-paren config)
         c
-        (read-vector read-one #\{ #\} in config))]
+        (read-vector read-one #\{ #\{ #\} in config))]
+      [(#\s)
+       (read-struct read-one dispatch-c in config)]
       [(#\')
        (read-quote read-one 'syntax "quoting #'" c in config)]
       [(#\`)

@@ -26,28 +26,26 @@
   (define-syntax-rule (guard-legal e c body ...)
     (cond
      [e body ...]
-     [else (reader-error in config
-                         "bad syntax `~a`"
-                         (get-accum c))]))
+     [else (bad-syntax-error in config (get-accum c))]))
   
   (define c (read-char-or-special in))
   (define ec (effective-char c config))
   (case ec
     [(#\()
      (accum-string-abandon! accum-str config)
-     (read-vector read-one #\( #\) in config #:length v)]
+     (read-vector read-one c #\( #\) in config #:length v)]
     [(#\[)
      (accum-string-abandon! accum-str config)
      (guard-legal
       (check-parameter read-square-bracket-as-paren config)
       (get-accum c)
-      (read-vector read-one #\[ #\] in config #:length v))]
+      (read-vector read-one c #\[ #\] in config #:length v))]
     [(#\{)
      (accum-string-abandon! accum-str config)
      (guard-legal
       (check-parameter read-curly-brace-as-paren config)
       (get-accum c)
-      (read-vector read-one #\{ #\} in config #:length v))]
+      (read-vector read-one c #\{ #\} in config #:length v))]
     [(#\= #\#)
      (when (or (read-config-for-syntax? config)
                (not (check-parameter read-accept-graph config)))

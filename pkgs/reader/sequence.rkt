@@ -4,6 +4,7 @@
          "whitespace.rkt"
          "delimiter.rkt"
          "consume.rkt"
+         "closer.rkt"
          "error.rkt"
          "indentation.rkt"
          "parameter.rkt"
@@ -11,32 +12,34 @@
 
 (provide read-unwrapped-sequence)
 
-(define (read-unwrapped-sequence read-one opener closer in seq-config
+(define (read-unwrapped-sequence read-one opener-c opener closer in seq-config
                                  #:dot-mode [dot-mode 'all]
-                                 #:shape-tag? [shape-tag? #f])
+                                 #:shape-tag? [shape-tag? #f]
+                                 #:first-read-one [first-read-one read-one])
   (define head #f)
   (define indentation (make-indentation closer in seq-config))
   (define config (struct-copy read-config seq-config
                               [indentations (cons indentation
                                                   (read-config-indentations seq-config))]))
-  (define (read-one/not-eof)
+  (define (read-one/not-eof read-one)
     (define e (read-one in config))
     (when (eof-object? e)
       (reader-error in config #:eof? #t
                     "expected a `~a` to close `~a`~a"
-                    closer
-                    opener
+                    (closer-name closer)
+                    opener-c
                     (indentation-possible-cause config)))
     e)
   (define seq
-    (let loop ()
+    (let loop ([first? #t] [first-read-one first-read-one])
       (define c (skip-whitespace-and-comments! in config))
       (define ec (effective-char c config))
       (cond
        [(eqv? ec closer)
         (consume-char in ec)
         null]
-       [(and (eqv? ec #\.)
+       [(and (not first?)
+             (eqv? ec #\.)
              (check-parameter read-accept-dot config)
              (char-delimiter? (peek-char-or-special in 1) config))
         ;; Found a `.`: maybe improper or maybe infix
@@ -51,7 +54,7 @@
                         "illegal use of `.`"))
         
         ;; Read one item for improper list or for infix:
-        (define v (read-one/not-eof))
+        (define v (read-one/not-eof first-read-one))
         
         ;; Check for infix or list termination:
         (define rest-c (skip-whitespace-and-comments! in config))
@@ -82,13 +85,13 @@
                           "illegal use of `.`"))
           
           ;; No closer => another item or EOF
-          (loop)]
+          (loop #f read-one)]
          [else
           ;; Something else after a single element after a single dot
           (reader-error in (reading-at config dot-line dot-col dot-pos)
                         "illegal use of `.`")])]
        [else
-        (cons (read-one/not-eof) (loop))])))
+        (cons (read-one/not-eof first-read-one) (loop #f read-one))])))
   (define full-seq (if head
                        (cons (unbox head) seq)
                        seq))

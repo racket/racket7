@@ -40,14 +40,14 @@
       (case ec
         [(#\()
          (define read-one-key+value (make-read-one-key+value read-one c #\)))
-         (values (read-unwrapped-sequence read-one-key+value ec #\) in config #:dot-mode #f)
+         (values (read-unwrapped-sequence read-one-key+value c #\( #\) in config #:dot-mode #f)
                  ec
                  mode)]
         [(#\[)
          (cond
           [(check-parameter read-square-bracket-as-paren config)
            (define read-one-key+value (make-read-one-key+value read-one c #\]))
-           (values (read-unwrapped-sequence read-one-key+value ec #\] in config #:dot-mode #f)
+           (values (read-unwrapped-sequence read-one-key+value c #\[ #\] in config #:dot-mode #f)
                    ec
                    mode)]
           [else
@@ -56,7 +56,7 @@
          (cond
           [(check-parameter read-curly-brace-as-paren config)
            (define read-one-key+value (make-read-one-key+value read-one c #\}))
-           (values (read-unwrapped-sequence read-one-key+value ec #\} in config #:dot-mode #f)
+           (values (read-unwrapped-sequence read-one-key+value c #\{ #\} in config #:dot-mode #f)
                    ec
                    mode)]
           [else
@@ -132,15 +132,7 @@
      [else
       (reader-error in (reading-at config open-line open-col open-pos)
                     "expected ~a to start a hash pair"
-                    (let ([p (opener-name #\( config)]
-                          [s (and (check-parameter read-square-bracket-as-paren config)
-                                  (opener-name #\[ config))]
-                          [c (and (check-parameter read-curly-brace-as-paren config)
-                                  (opener-name #\{ config))])
-                      (cond
-                       [(and s c) (format "~a, ~a, or ~a" p s c)]
-                       [(or s c) (format "~a or ~a" p (or s c))]
-                       [else p])))]))
+                    (all-openers-str config))]))
   
   (define k (read-one in (struct-copy read-config config
                                       [wrap #f])))
