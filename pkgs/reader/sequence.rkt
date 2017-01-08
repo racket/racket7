@@ -15,6 +15,7 @@
 (define (read-unwrapped-sequence read-one opener-c opener closer in seq-config
                                  #:dot-mode [dot-mode 'all]
                                  #:shape-tag? [shape-tag? #f]
+                                 #:whitespace-read-one [whitespace-read-one read-one]
                                  #:first-read-one [first-read-one read-one])
   (define head #f)
   (define indentation (make-indentation closer in seq-config))
@@ -32,7 +33,7 @@
     e)
   (define seq
     (let loop ([first? #t] [first-read-one first-read-one])
-      (define c (skip-whitespace-and-comments! in config))
+      (define c (skip-whitespace-and-comments! whitespace-read-one in config))
       (define ec (effective-char c config))
       (cond
        [(eqv? ec closer)
@@ -57,7 +58,7 @@
         (define v (read-one/not-eof first-read-one))
         
         ;; Check for infix or list termination:
-        (define rest-c (skip-whitespace-and-comments! in config))
+        (define rest-c (skip-whitespace-and-comments! whitespace-read-one in config))
         (define rest-ec (effective-char rest-c config))
         
         (cond
@@ -76,7 +77,7 @@
           (track-indentation! config dot2-line dot2-col)
           
           ;; Check for a closer right after the second dot:
-          (define post-c (skip-whitespace-and-comments! in config))
+          (define post-c (skip-whitespace-and-comments! whitespace-read-one in config))
           (define post-ec (effective-char post-c config))
           (when (or (eof-object? post-ec)
                     (char=? post-ec closer))

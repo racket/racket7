@@ -19,7 +19,8 @@
          "string.rkt"
          "char.rkt"
          "quote.rkt"
-         "constant.rkt")
+         "constant.rkt"
+         "box.rkt")
 
 (provide read)
 
@@ -58,7 +59,7 @@
        [else v]))]))
 
 (define (read-undotted in config)
-  (skip-whitespace-and-comments! in config)
+  (skip-whitespace-and-comments! read-one in config)
   (define-values (line col pos) (port-next-location in))
   (define c (read-char-or-special in))
   (cond
@@ -159,6 +160,8 @@
         (read-vector read-one #\{ #\{ #\} in config))]
       [(#\s)
        (read-struct read-one dispatch-c in config)]
+      [(#\&)
+       (read-box read-one dispatch-c in config)]
       [(#\')
        (read-quote read-one 'syntax "quoting #'" c in config)]
       [(#\`)

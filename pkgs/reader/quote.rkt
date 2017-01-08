@@ -9,5 +9,6 @@
   (define e (read-one in config))
   (when (eof-object? e)
     (reader-error in config #:eof? #t
-                  "expected an element for ~a (found end-of-file)"))
+                  "expected an element for ~a, found end-of-file"
+                  desc))
   (wrap (list wrapped-sym e) in config #f))

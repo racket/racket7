@@ -20,10 +20,12 @@
   (define read-one-element
     (case vector-mode
       [(any) read-one]
-      [(fixnum) read-fixnum]
-      [(flonum) read-flonum]))
+      [(fixnum) (lambda (in config) (read-fixnum read-one in config))]
+      [(flonum) (lambda (in config) (read-flonum read-one in config))]))
   
-  (define seq (read-unwrapped-sequence read-one-element opener-c #\( #\) in config
+  (define seq (read-unwrapped-sequence read-one-element
+                                       opener-c #\( #\) in config
+                                       #:whitespace-read-one read-one
                                        #:dot-mode #f))
   
   ;; Extend `seq` as needed to match the declared length

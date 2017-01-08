@@ -7,8 +7,8 @@
 (provide read-fixnum
          read-flonum)
 
-(define (read-fixnum in config)
-  (skip-whitespace-and-comments! in config)
+(define (read-fixnum read-one in config)
+  (skip-whitespace-and-comments! read-one in config)
   (define-values (line col pos) (port-next-location in))
   (define v (read-number-literal in config "#e"))
   (cond
@@ -18,8 +18,8 @@
                   "expected a fixnum, found ~a"
                   v)]))
 
-(define (read-flonum in config)
-  (skip-whitespace-and-comments! in config)
+(define (read-flonum read-one in config)
+  (skip-whitespace-and-comments! read-one in config)
   (define-values (line col pos) (port-next-location in))
   (define v (read-number-literal in config "#i"))
   (cond

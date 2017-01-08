@@ -104,7 +104,7 @@
 ;; ----------------------------------------
 
 (define ((make-read-one-key+value read-one overall-opener-c overall-closer-ec) in config)
-  (define c (skip-whitespace-and-comments! in config))
+  (define c (skip-whitespace-and-comments! read-one in config))
   (define-values (open-line open-col open-pos) (port-next-location in))
   (consume-char in c)
   (define ec (effective-char c config))
@@ -137,7 +137,7 @@
   (define k (read-one in (struct-copy read-config config
                                       [wrap #f])))
   
-  (define dot-c (skip-whitespace-and-comments! in config))
+  (define dot-c (skip-whitespace-and-comments! read-one in config))
   (define-values (dot-line dot-col dot-pos) (port-next-location in))
   (consume-char in dot-c)
   (define dot-ec (effective-char dot-c config))
@@ -150,7 +150,7 @@
   
   (define v (read-one in config))
   
-  (define closer-c (skip-whitespace-and-comments! in config))
+  (define closer-c (skip-whitespace-and-comments! read-one in config))
   (define-values (closer-line closer-col closer-pos) (port-next-location in))
   (consume-char in closer-c)
   (define closer-ec (effective-char closer-c config))
