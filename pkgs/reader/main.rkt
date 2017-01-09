@@ -213,8 +213,18 @@
       [(#\b) (read-number-or-symbol #f in config #:mode "#b")]
       [(#\x) (read-number-or-symbol #f in config #:mode "#x")]
       [(#\X) (read-number-or-symbol #f in config #:mode "#X")]
+      [(#\c #\C)
+       (define c2 (read-char-or-special in))
+       (case c2
+         [(#\s #\S) (read-one in (override-parameter read-case-sensitive config #t))]
+         [(#\i #\I) (read-one in (override-parameter read-case-sensitive config #f))]
+         [else
+          (reader-error in config
+                        "expected `s', `S`, `i', or `I` after `~a~a`"
+                        dispatch-c c)])]
       [(#\h #\H) (read-hash read-one dispatch-c c in config)]
       [(#\r)
+       ;; Maybe regexp or `#reader`
        (define accum-str (accum-string-init! config))
        (accum-string-add! accum-str dispatch-c)
        (accum-string-add! accum-str c)
@@ -227,6 +237,7 @@
                                  #:eof? (eof-object? c2)
                                  (accum-string-get! accum-str config))])]
       [(#\p)
+       ;; Maybe pregexp
        (define accum-str (accum-string-init! config))
        (accum-string-add! accum-str dispatch-c)
        (accum-string-add! accum-str c)

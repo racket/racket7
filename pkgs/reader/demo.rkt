@@ -26,7 +26,7 @@
 (test-read (s->p "'('a `b ,c ,@d ,@ e #'f #`g #,h #,@i)"))
 (test-read (s->p "(#t)"))
 (test-read (s->p "(#TRUE)"))
-(test-read (s->p "(#fAlSe)"))
+(test-read (s->p "#ci (#fAlSe)"))
 (test-read (s->p "#005(fAl Se)"))
 (let ([ht (test-read (s->p "#1=#hasheq((#1# . #1#))"))])
   (hash-ref ht ht))

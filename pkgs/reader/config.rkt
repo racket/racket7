@@ -14,6 +14,7 @@
                      col
                      pos
                      indentations  ; stack of `indentation` records
+                     parameter-override ; mash of parameter -> value
                      parameter-cache   ; hash of parameter -> value
                      st)) ; other shared mutable state
 
@@ -32,7 +33,8 @@
                #f ; col
                #f ; pos
                null ; indentations
-               (make-hasheq)
+               #hasheq()     ; parameter-override
+               (make-hasheq) ; parameter-cache
                (read-config-state #f    ; accum-str
                                   #f))) ; graph
 
