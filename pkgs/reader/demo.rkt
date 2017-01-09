@@ -33,6 +33,7 @@
 (test-read (s->p "#hash{(fAl . Se) (7 . 9)}"))
 (test-read (s->p "#s(fAl Se)"))
 (test-read (s->p "#&fox"))
+(test-read @s->p{#px#"fox"})
 (test-read (s->p "{fAl Se}"))
 (test-read (s->p "#! ok \\\n more\n 8"))
 (test-read @s->p{"apple\n\"\x30\7\07\u3BB\U1F600\uD83D\uDE00"})

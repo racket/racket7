@@ -20,7 +20,8 @@
          "char.rkt"
          "quote.rkt"
          "constant.rkt"
-         "box.rkt")
+         "box.rkt"
+         "regexp.rkt")
 
 (provide read)
 
@@ -213,5 +214,27 @@
       [(#\x) (read-number-or-symbol #f in config #:mode "#x")]
       [(#\X) (read-number-or-symbol #f in config #:mode "#X")]
       [(#\h #\H) (read-hash read-one dispatch-c c in config)]
+      [(#\r)
+       (define accum-str (accum-string-init! config))
+       (accum-string-add! accum-str dispatch-c)
+       (accum-string-add! accum-str c)
+       (define c2 (read-char-or-special in))
+       (when (char? c2) (accum-string-add! accum-str c2))
+       (case c2
+         [(#\x) (read-regexp c accum-str in config)]
+         [else
+          (bad-syntax-error in config
+                                 #:eof? (eof-object? c2)
+                                 (accum-string-get! accum-str config))])]
+      [(#\p)
+       (define accum-str (accum-string-init! config))
+       (accum-string-add! accum-str dispatch-c)
+       (accum-string-add! accum-str c)
+       (define c2 (read-char-or-special in))
+       (when (char? c2) (accum-string-add! accum-str c2))
+       (case c2
+         [(#\x) (read-regexp c accum-str in config)]
+         [else (bad-syntax-error in config #:eof? (eof-object? c2)
+                                 (accum-string-get! accum-str config))])]
       [else
        (reader-error in config "bad syntax `~a~a`" dispatch-c c)])]))
