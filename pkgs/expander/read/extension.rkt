@@ -20,13 +20,15 @@
                   "`~a` not enabled"
                   extend-str))
 
-  (define mod-path-datum (read-one in (disable-wrapping config)))
-  (when (eof-object? mod-path-datum)
+  (define mod-path-wrapped (read-one in config))
+  (when (eof-object? mod-path-wrapped)
     (reader-error in config
                   "expected a datum after `~a`, found end-of-file"
                   extend-str))
   
-  (read-extension mod-path-datum read-recur in config))
+  (read-extension ((read-config-coerce config) #f mod-path-wrapped)
+                  read-recur in config
+                  #:mod-path-wrapped mod-path-wrapped))
 
 ;; ----------------------------------------
 
@@ -103,7 +105,7 @@
   (define submod-path `(submod ,(string->symbol lang-str) reader))
   (define reader-path (string->symbol (string-append lang-str "/lang/reader")))
   
-  (read-extension #:try-path-first submod-path
+  (read-extension #:try-first-mod-path submod-path
                   reader-path read-recur in config))
 
 (define (char-lang-nonsep? c)
@@ -132,10 +134,18 @@
 
 ;; ----------------------------------------
 
-(define (read-extension #:try-path-first [submod-path #f]
-                        mod-path-datum read-recur in config)
-  (define mod-path ((check-parameter current-reader-guard config)
-                    mod-path-datum))
+(define (read-extension #:try-first-mod-path [try-first-mod-path #f]
+                        mod-path-datum read-recur in config
+                        #:mod-path-wrapped [mod-path-wrapped mod-path-datum])
+  (force-parameters! config)
+  (define guard (current-reader-guard))
+  (define mod-path
+    (or (and try-first-mod-path
+             (let ([mod-path (guard try-first-mod-path)])
+               (and ((read-config-module-declared? config) try-first-mod-path)
+                    mod-path)))
+        (guard mod-path-datum)))
+  
   (define for-syntax? (read-config-for-syntax? config))
   
   (define extension
@@ -149,14 +159,14 @@
      [for-syntax?
       (cond
        [(procedure-arity-includes? extension 6)
-        (extension mod-path-datum 
+        (extension mod-path-wrapped
                    in
                    (read-config-source config)
                    (read-config-line config)
                    (read-config-col config)
                    (read-config-pos config))]
        [(procedure-arity-includes? extension 2)
-        (extension mod-path-datum in)]
+        (extension mod-path-wrapped in)]
        [else
         (raise-argument-error '|#reader|
                               "(or/c (procedure-arity-includes?/c 2) (procedure-arity-includes?/c 6))"
@@ -180,4 +190,6 @@
    [(special-comment? result-v)
     (read-recur in config)]
    [else
-    result-v]))
+    ((read-config-coerce config)
+     for-syntax?
+     result-v)]))

@@ -9,7 +9,7 @@
          "digit.rkt"
          "parameter.rkt"
          "accum-string.rkt"
-         "number-literal.rkt")
+         "fixnum-flonum.rkt")
 
 (provide read-vector
          read-fixnum-or-flonum-vector)

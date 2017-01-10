@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../common/inline.rkt"
          "config.rkt"
+         "parameter.rkt"
          "readtable-parameter.rkt")
 
 (provide readtable-delimiter-ht
@@ -142,18 +143,22 @@
 
 ;; Map a character after `#` to a handler, if any:
 (define (readtable-dispatch-handler config c)
+  (force-parameters! config)
   (define rt (read-config-readtable config))
   (and rt
        (hash-ref (readtable-dispatch-ht rt) c #f)))
 
 (define (readtable-apply handler c in config line col pos)
+  (define for-syntax? (read-config-for-syntax? config))
   (cond
-   [(not (read-config-for-syntax? config))
+   [(not for-syntax?)
     (if (procedure-arity-includes? handler 2)
         (handler c in)
         (handler c in #f #f #f #f))]
    [else
-    (handler c in (read-config-source config) line col pos)]))
+    ((read-config-coerce config)
+     for-syntax?
+     (handler c in (read-config-source config) line col pos))]))
 
 ;; Part of the public API:
 (define (readtable-mapping rt c)

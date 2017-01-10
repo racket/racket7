@@ -10,10 +10,13 @@
          disable-wrapping)
 
 (struct* read-config (readtable
+                      for-syntax?   ; impose restrictions on graphs, fxvectors, etc?
                       source
                       wrap          ; wrapper applied to each datum, intended for syntax objects
-                      dynamic-require ; for reader extensions
-                      for-syntax?   ; impose restrictions on graphs, fxvectors, etc?
+                      read-compiled   ; for `#~`: input-port -> any/c
+                      dynamic-require ; for reader extensions: module-path sym fail-k -> any
+                      module-declared? ; for `#lang`: module-path -> any/c
+                      coerce        ; coerce for syntax or not: any boolean -> any
                       * line
                       * col
                       * pos
@@ -27,16 +30,28 @@
 
 (define (make-read-config
          #:source [source #f]
+         #:for-syntax? [for-syntax? #f]
          #:readtable [readtable (current-readtable)]
          #:wrap [wrap #f #;(lambda (s-exp srcloc) s-exp)]
-         #:dynamic-require [dynamic-require (lambda (mod-path sym failure-k)
-                                              (error 'read "no `dynamic-require` provided"))]
-         #:for-syntax? [for-syntax? #f])
+         #:read-compiled [read-compiled #f]
+         #:dynamic-require [dynamic-require #f]
+         #:module-declared? [module-declared? #f]
+         #:coerce [coerce #f])
   (read-config readtable
+               for-syntax?
                source
                wrap
-               dynamic-require
-               for-syntax?
+               (or read-compiled
+                   (lambda (in)
+                     (error 'read "no `read-compiled` provided")))
+               (or dynamic-require
+                   (lambda (mod-path sym failure-k)
+                     (error 'read "no `dynamic-require` provided")))
+               (or module-declared?
+                   (lambda (mod-path)
+                     (error 'read "no `module-declare?` provided")))
+               (or coerce
+                   (lambda (for-syntax? v) v))
                #f ; line
                #f ; col
                #f ; pos

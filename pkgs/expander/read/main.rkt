@@ -36,9 +36,17 @@
 
 (define (read in
               #:source [source #f]
-              #:dynamic-require [dynamic-require #f])
+              #:for-syntax? [for-syntax? #f]
+              #:read-compiled [read-compiled #f]
+              #:dynamic-require [dynamic-require #f]
+              #:module-declared? [module-declared? #f]
+              #:coerce [coerce #f])
   (define config (make-read-config #:source source
-                                   #:dynamic-require dynamic-require))
+                                   #:for-syntax? for-syntax?
+                                   #:read-compiled read-compiled
+                                   #:dynamic-require dynamic-require
+                                   #:module-declared? module-declared?
+                                   #:coerce coerce))
   (define v (read-one in config))
   (cond
    [(read-config-state-graph (read-config-st config))
@@ -276,5 +284,14 @@
       [(#\!)
        ;; Maybe `#lang`
        (read-extension-#! read-undotted dispatch-c in config)]
+      [(#\~)
+       ;; Compiled code
+       (cond
+        [(check-parameter read-accept-compiled config)
+         ((read-config-read-compiled config) in)]
+        [else
+         (reader-error in config
+                       "`~a~~` compiled expressions not enabled"
+                       dispatch-c)])]
       [else
        (reader-error in config "bad syntax `~a~a`" dispatch-c c)])]))
