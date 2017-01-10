@@ -1,5 +1,6 @@
 #lang racket/base
-(require "readtable.rkt"
+(require "../common/prefab.rkt"
+         "readtable.rkt"
          "config.rkt"
          "parameter.rkt"
          "error.rkt"
@@ -70,28 +71,4 @@
 (define (read-struct-sequence read-one opener-c opener closer in config)
   (read-unwrapped-sequence read-one opener-c opener closer in config
                            #:first-read-one (lambda (in config)
-                                              (read-one in (struct-copy read-config config
-                                                                        [wrap #f])))))
-;; ----------------------------------------
-
-;; FIXME: copied from the expander
-(define (all-fields-immutable? k)
-  (or (symbol? k)
-      (null? k)
-      (let* ([rk (cdr k)] ; skip name
-             [rk (if (and (pair? rk)
-                          (exact-integer? (car rk)))
-                     (cdr rk) ; skip init count
-                     rk)]
-             [rk (if (and (pair? rk)
-                          (pair? (car rk)))
-                     (if (zero? (caar rk))
-                         (cdr rk) ; skip zero auto count
-                         (cons '#(1) (cdr rk))) ; reflect mutable auto field
-                     rk)])
-        (if (and (pair? rk)
-                 (vector? (car rk)))
-            (if (zero? (vector-length (car rk)))
-                (all-fields-immutable? (cdr rk))
-                #f)
-            (all-fields-immutable? rk)))))
+                                              (read-one in (disable-wrapping config)))))

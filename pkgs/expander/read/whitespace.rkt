@@ -1,5 +1,6 @@
 #lang racket/base
-(require "config.rkt"
+(require "../common/struct-star.rkt"
+         "config.rkt"
          "readtable.rkt"
          "consume.rkt"
          "error.rkt")
@@ -39,8 +40,8 @@
     (consume-char in c)
     (consume-char in #\;)
     (define v
-      (read-one in (struct-copy read-config config
-                                [wrap #f])))
+      (read-one in (struct*-copy read-config config
+                                 [wrap #f])))
     (when (eof-object? v)
       (reader-error in config
                     #:eof? #t

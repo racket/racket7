@@ -134,8 +134,7 @@
                     "expected ~a to start a hash pair"
                     (all-openers-str config))]))
   
-  (define k (read-one in (struct-copy read-config config
-                                      [wrap #f])))
+  (define k (read-one in (disable-wrapping config)))
   
   (define dot-c (skip-whitespace-and-comments! read-one in config))
   (define-values (dot-line dot-col dot-pos) (port-next-location in))

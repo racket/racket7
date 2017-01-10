@@ -107,6 +107,9 @@ Running:
 
 Roadmap to the implementation:
 
+ read/ - the readers
+   demo.rkt - simples examples/tests for the reader
+
  syntax/ - syntax-object and binding representation
    syntax.rkt - syntax-object structure
    scope.rkt - scope sets and binding

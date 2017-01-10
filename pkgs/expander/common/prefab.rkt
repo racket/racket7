@@ -1,6 +1,7 @@
 #lang racket/base
 
-(provide immutable-prefab-struct-key)
+(provide immutable-prefab-struct-key
+         all-fields-immutable?)
 
 (define (immutable-prefab-struct-key v)
   (define k (prefab-struct-key v))

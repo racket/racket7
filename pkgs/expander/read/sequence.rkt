@@ -1,5 +1,6 @@
 #lang racket/base
-(require "config.rkt"
+(require "../common/struct-star.rkt"
+         "config.rkt"
          "readtable.rkt"
          "whitespace.rkt"
          "delimiter.rkt"
@@ -19,9 +20,9 @@
                                  #:first-read-one [first-read-one read-one])
   (define head #f)
   (define indentation (make-indentation closer in seq-config))
-  (define config (struct-copy read-config seq-config
-                              [indentations (cons indentation
-                                                  (read-config-indentations seq-config))]))
+  (define config (struct*-copy read-config seq-config
+                               [indentations (cons indentation
+                                                   (read-config-indentations seq-config))]))
   (define (read-one/not-eof read-one)
     (define e (read-one in config))
     (when (eof-object? e)
@@ -68,6 +69,7 @@
           v]
          [(and (eqv? rest-ec #\.)
                (check-parameter read-accept-dot config)
+               (check-parameter read-accept-infix-dot config)
                (char-delimiter? (peek-char-or-special in 1) config))
           ;; Infix mode
           (set! head (box v))

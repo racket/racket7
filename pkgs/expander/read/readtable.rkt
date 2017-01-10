@@ -1,5 +1,6 @@
 #lang racket/base
-(require "config.rkt"
+(require "../common/inline.rkt"
+         "config.rkt"
          "readtable-parameter.rkt")
 
 (provide readtable-delimiter-ht
@@ -116,7 +117,7 @@
 ;; Map a character to another character (if any) whose default
 ;; treatment should be used; be sure to map non-characters like
 ;; EOF to themselves.
-(define-syntax-rule (readtable-effective-char rt c)
+(define-inline (readtable-effective-char rt c)
   (cond
    [(or (not rt) (not (char? c))) c]
    [else (*readtable-effective-char rt c)]))

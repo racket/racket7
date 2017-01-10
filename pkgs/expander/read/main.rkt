@@ -10,6 +10,7 @@
          "error.rkt"
          "indentation.rkt"
          "parameter.rkt"
+         "primitive-parameter.rkt"
          "sequence.rkt"
          "vector.rkt"
          "struct.rkt"
@@ -21,17 +22,23 @@
          "quote.rkt"
          "constant.rkt"
          "box.rkt"
-         "regexp.rkt")
+         "regexp.rkt"
+         "extension.rkt")
 
 (provide read
 
          current-readtable
          make-readtable
          readtable?
-         readtable-mapping)
+         readtable-mapping
 
-(define (read in #:source [source #f])
-  (define config (make-read-config #:source source))
+         (all-from-out "primitive-parameter.rkt"))
+
+(define (read in
+              #:source [source #f]
+              #:dynamic-require [dynamic-require #f])
+  (define config (make-read-config #:source source
+                                   #:dynamic-require dynamic-require))
   (define v (read-one in config))
   (cond
    [(read-config-state-graph (read-config-st config))
@@ -70,6 +77,7 @@
   (define c (read-char-or-special in))
   (cond
    [(eof-object? c) eof]
+   [(special-comment? c) (read-undotted in config)]
    [(not (char? c)) c]
    [(readtable-handler config c)
     => (lambda (handler)
@@ -246,6 +254,7 @@
        (when (char? c2) (accum-string-add! accum-str c2))
        (case c2
          [(#\x) (read-regexp c accum-str in config)]
+         [(#\e) (read-extension-reader read-one read-undotted dispatch-c in config)]
          [else
           (bad-syntax-error in config
                                  #:eof? (eof-object? c2)
@@ -261,5 +270,11 @@
          [(#\x) (read-regexp c accum-str in config)]
          [else (bad-syntax-error in config #:eof? (eof-object? c2)
                                  (accum-string-get! accum-str config))])]
+      [(#\l)
+       ;; Maybe `#lang`
+       (read-extension-lang read-undotted dispatch-c in config)]
+      [(#\!)
+       ;; Maybe `#lang`
+       (read-extension-#! read-undotted dispatch-c in config)]
       [else
        (reader-error in config "bad syntax `~a~a`" dispatch-c c)])]))

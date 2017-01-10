@@ -11,8 +11,7 @@
 
 (define (read-regexp mode-c accum-str in config)
   (define c3 (read-char-or-special in))
-  (define no-wrap-config (struct-copy read-config config
-                                      [wrap #f]))
+  (define no-wrap-config (disable-wrapping config))
   
   (define rx
     (case c3
