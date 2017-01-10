@@ -4,7 +4,10 @@
 
 (provide readtable-delimiter-ht
          make-readtable
+         readtable?
+         readtable-mapping
          current-readtable
+         readtable-effective-char
          effective-char
          readtable-handler
          readtable-dispatch-handler
@@ -112,19 +115,20 @@
 
 ;; Map a character to another character (if any) whose default
 ;; treatment should be used; be sure to map non-characters like
-;; EOF to themselves
-(define (effective-char c config)
+;; EOF to themselves.
+(define-syntax-rule (readtable-effective-char rt c)
   (cond
-   [(not (char? c)) c]
-   [else
-    (define rt (read-config-readtable config))
-    (cond
-     [(not rt) c]
-     [else
-      (define target (hash-ref (readtable-char-ht rt) c #f))
-      (if (char? target)
-          target
-          c)])]))
+   [(or (not rt) (not (char? c))) c]
+   [else (*readtable-effective-char rt c)]))
+
+(define (*readtable-effective-char rt c)
+  (define target (hash-ref (readtable-char-ht rt) c #f))
+  (if (char? target)
+      target
+      c))
+
+(define (effective-char c config)
+  (readtable-effective-char (read-config-readtable config) c))
 
 ;; Map a character to a handler, if any:
 (define (readtable-handler config c)
@@ -149,3 +153,17 @@
         (handler c in #f #f #f #f))]
    [else
     (handler c in (read-config-source config) line col pos)]))
+
+;; Part of the public API:
+(define (readtable-mapping rt c)
+  (unless (readtable? rt)
+    (raise-argument-error 'readtable-mapping "readtable?" rt))
+  (unless (char? c)
+    (raise-argument-error 'readtable-mapping "char?" c))
+  (define handler (hash-ref (readtable-char-ht rt) c #f))
+  (values (and handler
+               (if (eq? 'delimit (hash-ref (readtable-delimiter-ht rt) c #f))
+                   'terminating-macro
+                   'non-terminating-macro))
+          handler
+          (hash-ref (readtable-dispatch-ht rt) c #f)))

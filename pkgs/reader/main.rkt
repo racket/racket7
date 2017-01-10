@@ -24,8 +24,11 @@
          "regexp.rkt")
 
 (provide read
+
+         current-readtable
          make-readtable
-         current-readtable)
+         readtable?
+         readtable-mapping)
 
 (define (read in #:source [source #f])
   (define config (make-read-config #:source source))

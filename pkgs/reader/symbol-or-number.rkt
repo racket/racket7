@@ -24,6 +24,7 @@
     (accum-string-add! accum-str extra-prefix))
   (unless (or (not c) initial-pipe-quote?)
     (accum-string-add! accum-str c))
+  (define rt (read-config-readtable config))
   
   ;; If we encounter an EOF or special in the wrong place:
   (define (unexpected-quoted c after-c)
@@ -38,7 +39,7 @@
   (let loop ([pipe-quote-c (and initial-pipe-quote? c)] ; currently quoting?
              [foldcase-from 0]) ; keep track of range to foldcase for case-insens
     (define c (peek-char-or-special in))
-    (define ec (effective-char c config))
+    (define ec (readtable-effective-char rt c))
     (cond
      [(and pipe-quote-c
            (not (char? ec)))
