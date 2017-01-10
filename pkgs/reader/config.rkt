@@ -1,4 +1,5 @@
 #lang racket/base
+(require "readtable-parameter.rkt")
 
 (provide (struct-out read-config)
          (struct-out read-config-state)
@@ -23,9 +24,10 @@
 
 (define (make-read-config
          #:source [source #f]
+         #:readtable [readtable (current-readtable)]
          #:wrap [wrap #f #;(lambda (s-exp srcloc) s-exp)]
          #:for-syntax? [for-syntax? #f])
-  (read-config #f
+  (read-config readtable
                source
                wrap
                for-syntax?

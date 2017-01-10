@@ -20,11 +20,11 @@
       (reader-error in config "found non-character while reading a ~a" mode)]))
   (let loop ()
     (define c (read-char-or-special in))
-    (define ec (effective-char c config))
+    ;; Note: readtable is not used for a closing " or other string decisions
     (cond
-     [(not (char? ec))
-      (bad-end ec)]
-     [(char=? #\\ ec)
+     [(not (char? c))
+      (bad-end c)]
+     [(char=? #\\ c)
       (define escaping-c c)
       (define escaped-c (read-char-or-special in))
       (when (not (char? escaped-c))
@@ -141,7 +141,7 @@
                          escaping-c (accum-string-get! accum-str config #:start-pos pos))])]
         [else (unknown-error)])
       (loop)]
-     [(char=? #\" ec)
+     [(char=? #\" c)
       null]
      [else
       (when (eq? mode '|byte string|)

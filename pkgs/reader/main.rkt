@@ -23,7 +23,9 @@
          "box.rkt"
          "regexp.rkt")
 
-(provide read)
+(provide read
+         make-readtable
+         current-readtable)
 
 (define (read in #:source [source #f])
   (define config (make-read-config #:source source))
@@ -66,6 +68,9 @@
   (cond
    [(eof-object? c) eof]
    [(not (char? c)) c]
+   [(readtable-handler config c)
+    => (lambda (handler)
+         (readtable-apply handler c in config line col pos))]
    [else
     ;; Map character via readtable:
     (define ec (effective-char c config))
@@ -138,6 +143,12 @@
     (reader-error in config #:eof? #t "bad syntax `~a`" dispatch-c)]
    [(not (char? c))
     (reader-error in config "bad syntax `~a`" dispatch-c)]
+   [(readtable-dispatch-handler config c)
+    => (lambda (handler)
+         (define line (read-config-line config))
+         (define col (read-config-col config))
+         (define pos (read-config-pos config))
+         (readtable-apply handler c in config line col pos))]
    [else
     (define-syntax-rule (guard-legal e c body ...)
       (cond
