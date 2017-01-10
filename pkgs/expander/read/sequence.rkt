@@ -23,6 +23,7 @@
   (define config (struct*-copy read-config seq-config
                                [indentations (cons indentation
                                                    (read-config-indentations seq-config))]))
+
   (define (read-one/not-eof read-one)
     (define e (read-one in config))
     (when (eof-object? e)
@@ -32,6 +33,7 @@
                     opener-c
                     (indentation-possible-cause config)))
     e)
+
   (define seq
     (let loop ([first? #t] [first-read-one first-read-one])
       (define c (skip-whitespace-and-comments! whitespace-read-one in config))

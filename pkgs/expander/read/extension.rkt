@@ -4,7 +4,8 @@
          "error.rkt"
          "accum-string.rkt"
          "parameter.rkt"
-         "wrap.rkt")
+         "wrap.rkt"
+         "special-comment.rkt")
 
 (provide read-extension-reader
          read-extension-lang

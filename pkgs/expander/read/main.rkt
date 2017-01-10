@@ -11,6 +11,7 @@
          "indentation.rkt"
          "parameter.rkt"
          "primitive-parameter.rkt"
+         "special-comment.rkt"
          "sequence.rkt"
          "vector.rkt"
          "struct.rkt"
@@ -32,7 +33,8 @@
          readtable?
          readtable-mapping
 
-         (all-from-out "primitive-parameter.rkt"))
+         (all-from-out "primitive-parameter.rkt")
+         (all-from-out "special-comment.rkt"))
 
 (define (read in
               #:source [source #f]

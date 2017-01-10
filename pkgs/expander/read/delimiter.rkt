@@ -3,10 +3,10 @@
          "readtable.rkt"
          "parameter.rkt")
 
-(provide char-delimiter?)
+(provide readtable-char-delimiter?
+         char-delimiter?)
 
-(define (char-delimiter? c config)
-  (define rt (read-config-readtable config))
+(define (readtable-char-delimiter? rt c config)
   (define dc (or (and rt
                       (hash-ref (readtable-delimiter-ht rt) c #f)) ; #f => default for `c`
                  c))
@@ -28,3 +28,6 @@
         (char=? dc #\")
         (and (char=? dc #\.)
              (check-parameter read-cdot config)))]))
+
+(define (char-delimiter? c config)
+  (readtable-char-delimiter? (read-config-readtable config) c config))

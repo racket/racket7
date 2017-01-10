@@ -3,52 +3,59 @@
          "config.rkt"
          "readtable.rkt"
          "consume.rkt"
-         "error.rkt")
+         "error.rkt"
+         "special-comment.rkt")
 
 (provide skip-whitespace-and-comments!)
 
-;; Returns the next character as peeked
+;; Skip whitespace, including non-character values that are
+;; `special-comment?`s
 (define (skip-whitespace-and-comments! read-one in config)
-  (define c (peek-char-or-special in))
-  (define ec (effective-char c config))
-  (cond
-   [(eof-object? ec) c]
-   [(not (char? ec)) c]
-   [(char-whitespace? ec)
-    (consume-char in c)
-    (skip-whitespace-and-comments! read-one in config)]
-   [(char=? #\; ec)
-    (let loop ()
-      (define c (read-char-or-special in))
-      (unless (or (eof-object? c)
-                  (char=? #\newline (effective-char c config)))
-        (loop)))
-    (skip-whitespace-and-comments! read-one in config)]
-   [(and (char=? #\# ec)
-         (eqv? #\| (peek-char-or-special in 1)))
-    (skip-pipe-comment! c in config)
-    (skip-whitespace-and-comments! read-one in config)]
-   [(and (char=? #\# ec)
-         (eqv? #\! (peek-char-or-special in 1))
-         (let ([c3 (peek-char-or-special in 2)])
-           (or (eqv? #\space c3)
-               (eqv? #\/ c3))))
-    (skip-unix-line-comment! in config)
-    (skip-whitespace-and-comments! read-one in config)]
-   [(and (char=? #\# ec)
-         (eqv? #\; (peek-char-or-special in 1)))
-    (consume-char in c)
-    (consume-char in #\;)
-    (define v
-      (read-one in (struct*-copy read-config config
-                                 [wrap #f])))
-    (when (eof-object? v)
-      (reader-error in config
-                    #:eof? #t
-                    "expected a commented-out element for `~a;', but found end-of-file"
-                    ec))
-    (skip-whitespace-and-comments! read-one in config)]
-   [else c]))
+  (define rt (read-config-readtable config))
+  (let skip-loop ()
+    (define c (peek-char-or-special in))
+    (define ec (readtable-effective-char rt c))
+    (cond
+     [(eof-object? ec) c]
+     [(not (char? ec))
+      (if (special-comment? c)
+          (skip-loop)
+          c)]
+     [(char-whitespace? ec)
+      (consume-char in c)
+      (skip-loop)]
+     [(char=? #\; ec)
+      (let loop ()
+        (define c (read-char-or-special in))
+        (unless (or (eof-object? c)
+                    (char=? #\newline (effective-char c config)))
+          (loop)))
+      (skip-loop)]
+     [(and (char=? #\# ec)
+           (eqv? #\| (peek-char-or-special in 1)))
+      (skip-pipe-comment! c in config)
+      (skip-loop)]
+     [(and (char=? #\# ec)
+           (eqv? #\! (peek-char-or-special in 1))
+           (let ([c3 (peek-char-or-special in 2)])
+             (or (eqv? #\space c3)
+                 (eqv? #\/ c3))))
+      (skip-unix-line-comment! in config)
+      (skip-loop)]
+     [(and (char=? #\# ec)
+           (eqv? #\; (peek-char-or-special in 1)))
+      (consume-char in c)
+      (consume-char in #\;)
+      (define v
+        (read-one in (struct*-copy read-config config
+                                   [wrap #f])))
+      (when (eof-object? v)
+        (reader-error in config
+                      #:eof? #t
+                      "expected a commented-out element for `~a;', but found end-of-file"
+                      ec))
+      (skip-loop)]
+     [else c])))
 
 ;; Skips balanced pipe comments
 (define (skip-pipe-comment! init-c in config)

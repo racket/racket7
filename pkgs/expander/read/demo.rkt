@@ -124,5 +124,14 @@
 
 (define s (format "~s" (for/list ([i 100000])
                          i)))
+(collect-garbage)
+(require "accum-string.rkt"
+         "config.rkt")
+(void (time (let ([p (s->p s)])
+              ;; Sortof a baseline measurement:
+              (define accum-str (accum-string-init! (make-read-config)))
+              (let loop ([v #f])
+                (unless (eof-object? (peek-char-or-special p))
+                  (loop (accum-string-add! accum-str (read-char-or-special p))))))))
 (void (time (test-read (s->p s))))
 (void (time (read (s->p s))))

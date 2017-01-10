@@ -47,11 +47,12 @@
       (consume-char in c)
       (unexpected-quoted c pipe-quote-c)]
      [(and (not pipe-quote-c)
-           (char-delimiter? c config))
+           (readtable-char-delimiter? rt c config))
       ;; EOF or other delimiter - done!
       (unless case-sens?
         (accum-string-convert! accum-str string-foldcase foldcase-from))]
-     [(and pipe-quote-c (char=? c pipe-quote-c)) ; note: `pipe-quote-c` determines close, not readtable
+     [(and pipe-quote-c
+           (char=? c pipe-quote-c)) ; note: `pipe-quote-c` determines close, not readtable
       ;; End quoting mode
       (consume-char in c)
       (loop #f (accum-string-count accum-str))]
