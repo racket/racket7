@@ -158,7 +158,8 @@
    [else
     ((read-config-coerce config)
      for-syntax?
-     (handler c in (read-config-source config) line col pos))]))
+     (parameterize ([current-read-config config])
+       (handler c in (read-config-source config) line col pos)))]))
 
 ;; Part of the public API:
 (define (readtable-mapping rt c)

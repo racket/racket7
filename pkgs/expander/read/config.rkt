@@ -4,12 +4,16 @@
 
 (provide (struct*-out read-config)
          (struct-out read-config-state)
+         current-read-config
          make-read-config
+         read-config-update
          port+config->srcloc
          reading-at
-         disable-wrapping)
+         disable-wrapping
+         next-readtable)
 
 (struct* read-config (readtable
+                      next-readtable ; readtable to use for recursive reads
                       for-syntax?   ; impose restrictions on graphs, fxvectors, etc?
                       source
                       wrap          ; wrapper applied to each datum, intended for syntax objects
@@ -28,16 +32,20 @@
 (struct read-config-state ([accum-str #:mutable] ; string-buffer cache
                            [graph #:mutable]))   ; #f or hash of number -> value
 
+(define current-read-config (make-parameter #f)) ; for `read/recursive`
+
 (define (make-read-config
          #:source [source #f]
          #:for-syntax? [for-syntax? #f]
          #:readtable [readtable (current-readtable)]
+         #:next-readtable [next-readtable readtable]
          #:wrap [wrap #f #;(lambda (s-exp srcloc) s-exp)]
          #:read-compiled [read-compiled #f]
          #:dynamic-require [dynamic-require #f]
          #:module-declared? [module-declared? #f]
          #:coerce [coerce #f])
   (read-config readtable
+               next-readtable
                for-syntax?
                source
                wrap
@@ -61,6 +69,19 @@
                (read-config-state #f    ; accum-str
                                   #f))) ; graph
 
+(define (read-config-update config
+                            #:for-syntax? for-syntax?
+                            #:readtable readtable
+                            #:next-readtable (read-config-readtable config)
+                            #:reset-graph? local-graph?)
+  (struct*-copy read-config config
+                [for-syntax? for-syntax?]
+                [readtable readtable]
+                [next-readtable next-readtable]
+                [st (if local-graph?
+                        (read-config-state #f #f)
+                        (read-config-st config))]))
+
 (define (port+config->srcloc in config)
   (define-values (end-line end-col end-pos) (port-next-location in))
   (srcloc (read-config-source config)
@@ -78,3 +99,13 @@
 (define (disable-wrapping config)
   (struct*-copy read-config config
                 [wrap #f]))
+
+(define (next-readtable config)
+  (cond
+   [(eq? (read-config-readtable config)
+         (read-config-next-readtable config))
+    config]
+   [else
+    (struct*-copy read-config config
+                  [readtable (read-config-next-readtable config)]
+                  [next-readtable #f])]))

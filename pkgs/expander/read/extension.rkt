@@ -82,25 +82,25 @@
       (accum-string-add! accum-str c)
       (loop)]
      [else (reader-error in config
-                         (string-append "expected only alphanumeric, `-', `+', `_', or `/'"
-                                        " characters for `~a', found `~a'")
+                         (string-append "expected only alphanumeric, `-`, `+`, `_`, or `/`"
+                                        " characters for `~a`, found `~a`")
                          extend-str
                          c)]))
 
   (define lang-str (accum-string-get! accum-str config))
   (when (equal? lang-str "")
     (reader-error in config
-                  "expected a non-empty sequence of alphanumeric, `-', `+', `_', or `/' after `~a'"
+                  "expected a non-empty sequence of alphanumeric, `-`, `+`, `_`, or `/` after `~a`"
                   extend-str))
 
   (when (char=? #\/ (string-ref lang-str 0))
     (reader-error in config
-                  "expected a name that does not start `/' after `~a'"
+                  "expected a name that does not start `/` after `~a`"
                   extend-str))
 
   (when (char=? #\/ (string-ref lang-str (sub1 (string-length lang-str))))
     (reader-error in config
-                  "expected a name that does not end `/' after `~a'"
+                  "expected a name that does not end `/` after `~a`"
                   extend-str))
   
   (define submod-path `(submod ,(string->symbol lang-str) reader))
@@ -160,14 +160,16 @@
      [for-syntax?
       (cond
        [(procedure-arity-includes? extension 6)
-        (extension mod-path-wrapped
-                   in
-                   (read-config-source config)
-                   (read-config-line config)
-                   (read-config-col config)
-                   (read-config-pos config))]
+        (parameterize ([current-read-config config])
+          (extension mod-path-wrapped
+                     in
+                     (read-config-source config)
+                     (read-config-line config)
+                     (read-config-col config)
+                     (read-config-pos config)))]
        [(procedure-arity-includes? extension 2)
-        (extension mod-path-wrapped in)]
+        (parameterize ([current-read-config config])
+          (extension mod-path-wrapped in))]
        [else
         (raise-argument-error '|#reader|
                               "(or/c (procedure-arity-includes?/c 2) (procedure-arity-includes?/c 6))"
@@ -175,13 +177,15 @@
      [else
       (cond
        [(procedure-arity-includes? extension 5)
-        (extension in
-                   (read-config-source config)
-                   (read-config-line config)
-                   (read-config-col config)
-                   (read-config-pos config))]
+        (parameterize ([current-read-config config])
+          (extension in
+                     (read-config-source config)
+                     (read-config-line config)
+                     (read-config-col config)
+                     (read-config-pos config)))]
        [(procedure-arity-includes? extension 1)
-        (extension in)]
+        (parameterize ([current-read-config config])
+          (extension in))]
        [else
         (raise-argument-error '|#reader|
                               "(or/c (procedure-arity-includes?/c 1) (procedure-arity-includes?/c 5))"

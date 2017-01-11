@@ -27,6 +27,8 @@
          "extension.rkt")
 
 (provide read
+         read/recursive
+         can-read/recursive?
 
          current-readtable
          make-readtable
@@ -37,57 +39,105 @@
          (all-from-out "special-comment.rkt"))
 
 (define (read in
+              #:init-c [init-c #f]
+              #:readtable [readtable (current-readtable)]
+              #:next-readtable [next-readtable readtable]
               #:source [source #f]
               #:for-syntax? [for-syntax? #f]
               #:read-compiled [read-compiled #f]
               #:dynamic-require [dynamic-require #f]
               #:module-declared? [module-declared? #f]
-              #:coerce [coerce #f])
-  (define config (make-read-config #:source source
+              #:coerce [coerce #f]
+              #:keep-special-comment? [keep-special-comment? #f])
+  (define config (make-read-config #:readtable readtable
+                                   #:next-readtable next-readtable
+                                   #:source source
                                    #:for-syntax? for-syntax?
                                    #:read-compiled read-compiled
                                    #:dynamic-require dynamic-require
                                    #:module-declared? module-declared?
                                    #:coerce coerce))
-  (define v (read-one in config))
+  (define v (read-one/readtable-set init-c in config
+                                    #:keep-special-comment? keep-special-comment?))
   (cond
    [(read-config-state-graph (read-config-st config))
     (make-reader-graph v)]
    [else v]))
 
+(define (read/recursive in
+                        #:for-syntax? [for-syntax? #f]
+                        #:init-c [init-c #f]
+                        #:readtable [readtable (current-readtable)]
+                        #:local-graph? [local-graph? #f]
+                        #:keep-special-comment? [keep-special-comment? #f])
+  (define config (read-config-update (current-read-config)
+                                     #:for-syntax? for-syntax?
+                                     #:readtable readtable
+                                     #:next-readtable (read-config-readtable config)
+                                     #:reset-graph? local-graph?))
+  (define v (read-one/readtable-set init-c in config
+                                    #:keep-special-comment? keep-special-comment?))
+  (cond
+   [(and local-graph?
+         (read-config-state-graph (read-config-st config)))
+    (make-reader-graph v)]
+   [(eof-object? v) v]
+   [else (make-placeholder v)]))
+  
+(define (can-read/recursive?)
+  (and (current-read-config) #t))
+
+;; ----------------------------------------
+
 (define (read-one in config)
+  (read-one/readtable-set #f in (next-readtable config)))
+
+(define (read-one/readtable-set init-c in config
+                                #:keep-special-comment? [keep-special-comment? #f])
   (cond
    [(not (check-parameter read-cdot config))
     ;; No parsing of `.` as `#%dot`
-    (read-undotted in config)]
+    (read-undotted/readtable-set init-c in config #:keep-special-comment? keep-special-comment?)]
    [(check-parameter read-cdot config)
     ;; Look for `<something> . <something>`
     (define-values (line col pos) (port-next-location in))
-    (define v (read-undotted in config))
-    (let loop ([v v])
-      (define c (peek-char-or-special in))
-      (define ec (effective-char c config))
-      (cond
-       [(not (char? ec))
-        v]
-       [(char-whitespace? ec)
-        (consume-char in c)
-        (loop v)]
-       [(char=? ec #\.)
-        (define-values (dot-line dot-col dot-pos) (port-next-location in))
-        (consume-char in c)
-        (define cdot (wrap '#%dot in (reading-at config dot-line dot-col dot-pos) #\.))
-        (define post-v (read-undotted in config))
-        (loop (wrap (list '#%dot v post-v) in (reading-at config line col pos) #\.))]
-       [else v]))]))
+    (define v (read-undotted/readtable-set init-c in config #:keep-special-comment? keep-special-comment?))
+    (cond
+     [(special-comment? v) v]
+     [else
+      (let loop ([v v])
+        (define c (peek-char-or-special in))
+        (define ec (effective-char c config))
+        (cond
+         [(not (char? ec))
+          v]
+         [(char-whitespace? ec)
+          (consume-char in c)
+          (loop v)]
+         [(char=? ec #\.)
+          (define-values (dot-line dot-col dot-pos) (port-next-location in))
+          (consume-char in c)
+          (define cdot (wrap '#%dot in (reading-at config dot-line dot-col dot-pos) #\.))
+          (define post-v (read-undotted in config))
+          (loop (wrap (list '#%dot v post-v) in (reading-at config line col pos) #\.))]
+         [else v]))])]))
+
+;; ----------------------------------------
 
 (define (read-undotted in config)
+  (read-undotted/readtable-set #f in (next-readtable config)))
+
+(define (read-undotted/readtable-set init-c in config
+                                     #:keep-special-comment? [keep-special-comment? #f])
   (skip-whitespace-and-comments! read-one in config)
   (define-values (line col pos) (port-next-location in))
-  (define c (read-char-or-special in))
+  (define c (or init-c (read-char-or-special in)))
   (cond
    [(eof-object? c) eof]
-   [(special-comment? c) (read-undotted in config)]
+   [(special-comment? c)
+    (if keep-special-comment?
+        c
+        (read-undotted/readtable-set #f in config))]
    [(not (char? c)) c]
    [(readtable-handler config c)
     => (lambda (handler)

@@ -29,7 +29,7 @@
     (when (eof-object? e)
       (reader-error in config #:eof? #t
                     "expected a `~a` to close `~a`~a"
-                    (closer-name closer)
+                    (closer-name closer config)
                     opener-c
                     (indentation-possible-cause config)))
     e)
