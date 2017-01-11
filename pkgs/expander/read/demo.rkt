@@ -105,6 +105,16 @@
                                                   (lambda (a b c d e f) 'TEE))])
   (test-read (s->p "(1 #t 2)")
              '(1 TEE 2)))
+(parameterize ([current-readtable (make-readtable #f
+                                                  #\t 'dispatch-macro
+                                                  (lambda (c in src long col pos)
+                                                    (unless (equal? c #\t)
+                                                      (error "not the expected character"))
+                                                    (main:read in
+                                                               #:recursive? #t
+                                                               #:readtable #f)))])
+  (test-read (s->p "(#1=(a) #t#1# #t#t)")
+             '((a) (a) #t)))
 (parameterize ([read-accept-reader #t])
   (main:read (s->p "#readerok") #:dynamic-require (lambda (lib sym fail-k)
                                                     (lambda (in src line col pos)

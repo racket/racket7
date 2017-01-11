@@ -152,9 +152,12 @@
   (define for-syntax? (read-config-for-syntax? config))
   (cond
    [(not for-syntax?)
-    (if (procedure-arity-includes? handler 2)
-        (handler c in)
-        (handler c in #f #f #f #f))]
+    ((read-config-coerce config)
+     #f
+     (parameterize ([current-read-config config])
+       (if (procedure-arity-includes? handler 2)
+           (handler c in)
+           (handler c in #f #f #f #f))))]
    [else
     ((read-config-coerce config)
      for-syntax?

@@ -10,7 +10,8 @@
 
 ;; Skip whitespace, including non-character values that are
 ;; `special-comment?`s
-(define (skip-whitespace-and-comments! read-one in config)
+(define (skip-whitespace-and-comments! read-one in config
+                                       #:keep-special-comment? [keep-special-comment? #f])
   (define rt (read-config-readtable config))
   (let skip-loop ()
     (define c (peek-char-or-special in))
@@ -18,9 +19,12 @@
     (cond
      [(eof-object? ec) c]
      [(not (char? ec))
-      (if (special-comment? c)
-          (skip-loop)
-          c)]
+      (cond
+       [(and (special-comment? c)
+             (not keep-special-comment?))
+        (consume-char in c)
+        (skip-loop)]
+       [else c])]
      [(char-whitespace? ec)
       (consume-char in c)
       (skip-loop)]

@@ -28,7 +28,6 @@
 
 (provide read
          read/recursive
-         can-read/recursive?
 
          current-readtable
          make-readtable
@@ -38,56 +37,60 @@
          (all-from-out "primitive-parameter.rkt")
          (all-from-out "special-comment.rkt"))
 
+;; This is not the `read` to be exposed from `racket/base`, but a
+;; general entry to point implement `read` and variants like
+;; `read-syntax` and `read/recursive`. To support syntax objects, the
+;; caller should provide the `dynamic-require`, `read-compiled`,
+;; `module-declared?`, and `corece` functions, even when implementing
+;; a plain `read`, since those might be needed by a
+;; `read-syntax/recursive`.
 (define (read in
               #:init-c [init-c #f]
               #:readtable [readtable (current-readtable)]
               #:next-readtable [next-readtable readtable]
+              #:recursive? [recursive? #f]
+              #:local-graph? [local-graph? #f] ; ignored unless `recursive?`
               #:source [source #f]
               #:for-syntax? [for-syntax? #f]
-              #:read-compiled [read-compiled #f]
-              #:dynamic-require [dynamic-require #f]
-              #:module-declared? [module-declared? #f]
-              #:coerce [coerce #f]
+              #:read-compiled [read-compiled #f]       ; see "config.rkt"
+              #:dynamic-require [dynamic-require #f]   ; see "config.rkt"
+              #:module-declared? [module-declared? #f] ; see "config.rkt"
+              #:coerce [coerce #f]                     ; see "config.rkt"
               #:keep-special-comment? [keep-special-comment? #f])
-  (define config (make-read-config #:readtable readtable
-                                   #:next-readtable next-readtable
-                                   #:source source
-                                   #:for-syntax? for-syntax?
-                                   #:read-compiled read-compiled
-                                   #:dynamic-require dynamic-require
-                                   #:module-declared? module-declared?
-                                   #:coerce coerce))
+  (define config
+    (cond
+     [(and recursive?
+           (current-read-config))
+      => (lambda (config)
+           (read-config-update config
+                               #:for-syntax? for-syntax?
+                               #:readtable readtable
+                               #:next-readtable (read-config-readtable config)
+                               #:reset-graph? local-graph?))]
+     [else
+      (make-read-config #:readtable readtable
+                        #:next-readtable next-readtable
+                        #:source source
+                        #:for-syntax? for-syntax?
+                        #:read-compiled read-compiled
+                        #:dynamic-require dynamic-require
+                        #:module-declared? module-declared?
+                        #:coerce coerce)]))
   (define v (read-one/readtable-set init-c in config
                                     #:keep-special-comment? keep-special-comment?))
   (cond
-   [(read-config-state-graph (read-config-st config))
-    (make-reader-graph v)]
-   [else v]))
-
-(define (read/recursive in
-                        #:for-syntax? [for-syntax? #f]
-                        #:init-c [init-c #f]
-                        #:readtable [readtable (current-readtable)]
-                        #:local-graph? [local-graph? #f]
-                        #:keep-special-comment? [keep-special-comment? #f])
-  (define config (read-config-update (current-read-config)
-                                     #:for-syntax? for-syntax?
-                                     #:readtable readtable
-                                     #:next-readtable (read-config-readtable config)
-                                     #:reset-graph? local-graph?))
-  (define v (read-one/readtable-set init-c in config
-                                    #:keep-special-comment? keep-special-comment?))
-  (cond
-   [(and local-graph?
+   [(and (or (not recursive?) local-graph?)
          (read-config-state-graph (read-config-st config)))
     (make-reader-graph v)]
-   [(eof-object? v) v]
-   [else (make-placeholder v)]))
-  
-(define (can-read/recursive?)
-  (and (current-read-config) #t))
+   [(and recursive? (not (eof-object? v)))
+    (make-placeholder v)]
+   [else v]))
 
 ;; ----------------------------------------
+;; The top-level reading layer that takes care of parsing into
+;; `#%cdot`. The `read-one` function is used for recursive reads, in
+;; which case the "next" readtable may need to be installed, while
+;; `read-one/readtable-set` uses the readtable setting as-is.
 
 (define (read-one in config)
   (read-one/readtable-set #f in (next-readtable config)))
@@ -123,13 +126,16 @@
          [else v]))])]))
 
 ;; ----------------------------------------
+;; The top-level reading layer within `#%cdot` handling --- which is
+;; the reader's main dispatch layer.
 
 (define (read-undotted in config)
   (read-undotted/readtable-set #f in (next-readtable config)))
 
 (define (read-undotted/readtable-set init-c in config
                                      #:keep-special-comment? [keep-special-comment? #f])
-  (skip-whitespace-and-comments! read-one in config)
+  (skip-whitespace-and-comments! read-one in config
+                                 #:keep-special-comment? keep-special-comment?)
   (define-values (line col pos) (port-next-location in))
   (define c (or init-c (read-char-or-special in)))
   (cond
