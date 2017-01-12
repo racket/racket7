@@ -17,6 +17,7 @@
               compile-linklet             ; result is serializable
               recompile-linklet
               eval-linklet                ; optional; result is not serializable
+              read-compiled-linklet
               instantiate-linklet         ; fills in an instance given linket an argument instances
               
               linklet-import-variables

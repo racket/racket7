@@ -6011,6 +6011,31 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
   }
 }
 
+Scheme_Object *scheme_read_compiled(Scheme_Object *port,
+				    Scheme_Object *stxsrc,
+				    intptr_t line, intptr_t col, intptr_t pos)
+{
+  Scheme_Config *config;
+  Scheme_Object *v, *v2;
+  ReadParams params;
+
+  config = scheme_current_config();
+
+  params.skip_zo_vers_check = 0;
+
+  v = scheme_get_param(scheme_current_config(), MZCONFIG_CODE_INSPECTOR);
+  v2 = scheme_get_initial_inspector();
+  params.can_read_unsafe = SAME_OBJ(v, v2);
+
+  v = scheme_get_param(config, MZCONFIG_DELAY_LOAD_INFO);
+  if (SCHEME_TRUEP(v))
+    params.delay_load_info = v;
+  else
+    params.delay_load_info = NULL;
+
+  return read_compiled(port, stxsrc, line, col, pos, NULL, &params);
+}
+
 
 THREAD_LOCAL_DECL(static Scheme_Load_Delay *clear_bytes_chain);
 

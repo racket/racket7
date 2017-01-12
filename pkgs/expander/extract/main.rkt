@@ -23,7 +23,12 @@
 (define (extract start-mod-path cache
                  #:print-extracted-to print-extracted-to
                  #:as-c? as-c?
-                 #:as-decompiled? as-decompiled?)
+                 #:as-decompiled? as-decompiled?
+                 ;; Table of symbol -> (listof module-path),
+                 ;; to redirect a remaining import back to
+                 ;; an implementation that is defined in the
+                 ;; flattened code:
+                 #:instance-knot-ties instance-knot-ties)
   ;; Located modules:
   (define compiled-modules (make-hash))
 
@@ -82,7 +87,8 @@
   (check-and-report! #:compiled-modules compiled-modules
                      #:linklets linklets
                      #:linklets-in-order linklets-in-order
-                     #:needed needed)
+                     #:needed needed
+                     #:instance-knot-ties instance-knot-ties)
   
   ;; If we're in source mode, we can generate a single linklet
   ;; that combines all the ones we found
@@ -100,7 +106,8 @@
                 #:linklets linklets
                 #:linklets-in-order linklets-in-order
                 #:needed needed
-                #:exports exports))
+                #:exports exports
+                #:instance-knot-ties instance-knot-ties))
     
     (define simplified-expr
       (simplify-definitions flattened-linklet-expr))

@@ -1,11 +1,12 @@
 #lang racket/base
 (require racket/fixnum
          racket/flonum
+         "config.rkt"
+         "special.rkt"
          "sequence.rkt"
          "wrap.rkt"
          "error.rkt"
          "consume.rkt"
-         "config.rkt"
          "digit.rkt"
          "parameter.rkt"
          "accum-string.rkt"
@@ -51,7 +52,7 @@
        [else
         (define (last-or v)
           (if (null? seq)
-              v
+              (wrap v in config #f)
               (let loop ([seq seq])
                 (if (null? (cdr seq)) (car seq) (loop (cdr seq))))))
         (define vec
@@ -84,7 +85,7 @@
   (when (read-config-for-syntax? config)
     (reader-error in config "literal f~avectors not allowed" c2))
   
-  (define c3 (read-char-or-special in))
+  (define c3 (read-char/special in config))
   (define-values (vector-len len-str c4)
     (cond
      [(decimal-digit? c3) (read-simple-number in config c3)]
@@ -123,4 +124,4 @@
           ;; We could avoid some peeks vising init-c
           ;; and having `read-digit` return its peek
           ;; result, but we don't for now
-          (peek-char-or-special in)))
+          (peek-char/special in config)))

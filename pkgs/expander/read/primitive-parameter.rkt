@@ -1,6 +1,6 @@
 #lang racket/base
 
-(define (default-reader-guard v) (void))
+(define (default-reader-guard v) v)
 
 (provide current-reader-guard)
 (define current-reader-guard

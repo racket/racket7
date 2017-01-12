@@ -1,5 +1,6 @@
 #lang racket/base
 (require "config.rkt"
+         "special.rkt"
          "wrap.rkt"
          "readtable.rkt"
          "consume.rkt"
@@ -11,6 +12,7 @@
          read-here-string)
 
 (define (read-string in config #:mode [mode 'string])
+  (define source (read-config-source config))
   (define accum-str (accum-string-init! config))
   (define (bad-end c)
     (cond
@@ -19,14 +21,14 @@
      [else
       (reader-error in config "found non-character while reading a ~a" mode)]))
   (let loop ()
-    (define c (read-char-or-special in))
+    (define c (read-char/special in config source))
     ;; Note: readtable is not used for a closing " or other string decisions
     (cond
      [(not (char? c))
       (bad-end c)]
      [(char=? #\\ c)
       (define escaping-c c)
-      (define escaped-c (read-char-or-special in))
+      (define escaped-c (read-char/special in config source))
       (when (not (char? escaped-c))
         (bad-end escaped-c))
       (define (unknown-error)
@@ -47,7 +49,7 @@
         [(#\e) (accum-string-add! accum-str #\u1B)]
         [(#\newline) (void)]
         [(#\return)
-         (define maybe-newline-c (peek-char-or-special in))
+         (define maybe-newline-c (peek-char/special in config 0 source))
          (when (eqv? maybe-newline-c #\newline)
            (consume-char in maybe-newline-c))
          (void)]
@@ -87,7 +89,7 @@
           [else
            ;; Maybe a surrogate-pair encoding
            (define (next!)
-             (define next-c (read-char-or-special in))
+             (define next-c (read-char/special in config source))
              (when (char? next-c)
                (accum-string-add! accum-str next-c))
              next-c)
@@ -162,12 +164,13 @@
 ;; ----------------------------------------
 
 (define (read-here-string in config)
+  (define source (read-config-source config))
   (define accum-str (accum-string-init! config))
   
   ;; Parse terminator
   (define full-terminator
     (let loop ()
-      (define c (read-char-or-special in))
+      (define c (read-char/special in config source))
       (cond
        [(eof-object? c)
         (reader-error in config #:eof? #t
@@ -180,7 +183,7 @@
   
   ;; Get string content
   (let loop ([terminator full-terminator] [terminator-accum null])
-    (define c (read-char-or-special in))
+    (define c (read-char/special in config source))
     (cond
      [(eof-object? c)
       (unless (null? terminator)

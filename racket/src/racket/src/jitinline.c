@@ -2512,6 +2512,24 @@ static int generate_binary_char(mz_jit_state *jitter, Scheme_App3_Rec *app, int 
   direction = scheme_generate_two_args(r1, r2, jitter, 0, 2);
   CHECK_LIMIT();
 
+  if (direction < 0) {
+    /* reverse sense of comparison */
+    switch (cmp) {
+    case CMP_LEQ:
+      cmp = CMP_GEQ;
+      break;
+    case CMP_GEQ:
+      cmp = CMP_LEQ;
+      break;
+    case CMP_GT:
+      cmp = CMP_LT;
+      break;
+    case CMP_LT:
+      cmp = CMP_GT;
+      break;
+    }
+  }
+
   mz_rs_sync();
 
   __START_SHORT_JUMPS__(branch_short);
@@ -2564,7 +2582,7 @@ static int generate_binary_char(mz_jit_state *jitter, Scheme_App3_Rec *app, int 
     CHECK_LIMIT();
   }
 
-  if (!direct) {
+  if (!direct || (cmp != CMP_EQUAL)) {
     /* Extract character value */
     jit_ldxi_i(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CHAR_VAL((Scheme_Object *)0x0));
     jit_ldxi_i(JIT_R1, JIT_R1, (intptr_t)&SCHEME_CHAR_VAL((Scheme_Object *)0x0));
@@ -2589,21 +2607,10 @@ static int generate_binary_char(mz_jit_state *jitter, Scheme_App3_Rec *app, int 
       ref = NULL; /* never happens */
     }
   } else {
+    /* Equality on small chars can compare pointers */
     switch(cmp) {
     case CMP_EQUAL:
       ref = jit_bner_p(jit_forward(), JIT_R0, JIT_R1);
-      break;
-    case CMP_LEQ:
-      ref = jit_bgtr_p(jit_forward(), JIT_R0, JIT_R1);
-      break;
-    case CMP_GEQ:
-      ref = jit_bltr_p(jit_forward(), JIT_R0, JIT_R1);
-      break;
-    case CMP_GT:
-      ref = jit_bler_p(jit_forward(), JIT_R0, JIT_R1);
-      break;
-    case CMP_LT:
-      ref = jit_bger_p(jit_forward(), JIT_R0, JIT_R1);
       break;
     default:
       ref = NULL; /* never happens */

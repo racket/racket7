@@ -30,3 +30,6 @@
 
 (define compile-linklet
   (hash-ref (primitive-table '#%linklet) 'compile-linklet #f))
+
+(define hash->linklet-bundle
+  (hash-ref (primitive-table '#%linklet) 'hash->linklet-bundle #f))

@@ -1,5 +1,6 @@
 #lang racket/base
 (require "config.rkt"
+         "special.rkt"
          "consume.rkt"
          "accum-string.rkt")
 
@@ -14,7 +15,7 @@
                      #:base base #:max-count max-count
                      #:init [init-v 0]
                      #:zero-digits-result [zero-digits-result #f])
-  (define c (peek-char-or-special in))
+  (define c (peek-char/special in config))
   (cond
    [(digit? c base)
     (consume-char in c)
@@ -24,7 +25,7 @@
       (cond
        [(zero? max-count) v]
        [else
-        (define c (peek-char-or-special in))
+        (define c (peek-char/special in config))
         (cond
          [(digit? c base)
           (consume-char in c)
@@ -60,4 +61,3 @@
     (- (char->integer c) (- (char->integer #\A) 10))]
    [else
     (- (char->integer c) (- (char->integer #\a) 10))]))
-

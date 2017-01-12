@@ -9,7 +9,9 @@
          "../namespace/api.rkt"
          "../eval/module-read.rkt"
          "../eval/module-cache.rkt"
-         "../eval/reflect.rkt")
+         "../eval/reflect.rkt"
+         "../read/api.rkt"
+         "../read/primitive-parameter.rkt")
 
 (provide default-load-handler)
 

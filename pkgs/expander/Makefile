@@ -2,9 +2,13 @@
 RACKET = ../../racket/bin/racket
 RACO = ../../racket/bin/raco
 
+# See "boot/read-primitive.rkt" for more info:
+KNOT = ++knot read read/api.rkt \
+       ++knot read read/primitive-parameter.rkt
+
 expander:
 	$(RACO) make bootstrap-run.rkt
-	$(RACKET) bootstrap-run.rkt -c compiled/cache-src -O ../../racket
+	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) -O ../../racket
 
 demo:
 	$(RACO) make demo.rkt

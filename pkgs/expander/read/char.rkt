@@ -1,5 +1,6 @@
 #lang racket/base
 (require "config.rkt"
+         "special.rkt"
          "wrap.rkt"
          "readtable.rkt"
          "consume.rkt"
@@ -10,7 +11,7 @@
 (provide read-character)
 
 (define (read-character in config)
-  (define c (read-char-or-special in))
+  (define c (read-char/special in config))
   (define char
     (cond
      [(eof-object? c)
@@ -21,12 +22,12 @@
                     "found non-character after `#\\`")]
      [(octal-digit? c)
       ;; Maybe octal
-      (define c2 (peek-char-or-special in))
+      (define c2 (peek-char/special in config))
       (cond
        [(and (char? c2) (octal-digit? c2))
         ;; Octal -- must be 3 digits
         (consume-char in c2)
-        (define c3 (read-char-or-special in))
+        (define c3 (read-char/special in config))
         (define v
           (cond
            [(and (char? c3) (octal-digit? c3))
@@ -67,7 +68,7 @@
         c])]
      [(char-alphabetic? c)
       ;; Maybe a name
-      (define next-c (peek-char-or-special in))
+      (define next-c (peek-char/special in config))
       (cond
        [(and (char? next-c)
              (char-alphabetic? next-c))
@@ -77,7 +78,7 @@
         (accum-string-add! accum-str next-c)
         (consume-char in next-c)
         (let loop ()
-          (define next-c (peek-char-or-special in))
+          (define next-c (peek-char/special in config))
           (when (and (char? next-c)
                      (char-alphabetic? next-c))
             (accum-string-add! accum-str next-c)

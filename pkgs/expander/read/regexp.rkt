@@ -1,5 +1,6 @@
 #lang racket/base
 (require "config.rkt"
+         "special.rkt"
          "wrap.rkt"
          "readtable.rkt"
          "consume.rkt"
@@ -10,7 +11,7 @@
 (provide read-regexp)
 
 (define (read-regexp mode-c accum-str in config)
-  (define c3 (read-char-or-special in))
+  (define c3 (read-char/special in config))
   (define no-wrap-config (disable-wrapping config))
   
   (define rx
@@ -21,7 +22,7 @@
         (read-string in no-wrap-config))]
       [(#\#)
        (accum-string-add! accum-str c3)
-       (define c4 (read-char-or-special in))
+       (define c4 (read-char/special in config))
        (case c4
          [(#\")
           (accum-string-abandon! accum-str config)

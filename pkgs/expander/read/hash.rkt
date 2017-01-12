@@ -1,5 +1,6 @@
 #lang racket/base
 (require "config.rkt"
+         "special.rkt"
          "readtable.rkt"
          "whitespace.rkt"
          "delimiter.rkt"
@@ -21,7 +22,7 @@
   (accum-string-add! accum-str init-c)
   
   (define (get-next! expect-c expect-alt-c)
-    (define c (read-char-or-special in))
+    (define c (read-char/special in config))
     (unless (or (eqv? c expect-c) (eqv? c expect-alt-c))
       (reader-error in config
                     #:eof? (eof-object? c)
@@ -35,7 +36,7 @@
   
   (define-values (content opener mode)
     (let loop ([mode 'equal])
-      (define c (read-char-or-special in))
+      (define c (read-char/special in config))
       (define ec (effective-char c config))
       (case ec
         [(#\()

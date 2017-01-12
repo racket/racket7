@@ -6,6 +6,8 @@
          "eval/main.rkt"
          "eval/dynamic-require.rkt"
          "eval/reflect.rkt"
+         "read/api.rkt"
+         "read/primitive-parameter.rkt"
          "namespace/api.rkt"
          (prefix-in wrapper: "eval/api.rkt")
          "namespace/attach.rkt"
@@ -13,6 +15,7 @@
          "namespace/core.rkt"
          "expand/missing-module.rkt"
          "boot/kernel.rkt"
+         "boot/read-primitive.rkt"
          "boot/main-primitive.rkt"
          "boot/utils-primitive.rkt"
          "boot/expobs-primitive.rkt"
@@ -36,6 +39,7 @@
          expand
          compile
          eval
+         read
          
          compile-to-linklets
          
@@ -78,10 +82,10 @@
          syntax-debug-info
          module-compiled-exports
          module-compiled-indirect-exports
+         read-accept-compiled
          
          syntax-shift-phase-level
          bound-identifier=?)
-
 
 ;; ----------------------------------------
 
@@ -98,6 +102,7 @@
 
 (define ns (make-namespace))
 (declare-core-module! ns)
+(declare-hash-based-module! '#%read read-primitives #:namespace ns)
 (declare-hash-based-module! '#%main main-primitives #:namespace ns)
 (declare-hash-based-module! '#%utils utils-primitives #:namespace ns)
 (declare-hash-based-module! '#%place-struct place-struct-primitives #:namespace ns
@@ -120,6 +125,8 @@
 (declare-kernel-module! ns
                         #:eval eval
                         #:main-ids (for/set ([name (in-hash-keys main-primitives)])
+                                     name)
+                        #:read-ids (for/set ([name (in-hash-keys read-primitives)])
                                      name))
 (for ([name (in-list runtime-instances)]
       #:unless (eq? name '#%kernel))

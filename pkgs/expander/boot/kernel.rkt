@@ -19,15 +19,19 @@
          declare-hash-based-module!
          declare-reexporting-module!)
 
-(define (declare-kernel-module! ns #:eval eval #:main-ids main-ids)
+(define (declare-kernel-module! ns
+                                #:eval eval
+                                #:main-ids main-ids
+                                #:read-ids read-ids)
   (copy-runtime-module! '#%kernel
                         #:to '#%runtime
                         #:skip (set-union primitive-ids
-                                          main-ids)
+                                          (set-union main-ids
+                                                     read-ids))
                         #:extras (hasheq 'variable-reference? variable-reference?
                                          'variable-reference-constant? variable-reference-constant?)
                         #:namespace ns)
-  (declare-reexporting-module! '#%kernel '(#%core #%runtime #%main)
+  (declare-reexporting-module! '#%kernel '(#%core #%runtime #%main #%read)
                                #:namespace ns))
  
 (define (copy-runtime-module! name

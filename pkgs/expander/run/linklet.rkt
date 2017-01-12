@@ -313,6 +313,9 @@
 (define (eval-linklet c)
   c)
 
+(define (read-compiled-linklet in)
+  (read in))
+
 ;; Convert linklet to a procedure
 (define (really-eval-linklet cl)
   (parameterize ([current-namespace cu-namespace]

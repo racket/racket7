@@ -35,6 +35,7 @@
 (define print-extracted-to #f)
 (define extract-to-c? #f)
 (define extract-to-decompiled? #f)
+(define instance-knot-ties (make-hasheq))
 (define quiet-load? #f)
 (define startup-module main.rkt)
 (define submod-name #f)
@@ -79,6 +80,12 @@
     (set! extract-to-c? #t)]
    [("-D") "Print extracted bootstrap as a decompiled"
     (set! extract-to-decompiled? #t)]
+   #:multi
+   [("++knot") sym path "Redirect imports from <sym> to flattened from <path>"
+    (hash-update! instance-knot-ties
+                  (string->symbol (format "#%~a" sym))
+                  (lambda (l) (cons (path->complete-path path) l))
+                  null)]
    #:once-any
    [("-t") file "Load specified file"
     (set! startup-module (path->complete-path file))]
@@ -250,7 +257,8 @@
   (extract startup-module cache
            #:print-extracted-to print-extracted-to
            #:as-c? extract-to-c?
-           #:as-decompiled? extract-to-decompiled?))
+           #:as-decompiled? extract-to-decompiled?
+           #:instance-knot-ties instance-knot-ties))
 
 (when load-file
   (load load-file))

@@ -44,6 +44,7 @@ static Scheme_Object *linklet_p(int argc, Scheme_Object **argv);
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *eval_linklet(int argc, Scheme_Object **argv);
+static Scheme_Object *read_compiled_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv);
 static Scheme_Object *linklet_import_variables(int argc, Scheme_Object **argv);
 static Scheme_Object *linklet_export_variables(int argc, Scheme_Object **argv);
@@ -121,6 +122,7 @@ void scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY2("compile-linklet", compile_linklet, 1, 4, 2, 2, env);
   ADD_PRIM_W_ARITY2("recompile-linklet", recompile_linklet, 1, 4, 2, 2, env);
   ADD_IMMED_PRIM("eval-linklet", eval_linklet, 1, 1, env);
+  ADD_PRIM_W_ARITY("read-compiled-linklet", read_compiled_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY2("instantiate-linklet", instantiate_linklet, 2, 4, 0, -1, env);
   ADD_PRIM_W_ARITY("linklet-import-variables", linklet_import_variables, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-export-variables", linklet_export_variables, 1, 1, env);
@@ -374,6 +376,14 @@ static Scheme_Object *eval_linklet(int argc, Scheme_Object **argv)
   }
 
   return (Scheme_Object *)linklet;
+}
+
+static Scheme_Object *read_compiled_linklet(int argc, Scheme_Object **argv)
+{
+  if (!SCHEME_INPUT_PORTP(argv[0]))
+    scheme_wrong_contract("read-compiled-linklet", "input-port?", 0, argc, argv);
+
+  return scheme_read_compiled(argv[0], NULL, -1, -1, -1);
 }
 
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)

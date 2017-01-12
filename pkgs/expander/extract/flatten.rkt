@@ -14,7 +14,8 @@
                   #:linklets linklets
                   #:linklets-in-order linklets-in-order
                   #:needed needed
-                  #:exports exports)
+                  #:exports exports
+                  #:instance-knot-ties instance-knot-ties)
   (log-status "Flattening to a single linklet...")
   (define needed-linklets-in-order
     (for/list ([lnk (in-list (unbox linklets-in-order))]
@@ -23,7 +24,8 @@
   
   (define variable-names (pick-variable-names
                           #:linklets linklets
-                          #:needed-linklets-in-order needed-linklets-in-order))
+                          #:needed-linklets-in-order needed-linklets-in-order
+                          #:instance-knot-ties instance-knot-ties))
   
   (for ([var (in-hash-keys variable-names)]
         #:when (symbol? (link-name (variable-link var))))
@@ -46,10 +48,13 @@
        (for/list ([lnk (in-list (reverse needed-linklets-in-order))])
          (body-with-substituted-variable-names lnk
                                                (hash-ref linklets lnk)
-                                               variable-names)))))
+                                               variable-names
+                                               #:linklets linklets
+                                               #:instance-knot-ties instance-knot-ties)))))
 
 (define (pick-variable-names #:linklets linklets
-                             #:needed-linklets-in-order needed-linklets-in-order)
+                             #:needed-linklets-in-order needed-linklets-in-order
+                             #:instance-knot-ties instance-knot-ties)
   ;; We need to pick a name for each needed linklet's definitions plus
   ;; each primitive import. Start by checking which names are
   ;; currently used.
@@ -67,22 +72,27 @@
     (define all-mentioned-symbols
       (all-used-symbols (bootstrap:s-expr-linklet-body linklet)))
     
-    (define (record! lnk external+local)
-      (define var (variable lnk (car external+local)))
-      (unless (hash-ref variable-locals var #f)
-        (set! all-variables (cons var all-variables)))
-      (hash-update! variable-locals
-                    var
-                    (lambda (s) (set-add s (cdr external+local)))
-                    (seteq)))
+    (define (record! lnk external+local knot-ties)
+      (cond
+       [(find-knot-tying-alternate knot-ties lnk (car external+local) linklets)
+        => (lambda (alt-lnk)
+             (record! alt-lnk external+local knot-ties))]
+       [else
+        (define var (variable lnk (car external+local)))
+        (unless (hash-ref variable-locals var #f)
+          (set! all-variables (cons var all-variables)))
+        (hash-update! variable-locals
+                      var
+                      (lambda (s) (set-add s (cdr external+local)))
+                      (seteq))]))
     
     (for ([imports+locals (in-list importss+localss)]
           [i-lnk (in-list (linklet-info-imports li))])
       (for ([import+local (in-list imports+locals)])
-        (record! i-lnk import+local)))
+        (record! i-lnk import+local instance-knot-ties)))
     
     (for ([export+local (in-list exports+locals)])
-      (record! lnk export+local))
+      (record! lnk export+local #hasheq()))
                    
     (define all-import-export-locals
       (list->set
@@ -114,7 +124,9 @@
     (set! otherwise-used-symbols (set-add otherwise-used-symbols sym))
     (values var sym)))
 
-(define (body-with-substituted-variable-names lnk li variable-names)
+(define (body-with-substituted-variable-names lnk li variable-names
+                                              #:linklets linklets
+                                              #:instance-knot-ties instance-knot-ties)
   (define linklet (linklet-info-linklet li))
   (define importss+localss
     (skip-abi-imports (bootstrap:s-expr-linklet-importss+localss linklet)))
@@ -123,19 +135,41 @@
 
   (define substs (make-hasheq))
   
-  (define (add-subst! lnk external+local)
-    (hash-set! substs
-               (cdr external+local)
-               (hash-ref variable-names (variable lnk (car external+local)))))
+  (define (add-subst! lnk external+local knot-ties)
+    (cond
+     [(find-knot-tying-alternate knot-ties lnk (car external+local) linklets)
+      => (lambda (alt-lnk)
+           (add-subst! alt-lnk external+local knot-ties))]
+     [else
+      (hash-set! substs
+                 (cdr external+local)
+                 (hash-ref variable-names (variable lnk (car external+local))))]))
   
   (for ([imports+locals (in-list importss+localss)]
         [i-lnk (in-list (linklet-info-imports li))])
     (for ([import+local (in-list imports+locals)])
-      (add-subst! i-lnk import+local)))
+      (add-subst! i-lnk import+local instance-knot-ties)))
   
   (for ([export+local (in-list exports+locals)])
-    (add-subst! lnk export+local))
+    (add-subst! lnk export+local #hasheq()))
   
   (define orig-s (bootstrap:s-expr-linklet-body (linklet-info-linklet li)))
   
   (substitute-symbols orig-s substs))
+
+
+(define (find-knot-tying-alternate knot-ties lnk external linklets)
+  (cond
+   [(hash-ref knot-ties (link-name lnk) #f)
+    => (lambda (alt-paths)
+         (or (for/or ([alt-path (in-list alt-paths)])
+               (define alt-lnk (link alt-path 0))
+               (define li (hash-ref linklets alt-lnk))
+               (define exports+locals (bootstrap:s-expr-linklet-exports+locals (linklet-info-linklet li)))
+               (for/or ([export+local (in-list exports+locals)])
+                 (and (eq? external (car export+local))
+                      alt-lnk)))
+             (error 'flatten "could not find alternative export: ~s from ~s"
+                    external
+                    lnk)))]
+   [else #f]))

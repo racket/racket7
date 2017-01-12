@@ -1,5 +1,6 @@
 #lang racket/base
 (require "config.rkt"
+         "special.rkt"
          "wrap.rkt"
          "readtable.rkt"
          "whitespace.rkt"
@@ -45,6 +46,7 @@
 ;; a plain `read`, since those might be needed by a
 ;; `read-syntax/recursive`.
 (define (read in
+              #:wrap [wrap #f]
               #:init-c [init-c #f]
               #:readtable [readtable (current-readtable)]
               #:next-readtable [next-readtable readtable]
@@ -56,7 +58,7 @@
               #:dynamic-require [dynamic-require #f]   ; see "config.rkt"
               #:module-declared? [module-declared? #f] ; see "config.rkt"
               #:coerce [coerce #f]                     ; see "config.rkt"
-              #:keep-special-comment? [keep-special-comment? #f])
+              #:keep-special-comment? [keep-special-comment? recursive?])
   (define config
     (cond
      [(and recursive?
@@ -64,6 +66,7 @@
       => (lambda (config)
            (read-config-update config
                                #:for-syntax? for-syntax?
+                               #:wrap wrap
                                #:readtable readtable
                                #:next-readtable (read-config-readtable config)
                                #:reset-graph? local-graph?))]
@@ -72,6 +75,7 @@
                         #:next-readtable next-readtable
                         #:source source
                         #:for-syntax? for-syntax?
+                        #:wrap wrap
                         #:read-compiled read-compiled
                         #:dynamic-require dynamic-require
                         #:module-declared? module-declared?
@@ -109,11 +113,13 @@
      [(special-comment? v) v]
      [else
       (let loop ([v v])
-        (define c (peek-char-or-special in))
+        (define c (peek-char/special in config))
         (define ec (effective-char c config))
         (cond
          [(not (char? ec))
-          v]
+          (if (special? v)
+              (special-value v)
+              v)]
          [(char-whitespace? ec)
           (consume-char in c)
           (loop v)]
@@ -137,14 +143,17 @@
   (skip-whitespace-and-comments! read-one in config
                                  #:keep-special-comment? keep-special-comment?)
   (define-values (line col pos) (port-next-location in))
-  (define c (or init-c (read-char-or-special in)))
+  (define c (or init-c (read-char/special in config)))
   (cond
    [(eof-object? c) eof]
-   [(special-comment? c)
-    (if keep-special-comment?
-        c
-        (read-undotted/readtable-set #f in config))]
-   [(not (char? c)) c]
+   [(not (char? c))
+    (define v (special-value c))
+    (cond
+     [(special-comment? v)
+      (if keep-special-comment?
+          v
+          (read-undotted/readtable-set #f in config))]
+     [else v])]
    [(readtable-handler config c)
     => (lambda (handler)
          (readtable-apply handler c in config line col pos))]
@@ -175,7 +184,7 @@
       [(#\,)
        (guard-legal
         (check-parameter read-accept-quasiquote config)
-        (define c2 (peek-char-or-special in))
+        (define c2 (peek-char/special in config))
         (if (eqv? c2 #\@)
             (begin
               (consume-char in c2)
@@ -208,13 +217,13 @@
       [(#\")
        (read-string in r-config)]
       [(#\|)
-       (read-number-or-symbol c in r-config #:initial-pipe-quote? #t #:mode 'symbol)]
+       (read-number-or-symbol c in r-config #:mode 'symbol)]
       [else
        (read-number-or-symbol c in r-config)])]))
 
 ;; Dispatch on `#` character
 (define (read-dispatch dispatch-c in config)
-  (define c (read-char-or-special in))
+  (define c (read-char/special in config))
   (cond
    [(eof-object? c)
     (reader-error in config #:eof? #t "bad syntax `~a`" dispatch-c)]
@@ -256,7 +265,7 @@
       [(#\`)
        (read-quote read-one 'quasisyntax "quasiquoting #`" c in config)]
       [(#\,)
-       (define c2 (peek-char-or-special in))
+       (define c2 (peek-char/special in config))
        (if (eqv? c2 #\@)
            (begin
              (consume-char in c2)
@@ -268,7 +277,7 @@
        (read-string in config #:mode '|byte string|)]
       [(#\<)
        (cond
-        [(eqv? #\< (peek-char-or-special in))
+        [(eqv? #\< (peek-char/special in config))
          (consume-char in #\<)
          (read-here-string in config)]
         [else
@@ -278,14 +287,14 @@
       [(#\:)
        (read-number-or-symbol #f in config #:mode 'keyword)]
       [(#\t #\T)
-       (define c2 (peek-char-or-special in))
+       (define c2 (peek-char/special in config))
        (cond
         [(char-delimiter? c2 config) (wrap #t in config c)]
         [else (read-delimited-constant c '(#\r #\u #\e) #t in config)])]
       [(#\f #\F)
-       (define c2 (peek-char-or-special in))
+       (define c2 (peek-char/special in config))
        (cond
-        [(char-delimiter? c2 config) (wrap #t in config c)]
+        [(char-delimiter? c2 config) (wrap #f in config c)]
         [(or (char=? c2 #\x) (char=? c2 #\l))
          (read-fixnum-or-flonum-vector read-one dispatch-c c c2 in config)]
         [else (read-delimited-constant c '(#\a #\l #\s #\e) #f in config)])]
@@ -302,7 +311,7 @@
       [(#\x) (read-number-or-symbol #f in config #:mode "#x")]
       [(#\X) (read-number-or-symbol #f in config #:mode "#X")]
       [(#\c #\C)
-       (define c2 (read-char-or-special in))
+       (define c2 (read-char/special in config))
        (case c2
          [(#\s #\S) (read-one in (override-parameter read-case-sensitive config #t))]
          [(#\i #\I) (read-one in (override-parameter read-case-sensitive config #f))]
@@ -316,7 +325,7 @@
        (define accum-str (accum-string-init! config))
        (accum-string-add! accum-str dispatch-c)
        (accum-string-add! accum-str c)
-       (define c2 (read-char-or-special in))
+       (define c2 (read-char/special in config))
        (when (char? c2) (accum-string-add! accum-str c2))
        (case c2
          [(#\x) (read-regexp c accum-str in config)]
@@ -330,7 +339,7 @@
        (define accum-str (accum-string-init! config))
        (accum-string-add! accum-str dispatch-c)
        (accum-string-add! accum-str c)
-       (define c2 (read-char-or-special in))
+       (define c2 (read-char/special in config))
        (when (char? c2) (accum-string-add! accum-str c2))
        (case c2
          [(#\x) (read-regexp c accum-str in config)]
@@ -346,7 +355,7 @@
        ;; Compiled code
        (cond
         [(check-parameter read-accept-compiled config)
-         ((read-config-read-compiled config) in)]
+         (wrap ((read-config-read-compiled config) in) in config c)]
         [else
          (reader-error in config
                        "`~a~~` compiled expressions not enabled"

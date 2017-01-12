@@ -2,6 +2,7 @@
 (require "../common/prefab.rkt"
          "readtable.rkt"
          "config.rkt"
+         "special.rkt"
          "parameter.rkt"
          "error.rkt"
          "wrap.rkt"
@@ -11,7 +12,7 @@
 (provide read-struct)
 
 (define (read-struct read-one dispatch-c in config)
-  (define c (read-char-or-special in))
+  (define c (read-char/special in config))
   
   (define-syntax-rule (guard-legal e body ...)
     (cond

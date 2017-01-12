@@ -1,5 +1,6 @@
 #lang racket/base
-(require "delimiter.rkt"
+(require "special.rkt"
+         "delimiter.rkt"
          "accum-string.rkt"
          "error.rkt"
          "consume.rkt"
@@ -11,7 +12,7 @@
   (define accum-str (accum-string-init! config))
   (accum-string-add! accum-str init-c)
   (let loop ([chars chars])
-    (define c (peek-char-or-special in))
+    (define c (peek-char/special in config))
     (cond
      [(char-delimiter? c config)
       (unless (null? chars)

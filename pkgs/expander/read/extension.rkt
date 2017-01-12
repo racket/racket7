@@ -1,5 +1,6 @@
 #lang racket/base
 (require "config.rkt"
+         "special.rkt"
          "consume.rkt"
          "error.rkt"
          "accum-string.rkt"
@@ -38,7 +39,7 @@
                                             '(#\a #\n #\g)
                                             in
                                             config))
-  (define c (read-char-or-special in))
+  (define c (read-char/special in config))
   (unless (char=? c #\space)
     (reader-error in config
                   "expected a single space after `~a`"
@@ -47,7 +48,7 @@
   (read-lang extend-str read-recur in config))
 
 (define (read-extension-#! read-recur dispatch-c in config)
-  (define c (read-char-or-special in))
+  (define c (read-char/special in config))
   (unless (char-lang-nonsep? c)
     (bad-syntax-error in config (if (char? c)
                                     (string dispatch-c #\! c)
@@ -69,23 +70,27 @@
   (when init-c
     (accum-string-add! accum-str init-c))
   (let loop ()
-    (define c (read-char-or-special in))
+    (define c (peek-char/special in config))
     (cond
      [(eof-object? c) (void)]
      [(not (char? c))
+      (consume-char in c)
       (reader-error in config
                     "found non-character while reading `#~a'"
                     extend-str)]
      [(char-whitespace? c) (void)]
      [(or (char-lang-nonsep? c)
           (char=? #\/ c))
+      (consume-char in c)
       (accum-string-add! accum-str c)
       (loop)]
-     [else (reader-error in config
-                         (string-append "expected only alphanumeric, `-`, `+`, `_`, or `/`"
-                                        " characters for `~a`, found `~a`")
-                         extend-str
-                         c)]))
+     [else
+      (consume-char in c)
+      (reader-error in config
+                    (string-append "expected only alphanumeric, `-`, `+`, `_`, or `/`"
+                                   " characters for `~a`, found `~a`")
+                    extend-str
+                    c)]))
 
   (define lang-str (accum-string-get! accum-str config))
   (when (equal? lang-str "")
@@ -125,7 +130,7 @@
     (accum-string-add! accum-str c))
   (let loop ([wanted wanted])
     (unless (null? wanted)
-      (define c (read-char-or-special in))
+      (define c (read-char/special in config))
       (when (char? c)
         (accum-string-add! accum-str c))
       (unless (eqv? c (car wanted))
@@ -137,7 +142,10 @@
 
 (define (read-extension #:try-first-mod-path [try-first-mod-path #f]
                         mod-path-datum read-recur in config
-                        #:mod-path-wrapped [mod-path-wrapped mod-path-datum])
+                        #:mod-path-wrapped [mod-path-wrapped
+                                            ((read-config-coerce config)
+                                             #t
+                                             mod-path-datum)])
   (force-parameters! config)
   (define guard (current-reader-guard))
   (define mod-path
@@ -152,8 +160,7 @@
   (define extension
     ((read-config-dynamic-require config)
      mod-path
-     (if for-syntax? 'read-syntax 'read)
-     #f))
+     (if for-syntax? 'read-syntax 'read)))
   
   (define result-v
     (cond
@@ -161,15 +168,15 @@
       (cond
        [(procedure-arity-includes? extension 6)
         (parameterize ([current-read-config config])
-          (extension mod-path-wrapped
+          (extension (read-config-source config)
                      in
-                     (read-config-source config)
+                     mod-path-wrapped
                      (read-config-line config)
                      (read-config-col config)
                      (read-config-pos config)))]
        [(procedure-arity-includes? extension 2)
         (parameterize ([current-read-config config])
-          (extension mod-path-wrapped in))]
+          (extension (read-config-source config) in))]
        [else
         (raise-argument-error '|#reader|
                               "(or/c (procedure-arity-includes?/c 2) (procedure-arity-includes?/c 6))"
@@ -179,7 +186,7 @@
        [(procedure-arity-includes? extension 5)
         (parameterize ([current-read-config config])
           (extension in
-                     (read-config-source config)
+                     mod-path-wrapped
                      (read-config-line config)
                      (read-config-col config)
                      (read-config-pos config)))]

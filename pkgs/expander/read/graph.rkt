@@ -1,5 +1,6 @@
 #lang racket/base
 (require "config.rkt"
+         "special.rkt"
          "readtable.rkt"
          "accum-string.rkt"
          "parameter.rkt"
@@ -28,7 +29,7 @@
      [e body ...]
      [else (bad-syntax-error in config (get-accum c))]))
   
-  (define c (read-char-or-special in))
+  (define c (read-char/special in config))
   (define ec (effective-char c config))
   (case ec
     [(#\()

@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../common/struct-star.rkt"
          "config.rkt"
+         "special.rkt"
          "readtable.rkt"
          "whitespace.rkt"
          "delimiter.rkt"
@@ -45,7 +46,7 @@
        [(and (not first?)
              (eqv? ec #\.)
              (check-parameter read-accept-dot config)
-             (char-delimiter? (peek-char-or-special in 1) config))
+             (char-delimiter? (peek-char/special in config 1) config))
         ;; Found a `.`: maybe improper or maybe infix
         (define-values (dot-line dot-col dot-pos) (port-next-location in))
         (consume-char in c)
@@ -72,7 +73,7 @@
          [(and (eqv? rest-ec #\.)
                (check-parameter read-accept-dot config)
                (check-parameter read-accept-infix-dot config)
-               (char-delimiter? (peek-char-or-special in 1) config))
+               (char-delimiter? (peek-char/special in config 1) config))
           ;; Infix mode
           (set! head (box v))
           (consume-char in rest-c)

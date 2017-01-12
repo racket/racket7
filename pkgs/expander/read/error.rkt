@@ -7,7 +7,10 @@
 (define (reader-error in config
                       #:eof? [eof? #f]
                       str . args)
-  (define msg (string-append "read: " (apply format str args)))
+  (define msg (string-append "read"
+                             (if (read-config-for-syntax? config) "-syntax" "")
+                             ": "
+                             (apply format str args)))
   (define srcloc (port+config->srcloc in config))
   (raise
    ((if eof? exn:fail:read:eof exn:fail:read)

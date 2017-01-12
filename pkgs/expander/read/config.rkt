@@ -18,7 +18,7 @@
                       source
                       wrap          ; wrapper applied to each datum, intended for syntax objects
                       read-compiled   ; for `#~`: input-port -> any/c
-                      dynamic-require ; for reader extensions: module-path sym fail-k -> any
+                      dynamic-require ; for reader extensions: module-path sym -> any
                       module-declared? ; for `#lang`: module-path -> any/c
                       coerce        ; coerce for syntax or not: any boolean -> any
                       * line
@@ -71,11 +71,13 @@
 
 (define (read-config-update config
                             #:for-syntax? for-syntax?
+                            #:wrap wrap
                             #:readtable readtable
                             #:next-readtable (read-config-readtable config)
                             #:reset-graph? local-graph?)
   (struct*-copy read-config config
                 [for-syntax? for-syntax?]
+                [wrap wrap]
                 [readtable readtable]
                 [next-readtable next-readtable]
                 [st (if local-graph?

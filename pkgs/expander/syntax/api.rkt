@@ -20,9 +20,6 @@
          "../expand/syntax-local.rkt"
          "srcloc.rkt"
          "../common/contract.rkt"
-         (rename-in "read-syntax.rkt"
-                    [read-syntax raw:read-syntax]
-                    [read-syntax/recursive raw:read-syntax/recursive])
          (rename-in "debug.rkt"
                     [syntax-debug-info raw:syntax-debug-info])
          (only-in "../expand/context.rkt" get-current-expand-context)
@@ -55,9 +52,7 @@
          identifier-prune-lexical-context
          syntax-shift-phase-level
          syntax-track-origin
-         syntax-debug-info
-         read-syntax
-         read-syntax/recursive)
+         syntax-debug-info)
 
 (define (syntax-e s)
   (check 'syntax-e syntax? s)
@@ -191,21 +186,3 @@
   (define ctx (get-current-expand-context #:fail-ok? #t))
   (when ctx (log-expand ctx 'track-origin s))
   s)
-
-;; ----------------------------------------
-
-(define (read-syntax [src (object-name (current-input-port))] [in (current-input-port)])
-  (check 'read-syntax input-port? in)
-  (raw:read-syntax src in))
-
-(define (read-syntax/recursive [src (object-name (current-input-port))]
-                               [in (current-input-port)]
-                               [start #f]
-                               [readtable (current-readtable)]
-                               [graph? #t])
-  (check 'read-syntax/recursive input-port? in)
-  (unless (or (char? start) (not start))
-    (raise-argument-error 'read-syntax/recursive "(or/c char? #f)" start))
-  (unless (or (readtable? readtable) (not readtable))
-    (raise-argument-error 'read-syntax/recursive "(or/c readtable? #f)" readtable))
-  (raw:read-syntax/recursive src in start readtable graph?))

@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../common/struct-star.rkt"
          "config.rkt"
+         "special.rkt"
          "readtable.rkt"
          "consume.rkt"
          "error.rkt"
@@ -13,41 +14,43 @@
 (define (skip-whitespace-and-comments! read-one in config
                                        #:keep-special-comment? [keep-special-comment? #f])
   (define rt (read-config-readtable config))
+  (define source (read-config-source config))
   (let skip-loop ()
-    (define c (peek-char-or-special in))
+    (define c (peek-char/special in config 0 source))
     (define ec (readtable-effective-char rt c))
     (cond
      [(eof-object? ec) c]
      [(not (char? ec))
+      (define v (special-value c))
       (cond
-       [(and (special-comment? c)
+       [(and (special-comment? v)
              (not keep-special-comment?))
         (consume-char in c)
         (skip-loop)]
-       [else c])]
+       [else v])]
      [(char-whitespace? ec)
       (consume-char in c)
       (skip-loop)]
      [(char=? #\; ec)
       (let loop ()
-        (define c (read-char-or-special in))
+        (define c (read-char/special in config source))
         (unless (or (eof-object? c)
                     (char=? #\newline (effective-char c config)))
           (loop)))
       (skip-loop)]
      [(and (char=? #\# ec)
-           (eqv? #\| (peek-char-or-special in 1)))
+           (eqv? #\| (peek-char/special in config 1 source)))
       (skip-pipe-comment! c in config)
       (skip-loop)]
      [(and (char=? #\# ec)
-           (eqv? #\! (peek-char-or-special in 1))
-           (let ([c3 (peek-char-or-special in 2)])
+           (eqv? #\! (peek-char/special in config 1 source))
+           (let ([c3 (peek-char/special in config 2 source)])
              (or (eqv? #\space c3)
                  (eqv? #\/ c3))))
       (skip-unix-line-comment! in config)
       (skip-loop)]
      [(and (char=? #\# ec)
-           (eqv? #\; (peek-char-or-special in 1)))
+           (eqv? #\; (peek-char/special in config 1 source)))
       (consume-char in c)
       (consume-char in #\;)
       (define v
@@ -63,11 +66,12 @@
 
 ;; Skips balanced pipe comments
 (define (skip-pipe-comment! init-c in config)
+  (define source (read-config-source config))
   (define-values (line col pos) (port-next-location in))
   (consume-char in init-c)
   (consume-char in #\|)
   (let loop ([prev-c #f] [depth 0])
-    (define c (read-char-or-special in))
+    (define c (read-char/special in config source))
     (cond
      [(eof-object? c)
       (reader-error in (reading-at config line col pos) #:eof? #t
@@ -85,7 +89,7 @@
 ;; can be continued with `\` at the end of the line
 (define (skip-unix-line-comment! in config)
   (let loop ([backslash? #f])
-    (define c (read-char-or-special in))
+    (define c (read-char/special in config))
     (cond
      [(eof-object? c) (void)]
      [(not (char? c)) (loop #f)]

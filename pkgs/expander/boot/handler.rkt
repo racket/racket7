@@ -11,6 +11,8 @@
          "../common/module-path.rkt"
          "../eval/module-read.rkt"
          "../expand/missing-module.rkt"
+         "../read/api.rkt"
+         "../read/primitive-parameter.rkt"
          "load-handler.rkt")
 
 (provide boot

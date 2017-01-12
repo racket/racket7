@@ -2531,6 +2531,10 @@ void scheme_internal_print(Scheme_Object *obj, Scheme_Object *port, Scheme_Objec
 
 Scheme_Object *scheme_read_language(Scheme_Object *port, int nonlang_ok);
 
+Scheme_Object *scheme_read_compiled(Scheme_Object *port,
+				    Scheme_Object *stxsrc,
+				    intptr_t line, intptr_t col, intptr_t pos);
+
 #define _scheme_eval_linked_expr(obj) scheme_do_eval(obj,-1,NULL,1)
 #define _scheme_eval_linked_expr_multi(obj) scheme_do_eval(obj,-1,NULL,-1)
 #define _scheme_eval_linked_expr_wp(obj, p) scheme_do_eval_w_thread(obj,-1,NULL,1,p)

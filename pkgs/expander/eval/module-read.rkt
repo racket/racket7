@@ -2,19 +2,34 @@
 (require "../syntax/api.rkt"
          "main.rkt"
          "reflect.rkt"
-         "../namespace/api.rkt")
+         "../namespace/api.rkt"
+         "../read/primitive-parameter.rkt")
 
 (provide with-module-reading-parameterization
          raise-wrong-module-name
          check-module-form)
 
 (define (with-module-reading-parameterization thunk)
-  (call-with-default-reading-parameterization
-   (lambda ()
-     (parameterize ([read-accept-reader #t]
-                    [read-accept-lang #t]
-                    [read-accept-compiled #t])
-       (thunk)))))
+  (parameterize ([read-accept-reader #t]
+                 [read-accept-lang #t]
+                 [read-accept-compiled #t]
+                 ;; Would be set by `call-with-default-reading-parameterization`,
+                 ;; but we need to set them in our own reader, not the host's:
+                 [read-case-sensitive #t]
+                 [read-square-bracket-as-paren #t]
+                 [read-curly-brace-as-paren #t]
+                 [read-square-bracket-with-tag #f]
+                 [read-curly-brace-with-tag #f]
+                 [read-accept-box #t]
+                 [read-accept-bar-quote #t]
+                 [read-accept-graph #t]
+                 [read-decimal-as-inexact #t]
+                 [read-cdot #f]
+                 [read-accept-dot #t]
+                 [read-accept-infix-dot #t]
+                 [read-accept-quasiquote #t]
+                 [current-readtable #f])
+    (thunk)))
 
 (define (raise-wrong-module-name filename expected-name name)
   (error 'load-handler

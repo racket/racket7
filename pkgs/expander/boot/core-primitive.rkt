@@ -21,6 +21,7 @@
          "../syntax/api.rkt"
          "../syntax/api-taint.rkt"
          "../syntax/error.rkt"
+         "../read/api.rkt"
          "../common/module-path.rkt"
          "../namespace/variable-reference.rkt"
          "../expand/allowed-context.rkt"
@@ -101,9 +102,6 @@
                       make-exn:fail:syntax:missing-module
                       exn:fail:syntax:missing-module?
                       exn:fail:syntax:missing-module-path
-                      
-                      read-syntax
-                      read-syntax/recursive
                       
                       syntax-transforming?
                       syntax-transforming-with-lifts?
@@ -198,4 +196,7 @@
                       variable-reference->module-source
                       variable-reference->phase
                       variable-reference->module-base-phase
-                      variable-reference->module-declaration-inspector)
+                      variable-reference->module-declaration-inspector
+
+                      read-syntax
+                      read-syntax/recursive)
