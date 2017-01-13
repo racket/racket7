@@ -14,6 +14,7 @@
   (reflect-hash read
                 read/recursive
 
+                current-reader-guard
                 read-case-sensitive
                 read-square-bracket-as-paren
                 read-curly-brace-as-paren
@@ -29,4 +30,8 @@
                 read-accept-infix-dot
                 read-accept-quasiquote
                 read-accept-reader
-                read-accept-lang))
+                read-accept-lang
+                
+                readtable?
+                make-readtable
+                readtable-mapping))
