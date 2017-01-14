@@ -17,9 +17,11 @@
   (define (bad-end c)
     (cond
      [(eof-object? c)
-      (reader-error in config #:eof? #t "expected a closing `\"`")]
+      (reader-error in config #:due-to c "expected a closing `\"`")]
      [else
-      (reader-error in config "found non-character while reading a ~a" mode)]))
+      (reader-error in config #:due-to c
+                    "found non-character while reading a ~a"
+                    mode)]))
   (let loop ()
     (define c (read-char/special in config source))
     ;; Note: readtable is not used for a closing " or other string decisions
@@ -64,7 +66,7 @@
          (unless (v . <= . 255)
            (reader-error in config
                          "escape sequence `~a~a` is out of range in ~a"
-                         escaping-c (accum-string-get! accum-str #:start-pos pos)
+                         escaping-c (accum-string-get! accum-str config #:start-pos pos)
                          mode))
          (set-accum-string-count! accum-str pos)
          (accum-string-add! accum-str (integer->char v))]
@@ -124,7 +126,7 @@
                (accum-string-add! accum-str (integer->char combined-v))])]
             [else
              (reader-error in config
-                           #:eof? (eof-object? v2)
+                           #:due-to v2
                            "bad or incomplete surrogate-style encoding at `~au~a`"
                            escaping-c (accum-string-get! accum-str config #:start-pos pos))])])]
         [(#\U)
@@ -173,10 +175,10 @@
       (define c (read-char/special in config source))
       (cond
        [(eof-object? c)
-        (reader-error in config #:eof? #t
+        (reader-error in config #:due-to c
                       "found end-of-file after `#<<` and before a newline")]
        [(not (char? c))
-        (reader-error in config #:eof? #t
+        (reader-error in config #:due-to c
                       "found non-character while reading `#<<`")]
        [(char=? c #\newline) null]
        [else (cons c (loop))])))
@@ -187,11 +189,11 @@
     (cond
      [(eof-object? c)
       (unless (null? terminator)
-        (reader-error in config #:eof? #t
+        (reader-error in config #:due-to c
                       "found end-of-file before terminating `~a`"
                       (list->string full-terminator)))]
      [(not (char? c))
-      (reader-error in config #:eof? #t
+      (reader-error in config #:due-to c
                     "found non-character while reading `#<<`")]
      [(and (pair? terminator)
            (char=? c (car terminator)))
@@ -217,6 +219,6 @@
 
 (define (no-hex-digits in config c escaping-c escaped-c)
   (reader-error in config
-                #:eof? (eof-object? c)
+                #:due-to c
                 "no hex digit following `~a~a`"
                 escaping-c escaped-c))

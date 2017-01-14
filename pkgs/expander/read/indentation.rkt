@@ -77,7 +77,7 @@
        ;; "unexpected" as we expected something else...
        (define missing
          (or (for/or ([indt (in-list (cdr indts))])
-               (and (char=? ec (indentation-closer indts))
+               (and (char=? ec (indentation-closer indt))
                     "missing"))
              "expected"))
        (define opener-str

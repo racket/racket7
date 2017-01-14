@@ -1,8 +1,10 @@
 #lang racket/base
 (require "../common/inline.rkt"
          "config.rkt"
+         "coerce.rkt"
          "parameter.rkt"
-         "readtable-parameter.rkt")
+         "readtable-parameter.rkt"
+         "special-comment.rkt")
 
 (provide readtable-delimiter-ht
          make-readtable
@@ -13,7 +15,8 @@
          effective-char
          readtable-handler
          readtable-dispatch-handler
-         readtable-apply)
+         readtable-apply
+         readtable-symbol-parser)
 
 (struct readtable (symbol-parser ; parser for default token handling: symbol-or-number
                    ;; The character table maps characters to either a
@@ -64,7 +67,7 @@
                                 "(or/c 'terminating-macro 'non-terminating-macro 'dispatch-macro char?)"
                                 mode))]
        [else
-        (unless (eq? mode ''non-terminating-macro)
+        (unless (eq? mode 'non-terminating-macro)
           (raise-arguments-error 'make-readtable
                                  "expected 'non-terminating-macro after #f"))])
       
@@ -125,9 +128,10 @@
 
 (define (*readtable-effective-char rt c)
   (define target (hash-ref (readtable-char-ht rt) c #f))
-  (if (char? target)
-      target
-      c))
+  (cond
+   [(not target) c]
+   [(char? target) target]
+   [else #\x])) ; return some non-special character
 
 (define (effective-char c config)
   (readtable-effective-char (read-config-readtable config) c))
@@ -150,19 +154,19 @@
 
 (define (readtable-apply handler c in config line col pos)
   (define for-syntax? (read-config-for-syntax? config))
-  (cond
-   [(not for-syntax?)
-    ((read-config-coerce config)
-     #f
-     (parameterize ([current-read-config config])
-       (if (procedure-arity-includes? handler 2)
-           (handler c in)
-           (handler c in #f #f #f #f))))]
-   [else
-    ((read-config-coerce config)
-     for-syntax?
-     (parameterize ([current-read-config config])
-       (handler c in (read-config-source config) line col pos)))]))
+  (define v
+    (cond
+     [(not for-syntax?)
+      (parameterize ([current-read-config config])
+        (if (procedure-arity-includes? handler 2)
+            (handler c in)
+            (handler c in #f #f #f #f)))]
+     [else
+      (parameterize ([current-read-config config])
+        (handler c in (read-config-source config) line col pos))]))
+  (if (special-comment? v)
+      v
+      (coerce v in config)))
 
 ;; Part of the public API:
 (define (readtable-mapping rt c)
@@ -171,9 +175,13 @@
   (unless (char? c)
     (raise-argument-error 'readtable-mapping "char?" c))
   (define handler (hash-ref (readtable-char-ht rt) c #f))
-  (values (and handler
-               (if (eq? 'delimit (hash-ref (readtable-delimiter-ht rt) c #f))
-                   'terminating-macro
-                   'non-terminating-macro))
-          handler
+  (values (or (and handler
+                   (cond
+                    [(char? handler) handler]
+                    [(eq? 'delimit (hash-ref (readtable-delimiter-ht rt) c #f))
+                     'terminating-macro]
+                    [else
+                     'non-terminating-macro]))
+              c)
+          (if (char? handler) #f handler)
           (hash-ref (readtable-dispatch-ht rt) c #f)))

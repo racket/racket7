@@ -15,10 +15,10 @@
   (define char
     (cond
      [(eof-object? c)
-      (reader-error in config #:eof? #t
+      (reader-error in config #:due-to c
                     "expected a character after `#\\`")]
      [(not (char? c))
-      (reader-error in config
+      (reader-error in config #:due-to c
                     "found non-character after `#\\`")]
      [(octal-digit? c)
       ;; Maybe octal
@@ -31,12 +31,12 @@
         (define v
           (cond
            [(and (char? c3) (octal-digit? c3))
-            (+ (arithmetic-shift (digit->number c) 16)
-               (arithmetic-shift (digit->number c2) 8)
+            (+ (arithmetic-shift (digit->number c) 6)
+               (arithmetic-shift (digit->number c2) 3)
                (digit->number c3))]
            [else #f]))
         (unless (and v (v . <= . 255))
-          (reader-error in config
+          (reader-error in config #:due-to c3
                         "bad character constant `#\\~a~a~a`"
                         c c2 (if (char? c3) c3 "")))
         (integer->char v)]

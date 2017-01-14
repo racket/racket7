@@ -10,6 +10,8 @@
          port+config->srcloc
          reading-at
          disable-wrapping
+         keep-comment
+         discard-comment
          next-readtable)
 
 (struct* read-config (readtable
@@ -25,6 +27,7 @@
                       * col
                       * pos
                       * indentations  ; stack of `indentation` records
+                      keep-comment? ; make main dispatch return on comment
                       parameter-override ; mash of parameter -> value
                       parameter-cache   ; hash of parameter -> value
                       st)) ; other shared mutable state
@@ -43,7 +46,8 @@
          #:read-compiled [read-compiled #f]
          #:dynamic-require [dynamic-require #f]
          #:module-declared? [module-declared? #f]
-         #:coerce [coerce #f])
+         #:coerce [coerce #f]
+         #:keep-comment? [keep-comment? #f])
   (read-config readtable
                next-readtable
                for-syntax?
@@ -59,11 +63,12 @@
                    (lambda (mod-path)
                      (error 'read "no `module-declare?` provided")))
                (or coerce
-                   (lambda (for-syntax? v) v))
+                   (lambda (for-syntax? v srcloc) v))
                #f ; line
                #f ; col
                #f ; pos
                null ; indentations
+               keep-comment?
                #hasheq()     ; parameter-override
                (make-hasheq) ; parameter-cache
                (read-config-state #f    ; accum-str
@@ -73,13 +78,15 @@
                             #:for-syntax? for-syntax?
                             #:wrap wrap
                             #:readtable readtable
-                            #:next-readtable (read-config-readtable config)
-                            #:reset-graph? local-graph?)
+                            #:next-readtable [next-readtable (read-config-readtable config)]
+                            #:reset-graph? local-graph?
+                            #:keep-comment? keep-comment?)
   (struct*-copy read-config config
                 [for-syntax? for-syntax?]
                 [wrap wrap]
                 [readtable readtable]
                 [next-readtable next-readtable]
+                [keep-comment? keep-comment?]
                 [st (if local-graph?
                         (read-config-state #f #f)
                         (read-config-st config))]))
@@ -102,6 +109,18 @@
   (struct*-copy read-config config
                 [wrap #f]))
 
+(define (keep-comment config)
+  (struct*-copy read-config config
+                [keep-comment? #t]))
+
+(define (discard-comment config)
+  (cond
+   [(not (read-config-keep-comment? config))
+    config]
+   [else
+    (struct*-copy read-config config
+                  [keep-comment? #f])]))
+
 (define (next-readtable config)
   (cond
    [(eq? (read-config-readtable config)
@@ -109,5 +128,4 @@
     config]
    [else
     (struct*-copy read-config config
-                  [readtable (read-config-next-readtable config)]
-                  [next-readtable #f])]))
+                  [readtable (read-config-next-readtable config)])]))

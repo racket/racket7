@@ -4,7 +4,9 @@ RACO = ../../racket/bin/raco
 
 # See "boot/read-primitive.rkt" for more info:
 KNOT = ++knot read read/api.rkt \
-       ++knot read read/primitive-parameter.rkt
+       ++knot read read/primitive-parameter.rkt \
+       ++knot read read/readtable-parameter.rkt \
+       ++knot read read/readtable.rkt
 
 expander:
 	$(RACO) make bootstrap-run.rkt

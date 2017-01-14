@@ -10,25 +10,29 @@
          "error.rkt"
          "indentation.rkt"
          "parameter.rkt"
-         "wrap.rkt")
+         "wrap.rkt"
+         "special-comment.rkt")
 
 (provide read-unwrapped-sequence)
 
 (define (read-unwrapped-sequence read-one opener-c opener closer in seq-config
+                                 #:elem-config [elem-config (next-readtable seq-config)]
                                  #:dot-mode [dot-mode 'all]
                                  #:shape-tag? [shape-tag? #f]
                                  #:whitespace-read-one [whitespace-read-one read-one]
                                  #:first-read-one [first-read-one read-one])
   (define head #f)
   (define indentation (make-indentation closer in seq-config))
-  (define config (struct*-copy read-config seq-config
+  (define config (struct*-copy read-config elem-config
                                [indentations (cons indentation
                                                    (read-config-indentations seq-config))]))
+  
+  (define config/keep-comment (keep-comment config))
 
-  (define (read-one/not-eof read-one)
-    (define e (read-one in config))
+  (define (read-one/not-eof init-c read-one config)
+    (define e (read-one init-c in config))
     (when (eof-object? e)
-      (reader-error in config #:eof? #t
+      (reader-error in config #:due-to e
                     "expected a `~a` to close `~a`~a"
                     (closer-name closer config)
                     opener-c
@@ -36,17 +40,19 @@
     e)
 
   (define seq
-    (let loop ([first? #t] [first-read-one first-read-one])
-      (define c (skip-whitespace-and-comments! whitespace-read-one in config))
-      (define ec (effective-char c config))
+    (let loop ([depth 0] [accum null] [first? #t] [first-read-one first-read-one])
+      (define c (skip-whitespace-and-comments! whitespace-read-one in seq-config))
+      (define ec (effective-char c seq-config))
       (cond
        [(eqv? ec closer)
         (consume-char in ec)
-        null]
+        (if (null? accum)
+            null
+            (reverse accum))]
        [(and (not first?)
              (eqv? ec #\.)
              (check-parameter read-accept-dot config)
-             (char-delimiter? (peek-char/special in config 1) config))
+             (char-delimiter? (peek-char/special in config 1) seq-config))
         ;; Found a `.`: maybe improper or maybe infix
         (define-values (dot-line dot-col dot-pos) (port-next-location in))
         (consume-char in c)
@@ -59,21 +65,23 @@
                         "illegal use of `.`"))
         
         ;; Read one item for improper list or for infix:
-        (define v (read-one/not-eof first-read-one))
+        (define v (read-one/not-eof #f first-read-one config))
         
         ;; Check for infix or list termination:
-        (define rest-c (skip-whitespace-and-comments! whitespace-read-one in config))
-        (define rest-ec (effective-char rest-c config))
+        (define rest-c (skip-whitespace-and-comments! whitespace-read-one in seq-config))
+        (define rest-ec (effective-char rest-c seq-config))
         
         (cond
          [(eqv? rest-ec closer)
           ;; Improper list
           (consume-char in rest-c)
-          v]
+          (if (null? accum)
+              v
+              (append (reverse accum) v))]
          [(and (eqv? rest-ec #\.)
                (check-parameter read-accept-dot config)
                (check-parameter read-accept-infix-dot config)
-               (char-delimiter? (peek-char/special in config 1) config))
+               (char-delimiter? (peek-char/special in config 1) seq-config))
           ;; Infix mode
           (set! head (box v))
           (consume-char in rest-c)
@@ -82,22 +90,31 @@
           (track-indentation! config dot2-line dot2-col)
           
           ;; Check for a closer right after the second dot:
-          (define post-c (skip-whitespace-and-comments! whitespace-read-one in config))
-          (define post-ec (effective-char post-c config))
+          (define post-c (skip-whitespace-and-comments! whitespace-read-one in seq-config))
+          (define post-ec (effective-char post-c seq-config))
           (when (or (eof-object? post-ec)
-                    (char=? post-ec closer))
+                    (eqv? post-ec closer))
             (reader-error in (reading-at config dot-line dot-col dot-pos)
-                          #:eof? (eof-object? post-ec)
+                          #:due-to post-ec
                           "illegal use of `.`"))
           
           ;; No closer => another item or EOF
-          (loop #f read-one)]
+          (loop depth accum #f read-one)]
          [else
           ;; Something else after a single element after a single dot
           (reader-error in (reading-at config dot-line dot-col dot-pos)
+                        #:due-to rest-c
                         "illegal use of `.`")])]
        [else
-        (cons (read-one/not-eof first-read-one) (loop #f read-one))])))
+        (consume-char/special in config c)
+        (define v (read-one/not-eof c first-read-one config/keep-comment))
+        (cond
+         [(special-comment? v) (loop depth accum #f read-one)]
+         [(depth . > . 1024)
+          ;; At some large depth, it's better to accumlate than recur
+          (loop depth (cons v accum) #f read-one)]
+         [else 
+          (cons v (loop (add1 depth) null #f read-one))])])))
   (define full-seq (if head
                        (cons (unbox head) seq)
                        seq))

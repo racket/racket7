@@ -5,14 +5,16 @@
          "readtable.rkt"
          "consume.rkt"
          "error.rkt"
+         "special.rkt"
          "special-comment.rkt")
 
 (provide skip-whitespace-and-comments!)
 
 ;; Skip whitespace, including non-character values that are
-;; `special-comment?`s
-(define (skip-whitespace-and-comments! read-one in config
-                                       #:keep-special-comment? [keep-special-comment? #f])
+;; `special-comment?`s, but return a special comment if
+;; `(read-config-keep-comment? config)`, where a special comment
+;; not wrapped with `special` means that it's not peeked
+(define (skip-whitespace-and-comments! read-one in config)
   (define rt (read-config-readtable config))
   (define source (read-config-source config))
   (let skip-loop ()
@@ -24,10 +26,10 @@
       (define v (special-value c))
       (cond
        [(and (special-comment? v)
-             (not keep-special-comment?))
-        (consume-char in c)
+             (not (read-config-keep-comment? config)))
+        (consume-char/special in config c)
         (skip-loop)]
-       [else v])]
+       [else c])]
      [(char-whitespace? ec)
       (consume-char in c)
       (skip-loop)]
@@ -35,34 +37,44 @@
       (let loop ()
         (define c (read-char/special in config source))
         (unless (or (eof-object? c)
-                    (char=? #\newline (effective-char c config)))
+                    (eqv? #\newline (effective-char c config)))
           (loop)))
-      (skip-loop)]
+      (if (read-config-keep-comment? config)
+          (result-special-comment)
+          (skip-loop))]
      [(and (char=? #\# ec)
            (eqv? #\| (peek-char/special in config 1 source)))
       (skip-pipe-comment! c in config)
-      (skip-loop)]
+      (if (read-config-keep-comment? config)
+          (result-special-comment)
+          (skip-loop))]
      [(and (char=? #\# ec)
            (eqv? #\! (peek-char/special in config 1 source))
            (let ([c3 (peek-char/special in config 2 source)])
              (or (eqv? #\space c3)
                  (eqv? #\/ c3))))
       (skip-unix-line-comment! in config)
-      (skip-loop)]
+      (if (read-config-keep-comment? config)
+          (result-special-comment)
+          (skip-loop))]
      [(and (char=? #\# ec)
            (eqv? #\; (peek-char/special in config 1 source)))
       (consume-char in c)
       (consume-char in #\;)
-      (define v
-        (read-one in (struct*-copy read-config config
-                                   [wrap #f])))
+      (define v (read-one #f in (disable-wrapping config)))
       (when (eof-object? v)
         (reader-error in config
-                      #:eof? #t
+                      #:due-to v
                       "expected a commented-out element for `~a;', but found end-of-file"
                       ec))
-      (skip-loop)]
+      (if (read-config-keep-comment? config)
+          (result-special-comment)
+          (skip-loop))]
      [else c])))
+
+;; For returning a comment as a result:
+(define (result-special-comment)
+  (make-special-comment #f))
 
 ;; Skips balanced pipe comments
 (define (skip-pipe-comment! init-c in config)
@@ -74,7 +86,8 @@
     (define c (read-char/special in config source))
     (cond
      [(eof-object? c)
-      (reader-error in (reading-at config line col pos) #:eof? #t
+      (reader-error in (reading-at config line col pos)
+                    #:due-to c
                     "end of file in `#|` comment")]
      [(not (char? c))
       (loop #f depth)]

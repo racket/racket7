@@ -8,7 +8,7 @@
 
 (provide read-delimited-constant)
 
-(define (read-delimited-constant init-c chars val in config)
+(define (read-delimited-constant init-c can-match? chars val in config)
   (define accum-str (accum-string-init! config))
   (accum-string-add! accum-str init-c)
   (let loop ([chars chars])
@@ -16,19 +16,19 @@
     (cond
      [(char-delimiter? c config)
       (unless (null? chars)
-        (reader-error in config
-                      "bad syntax `#~a`" (accum-string-get! accum-str config)
-                      #:eof? (eof-object? c)))]
+        (reader-error in config #:due-to c
+                      "bad syntax `#~a`" (accum-string-get! accum-str config)))]
      [(null? chars)
       (accum-string-add! accum-str c)
       (reader-error in config
                     "bad syntax `#~a`" (accum-string-get! accum-str config))]
-     [(char-ci=? c (car chars))
+     [(and can-match? (char=? c (car chars)))
       (consume-char in c)
       (accum-string-add! accum-str c)
       (loop (cdr chars))]
      [else
-      (consume-char in c)
+      (consume-char/special in config c)
       (accum-string-add! accum-str c)
-      (reader-error "bad syntax `#~a`" (accum-string-get! accum-str config))]))
+      (reader-error in config
+                    "bad syntax `#~a`" (accum-string-get! accum-str config))]))
   (wrap val in config (accum-string-get! accum-str config)))

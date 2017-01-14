@@ -1,7 +1,8 @@
 #lang racket/base
 (require "../common/reflect-hash.rkt"
          "../read/api.rkt"
-         "../read/primitive-parameter.rkt")
+         "../read/primitive-parameter.rkt"
+         "../read/special-comment.rkt")
 
 ;; Reader primitives are in their own module so that they can be
 ;; treated specially by the bootstrapped flattened. The expanded form
@@ -13,6 +14,7 @@
 (define read-primitives
   (reflect-hash read
                 read/recursive
+                read-language
 
                 current-reader-guard
                 read-case-sensitive
@@ -24,7 +26,7 @@
                 read-accept-graph
                 read-accept-compiled
                 read-accept-box
-                read-accept-bar-quote
+                ;; read-accept-bar-quote - shared with printer
                 read-decimal-as-inexact
                 read-accept-dot
                 read-accept-infix-dot
@@ -32,6 +34,11 @@
                 read-accept-reader
                 read-accept-lang
                 
+                current-readtable
                 readtable?
                 make-readtable
-                readtable-mapping))
+                readtable-mapping
+                
+                special-comment?
+                make-special-comment
+                special-comment-value))

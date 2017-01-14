@@ -48,7 +48,7 @@
                   "invalid structure description in `~as' form"
                   dispatch-c))
 
-  (define st (with-handlers ([exn:fail? (lambda () #f)])
+  (define st (with-handlers ([exn:fail? (lambda (exn) #f)])
                (prefab-key->struct-type (car seq) (length (cdr seq)))))
   (unless st
     (reader-error in config
@@ -71,5 +71,5 @@
 
 (define (read-struct-sequence read-one opener-c opener closer in config)
   (read-unwrapped-sequence read-one opener-c opener closer in config
-                           #:first-read-one (lambda (in config)
-                                              (read-one in (disable-wrapping config)))))
+                           #:first-read-one (lambda (init-c in config)
+                                              (read-one init-c in (disable-wrapping config)))))

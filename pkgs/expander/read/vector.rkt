@@ -21,11 +21,11 @@
   (define read-one-element
     (case vector-mode
       [(any) read-one]
-      [(fixnum) (lambda (in config) (read-fixnum read-one in config))]
-      [(flonum) (lambda (in config) (read-flonum read-one in config))]))
+      [(fixnum) (lambda (init-c in config) (read-fixnum read-one init-c in config))]
+      [(flonum) (lambda (init-c in config) (read-flonum read-one init-c in config))]))
   
   (define seq (read-unwrapped-sequence read-one-element
-                                       opener-c #\( #\) in config
+                                       opener-c opener closer in config
                                        #:whitespace-read-one read-one
                                        #:dot-mode #f))
   
@@ -98,30 +98,34 @@
   
   (case c4
     [(#\()
-     (read-vector read-one #\{ #\} in config #:mode vector-mode #:length vector-len)]
+     (read-vector read-one #\( #\( #\) in config #:mode vector-mode #:length vector-len)]
     [(#\[)
      (guard-legal
       (check-parameter read-square-bracket-as-paren config)
       (format "~a~a" c c2)
-      (read-vector read-one #\[ #\] in config #:mode vector-mode #:length vector-len))]
+      (read-vector read-one #\[ #\[ #\] in config #:mode vector-mode #:length vector-len))]
     [(#\{)
      (guard-legal
       (check-parameter read-curly-brace-as-paren config)
       (format "~a~a" c c2)
-      (read-vector read-one #\{ #\} in config #:mode vector-mode #:length vector-len))]
+      (read-vector read-one #\{ #\{ #\} in config #:mode vector-mode #:length vector-len))]
     [else
-     (reader-error in config #:eof (eof-object? c4)
+     (reader-error in config #:due-to c4
                    "expected `(`, `[`, or `{` after `#~a~a~a`"
                    c c2 len-str)]))
 
 
 (define (read-simple-number in config init-c)
   (define accum-str (accum-string-init! config))
+  (accum-string-add! accum-str init-c)
+  (define init-v (digit->number init-c))
   (define v (read-digits in config accum-str
-                         #:base 10 #:max-count +inf.0))
+                         #:base 10 #:max-count +inf.0
+                         #:init init-v
+                         #:zero-digits-result init-v))
   (values v
           (accum-string-get! accum-str config)
           ;; We could avoid some peeks vising init-c
           ;; and having `read-digit` return its peek
           ;; result, but we don't for now
-          (peek-char/special in config)))
+          (read-char/special in config)))

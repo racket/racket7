@@ -264,7 +264,7 @@ character and the @racket[#f] readtable.}
          ((if (eof-object? v) 
               raise-read-eof-error 
               raise-read-error)
-          "expected `,' or `>'" src l c p 1)]))]))
+          "expected `,` or `>`" src l c p 1)]))]))
 
 (define (make-delims-table)
   ;; Table to use for recursive reads to disallow delimiters
@@ -274,7 +274,7 @@ character and the @racket[#f] readtable.}
              [(ch port) (misplaced-delimiter ch port #f #f #f #f)]
              [(ch port src line col pos)
               (raise-read-error 
-               (format "misplaced `~a' in tuple" ch) 
+               (format "misplaced `~a` in tuple" ch)
                src line col pos 1)])])
     (make-readtable (current-readtable)
                     #\, 'terminating-macro misplaced-delimiter
@@ -286,14 +286,14 @@ character and the @racket[#f] readtable.}
 (define parse-open-tuple
   (case-lambda
    [(ch port) 
-    ;; `read' mode
+    ;; `read` mode
     (wrap (parse port 
                  (lambda () 
                    (read/recursive port #f 
                                    (make-delims-table)))
                  (object-name port)))]
    [(ch port src line col pos)
-    ;; `read-syntax' mode
+    ;; `read-syntax` mode
     (datum->syntax
      #f
      (wrap (parse port 

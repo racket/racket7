@@ -2,11 +2,13 @@
 (require "config.rkt"
          "special.rkt"
          "wrap.rkt"
+         "coerce.rkt"
          "readtable.rkt"
          "whitespace.rkt"
          "delimiter.rkt"
          "closer.rkt"
          "consume.rkt"
+         "location.rkt"
          "accum-string.rkt"
          "error.rkt"
          "indentation.rkt"
@@ -25,10 +27,11 @@
          "constant.rkt"
          "box.rkt"
          "regexp.rkt"
-         "extension.rkt")
+         "extension.rkt"
+         "language.rkt")
 
 (provide read
-         read/recursive
+         read-language
 
          current-readtable
          make-readtable
@@ -48,8 +51,8 @@
 (define (read in
               #:wrap [wrap #f]
               #:init-c [init-c #f]
-              #:readtable [readtable (current-readtable)]
-              #:next-readtable [next-readtable readtable]
+              #:next-readtable [next-readtable (current-readtable)]
+              #:readtable [readtable next-readtable]
               #:recursive? [recursive? #f]
               #:local-graph? [local-graph? #f] ; ignored unless `recursive?`
               #:source [source #f]
@@ -58,7 +61,7 @@
               #:dynamic-require [dynamic-require #f]   ; see "config.rkt"
               #:module-declared? [module-declared? #f] ; see "config.rkt"
               #:coerce [coerce #f]                     ; see "config.rkt"
-              #:keep-special-comment? [keep-special-comment? recursive?])
+              #:keep-comment? [keep-comment? recursive?])
   (define config
     (cond
      [(and recursive?
@@ -68,8 +71,9 @@
                                #:for-syntax? for-syntax?
                                #:wrap wrap
                                #:readtable readtable
-                               #:next-readtable (read-config-readtable config)
-                               #:reset-graph? local-graph?))]
+                               #:next-readtable next-readtable
+                               #:reset-graph? local-graph?
+                               #:keep-comment? keep-comment?))]
      [else
       (make-read-config #:readtable readtable
                         #:next-readtable next-readtable
@@ -79,36 +83,55 @@
                         #:read-compiled read-compiled
                         #:dynamic-require dynamic-require
                         #:module-declared? module-declared?
-                        #:coerce coerce)]))
-  (define v (read-one/readtable-set init-c in config
-                                    #:keep-special-comment? keep-special-comment?))
+                        #:coerce coerce
+                        #:keep-comment? keep-comment?)]))
+  (define v (read-one init-c in config))
   (cond
    [(and (or (not recursive?) local-graph?)
          (read-config-state-graph (read-config-st config)))
-    (make-reader-graph v)]
-   [(and recursive? (not (eof-object? v)))
+    (catch-and-reraise-as-reader
+     #f config
+     (make-reader-graph v))]
+   [(and recursive?
+         (not local-graph?)
+         (not for-syntax?)
+         (not (eof-object? v))
+         (not (special-comment? v)))
+    (get-graph-hash config) ; to trigger placeholder resolution
     (make-placeholder v)]
    [else v]))
 
+(define (read-language in fail-k
+                       #:for-syntax? [for-syntax? #f]
+                       #:wrap [wrap #f]
+                       #:read-compiled [read-compiled #f]
+                       #:dynamic-require [dynamic-require #f]
+                       #:module-declared? [module-declared? #f]
+                       #:coerce [coerce #f])
+  (define config (make-read-config #:readtable #f
+                                   #:next-readtable #f
+                                   #:for-syntax? for-syntax?
+                                   #:wrap wrap
+                                   #:read-compiled read-compiled
+                                   #:dynamic-require dynamic-require
+                                   #:module-declared? module-declared?
+                                   #:coerce coerce))
+  (define l-config (override-parameter read-accept-reader config #f))
+  (read-language/get-info read-undotted in config fail-k))
+
 ;; ----------------------------------------
 ;; The top-level reading layer that takes care of parsing into
-;; `#%cdot`. The `read-one` function is used for recursive reads, in
-;; which case the "next" readtable may need to be installed, while
-;; `read-one/readtable-set` uses the readtable setting as-is.
+;; `#%cdot`.
 
-(define (read-one in config)
-  (read-one/readtable-set #f in (next-readtable config)))
-
-(define (read-one/readtable-set init-c in config
-                                #:keep-special-comment? [keep-special-comment? #f])
+(define (read-one init-c in config)
   (cond
    [(not (check-parameter read-cdot config))
     ;; No parsing of `.` as `#%dot`
-    (read-undotted/readtable-set init-c in config #:keep-special-comment? keep-special-comment?)]
+    (read-undotted init-c in config)]
    [(check-parameter read-cdot config)
     ;; Look for `<something> . <something>`
     (define-values (line col pos) (port-next-location in))
-    (define v (read-undotted/readtable-set init-c in config #:keep-special-comment? keep-special-comment?))
+    (define v (read-undotted init-c in config))
     (cond
      [(special-comment? v) v]
      [else
@@ -116,10 +139,7 @@
         (define c (peek-char/special in config))
         (define ec (effective-char c config))
         (cond
-         [(not (char? ec))
-          (if (special? v)
-              (special-value v)
-              v)]
+         [(not (char? ec)) v]
          [(char-whitespace? ec)
           (consume-char in c)
           (loop v)]
@@ -127,7 +147,7 @@
           (define-values (dot-line dot-col dot-pos) (port-next-location in))
           (consume-char in c)
           (define cdot (wrap '#%dot in (reading-at config dot-line dot-col dot-pos) #\.))
-          (define post-v (read-undotted in config))
+          (define post-v (read-undotted #f in config))
           (loop (wrap (list '#%dot v post-v) in (reading-at config line col pos) #\.))]
          [else v]))])]))
 
@@ -135,28 +155,31 @@
 ;; The top-level reading layer within `#%cdot` handling --- which is
 ;; the reader's main dispatch layer.
 
-(define (read-undotted in config)
-  (read-undotted/readtable-set #f in (next-readtable config)))
-
-(define (read-undotted/readtable-set init-c in config
-                                     #:keep-special-comment? [keep-special-comment? #f])
-  (skip-whitespace-and-comments! read-one in config
-                                 #:keep-special-comment? keep-special-comment?)
-  (define-values (line col pos) (port-next-location in))
-  (define c (or init-c (read-char/special in config)))
+(define (read-undotted init-c in config)
+  (define ws-c
+    (and (not init-c)
+         (skip-whitespace-and-comments! read-one in config)))
+  (define-values (line col pos) (port-next-location* in init-c))
+  (define c (or init-c
+                (and (special-comment? ws-c) 
+                     ;; preserved comment, already read, only
+                     ;; when `(read-config-keep-comment? config)`:
+                     (special ws-c))
+                (read-char/special in config)))
   (cond
    [(eof-object? c) eof]
    [(not (char? c))
     (define v (special-value c))
     (cond
      [(special-comment? v)
-      (if keep-special-comment?
+      (if (read-config-keep-comment? config)
           v
-          (read-undotted/readtable-set #f in config))]
-     [else v])]
+          (read-undotted #f in config))]
+     [else (coerce v in (reading-at config line col pos))])]
    [(readtable-handler config c)
     => (lambda (handler)
-         (readtable-apply handler c in config line col pos))]
+         (define v (readtable-apply handler c in config line col pos))
+         (retry-special-comment v in config))]
    [else
     ;; Map character via readtable:
     (define ec (effective-char c config))
@@ -164,7 +187,7 @@
     ;; Track indentation, unless it's a spurious closer:
     (when (not (char-closer? ec config))
       (track-indentation! config line col))
-    (define r-config (reading-at config line col pos))
+    (define r-config (reading-at (discard-comment config) line col pos))
     
     (define-syntax-rule (guard-legal e body ...)
       (cond
@@ -174,7 +197,7 @@
     ;; Dispatch on character:
     (case ec
       [(#\#)
-       (read-dispatch c in r-config)]
+       (read-dispatch c in r-config config)]
       [(#\')
        (read-quote read-one 'quote "quoting '" c in r-config)]
       [(#\`)
@@ -217,24 +240,34 @@
       [(#\")
        (read-string in r-config)]
       [(#\|)
-       (read-number-or-symbol c in r-config #:mode 'symbol)]
+       (read-symbol-or-number c in r-config #:mode 'symbol)]
       [else
-       (read-number-or-symbol c in r-config)])]))
+       (define v
+         (read-symbol-or-number c in r-config
+                                ;; Don't read as a number if the effective char
+                                ;; is non-numeric:
+                                #:mode (if (or (eq? c ec)
+                                               (and ((char->integer ec) . < . 128)
+                                                    (char-numeric? ec)))
+                                           'symbol-or-number
+                                           'symbol/indirect)))
+       (retry-special-comment v in config)])]))
 
 ;; Dispatch on `#` character
-(define (read-dispatch dispatch-c in config)
+(define (read-dispatch dispatch-c in config orig-config)
   (define c (read-char/special in config))
   (cond
    [(eof-object? c)
-    (reader-error in config #:eof? #t "bad syntax `~a`" dispatch-c)]
+    (reader-error in config #:due-to c "bad syntax `~a`" dispatch-c)]
    [(not (char? c))
-    (reader-error in config "bad syntax `~a`" dispatch-c)]
-   [(readtable-dispatch-handler config c)
+    (reader-error in config #:due-to c "bad syntax `~a`" dispatch-c)]
+   [(readtable-dispatch-handler orig-config c)
     => (lambda (handler)
          (define line (read-config-line config))
          (define col (read-config-col config))
          (define pos (read-config-pos config))
-         (readtable-apply handler c in config line col pos))]
+         (define v (readtable-apply handler c in config line col pos))
+         (retry-special-comment v in orig-config))]
    [else
     (define-syntax-rule (guard-legal e c body ...)
       (cond
@@ -276,47 +309,48 @@
       [(#\")
        (read-string in config #:mode '|byte string|)]
       [(#\<)
+       (define c2 (peek-char/special in config))
        (cond
-        [(eqv? #\< (peek-char/special in config))
+        [(eqv? #\< c2)
          (consume-char in #\<)
          (read-here-string in config)]
         [else
-         (reader-error in config "bad syntax `~a<`" dispatch-c)])]
+         (reader-error in config #:due-to c2 "bad syntax `~a<`" dispatch-c)])]
       [(#\%)
-       (read-number-or-symbol c in config #:extra-prefix dispatch-c #:mode 'symbol)]
+       (read-symbol-or-number c in config #:extra-prefix dispatch-c #:mode 'symbol)]
       [(#\:)
-       (read-number-or-symbol #f in config #:mode 'keyword)]
+       (read-symbol-or-number #f in config #:mode 'keyword)]
       [(#\t #\T)
        (define c2 (peek-char/special in config))
        (cond
         [(char-delimiter? c2 config) (wrap #t in config c)]
-        [else (read-delimited-constant c '(#\r #\u #\e) #t in config)])]
+        [else (read-delimited-constant c (char=? c #\t) '(#\r #\u #\e) #t in config)])]
       [(#\f #\F)
        (define c2 (peek-char/special in config))
        (cond
         [(char-delimiter? c2 config) (wrap #f in config c)]
         [(or (char=? c2 #\x) (char=? c2 #\l))
          (read-fixnum-or-flonum-vector read-one dispatch-c c c2 in config)]
-        [else (read-delimited-constant c '(#\a #\l #\s #\e) #f in config)])]
-      [(#\e) (read-number-or-symbol #f in config #:mode "#e")]
-      [(#\E) (read-number-or-symbol #f in config #:mode "#E")]
-      [(#\i) (read-number-or-symbol #f in config #:mode "#i")]
-      [(#\I) (read-number-or-symbol #f in config #:mode "#I")]
-      [(#\d) (read-number-or-symbol #f in config #:mode "#d")]
-      [(#\B) (read-number-or-symbol #f in config #:mode "#B")]
-      [(#\o) (read-number-or-symbol #f in config #:mode "#o")]
-      [(#\O) (read-number-or-symbol #f in config #:mode "#O")]
-      [(#\D) (read-number-or-symbol #f in config #:mode "#D")]
-      [(#\b) (read-number-or-symbol #f in config #:mode "#b")]
-      [(#\x) (read-number-or-symbol #f in config #:mode "#x")]
-      [(#\X) (read-number-or-symbol #f in config #:mode "#X")]
+        [else (read-delimited-constant c (char=? c #\f) '(#\a #\l #\s #\e) #f in config)])]
+      [(#\e) (read-symbol-or-number #f in config #:mode "#e")]
+      [(#\E) (read-symbol-or-number #f in config #:mode "#E")]
+      [(#\i) (read-symbol-or-number #f in config #:mode "#i")]
+      [(#\I) (read-symbol-or-number #f in config #:mode "#I")]
+      [(#\d) (read-symbol-or-number #f in config #:mode "#d")]
+      [(#\B) (read-symbol-or-number #f in config #:mode "#B")]
+      [(#\o) (read-symbol-or-number #f in config #:mode "#o")]
+      [(#\O) (read-symbol-or-number #f in config #:mode "#O")]
+      [(#\D) (read-symbol-or-number #f in config #:mode "#D")]
+      [(#\b) (read-symbol-or-number #f in config #:mode "#b")]
+      [(#\x) (read-symbol-or-number #f in config #:mode "#x")]
+      [(#\X) (read-symbol-or-number #f in config #:mode "#X")]
       [(#\c #\C)
        (define c2 (read-char/special in config))
        (case c2
-         [(#\s #\S) (read-one in (override-parameter read-case-sensitive config #t))]
-         [(#\i #\I) (read-one in (override-parameter read-case-sensitive config #f))]
+         [(#\s #\S) (read-one #f in (override-parameter read-case-sensitive config #t))]
+         [(#\i #\I) (read-one #f in (override-parameter read-case-sensitive config #f))]
          [else
-          (reader-error in config
+          (reader-error in config #:due-to c2
                         "expected `s', `S`, `i', or `I` after `~a~a`"
                         dispatch-c c)])]
       [(#\h #\H) (read-hash read-one dispatch-c c in config)]
@@ -332,7 +366,7 @@
          [(#\e) (read-extension-reader read-one read-undotted dispatch-c in config)]
          [else
           (bad-syntax-error in config
-                                 #:eof? (eof-object? c2)
+                                 #:due-to c2
                                  (accum-string-get! accum-str config))])]
       [(#\p)
        ;; Maybe pregexp
@@ -343,7 +377,7 @@
        (when (char? c2) (accum-string-add! accum-str c2))
        (case c2
          [(#\x) (read-regexp c accum-str in config)]
-         [else (bad-syntax-error in config #:eof? (eof-object? c2)
+         [else (bad-syntax-error in config #:due-to c2
                                  (accum-string-get! accum-str config))])]
       [(#\l)
        ;; Maybe `#lang`
@@ -362,3 +396,11 @@
                        dispatch-c)])]
       [else
        (reader-error in config "bad syntax `~a~a`" dispatch-c c)])]))
+
+(define (retry-special-comment v in config)
+  (cond
+   [(special-comment? v)
+    (if (read-config-keep-comment? config)
+        v
+        (read-undotted #f in config))]
+   [else v]))

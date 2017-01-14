@@ -218,5 +218,8 @@ Some naming conventions:
  mod-name - a resolved module path, usually; sometimes used for other
   forms of module reference
 
+ c and ec - character and "effective" character (after readtable
+  mapping) in the reader
+
  <subscript>-<something> - like <something>, but specifically one for
    <subscript>; for example, `m-ns` is a namespace for some module

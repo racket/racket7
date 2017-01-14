@@ -8,7 +8,8 @@
          "digit.rkt"
          "vector.rkt")
 
-(provide read-vector-or-graph)
+(provide read-vector-or-graph
+         get-graph-hash)
 
 (define (read-vector-or-graph read-one dispatch-c init-c in config)
   (define accum-str (accum-string-init! config))
@@ -47,50 +48,61 @@
       (check-parameter read-curly-brace-as-paren config)
       (get-accum c)
       (read-vector read-one c #\{ #\} in config #:length v))]
-    [(#\= #\#)
-     (when (or (read-config-for-syntax? config)
-               (not (check-parameter read-accept-graph config)))
-       (reader-error in config
-                     "`#...~a` forms not ~a"
-                     c
-                     (if (read-config-for-syntax? config)
-                         "enabled"
-                         "allowed in `read-syntax` mode")))
-     (case ec
-       [(#\=)
-        (define ph (make-placeholder 'placeholder))
-        (define st (read-config-st config))
-        (define ht (or (read-config-state-graph st)
-                       (let ([ht (make-hasheqv)])
-                         (set-read-config-state-graph! st ht)
-                         ht)))
-        (when (hash-ref ht v #f)
-          (reader-error in config
-                        "multiple ~a~a~a tags"
-                        dispatch-c (accum-string-get! accum-str config) c))
-        (hash-set! ht v ph)
-        (define result-v (read-one in config))
-        (when (eof-object? result-v)
-          (reader-error in config
-                        "expected an element for graph after `~a~a~a`, found end-of-file"
-                        dispatch-c (accum-string-get! accum-str config) c))
-        (accum-string-abandon! accum-str config)
-        (placeholder-set! ph result-v)
-        ph]
-       [(#\#)
-        (begin0
-         (hash-ref 
-          (or (read-config-state-graph (read-config-st config))
-              #hash())
-          v
-          (lambda ()
-            (reader-error in config
-                          "no preceding `~a~a=` for `~a~a~a`"
-                          dispatch-c v
-                          dispatch-c (accum-string-get! accum-str config) c)))
-         (accum-string-abandon! accum-str config))])]
     [else
-     (reader-error in config
-                   #:eof? (eof-object? c)
-                   "bad syntax `~a`"
-                   (get-accum c))]))
+     (case c
+       [(#\= #\#)
+        (when (or (read-config-for-syntax? config)
+                  (not (check-parameter read-accept-graph config)))
+          (reader-error in config
+                        "`#...~a` forms not ~a"
+                        c
+                        (if (read-config-for-syntax? config)
+                            "enabled"
+                            "allowed in `read-syntax` mode")))
+        (unless ((accum-string-count accum-str) . <= . 8)
+          (reader-error in config
+                        "graph ID too long in `~a~a~a`"
+                        dispatch-c (accum-string-get! accum-str config) c))
+        (case c
+          [(#\=)
+           (define ph (make-placeholder 'placeholder))
+           (define ht (get-graph-hash config))
+           (when (hash-ref ht v #f)
+             (reader-error in config
+                           "multiple `~a~a~a` tags"
+                           dispatch-c (accum-string-get! accum-str config) c))
+           (hash-set! ht v ph)
+           (define result-v (read-one #f in (next-readtable config)))
+           (when (eof-object? result-v)
+             (reader-error in config #:due-to result-v
+                           "expected an element for graph after `~a~a~a`, found end-of-file"
+                           dispatch-c (accum-string-get! accum-str config) c))
+           (accum-string-abandon! accum-str config)
+           (placeholder-set! ph result-v)
+           ph]
+          [(#\#)
+           (begin0
+            (hash-ref 
+             (or (read-config-state-graph (read-config-st config))
+                 #hash())
+             v
+             (lambda ()
+               (reader-error in config
+                             "no preceding `~a~a=` for `~a~a~a`"
+                             dispatch-c v
+                             dispatch-c (accum-string-get! accum-str config) c)))
+            (accum-string-abandon! accum-str config))])]
+       [else
+        (reader-error in config
+                      #:due-to c
+                      "bad syntax `~a`"
+                      (get-accum c))])]))
+
+;; ----------------------------------------
+
+(define (get-graph-hash config)
+  (define st (read-config-st config))
+  (or (read-config-state-graph st)
+      (let ([ht (make-hasheqv)])
+        (set-read-config-state-graph! st ht)
+        ht)))

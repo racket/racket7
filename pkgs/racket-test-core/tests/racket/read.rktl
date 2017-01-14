@@ -483,7 +483,7 @@
 (test 0 syntax->datum (vector-ref (syntax-e (read-syntax #f (open-input-string "#2()"))) 1))
 
 (err/rt-test (readstr "#2(1 2 3)") exn:fail:read?)
-(err/rt-test (readstr "#200000000000(1 2 3)") (readerrtype exn:fail:out-of-memory?))
+(err/rt-test (readstr "#2000000000000000(1 2 3)") (readerrtype exn:fail:out-of-memory?))
 (err/rt-test (readstr "#111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111x1(1 2 3)") exn:fail:read?)
 
 (test #t (lambda (x) (eq? (car x) (cdr x))) (readstr "(#1=(1 2) . #0001#)"))
@@ -1098,6 +1098,8 @@
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(parameterize ([read-accept-dot #f])
+  (err/rt-test (read (open-input-string ".")) exn:fail:read?))
 (parameterize ([current-readtable (make-readtable (current-readtable) #\. #\a #f)])
   (test '|.| read (open-input-string ".")))
 (parameterize ([current-readtable (make-readtable (current-readtable) #\. #\a #f)]
@@ -1179,7 +1181,7 @@
 (test (void) read-language (open-input-string ";;\n;\n#xa") void)
 ;; Check error-message formatting:
 (err/rt-test (read (open-input-string "#l"))
-             (lambda (exn) (regexp-match? #rx"`#l'" (exn-message exn))))
+             (lambda (exn) (regexp-match? #rx"`#l`" (exn-message exn))))
 ;; Make sure read-language error here is this can comes from read-language
 ;; and not from an ill-formed srcloc construction:
 (let ()
@@ -1187,6 +1189,8 @@
   (port-count-lines! p)
   (err/rt-test (read-language p)
                (lambda (exn) (regexp-match? #rx"read-language" (exn-message exn)))))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (require racket/flonum
          racket/fixnum)

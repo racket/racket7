@@ -1,5 +1,8 @@
 #lang at-exp racket/base
-(require (rename-in "main.rkt" [read main:read]))
+(require racket/flonum
+         (rename-in "main.rkt"
+                    [read main:read]
+                    [read-language main:read-language]))
 
 (define (s->p . strs)
   (define p (open-input-string (apply string-append strs)))
@@ -21,6 +24,8 @@
            '#:a)
 (test-read (s->p "#\\a")
            #\a)
+(test-read (s->p "#\\110")
+           #\H)
 (test-read (s->p "#\\u0001")
            #\u1)
 (test-read (s->p "#\\U3BB")
@@ -53,12 +58,14 @@
            '(#t))
 (test-read (s->p "#f")
            '#f)
-(test-read (s->p "(#TRUE)")
+(test-read (s->p "(#true)")
            '(#t))
-(test-read (s->p "#ci (#fAlSe)")
+(test-read (s->p "#ci (#false)")
            '(#f))
 (test-read (s->p "#005(fAl Se)")
            '#(fAl Se Se Se Se))
+(test-read (s->p "#fl6(1.5 0.33 0.3)")
+           (flvector 1.5 0.33 0.3 0.3 0.3 0.3))
 (let ([ht (test-read (s->p "#1=#hasheq((#1# . #1#))"))])
   (unless (eq? (hash-ref ht ht) ht)
     (error 'test "fail for cyclic hash table")))
@@ -74,6 +81,8 @@
            #px#"fox")
 (test-read (s->p "{fAl Se}")
            '(fAl Se))
+(test-read (s->p "#{fAl Se}")
+           '#(fAl Se))
 (test-read (s->p "#! ok \\\n more\n 8")
            8)
 (test-read @s->p{"apple\n\"\x30\7\07\u3BB\U1F600\uD83D\uDE00"}
@@ -121,7 +130,7 @@
                                                     (main:read in
                                                                #:recursive? #t
                                                                #:readtable #f)))])
-  (test-read (s->p "(#1=(a) #t#1# #t#t)")
+  (test-read (s->p "(#1=(a) #t #1# #t#t)")
              '((a) (a) #t)))
 (parameterize ([read-accept-reader #t])
   (main:read (s->p "#readerok") #:dynamic-require (lambda (lib sym)
@@ -140,8 +149,22 @@
                                    '|#!-OK|))
              #:module-declared? (lambda (mp) #t)))
 
-(define s (format "~s" (for/list ([i 100000])
-                         i)))
+(main:read-language (s->p "#lang racket/base") (lambda () (error "fail"))
+                    #:dynamic-require (lambda (lib sym fail-k)
+                                        (lambda (in src line col pos)
+                                          (lambda (x y) 'LANG-INFO)))
+                    #:module-declared? (lambda (mp) #f))
+
+(parameterize ([current-readtable (make-readtable #f
+                                                  #\# #\a #f)])
+  (test-read (s->p "#ab#")
+             '|#ab#|))
+
+(define s (let ([o (open-output-bytes)])
+            (display "(" o)
+            (for ([i 100000]) (display " " o) (display i o))
+            (display ")" o)
+            (get-output-string o)))
 (collect-garbage)
 (require "accum-string.rkt"
          "config.rkt")

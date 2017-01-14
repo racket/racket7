@@ -1,9 +1,11 @@
 #lang racket/base
 (require "../common/performance.rkt"
-         (rename-in "../read/main.rkt" [read main:read])
-         "../syntax/syntax.rkt"
-         "../syntax/property.rkt"
-         "../syntax/original.rkt"
+         (rename-in "../read/main.rkt" 
+                    [read main:read]
+                    [read-language main:read-language])
+         "syntax.rkt"
+         "property.rkt"
+         "original.rkt"
          "../eval/dynamic-require.rkt"
          "../namespace/api-module.rkt"
          "srcloc.rkt"
@@ -12,7 +14,8 @@
 (provide read
          read/recursive
          read-syntax
-         read-syntax/recursive)
+         read-syntax/recursive
+         read-language)
 
 (define (read-syntax src in)
   (read* in
@@ -26,7 +29,7 @@
          #:source src
          #:init-c start
          #:readtable readtable
-         #:local-graph? graph?))
+         #:local-graph? (not graph?)))
 
 (define (read in)
   (read* in
@@ -38,7 +41,7 @@
          #:recursive? #t
          #:init-c start
          #:readtable readtable
-         #:local-graph? graph?))
+         #:local-graph? (not graph?)))
 
 (define (read* in
                #:for-syntax? for-syntax?
@@ -63,6 +66,15 @@
               #:module-declared? read-module-declared?
               #:coerce read-coerce)))
 
+(define (read-language in fail-thunk)
+  (main:read-language in fail-thunk
+                      #:for-syntax? #t
+                      #:wrap read-to-syntax
+                      #:read-compiled read-compiled-linklet
+                      #:dynamic-require dynamic-require
+                      #:module-declared? read-module-declared?
+                      #:coerce read-coerce))
+
 (define (read-to-syntax s-exp srcloc rep)
   (struct-copy syntax empty-syntax
                [content s-exp]
@@ -84,11 +96,11 @@
 (define (read-module-declared? mod-path)
   (module-declared? mod-path #t))
 
-(define (read-coerce for-syntax? v)
+(define (read-coerce for-syntax? v srcloc)
   (cond
    [(not for-syntax?)
     (cond
      [(syntax? v) (syntax->datum v)]
      [else v])]
    [else
-    (datum->syntax #f v)]))
+    (datum->syntax #f v (and srcloc (to-srcloc-stx srcloc)))]))

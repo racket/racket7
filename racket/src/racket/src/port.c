@@ -3762,8 +3762,6 @@ Scheme_Object *scheme_get_special(Scheme_Object *port,
 
   if (peek) {
     /* do location increment, since read didn't */
-    if (line > 0)
-      line++;
     if (col >= 0)
       col++;
     if (pos > 0)
@@ -3804,11 +3802,7 @@ static Scheme_Object *do_get_ready_special(Scheme_Object *port,
     stxsrc = ip->name;
   }
 
-  /* Don't use scheme_tell_all(), because we always want the
-     Racket-computed values here. */
-  line = scheme_tell_line(port);
-  col = scheme_tell_column(port);
-  pos = scheme_tell(port);
+  scheme_tell_all(port, &line, &col, &pos);
 
   return scheme_get_special(port, stxsrc, line, col, pos, peek, ht);
 }
