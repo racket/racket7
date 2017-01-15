@@ -145,7 +145,11 @@ void scheme_init_char (Scheme_Startup_Env *env)
   ADD_FOLDING_PRIM("char-numeric?",         char_numeric,          1, 1, 1, env);
   ADD_FOLDING_PRIM("char-symbolic?",        char_symbolic,         1, 1, 1, env);
   ADD_FOLDING_PRIM("char-graphic?",         char_graphic,          1, 1, 1, env);
-  ADD_FOLDING_PRIM("char-whitespace?",      char_whitespace,       1, 1, 1, env);
+
+  p = scheme_make_folding_prim(char_whitespace, "char-whitespace?", 1, 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  scheme_addto_prim_instance("char-whitespace?", p, env);
+  
   ADD_FOLDING_PRIM("char-blank?",           char_blank,            1, 1, 1, env);
   ADD_FOLDING_PRIM("char-iso-control?",     char_control,          1, 1, 1, env);
   ADD_FOLDING_PRIM("char-punctuation?",     char_punctuation,      1, 1, 1, env);

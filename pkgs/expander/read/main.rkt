@@ -156,16 +156,8 @@
 ;; the reader's main dispatch layer.
 
 (define (read-undotted init-c in config)
-  (define ws-c
-    (and (not init-c)
-         (skip-whitespace-and-comments! read-one in config)))
-  (define-values (line col pos) (port-next-location* in init-c))
-  (define c (or init-c
-                (and (special-comment? ws-c) 
-                     ;; preserved comment, already read, only
-                     ;; when `(read-config-keep-comment? config)`:
-                     (special ws-c))
-                (read-char/special in config)))
+  (define c (read-char/skip-whitespace-and-comments init-c read-one in config))
+  (define-values (line col pos) (port-next-location* in c))
   (cond
    [(eof-object? c) eof]
    [(not (char? c))

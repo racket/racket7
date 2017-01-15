@@ -11,6 +11,7 @@
          "indentation.rkt"
          "parameter.rkt"
          "wrap.rkt"
+         "location.rkt"
          "special-comment.rkt")
 
 (provide read-unwrapped-sequence)
@@ -40,22 +41,20 @@
     e)
 
   (define seq
-    (let loop ([depth 0] [accum null] [first? #t] [first-read-one first-read-one])
-      (define c (skip-whitespace-and-comments! whitespace-read-one in seq-config))
+    (let loop ([depth 0] [accum null] [init-c #f] [first? #t] [first-read-one first-read-one])
+      (define c (read-char/skip-whitespace-and-comments init-c whitespace-read-one in seq-config))
       (define ec (effective-char c seq-config))
       (cond
        [(eqv? ec closer)
-        (consume-char in ec)
         (if (null? accum)
             null
             (reverse accum))]
        [(and (not first?)
              (eqv? ec #\.)
              (check-parameter read-accept-dot config)
-             (char-delimiter? (peek-char/special in config 1) seq-config))
+             (char-delimiter? (peek-char/special in config) seq-config))
         ;; Found a `.`: maybe improper or maybe infix
-        (define-values (dot-line dot-col dot-pos) (port-next-location in))
-        (consume-char in c)
+        (define-values (dot-line dot-col dot-pos) (port-next-location* in c))
         (track-indentation! config dot-line dot-col)
         
         (unless (and dot-mode
@@ -68,29 +67,27 @@
         (define v (read-one/not-eof #f first-read-one config))
         
         ;; Check for infix or list termination:
-        (define rest-c (skip-whitespace-and-comments! whitespace-read-one in seq-config))
+        (define rest-c (read-char/skip-whitespace-and-comments #f whitespace-read-one in seq-config))
         (define rest-ec (effective-char rest-c seq-config))
         
         (cond
          [(eqv? rest-ec closer)
           ;; Improper list
-          (consume-char in rest-c)
           (if (null? accum)
               v
               (append (reverse accum) v))]
          [(and (eqv? rest-ec #\.)
                (check-parameter read-accept-dot config)
                (check-parameter read-accept-infix-dot config)
-               (char-delimiter? (peek-char/special in config 1) seq-config))
+               (char-delimiter? (peek-char/special in config) seq-config))
           ;; Infix mode
           (set! head (box v))
-          (consume-char in rest-c)
           
           (define-values (dot2-line dot2-col dot2-pos) (port-next-location in))
           (track-indentation! config dot2-line dot2-col)
           
           ;; Check for a closer right after the second dot:
-          (define post-c (skip-whitespace-and-comments! whitespace-read-one in seq-config))
+          (define post-c (read-char/skip-whitespace-and-comments #f whitespace-read-one in seq-config))
           (define post-ec (effective-char post-c seq-config))
           (when (or (eof-object? post-ec)
                     (eqv? post-ec closer))
@@ -99,22 +96,21 @@
                           "illegal use of `.`"))
           
           ;; No closer => another item or EOF
-          (loop depth accum #f read-one)]
+          (loop depth accum post-c #f read-one)]
          [else
           ;; Something else after a single element after a single dot
           (reader-error in (reading-at config dot-line dot-col dot-pos)
                         #:due-to rest-c
                         "illegal use of `.`")])]
        [else
-        (consume-char/special in config c)
         (define v (read-one/not-eof c first-read-one config/keep-comment))
         (cond
-         [(special-comment? v) (loop depth accum #f read-one)]
+         [(special-comment? v) (loop depth accum #f #f read-one)]
          [(depth . > . 1024)
           ;; At some large depth, it's better to accumlate than recur
-          (loop depth (cons v accum) #f read-one)]
+          (loop depth (cons v accum) #f #f read-one)]
          [else 
-          (cons v (loop (add1 depth) null #f read-one))])])))
+          (cons v (loop (add1 depth) null #f #f read-one))])])))
   (define full-seq (if head
                        (cons (unbox head) seq)
                        seq))

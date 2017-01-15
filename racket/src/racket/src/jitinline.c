@@ -536,6 +536,77 @@ static int generate_inlined_immutable_test(mz_jit_state *jitter, Scheme_App2_Rec
   return 1;
 }
 
+static int generate_inlined_char_category_test(mz_jit_state *jitter, Scheme_App2_Rec *app, int bit,
+                                               Branch_Info *for_branch, int branch_short,
+                                               int dest)
+{
+  GC_CAN_IGNORE jit_insn *reffail = NULL, *ref, *pref;
+
+  LOG_IT(("inlined %s\n", ((Scheme_Primitive_Proc *)rator)->name));
+
+  mz_runstack_skipped(jitter, 1);
+
+  scheme_generate_non_tail(app->rand, jitter, 0, 1, 0);
+  CHECK_LIMIT();
+
+  mz_runstack_unskipped(jitter, 1);
+
+  mz_rs_sync();
+
+  __START_SHORT_JUMPS__(branch_short);
+  
+  if (for_branch) {
+    scheme_prepare_branch_jump(jitter, for_branch);
+    CHECK_LIMIT();
+  }
+  
+  pref = jit_bmci_ul(jit_forward(), JIT_R0, 0x1);
+  reffail = jit_get_ip();
+  (void)jit_movi_p(JIT_R2, ((Scheme_Primitive_Proc *)app->rator)->prim_val);
+  __END_SHORT_JUMPS__(branch_short);
+  (void)jit_calli(sjc.call_original_unary_arith_code);
+  __START_SHORT_JUMPS__(branch_short);
+  mz_patch_branch(pref);
+  (void)mz_bnei_t(reffail, JIT_R0, scheme_char_type, JIT_R2);
+  
+  /* Extract character value */
+  jit_ldxi_i(JIT_R0, JIT_R0, (intptr_t)&SCHEME_CHAR_VAL((Scheme_Object *)0x0));
+
+  /* Lookup */
+  jit_movi_p(JIT_R1, scheme_uchar_table);
+  jit_rshi_i(JIT_R2, JIT_R0, (SCHEME_UCHAR_FIND_SHIFT - JIT_LOG_WORD_SIZE));
+  jit_andi_i(JIT_R2, JIT_R2, (SCHEME_UCHAR_FIND_HI_MASK << JIT_LOG_WORD_SIZE));
+  jit_ldxr_p(JIT_R1, JIT_R1, JIT_R2);
+  jit_andi_i(JIT_R2, JIT_R0, SCHEME_UCHAR_FIND_LO_MASK);
+  jit_lshi_i(JIT_R2, JIT_R2, 1); /* 1 = log_2(sizeof(short)) */
+  jit_ldxr_s(JIT_R1, JIT_R1, JIT_R2);
+
+  /* JIT_R1 now has character-property bits */
+  ref = jit_bmci_i(jit_forward(), JIT_R1, bit);
+  CHECK_LIMIT();
+  
+  if (for_branch) {
+    scheme_add_branch_false(for_branch, ref);
+    scheme_branch_for_true(jitter, for_branch);
+    CHECK_LIMIT();
+  } else {
+    GC_CAN_IGNORE jit_insn *ref2;
+    (void)jit_movi_p(dest, scheme_true);
+    __START_INNER_TINY__(branch_short);
+    ref2 = jit_jmpi(jit_forward());
+    __END_INNER_TINY__(branch_short);
+    mz_patch_branch(ref);
+    (void)jit_movi_p(dest, scheme_false);
+    __START_INNER_TINY__(branch_short);
+    mz_patch_ucbranch(ref2);
+    __END_INNER_TINY__(branch_short);
+  }
+    
+  __END_SHORT_JUMPS__(branch_short);
+
+  return 1;
+}
+
 static Scheme_Object *extract_struct_constant(mz_jit_state *jitter, Scheme_Object *rator)
 {
   if (SCHEME_PROCP(rator))
@@ -1310,6 +1381,9 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
     return 1;
   } else if (IS_NAMED_PRIM(rator, "immutable?")) {
     generate_inlined_immutable_test(jitter, app, for_branch, branch_short, dest);
+    return 1;
+  } else if (IS_NAMED_PRIM(rator, "char-whitespace?")) {
+    generate_inlined_char_category_test(jitter, app, SCHEME_ISSPACE_BIT, for_branch, branch_short, dest);
     return 1;
   } else if (IS_NAMED_PRIM(rator, "list?")
              || IS_NAMED_PRIM(rator, "list-pair?")) {

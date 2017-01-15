@@ -1,9 +1,9 @@
-This package contains the implementation of Racket's macro expander.
-A copy of this implementation is extracted and built into the Racket
-executable, so normally this package's modules are not run directly.
-The expander can be run separately, however, and the Racket expander
-is updated by modifying this package as it exists in the main Racket
-Git repository.
+This package contains the implementation of Racket's front-end: macro
+expander, reader, and module systems. A copy of this implementation is
+extracted and built into the Racket executable, so normally this
+package's modules are not run directly. The expander or reader can be
+run separately, however, and the Racket expander is updated by
+modifying this package as it exists in the main Racket Git repository.
 
 Running:
 
@@ -108,7 +108,7 @@ Running:
 Roadmap to the implementation:
 
  read/ - the readers
-   demo.rkt - simples examples/tests for the reader
+   demo.rkt - simple examples/tests for the reader
 
  syntax/ - syntax-object and binding representation
    syntax.rkt - syntax-object structure
@@ -180,12 +180,22 @@ Implementation guidelines:
    "run/" or "extract/" is allowed.)
 
  * The runtime implementation of the expander must not itself use any
-   syntax objects as provided by the Racket implementation used to
-   compile the expander. That means, for example, that the contract
-   system cannot be used in the implementation of the expander, since
-   the contract system manages some information with syntax objects at
-   run time. The expander-extraction process double-checks that the
-   expander is independent of its host in this way.
+   syntax objects or syntax function as provided by the Racket
+   implementation used to compile the expander. That means, for
+   example, that the contract system cannot be used in the
+   implementation of the expander, since the contract system manages
+   some information with syntax objects at run time. The
+   expander-extraction process double-checks that the expander is
+   independent of its host in this way.
+
+ * The runtime implementation of the expander can refer (via
+   `#%kernel`) to reader primitives that are to be implemented by the
+   reader that is bundled with the expander. The extraction process
+   simply redirects those references to the implemented variants.
+   Beware that adjusting parameters from `#%kernel` will not change
+   the behavior of the bundled reader during bootrstapping of the
+   expander (i.e., for bootstrapping, always refer to the parameters
+   from the implementation in the "read" directory).
 
 ----------------------------------------
 

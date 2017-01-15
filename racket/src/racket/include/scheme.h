@@ -716,13 +716,19 @@ typedef struct Scheme_Offset_Cptr
 #define scheme_make_character(ch) ((((mzchar)ch) < 256) ? scheme_char_constants[(unsigned char)(ch)] : scheme_make_char(ch))
 #define scheme_make_ascii_character(ch) scheme_char_constants[(unsigned char)(ch)]
 
-#define scheme_uchar_find(table, x) (table[(x >> 8) & 0x1FFF][x & 0xFF])
+#define SCHEME_UCHAR_FIND_SHIFT    8
+#define SCHEME_UCHAR_FIND_HI_MASK  0x1FFF
+#define SCHEME_UCHAR_FIND_LO_MASK  0xFF
+
+#define scheme_uchar_find(table, x) (table[(x >> SCHEME_UCHAR_FIND_SHIFT) & SCHEME_UCHAR_FIND_HI_MASK][x & SCHEME_UCHAR_FIND_LO_MASK])
+
+#define SCHEME_ISSPACE_BIT         0x10
 
 #define scheme_isblank(x) ((scheme_uchar_find(scheme_uchar_table, x)) & 0x1)
 #define scheme_issymbol(x) ((scheme_uchar_find(scheme_uchar_table, x)) & 0x2)
 #define scheme_ispunc(x) ((scheme_uchar_find(scheme_uchar_table, x)) & 0x4)
 #define scheme_iscontrol(x) ((scheme_uchar_find(scheme_uchar_table, x)) & 0x8)
-#define scheme_isspace(x) ((scheme_uchar_find(scheme_uchar_table, x)) & 0x10)
+#define scheme_isspace(x) ((scheme_uchar_find(scheme_uchar_table, x)) & SCHEME_ISSPACE_BIT)
 /* #define scheme_isSOMETHING(x) ((scheme_uchar_find(scheme_uchar_table, x)) & 0x20) - not yet used */
 #define scheme_isdigit(x) ((scheme_uchar_find(scheme_uchar_table, x)) & 0x40)
 #define scheme_isalpha(x) ((scheme_uchar_find(scheme_uchar_table, x)) & 0x80)

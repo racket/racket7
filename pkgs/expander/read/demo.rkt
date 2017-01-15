@@ -46,6 +46,8 @@
 (parameterize ([read-cdot #t])
   (test-read (s->p "a.b.c.d|.|f")
              '(#%dot (#%dot (#%dot a b) c) d.f)))
+(test-read (s->p "(b . a . c)")
+           '(a b c))
 (test-read (s->p "(b . a #| a |# . c)")
            '(a b c))
 (test-read (s->p "(a 1.0 ; comment\n c)")

@@ -5,14 +5,14 @@
          "parameter.rkt"
          "special.rkt"
          "error.rkt"
+         "location.rkt"
          "extension.rkt")
 
 (provide read-language/get-info)
 
 (define (read-language/get-info read-one in config fail-k)
-  (define c (skip-whitespace-and-comments! read-one in config))
-  (define-values (line col pos) (port-next-location in))
-  (consume-char/special in config c)
+  (define c (read-char/skip-whitespace-and-comments #f read-one in config))
+  (define-values (line col pos) (port-next-location* in c))
 
   (define l-config (override-parameter read-accept-reader 
                                        (reading-at config line col pos)

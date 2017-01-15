@@ -111,11 +111,8 @@
 ;; ----------------------------------------
 
 (define ((make-read-one-key+value read-one overall-opener-c overall-closer-ec) init-c in config)
-  (define c (or init-c
-                (skip-whitespace-and-comments! read-one in config)))
-  (define-values (open-line open-col open-pos) (port-next-location* in init-c))
-  (unless init-c
-    (consume-char/special in config c))
+  (define c (read-char/skip-whitespace-and-comments init-c read-one in config))
+  (define-values (open-line open-col open-pos) (port-next-location* in c))
   (define ec (effective-char c config))
   (define elem-config (next-readtable config))
   
@@ -156,9 +153,8 @@
    [else
     (define k (read-one #f in (disable-wrapping elem-config)))
     
-    (define dot-c (skip-whitespace-and-comments! read-one in config))
-    (define-values (dot-line dot-col dot-pos) (port-next-location in))
-    (consume-char/special in config dot-c)
+    (define dot-c (read-char/skip-whitespace-and-comments #f read-one in config))
+    (define-values (dot-line dot-col dot-pos) (port-next-location* in dot-c))
     (define dot-ec (effective-char dot-c config))
 
     (unless (and (eqv? dot-ec #\.)
@@ -170,9 +166,8 @@
     
     (define v (read-one #f in elem-config))
     
-    (define closer-c (skip-whitespace-and-comments! read-one in config))
-    (define-values (closer-line closer-col closer-pos) (port-next-location in))
-    (consume-char/special in config closer-c)
+    (define closer-c (read-char/skip-whitespace-and-comments #f read-one in config))
+    (define-values (closer-line closer-col closer-pos) (port-next-location* in closer-c))
     (define closer-ec (effective-char closer-c config))
     
     (unless (eqv? closer-ec closer)
