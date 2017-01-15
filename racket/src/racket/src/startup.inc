@@ -53667,7 +53667,7 @@
 "(lambda(s-exp_3 srcloc_10 rep_1)"
 "(let-values(((the-struct_83) empty-syntax))"
 "(if(syntax?$1 the-struct_83)"
-"(let-values(((content55_0) s-exp_3)"
+"(let-values(((content55_0)(datum-intern-literal s-exp_3))"
 "((srcloc56_0) srcloc_10)"
 "((props57_0)"
 "(let-values(((tmp_57) rep_1))"
