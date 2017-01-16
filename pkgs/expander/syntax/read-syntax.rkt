@@ -18,9 +18,13 @@
          read-language)
 
 (define (read-syntax src in)
-  (read* in
-         #:for-syntax? #t
-         #:source src))
+  (cond
+   [(default-read-handler? in)
+    (read* in
+           #:for-syntax? #t
+           #:source src)]
+   [else
+    ((port-read-handler in) in src)]))
 
 (define (read-syntax/recursive src in start readtable graph?)
   (read* in
@@ -32,8 +36,12 @@
          #:local-graph? (not graph?)))
 
 (define (read in)
-  (read* in
-         #:for-syntax? #f))
+  (cond
+   [(default-read-handler? in)
+    (read* in
+           #:for-syntax? #f)]
+   [else
+    ((port-read-handler in) in)]))
 
 (define (read/recursive in start readtable graph?)
   (read* in
@@ -64,7 +72,8 @@
               #:read-compiled read-compiled-linklet
               #:dynamic-require dynamic-require
               #:module-declared? read-module-declared?
-              #:coerce read-coerce)))
+              #:coerce read-coerce
+              #:coerce-key read-coerce-key)))
 
 (define (read-language in fail-thunk)
   (main:read-language in fail-thunk
@@ -73,7 +82,8 @@
                       #:read-compiled read-compiled-linklet
                       #:dynamic-require dynamic-require
                       #:module-declared? read-module-declared?
-                      #:coerce read-coerce))
+                      #:coerce read-coerce
+                      #:coerce-key read-coerce-key))
 
 (define (read-to-syntax s-exp srcloc rep)
   (struct-copy syntax empty-syntax
@@ -104,3 +114,23 @@
      [else v])]
    [else
     (datum->syntax #f v (and srcloc (to-srcloc-stx srcloc)))]))
+
+(define (read-coerce-key for-syntax? k)
+  (cond
+   [for-syntax? (datum-intern-literal k)]
+   [else k]))
+
+;; ----------------------------------------
+
+;; Initialized on first port that we read from, on the
+;; assuption that we have to read some file before a
+;; read handler can possibly be set:
+(define default-read-handler #f)
+
+(define (default-read-handler? in)
+  (cond
+   [(not default-read-handler)
+    (set! default-read-handler (port-read-handler in))
+    #t]
+   [else
+    (eq? default-read-handler (port-read-handler in))]))

@@ -60,7 +60,7 @@
      [(and (char=? #\# ec)
            (eqv? #\; (peek-char/special in config 0 source)))
       (consume-char in #\;)
-      (define v (read-one #f in (disable-wrapping config)))
+      (define v (read-one #f in config))
       (when (eof-object? v)
         (reader-error in config
                       #:due-to v

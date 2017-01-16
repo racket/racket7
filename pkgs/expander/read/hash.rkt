@@ -11,6 +11,7 @@
          "indentation.rkt"
          "closer.rkt"
          "parameter.rkt"
+         "coerce-key.rkt"
          "wrap.rkt"
          "sequence.rkt"
          "special-comment.rkt")
@@ -176,4 +177,4 @@
                     "expected ~a after value within a hash"
                     (closer-name closer config)))
     
-    (cons k v)]))
+    (cons (coerce-key k elem-config) v)]))

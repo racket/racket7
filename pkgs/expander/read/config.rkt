@@ -18,16 +18,17 @@
                       next-readtable ; readtable to use for recursive reads
                       for-syntax?   ; impose restrictions on graphs, fxvectors, etc?
                       source
-                      wrap          ; wrapper applied to each datum, intended for syntax objects
+                      * wrap          ; wrapper applied to each datum, intended for syntax objects
                       read-compiled   ; for `#~`: input-port -> any/c
                       dynamic-require ; for reader extensions: module-path sym -> any
                       module-declared? ; for `#lang`: module-path -> any/c
                       coerce        ; coerce for syntax or not: any boolean -> any
+                      coerce-key    ; coerce unwrapped key for hash
                       * line
                       * col
                       * pos
                       * indentations  ; stack of `indentation` records
-                      keep-comment? ; make main dispatch return on comment
+                      * keep-comment? ; make main dispatch return on comment
                       parameter-override ; mash of parameter -> value
                       parameter-cache   ; hash of parameter -> value
                       st)) ; other shared mutable state
@@ -47,6 +48,7 @@
          #:dynamic-require [dynamic-require #f]
          #:module-declared? [module-declared? #f]
          #:coerce [coerce #f]
+         #:coerce-key [coerce-key #f]
          #:keep-comment? [keep-comment? #f])
   (read-config readtable
                next-readtable
@@ -64,6 +66,8 @@
                      (error 'read "no `module-declare?` provided")))
                (or coerce
                    (lambda (for-syntax? v srcloc) v))
+               (or coerce-key
+                   (lambda (for-syntax? v) v))
                #f ; line
                #f ; col
                #f ; pos

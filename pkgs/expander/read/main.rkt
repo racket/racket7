@@ -61,6 +61,7 @@
               #:dynamic-require [dynamic-require #f]   ; see "config.rkt"
               #:module-declared? [module-declared? #f] ; see "config.rkt"
               #:coerce [coerce #f]                     ; see "config.rkt"
+              #:coerce-key [coerce-key #f]             ; see "config.rkt"
               #:keep-comment? [keep-comment? recursive?])
   (define config
     (cond
@@ -84,6 +85,7 @@
                         #:dynamic-require dynamic-require
                         #:module-declared? module-declared?
                         #:coerce coerce
+                        #:coerce-key coerce-key
                         #:keep-comment? keep-comment?)]))
   (define v (read-one init-c in config))
   (cond
@@ -107,7 +109,8 @@
                        #:read-compiled [read-compiled #f]
                        #:dynamic-require [dynamic-require #f]
                        #:module-declared? [module-declared? #f]
-                       #:coerce [coerce #f])
+                       #:coerce [coerce #f]
+                       #:coerce-key [coerce-key #f])
   (define config (make-read-config #:readtable #f
                                    #:next-readtable #f
                                    #:for-syntax? for-syntax?
@@ -115,7 +118,8 @@
                                    #:read-compiled read-compiled
                                    #:dynamic-require dynamic-require
                                    #:module-declared? module-declared?
-                                   #:coerce coerce))
+                                   #:coerce coerce
+                                   #:coerce-key coerce-key))
   (define l-config (override-parameter read-accept-reader config #f))
   (read-language/get-info read-undotted in config fail-k))
 
