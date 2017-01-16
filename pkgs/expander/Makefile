@@ -33,6 +33,6 @@ run-no-cache:
 # Writes the extracted, compiled, decompiled expander to compiled/exp.rkt
 decompile:
 	$(RACO) make bootstrap-run.rkt
-	$(RACKET) $(RKT_ARGS) bootstrap-run.rkt -c compiled/cache-src -s -x -D -o compiled/exp.rkt
+	$(RACKET) $(RKT_ARGS) bootstrap-run.rkt -c compiled/cache-src $(KNOT) -s -x -D -o compiled/exp.rkt
 
 .PHONY: expander demo run run-no-cache
