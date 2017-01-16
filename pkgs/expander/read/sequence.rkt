@@ -34,7 +34,7 @@
     (define e (read-one init-c in config))
     (when (eof-object? e)
       (reader-error in config #:due-to e
-                    "expected a `~a` to close `~a`~a"
+                    "expected a ~a to close `~a`~a"
                     (closer-name closer config)
                     opener-c
                     (indentation-possible-cause config)))

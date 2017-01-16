@@ -2508,7 +2508,7 @@
     (write (compile (read-syntax path p)) out)
     (eval (read in))
     (define src (syntax-source ((dynamic-require path 'f))))
-    (test (path->string path) values src)))
+    (test path values src)))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

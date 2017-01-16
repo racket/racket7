@@ -78,9 +78,9 @@
       (define m-ns (namespace->module-namespace ns ex-mod-name (phase- phase ex-phase)
                                                 #:complain-on-failure? #t))
       ;; Before continuing, make sure that we're allowed to access the binding
-      (define mi (namespace->module ns ex-mod-name))
-      (define access (or (module-access m) (module-compute-access! m)))
-      (when (and (not (eq? 'provided (hash-ref access ex-sym #f)))
+      (define ex-m (namespace->module ns ex-mod-name))
+      (define access (or (module-access ex-m) (module-compute-access! ex-m)))
+      (when (and (not (eq? 'provided (hash-ref (hash-ref access ex-phase #hasheq()) ex-sym #f)))
                  (and (not (inspector-superior? (current-code-inspector) (namespace-inspector m-ns)))
                       (not (and (module-binding-extra-inspector binding)
                                 (inspector-superior? (module-binding-extra-inspector binding)

@@ -162,6 +162,12 @@
   (test-read (s->p "#ab#")
              '|#ab#|))
 
+(with-handlers ([exn:fail:read? exn-message])
+  (parameterize ([current-readtable (make-readtable #f
+                                                    #\* #\) #f
+                                                    #\! #\) #f)])
+    (main:read (s->p "(x"))))
+
 (define s (let ([o (open-output-bytes)])
             (display "(" o)
             (for ([i 100000]) (display " " o) (display i o))

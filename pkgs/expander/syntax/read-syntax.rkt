@@ -24,7 +24,8 @@
            #:for-syntax? #t
            #:source src)]
    [else
-    ((port-read-handler in) in src)]))
+    ;; `values` forces a single result value:
+    (values ((port-read-handler in) in src))]))
 
 (define (read-syntax/recursive src in start readtable graph?)
   (read* in
@@ -41,7 +42,8 @@
     (read* in
            #:for-syntax? #f)]
    [else
-    ((port-read-handler in) in)]))
+    ;; `values` forces a single result value:
+    (values ((port-read-handler in) in))]))
 
 (define (read/recursive in start readtable graph?)
   (read* in

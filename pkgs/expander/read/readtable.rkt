@@ -16,7 +16,8 @@
          readtable-handler
          readtable-dispatch-handler
          readtable-apply
-         readtable-symbol-parser)
+         readtable-symbol-parser
+         readtable-equivalent-chars)
 
 (struct readtable (symbol-parser ; parser for default token handling: symbol-or-number
                    ;; The character table maps characters to either a
@@ -185,3 +186,14 @@
               c)
           (if (char? handler) #f handler)
           (hash-ref (readtable-dispatch-ht rt) c #f)))
+
+;; Return a list of characters mapped to `c`:
+(define (readtable-equivalent-chars rt c)
+  (define ht (readtable-char-ht rt))
+  (append
+   (if (hash-ref ht c #f)
+       null
+       (list c))
+   (for/list ([(k v) (in-hash ht)]
+              #:when (eqv? v c))
+     k)))

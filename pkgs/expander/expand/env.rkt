@@ -125,7 +125,7 @@
     (check-taint id)
     (define t (namespace-get-transformer m-ns (module-binding-phase b) (module-binding-sym b)
                                          variable))
-    (when mi (check-access b mi id in-s (if t "transformer" "variable")))
+    (when mi (check-access b mi id in-s (if (variable? t) "variable" "transformer")))
     (define insp (and mi (module-instance-module mi) (module-inspector (module-instance-module mi))))
     (values t primitive? insp)]
    [(local-binding? b)

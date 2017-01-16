@@ -1,5 +1,7 @@
 #lang racket/base
-(require "parameter.rkt")
+(require "parameter.rkt"
+         "config.rkt"
+         "readtable.rkt")
 
 (provide char-closer?
          closer-name
@@ -15,7 +17,30 @@
            (char=? ec #\}))))
 
 (define (closer-name c config)
-  (format "`~a`" c))
+  (effective-char-names c config "closer"))
+
+(define (opener-name c config)
+  (effective-char-names c config "opener"))
+
+(define (effective-char-names c config fallback-str)
+  (define rt (read-config-readtable config))
+  (cond
+   [(not rt)
+    (format "`~a`" c)]
+   [else
+    (define cs (readtable-equivalent-chars rt c))
+    (cond
+     [(null? cs) fallback-str]
+     [(null? (cdr cs)) (format "`~a`" (car cs))]
+     [(null? (cddr cs)) (format "`~a` or `~a`" (car cs) (cadr cs))]
+     [else
+      (apply
+       string-append
+       (let loop ([cs cs])
+         (cond
+          [(null? (cdr cs)) (list (format "or `~a`" (car cs)))]
+          [else (cons (format "`~a`, " (car cs))
+                      (loop (cdr cs)))])))])]))
 
 (define (closer->opener c)
   (case c
@@ -23,9 +48,6 @@
     [(#\]) #\[]
     [(#\}) #\{]
     [else c]))
-
-(define (opener-name c config)
-  (format "`~a`" c))
 
 (define (dot-name config)
   "`.`")
