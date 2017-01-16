@@ -65,7 +65,7 @@
           (fail-k))]
      [else
       ;; The provided binding may correspond to an immediate provide,
-      ;; or it may by re-rpovided from a different module
+      ;; or it may by re-provided from a different module
       (define binding (provided-as-binding binding/p))
       (define ex-sym (module-binding-sym binding))
       (define ex-phase (module-binding-phase binding))

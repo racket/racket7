@@ -152,7 +152,8 @@
                                        inst
                                        import-instances)
                                 ;; Instantiation merges with the namespace's current instance:
-                                (namespace->instance ns (phase+ phase phase-shift))
+                                (namespace->instance ns (phase- (phase+ phase phase-shift)
+                                                                (namespace-0-phase ns)))
                                 ;; No prompt in tail position:
                                 (not tail?)))
          ;; Return `instantiate` as the next thunk
