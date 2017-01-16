@@ -18,7 +18,7 @@
     (provide id)
     (define id (make-parameter val (lambda (v) (and v #t))))))
 
-(define-boolean-parameter read-case-sensitive #t)
+;; (define-boolean-parameter read-case-sensitive #t) - shared with printer
 (define-boolean-parameter read-square-bracket-as-paren #t)
 (define-boolean-parameter read-curly-brace-as-paren #t)
 (define-boolean-parameter read-square-bracket-with-tag #f)

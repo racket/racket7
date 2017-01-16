@@ -17,7 +17,7 @@
                 read-language
 
                 current-reader-guard
-                read-case-sensitive
+                ;; read-case-sensitive - shared with printer
                 read-square-bracket-as-paren
                 read-curly-brace-as-paren
                 read-square-bracket-with-tag
