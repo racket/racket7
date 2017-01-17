@@ -680,7 +680,7 @@ const char *scheme_symbol_name_and_size(Scheme_Object *sym, uintptr_t *length, i
     if (cs
 	&& digit_start
 	&& !(flags & SCHEME_SNF_FOR_TS)
-	&& (SCHEME_TRUEP(scheme_read_number(cs, clen, 0, 0, 1, 10, 0, NULL, &dz, 1, NULL, 0, 0, 0, 0, NULL))
+	&& (SCHEME_TRUEP(scheme_read_number(cs, clen, 0, 0, 1, 10, 0, NULL, &dz, 1))
 	    || dz)) {
       /* Need quoting: */
       if (pipe_quote)

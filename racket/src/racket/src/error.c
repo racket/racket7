@@ -2128,108 +2128,34 @@ Scheme_Object *srcloc_to_string(int argc, Scheme_Object **argv)
 }
 
 void scheme_read_err(Scheme_Object *port,
-		     Scheme_Object *stxsrc,
-		     intptr_t line, intptr_t col, intptr_t pos, intptr_t span,
-		     int gotc, Scheme_Object *indentation,
 		     const char *detail, ...)
 {
   GC_CAN_IGNORE va_list args;
-  char *s, *ls, lbuf[30], *fn, *suggests;
-  intptr_t slen, fnlen;
-  int show_loc;
-  Scheme_Object *loc;
+  Scheme_Object *pn;
+  char *s, *fn;
+  intptr_t slen;
 
   HIDE_FROM_XFORM(va_start(args, detail));
   slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL);
   HIDE_FROM_XFORM(va_end(args));
 
-  ls = "";
-  fnlen = 0;
-
-  show_loc = SCHEME_TRUEP(scheme_get_param(scheme_current_config(), MZCONFIG_ERROR_PRINT_SRCLOC));
-
-  /* Via read/recursive, it's possible that the reader will try to
-     complain about a character that precedes the start of a port.
-     In that case, pos can be 0. */
-  if (!pos) line = col = pos = -1;
-
-  if (stxsrc) {
-    Scheme_Object *xsrc;
-
-    xsrc = scheme_make_stx_w_offset(scheme_false, line, col, pos, span, stxsrc, STX_SRCTAG);
-
-    stxsrc = ((Scheme_Stx *)xsrc)->srcloc->src;
-    line = ((Scheme_Stx *)xsrc)->srcloc->line;
-    col = ((Scheme_Stx *)xsrc)->srcloc->col;
-    pos = ((Scheme_Stx *)xsrc)->srcloc->pos;
-
-    if (show_loc)
-      fn = make_stx_srcloc_string(((Scheme_Stx *)xsrc)->srcloc, &fnlen);
-    else
+  if (port) {
+    pn = scheme_input_port_record(port)->name;
+    if (SCHEME_PATHP(pn)) {
+      pn = scheme_remove_current_directory_prefix(pn);
+      fn = SCHEME_PATH_VAL(pn);
+    } else
       fn = NULL;
   } else
     fn = NULL;
 
-  if (!fn && show_loc) {
-    intptr_t column;
-
-    if (col < 0)
-      column = pos;
-    else
-      column = col;
-
-    if (port) {
-      Scheme_Object *pn;
-      pn = scheme_input_port_record(port)->name;
-      if (SCHEME_PATHP(pn)) {
-	pn = scheme_remove_current_directory_prefix(pn);
-	fn = SCHEME_PATH_VAL(pn);
-      } else
-	fn = "UNKNOWN";
-    } else
-      fn = "UNKNOWN";
-
-    fnlen = strlen(fn);
-
-    if (column >= 0) {
-      scheme_sprintf(lbuf, 30, ":%L%ld", line, column-1);
-      ls = lbuf;
-    } else
-      ls = ": ";
-  } else if (!show_loc) {
-    fn = "";
-    fnlen = 0;
-  }
-
-  if (indentation)
-    suggests = scheme_extract_indentation_suggestions(indentation);
+  if (fn)
+    scheme_raise_exn(MZEXN_FAIL_READ, scheme_null, "%t\n  in: %s", s, slen, fn);
   else
-    suggests = "";
-
-  loc = scheme_make_location(stxsrc ? stxsrc : scheme_false,
-			     (line < 0) ? scheme_false : scheme_make_integer(line),
-			     (col < 0) ? scheme_false : scheme_make_integer(col-1),
-			     (pos < 0) ? scheme_false : scheme_make_integer(pos),
-			     (span < 0) ? scheme_false : scheme_make_integer(span));
-
-  scheme_raise_exn(((gotc == EOF) 
-		    ? MZEXN_FAIL_READ_EOF 
-		    : ((gotc == SCHEME_SPECIAL) 
-		       ? MZEXN_FAIL_READ_NON_CHAR 
-		       : MZEXN_FAIL_READ)),
-		   scheme_make_pair(loc, scheme_null),
-		   "%t%s%s%t%s%s",
-                   fn, fnlen, ls,
-                   fnlen ? ": " : "",
-		   s, slen, 
-                   (*suggests ? "\n  possible cause: " : ""), suggests);
+    scheme_raise_exn(MZEXN_FAIL_READ, scheme_null, "%t", s, slen);
 }
 
-Scheme_Object *scheme_numr_err(Scheme_Object *complain,
-                               Scheme_Object *stxsrc,
-                               intptr_t line, intptr_t col, intptr_t pos, intptr_t span,
-                               Scheme_Object *indentation,
-                               const char *detail, ...)
+Scheme_Object *scheme_numr_err(Scheme_Object *complain, const char *detail, ...)
 {
   GC_CAN_IGNORE va_list args;
   char *s;
@@ -2242,11 +2168,7 @@ Scheme_Object *scheme_numr_err(Scheme_Object *complain,
   if (SCHEME_FALSEP(complain))
     return scheme_make_sized_utf8_string(s, slen);
 
-  scheme_read_err(complain,
-                  stxsrc,
-                  line, col, pos, span,
-                  0, indentation,
-                  "read: %s", s);
+  scheme_read_err(complain, "read: %s", s);
   ESCAPED_BEFORE_HERE;
 }
 

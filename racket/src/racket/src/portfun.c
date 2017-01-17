@@ -47,11 +47,6 @@ static Scheme_Object *call_with_output_file (int, Scheme_Object *[]);
 static Scheme_Object *call_with_input_file (int, Scheme_Object *[]);
 static Scheme_Object *with_input_from_file (int, Scheme_Object *[]);
 static Scheme_Object *with_output_to_file (int, Scheme_Object *[]);
-static Scheme_Object *read_f (int, Scheme_Object *[]);
-static Scheme_Object *read_recur_f (int, Scheme_Object *[]);
-static Scheme_Object *read_syntax_f (int, Scheme_Object *[]);
-static Scheme_Object *read_syntax_recur_f (int, Scheme_Object *[]);
-static Scheme_Object *read_language (int, Scheme_Object *[]);
 static Scheme_Object *read_char (int, Scheme_Object *[]);
 static Scheme_Object *read_char_spec (int, Scheme_Object *[]);
 static Scheme_Object *read_byte (int, Scheme_Object *[]);
@@ -269,11 +264,6 @@ scheme_init_port_fun(Scheme_Startup_Env *env)
   ADD_NONCM_PRIM("filesystem-change-evt?",   filesystem_change_evt_p, 1, 1, env);
   ADD_NONCM_PRIM("filesystem-change-evt-cancel",  filesystem_change_evt_cancel, 1, 1, env);
 
-  ADD_NONCM_PRIM("read",                           read_f,                         0, 1, env);
-  ADD_NONCM_PRIM("read/recursive",                 read_recur_f,                   0, 4, env);
-  ADD_NONCM_PRIM("read-syntax",                    read_syntax_f,                  0, 2, env);
-  ADD_NONCM_PRIM("read-syntax/recursive",          read_syntax_recur_f,            0, 5, env);
-  ADD_PRIM_W_ARITY2("read-language",               read_language,                  0, 2, 0, -1, env);
   ADD_NONCM_PRIM("read-char",                      read_char,                      0, 1, env);
   ADD_PRIM_W_ARITY2("read-char-or-special",        read_char_spec,                 0, 3, 0, -1, env);
   ADD_NONCM_PRIM("read-byte",                      read_byte,                      0, 1, env);
@@ -2876,162 +2866,10 @@ static Scheme_Object *sch_default_read_handler(void *ignore, int argc, Scheme_Ob
   else
     src = NULL;
 
-  return scheme_internal_read(argv[0], src, -1, 0, 0, 0, -1, NULL, NULL);
-}
-
-static int extract_recur_args(const char *who, int argc, Scheme_Object **argv, int delta, 
-                              Scheme_Object **_readtable, int *_recur_graph)
-{
-  int pre_char = -1;
-
-  if (argc > delta + 1) {
-    if (SCHEME_TRUEP(argv[delta + 1])) {
-      if (!SCHEME_CHARP(argv[delta + 1]))
-	scheme_wrong_contract(who, "(or/c char? #f)", delta + 1, argc, argv);
-      pre_char = SCHEME_CHAR_VAL(argv[delta + 1]);
-    }
-    if (argc > delta + 2) {
-      Scheme_Object *readtable;
-      readtable = argv[delta + 2];
-      if (SCHEME_TRUEP(readtable) && !SAME_TYPE(scheme_readtable_type, SCHEME_TYPE(readtable))) {
-	scheme_wrong_contract(who, "(or/c readtable? #f)", delta + 2, argc, argv);
-      }
-      *_readtable = readtable;
-      if (argc > delta + 3) {
-        *_recur_graph = SCHEME_TRUEP(argv[delta + 3]);
-      }
-    }
-  }
-
-  return pre_char;
-}
-
-static Scheme_Object *do_read_f(const char *who, int argc, Scheme_Object *argv[], int recur)
-{
-  Scheme_Object *port, *readtable = NULL;
-  int pre_char = -1, recur_graph = recur;
-  Scheme_Input_Port *ip;
-
-  if (argc && !SCHEME_INPUT_PORTP(argv[0]))
-    scheme_wrong_contract(who, "input-port?", 0, argc, argv);
-
-  if (argc)
-    port = argv[0];
+  if (src)
+    return scheme_read_syntax(argv[0], src);
   else
-    port = CURRENT_INPUT_PORT(scheme_current_config());
-
-  if (recur) {
-    pre_char = extract_recur_args(who, argc, argv, 0, &readtable, &recur_graph);
-  }
-
-  ip = scheme_input_port_record(port);
-
-  if (ip->read_handler && !recur) {
-    Scheme_Object *o[1];
-    o[0] = port;
-    return _scheme_apply(ip->read_handler, 1, o);
-  } else {
-    if (port == scheme_orig_stdin_port)
-      scheme_flush_orig_outputs();
-
-    return scheme_internal_read(port, NULL, -1, 0,
-                                recur_graph, recur, 
-                                pre_char, readtable, 
-                                NULL);
-  }
-}
-
-static Scheme_Object *read_f(int argc, Scheme_Object *argv[])
-{
-  return do_read_f("read", argc, argv, 0);
-}
-
-static Scheme_Object *read_recur_f(int argc, Scheme_Object *argv[])
-{
-  return do_read_f("read/recursive", argc, argv, 1);
-}
-
-static Scheme_Object *do_read_syntax_f(const char *who, int argc, Scheme_Object *argv[], int recur)
-{
-  Scheme_Object *port, *readtable = NULL;
-  int pre_char = -1, recur_graph = recur;
-  Scheme_Input_Port *ip;
-
-  if ((argc > 1) && !SCHEME_INPUT_PORTP(argv[1]))
-    scheme_wrong_contract(who, "input-port?", 1, argc, argv);
-
-  if (argc > 1)
-    port = argv[1];
-  else
-    port = CURRENT_INPUT_PORT(scheme_current_config());
-
-  if (recur) {
-    pre_char = extract_recur_args(who, argc, argv, 1, &readtable, &recur_graph);
-  }
-  
-  ip = scheme_input_port_record(port);
-
-  if (ip->read_handler && !recur) {
-    Scheme_Object *o[2], *result;
-    o[0] = port;
-    o[1] = (argc ? argv[0] : ip->name);
-
-    result = _scheme_apply(ip->read_handler, 2, o);
-    if (scheme_is_syntax(result) || SCHEME_EOFP(result))
-      return result;
-    else {
-      o[0] = result;
-      /* -1 for argument count indicates "result" */
-      scheme_wrong_contract("read handler for read-syntax", "syntax?", 0, -1, o);
-      return NULL;
-    }
-  } else {
-    Scheme_Object *src;
-
-    src = (argc ? argv[0] : ip->name);
-
-    if (port == scheme_orig_stdin_port)
-      scheme_flush_orig_outputs();
-
-    return scheme_internal_read(port, src, -1, 0,
-                                recur, recur_graph,
-                                pre_char, readtable, 
-                                NULL);
-  }
-}
-
-static Scheme_Object *read_syntax_f(int argc, Scheme_Object *argv[])
-{
-  return do_read_syntax_f("read-syntax", argc, argv, 0);
-}
-
-static Scheme_Object *read_syntax_recur_f(int argc, Scheme_Object *argv[])
-{
-  return do_read_syntax_f("read-syntax/recursive", argc, argv, 1);
-}
-
-static Scheme_Object *read_language(int argc, Scheme_Object **argv)
-{
-  Scheme_Object *port, *v, *fail_thunk = NULL;
-
-  if (argc > 0) {
-    port = argv[0];
-    if (!SCHEME_INPUT_PORTP(port))
-      scheme_wrong_contract("read-language", "input-port?", 0, argc, argv);
-    if (argc > 1) {
-      scheme_check_proc_arity("read-language", 0, 1, argc, argv);
-      fail_thunk = argv[1];
-    }
-  } else {
-    port = CURRENT_INPUT_PORT(scheme_current_config());
-  }
-  
-  v = scheme_read_language(port, !!fail_thunk);
-
-  if (SCHEME_VOIDP(v))
-    return _scheme_tail_apply(fail_thunk, 0, NULL);
-  
-  return v;
+    return scheme_read(argv[0]);
 }
 
 static Scheme_Object *

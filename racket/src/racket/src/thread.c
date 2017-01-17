@@ -7925,18 +7925,10 @@ static void make_initial_config(Scheme_Thread *p)
 
   p->init_config = config;
 
-  init_param(cells, paramz, MZCONFIG_READTABLE, scheme_make_default_readtable());
-  
-  init_param(cells, paramz, MZCONFIG_CAN_READ_GRAPH, scheme_true);
-  init_param(cells, paramz, MZCONFIG_CAN_READ_COMPILED, scheme_false);
-  init_param(cells, paramz, MZCONFIG_CAN_READ_BOX, scheme_true);
+  init_param(cells, paramz, MZCONFIG_CASE_SENS, (scheme_case_sensitive ? scheme_true : scheme_false));
   init_param(cells, paramz, MZCONFIG_CAN_READ_PIPE_QUOTE, scheme_true);
-  init_param(cells, paramz, MZCONFIG_CAN_READ_DOT, scheme_true);
-  init_param(cells, paramz, MZCONFIG_CAN_READ_INFIX_DOT, scheme_true);
-  init_param(cells, paramz, MZCONFIG_CAN_READ_QUASI, scheme_true);
   init_param(cells, paramz, MZCONFIG_READ_DECIMAL_INEXACT, scheme_true);
-  init_param(cells, paramz, MZCONFIG_CAN_READ_READER, scheme_false);
-  init_param(cells, paramz, MZCONFIG_CAN_READ_LANG, scheme_true);
+  
   init_param(cells, paramz, MZCONFIG_LOAD_DELAY_ENABLED, init_load_on_demand ? scheme_true : scheme_false);
   init_param(cells, paramz, MZCONFIG_DELAY_LOAD_INFO, scheme_false);
 
@@ -7962,16 +7954,6 @@ static void make_initial_config(Scheme_Thread *p)
     init_param(cells, paramz, MZCONFIG_LOCALE, s);
   }
 
-  init_param(cells, paramz, MZCONFIG_CASE_SENS, (scheme_case_sensitive ? scheme_true : scheme_false));
-  init_param(cells, paramz, MZCONFIG_SQUARE_BRACKETS_ARE_PARENS, (scheme_square_brackets_are_parens
-								 ? scheme_true : scheme_false));
-  init_param(cells, paramz, MZCONFIG_CURLY_BRACES_ARE_PARENS, (scheme_curly_braces_are_parens
-							      ? scheme_true : scheme_false));
-
-  init_param(cells, paramz, MZCONFIG_SQUARE_BRACKETS_ARE_TAGGED, scheme_false);
-  init_param(cells, paramz, MZCONFIG_CURLY_BRACES_ARE_TAGGED, scheme_false);
-  init_param(cells, paramz, MZCONFIG_READ_CDOT, scheme_false);
-  
   init_param(cells, paramz, MZCONFIG_ERROR_PRINT_WIDTH, scheme_make_integer(256));
   init_param(cells, paramz, MZCONFIG_ERROR_PRINT_CONTEXT_LENGTH, scheme_make_integer(16));
   init_param(cells, paramz, MZCONFIG_ERROR_PRINT_SRCLOC, scheme_true);

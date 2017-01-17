@@ -27,7 +27,7 @@
                 read-accept-compiled
                 read-accept-box
                 ;; read-accept-bar-quote - shared with printer
-                read-decimal-as-inexact
+                ;; read-decimal-as-inexact - shared with `string->number`
                 read-accept-dot
                 read-accept-infix-dot
                 read-accept-quasiquote

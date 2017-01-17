@@ -14,7 +14,6 @@
          "run/cache.rkt"
          "boot/runtime-primitive.rkt"
          "host/linklet.rkt"
-         "run/reader-bridge.rkt"
          "run/status.rkt"
          "run/submodule.rkt"
          "host/correlate.rkt"
@@ -199,29 +198,6 @@
     (when (and (path? n) cache)
       (register-dependency! cache n))
     p]))
-
-;; Set the reader guard to load modules on demand, and
-;; synthesize a module for the host Racket to call
-;; the hosted module system's instance
-(current-reader-guard (lambda (mod-path)
-                        (define synth-mod-path
-                          ;; Pick a module path that won't conflict with anything
-                          ;; in the host system
-                          `',(string->symbol (format "~s" mod-path)))
-                        (when (module-declared? mod-path #t)
-                          (define rs (dynamic-require mod-path 'read-syntax))
-                          (synthesize-reader-bridge-module mod-path synth-mod-path rs)
-                          ;; Also declare the synthesized name in the non-host system,
-                          ;; in case the reader gaurd was called from the hosted system
-                          (unless (module-declared? synth-mod-path #f)
-                            (parameterize ([current-module-declare-name (make-resolved-module-path
-                                                                         (cadr synth-mod-path))])
-                              (eval (check-module-form
-                                     (datum->syntax #f `(module m racket/base
-                                                         (require ,mod-path)
-                                                         (provide (all-from-out ,mod-path))))
-                                     synth-mod-path)))))
-                        synth-mod-path))
 
 (define (apply-to-module proc mod-path)
   (define path (resolved-module-path-name

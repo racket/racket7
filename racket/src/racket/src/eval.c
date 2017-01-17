@@ -3425,13 +3425,6 @@ Scheme_Object *scheme_dynamic_require(int argc, Scheme_Object *argv[])
   return scheme_apply(proc, argc, argv);
 }
 
-Scheme_Object *scheme_dynamic_require_reader(int argc, Scheme_Object *argv[])
-{
-  Scheme_Object *proc;
-  proc = scheme_get_startup_export("dynamic-require-reader");
-  return scheme_apply(proc, argc, argv);
-}
-
 int scheme_is_syntax(Scheme_Object *v)
 {
   Scheme_Object *a[1];

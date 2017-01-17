@@ -2076,23 +2076,12 @@ mark_cport {
   gcBYTES_TO_WORDS(sizeof(CPort));
 }
 
-mark_readtable {
- mark:
-  Readtable *t = (Readtable *)p;
-  gcMARK2(t->mapping, gc);
-  gcMARK2(t->fast_mapping, gc);
-  gcMARK2(t->symbol_parser, gc);
-  gcMARK2(t->names, gc);
- size:
-  gcBYTES_TO_WORDS(sizeof(Readtable));
-}
-
 mark_read_params {
  mark:
   ReadParams *rp = (ReadParams *)p;
-  gcMARK2(rp->table, gc);
   gcMARK2(rp->delay_load_info, gc);
   gcMARK2(rp->read_relative_path, gc);
+  gcMARK2(rp->graph_ht, gc);
  size:
   gcBYTES_TO_WORDS(sizeof(ReadParams));
 }

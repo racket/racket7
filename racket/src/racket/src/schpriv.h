@@ -2357,9 +2357,7 @@ Scheme_Object *scheme_read_number(const mzchar *str, intptr_t len,
 				  int radix, int radix_set,
 				  Scheme_Object *port,
 				  int *div_by_zero,
-				  int test_only,
-				  Scheme_Object *stxsrc, intptr_t line, intptr_t col, intptr_t pos, intptr_t span,
-				  Scheme_Object *indentation);
+				  int test_only);
 
 Scheme_Object *scheme_bin_gcd(const Scheme_Object *n1, const Scheme_Object *n2);
 Scheme_Object *scheme_bin_quotient(const Scheme_Object *n1, const Scheme_Object *n2);
@@ -2522,8 +2520,8 @@ Scheme_Object *scheme_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_
                                                 int num_instances, Scheme_Instance **instances,
                                                 int use_prompt);
 
-Scheme_Object *scheme_internal_read(Scheme_Object *port, Scheme_Object *stxsrc, int crc, int cantfail, 
-				    int recur, int expose_comment, int pre_char, Scheme_Object *readtable,
+Scheme_Object *scheme_internal_read(Scheme_Object *port, int crc, int cantfail, 
+				    int pre_char,
                                     Scheme_Object *delay_load_info);
 void scheme_internal_display(Scheme_Object *obj, Scheme_Object *port);
 void scheme_internal_write(Scheme_Object *obj, Scheme_Object *port);
@@ -2531,9 +2529,7 @@ void scheme_internal_print(Scheme_Object *obj, Scheme_Object *port, Scheme_Objec
 
 Scheme_Object *scheme_read_language(Scheme_Object *port, int nonlang_ok);
 
-Scheme_Object *scheme_read_compiled(Scheme_Object *port,
-				    Scheme_Object *stxsrc,
-				    intptr_t line, intptr_t col, intptr_t pos);
+Scheme_Object *scheme_read_compiled(Scheme_Object *port);
 
 #define _scheme_eval_linked_expr(obj) scheme_do_eval(obj,-1,NULL,1)
 #define _scheme_eval_linked_expr_multi(obj) scheme_do_eval(obj,-1,NULL,-1)
@@ -3271,16 +3267,8 @@ char *scheme_symbol_path_to_string(Scheme_Object *p, intptr_t *_len);
 
 intptr_t scheme_sprintf(char *s, intptr_t maxlen, const char *msg, ...);
 
-void scheme_read_err(Scheme_Object *port,
-		     Scheme_Object *stxsrc,
-		     intptr_t line, intptr_t column, intptr_t pos, intptr_t span,
-		     int is_eof, Scheme_Object *indentation,
-		     const char *detail, ...);
-Scheme_Object *scheme_numr_err(Scheme_Object *complain,
-                               Scheme_Object *stxsrc,
-                               intptr_t line, intptr_t column, intptr_t pos, intptr_t span,
-                               Scheme_Object *indentation,
-                               const char *detail, ...);
+void scheme_read_err(Scheme_Object *port, const char *detail, ...);
+Scheme_Object *scheme_numr_err(Scheme_Object *complain, const char *detail, ...);
 char *scheme_extract_indentation_suggestions(Scheme_Object *indentation);
 
 void scheme_wrong_syntax(const char *where,

@@ -90,50 +90,6 @@ static int mark_cport_FIXUP(void *p, struct NewGC *gc) {
 #define mark_cport_IS_CONST_SIZE 1
 
 
-static int mark_readtable_SIZE(void *p, struct NewGC *gc) {
-#ifndef GC_NO_SIZE_NEEDED_FROM_PROCS
-  gcBYTES_TO_WORDS(sizeof(Readtable));
-#else
-  return 0;
-#endif
-}
-
-static int mark_readtable_MARK(void *p, struct NewGC *gc) {
-#ifndef GC_NO_MARK_PROCEDURE_NEEDED
-  Readtable *t = (Readtable *)p;
-  gcMARK2(t->mapping, gc);
-  gcMARK2(t->fast_mapping, gc);
-  gcMARK2(t->symbol_parser, gc);
-  gcMARK2(t->names, gc);
-# ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
-  return 0;
-# else
-  return
-  gcBYTES_TO_WORDS(sizeof(Readtable));
-# endif
-#endif
-}
-
-static int mark_readtable_FIXUP(void *p, struct NewGC *gc) {
-#ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
-  Readtable *t = (Readtable *)p;
-  gcFIXUP2(t->mapping, gc);
-  gcFIXUP2(t->fast_mapping, gc);
-  gcFIXUP2(t->symbol_parser, gc);
-  gcFIXUP2(t->names, gc);
-# ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
-  return 0;
-# else
-  return
-  gcBYTES_TO_WORDS(sizeof(Readtable));
-# endif
-#endif
-}
-
-#define mark_readtable_IS_ATOMIC 0
-#define mark_readtable_IS_CONST_SIZE 1
-
-
 static int mark_read_params_SIZE(void *p, struct NewGC *gc) {
 #ifndef GC_NO_SIZE_NEEDED_FROM_PROCS
   gcBYTES_TO_WORDS(sizeof(ReadParams));
@@ -145,9 +101,9 @@ static int mark_read_params_SIZE(void *p, struct NewGC *gc) {
 static int mark_read_params_MARK(void *p, struct NewGC *gc) {
 #ifndef GC_NO_MARK_PROCEDURE_NEEDED
   ReadParams *rp = (ReadParams *)p;
-  gcMARK2(rp->table, gc);
   gcMARK2(rp->delay_load_info, gc);
   gcMARK2(rp->read_relative_path, gc);
+  gcMARK2(rp->graph_ht, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -160,9 +116,9 @@ static int mark_read_params_MARK(void *p, struct NewGC *gc) {
 static int mark_read_params_FIXUP(void *p, struct NewGC *gc) {
 #ifndef GC_NO_FIXUP_PROCEDURE_NEEDED
   ReadParams *rp = (ReadParams *)p;
-  gcFIXUP2(rp->table, gc);
   gcFIXUP2(rp->delay_load_info, gc);
   gcFIXUP2(rp->read_relative_path, gc);
+  gcFIXUP2(rp->graph_ht, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else

@@ -409,8 +409,7 @@ rational.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h    
 read.@LTO@: $(COMMON_HEADERS) \
         $(srcdir)/schcpt.h $(srcdir)/schvers.h $(srcdir)/schminc.h \
-        $(srcdir)/stypes.h $(srcdir)/mzmark_read.inc \
-        $(srcdir)/read_vector.inc
+        $(srcdir)/stypes.h $(srcdir)/mzmark_read.inc
 regexp.@LTO@:  $(COMMON_HEADERS) \
         $(srcdir)/stypes.h $(srcdir)/mzmark_regexp.inc $(srcdir)/schrx.h
 resolve.@LTO@:  $(COMMON_HEADERS) \

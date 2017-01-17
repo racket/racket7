@@ -3736,7 +3736,6 @@ Scheme_Object *scheme_get_special(Scheme_Object *port,
   int cnt;
   Scheme_Object *a[4], *special;
   Scheme_Input_Port *ip;
-  Scheme_Cont_Frame_Data cframe;
 
   SCHEME_USE_FUEL(1);
 
@@ -3779,12 +3778,7 @@ Scheme_Object *scheme_get_special(Scheme_Object *port,
     a[3] = (pos > 0) ? scheme_make_integer(pos) : scheme_false;
   }
 
-  scheme_push_continuation_frame(&cframe);
-  scheme_set_in_read_mark(src, for_read);
-
   special = scheme_apply(special, cnt, a);
-
-  scheme_pop_continuation_frame(&cframe);
 
   return special;
 }
@@ -3829,7 +3823,6 @@ void scheme_bad_time_for_special(const char *who, Scheme_Object *port)
 static Scheme_Object *check_special_args(void *sbox, int argc, Scheme_Object **argv)
 {
   Scheme_Object *special;
-  Scheme_Cont_Frame_Data cframe;
 
   if (SCHEME_TRUEP(argv[1]))
     if (!scheme_nonneg_exact_p(argv[1]) || (SAME_OBJ(argv[1], scheme_make_integer(0))))
@@ -3847,12 +3840,7 @@ static Scheme_Object *check_special_args(void *sbox, int argc, Scheme_Object **a
 		     "read-special: cannot be called a second time");
   *(Scheme_Object **)sbox = NULL;
 
-  scheme_push_continuation_frame(&cframe);
-  scheme_set_in_read_mark(NULL, NULL);
-
   special = _scheme_apply(special, 4, argv);
-
-  scheme_pop_continuation_frame(&cframe);
 
   return special;
 }

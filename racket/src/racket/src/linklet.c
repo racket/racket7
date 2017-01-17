@@ -383,7 +383,7 @@ static Scheme_Object *read_compiled_linklet(int argc, Scheme_Object **argv)
   if (!SCHEME_INPUT_PORTP(argv[0]))
     scheme_wrong_contract("read-compiled-linklet", "input-port?", 0, argc, argv);
 
-  return scheme_read_compiled(argv[0], NULL, -1, -1, -1);
+  return scheme_read_compiled(argv[0]);
 }
 
 static Scheme_Object *instantiate_linklet(int argc, Scheme_Object **argv)
