@@ -24,7 +24,7 @@
 (struct rx:maybe (rx non-greedy?) #:transparent) ; special case in size validation
 (struct rx:conditional (tst rx1 rx2 needs-backtrack?) #:transparent)
 (struct rx:lookahead (rx match?) #:transparent)
-(struct rx:lookbehind (rx match?) #:transparent)
+(struct rx:lookbehind (rx match? [lb-min #:mutable] [lb-max #:mutable])) ; min & max set by `validate`
 (struct rx:cut (rx needs-backtrack?) #:transparent)
 (struct rx:reference (n) #:transparent)
 (struct rx:range (range) #:transparent)
@@ -41,7 +41,7 @@
    [(rx:repeat? rx) #t]
    [(rx:maybe? rx) #t]
    [(rx:conditional? rx) (rx:conditional-needs-backtrack? rx)]
-   [(rx:cut? rx) (rx:cut-needs-backtrack? rx)]
+   [(rx:cut? rx) (rx:cut-needs-backtrack? rx)] ; doesn't actually backtrack, but count varies
    [(rx:unicode-categories? rx) #t] ; only for bytes mode, though
    [else #f]))
 

@@ -1,7 +1,8 @@
 #lang racket/base
 (require "regexp.rkt"
          "lazy-bytes.rkt"
-         "port.rkt")
+         "port.rkt"
+         "compile.rkt")
 
 ;; Drives a regexp matcher on a byte string, character string, or port
 
@@ -321,7 +322,7 @@
        [(and anchored? (not (= pos start-pos)))
         (values #f #f)]
        [else
-        (define pos2 (matcher in pos start-pos end-pos state))
+        (define pos2 (interp matcher in pos start-pos end-pos state))
         (cond
          [pos2 (values pos pos2)]
          [(if (integer? end-pos)

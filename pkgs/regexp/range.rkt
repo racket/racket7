@@ -13,7 +13,10 @@
          range-includes?
          range-overlaps?
          range-within?
-         range->list)
+         range->list
+         
+         compile-range
+         rng-in?)
 
 (define empty-range null)
 
@@ -102,3 +105,19 @@
 
 (define (range->list range)
   range)
+
+;; ----------------------------------------
+
+(define rngs (make-weak-hash))
+
+(define (compile-range range)
+  (or (hash-ref rngs range #f)
+      (let ([rng (make-bytes 256 0)])
+        (for* ([p (in-list range)]
+               [i (in-range (car p) (add1 (cdr p)))])
+          (bytes-set! rng i 1))
+        (hash-set! rngs range rng)
+        rng)))
+          
+(define (rng-in? rng v)
+  (eq? 1 (bytes-ref rng v)))

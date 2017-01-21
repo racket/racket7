@@ -3,26 +3,29 @@
 
 
 (define (check rx in N [M (max 1 (quotient N 10))])
-  (define orig-v (regexp-match rx in))
-  (define new-v (rx:regexp-match rx in))
-  (unless (equal? orig-v new-v)
-    (error 'check "failed ~s ~s ~s ~s" rx in orig-v new-v))
-  
   (define c-start (current-inexact-milliseconds))
   (define orig-rx
     (if (bytes? rx)
         (for/fold ([r #f]) ([i (in-range M)])
-          (byte-regexp rx))
+          (byte-pregexp rx))
         (for/fold ([r #f]) ([i (in-range M)])
-          (regexp rx))))
+          (pregexp rx))))
   (define c-after-orig (current-inexact-milliseconds))
   (define new-rx
     (if (bytes? rx)
         (for/fold ([r #f]) ([i (in-range M)])
-          (rx:byte-regexp rx))
+          (rx:byte-pregexp rx))
         (for/fold ([r #f]) ([i (in-range M)])
-          (rx:regexp rx))))
+          (rx:pregexp rx))))
   (define c-after-new (current-inexact-milliseconds))
+
+  (define orig-v (regexp-match orig-rx in))
+  (define new-v (rx:regexp-match new-rx in))
+  (unless (equal? orig-v new-v)
+    (error 'check
+           "failed\n  pattern: ~s\n  input: ~s\n  expected: ~s\n  got: ~s"
+           rx in orig-v new-v))
+  
 
   (define start (current-inexact-milliseconds))
   (for/fold ([r #f]) ([i (in-range N)])
@@ -37,20 +40,52 @@
   (define orig-msec (- after-orig start))
   (define new-msec (- after-new after-orig))
   
-  (printf "~.s:\n  ~a  (~a vs. ~a)\n"
-          rx
-          (/ new-c-msec orig-c-msec)
-          orig-c-msec
-          new-c-msec)
-  (printf "~.s:\n  ~a  (~a vs. ~a)\n"
-          in
-          (/ new-msec orig-msec)
-          orig-msec
-          new-msec))
+  (parameterize ([error-print-width 64])
+    (printf "regex: ~.s\non: ~.s\n" rx in))
+  
+  (define (~n n)
+    (car (regexp-match #px"^[0-9]*[.]?[0-9]{0,2}" (format "~a" n))))
+  
+  (printf " compile: ~a  (~a vs. ~a)\n"
+          (~n (/ new-c-msec orig-c-msec))
+          (~n orig-c-msec)
+          (~n new-c-msec))
+  (printf " interp:  ~a  (~a vs. ~a)\n"
+          (~n (/ new-msec orig-msec))
+          (~n orig-msec)
+          (~n new-msec)))
 
 ;; ----------------------------------------
 
+(check #"(?m:^aa$a.)"
+       #"abaac\nac\naa\nacacaaacd"
+       100)
+
+(check #"\\sa."
+       #"cat apple"
+       100)
+
+(check "(?>a*)a"
+       "aaa"
+       100)
+
+(check "..(?=cat).."
+       "y1caty2"
+       100)
+
+(check #".*"
+       #"abaacacaaacacaaacd"
+       100000)
+
 (check #"ab(?:a*c)*d"
+       #"abaacacaaacacaaacd"
+       100000)
+
+(check #"ab(?:a*?c)*d"
+       #"abaacacaaacacaaacd"
+       100000)
+
+(check #"ab(?:[ab]*c)*d"
        #"abaacacaaacacaaacd"
        100000)
 

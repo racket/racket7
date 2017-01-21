@@ -70,6 +70,8 @@
         (define-values (min1 max1 lb1) (validate (rx:lookbehind-rx rx)))
         (when (= +inf.0 max1)
           (regexp-error "lookbehind pattern does not match a bounded length"))
+        (set-rx:lookbehind-lb-min! rx min1)
+        (set-rx:lookbehind-lb-max! rx max1)
         (values 0 0 (max max1 lb1))]
        [(rx:cut? rx)
         (validate (rx:cut-rx rx))]

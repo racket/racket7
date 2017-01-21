@@ -39,8 +39,9 @@
      (define-values (raw-rx num-groups) (parse p #:px? px?))
      (define rx (if as-bytes? raw-rx (convert raw-rx)))
      (define max-lookbehind (validate rx 'pregexp))
+     (define matcher (compile rx))
      (rx:regexp as-bytes? px? p
-                (compile rx) num-groups max-lookbehind
+                matcher num-groups max-lookbehind
                 (anchored? rx) (get-must-string rx)))
    regexp-error-tag
    (lambda (str)

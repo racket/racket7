@@ -18,7 +18,7 @@
   (values rx (unbox (parse-config-group-number-box config))))
 
 ;; Returns (values rx position)
-(define (parse-regexp s pos config)
+(define (parse-regexp s pos config #:parse-regexp [parse-regexp parse-regexp])
   (define-values (rxs pos2) (parse-pces s pos config))
   (chyte-case/eos
    s pos2
@@ -34,7 +34,7 @@
    [(#\))
     (values rx:empty pos)]
    [else
-    (parse-regexp s pos config)]))
+    (parse-regexp s pos config #:parse-regexp parse-regexp/maybe-empty)]))
 
 ;; Returns (values list-of-rx position)
 (define (parse-pces s pos config)
@@ -192,10 +192,10 @@
       (bad-?-sequence-error s pos2+ config)]
      [(#\=)
       (define-values (rx pos3) (parse-regexp s (add1 pos2+) config))
-      (values (rx:lookbehind rx #t) (check-close-paren s pos3 config))]
+      (values (rx:lookbehind rx #t 0 0) (check-close-paren s pos3 config))]
      [(#\!)
       (define-values (rx pos3) (parse-regexp s (add1 pos2+) config))
-      (values (rx:lookbehind rx #f) (check-close-paren s pos3 config))]
+      (values (rx:lookbehind rx #f 0 0) (check-close-paren s pos3 config))]
      [else
       (bad-?-sequence-error s pos2+ config)])]
    [else
@@ -317,7 +317,7 @@
        [else
         (define-values (success? range pos3) (parse-class s pos2 config))
         (if success?
-            (values (rx-range range) pos3)
+            (values (rx-range range (chytes-limit s)) pos3)
             (parse-error s pos2 config "illegal alphabetic escape"))])]
      [else
       (values c2 (add1 pos2))])]))
