@@ -7,9 +7,11 @@
          "../run/status.rkt"
          (prefix-in bootstrap: "../run/linklet.rkt")
          "symbol.rkt"
-         "defn-utils.rkt")
+         "defn-utils.rkt"
+         "known-primitive.rkt")
 
-(provide simplify-definitions simplify-expr)
+(provide simplify-definitions
+         simplify-expr)
 
 (define (union-all . args)
   (if (null? args)
@@ -121,12 +123,13 @@
             [else (set-union s (mutated-vars e))])))
 
   (define seen-defns (make-hasheq))
-  (define (ref? s) (hash-ref seen-defns s #f))
+  (register-known-primitives! seen-defns)
 
   (define (safe-defn? e)
     (and (defn? e)
-         (not (any-side-effects? (defn-rhs e) (length (defn-syms e)) ref? #:known-defns seen-defns))))
+         (not (any-side-effects? (defn-rhs e) (length (defn-syms e)) #:known-defns seen-defns))))
 
+  (define (safe-ref? s) (hash-ref seen-defns s #f))
   
   (define new-body
     (let loop ([body body])
@@ -138,10 +141,10 @@
                (hash-set! seen-defns s (known-defined)))
              (define e (car body))
              (define new-defn 
-               (list 'define-values (defn-syms e) (simplify-expr (defn-rhs e) all-mutated-vars ref?)))
+               (list 'define-values (defn-syms e) (simplify-expr (defn-rhs e) all-mutated-vars safe-ref?)))
              (add-defn-types! seen-defns (defn-syms e) (defn-rhs e))
              (cons new-defn (loop (cdr body)))]
-            [else (cons (simplify-expr (car body) all-mutated-vars ref?)
+            [else (cons (simplify-expr (car body) all-mutated-vars safe-ref?)
                         (loop (cdr body)))])))
 
   (append (take linklet-expr 3)

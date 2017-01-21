@@ -42,6 +42,6 @@
                                (reader-error in config
                                              "~a"
                                              (let ([s (exn-message exn)])
-                                               (regexp-replace* "^[a-z-]*: " s ""))
+                                               (regexp-replace "^[a-z-]*: " s ""))
                                              #:continuation-marks (exn-continuation-marks exn)))])
     (thunk)))

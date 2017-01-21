@@ -73,7 +73,7 @@
                     #:compiled-expression-callback
                     (lambda (e expected-results phase required-reference?)
                       (when (and purely-functional?
-                                 (any-side-effects? e expected-results required-reference?))
+                                 (any-side-effects? e expected-results #:ready-variable? required-reference?))
                         (set! purely-functional? #f)))
                     #:other-form-callback (lambda (s cctx)
                                             (set! purely-functional? #f)

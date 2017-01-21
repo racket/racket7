@@ -76,7 +76,8 @@
       (cond
        [(find-knot-tying-alternate knot-ties lnk (car external+local) linklets)
         => (lambda (alt-lnk)
-             (record! alt-lnk external+local knot-ties))]
+             (unless (eq? alt-lnk 'ignore)
+               (record! alt-lnk external+local knot-ties)))]
        [else
         (define var (variable lnk (car external+local)))
         (unless (hash-ref variable-locals var #f)
@@ -139,7 +140,8 @@
     (cond
      [(find-knot-tying-alternate knot-ties lnk (car external+local) linklets)
       => (lambda (alt-lnk)
-           (add-subst! alt-lnk external+local knot-ties))]
+           (unless (eq? alt-lnk 'ignore)
+             (add-subst! alt-lnk external+local knot-ties)))]
      [else
       (hash-set! substs
                  (cdr external+local)
@@ -163,12 +165,16 @@
    [(hash-ref knot-ties (link-name lnk) #f)
     => (lambda (alt-paths)
          (or (for/or ([alt-path (in-list alt-paths)])
-               (define alt-lnk (link alt-path 0))
-               (define li (hash-ref linklets alt-lnk))
-               (define exports+locals (bootstrap:s-expr-linklet-exports+locals (linklet-info-linklet li)))
-               (for/or ([export+local (in-list exports+locals)])
-                 (and (eq? external (car export+local))
-                      alt-lnk)))
+               (cond
+                [(eq? alt-path 'ignore)
+                 'ignore]
+                [else
+                 (define alt-lnk (link alt-path 0))
+                 (define li (hash-ref linklets alt-lnk))
+                 (define exports+locals (bootstrap:s-expr-linklet-exports+locals (linklet-info-linklet li)))
+                 (for/or ([export+local (in-list exports+locals)])
+                   (and (eq? external (car export+local))
+                        alt-lnk))]))
              (error 'flatten "could not find alternative export: ~s from ~s"
                     external
                     lnk)))]

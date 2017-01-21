@@ -12,6 +12,10 @@ expander:
 	$(RACO) make bootstrap-run.rkt
 	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) -O ../../racket
 
+expander-src:
+	$(RACO) make bootstrap-run.rkt
+	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) -s -x -o compiled/exp.rktl
+
 demo:
 	$(RACO) make demo.rkt
 	$(RACKET) demo.rkt

@@ -155,7 +155,8 @@ code.
   ;; Precompiling of standard comparison functions
   ;; for standard data types
   ;; - - - - - - - - - - - - - - - - - - - - - - - -
-  (define precompiled-sorts
+  (define precompiled-sorts #f)
+  (define (precompile-sorts!)
     (let ([sorts (make-hasheq)])
       (define-syntax-rule (precomp less-than? more ...)
         (let ([sort-proc
@@ -177,7 +178,9 @@ code.
       (precomp char<? char<=?)
       (precomp char>? char>=?)
       (precomp keyword<?)
-      (make-immutable-hasheq (hash-map sorts cons))))
+      (make-immutable-hasheq (hash-map sorts cons))
+      (set! precompiled-sorts sorts)
+      sorts))
   
   (define (generic-sort A less-than? n)
     (sort-internal-body A less-than? n #f))
@@ -188,7 +191,7 @@ code.
   (define-syntax (sort-internal stx)
     (syntax-case stx ()
       [(_ vec less-than? n #:key #f)
-       #'(let ([precomp (hash-ref precompiled-sorts less-than? #f)])
+       #'(let ([precomp (hash-ref (or precompiled-sorts (precompile-sorts!)) less-than? #f)])
            (if precomp
                ;; use a precompiled function if found
                (precomp vec n)

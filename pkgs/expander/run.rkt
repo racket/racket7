@@ -72,7 +72,7 @@
    [("--time") "Time re-expansion"
     (set! time-expand? #t)]
    [("-o" "--output") file "Print extracted bootstrap linklet to <file>"
-    (when print-extracted-to (raise-user-error 'run "the `-O` flag implied `-o`, so don't use both"))
+    (when print-extracted-to (raise-user-error 'run "the `-O` flag implies `-o`, so don't use both"))
     (set! print-extracted-to file)]
    #:once-any
    [("-C") "Print extracted bootstrap as a C encoding"
@@ -83,7 +83,10 @@
    [("++knot") sym path "Redirect imports from <sym> to flattened from <path>"
     (hash-update! instance-knot-ties
                   (string->symbol (format "#%~a" sym))
-                  (lambda (l) (cons (path->complete-path path) l))
+                  (lambda (l) (cons (if (equal? path "-")
+                                   'ignore
+                                   (path->complete-path path))
+                               l))
                   null)]
    #:once-any
    [("-t") file "Load specified file"

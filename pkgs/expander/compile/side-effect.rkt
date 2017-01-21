@@ -15,16 +15,19 @@
          (struct-out known-function)
          (struct-out known-struct-op))
 
-;; known definitions map to one of
-;; #s(known-defined) -- all we know is that it's defined
-;; #s(known-property) -- defined as a struct property with no guard
-;; #s(known-function arity pure?) -- function of known arity and maybe known pure, where
-;;                                   pure must return 1 value
-;; #s(known-struct-op type n) -- struct operation for a type with n fields
-;;                               where type is one of: 'struct-type, 'constructor
-;;                                                     'predicate, 'accessor, or 'mutator 
-;;                               and the 'constructor mode can be used for things that
-;;                               construct built-in datatypes
+;; Known locals and defined variables map to one of
+;;  #s(known-defined) -- all we know is that it's defined and can be referenced now
+;;  #s(known-property) -- defined as a struct property with no guard
+;;  #s(known-function arity pure?) -- function of known arity and maybe known pure, where
+;;                                    pure must return 1 value
+;;  #s(known-struct-op type n) -- struct operation for a type with n fields
+;;                                where type is one of: 'struct-type, 'constructor
+;;                                                      'predicate, 'accessor, 'mutator 
+;;                                                      'general-accessor,
+;;                                                      or 'general-mutator  (needs field index)
+;;                                and the 'constructor mode can be used for things that
+;;                                construct built-in datatypes; for `'general-accessor or
+;;                                'general-mutator, the field count doesn't include inherited
 (struct known-defined () #:prefab)
 (struct known-property () #:prefab)
 (struct known-function (arity pure?) #:prefab)
@@ -32,9 +35,14 @@
 
 (define (any-side-effects? e ; compiled expression
                            expected-results ; number of expected results, or #f if any number is ok
-                           required-reference?
-                           #:known-defns [defns #hasheq()] ; known definitions
-                           #:locals [locals #hasheq()]) ; allowed local variabes
+                           #:known-locals [locals #hasheq()] ; known local-variable bindings
+                           #:known-defns [defns #hasheq()] ; other variables to known-value information
+                           #:ready-variable? [ready-variable? (lambda (id) #f)]) ; other variables known to be ready
+  (define (effects? e expected-results locals)
+    (any-side-effects? e expected-results
+                       #:known-locals locals
+                       #:known-defns defns
+                       #:ready-variable? ready-variable?))
   (define actual-results
     (let loop ([e e] [locals locals])
       (case (and (pair? (correlated-e e))
@@ -44,19 +52,17 @@
          (define-correlated-match m e '(_ ([ids rhs] ...) body))
          (and (not (for/or ([ids (in-list (m 'ids))]
                             [rhs (in-list (m 'rhs))])
-                     (any-side-effects? rhs (correlated-length ids) required-reference?
-                                        #:locals locals
-                                        #:known-defns defns)))
+                     (effects? rhs (correlated-length ids) locals)))
               (loop (m 'body) (add-binding-info locals (m 'ids) (m 'rhs))))]
         [(values)
          (define-correlated-match m e '(_ e ...))
          (and (for/and ([e (in-list (m 'e))])
-                (not (any-side-effects? e 1 required-reference? #:locals locals #:known-defns defns)))
+                (not (effects? e 1 locals)))
               (length (m 'e)))]
         [(void)
          (define-correlated-match m e '(_ e ...))
          (and (for/and ([e (in-list (m 'e))])
-                (not (any-side-effects? e 1 required-reference? #:locals locals #:known-defns defns)))
+                (not (effects? e 1 locals)))
               1)]
         [(begin)
          (define-correlated-match m e '(_ e ...))
@@ -64,15 +70,15 @@
            (cond
             [(null? es) #f]
             [(null? (cdr es)) (loop (car es) locals)]
-            [else (and (not (any-side-effects? (car es) #f required-reference? #:locals locals #:known-defns defns))
+            [else (and (not (effects? (car es) #f locals))
                        (bloop (cdr es)))]))]
         [(begin0)
          (define-correlated-match m e '(_ e0 e ...))
          (and (for/and ([e (in-list (m 'e))])
-                (not (any-side-effects? e #f required-reference? #:locals locals #:known-defns defns)))
+                (not (effects? e #f locals)))
               (loop (m 'e0) locals))]
         [(make-struct-type)
-         (and (ok-make-struct-type? e required-reference? defns)
+         (and (ok-make-struct-type? e ready-variable? defns)
               5)]
         [(make-struct-field-accessor)
          (and (ok-make-struct-field-accessor/mutator? e locals 'accessor defns)
@@ -88,23 +94,31 @@
          (cond
           [(or (string? v) (number? v) (boolean? v) (char? v))
            1] ;; unquoted vals
-          [(and (pair? v) (hash-ref defns (correlated-e (car v)) #f))
+          [(and (pair? v)
+                (let ([rator (correlated-e (car v))])
+                  (or (hash-ref locals rator #f)
+                      (hash-ref defns rator #f))))
            =>
            (lambda (d)
              (define-correlated-match m e '(_ e ...))
-             (and (known-struct-op? d)
-                  (eq? 'constructor (known-struct-op-type d))
-                  (= (known-struct-op-field-count d) (length (m 'e)))
+             (define n-args (length (m 'e)))
+             (and (or (and (known-struct-op? d)
+                           (eq? 'constructor (known-struct-op-type d))
+                           (= (known-struct-op-field-count d) n-args))
+                      (and (known-function? d)
+                           (known-function-pure? d)
+                           (arity-includes? (known-function-arity d) n-args)))
                   (for/and ([e (in-list (m 'e))])
-                    (not (any-side-effects? e 1 required-reference? #:locals locals #:known-defns defns)))
+                    (not (effects? e 1 locals)))
                   1))]
           [else
            (and
             (or (self-quoting-in-linklet? v)
                 (and (symbol? v)
                      (or (hash-ref locals v #f)
+                         (hash-ref defns v #f)
                          (built-in-symbol? v)
-                         (required-reference? v))))
+                         (ready-variable? v))))
             1)])])))
   (not (and actual-results
             (or (not expected-results)
@@ -146,7 +160,7 @@
                         (lambda (v) (quoted? symbol? v))
                         (lambda (v) (is-lambda? v 2 defns))
                         (lambda (v) (ok-make-struct-type-property-super? v defns))
-                        (lambda (v) (any-side-effects? v 1 (lambda (x) #f) #:known-defns defns)))])
+                        (lambda (v) (any-side-effects? v 1 #:known-defns defns)))])
          (pred arg))))
 
 (define (ok-make-struct-type-property-super? v defns)
@@ -161,7 +175,7 @@
                          (or (memq (correlated-e (list-ref prop+val 1))
                                    '(prop:procedure prop:equal+hash prop:custom-write))
                              (known-property? (hash-ref defns (correlated-e (list-ref prop+val 1)) #f)))
-                         (not (any-side-effects? (list-ref prop+val 2) 1 (lambda (x) #f) #:known-defns defns))))))
+                         (not (any-side-effects? (list-ref prop+val 2) 1 #:known-defns defns))))))
            ;; All properties must be distinct
            (= (sub1 (correlated-length v))
               (set-count (for/set ([prop+val (in-list (cdr  (correlated->list v)))])
@@ -169,7 +183,7 @@
 
 ;; ----------------------------------------
 
-(define (ok-make-struct-type? e required-reference? defns)
+(define (ok-make-struct-type? e ready-variable? defns)
   (define l (correlated->list e))
   (define init-field-count-expr (and ((length l) . > . 3)
                                      (list-ref l 3)))
@@ -192,7 +206,7 @@
                         (lambda (v) (super-ok? v defns))
                         (lambda (v) (field-count-expr-to-field-count v))
                         (lambda (v) (field-count-expr-to-field-count v))
-                        (lambda (v) (not (any-side-effects? v 1 required-reference? #:known-defns defns)))
+                        (lambda (v) (not (any-side-effects? v 1 #:ready-variable? ready-variable? #:known-defns defns)))
                         (lambda (v) (known-good-struct-properties? v immutables-expr super-expr defns))
                         (lambda (v) (inspector-or-false? v))
                         (lambda (v) (procedure-spec? v num-fields))
@@ -271,7 +285,7 @@
           (is-lambda? (list-ref l 2) 2 defns)
           (is-lambda? (list-ref l 3) 2 defns))]
     [(prop:method-arity-error prop:incomplete-arity)
-     (not (any-side-effects? val-expr 1 (lambda (x) (hash-ref defns x #f)) #:known-defns defns))]
+     (not (any-side-effects? val-expr 1 #:known-defns defns))]
     [(prop:impersonator-of)
      (is-lambda? val-expr 1 defns)]
     [(prop:arity-string) (is-lambda? val-expr 1 defns)]
@@ -283,14 +297,14 @@
      (define o (hash-ref defns prop-name #f))
      (and o
           (known-property? o)
-          (not (any-side-effects? val-expr 1 (lambda (x) (hash-ref defns x #f)) #:known-defns defns)))]))
+          (not (any-side-effects? val-expr 1 #:known-defns defns)))]))
 
 ;; is expr a procedure of specified arity? (arity irrelevant if #f)
 (define (is-lambda? expr arity defns)
   (define lookup (hash-ref defns expr #f))
   (or (and lookup (known-function? lookup) ;; is it a known procedure?
            (or (not arity) ;; arity doesn't matter
-               (equal? arity (known-function-arity lookup)))) ;; arity the same
+               (arity-includes? (known-function-arity lookup) arity))) ;; arity compatible
       (and (pair? (correlated-e expr))
            (eq? 'case-lambda (car (correlated-e expr)))
            (not arity))
@@ -299,7 +313,11 @@
            (or (not arity)
                (= arity (length (correlated->list (cadr (correlated->list expr)))))))))
 
-
+(define (arity-includes? a n)
+  (or (equal? a n)
+      (and (list? a)
+           (for/or ([a (in-list a)])
+             (equal? a n)))))
 
 (define (immutable-field? val-expr immutables-expr)
   (and (quoted? exact-nonnegative-integer? val-expr)
@@ -338,9 +356,8 @@
 (define (ok-make-struct-field-accessor/mutator? e locals type defns)
   (define l (correlated->list e))
   (define a (and (or (= (length l) 3) (= (length l) 4))
-                 (hash-ref locals (correlated-e (list-ref l 1))
-                           (lambda ()
-                             (hash-ref defns (correlated-e (list-ref l 1)) #f)))))
+                 (or (hash-ref locals (correlated-e (list-ref l 1)) #f)
+                     (hash-ref defns (correlated-e (list-ref l 1)) #f))))
   (and (known-struct-op? a)
        (eq? (known-struct-op-type a) type)
        ((field-count-expr-to-field-count (list-ref l 2)) . < . (known-struct-op-field-count a))
@@ -359,8 +376,8 @@
       (error 'failed "~s" #'expr)))
 
   (define (any-side-effects?* e n)
-    (define v1 (any-side-effects? e n (lambda (s) #f)))
-    (define v2 (any-side-effects? (datum->correlated e) n (lambda (s) #f)))
+    (define v1 (any-side-effects? e n))
+    (define v2 (any-side-effects? (datum->correlated e) n))
     (unless (equal? v1 v2)
       (error "problem with correlated:" e))
     v1)

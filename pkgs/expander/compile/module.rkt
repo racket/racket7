@@ -124,7 +124,7 @@
                                 phase
                                 required-reference?)
      (unless (hash-ref side-effects phase #f)
-       (when (any-side-effects? e expected-results required-reference?)
+       (when (any-side-effects? e expected-results #:ready-variable? required-reference?)
          (hash-set! side-effects phase #t))))
    
    (when (and need-compiled-submodule-rename?
