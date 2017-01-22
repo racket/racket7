@@ -38,7 +38,7 @@
                    (string->immutable-string orig-p)))
      (define-values (raw-rx num-groups) (parse p #:px? px?))
      (define rx (if as-bytes? raw-rx (convert raw-rx)))
-     (define max-lookbehind (validate rx 'pregexp))
+     (define max-lookbehind (validate rx num-groups))
      (define matcher (compile rx))
      (rx:regexp as-bytes? px? p
                 matcher num-groups max-lookbehind

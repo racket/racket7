@@ -210,13 +210,13 @@
    [(eos)
     (missing-closing-error s pos3 config)]
    [(#\|)
-    (define-values (pces2 pos4) (parse-pces s pos3 config))
+    (define-values (pces2 pos4) (parse-pces s (add1 pos3) config))
     (chyte-case/eos
      s pos4
      [(eos)
       (missing-closing-error s pos4 config)]
      [(#\))
-      (values (rx-conditional tst pces pces2) (add1 pos4))]
+      (values (rx-conditional tst (rx-sequence pces) (rx-sequence pces2)) (add1 pos4))]
      [else
       (parse-error s pos4 config "expected `)` to close `(?(...)...` after second branch")])]
    [(#\))

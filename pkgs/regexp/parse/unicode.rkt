@@ -67,7 +67,7 @@
                            "unrecognized property name in `\\~a{}`: `~a`"
                            (integer->char p-c)
                            (list->string (map integer->char l)))]))
-    (values (rx:unicode-categories categories)
+    (values (rx:unicode-categories categories (= p-c (char->integer #\p)))
             pos2)]
    [else
     (parse-error s pos config

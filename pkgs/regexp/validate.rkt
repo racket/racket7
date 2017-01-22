@@ -6,7 +6,7 @@
 (provide validate)
 
 ;; Returns max-lookbehind or reports an error
-(define (validate rx who)
+(define (validate rx num-groups)
   (define group-sizes #hasheqv())
   (define depends-sizes #hasheqv())
   (define must-sizes #hasheqv())
@@ -77,6 +77,8 @@
         (validate (rx:cut-rx rx))]
        [(rx:reference? rx)
         (define n (rx:reference-n rx))
+        (unless (n . <= . num-groups)
+          (regexp-error "backreference number is larger than the highest-numbered cluster"))
         (define min-size (hash-ref group-sizes n #f))
         (cond
          [min-size

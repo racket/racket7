@@ -28,7 +28,7 @@
 (struct rx:cut (rx needs-backtrack?) #:transparent)
 (struct rx:reference (n) #:transparent)
 (struct rx:range (range) #:transparent)
-(struct rx:unicode-categories (categories) #:transparent)
+(struct rx:unicode-categories (symlist match?) #:transparent)
 
 ;; We need to backtrack for `rx` if it has alternatives;
 ;; we also count as backtracking anything complex enough

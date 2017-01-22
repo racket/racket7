@@ -40,38 +40,45 @@
   (define orig-msec (- after-orig start))
   (define new-msec (- after-new after-orig))
   
-  (parameterize ([error-print-width 64])
-    (printf "regex: ~.s\non: ~.s\n" rx in))
-  
-  (define (~n n)
-    (car (regexp-match #px"^[0-9]*[.]?[0-9]{0,2}" (format "~a" n))))
-  
-  (printf " compile: ~a  (~a vs. ~a)\n"
-          (~n (/ new-c-msec orig-c-msec))
-          (~n orig-c-msec)
-          (~n new-c-msec))
-  (printf " interp:  ~a  (~a vs. ~a)\n"
-          (~n (/ new-msec orig-msec))
-          (~n orig-msec)
-          (~n new-msec)))
+  (unless (= N 1)
+    (parameterize ([error-print-width 64])
+      (printf "regex: ~.s\non: ~.s\n" rx in))
+    
+    (define (~n n)
+      (car (regexp-match #px"^[0-9]*[.]?[0-9]{0,2}" (format "~a" n))))
+    
+    (printf " compile: ~a  (~a vs. ~a) / ~a iterations\n"
+            (~n (/ new-c-msec orig-c-msec))
+            (~n orig-c-msec)
+            (~n new-c-msec)
+            M)
+    (printf " interp:  ~a  (~a vs. ~a) / ~a iterations\n"
+            (~n (/ new-msec orig-msec))
+            (~n orig-msec)
+            (~n new-msec)
+            N)))
 
 ;; ----------------------------------------
 
 (check #"(?m:^aa$a.)"
        #"abaac\nac\naa\nacacaaacd"
-       100)
+       1)
 
 (check #"\\sa."
        #"cat apple"
-       100)
+       1)
 
 (check "(?>a*)a"
        "aaa"
-       100)
+       1)
 
-(check "..(?=cat).."
-       "y1caty2"
-       100)
+(check "(?:a|b)y(\\1)"
+       "ayb"
+       1)
+
+(check #"\\P{Ll}"
+       #"aB"
+       1)
 
 (check #".*"
        #"abaacacaaacacaaacd"
