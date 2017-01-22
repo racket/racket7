@@ -24,14 +24,18 @@
 (define FAST-STRING-LEN 64)
 
 (define (fast-drive-regexp-match?/bytes rx in start-pos end-pos)
+  (define state (and (rx:regexp-references? rx)
+                     (make-vector (rx:regexp-num-groups rx) #f)))
   (define-values (ms-pos me-pos)
-    (search-match rx in start-pos start-pos (or end-pos (bytes-length in)) #f))
+    (search-match rx in start-pos start-pos (or end-pos (bytes-length in)) state))
   (and ms-pos #t))
 
 (define (fast-drive-regexp-match?/string rx in-str start-pos end-pos)
+  (define state (and (rx:regexp-references? rx)
+                     (make-vector (rx:regexp-num-groups rx) #f)))
   (define in (string->bytes/utf-8 in-str 0 start-pos (or end-pos (string-length in-str))))
   (define-values (ms-pos me-pos)
-    (search-match rx in start-pos start-pos (or end-pos (string-length in)) #f))
+    (search-match rx in 0 0 (bytes-length in) state))
   (and ms-pos #t))
 
 (define (fast-drive-regexp-match-positions/bytes rx in start-pos end-pos)
@@ -145,7 +149,8 @@
     (unless (exact-nonnegative-integer? end-bytes-count)
       (raise-argument-error who "exact-nonnegative-integer?" end-bytes-count)))
   
-  (define state (and (not (eq? mode '?))
+  (define state (and (or (not (eq? mode '?))
+                         (rx:regexp-references? rx))
                      (let ([n (rx:regexp-num-groups rx)])
                        (and (positive? n)
                             (make-vector n #f)))))

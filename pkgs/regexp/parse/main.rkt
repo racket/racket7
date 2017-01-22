@@ -15,7 +15,9 @@
 (define (parse p #:px? [px? #f])
   (define config (make-parse-config #:px? px?))
   (define-values (rx pos) (parse-regexp p 0 config))
-  (values rx (unbox (parse-config-group-number-box config))))
+  (values rx
+          (unbox (parse-config-group-number-box config))
+          (unbox (parse-config-references?-box config))))
 
 ;; Returns (values rx position)
 (define (parse-regexp s pos config #:parse-regexp [parse-regexp parse-regexp])
@@ -235,6 +237,7 @@
     (define c (chytes-ref s pos))
     (cond
      [(and (>= c (chyte #\0)) (<= c (chyte #\9)))
+      (set-box! (parse-config-references?-box config) #t)
       (define-values (n pos3) (parse-integer 0 s pos config))
       (unless (and (pos3 . < . (chytes-length s))
                    (= (chytes-ref s pos3) (chyte #\))))
@@ -301,6 +304,7 @@
     (cond
      [(and (parse-config-px? config)
            (and (>= c2 (chyte #\0)) (<= c2 (chyte #\9))))
+      (set-box! (parse-config-references?-box config) #t)
       (define-values (n pos3) (parse-integer 0 s pos2 config))
       (values (rx:reference n) pos3)]
      [(and (parse-config-px? config)

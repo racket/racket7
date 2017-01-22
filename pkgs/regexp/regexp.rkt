@@ -19,6 +19,7 @@
                    source   ; original source string/bytes, but made immutable
                    matcher  ; compiled matcher function; see "compile.rkt"
                    num-groups ; number of `(...)` groups for reporting submatches
+                   references?  ; any backreferences in the pattern?
                    max-lookbehind ; max lookbehnd
                    anchored?    ; starts with `^`?
                    must-string) ; shortcut: a byte string that must appear in a match
@@ -36,12 +37,12 @@
      (define p (if (bytes? orig-p)
                    (bytes->immutable-bytes orig-p)
                    (string->immutable-string orig-p)))
-     (define-values (raw-rx num-groups) (parse p #:px? px?))
+     (define-values (raw-rx num-groups references?) (parse p #:px? px?))
      (define rx (if as-bytes? raw-rx (convert raw-rx)))
      (define max-lookbehind (validate rx num-groups))
      (define matcher (compile rx))
      (rx:regexp as-bytes? px? p
-                matcher num-groups max-lookbehind
+                matcher num-groups references? max-lookbehind
                 (anchored? rx) (get-must-string rx)))
    regexp-error-tag
    (lambda (str)

@@ -29,10 +29,10 @@
 
   (define start (current-inexact-milliseconds))
   (for/fold ([r #f]) ([i (in-range N)])
-    (regexp-match orig-rx in))
+    (regexp-match? orig-rx in))
   (define after-orig (current-inexact-milliseconds))
   (for/fold ([r #f]) ([i (in-range N)])
-    (rx:regexp-match new-rx in))
+    (rx:regexp-match? new-rx in))
   (define after-new (current-inexact-milliseconds))
   
   (define orig-c-msec (- c-after-orig c-start))
@@ -137,6 +137,7 @@
        rlo
        10000)
 
+;; all of the work is looking for a must-string
 (check #"a*b"
        (make-bytes 1024 (char->integer #\a))
        100000)

@@ -12,6 +12,7 @@
                       case-sensitive?
                       multi-line?
                       group-number-box
+                      references?-box
                       error-handler?))
 
 (define (make-parse-config #:who [who 'regexp]
@@ -21,7 +22,8 @@
                 px?
                 #t ; case-sensitive?
                 #f ; multi-line?
-                (box 0)
+                (box 0)  ; group-number-box
+                (box #f) ; references?-box
                 error-handler?))
 
 (define (config-case-sensitive config cs?)
