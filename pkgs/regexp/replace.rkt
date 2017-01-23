@@ -45,28 +45,28 @@
                   (string->bytes/utf-8 insert)
                   insert))
 
-  (let loop ([start-pos 0])
+  (let loop ([search-pos 0])
     (define poss
-      (drive-regexp-match who rx in start-pos #f #f prefix
+      (drive-regexp-match who rx in 0 #:search-offset search-pos #f #f prefix
                           #:in-port-ok? #f
                           #:mode 'positions))
     
     (define (recur)
       (define pos (cdar poss))
       (cond
-       [(= pos start-pos)
-        (if (= start-pos (chytes-length in))
+       [(= pos search-pos)
+        (if (= search-pos (chytes-length in))
             (subchytes in 0 0)
-            (chytes-append (subchytes in start-pos (add1 start-pos))
-                           (loop (add1 start-pos))))]
+            (chytes-append (subchytes in search-pos (add1 search-pos))
+                           (loop (add1 search-pos))))]
        [else (loop (cdar poss))]))
     
     (cond
      [(not poss) (cond
-                  [(zero? start-pos) in]
-                  [else (subchytes in start-pos)])]
+                  [(zero? search-pos) in]
+                  [else (subchytes in search-pos)])]
      [else
-      (chytes-append (subchytes in start-pos (caar poss))
+      (chytes-append (subchytes in search-pos (caar poss))
                      (replacements who in poss ins)
                      (if all?
                          (recur)

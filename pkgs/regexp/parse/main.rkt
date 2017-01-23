@@ -129,7 +129,12 @@
     (define-values (range pos2) (parse-range/not s (add1 pos) config))
     (values (rx-range range (chytes-limit s)) pos2)]
    [(#\.)
-    (values rx:any (add1 pos))]
+    (define rx (if (parse-config-multi-line? config)
+                   (rx-range (range-invert (range-add empty-range (chyte #\newline))
+                                           (chytes-limit s))
+                             (chytes-limit s))
+                   rx:any))
+    (values rx (add1 pos))]
    [(#\^)
     (values (if (parse-config-multi-line? config) rx:line-start rx:start)
             (add1 pos))] 
