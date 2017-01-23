@@ -30,7 +30,7 @@
    [(eos)
     (missing-square-closing-error s pos config)]
    [(#\])
-    (parse-range-rest (range-add empty-range (chyte #\[)) s (add1 pos) config)]
+    (parse-range-rest (range-add empty-range (chyte #\])) s (add1 pos) config)]
    [(#\-)
     (parse-range-rest (range-add empty-range (chyte #\-)) s (add1 pos) config)]
    [else
@@ -66,20 +66,22 @@
      [(parse-config-px? config)
       (define pos2 (add1 pos))
       (cond
-       [must-span-from
-        (parse-error s pos config "escaping backslash at end pattern (within square brackets)")]
        [(= pos2 (chytes-length s))
-        (missing-square-closing-error s pos2 config)]
+        (parse-error s pos config "escaping backslash at end pattern (within square brackets)")]
        [else
         (define c (chytes-ref s pos2))
         (cond
          [(or (and (c . >= . (chyte #\a)) (c . <= . (chyte #\z)))
               (and (c . >= . (chyte #\A)) (c . <= . (chyte #\Z))))
-          (define-values (success? range1 pos3) (parse-class s pos2 config))
-          (unless success?
-            (parse-error s pos3 config "illegal alphabetic escape"))
-          (define range2 (range-union range1 (range-add* range span-from config)))
-          (parse-range-rest range2 s (add1 pos2) config)]
+          (cond
+           [must-span-from
+            (parse-error s pos config "misplaced hyphen within square brackets in pattern")]
+           [else
+            (define-values (success? range1 pos3) (parse-class s pos2 config))
+            (unless success?
+              (parse-error s pos3 config "illegal alphabetic escape"))
+            (define range2 (range-union range1 (range-add* range span-from config)))
+            (parse-range-rest range2 s (add1 pos2) config)])]
          [else
           (parse-range-rest/span c range s (add1 pos2) config
                                  #:span-from span-from

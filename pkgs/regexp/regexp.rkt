@@ -48,7 +48,7 @@
    (lambda (str)
      (if handler
          (handler str)
-         (error who "~a" str)))))
+         (raise-arguments-error who str "pattern" orig-p)))))
 
 (define (regexp? v)
   (and (rx:regexp? v)

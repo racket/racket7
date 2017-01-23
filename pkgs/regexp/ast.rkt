@@ -22,11 +22,13 @@
 (struct rx:group (rx number) #:transparent)
 (struct rx:repeat (rx min max non-greedy?) #:transparent)
 (struct rx:maybe (rx non-greedy?) #:transparent) ; special case in size validation
-(struct rx:conditional (tst rx1 rx2 needs-backtrack?) #:transparent)
-(struct rx:lookahead (rx match?) #:transparent)
-(struct rx:lookbehind (rx match? [lb-min #:mutable] [lb-max #:mutable])) ; min & max set by `validate`
-(struct rx:cut (rx needs-backtrack?) #:transparent)
-(struct rx:reference (n) #:transparent)
+(struct rx:conditional (tst rx1 rx2 n-start num-n needs-backtrack?) #:transparent)
+(struct rx:lookahead (rx match? n-start num-n) #:transparent)
+(struct rx:lookbehind (rx match? [lb-min #:mutable] [lb-max #:mutable] ; min & max set by `validate`
+                          n-start num-n)
+        #:transparent)
+(struct rx:cut (rx n-start num-n needs-backtrack?) #:transparent)
+(struct rx:reference (n case-sensitive?) #:transparent)
 (struct rx:range (range) #:transparent)
 (struct rx:unicode-categories (symlist match?) #:transparent)
 
@@ -129,6 +131,10 @@
     (rx-range (range-union (rx:range-range rx1)
                            (rx:range-range rx2))
               limit-c)]
+   [(and (rx:range? rx1) (rx:alts? rx2) (rx:range? (rx:alts-rx1 rx2)))
+    (rx-alts (rx-alts rx1 (rx:alts-rx1 rx2) limit-c)
+             (rx:alts-rx2 rx2)
+             limit-c)]
    [(and (rx:range? rx1) (integer? rx2))
     (rx-range (range-add (rx:range-range rx1) rx2) limit-c)]
    [(and (rx:range? rx2) (integer? rx1))
@@ -141,9 +147,9 @@
 (define (rx-group rx n)
   (rx:group rx n))
 
-(define (rx-cut rx)
-  (rx:cut rx (needs-backtrack? rx)))
+(define (rx-cut rx n-start num-n)
+  (rx:cut rx n-start num-n (needs-backtrack? rx)))
 
-(define (rx-conditional tst pces1 pces2)
-  (rx:conditional tst pces1 pces2 (or (needs-backtrack? pces1)
-                                      (needs-backtrack? pces2))))
+(define (rx-conditional tst pces1 pces2 n-start num-n)
+  (rx:conditional tst pces1 pces2 n-start num-n (or (needs-backtrack? pces1)
+                                                    (needs-backtrack? pces2))))

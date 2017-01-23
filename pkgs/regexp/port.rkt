@@ -9,12 +9,15 @@
 (define (copy-port-bytes in out n)
   (define bstr (make-bytes (min 4096 (or n 4096))))
   (define (copy got expect)
-    (when out
-      (write-bytes bstr out 0 got))
-    (or (and (not n)
-             (positive? got))
-        (and n
-             (= got expect))))
+    (cond
+     [(eof-object? got) #f]
+     [else
+      (when out
+        (write-bytes bstr out 0 got))
+      (or (and (not n)
+               (positive? got))
+          (and n
+               (= got expect)))]))
   (let loop ([n n])
     (if (and n (n . < . 4096))
         (copy (read-bytes! bstr in 0 n) n)

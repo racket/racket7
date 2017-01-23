@@ -16,7 +16,7 @@
   (define config (make-parse-config #:px? px?))
   (define-values (rx pos) (parse-regexp p 0 config))
   (values rx
-          (unbox (parse-config-group-number-box config))
+          (config-group-number config)
           (unbox (parse-config-references?-box config))))
 
 ;; Returns (values rx position)
@@ -121,6 +121,8 @@
   ;; Assumes at least one character
   (chyte-case
    (chytes-ref s pos)
+   [(#\|)
+    (values rx:empty pos)]
    [(#\()
     (parse-parenthesized-atom s (add1 pos) config)]
    [(#\[)
@@ -151,8 +153,10 @@
      [(eos)
       (bad-?-sequence-error s pos2 config)]
      [(#\>)
+      (define pre-num-groups (config-group-number config))
       (define-values (rx pos3) (parse-regexp/maybe-empty s (add1 pos2) config))
-      (values (rx-cut rx)
+      (define post-num-groups (config-group-number config))
+      (values (rx-cut rx pre-num-groups (- post-num-groups pre-num-groups))
               (check-close-paren s pos3 config))]
      [(#\()
       (parse-conditional s (add1 pos2) config)]
@@ -178,14 +182,18 @@
 ;; Returns (values rx position)
 (define (parse-look s pos2 config)
   ;; known that one character is available
+  (define pre-num-groups (config-group-number config))
+  (define (span-num-groups) (- (config-group-number config) pre-num-groups))
   (chyte-case
    (chytes-ref s pos2)
    [(#\=)
-    (define-values (rx pos3) (parse-regexp s (add1 pos2) config))
-    (values (rx:lookahead rx #t) (check-close-paren s pos3 config))]
+    (define-values (rx pos3) (parse-regexp/maybe-empty s (add1 pos2) config))
+    (values (rx:lookahead rx #t pre-num-groups (span-num-groups))
+            (check-close-paren s pos3 config))]
    [(#\!)
-    (define-values (rx pos3) (parse-regexp s (add1 pos2) config))
-    (values (rx:lookahead rx #f) (check-close-paren s pos3 config))]
+    (define-values (rx pos3) (parse-regexp/maybe-empty s (add1 pos2) config))
+    (values (rx:lookahead rx #f pre-num-groups (span-num-groups))
+            (check-close-paren s pos3 config))]
    [(#\<)
     (define pos2+ (add1 pos2))
     (chyte-case/eos
@@ -193,11 +201,13 @@
      [(eos)
       (bad-?-sequence-error s pos2+ config)]
      [(#\=)
-      (define-values (rx pos3) (parse-regexp s (add1 pos2+) config))
-      (values (rx:lookbehind rx #t 0 0) (check-close-paren s pos3 config))]
+      (define-values (rx pos3) (parse-regexp/maybe-empty s (add1 pos2+) config))
+      (values (rx:lookbehind rx #t 0 0 pre-num-groups (span-num-groups))
+              (check-close-paren s pos3 config))]
      [(#\!)
-      (define-values (rx pos3) (parse-regexp s (add1 pos2+) config))
-      (values (rx:lookbehind rx #f 0 0) (check-close-paren s pos3 config))]
+      (define-values (rx pos3) (parse-regexp/maybe-empty s (add1 pos2+) config))
+      (values (rx:lookbehind rx #f 0 0 pre-num-groups (span-num-groups))
+              (check-close-paren s pos3 config))]
      [else
       (bad-?-sequence-error s pos2+ config)])]
    [else
@@ -205,7 +215,9 @@
 
 ;; Returns (values rx position)
 (define (parse-conditional s pos config)
+  (define tst-pre-num-groups (config-group-number config))
   (define-values (tst pos2) (parse-test s pos config))
+  (define tst-span-num-groups (- (config-group-number config) tst-pre-num-groups))
   (define-values (pces pos3) (parse-pces s pos2 config))
   (chyte-case/eos
    s pos3
@@ -218,11 +230,14 @@
      [(eos)
       (missing-closing-error s pos4 config)]
      [(#\))
-      (values (rx-conditional tst (rx-sequence pces) (rx-sequence pces2)) (add1 pos4))]
+      (values (rx-conditional tst (rx-sequence pces) (rx-sequence pces2)
+                              tst-pre-num-groups tst-span-num-groups)
+              (add1 pos4))]
      [else
       (parse-error s pos4 config "expected `)` to close `(?(...)...` after second branch")])]
    [(#\))
-    (values (rx-conditional tst pces rx:empty)
+    (values (rx-conditional tst (rx-sequence pces) rx:empty
+                            tst-pre-num-groups tst-span-num-groups)
             (add1 pos3))]))
 
 ;; Returns (values rx position)
@@ -242,7 +257,7 @@
       (unless (and (pos3 . < . (chytes-length s))
                    (= (chytes-ref s pos3) (chyte #\))))
         (parse-error s pos3 config "expected `)` after `(?(` followed by digits"))
-      (values (rx:reference n) (add1 pos3))]
+      (values (rx:reference n #f) (add1 pos3))]
      [else
       (parse-error s pos config "expected `(?=`, `(?!`, `(?<`, or digit after `(?(`")])]))
 
@@ -250,7 +265,7 @@
 (define (parse-integer n s pos config)
   (cond
    [(= pos (chytes-length s))
-    (values 0 pos)]
+    (values n pos)]
    [else
     (define c (chytes-ref s pos))
     (cond
@@ -306,7 +321,7 @@
            (and (>= c2 (chyte #\0)) (<= c2 (chyte #\9))))
       (set-box! (parse-config-references?-box config) #t)
       (define-values (n pos3) (parse-integer 0 s pos2 config))
-      (values (rx:reference n) pos3)]
+      (values (rx:reference n (parse-config-case-sensitive? config)) pos3)]
      [(and (parse-config-px? config)
            (or (and (>= c2 (chyte #\a)) (<= c2 (chyte #\z)))
                (and (>= c2 (chyte #\A)) (<= c2 (chyte #\Z)))))

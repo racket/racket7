@@ -25,7 +25,6 @@
     (error 'check
            "failed\n  pattern: ~s\n  input: ~s\n  expected: ~s\n  got: ~s"
            rx in orig-v new-v))
-  
 
   (define start (current-inexact-milliseconds))
   (for/fold ([r #f]) ([i (in-range N)])
@@ -74,6 +73,10 @@
 
 (check "(?:a|b)y(\\1)"
        "ayb"
+       1)
+
+(check "!.!"
+       #"!\x80!"
        1)
 
 (check #"\\P{Ll}"

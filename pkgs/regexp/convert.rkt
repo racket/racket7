@@ -8,10 +8,12 @@
 
 (define (convert rx)
   (cond
+   [(eq? rx rx:any)
+    (rx:unicode-categories null #f)]
    [(exact-integer? rx)
     (cond
      [(< rx 128) rx]
-     [else (string->bytes/utf-8 (string rx))])]
+     [else (string->bytes/utf-8 (string (integer->char rx)))])]
    [(rx:range? rx)
     (define range (rx:range-range rx))
     (if (range-within? range 0 127)

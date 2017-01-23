@@ -206,6 +206,11 @@
       (search-match rx bstr-in 0 0 end-pos state))
     (define (string-pos pos)
       (+ start-offset (bytes-utf-8-length bstr-in #\? 0 pos)))
+    (define bytes-offset
+      (and (rx:regexp-bytes? rx)
+           (string-utf-8-length in 0 start-offset)))
+    (define (bytes-pos pos)
+      (+ pos bytes-offset))
     (when out
       (write-string in out 0 start-offset)
       (write-bytes bstr-in out 0 (or ms-pos end-pos)))
@@ -214,23 +219,45 @@
       [(?) #t]
       [(positions)
        (add-end-bytes
-        bstr-in me-pos
-        (cons (cons (string-pos ms-pos) (string-pos me-pos))
-              (if state
-                  (for/list ([p (in-vector state)])
-                    (and p
-                         (cons (string-pos (car p))
-                               (string-pos (cdr p)))))
-                  null)))]
+        in me-pos
+        (if (rx:regexp-bytes? rx)
+            ;; Return byte positions:
+            (if state
+                (cons (cons (bytes-pos ms-pos) (bytes-pos me-pos))
+                      (if state
+                          (for/list ([p (in-vector state)])
+                            (and p
+                                 (cons (bytes-pos (car p))
+                                       (bytes-pos (cdr p)))))
+                          null)
+                      (vector->list state))
+                (list (cons ms-pos me-pos)))
+           ;; Return string positions:
+            (cons (cons (string-pos ms-pos) (string-pos me-pos))
+                  (if state
+                      (for/list ([p (in-vector state)])
+                        (and p
+                             (cons (string-pos (car p))
+                                   (string-pos (cdr p)))))
+                      null))))]
       [(strings)
        (add-end-bytes
         bstr-in me-pos
-        (cons (bytes->string/utf-8 bstr-in #\? ms-pos me-pos)
-              (if state
-                  (for/list ([p (in-vector state)])
-                    (and p
-                         (bytes->string/utf-8 bstr-in #\? (car p) (cdr p))))
-                  null)))])]
+        (if (rx:regexp-bytes? rx)
+            ;; Return bytes:
+            (cons (subbytes bstr-in ms-pos me-pos)
+                  (if state
+                      (for/list ([p (in-vector state)])
+                        (and p
+                             (subbytes in (car p) (cdr p))))
+                      null))
+            ;; return strings:
+            (cons (bytes->string/utf-8 bstr-in #\? ms-pos me-pos)
+                  (if state
+                      (for/list ([p (in-vector state)])
+                        (and p
+                             (bytes->string/utf-8 bstr-in #\? (car p) (cdr p))))
+                      null))))])]
    
    [else
     (define start-pos (bytes-length prefix))
@@ -250,7 +277,7 @@
                                    peek? immediate-only? progress-evt
                                    out (rx:regexp-max-lookbehind rx)))
     (define end-pos (if (eq? 'eof end-offset)
-                        eof
+                        'eof
                         (+ start-pos end-offset)))
     (define prefix-len (bytes-length prefix))
     (define end-pos-in-lazy-bytes (if (eq? end-pos 'eof)
@@ -264,6 +291,8 @@
     ;; be shifted by discarded bytes, if not in `peek?` mode
     (define (port-pos pos)
       (+ (- pos start-pos) start-offset))
+    (define (string-pos pos)
+      (+ start-offset (bytes-utf-8-length (lazy-bytes-bstr lb-in) #\? 0 pos)))
     (define result
       (case (and ms-pos
                  (not (lazy-bytes-failed? lb-in))
@@ -273,25 +302,46 @@
         [(positions)
          (add-end-bytes
           (lazy-bytes-bstr lb-in) me-pos
-          (cons (cons (port-pos ms-pos) (port-pos me-pos))
-                (if state
-                    (for/list ([p (in-vector state)])
-                      (and p
-                           (cons (port-pos (car p))
-                                 (port-pos (cdr p)))))
-                    null)))]
+          (if (and (string? in)
+                   (not (rx:regexp-bytes? rx)))
+              ;; return string positions
+              (cons (cons (port-pos ms-pos) (string-pos me-pos))
+                    (if state
+                        (for/list ([p (in-vector state)])
+                          (and p
+                               (cons (string-pos (car p))
+                                     (string-pos (cdr p)))))
+                        null))
+              ;; return byte positions
+              (cons (cons (port-pos ms-pos) (port-pos me-pos))
+                    (if state
+                        (for/list ([p (in-vector state)])
+                          (and p
+                               (cons (port-pos (car p))
+                                     (port-pos (cdr p)))))
+                        null))))]
         [(strings)
          (define (bytes-pos pos)
            (- pos (lazy-bytes-discarded-count lb-in)))
          (define bstr (lazy-bytes-bstr lb-in))
          (add-end-bytes
           bstr me-pos
-          (cons (subbytes bstr (bytes-pos ms-pos) (bytes-pos me-pos))
-                (if state
-                    (for/list ([p (in-vector state)])
-                      (and p
-                           (subbytes bstr (bytes-pos (car p)) (bytes-pos (cdr p)))))
-                    null)))]))
+          (if (and (string? in)
+                   (not (rx:regexp-bytes? rx)))
+              ;; return strings
+              (cons (bytes->string/utf-8 bstr #\? (bytes-pos ms-pos) (bytes-pos me-pos))
+                    (if state
+                        (for/list ([p (in-vector state)])
+                          (and p
+                               (bytes->string/utf-8 bstr #\? (bytes-pos (car p)) (bytes-pos (cdr p)))))
+                        null))
+              ;; return bytes
+              (cons (subbytes bstr (bytes-pos ms-pos) (bytes-pos me-pos))
+                    (if state
+                        (for/list ([p (in-vector state)])
+                          (and p
+                               (subbytes bstr (bytes-pos (car p)) (bytes-pos (cdr p)))))
+                        null))))]))
     ;; Consume input
     (when (not peek?)
       (cond

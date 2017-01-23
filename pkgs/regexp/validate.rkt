@@ -28,10 +28,11 @@
             (eq? rx rx:start)
             (eq? rx rx:end)
             (eq? rx rx:line-start)
-            (eq? rx rx:line-end)
-            (eq? rx rx:word-boundary)
-            (eq? rx rx:not-word-boundary))
+            (eq? rx rx:line-end))
         (values 0 0 0)]
+       [(or (eq? rx rx:word-boundary)
+            (eq? rx rx:not-word-boundary))
+        (values 0 0 1)]
        [(rx:alts? rx)
         (define-values (min1 max1 lb1) (validate (rx:alts-rx1 rx)))
         (define-values (min2 max2 lb2) (validate (rx:alts-rx2 rx)))
@@ -86,13 +87,13 @@
           (values min-size +inf.0 0)]
          [else
           ;; assume at least one, but check:
-          (set! depends-sizes (hash-set depends-sizes n #t))
+          (set! depends-sizes (hash-set depends-sizes (sub1 n) #t))
           (values 1 +inf.0 0)])]
        [(rx:unicode-categories? rx)
         (values 1 4 0)]
        [else (error 'validate "internal error: ~s" rx)])))
   (for ([n (in-hash-keys must-sizes)])
-    (unless (positive? (hash-ref group-sizes n))
+    (unless (positive? (hash-ref group-sizes n 0))
       (might-be-empty-error)))
   max-lookbehind)
 

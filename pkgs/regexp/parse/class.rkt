@@ -13,22 +13,24 @@
   (chyte-case
    (chytes-ref s pos)
    [(#\d) (success (range:d))]
-   [(#\D) (success (range-invert (range:d)))]
+   [(#\D) (success (range-invert (range:d) (chytes-limit s)))]
    [(#\w) (success (range:w))]
-   [(#\W) (success (range-invert (range:w)))]
+   [(#\W) (success (range-invert (range:w) (chytes-limit s)))]
    [(#\s) (success (range:s))]
-   [(#\S) (success (range-invert (range:w)))]
+   [(#\S) (success (range-invert (range:s) (chytes-limit s)))]
    [else (values #f #f #f)]))
          
 (define (range:d)
   (range-add-span empty-range (chyte #\0) (chyte #\9)))
 
 (define (range:w)
-  (range-add-span
+  (range-add
    (range-add-span
-    (range:d)
-    (chyte #\a) (chyte #\z))
-   (chyte #\A) (chyte #\Z)))
+    (range-add-span
+     (range:d)
+     (chyte #\a) (chyte #\z))
+    (chyte #\A) (chyte #\Z))
+   (chyte #\_)))
 
 (define (range:s)
   (let* ([r (range-add empty-range (chyte #\space))]

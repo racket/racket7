@@ -14,27 +14,30 @@
     (cond
      [(null? accum) 'fail]
      [(two-byte-prefix? (car accum))
-      (+ (arithmetic-shift (bitwise-and #b11111 (car accum)) 6)
-         (continue-value last-b))]
+      (integer->char
+       (+ (arithmetic-shift (bitwise-and #b11111 (car accum)) 6)
+          (continue-value last-b)))]
      [(three-byte-prefix? (car accum))
       'continue]
      [(four-byte-prefix? (car accum))
       'continue]
      [(and (pair? (cdr accum))
            (three-byte-prefix? (cadr accum)))
-      (+ (arithmetic-shift (bitwise-and #b1111 (cadr accum)) 12)
-         (arithmetic-shift (continue-value (car accum)) 6)
-         (continue-value last-b))]
+      (integer->char
+       (+ (arithmetic-shift (bitwise-and #b1111 (cadr accum)) 12)
+          (arithmetic-shift (continue-value (car accum)) 6)
+          (continue-value last-b)))]
      [(and (pair? (cdr accum))
            (four-byte-prefix? (cadr accum)))
       'continue]
      [(and (pair? (cdr accum))
            (pair? (cddr accum))
            (four-byte-prefix? (caddr accum)))
-      (+ (arithmetic-shift (bitwise-and #b1111 (caddr accum)) 18)
-         (arithmetic-shift (continue-value (cadr accum)) 12)
-         (arithmetic-shift (continue-value (car accum)) 6)
-         (continue-value last-b))]
+      (integer->char
+       (+ (arithmetic-shift (bitwise-and #b1111 (caddr accum)) 18)
+          (arithmetic-shift (continue-value (cadr accum)) 12)
+          (arithmetic-shift (continue-value (car accum)) 6)
+          (continue-value last-b)))]
      [else 'fail])]
    [(and (or (two-byte-prefix? last-b)
              (three-byte-prefix? last-b)

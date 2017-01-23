@@ -15,7 +15,8 @@
      [(parse-config-case-sensitive? config) range2]
      [else
       (define range3 (range-add range2 (char->integer (char-upcase (integer->char c)))))
-      (range-add range3 (char->integer (char-downcase (integer->char c))))])]))
+      (define range4 (range-add range3 (char->integer (char-foldcase (integer->char c)))))
+      (range-add range4 (char->integer (char-downcase (integer->char c))))])]))
 
 (define (range-add-span* range from-c to-c config)
   (cond

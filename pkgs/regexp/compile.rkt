@@ -21,15 +21,6 @@
 (provide compile
          interp)
 
-;; Compilation produces a matcher function; see "match.rkt"
-(define (interp m s pos start end state)
-  (m s pos start end state null (lambda () #f)))
-
-(define done-m (lambda (s pos start end state stack fail-k)
-                 pos))
-(define continue-m (lambda (s pos start end state stack fail-k)
-                     ((car stack) pos fail-k)))
-
 (define (compile rx)
   (let compile ([rx rx] [next-m done-m] [next-backtracks? #f])
     (define-syntax-rule (mode-cond
@@ -81,18 +72,17 @@
       (not-word-boundary-matcher next-m)]
      [(rx:sequence? rx)
       (define rxs (rx:sequence-rxs rx))
-      (define backtracks (if next-backtracks?
-                             0
-                             (count-backtrack-prefix rxs)))
-      (let loop ([rxs rxs] [backtracks backtracks])
+      (define backtracks? (or next-backtracks?
+                              (rx:sequence-needs-backtrack? rx)))
+      (let loop ([rxs rxs])
         (cond
          [(null? rxs) next-m]
          [else
-          (define rest-node (loop (cdr rxs) (sub1 backtracks)))
-          (compile (car rxs) rest-node (or next-backtracks? (backtracks . > . 1)))]))]
+          (define rest-node (loop (cdr rxs)))
+          (compile (car rxs) rest-node backtracks?)]))]
      [(rx:alts? rx)
       ;; Specializations for non-backtracking subforms might be useful here
-      (define m1 (compile (rx:alts-rx1 rx) next-m next-backtracks?))
+      (define m1 (compile (rx:alts-rx1 rx) next-m #t))
       (define m2 (compile (rx:alts-rx2 rx) next-m next-backtracks?))
       (alts-matcher m1 m2)]
      [(rx:maybe? rx)
@@ -136,29 +126,43 @@
       (group-push-matcher n m)]
      [(rx:reference? rx)
       (define n (rx:reference-n rx))
-      (if (zero? n)
-          (never-matcher)
-          (reference-matcher (sub1 n) next-m))]
+      (cond
+       [(zero? n)
+        (never-matcher)]
+       [(rx:reference-case-sensitive? rx)
+        (reference-matcher (sub1 n) next-m)]
+       [else
+        (reference-matcher/case-insensitive (sub1 n) next-m)])]
      [(rx:cut? rx)
-      (cut-matcher (compile (rx:cut-rx rx) done-m #f) next-m)]
+      (cut-matcher (compile (rx:cut-rx rx) done-m #f) 
+                   (rx:cut-n-start rx)
+                   (rx:cut-num-n rx)
+                   next-m)]
      [(rx:conditional? rx)
       (define tst (rx:conditional-tst rx))
       (define m1 (compile (rx:conditional-rx1 rx) next-m next-backtracks?))
       (define m2 (compile (rx:conditional-rx2 rx) next-m next-backtracks?))
       (cond
        [(rx:reference? tst)
-        (conditional/reference-matcher (sub1 (rx:reference-n tst)) m1 m2)]
+        (define n (sub1 (rx:reference-n tst)))
+        (conditional/reference-matcher n m1 m2)]
        [else
-        (conditional/look-matcher (compile tst done-m #f) m1 m2)])]
+        (conditional/look-matcher (compile tst done-m #f) m1 m2
+                                  (rx:conditional-n-start rx)
+                                  (rx:conditional-num-n rx))])]
      [(rx:lookahead? rx)
       (lookahead-matcher (rx:lookahead-match? rx)
                          (compile (rx:lookahead-rx rx) done-m #f)
+                         (rx:lookahead-n-start rx)
+                         (rx:lookahead-num-n rx)
                          next-m)]
      [(rx:lookbehind? rx)
       (lookbehind-matcher (rx:lookbehind-match? rx)
                           (rx:lookbehind-lb-min rx)
                           (rx:lookbehind-lb-max rx)
-                          (compile (rx:lookbehind-rx rx) done-m #f)
+                          (compile (rx:lookbehind-rx rx) limit-m #f)
+                          (rx:lookbehind-n-start rx)
+                          (rx:lookbehind-num-n rx)
                           next-m)]
      [(rx:unicode-categories? rx)
       (unicode-categories-matcher (rx:unicode-categories-symlist rx)
