@@ -2,7 +2,8 @@
 (require "../common/range.rkt"
          "regexp.rkt"
          "lazy-bytes.rkt"
-         "interp.rkt")
+         "interp.rkt"
+         "../analyze/must-string.rkt")
 
 (provide search-match)
 
@@ -53,15 +54,31 @@
   (cond
    [(not must-string) #t]
    [(not (bytes? in)) #t]
-   [(= 1 (bytes-length must-string))
-    (define mc (bytes-ref must-string 0))
-    (for/or ([c (in-bytes in pos end-pos)])
-      (= c mc))]
+   [(bytes? must-string)
+    (cond
+     [(= 1 (bytes-length must-string))
+      ;; Check for a single byte
+      (define mc (bytes-ref must-string 0))
+      (for/or ([c (in-bytes in pos end-pos)])
+        (= c mc))]
+     [else
+      ;; Check for a byte string
+      (define mc1 (bytes-ref must-string 0))
+      (for/or ([i (in-range pos (- end-pos (sub1 (bytes-length must-string))))])
+        (and (= mc1 (bytes-ref in i))
+             (for/and ([c (in-bytes in (add1 i))]
+                       [mc (in-bytes must-string 1)])
+               (= c mc))))])]
    [else
-    (for/or ([i (in-range pos (- end-pos (sub1 (bytes-length must-string))))])
-      (for/and ([c (in-bytes in i)]
-                [mc (in-bytes must-string)])
-        (= c mc)))]))
+    ;; Check against a sequence of ranges
+    (for/or ([i (in-range pos (- end-pos (sub1 (length must-string))))])
+      (let loop ([i i] [l must-string])
+        (cond
+         [(null? l) #t]
+         [else
+          (define e (car l))
+          (and (rng-in? e (bytes-ref in i))
+               (loop (add1 i) (cdr l)))])))]))
 
 ;; ------------------------------------------------------------------
 ;; Checking for a startup byte can speed up a match failure by

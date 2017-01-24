@@ -59,6 +59,13 @@
 
 ;; ----------------------------------------
 
+
+(check #"^((?>\\w+)|(?>\\s+))*$" 
+       #"now is the time for all good men to come to the aid of the party"
+       30000)
+
+(error "stop")
+
 (check #"(?m:^aa$a.)"
        #"abaac\nac\naa\nacacaaacd"
        1)

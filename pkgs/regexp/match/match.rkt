@@ -106,14 +106,16 @@
 ;; and the number of items; this mode is used only when each match
 ;; has a fixed size
 (define-syntax-rule (define-iterate (op-matcher* arg ...)
-                      defn ...
-                      (lambda (s pos2 start limit end)
+                      outer-defn ... 
+                      (lambda (s pos2 start limit end state)
+                        inner-defn ...
                         #:size size
                         #:s-test s-tst
                         #:ls-test ls-tst))
   (define (op-matcher* arg ... max)
-    defn ...
-    (lambda (s pos start limit end)
+    outer-defn ...
+    (lambda (s pos start limit end state)
+      inner-defn ...
       (if (bytes? s)
           (let ([limit (if max
                            (min limit (+ pos (* size max)))
@@ -123,7 +125,7 @@
               (cond
                [(or (pos3 . > . limit)
                     (not s-tst))
-                (values pos2 n)]
+                (values pos2 n size)]
                [else (loop pos3 (add1 n))])))
           (let ([limit (and max (+ pos (* size max)))])
             (let loop ([pos2 pos] [n 0])
@@ -131,23 +133,26 @@
                [(or (and limit ((+ pos2 size) . > . limit))
                     (not (lazy-bytes-before-end? s (+ pos2 (sub1 size)) limit))
                     (not ls-tst))
-                (values pos2 n)]
+                (values pos2 n size)]
                [else
                 (loop (+ pos2 size) (add1 n))])))))))
 
 ;; When a simple repeat argument is wrapped as a group, `add-repeated-group`
 ;; is used in the repeating loop to set the group to the last span produced
 ;; by an iterator
-(define-syntax-rule (add-repeated-group group-n-expr state-expr pos-expr back-amt
+(define-syntax-rule (add-repeated-group group-n-expr state-expr pos-expr n-expr back-amt
                                         group-revert ; bound to an unwind thunk
                                         body ...) ; duplicated in two `cond` branches
   (let ([group-n group-n-expr]
         [state state-expr]
+        [n n-expr]
         [pos pos-expr])
     (cond
      [(and group-n state)
       (define old-span (vector-ref state group-n))
-      (vector-set! state group-n (cons (- pos back-amt) pos))
+      (vector-set! state group-n (if (zero? n)
+                                     #f
+                                     (cons (- pos back-amt) pos)))
       (define (group-revert) (vector-set! state group-n old-span))
       body ...]
      [else
@@ -167,7 +172,7 @@
     (add1 pos)))
 
 (define-iterate (byte-matcher* b)
-  (lambda (s pos start limit end)
+  (lambda (s pos start limit end state)
     #:size 1
     #:s-test (= b (bytes-ref s pos))
     #:ls-test (= b (lazy-bytes-ref s pos))))
@@ -191,9 +196,9 @@
 
 (define-iterate (bytes-matcher* bstr)
   (define len (bytes-length bstr))
-  (lambda (s pos start limit end)
+  (lambda (s pos start limit end state)
     #:size len
-    #:s-test (for/and ([c1 (in-bytes s 0 len)]
+    #:s-test (for/and ([c1 (in-bytes bstr 0 len)]
                        [c2 (in-bytes s pos (+ pos len))])
                (= c1 c2))
     #:ls-test (for/and ([c1 (in-bytes bstr 0 len)]
@@ -219,13 +224,13 @@
     (add1 pos)))
 
 (define (any-matcher* max-repeat)
-  (lambda (s pos start limit end)
+  (lambda (s pos start limit end state)
     (cond
      [(bytes? s)
       (define n (if max-repeat
                     (min max-repeat (- limit pos))
                     (- limit pos)))
-      (values (+ pos n) n)]
+      (values (+ pos n) n 1)]
      [else
       ;; Search for end position
       (let grow-loop ([size 1])
@@ -240,7 +245,7 @@
             (define mid (quotient (+ min too-high) 2))
             (cond
              [(= mid min)
-              (values mid (- mid pos))]
+              (values mid (- mid pos) 1)]
              [(lazy-bytes-before-end? s (sub1 mid) limit)
               (search-loop mid too-high)]
              [else
@@ -259,7 +264,7 @@
     (add1 pos)))
 
 (define-iterate (range-matcher* rng)
-  (lambda (s pos start limit end)
+  (lambda (s pos start limit end state)
     #:size 1
     #:s-test (rng-in? rng (bytes-ref s pos))
     #:ls-test (rng-in? rng (lazy-bytes-ref s pos))))
@@ -383,7 +388,7 @@
              [(n . < . min) (fail-k)]
              [else
               (add-repeated-group
-               group-n state pos back-amt group-revert
+               group-n state pos n back-amt group-revert
                (next-m s pos start limit end state stack
                        (lambda ()
                          (group-revert)
@@ -405,38 +410,38 @@
              [(n . < . min) (fail-k)]
              [else
               (add-repeated-group
-               group-n state pos back-amt group-revert
+               group-n state pos n back-amt group-revert
                (define pos2 (next-m s pos start limit end state stack (lambda () #f)))
                (or pos2
                    (begin
                      (group-revert)
                      (bloop (- pos back-amt) (sub1 n)))))]))))))
 
-(define (repeat-simple-many-matcher r-m* back-amt min max group-n next-m)
+(define (repeat-simple-many-matcher r-m* min max group-n next-m)
   ;; Instead of `r-m`, we have a `r-m*` that finds as many matches as
   ;; possible (up to max) in one go
   (lambda (s pos start limit end state stack fail-k)
-    (define-values (pos2 n) (r-m* s pos start limit end))
+    (define-values (pos2 n back-amt) (r-m* s pos start limit end state))
     (let bloop ([pos pos2] [n n])
       (cond
        [(n . < . min) (fail-k)]
        [else
         (add-repeated-group
-         group-n state pos back-amt group-revert
+         group-n state pos n back-amt group-revert
          (next-m s pos start limit end state stack
                  (lambda ()
                    (group-revert)
                    (bloop (- pos back-amt) (sub1 n)))))]))))
 
-(define (repeat-simple-many+simple-matcher r-m* back-amt min max group-n next-m)
+(define (repeat-simple-many+simple-matcher r-m* min max group-n next-m)
   (lambda (s pos start limit end state stack fail-k)
-    (define-values (pos2 n) (r-m* s pos start limit end))
+    (define-values (pos2 n back-amt) (r-m* s pos start limit end state))
     (let bloop ([pos pos2] [n n])
       (cond
        [(n . < . min) (fail-k)]
        [else
         (add-repeated-group
-         group-n state pos back-amt group-revert
+         group-n state pos n back-amt group-revert
          (define pos2 (next-m s pos start limit end state stack (lambda () #f)))
          (or pos2
              (begin

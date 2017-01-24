@@ -34,7 +34,8 @@
 
 ;; We need to backtrack for `rx` if it has alternatives;
 ;; we also count as backtracking anything complex enough
-;; to match different numbers of elements
+;; to match different numbers of elements in an immediate
+;; repetition
 (define (needs-backtrack? rx)
   (cond
    [(rx:alts? rx) #t]
@@ -44,7 +45,7 @@
    [(rx:maybe? rx) #t]
    [(rx:conditional? rx) (rx:conditional-needs-backtrack? rx)]
    [(rx:cut? rx) (rx:cut-needs-backtrack? rx)] ; doesn't actually backtrack, but count varies
-   [(rx:unicode-categories? rx) #t] ; only for bytes mode, though
+   [(rx:unicode-categories? rx) #t]
    [else #f]))
 
 (define (rx-range range limit-c)

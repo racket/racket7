@@ -106,13 +106,13 @@
       (define min (rx:repeat-min rx))
       (define max (let ([n (rx:repeat-max rx)])
                     (if (= n +inf.0) #f n)))
-      (define-values (r-m* back-amt) (compile*/maybe r-rx min max))
+      (define r-m* (compile*/maybe r-rx min max))
       (cond
        [(and r-m*
              (not (rx:repeat-non-greedy? rx)))
         (if fail-via-k?
-            (repeat-simple-many-matcher r-m* back-amt min max group-n next-m)
-            (repeat-simple-many+simple-matcher r-m* back-amt min max group-n next-m))]
+            (repeat-simple-many-matcher r-m* min max group-n next-m)
+            (repeat-simple-many+simple-matcher r-m* min max group-n next-m))]
        [else
         (define r-m (compile r-rx
                              (if simple? done-m continue-m)
@@ -185,15 +185,15 @@
 (define (compile*/maybe rx min max)
   (cond
    [(exact-integer? rx)
-    (values (byte-matcher* rx max) 1)]
+    (byte-matcher* rx max)]
    [(bytes? rx)
-    (values (bytes-matcher* rx max) (bytes-length rx))]
+    (bytes-matcher* rx max)]
    [(eq? rx rx:any)
-    (values (any-matcher* max) 1)]
+    (any-matcher* max)]
    [(rx:range? rx)
-    (values (range-matcher* (compile-range (rx:range-range rx)) max) 1)]
+    (range-matcher* (compile-range (rx:range-range rx)) max)]
    [else
-    (values #f #f)]))
+    #f]))
 
 ;; Determine the length of the prefix of `l` that needs backtracking:
 (define (count-backtrack-prefix l)
