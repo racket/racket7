@@ -1,5 +1,6 @@
 #lang racket/base
-(require "regexp.rkt"
+(require "../common/range.rkt"
+         "regexp.rkt"
          "lazy-bytes.rkt"
          "interp.rkt")
 
@@ -13,6 +14,7 @@
   (define matcher (rx:regexp-matcher rx))
   (define anchored? (rx:regexp-anchored? rx))
   (define must-string (rx:regexp-must-string rx))
+  (define start-range (rx:regexp-start-range rx))
   (cond
    [(not (check-must-string must-string in pos end-pos))
     (values #f #f)]
@@ -21,11 +23,20 @@
       (cond
        [(and anchored? (not (= pos start-pos)))
         (values #f #f)]
+       [(and start-range
+             (if (bytes? in)
+                 (= pos end-pos)
+                 (not (lazy-bytes-before-end? in pos end-pos))))
+        (values #f #f)]
+       [(and start-range
+             (not (check-start-range start-range in pos end-pos)))
+        (loop (add1 pos))]
        [else
         (define pos2 (interp matcher in pos start-pos end-pos state))
         (cond
          [pos2 (values pos pos2)]
-         [(if (integer? end-pos)
+         [start-range (loop (add1 pos))]
+         [(if (bytes? in)
               (pos . < . end-pos)
               (lazy-bytes-before-end? in pos end-pos))
           (define pos2 (add1 pos))
@@ -52,3 +63,12 @@
                 [mc (in-bytes must-string)])
         (= c mc)))]))
 
+;; ------------------------------------------------------------------
+;; Checking for a startup byte can speed up a match failure by
+;; avoiding the general pattern checker:
+
+(define (check-start-range start-range in pos end-pos)
+  (rng-in? start-range
+           (if (bytes? in)
+               (bytes-ref in pos)
+               (lazy-bytes-ref in pos))))

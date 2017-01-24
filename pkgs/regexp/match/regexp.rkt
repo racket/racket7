@@ -5,6 +5,7 @@
          "../analyze/convert.rkt"
          "../analyze/anchor.rkt"
          "../analyze/must-string.rkt"
+         "../analyze/start-range.rkt"
          "compile.rkt")
 
 (provide (struct-out rx:regexp)
@@ -22,7 +23,8 @@
                    references?  ; any backreferences in the pattern?
                    max-lookbehind ; max lookbehnd
                    anchored?    ; starts with `^`?
-                   must-string) ; shortcut: a byte string that must appear in a match
+                   must-string  ; shortcut: a byte string that must appear in a match
+                   start-range) ; shortcut: a range that must match the initial byte
         #:reflection-name 'regexp
         #:property prop:custom-write (lambda (rx port mode)
                                        (write-bytes (if (rx:regexp-px? rx)
@@ -43,7 +45,8 @@
      (define matcher (compile rx))
      (rx:regexp as-bytes? px? p
                 matcher num-groups references? max-lookbehind
-                (anchored? rx) (get-must-string rx)))
+                (anchored? rx) (get-must-string rx)
+                (get-start-range rx)))
    regexp-error-tag
    (lambda (str)
      (if handler

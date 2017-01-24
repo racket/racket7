@@ -81,20 +81,21 @@
                         tst
                         next-pos))
   (begin
-    ;; General mode for `next-m` that may backtrack
+    ;; General mode when `next-m` is not just `done-m` and when
+    ;; we need to use `fail-k` to fail:
     (define (general-matcher arg ... next-m)
       (lambda (s pos start limit end state stack fail-k)
         (if tst
             (next-m s next-pos start limit end state stack fail-k)
             (fail-k))))
-    ;; Simple mode when we don't need to use `fail-k`,
-    ;; because `next-m` can't backtrack
+    ;; Simple mode when we don't need to use `fail-k` (a #f result
+    ;; is ok), but we do need to chain to `next-m`:
     (define (simple-matcher arg ... next-m)
       (lambda (s pos start limit end state stack fail-k)
         (and tst
              (next-m s next-pos start limit end state stack fail-k))))
-    ;; Tail mode when `next-m` is `done-m` (which not only
-    ;; can't backtrack, but just returns the given posiion)
+    ;; Tail mode when `next-m` is `done-m` and we don't need to
+    ;; use `fail-k`:
     (define (tail-matcher arg ...)
       (lambda (s pos start limit end state stack fail-k)
         (and tst
@@ -118,11 +119,12 @@
                            (min limit (+ pos (* size max)))
                            limit)])
             (let loop ([pos2 pos] [n 0])
+              (define pos3 (+ pos2 size))
               (cond
-               [(or ((+ pos2 size) . > . limit)
+               [(or (pos3 . > . limit)
                     (not s-tst))
                 (values pos2 n)]
-               [else (loop (+ pos2 size) (add1 n))])))
+               [else (loop pos3 (add1 n))])))
           (let ([limit (and max (+ pos (* size max)))])
             (let loop ([pos2 pos] [n 0])
               (cond
@@ -197,11 +199,33 @@
         (lazy-bytes-before-end? s pos limit))
     (add1 pos)))
 
-(define-iterate (any-matcher*)
+(define (any-matcher* max-repeat)
   (lambda (s pos start limit end)
-    #:size 1
-    #:s-test #t
-    #:ls-test #t))
+    (cond
+     [(bytes? s)
+      (define n (if max-repeat
+                    (min max-repeat (- limit pos))
+                    (- limit pos)))
+      (values (+ pos n) n)]
+     [else
+      ;; Search for end position
+      (let grow-loop ([size 1])
+        (define n (if max-repeat (min size max-repeat) size))
+        (define pos2 (+ pos n))
+        (cond
+         [(and (lazy-bytes-before-end? s (sub1 pos2) limit)
+               (or (not max-repeat) (n . < . max-repeat)))
+          (grow-loop (* size 2))]
+         [else
+          (let search-loop ([min pos] [too-high (add1 pos2)])
+            (define mid (quotient (+ min too-high) 2))
+            (cond
+             [(= mid min)
+              (values mid (- mid pos))]
+             [(lazy-bytes-before-end? s (sub1 mid) limit)
+              (search-loop mid too-high)]
+             [else
+              (search-loop min mid)]))]))])))
 
 ;; ----------------------------------------
 ;; Match any byte in a set

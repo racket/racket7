@@ -21,13 +21,13 @@
 (provide compile)
 
 (define (compile rx)
-  (let compile ([rx rx] [next-m done-m] [next-backtracks? #f])
+  (let compile ([rx rx] [next-m done-m] [fail-via-k? #f])
     (define-syntax-rule (mode-cond
                          #:tail tail
                          #:simple simple
                          #:general general)
       (cond
-       [next-backtracks? general]
+       [fail-via-k? general]
        [(eq? next-m done-m) tail]
        [else simple]))
     (cond
@@ -71,23 +71,23 @@
       (not-word-boundary-matcher next-m)]
      [(rx:sequence? rx)
       (define rxs (rx:sequence-rxs rx))
-      (define backtracks? (or next-backtracks?
-                              (rx:sequence-needs-backtrack? rx)))
-      (let loop ([rxs rxs])
+      (let loop ([rxs rxs] [fail-via-k? fail-via-k?])
         (cond
          [(null? rxs) next-m]
          [else
-          (define rest-node (loop (cdr rxs)))
-          (compile (car rxs) rest-node backtracks?)]))]
+          (define rest-via-k? (or fail-via-k?
+                                  (rx:sequence-needs-backtrack? rx)))
+          (define rest-node (loop (cdr rxs) rest-via-k?))
+          (compile (car rxs) rest-node fail-via-k?)]))]
      [(rx:alts? rx)
       ;; Specializations for non-backtracking subforms might be useful here
       (define m1 (compile (rx:alts-rx1 rx) next-m #t))
-      (define m2 (compile (rx:alts-rx2 rx) next-m next-backtracks?))
+      (define m2 (compile (rx:alts-rx2 rx) next-m fail-via-k?))
       (alts-matcher m1 m2)]
      [(rx:maybe? rx)
       (if (rx:maybe-non-greedy? rx)
           (alts-matcher next-m
-                        (compile (rx:maybe-rx rx) next-m next-backtracks?))
+                        (compile (rx:maybe-rx rx) next-m fail-via-k?))
           (alts-matcher (compile (rx:maybe-rx rx) next-m #t)
                         next-m))]
      [(rx:repeat? rx)
@@ -99,7 +99,7 @@
       (cond
        [(and r-m*
              (not (rx:repeat-non-greedy? rx)))
-        (if next-backtracks?
+        (if fail-via-k?
             (repeat-simple-many-matcher r-m* back-amt min max next-m)
             (repeat-simple-many+simple-matcher r-m* back-amt min max next-m))]
        [else
@@ -113,7 +113,7 @@
               (lazy-repeat-matcher r-m min max next-m))]
          [else
           (if simple?
-              (if next-backtracks?
+              (if fail-via-k?
                   (repeat-simple-matcher r-m min max next-m)
                   (repeat-simple+simple-matcher r-m min max next-m))
               (repeat-matcher r-m min max next-m))])])]
@@ -139,8 +139,8 @@
                    next-m)]
      [(rx:conditional? rx)
       (define tst (rx:conditional-tst rx))
-      (define m1 (compile (rx:conditional-rx1 rx) next-m next-backtracks?))
-      (define m2 (compile (rx:conditional-rx2 rx) next-m next-backtracks?))
+      (define m1 (compile (rx:conditional-rx1 rx) next-m fail-via-k?))
+      (define m2 (compile (rx:conditional-rx2 rx) next-m fail-via-k?))
       (cond
        [(rx:reference? tst)
         (define n (sub1 (rx:reference-n tst)))
