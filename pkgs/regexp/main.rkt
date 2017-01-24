@@ -1,7 +1,7 @@
 #lang racket/base
-(require "regexp.rkt"
-         "drive.rkt"
-         "replace.rkt")
+(require "match/regexp.rkt"
+         "match/main.rkt"
+         "replace/main.rkt")
 
 (provide regexp
          byte-regexp

@@ -1,10 +1,10 @@
 #lang racket/base
 (require "chyte.rkt"
          "chyte-case.rkt"
-         "../ast.rkt"
+         "ast.rkt"
          "config.rkt"
          "error.rkt"
-         "../range.rkt"
+         "../common/range.rkt"
          "class.rkt"
          "unicode.rkt"
          "range.rkt"

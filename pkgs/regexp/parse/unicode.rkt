@@ -1,7 +1,7 @@
 #lang racket/base
 (require "chyte.rkt"
          "chyte-case.rkt"
-         "../ast.rkt"
+         "ast.rkt"
          "config.rkt"
          "error.rkt")
 

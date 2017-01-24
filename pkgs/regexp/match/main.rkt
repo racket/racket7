@@ -2,7 +2,9 @@
 (require "regexp.rkt"
          "lazy-bytes.rkt"
          "port.rkt"
-         "compile.rkt")
+         "compile.rkt"
+         "extract.rkt"
+         "search.rkt")
 
 ;; Drives a regexp matcher on a byte string, character string, or port
 
@@ -161,49 +163,38 @@
                        (and (positive? n)
                             (make-vector n #f)))))
   
-  (define (add-end-bytes s me-pos results)
-    (if end-bytes-count
-        (values results
-                (and results
-                     (subbytes s (max 0 (- me-pos end-bytes-count)) me-pos)))
-        results))
-  
   ;; Separate cases for bytes, strings, and port.
   ;; There's an annoying level of duplication here, but
   ;; there are lots of little differences in each case.
   (cond
    
-   ;; Bytes input, no provided prefix:
+   ;; Bytes input, no provided prefix: ----------------------------------------
    [(and (bytes? in)
          (not out)
          (equal? #"" prefix))
     (define start-pos start-offset)
     (define search-pos search-offset)
     (define end-pos end-offset)
-    (define-values (ms-pos me-pos)
-      (search-match rx in search-pos start-pos end-pos state))
+    
+    ;; Search for a match:
+    (define-values (ms-pos me-pos) (search-match rx in search-pos start-pos end-pos state))
+    
+    ;; Maybe write skipped bytes:
     (when out
       (write-bytes in out 0 (or ms-pos end-pos)))
+    
+    ;; Return match results:
     (case (and ms-pos mode)
-      [(#f) (add-end-bytes #f #f #f)]
+      [(#f) (add-end-bytes #f end-bytes-count #f #f)]
       [(?) #t]
       [(positions)
-       (add-end-bytes
-        in me-pos
-        (if state
-            (cons (cons ms-pos me-pos) (vector->list state))
-            (list (cons ms-pos me-pos))))]
+       (define positions (byte-positions->byte-positions ms-pos me-pos state))
+       (add-end-bytes positions end-bytes-count in me-pos)]
       [(strings)
-       (add-end-bytes
-        in me-pos
-        (cons (subbytes in ms-pos me-pos)
-              (if state
-                  (for/list ([p (in-vector state)])
-                    (and p
-                         (subbytes in (car p) (cdr p))))
-                  null)))])]
+       (define bytess (byte-positions->bytess in ms-pos me-pos state))
+       (add-end-bytes bytess end-bytes-count in me-pos)])]
 
-   ;; Sufficiently small string input, no provided prefix:
+   ;; Sufficiently small string input, no provided prefix: --------------------
    [(and (string? in)
          (not out)
          (equal? #"" prefix)
@@ -216,66 +207,41 @@
                            0
                            (string-utf-8-length in start-offset search-offset)))
     (define end-pos (bytes-length bstr-in))
-    (define-values (ms-pos me-pos)
-      (search-match rx bstr-in search-pos 0 end-pos state))
-    (define (string-offset pos)
-      (+ start-offset (bytes-utf-8-length bstr-in #\? 0 pos)))
+    
+    ;; Search for a match:
+    (define-values (ms-pos me-pos) (search-match rx bstr-in search-pos 0 end-pos state))
+    
+    ;; Maybe write skipped bytes:
     (when out
       (write-string in out 0 start-offset)
       (write-bytes bstr-in out 0 (or ms-pos end-pos)))
+    
+    ;; Return match results:
     (case (and ms-pos mode)
-      [(#f) (add-end-bytes #f #f #f)]
+      [(#f) (add-end-bytes #f end-bytes-count #f #f)]
       [(?) #t]
       [(positions)
-       (define bytes-before-start-offset
-         ;; If pattern is bytes-based, then results will be bytes-based:
-         (and (rx:regexp-bytes? rx)
-              (string-utf-8-length in 0 start-offset)))
-       (define (bytes-pos pos)
-         (+ pos bytes-before-start-offset))
-       ;; Compute result positions:
-       (add-end-bytes
-        bstr-in me-pos
-        (if (rx:regexp-bytes? rx)
-            ;; Return byte positions:
-            (if state
-                (cons (cons (bytes-pos ms-pos) (bytes-pos me-pos))
-                      (if state
-                          (for/list ([p (in-vector state)])
-                            (and p
-                                 (cons (bytes-pos (car p))
-                                       (bytes-pos (cdr p)))))
-                          null)
-                      (vector->list state))
-                (list (cons ms-pos me-pos)))
-           ;; Return string offsets:
-            (cons (cons (string-offset ms-pos) (string-offset me-pos))
-                  (if state
-                      (for/list ([p (in-vector state)])
-                        (and p
-                             (cons (string-offset (car p))
-                                   (string-offset (cdr p)))))
-                      null))))]
+       ;; If pattern is bytes-based, then results will be bytes-based:
+       (define positions
+         (cond
+          [(rx:regexp-bytes? rx)
+           (define delta (string-utf-8-length in 0 start-offset))
+           (byte-positions->byte-positions ms-pos me-pos state #:delta delta)]
+          [else
+           (byte-positions->string-positions bstr-in ms-pos me-pos state
+                                              #:start-offset start-offset)]))
+       (add-end-bytes positions end-bytes-count bstr-in me-pos)]
       [(strings)
-       (add-end-bytes
-        bstr-in me-pos
-        (if (rx:regexp-bytes? rx)
-            ;; Return bytes:
-            (cons (subbytes bstr-in ms-pos me-pos)
-                  (if state
-                      (for/list ([p (in-vector state)])
-                        (and p
-                             (subbytes in (car p) (cdr p))))
-                      null))
-            ;; Return strings:
-            (cons (bytes->string/utf-8 bstr-in #\? ms-pos me-pos)
-                  (if state
-                      (for/list ([p (in-vector state)])
-                        (and p
-                             (bytes->string/utf-8 bstr-in #\? (car p) (cdr p))))
-                      null))))])]
+       ;; If pattern is bytes-based, then results will be bytes instead of strings:
+       (define bytes/strings
+         (cond
+          [(rx:regexp-bytes? rx)
+           (byte-positions->bytess bstr-in ms-pos me-pos state)]
+          [else
+           (byte-positions->strings bstr-in ms-pos me-pos state)]))
+       (add-end-bytes bytes/strings end-bytes-count bstr-in me-pos)])]
    
-   ;; Port input, long string input, and/or provided prefix:
+   ;; Port input, long string input, and/or provided prefix: --------------------
    [else
     (define prefix-len (bytes-length prefix))
     ;; The lazy-bytes record will include the prefix,
@@ -309,125 +275,71 @@
                            (cond
                             [(string? in) (string-utf-8-length in start-offset end-offset)]
                             [else (- end-offset start-offset)]))))
-    ;; Run the matcher:
-    (define-values (ms-pos me-pos)
-      (search-match rx lb-in search-pos 0 end-pos state))
-    ;; Result positions correspond to the port after `start-offset`, 
-    ;; but with the prefix bytes; note that the byte string may
-    ;; be shifted by discarded bytes, if not in `peek?` mode
-    (define (port-pos pos)
-      (+ (- pos start-pos) start-offset))
-    (define (string-offset pos)
-      (+ start-offset (bytes-utf-8-length (lazy-bytes-bstr lb-in) #\? prefix-len pos)))
+    
+    ;; Search for a match:
+    (define-values (ms-pos me-pos) (search-match rx lb-in search-pos 0 end-pos state))
+    
+    ;; To write and consume skipped bytes, but we'll do this only
+    ;; after we've extracted match information from the lazy byte
+    ;; string:
+    (define (write/consume-skipped)
+      (when (not peek?)
+        (cond
+         [ms-pos
+          (when (or out (input-port? in))
+            ;; Flush bytes before match:
+            (lazy-bytes-advance! lb-in ms-pos #t)
+            ;; Consume bytes that correspond to match:
+            (copy-port-bytes port-in #f (- me-pos ms-pos)))]
+         [(eq? end-pos 'eof)
+          ;; copy all remaining bytes from input to output
+          (copy-port-bytes port-in out #f)]
+         [else
+          (when (or out (input-port? in))
+            (lazy-bytes-advance! lb-in end-pos #t))])))
+
     (begin0
-     ;; Compute result
+
+     ;; Return match results:
      (case (and ms-pos
                 (not (lazy-bytes-failed? lb-in))
                 mode)
-       [(#f) (add-end-bytes #f #f #f)]
+       [(#f) (add-end-bytes #f end-bytes-count #f #f)]
        [(?) #t]
        [(positions)
-        (add-end-bytes
-         (lazy-bytes-bstr lb-in) me-pos
-         (if (and (string? in)
-                  (not (rx:regexp-bytes? rx)))
-             ;; return string positions
-             (cons (cons (port-pos ms-pos) (string-offset me-pos))
-                   (if state
-                       (for/list ([p (in-vector state)])
-                         (and p
-                              (cons (string-offset (car p))
-                                    (string-offset (cdr p)))))
-                       null))
-             ;; return byte positions
-             (cons (cons (port-pos ms-pos) (port-pos me-pos))
-                   (if state
-                       (for/list ([p (in-vector state)])
-                         (and p
-                              (cons (port-pos (car p))
-                                    (port-pos (cdr p)))))
-                       null))))]
-       [(strings)
-        (define (bytes-pos pos)
-          (- pos (lazy-bytes-discarded-count lb-in)))
+        ;; Result positions correspond to the port after `start-offset`, 
+        ;; but with the prefix bytes (= `start-pos`)
         (define bstr (lazy-bytes-bstr lb-in))
-        (add-end-bytes
-         bstr me-pos
-         (if (and (string? in)
-                  (not (rx:regexp-bytes? rx)))
-             ;; return strings
-             (cons (bytes->string/utf-8 bstr #\? (bytes-pos ms-pos) (bytes-pos me-pos))
-                   (if state
-                       (for/list ([p (in-vector state)])
-                         (and p
-                              (bytes->string/utf-8 bstr #\? (bytes-pos (car p)) (bytes-pos (cdr p)))))
-                       null))
-             ;; return bytes
-             (cons (subbytes bstr (bytes-pos ms-pos) (bytes-pos me-pos))
-                   (if state
-                       (for/list ([p (in-vector state)])
-                         (and p
-                              (subbytes bstr (bytes-pos (car p)) (bytes-pos (cdr p)))))
-                       null))))])
+        (define positions
+          (cond
+           [(or (not (string? in))
+                (rx:regexp-bytes? rx))
+            (define delta (- start-offset start-pos))
+            (byte-positions->byte-positions ms-pos me-pos state #:delta delta)]
+           [else
+            (byte-positions->string-positions bstr ms-pos me-pos state
+                                              #:start-pos start-pos
+                                              #:start-offset start-offset)]))
+        (add-end-bytes positions end-bytes-count bstr me-pos)]
+       [(strings)
+        ;; The byte string may be shifted by discarded bytes, if not
+        ;; in `peek?` mode
+        (define bstr (lazy-bytes-bstr lb-in))
+        (define delta (lazy-bytes-discarded-count lb-in))
+        (define bytes/strings
+          (cond
+           [(or (not (string? in))
+                (rx:regexp-bytes? rx))
+            (byte-positions->bytess bstr ms-pos me-pos state #:delta delta)]
+           [else
+            (byte-positions->strings bstr ms-pos me-pos state #:delta delta)]))
+        (add-end-bytes bytes/strings end-bytes-count bstr me-pos)])
      
-     ;; Consume input
-     (when (not peek?)
-       (cond
-        [ms-pos
-         (when (or out (input-port? in))
-           ;; Flush bytes before match:
-           (lazy-bytes-advance! lb-in ms-pos #t)
-           ;; Consume bytes that correspond to match:
-           (copy-port-bytes port-in #f (- me-pos ms-pos)))]
-        [(eq? end-pos 'eof)
-         ;; copy all remaining bytes from input to output
-         (copy-port-bytes port-in out #f)]
-        [else
-         (when (or out (input-port? in))
-           (lazy-bytes-advance! lb-in end-pos #t))])))]))
+     ;; Now, write and consume port content:
+     (write/consume-skipped))]))
 
-;; ----------------------------------------
-;; The driver iterates through an input (unless the pattern is anchored)
-;; to find a match
-
-(define (search-match rx in pos start-pos end-pos state)
-  (define matcher (rx:regexp-matcher rx))
-  (define anchored? (rx:regexp-anchored? rx))
-  (define must-string (rx:regexp-must-string rx))
-  (cond
-   [(not (check-must-string must-string in pos end-pos))
-    (values #f #f)]
-   [else
-    (let loop ([pos pos])
-      (cond
-       [(and anchored? (not (= pos start-pos)))
-        (values #f #f)]
-       [else
-        (define pos2 (interp matcher in pos start-pos end-pos state))
-        (cond
-         [pos2 (values pos pos2)]
-         [(if (integer? end-pos)
-              (pos . < . end-pos)
-              (lazy-bytes-before-end? in pos end-pos))
-          (define pos2 (add1 pos))
-          (unless (bytes? in)
-            (lazy-bytes-advance! in pos2 #f))
-          (loop pos2)]
-         [else (values #f #f)])]))]))
-
-(define (check-must-string must-string in pos end-pos)
-  (cond
-   [(not must-string) #t]
-   [(not (bytes? in)) #t]
-   [(= 1 (bytes-length must-string))
-    (define mc (bytes-ref must-string 0))
-    (for/or ([c (in-bytes in pos end-pos)])
-      (= c mc))]
-   [else
-    (for/or ([i (in-range pos (- end-pos (sub1 (bytes-length must-string))))])
-      (for/and ([c (in-bytes in i)]
-                [mc (in-bytes must-string)])
-        (= c mc)))]))
+;; -------------------------------------------------------
+;; Range-checking arguments to `regexp-match` and company:
 
 (define (check-range who what in pos start-pos)
   (define len (cond
@@ -443,3 +355,4 @@
     (raise-arguments-error who
                            (format "~a is out of range" what)
                            what pos)))
+

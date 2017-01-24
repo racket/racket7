@@ -1,5 +1,5 @@
 #lang racket/base
-(require "range.rkt")
+(require "../common/range.rkt")
 
 (provide (all-defined-out))
 

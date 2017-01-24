@@ -1,6 +1,6 @@
 #lang racket/base
-(require "ast.rkt"
-         "range.rkt"
+(require "../parse/ast.rkt"
+         "../common/range.rkt"
          "match.rkt")
 
 ;; Compile to a Spencer-style interpretation of a regular expression,
@@ -18,8 +18,7 @@
 ;; closure to use as the next step, so the closure tree is built
 ;; bottom-up.
 
-(provide compile
-         interp)
+(provide compile)
 
 (define (compile rx)
   (let compile ([rx rx] [next-m done-m] [next-backtracks? #f])

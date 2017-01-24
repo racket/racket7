@@ -1,7 +1,7 @@
 #lang racket/base
 (require "chyte.rkt"
          "chyte-case.rkt"
-         "../range.rkt")
+         "../common/range.rkt")
 
 (provide parse-class
          parse-posix-char-class)

@@ -1,11 +1,11 @@
 #lang racket/base
-(require "error.rkt"
-         "parse/main.rkt"
-         "validate.rkt"
-         "convert.rkt"
-         "compile.rkt"
-         "anchor.rkt"
-         "must-string.rkt")
+(require "../common/error.rkt"
+         "../parse/main.rkt"
+         "../analyze/validate.rkt"
+         "../analyze/convert.rkt"
+         "../analyze/anchor.rkt"
+         "../analyze/must-string.rkt"
+         "compile.rkt")
 
 (provide (struct-out rx:regexp)
          make-regexp

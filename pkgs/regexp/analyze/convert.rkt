@@ -1,6 +1,6 @@
 #lang racket/base
-(require "ast.rkt"
-         "range.rkt")
+(require "../parse/ast.rkt"
+         "../common/range.rkt")
 
 ;; Convert a string regexp to a byte-string regexp
 

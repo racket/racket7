@@ -1,5 +1,5 @@
 #lang racket/base
-(require "../error.rkt")
+(require "../common/error.rkt")
 
 (provide parse-error)
 

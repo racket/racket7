@@ -1,5 +1,5 @@
 #lang racket/base
-(require "ast.rkt")
+(require "../parse/ast.rkt")
 
 (provide anchored?)
 

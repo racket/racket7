@@ -1,5 +1,5 @@
 #lang racket/base
-(require "../range.rkt"
+(require "../common/range.rkt"
          "config.rkt")
 
 ;; Add case-insensitive mappins as specified by `config`

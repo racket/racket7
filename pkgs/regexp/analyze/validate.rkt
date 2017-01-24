@@ -1,7 +1,7 @@
 #lang racket/base
-(require "ast.rkt"
-         "range.rkt"
-         "error.rkt")
+(require "../parse/ast.rkt"
+         "../common/range.rkt"
+         "../common/error.rkt")
 
 (provide validate)
 

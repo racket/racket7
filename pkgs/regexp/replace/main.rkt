@@ -1,6 +1,6 @@
 #lang racket/base
-(require "regexp.rkt"
-         "drive.rkt"
+(require "../match/regexp.rkt"
+         "../match/main.rkt"
          "chyte.rkt")
 
 (provide regexp-replace
