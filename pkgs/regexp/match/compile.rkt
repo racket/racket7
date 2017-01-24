@@ -4,43 +4,34 @@
          "match.rkt")
 
 ;; Compile to a Spencer-style interpretation of a regular expression,
-;; where sequences are implemented by record chaining and backtracking
-;; is implemented by a failure continuation plus the implicit
-;; continuation, which mostly serves as the success continuation. A
-;; stack of success continuations is used as needed or repetition
-;; patterns. Meanwhile, further specializing on simple patterns that
-;; don't need backtracking avoids many continuation allocations and/or
-;; takes more advantage of the implicit continuation.
+;; where sequences are implemented by record chaining. Backtracking
+;; is implemented by a stack of of success continuations as needed.
 
 ;; Spenser's implementation in C dispatches on records, but we compile
-;; to closures, instead. A function like `BYTE` allocates a closure to
-;; implement byte matching. Matcher-creation functions usually take a
-;; closure to use as the next step, so the closure tree is built
-;; bottom-up.
+;; to closures, instead. A function like `byte-matcher` allocates a
+;; closure to implement byte matching. Matcher-creation functions
+;; usually take a closure to use as the next step, so the closure tree
+;; is built bottom-up.
 
 (provide compile)
 
 (define (compile rx)
-  (let compile ([rx rx] [next-m done-m] [fail-via-k? #f])
+  (let compile ([rx rx] [next-m done-m])
     (define-syntax-rule (mode-cond
                          #:tail tail
-                         #:simple simple
                          #:general general)
       (cond
-       [fail-via-k? general]
        [(eq? next-m done-m) tail]
-       [else simple]))
+       [else general]))
     (cond
      [(exact-integer? rx)
       (mode-cond
        #:tail (byte-tail-matcher rx)
-       #:simple (byte-simple-matcher rx next-m)
        #:general (byte-matcher rx next-m))]
      [(bytes? rx)
       (define len (bytes-length rx))
       (mode-cond
        #:tail (bytes-tail-matcher rx len)
-       #:simple (bytes-simple-matcher rx len next-m)
        #:general (bytes-matcher rx len next-m))]
      [(eq? rx rx:empty)
       next-m]
@@ -49,13 +40,11 @@
      [(eq? rx rx:any)
       (mode-cond
        #:tail (any-tail-matcher)
-       #:simple (any-simple-matcher next-m)
        #:general (any-matcher next-m))]
      [(rx:range? rx)
       (define rng (compile-range (rx:range-range rx)))
       (mode-cond
        #:tail (range-tail-matcher rng)
-       #:simple (range-simple-matcher rng next-m)
        #:general (range-matcher rng next-m))]
      [(eq? rx rx:start)
       (start-matcher next-m)]
@@ -71,24 +60,20 @@
       (not-word-boundary-matcher next-m)]
      [(rx:sequence? rx)
       (define rxs (rx:sequence-rxs rx))
-      (let loop ([rxs rxs] [fail-via-k? fail-via-k?])
+      (let loop ([rxs rxs])
         (cond
          [(null? rxs) next-m]
          [else
-          (define rest-via-k? (or fail-via-k?
-                                  (rx:sequence-needs-backtrack? rx)))
-          (define rest-node (loop (cdr rxs) rest-via-k?))
-          (compile (car rxs) rest-node fail-via-k?)]))]
+          (define rest-node (loop (cdr rxs)))
+          (compile (car rxs) rest-node)]))]
      [(rx:alts? rx)
-      ;; Specializations for non-backtracking subforms might be useful here
-      (define m1 (compile (rx:alts-rx1 rx) next-m #t))
-      (define m2 (compile (rx:alts-rx2 rx) next-m fail-via-k?))
-      (alts-matcher m1 m2)]
+      (alts-matcher (compile (rx:alts-rx1 rx) next-m)
+                    (compile (rx:alts-rx2 rx) next-m))]
      [(rx:maybe? rx)
       (if (rx:maybe-non-greedy? rx)
           (alts-matcher next-m
-                        (compile (rx:maybe-rx rx) next-m fail-via-k?))
-          (alts-matcher (compile (rx:maybe-rx rx) next-m #t)
+                        (compile (rx:maybe-rx rx) next-m))
+          (alts-matcher (compile (rx:maybe-rx rx) next-m)
                         next-m))]
      [(rx:repeat? rx)
       (define actual-r-rx (rx:repeat-rx rx))
@@ -110,13 +95,9 @@
       (cond
        [(and r-m*
              (not (rx:repeat-non-greedy? rx)))
-        (if fail-via-k?
-            (repeat-simple-many-matcher r-m* min max group-n next-m)
-            (repeat-simple-many+simple-matcher r-m* min max group-n next-m))]
+        (repeat-simple-many-matcher r-m* min max group-n next-m)]
        [else
-        (define r-m (compile r-rx
-                             (if simple? done-m continue-m)
-                             (not simple?)))
+        (define r-m (compile r-rx (if simple? done-m continue-m)))
         (cond
          [(rx:repeat-non-greedy? rx)
           (if simple?
@@ -124,15 +105,11 @@
               (lazy-repeat-matcher r-m min max next-m))]
          [else
           (if simple?
-              (if fail-via-k?
-                  (repeat-simple-matcher r-m min max group-n next-m)
-                  (repeat-simple+simple-matcher r-m min max group-n next-m))
+              (repeat-simple-matcher r-m min max group-n next-m)
               (repeat-matcher r-m min max next-m))])])]
      [(rx:group? rx)
       (define n (rx:group-number rx))
-      (define m (compile (rx:group-rx rx)
-                         (group-set-matcher n next-m)
-                         #t))
+      (define m (compile (rx:group-rx rx) (group-set-matcher n next-m)))
       (group-push-matcher n m)]
      [(rx:reference? rx)
       (define n (rx:reference-n rx))
@@ -144,25 +121,25 @@
        [else
         (reference-matcher/case-insensitive (sub1 n) next-m)])]
      [(rx:cut? rx)
-      (cut-matcher (compile (rx:cut-rx rx) done-m #f) 
+      (cut-matcher (compile (rx:cut-rx rx) done-m) 
                    (rx:cut-n-start rx)
                    (rx:cut-num-n rx)
                    next-m)]
      [(rx:conditional? rx)
       (define tst (rx:conditional-tst rx))
-      (define m1 (compile (rx:conditional-rx1 rx) next-m fail-via-k?))
-      (define m2 (compile (rx:conditional-rx2 rx) next-m fail-via-k?))
+      (define m1 (compile (rx:conditional-rx1 rx) next-m))
+      (define m2 (compile (rx:conditional-rx2 rx) next-m))
       (cond
        [(rx:reference? tst)
         (define n (sub1 (rx:reference-n tst)))
         (conditional/reference-matcher n m1 m2)]
        [else
-        (conditional/look-matcher (compile tst done-m #f) m1 m2
+        (conditional/look-matcher (compile tst done-m) m1 m2
                                   (rx:conditional-n-start rx)
                                   (rx:conditional-num-n rx))])]
      [(rx:lookahead? rx)
       (lookahead-matcher (rx:lookahead-match? rx)
-                         (compile (rx:lookahead-rx rx) done-m #f)
+                         (compile (rx:lookahead-rx rx) done-m)
                          (rx:lookahead-n-start rx)
                          (rx:lookahead-num-n rx)
                          next-m)]
@@ -170,7 +147,7 @@
       (lookbehind-matcher (rx:lookbehind-match? rx)
                           (rx:lookbehind-lb-min rx)
                           (rx:lookbehind-lb-max rx)
-                          (compile (rx:lookbehind-rx rx) limit-m #f)
+                          (compile (rx:lookbehind-rx rx) limit-m)
                           (rx:lookbehind-n-start rx)
                           (rx:lookbehind-num-n rx)
                           next-m)]

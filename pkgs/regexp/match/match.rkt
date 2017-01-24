@@ -12,24 +12,20 @@
          limit-m
          
          byte-tail-matcher
-         byte-simple-matcher
          byte-matcher
          byte-matcher*
          
          bytes-tail-matcher
-         bytes-simple-matcher
          bytes-matcher
          bytes-matcher*
          
          never-matcher
          
          any-tail-matcher
-         any-simple-matcher
          any-matcher
          any-matcher*
          
          range-tail-matcher
-         range-simple-matcher
          range-matcher
          range-matcher*
          
@@ -44,9 +40,7 @@
          
          repeat-matcher
          repeat-simple-many-matcher
-         repeat-simple-many+simple-matcher
          repeat-simple-matcher
-         repeat-simple+simple-matcher
          lazy-repeat-matcher
          lazy-repeat-simple-matcher
 
@@ -66,38 +60,29 @@
 
 ;; ----------------------------------------
 
-(define done-m (lambda (s pos start limit end state stack fail-k)
+(define done-m (lambda (s pos start limit end state stack)
                  pos))
-(define continue-m (lambda (s pos start limit end state stack fail-k)
-                     ((car stack) pos fail-k)))
-(define limit-m (lambda (s pos start limit end state stack fail-k)
+(define continue-m (lambda (s pos start limit end state stack)
+                     ((car stack) pos)))
+(define limit-m (lambda (s pos start limit end state stack)
                   (= pos limit)))
 
 
 ;; ----------------------------------------
 
-(define-syntax-rule (define-plain+simple+tail (general-matcher simple-matcher tail-matcher arg ... next-m)
+(define-syntax-rule (define-general+tail (general-matcher tail-matcher arg ... next-m)
                       (lambda (s pos start limit end)
                         tst
                         next-pos))
   (begin
-    ;; General mode when `next-m` is not just `done-m` and when
-    ;; we need to use `fail-k` to fail:
+    ;; General mode when `next-m` is not just `done-m`:
     (define (general-matcher arg ... next-m)
-      (lambda (s pos start limit end state stack fail-k)
-        (if tst
-            (next-m s next-pos start limit end state stack fail-k)
-            (fail-k))))
-    ;; Simple mode when we don't need to use `fail-k` (a #f result
-    ;; is ok), but we do need to chain to `next-m`:
-    (define (simple-matcher arg ... next-m)
-      (lambda (s pos start limit end state stack fail-k)
+      (lambda (s pos start limit end state stack)
         (and tst
-             (next-m s next-pos start limit end state stack fail-k))))
-    ;; Tail mode when `next-m` is `done-m` and we don't need to
-    ;; use `fail-k`:
+             (next-m s next-pos start limit end state stack))))
+    ;; Tail mode when `next-m` is `done-m`:
     (define (tail-matcher arg ...)
-      (lambda (s pos start limit end state stack fail-k)
+      (lambda (s pos start limit end state stack)
         (and tst
              next-pos)))))
 
@@ -162,7 +147,7 @@
 ;; ----------------------------------------
 ;; Single-byte matching
 
-(define-plain+simple+tail (byte-matcher byte-simple-matcher byte-tail-matcher b next-m)
+(define-general+tail (byte-matcher byte-tail-matcher b next-m)
   (lambda (s pos start limit end)
     (if (bytes? s)
         (and (pos . < . limit)
@@ -180,7 +165,7 @@
 ;; ----------------------------------------
 ;; Byte-string matching
 
-(define-plain+simple+tail (bytes-matcher bytes-simple-matcher bytes-tail-matcher bstr len next-m)
+(define-general+tail (bytes-matcher bytes-tail-matcher bstr len next-m)
   (lambda (s pos start limit end)
     (if (bytes? s)
         (and ((+ pos len) . <= . limit)
@@ -210,13 +195,13 @@
 ;; An always-fail pattern
 
 (define (never-matcher)
-  (lambda (s pos start limit end state stack fail-k)
-    (fail-k)))
+  (lambda (s pos start limit end state stack)
+    #f))
 
 ;; ----------------------------------------
 ;; Match any byte
 
-(define-plain+simple+tail (any-matcher any-simple-matcher any-tail-matcher next-m)
+(define-general+tail (any-matcher any-tail-matcher next-m)
   (lambda (s pos start limit end)
     (if (bytes? s)
         (pos . < . limit)
@@ -254,7 +239,7 @@
 ;; ----------------------------------------
 ;; Match any byte in a set
 
-(define-plain+simple+tail (range-matcher range-simple-matcher range-tail-matcher rng next-m)
+(define-general+tail (range-matcher range-tail-matcher rng next-m)
   (lambda (s pos start limit end)
     (if (bytes? s)
         (and (pos . < . limit)
@@ -277,10 +262,9 @@
                       (lambda (s pos start limit end)
                         tst))
   (define (op-matcher arg ... next-m)
-    (lambda (s pos start limit end state stack fail-k)
-      (if tst
-          (next-m s pos start limit end state stack fail-k)
-          (fail-k)))))
+    (lambda (s pos start limit end state stack)
+      (and tst
+           (next-m s pos start limit end state stack)))))
 
 (define-zero-width (start-matcher next-m)
   (lambda (s pos start limit end)
@@ -339,10 +323,9 @@
 ;; Alternatives
 
 (define (alts-matcher m1 m2)
-  (lambda (s pos start limit end state stack fail-k)
-    (m1 s pos start limit end state stack
-        (lambda ()
-          (m2 s pos start limit end state stack fail-k)))))
+  (lambda (s pos start limit end state stack)
+    (or (m1 s pos start limit end state stack)
+        (m2 s pos start limit end state stack))))
 
 ;; ----------------------------------------
 ;; Repeats, greedy (normal) and non-greedy,
@@ -352,67 +335,42 @@
   ;; The tail of `r-m` is set to `continue-m` instead
   ;; of `done-m`, so we can supply a success continuation
   ;; by pushing it onto the stack
-  (lambda (s pos start limit end state stack fail-k)
-    (let rloop ([pos pos] [n 0] [fail-k fail-k])
+  (lambda (s pos start limit end state stack)
+    (let rloop ([pos pos] [n 0])
       (cond
        [(n . < . min)
-        (define new-stack (cons (lambda (pos fail-k)
-                                  (rloop pos (add1 n) fail-k))
+        (define new-stack (cons (lambda (pos)
+                                  (rloop pos (add1 n)))
                                 stack))
-        (r-m s pos start limit end state new-stack fail-k)]
-       [(and max (= n max)) (next-m s pos start limit end state stack fail-k)]
+        (r-m s pos start limit end state new-stack)]
+       [(and max (= n max)) (next-m s pos start limit end state stack)]
        [else
-        (define new-stack (cons (lambda (pos fail-k)
-                                  (rloop pos (add1 n) fail-k))
+        (define new-stack (cons (lambda (pos)
+                                  (rloop pos (add1 n)))
                                 stack))
-        (r-m s pos start limit end state new-stack
-             (lambda () (next-m s pos start limit end state stack fail-k)))]))))
+        (or (r-m s pos start limit end state new-stack)
+            (next-m s pos start limit end state stack))]))))
 
-(define r-stack (list (lambda (pos fail-k) pos)))
+(define r-stack (list (lambda (pos) pos)))
 
 (define (repeat-simple-matcher r-m min max group-n next-m)
-  ;; The `r-m` matcher doesn't need bcktracking, so
-  ;; we can supply a failure continuation that just
-  ;; returns `#f` (which avoids allocating that
-  ;; continuation)
-  (lambda (s pos start limit end state stack fail-k)
+  ;; The `r-m` matcher doesn't need backtracking, so
+  ;; we don't need to push a success continuation onto
+  ;; the stack
+  (lambda (s pos start limit end state stack)
     (let rloop ([pos pos] [n 0] [back-amt 0])
       (define pos2
-        (if (or (not max) (n . < . max))
-            (r-m s pos start limit end state r-stack (lambda () #f))
-            #f))
+        (and (or (not max) (n . < . max))
+             (r-m s pos start limit end state r-stack)))
       (if pos2
           (rloop pos2 (add1 n) (- pos2 pos))
           (let bloop ([pos pos] [n n])
             (cond
-             [(n . < . min) (fail-k)]
+             [(n . < . min) #f]
              [else
               (add-repeated-group
                group-n state pos n back-amt group-revert
-               (next-m s pos start limit end state stack
-                       (lambda ()
-                         (group-revert)
-                         (bloop (- pos back-amt) (sub1 n)))))]))))))
-
-(define (repeat-simple+simple-matcher r-m min max group-n next-m)
-  ;; The `r-m` matcher doesn't need bcktracking, and neither does
-  ;; `next-m`, so we can avoid yet more continuations.
-  (lambda (s pos start limit end state stack fail-k)
-    (let rloop ([pos pos] [n 0] [back-amt 0])
-      (define pos2
-        (if (or (not max) (n . < . max))
-            (r-m s pos start limit end state r-stack (lambda () #f))
-            #f))
-      (if pos2
-          (rloop pos2 (add1 n) (- pos2 pos))
-          (let bloop ([pos pos] [n n])
-            (cond
-             [(n . < . min) (fail-k)]
-             [else
-              (add-repeated-group
-               group-n state pos n back-amt group-revert
-               (define pos2 (next-m s pos start limit end state stack (lambda () #f)))
-               (or pos2
+               (or (next-m s pos start limit end state stack)
                    (begin
                      (group-revert)
                      (bloop (- pos back-amt) (sub1 n)))))]))))))
@@ -420,92 +378,76 @@
 (define (repeat-simple-many-matcher r-m* min max group-n next-m)
   ;; Instead of `r-m`, we have a `r-m*` that finds as many matches as
   ;; possible (up to max) in one go
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (define-values (pos2 n back-amt) (r-m* s pos start limit end state))
     (let bloop ([pos pos2] [n n])
       (cond
-       [(n . < . min) (fail-k)]
+       [(n . < . min) #f]
        [else
         (add-repeated-group
          group-n state pos n back-amt group-revert
-         (next-m s pos start limit end state stack
-                 (lambda ()
-                   (group-revert)
-                   (bloop (- pos back-amt) (sub1 n)))))]))))
-
-(define (repeat-simple-many+simple-matcher r-m* min max group-n next-m)
-  (lambda (s pos start limit end state stack fail-k)
-    (define-values (pos2 n back-amt) (r-m* s pos start limit end state))
-    (let bloop ([pos pos2] [n n])
-      (cond
-       [(n . < . min) (fail-k)]
-       [else
-        (add-repeated-group
-         group-n state pos n back-amt group-revert
-         (define pos2 (next-m s pos start limit end state stack (lambda () #f)))
-         (or pos2
+         (or (next-m s pos start limit end state stack)
              (begin
                (group-revert)
                (bloop (- pos back-amt) (sub1 n)))))]))))
 
 (define (lazy-repeat-matcher r-m min max next-m)
   ;; Like `repeat-matcher`: the tail of `r-m` is set to `continue-m`
-  (lambda (s pos start limit end state stack fail-k)
-    (let rloop ([pos pos] [n 0] [min min] [fail-k fail-k])
+  (lambda (s pos start limit end state stack)
+    (let rloop ([pos pos] [n 0] [min min])
       (cond
        [(n . < . min)
-        (define new-stack (cons (lambda (pos fail-k)
-                                  (rloop pos (add1 n) min fail-k))
+        (define new-stack (cons (lambda (pos)
+                                  (rloop pos (add1 n) min))
                                 stack))
-        (r-m s pos start limit end state new-stack fail-k)]
+        (r-m s pos start limit end state new-stack)]
        [(and max (= n max))
-        (next-m s pos start limit end state stack fail-k)]
+        (next-m s pos start limit end state stack)]
        [else
-        (next-m s pos start limit end state stack
-                (lambda () (rloop pos n (add1 min) fail-k)))]))))
+        (or (next-m s pos start limit end state stack)
+            (rloop pos n (add1 min)))]))))
 
 (define (lazy-repeat-simple-matcher r-m min max next-m)
-  ;; Like `repeat-simple-matcher`: no backtracking `r-m`
-  (lambda (s pos start limit end state stack fail-k)
-    (let rloop ([pos pos] [n 0] [min min] [fail-k fail-k])
+  ;; Like `repeat-simple-matcher`: no backtracking in `r-m`
+  (lambda (s pos start limit end state stack)
+    (let rloop ([pos pos] [n 0] [min min])
       (cond
        [(n . < . min)
-        (define pos2 (r-m s pos start limit end state stack (lambda () #f)))
-        (if pos2
-            (rloop pos2 (add1 n) min fail-k)
-            (fail-k))]
+        (define pos2 (r-m s pos start limit end state stack))
+        (and pos2
+             (rloop pos2 (add1 n) min))]
        [(and max (= n max))
-        (next-m s pos start limit end state stack fail-k)]
+        (next-m s pos start limit end state stack)]
        [else
-        (next-m s pos start limit end state stack
-                (lambda () (rloop pos n (add1 min) fail-k)))]))))
+        (or (next-m s pos start limit end state stack)
+            (rloop pos n (add1 min)))]))))
 
 ;; ----------------------------------------
 ;; Recording and referencing group matches
 
 (define (group-push-matcher n next-m)
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (define new-stack (cons (cons pos (and state (vector-ref state n)))
                             stack))
-    (next-m s pos start limit end state new-stack fail-k)))
+    (next-m s pos start limit end state new-stack)))
 
 (define (group-set-matcher n next-m)
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (define old-pos+span (car stack))
     (define old-span (cdr old-pos+span))
     (when state
       (vector-set! state n (cons (car old-pos+span) pos)))
-    (next-m s pos start limit end state (cdr stack)
-            (lambda ()
-              (when state (vector-set! state n old-span))
-              (fail-k)))))
+    (or (next-m s pos start limit end state (cdr stack))
+        (begin
+          (when state (vector-set! state n old-span))
+          #f))))
 
 (define-syntax-rule (define-reference-matcher reference-matcher chyte=?)
   (define (reference-matcher n next-m)
-    (lambda (s pos start limit end state stack fail-k)
+    (lambda (s pos start limit end state stack)
       (define p (vector-ref state n))
       (cond
-       [(not p) (fail-k)]
+       [(not p) #f]
        [else
         (define len (- (cdr p) (car p)))
         (define matches?
@@ -520,9 +462,8 @@
                      (define c1 (lazy-bytes-ref s j))
                      (define c2 (lazy-bytes-ref s i))
                      (chyte=? c1 c2)))))
-        (if matches?
-            (next-m s (+ pos len) start limit end state stack fail-k)
-            (fail-k))]))))
+        (and matches?
+             (next-m s (+ pos len) start limit end state stack))]))))
 
 (define-reference-matcher reference-matcher =)
 
@@ -538,67 +479,63 @@
 ;; Lookahead, lookbehind, conditionals, and cut
 
 (define (lookahead-matcher match? sub-m n-start num-n next-m)
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (define old-state (save-groups state n-start num-n))
-    (define pos2 (sub-m s pos start limit end state null (lambda () #f)))
+    (define pos2 (sub-m s pos start limit end state null))
     (cond
      [match?
-      (if pos2
-          (next-m s pos start limit end state stack
-                  (make-restore-groups fail-k state old-state n-start num-n))
-          (fail-k))]
+      (and pos2
+           (or (next-m s pos start limit end state stack)
+               (restore-groups state old-state n-start num-n)))]
      [pos2
-      (restore-groups state old-state n-start num-n)
-      (fail-k)]
+      (restore-groups state old-state n-start num-n)]
      [else
-      (next-m s pos start limit end state stack fail-k)])))
+      (next-m s pos start limit end state stack)])))
 
 (define (lookbehind-matcher match? lb-min lb-max sub-m n-start num-n next-m)
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (define lb-min-pos (max start (- pos lb-max)))
     (let loop ([lb-pos (- pos lb-min)])
       (cond
        [(lb-pos . < . lb-min-pos)
         (if match?
-            (fail-k)
-            (next-m s pos start limit end state stack fail-k))]
+            #f
+            (next-m s pos start limit end state stack))]
        [else
         (define old-state (save-groups state n-start num-n))
-        (define pos2 (sub-m s lb-pos start pos end state null (lambda () #f)))
+        (define pos2 (sub-m s lb-pos start pos end state null))
         (cond
          [match?
           (if pos2
-              (next-m s pos start limit end state stack
-                      (make-restore-groups fail-k state old-state n-start num-n))
+              (or (next-m s pos start limit end state stack)
+                  (restore-groups state old-state n-start num-n))
               (loop (sub1 lb-pos)))]
          [pos2
-          (restore-groups state old-state n-start num-n)
-          (fail-k)]
+          (restore-groups state old-state n-start num-n)]
          [else
-          (next-m s pos start limit end state stack fail-k)])]))))
+          (next-m s pos start limit end state stack)])]))))
 
 (define (conditional/reference-matcher n m1 m2)
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (if (vector-ref state n)
-        (m1 s pos start limit end state stack fail-k)
-        (m2 s pos start limit end state stack fail-k))))
+        (m1 s pos start limit end state stack)
+        (m2 s pos start limit end state stack))))
 
 (define (conditional/look-matcher tst-m m1 m2 n-start num-n)
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (define old-state (save-groups state n-start num-n))
-    (define branch-fail-k (make-restore-groups fail-k state old-state n-start num-n))
-    (if (tst-m s pos start limit end state null (lambda () #f))
-        (m1 s pos start limit end state stack branch-fail-k)
-        (m2 s pos start limit end state stack branch-fail-k))))
+    (or (if (tst-m s pos start limit end state null)
+            (m1 s pos start limit end state stack)
+            (m2 s pos start limit end state stack))
+        (restore-groups state old-state n-start num-n))))
 
 (define (cut-matcher sub-m n-start num-n next-m)
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (define old-state (save-groups state n-start num-n))
-    (define pos2 (sub-m s pos start limit end state null (lambda () #f)))
-    (if pos2
-        (next-m s pos2 start limit end state stack
-                (make-restore-groups fail-k state old-state n-start num-n))
-        (fail-k))))
+    (define pos2 (sub-m s pos start limit end state null))
+    (and pos2
+         (or (next-m s pos2 start limit end state stack)
+             (restore-groups state old-state n-start num-n)))))
 
 
 (define (save-groups state n-start num-n)
@@ -612,20 +549,14 @@
 
 (define (restore-groups state old-state n-start num-n)
   (when old-state
-    (vector-copy! state n-start old-state)))
-
-(define (make-restore-groups fail-k state old-state n-start num-n)
-  (cond
-   [(not old-state) fail-k]
-   [else (lambda ()
-           (restore-groups state old-state n-start num-n)
-           (fail-k))]))
+    (vector-copy! state n-start old-state))
+  #f)
 
 ;; ----------------------------------------
 ;; Unicode characters in UTF-8 encoding
 
 (define (unicode-categories-matcher cats match? next-m)
-  (lambda (s pos start limit end state stack fail-k)
+  (lambda (s pos start limit end state stack)
     (let loop ([pos pos] [accum null])
       (define b
         (if (bytes? s)
@@ -634,7 +565,7 @@
             (and (lazy-bytes-before-end? s pos limit)
                  (lazy-bytes-ref s pos))))
       (cond
-       [(not b) (fail-k)]
+       [(not b) #f]
        [else
         (define c (bytes->char/utf-8 b accum))
         (cond
@@ -645,10 +576,10 @@
                          (for/or ([cat (in-list cats)])
                            (eq? cat c-cat))
                          (eq? cats c-cat))))
-              (next-m s (add1 pos) start limit end state stack fail-k)
-              (fail-k))]
+              (next-m s (add1 pos) start limit end state stack)
+              #f)]
          [(eq? c 'fail)
-          (fail-k)]
+          #f]
          [else
           ;; c must be 'continue
           (loop (add1 pos) (cons b accum))])]))))

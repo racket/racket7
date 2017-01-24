@@ -12,14 +12,14 @@
 ;; anchored) to find a match
 
 (define (search-match rx in pos start-pos end-pos state)
-  (define matcher (rx:regexp-matcher rx))
-  (define anchored? (rx:regexp-anchored? rx))
   (define must-string (rx:regexp-must-string rx))
-  (define start-range (rx:regexp-start-range rx))
   (cond
    [(not (check-must-string must-string in pos end-pos))
     (values #f #f)]
    [else
+    (define matcher (rx:regexp-matcher rx))
+    (define anchored? (rx:regexp-anchored? rx))
+    (define start-range (rx:regexp-start-range rx))
     (let loop ([pos pos])
       (cond
        [(and anchored? (not (= pos start-pos)))

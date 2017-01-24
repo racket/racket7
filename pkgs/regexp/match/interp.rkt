@@ -13,5 +13,5 @@
   ;; passed to `regexp-match`.
   ;; The search `limit` and `end` start out the same, but `limit`
   ;; can be less than `end` for a lookbehind match.
-  (m s pos start limit/end limit/end state null (lambda () #f)))
+  (m s pos start limit/end limit/end state null))
 
