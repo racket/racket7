@@ -21,13 +21,7 @@
        [else
         (define rx (car l))
         (cond
-         [(or (eq? rx rx:empty)
-              (eq? rx rx:start)
-              (eq? rx rx:line-start)
-              (eq? rx rx:word-boundary)
-              (eq? rx rx:not-word-boundary)
-              (rx:lookahead? rx)
-              (rx:lookbehind? rx))
+         [(zero-sized? rx)
           ;; Zero-sized element, so look at rest
           (loop (cdr l))]
          [else
@@ -38,6 +32,8 @@
    [(rx:conditional? rx)
     (union (start-range (rx:conditional-rx1 rx))
            (start-range (rx:conditional-rx2 rx)))]
+   [(rx:group? rx)
+    (start-range (rx:group-rx rx))]
    [(rx:cut? rx)
     (start-range (rx:cut-rx rx))]
    [(rx:repeat? rx)
@@ -45,6 +41,19 @@
          (start-range (rx:repeat-rx rx)))]
    [(rx:range? rx) (rx:range-range rx)]
    [else #f]))
+
+(define (zero-sized? rx)
+  (or (eq? rx rx:empty)
+      (eq? rx rx:start)
+      (eq? rx rx:line-start)
+      (eq? rx rx:word-boundary)
+      (eq? rx rx:not-word-boundary)
+      (rx:lookahead? rx)
+      (rx:lookbehind? rx)
+      (and (rx:group? rx)
+           (zero-sized? (rx:group-rx rx)))
+      (and (rx:cut? rx)
+           (zero-sized? (rx:cut-rx rx)))))
 
 (define (union a b)
   (and a b (range-union a b)))

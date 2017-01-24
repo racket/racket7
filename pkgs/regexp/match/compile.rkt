@@ -91,19 +91,30 @@
           (alts-matcher (compile (rx:maybe-rx rx) next-m #t)
                         next-m))]
      [(rx:repeat? rx)
-      (define simple? (not (needs-backtrack? (rx:repeat-rx rx))))
+      (define actual-r-rx (rx:repeat-rx rx))
+      ;; As a special case, handle in non-lazy `repeat` a group around
+      ;; a simple pattern:
+      (define r-rx (if (and (rx:group? actual-r-rx)
+                            (not (rx:repeat-non-greedy? rx))
+                            (not (needs-backtrack? (rx:group-rx actual-r-rx))))
+                       (rx:group-rx actual-r-rx)
+                       actual-r-rx))
+      (define simple? (not (needs-backtrack? r-rx)))
+      (define group-n (and simple?
+                           (rx:group? actual-r-rx)
+                           (rx:group-number actual-r-rx)))
       (define min (rx:repeat-min rx))
       (define max (let ([n (rx:repeat-max rx)])
                     (if (= n +inf.0) #f n)))
-      (define-values (r-m* back-amt) (compile*/maybe (rx:repeat-rx rx) min max))
+      (define-values (r-m* back-amt) (compile*/maybe r-rx min max))
       (cond
        [(and r-m*
              (not (rx:repeat-non-greedy? rx)))
         (if fail-via-k?
-            (repeat-simple-many-matcher r-m* back-amt min max next-m)
-            (repeat-simple-many+simple-matcher r-m* back-amt min max next-m))]
+            (repeat-simple-many-matcher r-m* back-amt min max group-n next-m)
+            (repeat-simple-many+simple-matcher r-m* back-amt min max group-n next-m))]
        [else
-        (define r-m (compile (rx:repeat-rx rx)
+        (define r-m (compile r-rx
                              (if simple? done-m continue-m)
                              (not simple?)))
         (cond
@@ -114,8 +125,8 @@
          [else
           (if simple?
               (if fail-via-k?
-                  (repeat-simple-matcher r-m min max next-m)
-                  (repeat-simple+simple-matcher r-m min max next-m))
+                  (repeat-simple-matcher r-m min max group-n next-m)
+                  (repeat-simple+simple-matcher r-m min max group-n next-m))
               (repeat-matcher r-m min max next-m))])])]
      [(rx:group? rx)
       (define n (rx:group-number rx))

@@ -135,6 +135,25 @@
                [else
                 (loop (+ pos2 size) (add1 n))])))))))
 
+;; When a simple repeat argument is wrapped as a group, `add-repeated-group`
+;; is used in the repeating loop to set the group to the last span produced
+;; by an iterator
+(define-syntax-rule (add-repeated-group group-n-expr state-expr pos-expr back-amt
+                                        group-revert ; bound to an unwind thunk
+                                        body ...) ; duplicated in two `cond` branches
+  (let ([group-n group-n-expr]
+        [state state-expr]
+        [pos pos-expr])
+    (cond
+     [(and group-n state)
+      (define old-span (vector-ref state group-n))
+      (vector-set! state group-n (cons (- pos back-amt) pos))
+      (define (group-revert) (vector-set! state group-n old-span))
+      body ...]
+     [else
+      (define (group-revert) (void))
+      body ...])))
+
 ;; ----------------------------------------
 ;; Single-byte matching
 
@@ -346,7 +365,7 @@
 
 (define r-stack (list (lambda (pos fail-k) pos)))
 
-(define (repeat-simple-matcher r-m min max next-m)
+(define (repeat-simple-matcher r-m min max group-n next-m)
   ;; The `r-m` matcher doesn't need bcktracking, so
   ;; we can supply a failure continuation that just
   ;; returns `#f` (which avoids allocating that
@@ -362,10 +381,15 @@
           (let bloop ([pos pos] [n n])
             (cond
              [(n . < . min) (fail-k)]
-             [else (next-m s pos start limit end state stack
-                           (lambda () (bloop (- pos back-amt) (sub1 n))))]))))))
+             [else
+              (add-repeated-group
+               group-n state pos back-amt group-revert
+               (next-m s pos start limit end state stack
+                       (lambda ()
+                         (group-revert)
+                         (bloop (- pos back-amt) (sub1 n)))))]))))))
 
-(define (repeat-simple+simple-matcher r-m min max next-m)
+(define (repeat-simple+simple-matcher r-m min max group-n next-m)
   ;; The `r-m` matcher doesn't need bcktracking, and neither does
   ;; `next-m`, so we can avoid yet more continuations.
   (lambda (s pos start limit end state stack fail-k)
@@ -380,11 +404,15 @@
             (cond
              [(n . < . min) (fail-k)]
              [else
-              (define pos2 (next-m s pos start limit end state stack (lambda () #f)))
-              (or pos2
-                  (bloop (- pos back-amt) (sub1 n)))]))))))
+              (add-repeated-group
+               group-n state pos back-amt group-revert
+               (define pos2 (next-m s pos start limit end state stack (lambda () #f)))
+               (or pos2
+                   (begin
+                     (group-revert)
+                     (bloop (- pos back-amt) (sub1 n)))))]))))))
 
-(define (repeat-simple-many-matcher r-m* back-amt min max next-m)
+(define (repeat-simple-many-matcher r-m* back-amt min max group-n next-m)
   ;; Instead of `r-m`, we have a `r-m*` that finds as many matches as
   ;; possible (up to max) in one go
   (lambda (s pos start limit end state stack fail-k)
@@ -392,19 +420,28 @@
     (let bloop ([pos pos2] [n n])
       (cond
        [(n . < . min) (fail-k)]
-       [else (next-m s pos start limit end state stack
-                     (lambda () (bloop (- pos back-amt) (sub1 n))))]))))
+       [else
+        (add-repeated-group
+         group-n state pos back-amt group-revert
+         (next-m s pos start limit end state stack
+                 (lambda ()
+                   (group-revert)
+                   (bloop (- pos back-amt) (sub1 n)))))]))))
 
-(define (repeat-simple-many+simple-matcher r-m* back-amt min max next-m)
+(define (repeat-simple-many+simple-matcher r-m* back-amt min max group-n next-m)
   (lambda (s pos start limit end state stack fail-k)
     (define-values (pos2 n) (r-m* s pos start limit end))
     (let bloop ([pos pos2] [n n])
       (cond
        [(n . < . min) (fail-k)]
        [else
-        (define pos2 (next-m s pos start limit end state stack (lambda () #f)))
-        (or pos2
-            (bloop (- pos back-amt) (sub1 n)))]))))
+        (add-repeated-group
+         group-n state pos back-amt group-revert
+         (define pos2 (next-m s pos start limit end state stack (lambda () #f)))
+         (or pos2
+             (begin
+               (group-revert)
+               (bloop (- pos back-amt) (sub1 n)))))]))))
 
 (define (lazy-repeat-matcher r-m min max next-m)
   ;; Like `repeat-matcher`: the tail of `r-m` is set to `continue-m`
