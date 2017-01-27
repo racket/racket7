@@ -1772,7 +1772,7 @@ read_number_or_symbol(int init_ch, Scheme_Object *port,
 {
   mzchar *buf, *oldbuf, onstack[MAX_QUICK_SYMBOL_SIZE];
   int size, oldsize;
-  int i, ch, quoted, quoted_ever = 0, running_quote = 0;
+  int i, ch, quoted_ever = 0, running_quote = 0;
   int running_quote_ch = 0;
   Scheme_Object *o;
   int delim_ok;
@@ -1822,18 +1822,15 @@ read_number_or_symbol(int init_ch, Scheme_Object *port,
 	scheme_read_err(port, "read: EOF following `%c' in %s", esc_ch, is_kw ? "keyword" : "symbol");
 	return NULL;
       }
-      quoted = 1;
       quoted_ever = 1;
     } else if (multiple_escape && (!running_quote || (ch == running_quote_ch))) {
       quoted_ever = 1;
       running_quote = !running_quote;
       running_quote_ch = ch;
-      quoted = 0;
 
       ch = getc_fun(port);
       continue; /* <-- !!! */
-    } else
-      quoted = 0;
+    }
 
     if (i >= size) {
       oldsize = size;
@@ -2292,7 +2289,7 @@ static void unexpected_closer(int ch, Scheme_Object *port)
 
 static int read_graph_index(Scheme_Object *port, int *ch)
 {
-  int digits = 0, val, nch;
+  int digits = 0, val = 0, nch;
 
   while (NOT_EOF_OR_SPECIAL((*ch)) && isdigit_ascii((*ch))) {
     if (digits >= MAX_GRAPH_ID_DIGITS)
