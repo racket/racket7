@@ -2042,5 +2042,48 @@ case of module-leve bindings; it doesn't cover local bindings.
 (test 'defined dynamic-require ''uses-defines-a-variable-x-in-its-body-at-phase-1 'out)
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure a hash-table constant is allowed as a compile-time RHS:
+
+(let ()
+  (define o (open-output-bytes))
+  (write (compile '(module m racket/base
+                    (require (for-syntax racket/base))
+                    (define-syntax something #hash((1 . 2)))))
+         o)
+  (parameterize ([read-accept-compiled #t])
+    (read (open-input-bytes (get-output-bytes o)))))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure that when `variable-reference->namespace`
+;; reconstitutes variable mappings, that it uses the
+;; run-time module path index of the module instead
+;; of it's compile-time module path index
+
+(parameterize ([current-module-declare-name
+                (make-resolved-module-path 'uses-own-namespace-for-eval-from-submodule)])
+  (eval
+   '(module m racket/base
+     (require (for-syntax racket/base))
+
+     (define (x) 1)
+
+     (define-syntax-rule (def) (define y 0))
+     (def)
+
+     (void
+      (variable-reference->namespace (#%variable-reference)))
+
+     (define (get-x)
+       (eval '(x) (variable-reference->namespace (#%variable-reference))))
+
+     (module* main #f
+       (provide v)
+       (define v
+         (parameterize ([current-namespace (variable-reference->namespace (#%variable-reference))])
+           (eval '(get-x))))))))
+
+(test 1 dynamic-require '(submod 'uses-own-namespace-for-eval-from-submodule main) 'v)
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)

@@ -2978,7 +2978,8 @@ static int is_nonmutating_nondependant_primitive(Scheme_Object *rator, int n)
 {
   if (SCHEME_PRIMP(rator)
       && ((SCHEME_PRIM_PROC_OPT_FLAGS(rator) & (SCHEME_PRIM_IS_OMITABLE | SCHEME_PRIM_IS_OMITABLE_ALLOCATION))
-          && !(SCHEME_PRIM_PROC_OPT_FLAGS(rator) & (SCHEME_PRIM_IS_UNSAFE_OMITABLE)))
+          && !(SCHEME_PRIM_PROC_OPT_FLAGS(rator) & (SCHEME_PRIM_IS_UNSAFE_OMITABLE))
+          && !((SAME_OBJ(scheme_values_proc, rator) && (n != 1))))
       && (n >= ((Scheme_Primitive_Proc *)rator)->mina)
       && (n <= ((Scheme_Primitive_Proc *)rator)->mu.maxa))
     return 1;
@@ -3031,11 +3032,11 @@ static int is_nonsaving_primitive(Scheme_Object *rator, int n)
   return 0;
 }
 
-static int is_allways_escaping_primitive(Scheme_Object *rator)
+static int is_always_escaping_primitive(Scheme_Object *rator)
 {
   if (SCHEME_PRIMP(rator)
       && (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_ALWAYS_ESCAPES)) {
-        return 1;
+    return 1;
   }
   return 0;
 }
@@ -3919,7 +3920,7 @@ static Scheme_Object *finish_optimize_any_application(Scheme_Object *app, Scheme
   if (SAME_OBJ(rator, scheme_void_proc))
     return make_discarding_sequence(app, scheme_void, info);
   
-  if (is_allways_escaping_primitive(rator)) {
+  if (is_always_escaping_primitive(rator)) {
     info->escapes = 1;
   }
 
@@ -7130,6 +7131,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
   Scheme_IR_Let_Header *head = (Scheme_IR_Let_Header *)form;
   Scheme_IR_Let_Value *irlv, *pre_body, *retry_start, *prev_body;
   Scheme_Object *body, *value, *ready_pairs = NULL, *rp_last = NULL, *ready_pairs_start;
+  Scheme_Object *escape_body = scheme_false;
   Scheme_Once_Used *once_used;
   Scheme_Hash_Tree *merge_skip_vars;
   int i, j, is_rec, not_simply_let_star = 0, undiscourage, skip_opts = 0;
@@ -7406,6 +7408,13 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
            here messes up the loop for letrec. So wait and
            remove it at the end. */
         remove_last_one = 1;
+        /* If `found_escapes`, either this expression is the
+           one that escaped, or `value` should have been simplified
+           to `#f`. So, if it's not `#f`, we'll need to keep
+           the expression part */
+        if (!found_escapes)
+          value = scheme_false;
+        pre_body->value = value;
       } else {
         Scheme_IR_Let_Value *naya;
         Scheme_Object *rest = pre_body->body;
@@ -7434,6 +7443,14 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
             else
               naya2->value = scheme_false;
             naya2 = (Scheme_IR_Let_Value *)naya2->body;
+          }
+
+          if (!pre_body->count && !SCHEME_FALSEP(value)) {
+            /* Since `value` is not false, this clause must be the one
+               that is escaping. We'll end up dropping the remaining
+               clauses and the original body, but we need to keep the
+               erroring expression. */
+            escape_body = value;
           }
         }
 
@@ -7724,6 +7741,13 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
     if (remove_last_one) {
       head->num_clauses -= 1;
       body = (Scheme_Object *)pre_body->body;
+
+      if (found_escapes && !SCHEME_FALSEP(pre_body->value)) {
+        /* Since `pre_body->value` wasn't simplified to #f,
+           keep this as the new body */
+        escape_body = pre_body->value;
+      }
+
       if (prev_body) {
         prev_body->body = body;
         pre_body = prev_body;
@@ -7755,7 +7779,7 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
   if (!found_escapes) {
     body = optimize_expr(body, body_info, scheme_optimize_tail_context(context));
   } else {
-    body = scheme_false;
+    body = ensure_noncm(escape_body);
     body_info->single_result = 1;
     body_info->preserves_marks = 1;
     body_info->escapes = 1;
@@ -7965,8 +7989,8 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
 
         if (head->num_clauses)
           seq->array[1] = (Scheme_Object *)head;
-        else if (found_escapes) {
-          /* don't need the body, because some RHS escapes */
+        else if (found_escapes && SCHEME_FALSEP(head->body)) {
+          /* don't need the `#f` for the body, because some RHS escapes */
           new_body = ensure_noncm(rhs);
         } else
           seq->array[1] = head->body;
@@ -8666,7 +8690,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
         if (n == 1) {
           if (scheme_ir_propagate_ok(e, info))
             cnst = 1;
-          else if (scheme_is_statically_proc(e, info, 0)) {
+          else if (scheme_is_statically_proc(e, info, OMITTABLE_IGNORE_APPN_OMIT)) {
             cnst = 1;
             sproc = 1;
           }

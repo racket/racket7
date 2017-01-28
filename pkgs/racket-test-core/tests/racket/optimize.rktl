@@ -1727,6 +1727,15 @@
                (let loop ([n 0] [m 9])
                  (loop (+ m 10) (+ n 9))))))
 
+;; Don't reorder pass a `values` with the wrong nunmber of arguments.
+;; `values` is the only primitive that is omitable and may return multiple values.
+(test-comp '(lambda (b)
+              (let ([x (unbox b)])
+                (+ (values 2 2) x)))
+           '(lambda (b)
+              (+ (values 2 2) (unbox b)))
+           #f)
+
 (test-comp '(lambda (z)
               (let-values ([(x y)
                             (if z
@@ -3920,6 +3929,44 @@
 (test-comp '(lambda (f) (letrec ([z (error 'error)] [x #f] [y #f]) #f))
            '(lambda (f) (letrec ([z (error 'error)] [x (lambda() y)] [y (lambda () x)]) (f x y z)) 5))
 
+(test-comp '(let-values ([() (error "oops")]) 11)
+           '(error "oops"))
+(test-comp '(let-values ([(x y) (error "oops")]) 11)
+           '(error "oops"))
+(test-comp '(letrec-values ([() (error "oops")]) 11)
+           '(error "oops"))
+(test-comp '(letrec-values ([(x y) (error "oops")]) 11)
+           '(error "oops"))
+(test-comp '(let-values (((y) (read)) (() (error "oops"))) 11)
+           '(let () (begin (read) (error "oops"))))
+(test-comp '(let-values (((y) (read)) (() (error "oops"))) 11)
+           '(let () (begin (read) (error "oops"))))
+(test-comp '(let-values ((() (error "oops")) ((x) 9)) 11)
+           '(error "oops"))
+(test-comp '(let-values ((() (error "oops")) (() (values))) 11)
+           '(error "oops"))
+(test-comp '(let-values (((y) (read)) (() (error "oops")) ((x) 9)) 11)
+           '(let () (begin (read) (error "oops"))))
+(test-comp '(let-values (((y) (read)) (() (error "oops")) (() (values))) 11)
+           '(let () (begin (read) (error "oops"))))
+(test-comp '(error "oops")
+           '(let () (begin (read) (error "oops")))
+           #f)
+
+(test-comp '(with-continuation-mark
+             'x 'y
+             (let-values ([() (with-continuation-mark
+                                  'x 'z
+                                  (error "oops"))])
+               11))
+           '(with-continuation-mark
+             'x 'y
+             (begin0
+              (with-continuation-mark
+                  'x 'z
+                  (error "oops"))
+              (void))))
+
 (test-comp `(module m racket/base
               (define x 5)
               (set! x 3)
@@ -5748,6 +5795,28 @@
       (let-values ([(val1 val2) (binop a)])
         'bar)))
   bar)
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check that `string-append` on a known-string argument
+;; is not treated consistently by the optimzier and
+;; validator
+
+(let ([c (compile
+          '(module m racket/base
+            (define ill
+              (let ((base (string-append "a")))
+                (λ (x) (string-append base x))))
+            (ill "b")))])
+  (define o (open-output-bytes))
+  (write c o)
+  (parameterize ([read-accept-compiled #t])
+    (void (read (open-input-bytes (get-output-bytes o))))))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check for an optimizer regresssion
+
+(err/rt-test (+ (let-values (((x y) (let-values ((() 9)) 2))) x) (error))
+             exn:fail?)
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
