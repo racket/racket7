@@ -1810,7 +1810,7 @@
    free-identifier=?
    f-id
    (eval '(extract (f #:x 8)
-                   (lv ([(proc) f2] . _) (if const? (app f3 . _) . _))
+                   (lv _ (if const? (app f3 . _) . _))
                    f3
                    #f)))
   (test
@@ -1818,17 +1818,17 @@
    free-identifier=?
    f-id
    (eval '(extract (f #:x 8)
-                   (lv ([(proc) f2] . _) (if const? (app f3 . _) . _))
-                   f2
-                   #t)))
+           (lv _ (if const? (app f3 . _) (app2 (app3 check&extract _ f2 . _) . _)))
+           f2
+           #t)))
   (test
    #t
    free-identifier=?
    f-id
    (eval '(extract (f #:y 9)
-                   (lv ([(proc) f2] . _) . _)
-                   f2
-                   #t)))
+           (lv _ (app2 (app3 check&extract _ f2 . _) . _))
+           f2
+           #t)))
   (test
    #t
    free-identifier=?
