@@ -8,6 +8,7 @@
          "original.rkt"
          "../eval/dynamic-require.rkt"
          "../namespace/api-module.rkt"
+         "../namespace/namespace.rkt"
          "srcloc.rkt"
          "../host/linklet.rkt")
 
@@ -72,7 +73,7 @@
               #:readtable readtable
               #:local-graph? local-graph?
               #:read-compiled read-compiled-linklet
-              #:dynamic-require dynamic-require
+              #:dynamic-require dynamic-require-reader
               #:module-declared? read-module-declared?
               #:coerce read-coerce
               #:coerce-key read-coerce-key)))
@@ -82,7 +83,7 @@
                       #:for-syntax? #t
                       #:wrap read-to-syntax
                       #:read-compiled read-compiled-linklet
-                      #:dynamic-require dynamic-require
+                      #:dynamic-require dynamic-require-reader
                       #:module-declared? read-module-declared?
                       #:coerce read-coerce
                       #:coerce-key read-coerce-key))
@@ -136,3 +137,14 @@
     #t]
    [else
     (eq? default-read-handler (port-read-handler in))]))
+
+;; ----------------------------------------
+
+(define (dynamic-require-reader mod-path sym [fail-thunk default-dynamic-require-fail-thunk])
+  (define root-ns (namespace-root-namespace (current-namespace)))
+  (if root-ns
+      ;; Switch to the root namespace:
+      (parameterize ([current-namespace root-ns])
+        (dynamic-require mod-path sym fail-thunk))
+      ;; Current namespace is a root namespace:
+      (dynamic-require mod-path sym fail-thunk)))
