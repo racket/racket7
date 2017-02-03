@@ -25,7 +25,7 @@
          regexp?
          byte-regexp?
          pregexp?
-         byte-pregexp
+         byte-pregexp?
          
          regexp-max-lookbehind)
 
