@@ -2,6 +2,7 @@
 (require "../common/reflect-hash.rkt"
          "../read/api.rkt"
          "../read/primitive-parameter.rkt"
+         "../read/readtable.rkt"
          "../read/special-comment.rkt")
 
 ;; Reader primitives are in their own module so that they can be
