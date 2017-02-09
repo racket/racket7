@@ -6,7 +6,8 @@
          "file-port.rkt"
          "bytes-port.rkt"
          "pipe.rkt"
-         "close.rkt")
+         "close.rkt"
+         "count.rkt")
 
 (provide read-byte
          read-bytes
@@ -44,4 +45,7 @@
          pipe-content-length
          
          close-input-port
-         close-output-port)
+         close-output-port
+         
+         port-count-lines!
+         port-next-location)

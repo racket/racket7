@@ -19,7 +19,7 @@
                           ;; string and change it later. We can skip
                           ;; the copy if the bstr is the right length
                           ;; and won't be exposed, though.
-                          #:copy-bstr [copy-bstr? #t]
+                          #:copy-bstr? [copy-bstr? #t]
                           ;; If `keep-eof?`, don't consume an EOF
                           #:keep-eof? [keep-eof? #f])
   (let loop ([in orig-in])
@@ -47,7 +47,7 @@
                 0
                 (loop in))]
            [(v . <= . (- end start))
-            (port-count! orig-in v bstr start)
+            (input-port-count! orig-in v bstr start)
             v]
            [else
             (raise-arguments-error who

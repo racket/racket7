@@ -17,7 +17,7 @@
                      [offset #:mutable] ; count plain bytes
                      [line #:mutable]   ; count newlines
                      [column #:mutable] ; count UTF-8 characters in line
-                     [pos #:mutable]))  ; count UTF-8 characters
+                     [position #:mutable]))  ; count UTF-8 characters
 
 (define (make-output-port #:name name
                           #:data [data #f]
@@ -44,4 +44,4 @@
                0    ; offset
                #f   ; line
                #f   ; column
-               #f)) ; pos
+               #f)) ; position

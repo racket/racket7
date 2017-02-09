@@ -15,9 +15,11 @@
                     count-lines!
                     [closed? #:mutable]
                     [offset #:mutable] ; count plain bytes
+                    [state #:mutable] ; state of UTF-8 decoding
+                    [cr-state #:mutable] ; state of CRLF counting as a single LF
                     [line #:mutable]   ; count newlines
                     [column #:mutable] ; count UTF-8 characters in line
-                    [pos #:mutable]    ; count UTF-8 characters
+                    [position #:mutable]    ; count UTF-8 characters
                     [pending-eof? #:mutable]))
 
 (define (make-input-port #:name name
@@ -44,7 +46,9 @@
               count-lines!
               #f   ; closed?
               0    ; offset
+              #f   ; state
+              #f   ; cr-state
               #f   ; line
               #f   ; column
-              #f   ; pos
+              #f   ; position
               #f)) ; pending-eof?

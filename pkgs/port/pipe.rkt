@@ -23,9 +23,9 @@
 (define (pipe-content-length p)
   (cond
    [(pipe-input-port? p)
-    ((pipe-data (input-port-data p)))]
+    ((pipe-data-get-content-length (input-port-data p)))]
    [(pipe-output-port? p)
-    ((pipe-data (output-port-data p)))]
+    ((pipe-data-get-content-length (output-port-data p)))]
    [else
     (raise-argument-error 'pipe-contact-length "(or/c pipe-input-port? pipe-output-port?)" p)]))
 
@@ -39,9 +39,10 @@
   (define output-closed? #f)
   (define data
     (pipe-data
-     (lambda () (if (start . < . end)
-               (- end start)
-               (+ end (- (bytes-length bstr) start))))))
+     (lambda ()
+       (if (start . <= . end)
+           (- end start)
+           (+ end (- (bytes-length bstr) start))))))
   (values
    ;; input ----------------------------------------
    (make-input-port
@@ -115,12 +116,12 @@
         (define peek-start (modulo (+ start skip) len))
         (cond
          [(peek-start . < . end)
-          (define amt (max (- dest-end dest-start)
+          (define amt (min (- dest-end dest-start)
                            (- end peek-start)))
           (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
           amt]
          [else
-          (define amt (max (- dest-end dest-start)
+          (define amt (min (- dest-end dest-start)
                            (- len peek-start)))
           (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
           amt])]))

@@ -50,7 +50,7 @@
      [(and (exact-integer? consumed-v)
            (= consumed-v min-consume-ok-amt))
       (let ([v2 (peek-some-bytes! who orig-in 
-                                  bstr consumed-v (- amt min-consume-ok-amt) skip-k
+                                  bstr consumed-v (+ consumed-v (- amt min-consume-ok-amt)) skip-k
                                   #:zero-ok? #t)])
         (cond
          [(exact-integer? v2) (+ consumed-v v2)]
@@ -160,7 +160,7 @@
   (cond
    [(eof-object? b) b]
    [else
-    (port-count-byte! in b)
+    (input-port-count-byte! in b)
     (cond
      [(b . < . 128) (integer->char b)]
      [else

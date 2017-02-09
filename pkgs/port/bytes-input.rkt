@@ -50,7 +50,7 @@
    [read-byte
     ;; Shortcut is available
     (define b (read-byte))
-    (unless (eof-object? b) (port-count-byte! in b))
+    (unless (eof-object? b) (input-port-count-byte! in b))
     b]
    [else
     ;; Use the general path
@@ -102,14 +102,14 @@
 
 ;; Peek `(- end start)` bytes, stopping early only if an EOF is found
 (define (do-peek-bytes! who in bstr start end skip)
-  (define amt (- start end))
+  (define amt (- end start))
   (define v (peek-some-bytes! who in bstr start end skip))
   (if (exact-integer? v)
       (cond
        [(= v amt) v]
        [else
         (let loop ([got v])
-          (define v (peek-some-bytes! in bstr got amt (+ got skip) #:copy-bstr? #f))
+          (define v (peek-some-bytes! who in bstr got amt (+ got skip) #:copy-bstr? #f))
           (cond
            [(eof-object? v)
             got]
@@ -142,7 +142,7 @@
   (check 'peek-bytes exact-nonnegative-integer? skip-k)
   (check 'peek-bytes input-port? in)
   (define bstr (make-bytes amt))
-  (define v (do-peek-bytes! 'read-bytes bstr in 0 amt skip-k))
+  (define v (do-peek-bytes! 'read-bytes in bstr 0 amt skip-k))
   (if (exact-integer? v)
       (if (= v amt)
           bstr
@@ -157,7 +157,7 @@
   (check 'peek-bytes! exact-nonnegative-integer? start-pos)
   (check 'peek-bytes! exact-nonnegative-integer? end-pos)
   (check-range 'peek-bytes! start-pos end-pos (bytes-length bstr) bstr)
-  (do-peek-bytes! 'peek-bytes! bstr in start-pos end-pos skip-k))
+  (do-peek-bytes! 'peek-bytes! in bstr start-pos end-pos skip-k))
 
 (define (peek-bytes-avail! bstr skip-k [in (current-input-port)] [start-pos 0] [end-pos (and (bytes? bstr)
                                                                                              (bytes-length bstr))])
