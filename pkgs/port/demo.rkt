@@ -1,5 +1,12 @@
 #lang racket/base
-(require "main.rkt")
+(require "main.rkt"
+         (only-in racket/base
+                  [string->bytes/utf-8 host:string->bytes/utf-8]
+                  [bytes->string/utf-8 host:bytes->string/utf-8]))
+
+(bytes->string/utf-8 (string->bytes/utf-8 "!!ap\u3BBple__" #f 2) #f 0 7)
+(bytes->string/latin-1 (string->bytes/latin-1 "ap\u3BBple" (char->integer #\?)))
+(bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBp\uF7F8\U101234le"))
 
 (define apple (string->bytes/utf-8 "ap\u3BBple"))
 (define elppa (list->bytes (reverse (bytes->list (string->bytes/utf-8 "ap\u3BBple")))))
@@ -48,3 +55,10 @@
            (loop)))
        (close-input-port p)
        (loop (sub1 j))))))
+
+(time
+ (for/fold ([v #f]) ([i (in-range 1000000)])
+   (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBple"))))
+(time
+ (for/fold ([v #f]) ([i (in-range 1000000)])
+   (host:bytes->string/utf-8 (host:string->bytes/utf-8 "ap\u3BBple"))))

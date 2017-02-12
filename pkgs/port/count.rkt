@@ -1,7 +1,7 @@
 #lang racket/base
 (require "input-port.rkt"
          "output-port.rkt"
-         "utf-8.rkt"
+         "utf-8-decode.rkt"
          "check.rkt")
 
 (provide port-count-lines!
@@ -76,7 +76,7 @@
                            #:error-char #\?
                            #:abort-mode 'state
                            #:state state))
-          (loop end line (+ column got-chars) (+ position got-chars) new-state #f)])]
+          (loop end 0 line (+ column got-chars) (+ position got-chars) new-state #f)])]
        [else
         (define b (bytes-ref bstr i))
         (define (end-utf-8) ; => next byte is ASCII, so we can terminate a UTF-8 sequence
@@ -85,7 +85,7 @@
                            #f 0 #f
                            #:error-char #\?
                            #:state state))
-          (loop end line (+ column got-chars) (+ position got-chars) new-state #f))
+          (loop end 0 line (+ column got-chars) (+ position got-chars) new-state #f))
         (cond
          [(eq? b (char->integer #\newline))
           (cond
@@ -105,7 +105,7 @@
          [(b . < . 128)
           (if (and (zero? span) (not state))
               (loop (add1 i) 0 line (add1 column) (add1 position) #f #f)
-              (loop (add1 i) (add1 span) line column position state state #f))]
+              (loop (add1 i) (add1 span) line column position state #f))]
          [else
           (loop (add1 i) (add1 span) line column position state #f)])]))))
   

@@ -3,7 +3,7 @@
          "input-port.rkt"
          "internal-pipe.rkt"
          (submod "bytes-input.rkt" internal)
-         "utf-8.rkt"
+         "utf-8-decode.rkt"
          "count.rkt"
          "check.rkt")
 

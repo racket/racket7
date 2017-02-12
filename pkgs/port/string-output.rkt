@@ -1,6 +1,7 @@
 #lang racket/base
 (require "output-port.rkt"
          "check.rkt"
+         "convert.rkt"
          (submod "bytes-output.rkt" internal))
 
 (provide write-string)
