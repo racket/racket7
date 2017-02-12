@@ -1120,7 +1120,7 @@
 ;; in-vector like sequence over array
 (define-:vector-like-gen :array-gen array-ref)
 
-(define-in-vector-like in-array
+(define-in-vector-like (in-array check-array)
   "array" array? array-length :array-gen)
 
 (define-sequence-syntax *in-array
@@ -1130,6 +1130,7 @@
                        #'array?
                        #'array-length
                        #'in-array
+                       #'check-array
                        #'array-ref))
 
 ;; (_array/list <type> <len> ...+)

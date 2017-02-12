@@ -579,14 +579,17 @@
                                      #f
                                      #f))))))
 
+  (define (check-range a b step)
+    (unless (real? a) (raise-argument-error 'in-range "real?" a))
+    (unless (real? b) (raise-argument-error 'in-range "real?" b))
+    (unless (real? step) (raise-argument-error 'in-range "real?" step)))
+  
   (define in-range
     (case-lambda
       [(b) (in-range 0 b 1)]
       [(a b) (in-range a b 1)]
       [(a b step)
-       (unless (real? a) (raise-argument-error 'in-range "real?" a))
-       (unless (real? b) (raise-argument-error 'in-range "real?" b))
-       (unless (real? step) (raise-argument-error 'in-range "real?" step))
+       (check-range a b step)
        (let* ([cont? (if (step . >= . 0)
                          (lambda (x) (< x b))
                          (lambda (x) (> x b)))]
@@ -596,16 +599,19 @@
   (define (:integer-gen v)
     (values values #f add1 0 (lambda (i) (i . < . v)) #f #f))
 
+  (define (check-naturals n)
+    (unless (and (integer? n)
+                 (exact? n)
+                 (n . >= . 0))
+      (raise-argument-error 'in-naturals
+                            "exact-nonnegative-integer?"
+                            n)))
+
   (define in-naturals
     (case-lambda
       [() (in-naturals 0)]
       [(n)
-       (unless (and (integer? n)
-                    (exact? n)
-                    (n . >= . 0))
-         (raise-argument-error 'in-naturals
-                               "exact-nonnegative-integer?"
-                               n))
+       (check-naturals n)
        (make-range n add1 #f)]))
 
   (define-values (struct:list-stream
@@ -630,8 +636,10 @@
                                      #f
                                      #f))))))
 
+  (define (check-list l)
+    (unless (list? l) (raise-argument-error 'in-list "list?" l)))
   (define (in-list l)
-    (unless (list? l) (raise-argument-error 'in-list "list?" l))
+    (check-list l)
     (make-list-stream l))
 
   (define (:list-gen l)
@@ -773,11 +781,14 @@
                 ([-first (format-id #'PREFIX "~a-first" #'PREFIX)]
                  [-next (format-id #'PREFIX "~a-next" #'PREFIX)]
                  [-VAL (format-id #'PREFIX "~a-~a" #'PREFIX #'VAL)]
+                 [CHECK-SEQ (format-id #'def "check-~a" #'IN-HASH-SEQ)]
                  [AS-EXPR-SEQ (format-id #'def "default-~a" #'IN-HASH-SEQ)])
                 #'(begin
-                   (define (AS-EXPR-SEQ ht)
+                   (define (CHECK-SEQ ht)
                      (unless (HASHTYPE? ht)
-                       (raise-argument-error 'IN-HASH-SEQ ERR-STR ht))
+                       (raise-argument-error 'IN-HASH-SEQ ERR-STR ht)))
+                   (define (AS-EXPR-SEQ ht)
+                     (CHECK-SEQ ht)
                      (make-do-sequence (lambda () (:hash-gen ht -VAL -first -next))))
                    (define-sequence-syntax IN-HASH-SEQ
                     (lambda () #'AS-EXPR-SEQ)
@@ -790,7 +801,7 @@
                             ;;outer bindings
                             ([(ht) ht-expr])
                             ;; outer check
-                            (unless (HASHTYPE? ht) (AS-EXPR-SEQ ht))
+                            (unless (HASHTYPE? ht) (CHECK-SEQ ht))
                             ;; loop bindings
                             ([i (-first ht)])
                             ;; pos check
@@ -858,18 +869,22 @@
 
   (define-syntax define-in-vector-like
     (syntax-rules ()
-      [(define-in-vector-like in-vector-name
+      [(define-in-vector-like (in-vector-name check-vector-name)
          type-name-str vector?-id vector-length-id :vector-gen-id)
-       (define in-vector-name
-         (case-lambda
-           [(v) (in-vector-name v 0 #f 1)]
-           [(v start) (in-vector-name v start #f 1)]
-           [(v start stop) (in-vector-name v start stop 1)]
-           [(v start stop step)
-            (let-values (([v start stop step]
-                          (normalise-inputs 'in-vector-name type-name-str vector?-id vector-length-id
-                                            v start stop step)))
-              (make-do-sequence (lambda () (:vector-gen-id v start stop step))))]))]))
+       (begin
+         (define in-vector-name
+           (case-lambda
+             [(v) (in-vector-name v 0 #f 1)]
+             [(v start) (in-vector-name v start #f 1)]
+             [(v start stop) (in-vector-name v start stop 1)]
+             [(v start stop step)
+              (let-values (([v start stop step]
+                            (normalise-inputs 'in-vector-name type-name-str vector?-id vector-length-id
+                                              v start stop step)))
+                (make-do-sequence (lambda () (:vector-gen-id v start stop step))))]))
+         (define (check-vector-name v)
+           (unless (vector?-id v)
+             (raise-argument-error 'in-vector-name type-name-str v))))]))
 
   (define-syntax define-:vector-like-gen
     (syntax-rules ()
@@ -897,12 +912,14 @@
                                           vector?-id
                                           unsafe-vector-length-id
                                           in-vector-id
+                                          check-vector-id
                                           unsafe-vector-ref-id)
     (define (in-vector-like stx)
       (with-syntax ([in-vector-name in-vector-name]
                     [type-name type-name-str]
                     [vector? vector?-id]
                     [in-vector in-vector-id]
+                    [check-vector check-vector-id]
                     [unsafe-vector-length unsafe-vector-length-id]
                     [unsafe-vector-ref unsafe-vector-ref-id])
         (syntax-case stx ()
@@ -914,7 +931,7 @@
                 ;;outer bindings
                 ([(vec len) (let ([vec vec-expr])
                               (unless (vector? vec)
-                                (in-vector vec))
+                                (check-vector vec))
                               (values vec (unsafe-vector-length vec)))])
                 ;; outer check
                 #f
@@ -978,7 +995,7 @@
 
   (define-:vector-like-gen :vector-gen unsafe-vector-ref)
 
-  (define-in-vector-like in-vector
+  (define-in-vector-like (in-vector check-vector)
     "vector" vector? vector-length :vector-gen)
 
   (define-sequence-syntax *in-vector
@@ -988,11 +1005,12 @@
                          #'vector?
                          #'unsafe-vector-length
                          #'in-vector
+                         #'check-vector
                          #'unsafe-vector-ref))
 
   (define-:vector-like-gen :string-gen string-ref)
 
-  (define-in-vector-like in-string
+  (define-in-vector-like (in-string check-string)
     "string" string? string-length :string-gen)
 
   (define-sequence-syntax *in-string
@@ -1002,11 +1020,12 @@
                          #'string?
                          #'unsafe-string-length
                          #'in-string
+                         #'check-string
                          #'string-ref))
 
   (define-:vector-like-gen :bytes-gen unsafe-bytes-ref)
 
-  (define-in-vector-like in-bytes
+  (define-in-vector-like (in-bytes check-bytes)
     "bytes" bytes? bytes-length :bytes-gen)
 
   (define-sequence-syntax *in-bytes
@@ -1016,6 +1035,7 @@
                          #'bytes?
                          #'unsafe-bytes-length
                          #'in-bytes
+                         #'check-bytes
                          #'unsafe-bytes-ref))
 
   (define-:vector-like-gen :flvector-gen unsafe-flvector-ref)
@@ -1854,8 +1874,8 @@
                   ([(start) a] [(end) b] [(inc) step])
                   ;; outer check:
                   (unless (and (real? start) (real? end) (real? inc))
-                    ;; let `in-range' report the error:
-                    (in-range start end inc))
+                    ;; let `check-range' report the error:
+                    (check-range start end inc))
                   ;; loop bindings:
                   ([pos start])
                   ;; pos check
@@ -1896,8 +1916,8 @@
                 ([(start) start-expr])
                 ;; outer check:
                 (unless (exact-nonnegative-integer? start)
-                  ;; let `in-naturals' report the error:
-                  (in-naturals start))
+                  ;; let `check-naturals' report the error:
+                  (check-naturals start))
                 ;; loop bindings:
                 ([pos start])
                 ;; pos check
@@ -1926,7 +1946,7 @@
               ;;outer bindings
               ([(lst) lst-expr])
               ;; outer check
-              (unless (list? lst) (in-list lst))
+              (unless (list? lst) (check-list lst))
               ;; loop bindings
               ([lst lst])
               ;; pos check
