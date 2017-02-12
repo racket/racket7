@@ -3,10 +3,12 @@
          "../host/correlate.rkt"
          "../common/set.rkt"
          "../compile/side-effect.rkt"
+         "../compile/known.rkt"
          "../run/status.rkt"
          (prefix-in bootstrap: "../run/linklet.rkt")
          "symbol.rkt"
-         "defn-utils.rkt"
+         "defn.rkt"
+         "defn-known.rkt"
          "known-primitive.rkt")
 
 (provide garbage-collect-definitions)
@@ -38,10 +40,11 @@
         (hash-set! used-syms sym #t)
         (set-all-used! (hash-ref sym-to-rhs sym #f)))))
 
-  (define (safe-defn? e)
-    (and (defn? e)
-         (or (not (any-side-effects? (defn-rhs e) (length (defn-syms e))
-                                     #:known-defns seen-defns)))))
+  ;; Helper to check for side-effects at a definition
+  (define (defn-side-effects? e)
+    (any-side-effects? (defn-rhs e)
+                       (length (defn-syms e))
+                       #:known-defns seen-defns))
 
   ;; Mark each body form, delaying the righthand side of definitions
   ;; if the definition has no side-effect
@@ -49,20 +52,35 @@
     (cond
      [(null? body) (void)]
      [(defn? (car body))
-      ;; FIXME: quadratic behavior here, since we look forward in
-      ;; `body` until finding a non-safe defn:
-      (for* ([d (in-list body)]
-             #:break (not (safe-defn? d))
-             [s (in-list (defn-syms d))])
-        (unless (hash-ref seen-defns s #f)
-          (hash-set! seen-defns s (known-defined))))
       (define defn (car body))
-      (when (any-side-effects? (defn-rhs defn) (length (defn-syms defn)) #:known-defns seen-defns)
+      (cond
+       [(defn-side-effects? defn)
+        ;; Right-hand side has an effect, so keep the
+        ;; definition and mark everything as used:
         (for ([sym (in-list (defn-syms defn))])
           (unless (hash-ref used-syms sym #f)
             (hash-set! used-syms sym #t)))
-        (set-all-used! (defn-rhs defn)))
-      (add-defn-types! seen-defns (defn-syms defn) (defn-rhs defn))
+        (set-all-used! (defn-rhs defn))
+        ;; Afterward, these identifiers are defined.
+        ;; (It's ok if delayed types refer to these,
+        ;; because they're apparently used later if they're
+        ;; still delayed.)
+        (for ([sym (in-list (defn-syms defn))])
+          (hash-set! seen-defns sym (known-defined)))]
+       [else
+        ;; The definition itself doesn't have a side effect, so dont
+        ;; mark it as used right away, and delay analysis to make it
+        ;; independent of order within a group without side effects
+        (define thunk
+          (known-defined/delay
+           (lambda ()
+             (for ([sym (in-list (defn-syms defn))])
+               (hash-set! seen-defns sym (known-defined)))
+             (add-defn-known! seen-defns
+                              (defn-syms defn)
+                              (defn-rhs defn)))))
+        (for ([sym (in-list (defn-syms defn))])
+          (hash-set! seen-defns sym thunk))])
       (loop (cdr body))]
      [else
       (set-all-used! (car body))

@@ -264,7 +264,8 @@
                 (apply proc null null args)))]
      [(proc plain-proc)
       (make-optional-keyword-procedure
-       (make-keyword-checker null #f (procedure-arity proc))
+       (make-keyword-checker null #f (and (procedure? proc) ; reundant check helps purity inference
+                                          (procedure-arity proc)))
        proc
        null
        #f
@@ -1288,7 +1289,9 @@
         (arity-check-lambda (kws) (subset? kws allowed-kws))]
        [else
         ;; Some required, some allowed
-        (if (equal? req-kws allowed-kws)
+        (if (and (list? req-kws) ; reundant, but helps inferences of no side effects
+                 (list? allowed-kws) ; also for inference
+                 (eq? (length req-kws) (length allowed-kws)))
             (arity-check-lambda 
              (kws)
              ;; All allowed are required, so check equality

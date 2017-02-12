@@ -1,17 +1,13 @@
 #lang racket/base
 (require racket/match
          "../run/status.rkt"
-         "../compile/side-effect.rkt")
-(provide (all-defined-out))
-
-(define (defn? e)
-  (match e [`(define-values ,_ ,_) #t] [_ #f]))
-(define defn-syms cadr)
-(define defn-rhs caddr)
+         "../compile/side-effect.rkt"
+         "../compile/known.rkt")
+(provide add-defn-known!)
 
 (struct struct-shape (num-fields num-parent-fields op-types))
 
-(define (add-defn-types! seen-defns syms rhs)
+(define (add-defn-known! seen-defns syms rhs)
   (for ([s (in-list syms)])
     (unless (hash-ref seen-defns s #f)
       (hash-set! seen-defns s (known-defined))))
@@ -20,7 +16,12 @@
    [(and (= 1 (length syms)) (lambda-arity rhs))
     =>
     (lambda (arity)
-      (hash-set! seen-defns (car syms) (known-function arity #f)))]
+      (hash-set! seen-defns
+                 (car syms)
+                 (known-function arity
+                                 (pure-lambda? (car syms)
+                                               rhs
+                                               seen-defns))))]
    ;; Recognize structure declarations
    [(expr-struct-shape rhs seen-defns)
     =>
@@ -46,6 +47,44 @@
     [`(lambda (,args ...) ,_) (length args)]
     [`(case-lambda [(,argss ...) ,_] ...) (map length argss)]
     [_ #f]))
+
+(define (pure-lambda? self-id e seen-defns)
+  (match e
+    [`(lambda (,args ...) ,body)
+     (pure-body? self-id null args body seen-defns)]
+    [`(case-lambda [(,argss ...) ,bodys] ...)
+     (define arity (map length argss))
+     (for/and ([args (in-list argss)]
+               [body (in-list bodys)])
+       (pure-body? self-id arity args body seen-defns))]
+    [_ #f]))
+
+(define (pure-body? self-id self-arity args body seen-defns)
+  (define locals
+    (for/hash ([arg (in-list args)])
+      (values arg (known-defined))))
+  (cond
+   [(and (pair? body)
+         (eq? (car body) self-id)
+         ((sub1 (length body)) . > . (length args)))
+    ;; Allow a self-call as pure, as long as the number of arguments
+    ;; grows. We'll only conclude that the function is pure overall if
+    ;; that assumption now as justified, but we require the number of
+    ;; arguments to grow to disallow an infinite loop as pure.
+    (define num-args (length args))
+    (not (any-side-effects? body 1
+                            #:known-defns seen-defns
+                            #:known-locals (hash-set locals
+                                                     self-id
+                                                     (known-function
+                                                      (for/list ([a (in-list self-arity)]
+                                                                 #:when (a . > . num-args))
+                                                        a)
+                                                      #t))))]
+   [else
+    (not (any-side-effects? body 1
+                            #:known-defns seen-defns
+                            #:known-locals locals))]))
 
 (define struct-general-op-types
   '(struct-type constructor predicate general-accessor general-mutator))

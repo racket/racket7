@@ -4,10 +4,12 @@
          "../host/correlate.rkt"
          "../common/set.rkt"
          "../compile/side-effect.rkt"
+         "../compile/known.rkt"
          "../run/status.rkt"
          (prefix-in bootstrap: "../run/linklet.rkt")
          "symbol.rkt"
-         "defn-utils.rkt"
+         "defn.rkt"
+         "defn-known.rkt"
          "known-primitive.rkt")
 
 (provide simplify-definitions
@@ -142,10 +144,15 @@
              (define e (car body))
              (define new-defn 
                (list 'define-values (defn-syms e) (simplify-expr (defn-rhs e) all-mutated-vars safe-ref?)))
-             (add-defn-types! seen-defns (defn-syms e) (defn-rhs e))
+             (add-defn-known! seen-defns (defn-syms e) (defn-rhs e))
              (cons new-defn (loop (cdr body)))]
-            [else (cons (simplify-expr (car body) all-mutated-vars safe-ref?)
-                        (loop (cdr body)))])))
+            [else
+             (define e
+               (simplify-expr (car body) all-mutated-vars safe-ref?))
+             (if (equal? e '(void))
+                 (loop (cdr body))
+                 (cons e
+                       (loop (cdr body))))])))
 
   (append (take linklet-expr 3)
           new-body))

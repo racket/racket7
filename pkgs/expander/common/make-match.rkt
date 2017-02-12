@@ -143,7 +143,8 @@
         [(symbol? pattern)
          (if (identifier-pattern? pattern)
              #`(or (and (rt-syntax? s)
-                        (symbol? (rt-syntax-e s))))
+                        (symbol? (rt-syntax-e s)))
+                   (symbol? s))
              #'#t)]
         [else
          #`(let ([s (if (rt-syntax? s) (rt-syntax-e s) s)])

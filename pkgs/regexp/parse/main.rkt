@@ -20,7 +20,8 @@
           (unbox (parse-config-references?-box config))))
 
 ;; Returns (values rx position)
-(define (parse-regexp s pos config #:parse-regexp [parse-regexp parse-regexp])
+(define (parse-regexp s pos config #:parse-regexp [parse-regexp (lambda (s pos config)
+                                                                  (parse-regexp s pos config))])
   (define-values (rxs pos2) (parse-pces s pos config))
   (chyte-case/eos
    s pos2
