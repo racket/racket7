@@ -5,6 +5,8 @@
          "string-output.rkt"
          "file-port.rkt"
          "bytes-port.rkt"
+         "custom-input-port.rkt"
+         "custom-output-port.rkt"
          "pipe.rkt"
          "close.rkt"
          "count.rkt"
@@ -35,6 +37,9 @@
          write-bytes-avail*
          write-bytes-avail/enable-break
          write-string
+         
+         make-input-port
+         make-output-port
          
          open-input-file
          

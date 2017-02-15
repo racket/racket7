@@ -17,7 +17,8 @@
      #:exists 'truncate
      (lambda (o)
        (unless as-c?
-         (displayln ";; This file is the result of applying the macro expander to itself" o))
+         (displayln ";; This is not the original source code. Instead, this is the code after" o)
+         (displayln ";; fully expanding and flattening into a single linklet." o))
        (define s-expr-o (if as-c?
                             (open-output-bytes)
                             o))

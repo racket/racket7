@@ -14,11 +14,7 @@ expander:
 
 expander-src:
 	$(RACO) make bootstrap-run.rkt
-	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) -s -x -o compiled/exp.rktl
-
-intern-src:
-	$(RACO) make bootstrap-run.rkt
-	$(RACKET) bootstrap-run.rkt -c compiled/cache-src ++knot read - -s -x -o compiled/intern.rktl -t common/intern.rkt
+	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) -s -x -o compiled/expander.rktl
 
 demo:
 	$(RACO) make demo.rkt

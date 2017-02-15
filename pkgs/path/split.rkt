@@ -28,8 +28,8 @@
     (define bstr (path-bytes p))
     (cond
      [(and ((bytes-length bstr) . > . 2)
-           (is-sep? (bytes-ref bstr 0))
-           (is-sep? (bytes-ref bstr 1)))
+           (is-sep? (bytes-ref bstr 0) 'windows)
+           (is-sep? (bytes-ref bstr 1) 'windows))
       (define //?-drive-end (parse-//?-drive bstr))
       (cond
        [//?-drive-end
@@ -59,7 +59,7 @@
                                                 (is-sep? (bytes-ref bstr //?-drive-end) 'windows))
                                            (add1 //-drive-end)]
                                           [else //-drive-end])
-                             #:allow-double-before? 1
+                             #:allow-double-before 1
                              #:explode? explode?)]
          [else
           (split-after-drive p #:explode? explode?)])])]
