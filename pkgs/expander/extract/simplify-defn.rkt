@@ -69,8 +69,9 @@
 
 (define (simplify-expr e ;; expression to simplify
                        vars ;; set of all mutated variables (for variable-reference-constant?)
-                       safe-ref?) ;; predicate for whether referencing a variable is safe
-  (define (simp e) (simplify-expr e vars safe-ref?))
+                       safe-ref? ;; predicate for whether referencing a variable is safe
+                       seen-defns) ;; known definitions
+  (define (simp e) (simplify-expr e vars safe-ref? seen-defns))
   (match e
     [`(if ,e0 ,e1 ,e2)
      (define e0* (simp e0))
@@ -80,15 +81,15 @@
        [else `(if ,e0* ,(simp e1) ,(simp e2))])]
     [`(let-values ,cl ,e) 
      (define names (apply append (map car cl)))     
-     (define simp-body (simplify-expr e vars (lambda (e) (or (memq e names) (safe-ref? e)))))
+     (define simp-body (simplify-expr e vars (lambda (e) (or (memq e names) (safe-ref? e))) seen-defns))
      (define body-frees (frees simp-body))
      (define cl* (filter-map 
                   (lambda (c)
                     (define vars (car c))
                     (define rhs (simp (cadr c)))
                     (cond [(and (for/and ([v (in-list vars)]) (not (set-member? body-frees v)))
-                                (symbol? rhs)
-                                (safe-ref? rhs))
+                                (not (any-side-effects? rhs (length vars) #:known-defns seen-defns
+                                                        #:ready-variable? safe-ref?)))
                            #f]
                           [else (list vars rhs)]))
                   cl))
@@ -96,8 +97,8 @@
     [`(letrec-values ,cl ,e) 
      (define names (apply append (map car cl)))
      (define cl* (map (lambda (c) (list (car c) (simp (cadr c)))) cl))
-     `(letrec-values ,cl* ,(simplify-expr e vars (lambda (e) (or (memq e names) (safe-ref? e)))))]
-    [`(lambda (,args ...) ,e) `(lambda ,args ,(simplify-expr e vars (lambda (e) (or (memq e args) (safe-ref? e)))))]
+     `(letrec-values ,cl* ,(simplify-expr e vars (lambda (e) (or (memq e names) (safe-ref? e))) seen-defns))]
+    [`(lambda (,args ...) ,e) `(lambda ,args ,(simplify-expr e vars (lambda (e) (or (memq e args) (safe-ref? e))) seen-defns))]
     [`(lambda ,args ,e) `(lambda ,args ,(simp e))]
     [`(case-lambda ,cl ...)
      (cons 'case-lambda (for/list ([c (in-list cl)])
@@ -143,12 +144,12 @@
                (hash-set! seen-defns s (known-defined)))
              (define e (car body))
              (define new-defn 
-               (list 'define-values (defn-syms e) (simplify-expr (defn-rhs e) all-mutated-vars safe-ref?)))
+               (list 'define-values (defn-syms e) (simplify-expr (defn-rhs e) all-mutated-vars safe-ref? seen-defns)))
              (add-defn-known! seen-defns (defn-syms e) (defn-rhs e))
              (cons new-defn (loop (cdr body)))]
             [else
              (define e
-               (simplify-expr (car body) all-mutated-vars safe-ref?))
+               (simplify-expr (car body) all-mutated-vars safe-ref? seen-defns))
              (if (equal? e '(void))
                  (loop (cdr body))
                  (cons e

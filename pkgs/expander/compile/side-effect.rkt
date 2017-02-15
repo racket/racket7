@@ -90,7 +90,7 @@
            (and (m)
                 (not (effects? (m 'tst) 1 locals))
                 (not (effects? (m 'thn) expected-results locals))
-                (loop (m 'thn) locals))])]
+                (loop (m 'els) locals))])]
         [else
          (define v (correlated-e e))
          (cond

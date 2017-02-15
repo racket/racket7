@@ -876,11 +876,18 @@
     syntax-shift-phase-level
     module-use
     deserialize))
+
+;; To avoid a higher-order use of a keyword-accepting function:
+(define syntax-module-path-index-shift/no-keywords
+  (let ([syntax-module-path-index-shift
+         (lambda (s from-mpi to-mpi [inspector #f])
+           (syntax-module-path-index-shift s from-mpi to-mpi inspector))])
+    syntax-module-path-index-shift))
     
 (define deserialize-instance
   (make-instance 'deserialize #f
                  'deserialize-module-path-indexes deserialize-module-path-indexes
-                 'syntax-module-path-index-shift syntax-module-path-index-shift
+                 'syntax-module-path-index-shift syntax-module-path-index-shift/no-keywords
                  'syntax-shift-phase-level syntax-shift-phase-level
                  'module-use module-use
                  'deserialize deserialize))
