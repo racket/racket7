@@ -170,12 +170,13 @@
 (define (ok-make-struct-type-property? e defns)
   (define l (correlated->list e))
   (and (<= 2 (length l) 5)
-       (for/and ([arg (cdr l)]
-                 [pred (list
-                        (lambda (v) (quoted? symbol? v))
-                        (lambda (v) (is-lambda? v 2 defns))
-                        (lambda (v) (ok-make-struct-type-property-super? v defns))
-                        (lambda (v) (any-side-effects? v 1 #:known-defns defns)))])
+       (for/and ([arg (in-list (cdr l))]
+                 [pred (in-list
+                        (list
+                         (lambda (v) (quoted? symbol? v))
+                         (lambda (v) (is-lambda? v 2 defns))
+                         (lambda (v) (ok-make-struct-type-property-super? v defns))
+                         (lambda (v) (any-side-effects? v 1 #:known-defns defns))))])
          (pred arg))))
 
 (define (ok-make-struct-type-property-super? v defns)
@@ -215,17 +216,17 @@
 
   (and ((length l) . >= . 5)
        ((length l) . <= . 12)
-       (for/and ([arg (cdr l)]
-                 [pred (list
-                        (lambda (v) (quoted? symbol? v))
-                        (lambda (v) (super-ok? v defns))
-                        (lambda (v) (field-count-expr-to-field-count v))
-                        (lambda (v) (field-count-expr-to-field-count v))
-                        (lambda (v) (not (any-side-effects? v 1 #:ready-variable? ready-variable? #:known-defns defns)))
-                        (lambda (v) (known-good-struct-properties? v immutables-expr super-expr defns))
-                        (lambda (v) (inspector-or-false? v))
-                        (lambda (v) (procedure-spec? v num-fields))
-                        (lambda (v) (immutables-ok? v init-field-count-expr)))])
+       (for/and ([arg (in-list (cdr l))]
+                 [pred (in-list (list
+                                 (lambda (v) (quoted? symbol? v))
+                                 (lambda (v) (super-ok? v defns))
+                                 (lambda (v) (field-count-expr-to-field-count v))
+                                 (lambda (v) (field-count-expr-to-field-count v))
+                                 (lambda (v) (not (any-side-effects? v 1 #:ready-variable? ready-variable? #:known-defns defns)))
+                                 (lambda (v) (known-good-struct-properties? v immutables-expr super-expr defns))
+                                 (lambda (v) (inspector-or-false? v))
+                                 (lambda (v) (procedure-spec? v num-fields))
+                                 (lambda (v) (immutables-ok? v init-field-count-expr))))])
          (pred arg))))
 
 (define (super-ok? e defns)

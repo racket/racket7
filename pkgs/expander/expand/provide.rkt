@@ -199,10 +199,10 @@
                                         (syntax-e id:struct)
                                         (syntax-e field-id))))
     (datum->syntax id:struct sym id:struct))
-  (for ([fmt (list "~a"
-                   "make-~a"
-                   "struct:~a"
-                   "~a?")])
+  (for ([fmt (in-list (list "~a"
+                            "make-~a"
+                            "struct:~a"
+                            "~a?"))])
     (define id (mk fmt))
     (parse-identifier! id orig-s (syntax-e id) at-phase ns rp protected?))
   (for ([field (in-list fields)])

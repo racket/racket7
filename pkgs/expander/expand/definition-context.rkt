@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../common/struct-star.rkt"
+(require (for-syntax racket/base)
+         "../common/struct-star.rkt"
          "../syntax/syntax.rkt"
          "../common/phase.rkt"
          "../syntax/scope.rkt"
@@ -140,11 +141,25 @@
     (internal-definition-context-introduce intdef id 'remove)))
 
 ;; Sequence for intdefs provided to `local-expand`
-(define (in-intdefs intdefs)
-  (cond
-   [(not intdefs) (in-list null)]
-   [(list? intdefs) (in-list (reverse intdefs))]
-   [else (in-value intdefs)]))
+(define-sequence-syntax in-intdefs
+  (lambda (stx) (raise-syntax-error #f "only allowed in a `for` form" stx))
+  (lambda (stx)
+    (syntax-case stx ()
+      [[(d) (_ arg)]
+       #'[(d)
+          (:do-in
+           ([(x) (let ([a arg])
+                   (cond
+                    [(list? a) (reverse a)]
+                    [(not a) null]
+                    [else (list a)]))])
+           #t
+           ([a x])
+           (pair? a)
+           ([(d) (car a)])
+           #t
+           #t
+           ((cdr a)))]])))
 
 (define (add-intdef-bindings env intdefs)
   (for/fold ([env env]) ([intdef (in-intdefs intdefs)])
