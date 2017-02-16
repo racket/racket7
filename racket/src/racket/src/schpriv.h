@@ -3246,7 +3246,7 @@ void scheme_restore_prim_instance(Scheme_Startup_Env *env);
   Scheme_Object *p; \
   p = scheme_make_folding_prim(func, name, a1, a2, a3); \
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED); \
-  scheme_add_to_primitive_instance(name, p, env); \
+  scheme_addto_prim_instance(name, p, env); \
 } while(0)
 
 
