@@ -1298,6 +1298,9 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
   } else if (IS_NAMED_PRIM(rator, "syntax?")) {
     generate_inlined_type_test(jitter, app, scheme_stx_type, scheme_stx_type, 0, for_branch, branch_short, dest);
     return 1;
+  } else if(IS_NAMED_PRIM(rator, "variable-reference?")) {
+    generate_inlined_type_test(jitter, app, scheme_global_ref_type, scheme_global_ref_type, 0, for_branch, branch_short, dest);
+    return 1;
   } else if (IS_NAMED_PRIM(rator, "char?")) {
     generate_inlined_type_test(jitter, app, scheme_char_type, scheme_char_type, 0, for_branch, branch_short, dest);
     return 1;

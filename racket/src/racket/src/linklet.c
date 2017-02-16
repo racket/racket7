@@ -144,7 +144,7 @@ void scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("hash->linklet-bundle", hash_to_linklet_bundle, 1, 1, env);
   ADD_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, env);
 
-  ADD_FOLDING_PRIM("variable-reference?", variable_p, 1, 1, 1, env);
+  ADD_FOLDING_PRIM_UNARY_INLINED("variable-reference?", variable_p, 1, 1, 1, env);
   ADD_IMMED_PRIM("variable-reference->instance", variable_instance, 1, 1, env);
 
   REGISTER_SO(scheme_varref_const_p_proc);
