@@ -20,7 +20,7 @@
 
   (define used-syms (make-hasheq))
 
-  ;; See "../compile/side-effect.rkt" for the meaning of
+  ;; See "../compile/known.rkt" for the meaning of
   ;; values in `seen-defns`
   (define seen-defns (make-hasheq))
   (register-known-primitives! seen-defns)

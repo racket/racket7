@@ -158,11 +158,11 @@
                        (cond
                         [(not flat-s) #f]
                         [#,(if (eq? '...+ (cadr pattern)) #'(null? flat-s) #'#f) #f]
-                        [else (if (and (symbol? (car pattern))
-                                       (not (identifier-pattern? (car pattern))))
-                                  #t
-                                  #`(for/and ([s (in-list flat-s)])
-                                      #,(compile-pattern-check (car pattern))))])))]
+                        [else #,(if (and (symbol? (car pattern))
+                                         (not (identifier-pattern? (car pattern))))
+                                    #`#t
+                                    #`(for/and ([s (in-list flat-s)])
+                                        #,(compile-pattern-check (car pattern))))])))]
                 [(pair? pattern)
                  (with-syntax ([(a-pattern-id ...) (extract-pattern-ids (car pattern))]
                                [(d-pattern-id ...) (extract-pattern-ids (cdr pattern))])
