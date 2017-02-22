@@ -1,11 +1,11 @@
 #lang racket/base
-(require "read-and-peek.rkt"
+(require "../common/check.rkt"
+         "read-and-peek.rkt"
          "input-port.rkt"
          "internal-pipe.rkt"
          (submod "bytes-input.rkt" internal)
-         "utf-8-decode.rkt"
-         "count.rkt"
-         "check.rkt")
+         "../string/utf-8-decode.rkt"
+         "count.rkt")
 
 (provide read-char
          read-string

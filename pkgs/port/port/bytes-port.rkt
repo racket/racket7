@@ -1,6 +1,6 @@
 #lang racket/base
-(require "input-port.rkt"
-         "check.rkt")
+(require "../common/check.rkt"
+         "input-port.rkt")
 
 (provide open-input-bytes)
 

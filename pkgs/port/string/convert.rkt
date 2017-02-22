@@ -1,7 +1,7 @@
 #lang racket/base
 (require "utf-8-decode.rkt"
          "utf-8-encode.rkt"
-         "check.rkt")
+         "../common/check.rkt")
 
 (provide bytes->string/latin-1
          bytes->string/utf-8

@@ -1,7 +1,7 @@
 #lang racket/base
-(require "input-port.rkt"
-         "output-port.rkt"
-         "check.rkt")
+(require "../common/check.rkt"
+         "input-port.rkt"
+         "output-port.rkt")
 
 (provide make-pipe
          pipe-input-port?

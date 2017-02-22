@@ -1,8 +1,8 @@
 #lang racket/base
-(require "read-and-peek.rkt"
+(require "../common/check.rkt"
+         "read-and-peek.rkt"
          "input-port.rkt"
          "internal-pipe.rkt"
-         "check.rkt"
          "count.rkt")
 
 (provide read-byte

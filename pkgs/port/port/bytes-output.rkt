@@ -1,7 +1,7 @@
 #lang racket/base
-(require "output-port.rkt"
-         "write.rkt"
-         "check.rkt")
+(require "../common/check.rkt"
+         "output-port.rkt"
+         "write.rkt")
 
 (provide write-bytes
          write-bytes-avail

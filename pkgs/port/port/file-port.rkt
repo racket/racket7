@@ -5,10 +5,10 @@
                   [peek-byte host:peek-byte]
                   [read-bytes-avail!* host:read-bytes-avail!*]
                   [close-input-port host:close-input-port])
+         "../common/check.rkt"
          "input-port.rkt"
          "output-port.rkt"
-         "pipe.rkt"
-         "check.rkt")
+         "pipe.rkt")
 
 (provide open-input-file)
 

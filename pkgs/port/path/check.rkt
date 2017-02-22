@@ -1,17 +1,11 @@
 #lang racket/base
-(require (for-syntax racket/base))
+(require (for-syntax racket/base)
+         "../common/check.rkt")
+
 (provide check
          check-convention
          check-path-string
          check-path-bytes)
-
-(define-syntax (check stx)
-  (syntax-case stx ()
-    [(_ who pred #:contract ctc v)
-     #`(unless (pred v)
-         (raise-argument-error who ctc v))]
-    [(_ who pred v)
-     #`(check who pred #:contract #,(format "~a" (syntax->datum #'pred)) v)]))
 
 (define (check-convention who c)
   (check who (lambda (c) (or (eq? c 'windows) (eq? c 'unix)))
@@ -33,4 +27,3 @@
     (when (zero? c)
       (raise-arguments-error who "byte string contains a nul character"
                              "byte string" s))))
-

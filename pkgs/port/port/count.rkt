@@ -1,8 +1,8 @@
 #lang racket/base
-(require "input-port.rkt"
+(require "../common/check.rkt"
+         "input-port.rkt"
          "output-port.rkt"
-         "utf-8-decode.rkt"
-         "check.rkt")
+         "../string/utf-8-decode.rkt")
 
 (provide port-count-lines!
          port-next-location
@@ -19,7 +19,7 @@
       (set-input-port-position! p 1)
       (define count-lines! (input-port-count-lines! p))
       (when count-lines! (count-lines!)))]
-   [(output-port?)
+   [(output-port? p)
     (unless (output-port-line p)
       (set-output-port-line! p 1)
       (set-output-port-column! p 0)
