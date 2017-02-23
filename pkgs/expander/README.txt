@@ -70,7 +70,12 @@ Running:
    Checks possibility of converting a module to a stand-alone linklet
    with no imports --- used mainly to extract the expander itself.
 
- % racket bootstrap-run.rkt -c <dir> -O <checkout-dir>/racket
+ % racket bootstrap-run.rkt -c <dir> -sx -t <file-path> -o <outfile-path>
+
+   Expands and extracts <file-path> as a single linklet to
+   <outfile-path>.
+
+% racket bootstrap-run.rkt -c <dir> -O <checkout-dir>/racket
 
    Compiles the expander to source files in <dir> --- note that
    "bootstrap-run.rkt" must be used to get source compiles --- and
