@@ -7,6 +7,7 @@
              "member.rkt"
              "reverse.rkt"
              "sort.rkt"
+             "performance-hint.rkt"
              '#%unsafe
              '#%flfxnum
              (for-syntax '#%kernel
@@ -599,13 +600,14 @@
   (define (:integer-gen v)
     (values values #f add1 0 (lambda (i) (i . < . v)) #f #f))
 
-  (define (check-naturals n)
-    (unless (and (integer? n)
-                 (exact? n)
-                 (n . >= . 0))
-      (raise-argument-error 'in-naturals
-                            "exact-nonnegative-integer?"
-                            n)))
+  (begin-encourage-inline
+    (define (check-naturals n)
+      (unless (and (integer? n)
+                   (exact? n)
+                   (n . >= . 0))
+        (raise-argument-error 'in-naturals
+                              "exact-nonnegative-integer?"
+                              n))))
 
   (define in-naturals
     (case-lambda
@@ -784,9 +786,10 @@
                  [CHECK-SEQ (format-id #'def "check-~a" #'IN-HASH-SEQ)]
                  [AS-EXPR-SEQ (format-id #'def "default-~a" #'IN-HASH-SEQ)])
                 #'(begin
-                   (define (CHECK-SEQ ht)
-                     (unless (HASHTYPE? ht)
-                       (raise-argument-error 'IN-HASH-SEQ ERR-STR ht)))
+                   (begin-encourage-inline
+                     (define (CHECK-SEQ ht)
+                       (unless (HASHTYPE? ht)
+                         (raise-argument-error 'IN-HASH-SEQ ERR-STR ht))))
                    (define (AS-EXPR-SEQ ht)
                      (CHECK-SEQ ht)
                      (make-do-sequence (lambda () (:hash-gen ht -VAL -first -next))))
@@ -801,7 +804,7 @@
                             ;;outer bindings
                             ([(ht) ht-expr])
                             ;; outer check
-                            (unless (HASHTYPE? ht) (CHECK-SEQ ht))
+                            (CHECK-SEQ ht)
                             ;; loop bindings
                             ([i (-first ht)])
                             ;; pos check
@@ -930,8 +933,7 @@
                (:do-in
                 ;;outer bindings
                 ([(vec len) (let ([vec vec-expr])
-                              (unless (vector? vec)
-                                (check-vector vec))
+                              (check-vector vec)
                               (values vec (unsafe-vector-length vec)))])
                 ;; outer check
                 #f
@@ -1873,9 +1875,8 @@
                   ;; outer bindings:
                   ([(start) a] [(end) b] [(inc) step])
                   ;; outer check:
-                  (unless (and (real? start) (real? end) (real? inc))
-                    ;; let `check-range' report the error:
-                    (check-range start end inc))
+                  ;; let `check-range' report the error:
+                  (check-range start end inc)
                   ;; loop bindings:
                   ([pos start])
                   ;; pos check
@@ -1915,9 +1916,8 @@
                 ;; outer bindings:
                 ([(start) start-expr])
                 ;; outer check:
-                (unless (exact-nonnegative-integer? start)
-                  ;; let `check-naturals' report the error:
-                  (check-naturals start))
+                ;; let `check-naturals' report the error:
+                (check-naturals start)
                 ;; loop bindings:
                 ([pos start])
                 ;; pos check
@@ -1946,7 +1946,7 @@
               ;;outer bindings
               ([(lst) lst-expr])
               ;; outer check
-              (unless (list? lst) (check-list lst))
+              (check-list lst)
               ;; loop bindings
               ([lst lst])
               ;; pos check
