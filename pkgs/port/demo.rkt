@@ -8,7 +8,7 @@
         #:property prop:custom-write (lambda (v o mode)
                                        (fprintf o "<~a>" (animal-name v))))
 
-(format "1~%~  \n  ~o~c" 0 #\!)
+(format "1~%~  \n  ~o~c~s" 0 #\! "hi")
 
 (format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file")))
 (format "*~.v*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155)))

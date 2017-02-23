@@ -97,4 +97,4 @@
       (output-port/max-max-length o max-length))]
    [else
     ;; As a last resort, fall back to the host `format`:
-    (format "~s" v)]))
+    (write-string/max (format "~s" v) o max-length)]))
