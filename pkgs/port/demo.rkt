@@ -4,6 +4,24 @@
                   [string->bytes/utf-8 host:string->bytes/utf-8]
                   [bytes->string/utf-8 host:bytes->string/utf-8]))
 
+(struct animal (name weight)
+        #:property prop:custom-write (lambda (v o mode)
+                                       (fprintf o "<~a>" (animal-name v))))
+
+(format "1~%~  \n  ~o~c" 0 #\!)
+
+(format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file")))
+(format "*~.v*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155)))
+
+(fprintf (current-output-port) "*~v*" '!!!)
+(newline)
+
+(with-handlers ([exn:fail? exn-message])
+  (error 'no "hi ~s" 10))
+
+(with-handlers ([exn:fail? exn-message])
+  (error 'no "hi ~s" 1 2 3))
+
 (bytes->string/utf-8 (string->bytes/utf-8 "!!ap\u3BBple__" #f 2) #f 0 7)
 (bytes->string/latin-1 (string->bytes/latin-1 "ap\u3BBple" (char->integer #\?)))
 (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBp\uF7F8\U101234le"))

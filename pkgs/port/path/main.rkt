@@ -1,5 +1,6 @@
 #lang racket/base
-(require (rename-in "path.rkt"
+(require "../string/convert.rkt"
+         (rename-in "path.rkt"
                     [string->path raw:string->path])
          "check.rkt"
          "sep.rkt"

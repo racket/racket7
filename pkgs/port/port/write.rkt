@@ -1,5 +1,6 @@
 #lang racket/base
-(require "output-port.rkt")
+(require "../error/abort.rkt"
+         "output-port.rkt")
 
 (provide write-some-bytes)
 
@@ -26,7 +27,4 @@
             0
             (try-again))]
        [(exact-integer? v) v]
-       [else
-        (error who "weird result")]))]))
-  
-
+       [else (abort "write-some-bytes: weird result")]))]))

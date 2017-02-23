@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../common/check.rkt"
          "output-port.rkt"
+         "parameter.rkt"
          "write.rkt")
 
 (provide write-bytes

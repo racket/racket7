@@ -1,5 +1,6 @@
 #lang racket/base
-(require "path.rkt"
+(require "../error/abort.rkt"
+         "path.rkt"
          "check-path.rkt"
          "sep.rkt")
 
@@ -18,13 +19,13 @@
          (define bstr (path-bytes p))
          (unix-bstr-check bstr)]
         [(windows)
-         (error "much more here")])]
+         (abort "much more here")])]
      [(string? p)
       (case (system-path-convention-type)
         [(unix)
          (unix-str-check p)]
         [(windows)
-         (error "much more here")])])))
+         (abort "much more here")])])))
 
 (define-...-path? relative-path?
   (lambda (p) 

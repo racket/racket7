@@ -1,6 +1,5 @@
 #lang racket/base
 (require "input-port.rkt"
-         "internal-pipe.rkt"
          "count.rkt")
 
 (provide read-some-bytes!
@@ -74,6 +73,7 @@
      ;; previously detected EOF? (never skip past it)
      [(input-port-pending-eof? in)
       eof]
+     [(zero? (bytes-length bstr)) 0]
      [else
       (define peek-in (input-port-peek-in in))
       (cond

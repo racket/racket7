@@ -2,7 +2,6 @@
 (require "../common/check.rkt"
          "read-and-peek.rkt"
          "input-port.rkt"
-         "internal-pipe.rkt"
          (submod "bytes-input.rkt" internal)
          "../string/utf-8-decode.rkt"
          "count.rkt")

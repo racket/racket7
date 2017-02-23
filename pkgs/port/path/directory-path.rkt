@@ -1,5 +1,6 @@
 #lang racket/base
-(require "path.rkt"
+(require "../error/abort.rkt"
+         "path.rkt"
          "check-path.rkt"
          "sep.rkt")
 
@@ -16,7 +17,7 @@
       [(unix)
        (path (bytes-append (path-bytes p) #"/") 'unix)]
       [else
-       (error "path->dir-path for Windows")])]))
+       (abort "path->dir-path for Windows")])]))
 
 (define (directory-path? p)
   (define bstr (path-bytes p))
@@ -35,5 +36,5 @@
                   (is-sep? (bytes-ref bstr (- len 2)) 'unix))))]
     [else
      ;; FIXME
-     (error "dir-path? for Windows")]))
+     (abort "dir-path? for Windows")]))
 

@@ -5,11 +5,13 @@
          "string-output.rkt"
          "file-port.rkt"
          "bytes-port.rkt"
+         "string-port.rkt"
          "custom-input-port.rkt"
          "custom-output-port.rkt"
          "pipe.rkt"
          "close.rkt"
-         "count.rkt")
+         "count.rkt"
+         "parameter.rkt")
 
 (provide read-byte
          read-bytes
@@ -43,6 +45,10 @@
          open-input-file
          
          open-input-bytes
+         open-output-bytes
+         open-input-string
+         open-output-string
+         string-port?
          
          make-pipe
          pipe-input-port?
@@ -53,4 +59,8 @@
          close-output-port
          
          port-count-lines!
-         port-next-location)
+         port-next-location
+
+         current-input-port
+         current-output-port
+         current-error-port)
