@@ -317,7 +317,8 @@ Scheme_Comp_Env *scheme_new_comp_env(Scheme_Linklet *linklet, int flags)
   return env;
 }
 
-Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var, int mutate)
+Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var,
+                                        int mutate, int check_dups)
 {
   Scheme_Comp_Env *env2;
   Scheme_Hash_Tree *vars;
@@ -330,6 +331,11 @@ Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id,
   else {
     env2 = MALLOC_ONE_RT(Scheme_Comp_Env);
     memcpy(env2, env, sizeof(Scheme_Comp_Env));
+  }
+
+  if (check_dups) {
+    if (scheme_hash_tree_get(env2->vars, id))
+      return NULL;
   }
 
   vars = scheme_hash_tree_set(env2->vars, id, var);

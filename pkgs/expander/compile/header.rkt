@@ -255,8 +255,8 @@
 ;;  extra-inspectorsss : a list of list of (or/c #f (set/c inspector?))
 ;;  def-decls : a list of S-expressions for forward-reference declarations
 (define (generate-links+imports header phase cctx)
-  ;; Make a link symbol for each distinct module+phase:
-  (define mod-use-to-link-sym
+  ;; Find each distinct module+phase:
+  (define mod-use-ht
     (for/fold ([ht #hash()]) ([(vu) (in-list (header-require-vars-in-order header))])
       (define mu (variable-use-module-use vu))
       (if (or (hash-ref ht mu #f)
@@ -264,13 +264,9 @@
                    (compile-context-self cctx))
               (top-level-module-path-index? (module-use-module mu)))
           ht
-          (hash-set ht mu (string->symbol
-                           (format "~a_~a_~a"
-                                   (extract-name (module-use-module mu))
-                                   (module-use-phase mu)
-                                   (hash-count ht)))))))
+          (hash-set ht mu #t))))
   ;; List of distinct module+phases:
-  (define link-mod-uses (hash-keys mod-use-to-link-sym))
+  (define link-mod-uses (hash-keys mod-use-ht))
 
   (values
    ;; Module-uses list:

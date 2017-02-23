@@ -2601,7 +2601,8 @@ typedef struct Scheme_Comp_Env
 #define COMP_ENV_ALLOW_SET_UNDEFINED  0x4
 
 Scheme_Comp_Env *scheme_new_comp_env(Scheme_Linklet *linklet, int flags);
-Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var, int mutate);
+Scheme_Comp_Env *scheme_extend_comp_env(Scheme_Comp_Env *env, Scheme_Object *id, Scheme_Object *var,
+                                        int mutate, int check_dups);
 Scheme_Comp_Env *scheme_set_comp_env_flags(Scheme_Comp_Env *env, int flags);
 Scheme_Comp_Env *scheme_set_comp_env_name(Scheme_Comp_Env *env, Scheme_Object *name);
 

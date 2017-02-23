@@ -430,7 +430,7 @@ static Scheme_Object *make_lambda(Scheme_Comp_Env *env, Scheme_Object *code)
       param = SCHEME_STX_CAR(params);
     var = scheme_make_ir_local(param);
     vars[i] = var;
-    env = scheme_extend_comp_env(env, param, (Scheme_Object *)var, i > 0);
+    env = scheme_extend_comp_env(env, param, (Scheme_Object *)var, i > 0, 0);
     if (SCHEME_STX_PAIRP(params))
       params = SCHEME_STX_CDR (params);
   }
@@ -1063,7 +1063,7 @@ static Scheme_Object *do_let_compile (Scheme_Object *form, Scheme_Comp_Env *orig
         var->compile.use_position = m;
       }
       vars[m-pre_k] = var;
-      frame = scheme_extend_comp_env(frame, names[m], (Scheme_Object *)var, mutate_frame);
+      frame = scheme_extend_comp_env(frame, names[m], (Scheme_Object *)var, mutate_frame, 0);
       mutate_frame = 1;
     }
     
@@ -1947,7 +1947,7 @@ static Scheme_Object *define_parse(Scheme_Object *form,
 
     if (!v) {
       v = (Scheme_Object *)scheme_make_ir_toplevel(-1, *_extra_vars_pos, 0);
-      env = scheme_extend_comp_env(*_env, name, v, 1);
+      env = scheme_extend_comp_env(*_env, name, v, 1, 0);
       *_env = env;
       extra_vars = scheme_make_pair(name, extra_vars);
       (*_extra_vars_pos)++;
@@ -2053,7 +2053,9 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Schem
         e = SCHEME_STX_CADR(e);
       }
       tl = scheme_make_ir_toplevel(i, j, SCHEME_TOPLEVEL_READY);
-      env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
+      env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1, 1);
+      if (!env)
+        scheme_wrong_syntax("linklet", e, NULL, "duplicate import");
     }
 
     linklet->num_total_imports += len;
@@ -2090,7 +2092,9 @@ Scheme_Linklet *scheme_compile_linklet(Scheme_Object *form, int set_undef, Schem
     else
       also_used_names = scheme_hash_tree_set(also_used_names, a, scheme_true);
     tl = scheme_make_ir_toplevel(-1, j, 0);
-    env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1);
+    env = scheme_extend_comp_env(env, e, (Scheme_Object *)tl, 1, 1);
+    if (!env)
+      scheme_wrong_syntax("linklet", e, NULL, "export duplicates import");
   }
 
   /* Looks for `define-values` forms to detect variables that are defined but
