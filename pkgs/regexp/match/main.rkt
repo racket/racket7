@@ -106,7 +106,7 @@
 ;; position in bytes --- so, a "pos" is normalized to UTF-8 bytes in
 ;; the case of a string.
 
-(define (drive-regexp-match who orig-rx in orig-start-offset orig-end-offset out prefix
+(define (drive-regexp-match who orig-rx orig-in orig-start-offset orig-end-offset out prefix
                             #:search-offset [search-offset orig-start-offset]
                             #:mode mode
                             #:in-port-ok? [in-port-ok? #t]
@@ -120,15 +120,16 @@
               [(string? orig-rx) (make-regexp who orig-rx #f #f #f)]
               [(bytes? orig-rx) (make-regexp who orig-rx #f #t #f)]
               [else (raise-argument-error who "(or/c regexp? byte-regexp? string? bytes?)" orig-rx)]))
+  (define in (if (path? orig-in) (path->bytes orig-in) orig-in))
   (unless (or (and (bytes? in) (not peek?))
               (and (string? in) (not peek?))
               (and in-port-ok? (input-port? in)))
     (raise-argument-error who
                           (cond
                            [peek? "input-port?"]
-                           [in-port-ok? "(or/c bytes? string? input-port?)"]
+                           [in-port-ok? "(or/c bytes? string? input-port? path?)"]
                            [else "(or/c bytes? string?)"])
-                          in))
+                          orig-in))
   
   (define start-offset (cond
                         [orig-start-offset

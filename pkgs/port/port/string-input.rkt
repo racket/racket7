@@ -248,7 +248,7 @@
   (check 'peek-char input-port? in)
   (check 'peek-char exact-nonnegative-integer? skip-k)
   (define peek-byte (and (zero? skip-k)
-                         (input-port-read-byte in)))
+                         (input-port-peek-byte in)))
   (define b (and peek-byte (peek-byte)))
   (cond
    [(and b
@@ -261,7 +261,7 @@
     (define bstr (make-string 1))
     (define v (do-peek-string! 'peek-char in bstr 0 1 skip-k))
     (if (eq? v 1)
-        (string-ref bstr 1)
+        (string-ref bstr 0)
         v)]))
 
 (define (peek-string amt skip-k [in (current-input-port)])

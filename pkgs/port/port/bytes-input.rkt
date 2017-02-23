@@ -123,7 +123,7 @@
   (check 'peek-byte input-port? in)
   (check 'peek-byte exact-nonnegative-integer? skip-k)
   (define peek-byte (and (zero? skip-k)
-                         (input-port-read-byte in)))
+                         (input-port-peek-byte in)))
   (cond
    [peek-byte
     ;; Shortcut is available
@@ -133,7 +133,7 @@
     (define bstr (make-bytes 1))
     (define v (peek-some-bytes! 'peek-byte in bstr 0 1 skip-k #:copy-bstr? #f))
     (if (eq? v 1)
-        (bytes-ref bstr 1)
+        (bytes-ref bstr 0)
         v)]))
 
 (define (peek-bytes amt skip-k [in (current-input-port)])

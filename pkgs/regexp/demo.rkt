@@ -1,7 +1,6 @@
 #lang racket/base
 (require (prefix-in rx: "main.rkt"))
 
-
 (define (check rx in N [M (max 1 (quotient N 10))])
   (define c-start (current-inexact-milliseconds))
   (define orig-rx

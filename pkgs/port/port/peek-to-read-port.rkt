@@ -72,7 +72,11 @@
            eof]
           [(zero? v) 0]
           [else
-           ((output-port-write-out peek-pipe-o) buf 0 v #t #f)
+           (let loop ([wrote 0])
+             (define just-wrote ((output-port-write-out peek-pipe-o) buf wrote v #t #f))
+             (define next-wrote (+ wrote just-wrote))
+             (unless (= v next-wrote)
+               (loop next-wrote)))
            (try-again)])])))
 
    #:close

@@ -8,7 +8,8 @@
          "custom-write.rkt"
          "write-with-max.rkt"
          "string.rkt"
-         "symbol.rkt")
+         "symbol.rkt"
+         "char.rkt")
 
 (provide display
          write
@@ -72,6 +73,10 @@
     (case mode
       [(#f) (write-string/max (symbol->string v) o max-length)]
       [else (print-symbol v o max-length)])]
+   [(char? v)
+    (case mode
+      [(#f) (write-string/max (string v) o max-length)]
+      [else (print-char v o max-length)])]
    [(not v)
     (write-string/max "#f" o max-length)]
    [(eq? v #t)

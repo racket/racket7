@@ -76,7 +76,8 @@
                            #:error-char #\?
                            #:abort-mode 'state
                            #:state state))
-          (loop end 0 line (+ column got-chars) (+ position got-chars) new-state #f)])]
+          (define (keep-aborts s) (if (eq? s 'complete) #f s))
+          (loop end 0 line (+ column got-chars) (+ position got-chars) (keep-aborts new-state) #f)])]
        [else
         (define b (bytes-ref bstr i))
         (define (end-utf-8) ; => next byte is ASCII, so we can terminate a UTF-8 sequence
@@ -85,7 +86,7 @@
                            #f 0 #f
                            #:error-char #\?
                            #:state state))
-          (loop end 0 line (+ column got-chars) (+ position got-chars) new-state #f))
+          (loop end 0 line (+ column got-chars) (+ position got-chars) #f #f))
         (cond
          [(eq? b (char->integer #\newline))
           (cond
