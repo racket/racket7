@@ -255,7 +255,7 @@
          (or (eof-object? b)
              (b . < . 128)))
     ;; Shortcut worked
-    (integer->char b)]
+    (if (eof-object? b) b (integer->char b))]
    [else
     ;; General mode
     (define bstr (make-string 1))
