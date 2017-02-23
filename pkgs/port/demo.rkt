@@ -22,6 +22,21 @@
 (with-handlers ([exn:fail? exn-message])
   (error 'no "hi ~s" 1 2 3))
 
+(define infinite-ones 
+  (make-input-port 'ones
+                   (lambda (s) 
+                     (bytes-set! s 0 (char->integer #\1))
+                     1)
+                   #f
+                   void))
+
+(read-byte infinite-ones)
+(read-char infinite-ones)
+(read-bytes 5 infinite-ones)
+(peek-bytes 5 3 infinite-ones)
+(read-bytes 5 infinite-ones)
+(read-string 5 infinite-ones)
+
 (bytes->string/utf-8 (string->bytes/utf-8 "!!ap\u3BBple__" #f 2) #f 0 7)
 (bytes->string/latin-1 (string->bytes/latin-1 "ap\u3BBple" (char->integer #\?)))
 (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBp\uF7F8\U101234le"))

@@ -75,7 +75,7 @@ Running:
    Expands and extracts <file-path> as a single linklet to
    <outfile-path>.
 
-% racket bootstrap-run.rkt -c <dir> -O <checkout-dir>/racket
+ % racket bootstrap-run.rkt -c <dir> -O <checkout-dir>/racket
 
    Compiles the expander to source files in <dir> --- note that
    "bootstrap-run.rkt" must be used to get source compiles --- and

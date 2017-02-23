@@ -1,5 +1,9 @@
 #lang racket/base
-(require "bytes-input.rkt"
+(require (only-in "input-port.rkt"
+                  input-port?)
+         (only-in "output-port.rkt"
+                  output-port?)
+         "bytes-input.rkt"
          "string-input.rkt"
          "bytes-output.rkt"
          "string-output.rkt"
@@ -41,6 +45,9 @@
          
          make-input-port
          make-output-port
+         
+         input-port?
+         output-port?
          
          open-input-file
          
