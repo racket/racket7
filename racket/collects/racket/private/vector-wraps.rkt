@@ -17,7 +17,8 @@
                       for/fXvector
                       for*/fXvector
                       fXvector-copy
-                      fXzero)
+                      fXzero
+                      check-fXvector)
   (...
    (begin
      (define-:vector-like-gen :fXvector-gen unsafe-fXvector-ref)
