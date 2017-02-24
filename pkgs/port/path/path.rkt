@@ -13,9 +13,11 @@
 (struct path (bytes convention)
         #:property prop:custom-write
         (lambda (p port mode)
-          (write-string "#<path:" port)
+          (when mode
+            (write-string "#<path:" port))
           (write-string (bytes->string/locale (path-bytes p)) port)
-          (write-string ">" port))
+          (when mode
+            (write-string ">" port)))
         #:property prop:equal+hash
         (list
          (lambda (p1 p2 eql?)
