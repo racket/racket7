@@ -62,7 +62,7 @@
    [else
     (define-values (used-bytes got-chars state)
       (utf-8-decode! bstr 0 v
-                     str start amt
+                     str start (+ start amt)
                      #:error-char #\?
                      #:abort-mode 'state))
     ;; The `state` result can't be 'continues, because N
