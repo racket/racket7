@@ -2,7 +2,10 @@
 (require "main.rkt"
          (only-in racket/base
                   [string->bytes/utf-8 host:string->bytes/utf-8]
-                  [bytes->string/utf-8 host:bytes->string/utf-8]))
+                  [bytes->string/utf-8 host:bytes->string/utf-8]
+                  [open-input-file host:open-input-file]
+                  [close-input-port host:close-input-port]
+                  [read-line host:read-line]))
 
 (struct animal (name weight)
         #:property prop:custom-write (lambda (v o mode)
@@ -65,7 +68,7 @@
     (loop (add1 x) (cdr content) (list* bstr bstr accum))]))
 
 (time
- (let loop ([j 1000])
+ (let loop ([j 10])
    (unless (zero? j)
      (let ()
        (define p (open-input-file "compiled/port.rktl"))
@@ -89,9 +92,37 @@
        (close-input-port p)
        (loop (sub1 j))))))
 
+'read-line
+(time
+ (let loop ([j 100])
+   (unless (zero? j)
+     (let ()
+       (define p (host:open-input-file "compiled/port.rktl"))
+       (let loop ()
+         (unless (eof-object? (host:read-line p))
+           (loop)))
+       (host:close-input-port p)
+       (loop (sub1 j))))))
+
+(time
+ (let loop ([j 100])
+   (unless (zero? j)
+     (let ()
+       (define p (open-input-file "compiled/port.rktl"))
+       (let loop ()
+         (unless (eof-object? (read-line p))
+           (loop)))
+       (close-input-port p)
+       (loop (sub1 j))))))
+
 (time
  (for/fold ([v #f]) ([i (in-range 1000000)])
    (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBple"))))
 (time
  (for/fold ([v #f]) ([i (in-range 1000000)])
    (host:bytes->string/utf-8 (host:string->bytes/utf-8 "ap\u3BBple"))))
+
+(read-line (open-input-string "a"))
+(read-line (open-input-string "a\nb"))
+(read-line (open-input-string "a\r\nb") 'any)
+(read-line (open-input-string "a\rb") 'any)

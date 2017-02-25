@@ -7,6 +7,7 @@
          "string-input.rkt"
          "bytes-output.rkt"
          "string-output.rkt"
+         "line-input.rkt"
          "file-port.rkt"
          "bytes-port.rkt"
          "string-port.rkt"
@@ -43,6 +44,9 @@
          write-bytes-avail*
          write-bytes-avail/enable-break
          write-string
+         
+         read-line
+         read-bytes-line
          
          make-input-port
          make-output-port
