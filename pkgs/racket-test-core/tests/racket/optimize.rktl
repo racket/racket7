@@ -357,6 +357,58 @@
 (test #t (lambda () (let ([f (case-lambda [(x) '(1)] [(x y) 0])])
                       (eq? (f 5) (f 5)))))
 
+;; Check that lambdas are marked as single valed and mark preserving
+(test-comp '(let ([f (lambda () '(1))])
+              (display (list f f))
+              (values (f))) 
+           '(let ([f (lambda () '(1))])
+              (display (list f f))
+              (f)))
+(test-comp '(let ([f (lambda (x) '(1))])
+              (display (list f f))
+              (values (f 0))) 
+           '(let ([f (lambda (x) '(1))])
+              (display (list f f))
+              (f 0)))
+(test-comp '(let ([f (lambda (x y) '(1))])
+              (display (list f f))
+              (values (f 0 0))) 
+           '(let ([f (lambda (x y) '(1))])
+              (display (list f f))
+              (f 0 0)))
+(test-comp '(let ([f (lambda (x y z) '(1))])
+              (display (list f f))
+              (values (f 0 0 0))) 
+           '(let ([f (lambda (x y z) '(1))])
+              (display (list f f))
+              (f 0 0 0)))
+(test-comp '(letrec ([even (lambda (x) (if (= x 0) #t (not (odd (sub1 x)))))]
+                     [odd (lambda (x) (if (= x 1) #t (not (even (sub1 x)))))])
+              (display (list even even odd odd))
+              (values (even 1000))) 
+           '(letrec ([even (lambda (x) (if (= x 0) #t (not (odd (sub1 x)))))]
+                     [odd (lambda (x) (if (= x 1) #t (not (even (sub1 x)))))])
+              (display (list even even odd odd))
+              (even 1000))) 
+(test-comp '(letrec ([f (lambda (x) (g '(1)))]
+                     [g (lambda (x) (display x) (if (zero? (random 2)) '(1 2) (values 1 2)))])
+              (display (list f f g g))
+              (values (f 0))) 
+           '(letrec ([f (lambda (x) (g '(1)))]
+                     [g (lambda (x) (display x) (if (zero? (random 2)) '(1 2) (values 1 2)))])
+              (display (list f f g g))
+              (f 0))
+           #f)
+(test-comp '(letrec ([g (lambda (x) (display x) (if (zero? (random 2)) '(1 2) (values 1 2)))]
+                     [f (lambda (x) (g '(1)))])
+              (display (list f f g g))
+              (values (f 0))) 
+           '(letrec ([g (lambda (x) (display x) (if (zero? (random 2)) '(1 2) (values 1 2)))]
+                     [f (lambda (x) (g '(1)))])
+              (display (list f f g g))
+              (f 0))
+           #f)
+
 
 (test-comp '(lambda (w z)
               (let ([x (cons w z)])
@@ -3472,6 +3524,45 @@
                (a? (a-x (a 1 2)))
                5)))
 
+(test-comp '(module m racket/base
+              (struct a (x) #:omit-define-syntaxes #:mutable)
+
+              (procedure? a)
+              (lambda (x) (values (a x)))
+              (lambda (x) (void (a x)))
+
+              (procedure? a?)
+              (lambda (x) (values (a? x)))
+              (lambda (x) (void (a? x)))
+              (lambda (x) (boolean? (a? x)))
+              (lambda (x) (when (a? x) (a? x)))
+
+              (procedure? a-x)
+              (lambda (x) (values (a-x x)))
+              (lambda (x) (when (a? x) (void (a-x x))))
+
+              (procedure? set-a-x!)
+              (lambda (x) (values (set-a-x! x 5))))
+           '(module m racket/base
+              (struct a (x) #:omit-define-syntaxes #:mutable)
+
+              #t
+              (lambda (x) (a x))
+              (lambda (x) a (void))
+
+              #t
+              (lambda (x) (a? x))
+              (lambda (x) a (void))
+              (lambda (x) a #t)
+              (lambda (x) (when (a? x) #t))
+
+              #t
+              (lambda (x) (a-x x))
+              (lambda (x) (when (a? x) (void)))
+
+              #t
+              (lambda (x) (set-a-x! x 5))))
+
 (test-comp '(lambda ()
              (make-struct-type 'a #f 0 0 #f)
              10)
@@ -3493,6 +3584,30 @@
              (define-values (prop:a a? a-ref) (make-struct-type-property 'a))
              (lambda (x)
                x)))
+(test-comp '(module m racket/base
+              (define-values (prop:a a? a-ref) (make-struct-type-property 'a))
+
+              (procedure? a?)
+              (lambda (x) (values (a? x)))
+              (lambda (x) (void (a? x)))
+              (lambda (x) (boolean? (a? x)))
+              #;(lambda (x) (when (a? x) (a? x)))
+
+              (procedure? a-ref)
+              (lambda (x) (values (a-ref x)))
+              #;(lambda (x) (when (a? x) (void (a-ref x)))))
+           '(module m racket/base
+              (define-values (prop:a a? a-ref) (make-struct-type-property 'a))
+
+              #t
+              (lambda (x) (a? x))
+              (lambda (x) a? (void))
+              (lambda (x) a? #t)
+              #;(lambda (x) (when (a? x) #t))
+
+              #t
+              (lambda (x) (a-ref x))
+              #;(lambda (x) (when (a? x) (void)))))
 
 (test-comp '(module m racket/base
              (define (f x) (list (g x) g))
@@ -5817,6 +5932,16 @@
 
 (err/rt-test (+ (let-values (((x y) (let-values ((() 9)) 2))) x) (error))
              exn:fail?)
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check that optimizer-clock are updated 
+;; after the equal? is reduced to eq?
+
+(test-comp '(lambda (x)
+              (let ([m (box 5)])
+                (list (equal? x 7) m)))
+           '(lambda (x)
+              (list (eq? x 7) (box 5))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

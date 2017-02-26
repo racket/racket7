@@ -2576,5 +2576,26 @@
   (check-combo h2 h))
 
 ;; ----------------------------------------
+;; Make sure field mutability is checked at the right level
+
+(let ()
+  (struct a (x [y #:mutable]))
+  (struct b a (z w))
+  (test #t impersonator? (impersonate-struct (b 1 2 3 4) set-a-y! void)))
+
+;; ----------------------------------------
+;; Make sure `struct->vector` doesnt' have memory-management issues
+;; with impersonated structs:
+
+(let ()
+  (struct s (x y z) #:mutable #:transparent)
+  (test #(struct:s 1 2 3)
+        struct->vector
+        (impersonate-struct (s 1 2 3)
+                            s-x (lambda (s v) (collect-garbage 'minor) v)
+                            s-y (lambda (s v) (collect-garbage 'minor) v)
+                            s-z (lambda (s v) (collect-garbage 'minor) v))))
+
+;; ----------------------------------------
 
 (report-errs)

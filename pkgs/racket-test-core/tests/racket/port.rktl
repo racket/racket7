@@ -921,5 +921,53 @@
    exn:fail:read?))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check whether `read` counts correctly
+;; (because `read` may cheat internally with a private "unget")
+
+(let ()
+  (define p 
+    (let ([in (open-input-string "(…)abcdef")])
+      (make-input-port
+       "unicode"
+       (lambda (s)
+         (read-bytes-avail!* s in))
+       (lambda (s skip default)
+         (peek-bytes-avail!* s skip #f in))
+       void
+       #f
+       #f
+       #f
+       void
+       1)))
+
+  (test 0 file-position p)
+  (void (read p))
+  (test 5 file-position p)
+  (test  "abcde" read-string 5 p))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check that lines, columns, and positions stay at #f when set to #f
+
+(let ()
+  (define (check-srcloc line col pos)
+    (define stx-port (open-input-string "A\n B"))
+    (port-count-lines! stx-port)
+    (set-port-next-location! stx-port line col pos)
+    (define a (read-syntax #f stx-port))
+    (define b (read-syntax #f stx-port))
+    (test line syntax-line a)
+    (test col syntax-column a)
+    (test pos syntax-position a)
+    (test (and line (add1 line)) syntax-line b)
+    (test (and col 1) syntax-column b)
+    (test (and pos (+ 3 pos)) syntax-position b))
+  (check-srcloc #f #f #f)
+  (check-srcloc #f #f 29)
+  (check-srcloc 1 #f 29)
+  (check-srcloc #f 3 29)
+  (check-srcloc #f 3 #f)
+  (check-srcloc 1 3 29))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)

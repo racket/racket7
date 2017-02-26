@@ -399,35 +399,37 @@
                    (and im (eq? (cdr im) 'addon-tethered)))]
          [config? (let ([im (assoc 'install-mode aux)])
                     (and im (eq? (cdr im) 'config-tethered)))]
+         [bindir (if alt-exe
+                     (let ([m (assq 'exe-is-gracket aux)])
+                       (if (and m (cdr m))
+                           (find-lib-dir)
+                           (let ([p (path-only dest)])
+                             (if (eq? 'macosx (cross-system-type))
+                                 (let* ([cdir (or (and addon?
+                                                       (find-addon-tethered-console-bin-dir))
+                                                  (and config?
+                                                       (find-config-tethered-console-bin-dir))
+                                                  (find-console-bin-dir))]
+                                        [gdir (or (and addon?
+                                                       (find-addon-tethered-gui-bin-dir))
+                                                  (and config?
+                                                       (find-config-tethered-gui-bin-dir))
+                                                  (find-gui-bin-dir))]
+                                        [rel (find-relative-path cdir gdir)])
+                                   (cond
+                                     [(relative-path? rel)
+                                      (build-path p rel)]
+                                     [(equal? cdir gdir) p]
+                                     [else rel]))
+                                 p))))
+                     (if (eq? kind 'mred)
+                         (find-gui-bin-dir)
+                         (find-console-bin-dir)))]
          [dir-finder
-          (let ([bindir (if alt-exe
-                            (let ([m (assq 'exe-is-gracket aux)])
-                              (if (and m (cdr m))
-                                  (find-lib-dir)
-                                  (let ([p (path-only dest)])
-                                    (if (eq? 'macosx (cross-system-type))
-                                        (let* ([cdir (or (and addon?
-                                                              (find-addon-tethered-console-bin-dir))
-                                                         (and config?
-                                                              (find-config-tethered-console-bin-dir))
-                                                         (find-console-bin-dir))]
-                                               [gdir (or (and addon?
-                                                              (find-addon-tethered-gui-bin-dir))
-                                                         (and config?
-                                                              (find-config-tethered-gui-bin-dir))
-                                                         (find-gui-bin-dir))]
-                                               [rel (find-relative-path cdir gdir)])
-                                          (cond
-                                           [(relative-path? rel)
-                                            (build-path p rel)]
-                                           [(equal? cdir gdir) p]
-                                           [else rel]))
-                                        p))))
-                            (find-console-bin-dir))])
-            (if (let ([a (assq 'relative? aux)])
-                  (and a (cdr a)))
-                (make-relative-path-header dest bindir use-librktdir?)
-                (make-absolute-path-header bindir)))]
+          (if (let ([a (assq 'relative? aux)])
+                (and a (cdr a)))
+              (make-relative-path-header dest bindir use-librktdir?)
+              (make-absolute-path-header bindir))]
          [exec (format
                 "exec \"${~a}/~a~a\" ~a"
                 (if use-librktdir?
@@ -468,8 +470,9 @@
         (when use-librktdir?
           (display "# {{{ librktdir\n")
           (display "librktdir=\"$bindir/")
-          (display (find-relative-path (find-console-bin-dir)
-                                       (find-lib-dir)))
+          (display (find-relative-path bindir
+                                       (simplify-path
+                                        (find-lib-dir))))
           (display "\"\n")
           (display "# }}} librktdir\n"))
         (newline)
@@ -924,13 +927,13 @@
      (string-append (if mred? file (unix-sfx file mred?)) ".exe")]
     [else file]))
 
-(define (program-launcher-path name mred? user? tethered?)
+(define (program-launcher-path name mred? user? tethered? console?)
   (let* ([variant (current-launcher-variant)]
          [mac-script? (and (eq? (cross-system-type) 'macosx)
                            (script-variant? variant))])
     (let ([p (add-file-suffix
               (build-path
-               (if (or mac-script? (not mred?))
+               (if (or mac-script? (not mred?) console?)
                    (if user?
                        (or (and tethered?
                                 (find-addon-tethered-console-bin-dir))
@@ -953,10 +956,19 @@
           (path-replace-extension p #".app")
           p))))
 
-(define (gracket-program-launcher-path name #:user? [user? #f] #:tethered? [tethered? #f])
-  (program-launcher-path name #t user? tethered?))
-(define (mred-program-launcher-path name #:user? [user? #f] #:tethered? [tethered? #f])
-  (gracket-program-launcher-path name #:user? user? #:tethered? tethered?))
+(define (gracket-program-launcher-path name
+                                       #:user? [user? #f]
+                                       #:tethered? [tethered? #f]
+                                       #:console? [console? #f])
+  (program-launcher-path name #t user? tethered? console?))
+(define (mred-program-launcher-path name
+                                    #:user? [user? #f]
+                                    #:tethered? [tethered? #f]
+                                    #:console? [console? #f])
+  (gracket-program-launcher-path name
+                                 #:user? user?
+                                 #:tethered? tethered?
+                                 #:console? console?))
 
 (define (racket-program-launcher-path name #:user? [user? #f] #:tethered? [tethered? #f])
   (case (cross-system-type)
@@ -971,7 +983,7 @@
                                   (unix-sfx name #f))
                       (current-launcher-variant)
                       #f)]
-    [else (program-launcher-path name #f user? tethered?)]))
+    [else (program-launcher-path name #f user? tethered? #t)]))
 (define (mzscheme-program-launcher-path name #:user? [user? #f] #:tethered? [tethered? #f])
   (racket-program-launcher-path name #:user? user? #:tethered? tethered?))
 

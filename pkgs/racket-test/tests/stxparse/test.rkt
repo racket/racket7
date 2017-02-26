@@ -802,3 +802,31 @@
                 #:fail [(s-3d)
                         (vector-immutable 1 (s-3d) 3)
                         (list 'a (s-3d) 'c)]))
+
+;; from Alex Knauth, issue #1602 (2/2017)
+(let ()
+  (define-splicing-syntax-class three
+    [pattern 3])
+  (define-syntax-class stuff
+    [pattern (2 :three)])
+  ;; like stuff, but with an extra attribute (adds ORD progress frame)
+  (define-syntax-class stuff*
+    [pattern :stuff #:with random-attr 'whocares])
+  (terx (1 2 wrong)
+        (1 . :stuff*)
+        #rx"expected the literal 3"
+        #rx"at: wrong"))
+
+;; more #1602 tests
+(terx (1 2)
+      (a . (~post (b c)))
+      #rx"expected more terms starting with any term")
+(terx (1 2)
+      (a . (~and (_ . _) (b c)))
+      #rx"expected more terms starting with any term")
+(terx #(1 2)
+      #(a b c)
+      #rx"expected more terms starting with any term")
+(terx #s(point 1)
+      #s(point a b)
+      #rx"expected more terms starting with any term")
