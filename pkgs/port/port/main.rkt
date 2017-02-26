@@ -58,8 +58,10 @@
          
          open-input-bytes
          open-output-bytes
+         get-output-bytes
          open-input-string
          open-output-string
+         get-output-string
          string-port?
          
          make-pipe
