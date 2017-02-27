@@ -47,6 +47,15 @@
 (define apple (string->bytes/utf-8 "ap\u3BBple"))
 (define elppa (list->bytes (reverse (bytes->list (string->bytes/utf-8 "ap\u3BBple")))))
 
+(let ()
+  (define-values (i o) (make-pipe))
+  (for ([n 3])
+    (write-bytes (make-bytes 4096 (char->integer #\a)) o)
+    (for ([j (in-range 4096)])
+      (read-byte i))
+    (unless (zero? (pipe-content-length i))
+      (error "pipe loop failed\n"))))
+
 (define p (open-input-bytes apple))
 (define-values (i o) (make-pipe))
 
@@ -94,7 +103,7 @@
 
 'read-line
 (time
- (let loop ([j 100])
+ (let loop ([j 10])
    (unless (zero? j)
      (let ()
        (define p (host:open-input-file "compiled/port.rktl"))
@@ -105,7 +114,7 @@
        (loop (sub1 j))))))
 
 (time
- (let loop ([j 100])
+ (let loop ([j 10])
    (unless (zero? j)
      (let ()
        (define p (open-input-file "compiled/port.rktl"))
@@ -115,6 +124,7 @@
        (close-input-port p)
        (loop (sub1 j))))))
 
+'encoding
 (time
  (for/fold ([v #f]) ([i (in-range 1000000)])
    (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBple"))))

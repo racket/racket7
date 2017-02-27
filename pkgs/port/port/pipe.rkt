@@ -168,7 +168,8 @@
           (define amt (min (- top-pos end)
                            (- src-end src-start)))
           (bytes-copy! bstr end src-bstr src-start (+ src-start amt))
-          (set! end (+ end amt))
+          (let ([new-end (+ end amt)])
+            (set! end (if (= new-end len) 0 new-end)))
           amt]
          [(= end top-pos)
           (cond
