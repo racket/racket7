@@ -2557,7 +2557,7 @@ Scheme_Object *do_lookup_constant_proc(Optimize_Info *info, Scheme_Object *le,
    When argc == -1, the result may be a case-lambda or `scheme_constant_key`;
    otherwise, unless `for_props`, the arity is used to split a case-lambda to extact
    the relevant lambda, and if the arity is wrong, the result is `scheme_true`.
-   If for_inline, the result may be a potential size, otherwise this function
+   If `for_inline`, the result may be a potential size, otherwise this function
    goes inside potential sizes, noinline procedures, lets, begins and other construction,
    so the result can't be inlined and must be used only to get the properties
    of the actual procedure. */
@@ -2633,9 +2633,10 @@ Scheme_Object *do_lookup_constant_proc(Optimize_Info *info, Scheme_Object *le,
     }
     if (ok_arity || (argc == -1)) {
       return for_inline ? NULL : le;
-    } else {
+    } else if (for_props)
+      return le;
+    else
       return scheme_true;
-    }
   }
 
   if (SAME_TYPE(SCHEME_TYPE(le), scheme_struct_prop_proc_shape_type)) {
@@ -2652,9 +2653,10 @@ Scheme_Object *do_lookup_constant_proc(Optimize_Info *info, Scheme_Object *le,
     }
     if (ok_arity || (argc == -1)) {
       return for_inline ? NULL : le;
-    } else {
+    } else if (for_props)
+      return le;
+    else
       return scheme_true;
-    }
   }
 
   if (SAME_TYPE(SCHEME_TYPE(le), scheme_case_lambda_sequence_type)) {
