@@ -8,6 +8,7 @@
          "custom-write.rkt"
          "write-with-max.rkt"
          "string.rkt"
+         "bytes.rkt"
          "symbol.rkt"
          "char.rkt")
 
@@ -69,10 +70,19 @@
     (case mode
       [(#f) (write-string/max v o max-length)]
       [else (print-string v o max-length)])]
+   [(bytes? v)
+    (case mode
+      [(#f) (write-bytes/max v o max-length)]
+      [else (print-bytes v o max-length)])]
    [(symbol? v)
     (case mode
       [(#f) (write-string/max (symbol->string v) o max-length)]
       [else (print-symbol v o max-length)])]
+   [(keyword? v)
+    (let ([max-length (write-string/max "#:" o max-length)])
+      (case mode
+        [(#f) (write-string/max (symbol->string v) o max-length)]
+        [else (print-symbol v o max-length)]))]
    [(char? v)
     (case mode
       [(#f) (write-string/max (string v) o max-length)]

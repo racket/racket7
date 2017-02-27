@@ -4,6 +4,7 @@
          "../port/output-port.rkt")
 
 (provide write-string/max
+         write-bytes/max
          
          make-output-port/max
          output-port/max-max-length)
@@ -22,6 +23,23 @@
       (- max-length len)]
      [else
       (write-string str o start (+ start max-length))
+      'full])]))
+
+;; For measuring purposes, just treat bytes as characters:
+(define (write-bytes/max bstr o max-length [start 0] [end (bytes-length bstr)])
+  (cond
+   [(eq? max-length 'full) 'full]
+   [(not max-length)
+    (write-bytes bstr o start end)
+    #f]
+   [else
+    (define len (- end start))
+    (cond
+     [(len . < . max-length)
+      (write-bytes bstr o start end)
+      (- max-length len)]
+     [else
+      (write-bytes bstr o start (+ start max-length))
       'full])]))
 
 (define (make-output-port/max o max-length)

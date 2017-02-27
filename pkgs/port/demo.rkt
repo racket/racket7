@@ -13,8 +13,8 @@
 
 (format "1~%~  \n  ~o~c~s" 0 #\! "hi")
 
-(format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file")))
-(format "*~.v*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155)))
+(format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file") #"1\"2\"3"))
+(format "*~.v*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) #"1\"2\"3\t\0010"))
 
 (fprintf (current-output-port) "*~v*" '!!!)
 (newline)
