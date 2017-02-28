@@ -129,8 +129,8 @@
                         (list (get-chytes accum))]
                        [else
                         (define c (chytes-ref insert pos))
-                        (if (and (eq? c (char->integer #\0))
-                                 (eq? c (char->integer #\9)))
+                        (if (and (>= c (char->integer #\0))
+                                 (<= c (char->integer #\9)))
                             (d-loop (add1 pos) (+ (* accum 10)
                                                   (- c (char->integer #\0))))
                             (cons (get-chytes accum)
