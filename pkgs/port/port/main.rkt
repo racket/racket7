@@ -55,6 +55,11 @@
          output-port?
          
          open-input-file
+         open-output-file
+         call-with-input-file
+         call-with-output-file
+         with-input-from-file
+         with-output-to-file
          
          open-input-bytes
          open-output-bytes
