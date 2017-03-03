@@ -354,10 +354,11 @@
           (list (core-id 'quote phase)
                 null)))]
     [else
-     (define rebuild-s (keep-as-needed ctx s))
+     (define keep-for-parsed? (eq? (system-type 'vm) 'chez-scheme))
+     (define rebuild-s (keep-as-needed ctx s #:keep-for-parsed? keep-for-parsed?))
      (define prefixless (cdr (syntax-e disarmed-s)))
      (define rebuild-prefixless (and (syntax? prefixless)
-                                     (keep-as-needed ctx prefixless)))
+                                     (keep-as-needed ctx prefixless #:keep-for-parsed? keep-for-parsed?)))
      (define expr-ctx (as-expression-context ctx))
      (define rest-es (cdr es))
      (define exp-rator (expand (car es) expr-ctx))

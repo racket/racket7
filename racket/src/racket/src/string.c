@@ -251,6 +251,8 @@ static char *mz_iconv_nl_langinfo(){
 }
 #endif
 
+Scheme_Object *scheme_system_type_proc;
+
 static Scheme_Object *make_string (int argc, Scheme_Object *argv[]);
 static Scheme_Object *string (int argc, Scheme_Object *argv[]);
 static Scheme_Object *string_p (int argc, Scheme_Object *argv[]);
@@ -975,11 +977,12 @@ scheme_init_string (Scheme_Startup_Env *env)
 
   /* Don't make these folding, since they're platform-specific: */
 
-  scheme_addto_prim_instance("system-type",
-			     scheme_make_immed_prim(system_type,
-						    "system-type",
-						    0, 1),
-			     env);
+  REGISTER_SO(scheme_system_type_proc);
+  scheme_system_type_proc = scheme_make_immed_prim(system_type,
+                                                   "system-type",
+                                                   0, 1);
+  scheme_addto_prim_instance("system-type", scheme_system_type_proc, env);
+
   scheme_addto_prim_instance("system-library-subpath",
 			     scheme_make_immed_prim(system_library_subpath,
 						    "system-library-subpath",

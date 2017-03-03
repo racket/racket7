@@ -11,6 +11,7 @@
 
 (provide correlate*
          correlate~
+         correlate/app
          ->correlated)
 
 (define (correlate* stx s-exp)
@@ -23,6 +24,11 @@
 ;; to keep them:
 (define (correlate~ stx s-exp)
   s-exp)
+
+(define (correlate/app stx s-exp)
+  (if (eq? (system-type 'vm) 'chez-scheme)
+      (correlate* stx s-exp)
+      (correlate~ stx s-exp)))
 
 (define (->correlated s)
   (datum->correlated s #f))

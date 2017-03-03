@@ -60,10 +60,10 @@
        [else (correlate~ s `(quote unused-case-lambda))])]
      [(parsed-app? p)
       (define rands (parsed-app-rands p))
-      (correlate~ s (cons
-                     (compile (parsed-app-rator p) #f #t)
-                     (for/list ([r (in-list rands)])
-                       (compile r #f #t))))]
+      (correlate/app s (cons
+                        (compile (parsed-app-rator p) #f #t)
+                        (for/list ([r (in-list rands)])
+                          (compile r #f #t))))]
      [(parsed-if? p)
       (define tst-e (compile (parsed-if-tst p) #f #f))
       ;; Ad hoc optimization of `(if #t ... ...)` or `(if #f ... ...)`

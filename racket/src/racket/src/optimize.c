@@ -4460,6 +4460,15 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
       }
     }
 
+    if (SAME_OBJ(rator, scheme_system_type_proc)
+        && SCHEME_SYMBOLP(rand)
+        && !SCHEME_SYM_WEIRDP(rand)
+        && !strcmp(SCHEME_SYM_VAL(rand), "vm")) {
+      /* For the expander's benefit, optimize `(system-type 'vm)` to `'racket`
+         to effectively select backend details statically. */
+      return scheme_intern_symbol("racket");
+    }
+
     {
       /* Try to check the argument's type, and use the unsafe versions if possible. */ 
       Scheme_Object *app_o = (Scheme_Object *)app;

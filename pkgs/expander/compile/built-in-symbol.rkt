@@ -34,7 +34,7 @@
             with-continuation-mark
             #%variable-reference))
 
-;; Temporary linklet glue
+;; Source-mode linklet glue
 (for-each register-built-in-symbol!
           '(check-not-undefined 
             instance-variable-box
@@ -42,3 +42,13 @@
             variable-reference?
             variable-reference->instance
             variable-reference-constant?))
+
+;; Linklet compilation on Chez Scheme 
+(for-each register-built-in-symbol!
+          '(let
+            letrec*
+            define
+            variable-set!
+            variable-ref
+            variable-ref/no-check
+            make-instance-variable-reference))
