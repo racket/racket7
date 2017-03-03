@@ -1280,7 +1280,31 @@ Returns @racket[#t] if @racket[x] is @racket[eqv?] to @racket[+nan.0] or @racket
 
 @defproc[(infinite? [x real?]) boolean?]{
 
-Returns @racket[#t] if @racket[z] is @racket[+inf.0], @racket[-inf.0], @racket[+inf.f], @racket[-inf.f]; otherwise @racket[#f].}
+Returns @racket[#t] if @racket[x] is @racket[+inf.0], @racket[-inf.0], @racket[+inf.f], @racket[-inf.f]; otherwise @racket[#f].}
+
+@defproc[(positive-integer? [x any/c]) boolean?]{
+ Like @racket[exact-positive-integer?], but also returns
+ @racket[#t] for positive @racket[inexact?] integers.
+ @history[#:added "6.8.0.2"]}
+
+@defproc[(negative-integer? [x any/c]) boolean?]{
+ Like @racket[exact-negative-integer?], but also returns
+ @racket[#t] for negative @racket[inexact?] integers.
+ @history[#:added "6.8.0.2"]}
+
+@defproc[(nonpositive-integer? [x any/c]) boolean?]{
+ Like @racket[exact-nonpositive-integer?], but also returns
+ @racket[#t] for non-positive @racket[inexact?] integers.
+ @history[#:added "6.8.0.2"]}
+
+@defproc[(nonnegative-integer? [x any/c]) boolean?]{
+ Like @racket[exact-nonnegative-integer?], but also returns
+ @racket[#t] for non-negative @racket[inexact?] integers.
+ @history[#:added "6.8.0.2"]}
+
+@defproc[(natural? [x any/c]) boolean?]{
+ An alias for @racket[exact-nonnegative-integer?].
+ @history[#:added "6.8.0.2"]}
 
 @; ----------------------------------------------------------------------
 @close-eval[math-eval]
