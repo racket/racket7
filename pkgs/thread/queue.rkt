@@ -1,0 +1,70 @@
+#lang racket/base
+
+(provide make-queue
+         queue-remove!
+         queue-fremove!
+         queue-remove-all!
+         queue-add!
+         queue-remove-node!)
+
+(struct queue (start end) #:mutable)
+(struct node (waiter
+              [prev #:mutable]
+              [next #:mutable]))
+
+(define (make-queue)
+  (queue #f #f))
+
+(define (queue-remove! q)
+  (define qs (queue-start q))
+  (cond
+   [(not qs) #f]
+   [else
+    (define n (node-next qs))
+    (set-queue-start! q n)
+    (if n
+        (set-node-prev! n #f)
+        (set-queue-end! q #f))
+    (node-waiter qs)]))
+
+(define (queue-fremove! q pred)
+  (let loop ([qs (queue-start q)])
+    (cond
+     [qs
+      (define w (node-waiter qs))
+      (cond
+       [(pred w)
+        (queue-remove-node! q qs)
+        w]
+       [else
+        (loop (node-next qs))])]
+     [else #f])))
+
+(define (queue-remove-all! q proc)
+  (let loop ([qs (queue-start q)])
+    (when qs
+      (proc (node-waiter qs))
+      (loop (node-next qs))))
+  (set-queue-start! q #f)
+  (set-queue-end! q #f))
+
+(define (queue-add! q w)
+  (define e (queue-end q))
+  (define n (node w e #f))
+  (cond
+   [(not e)
+    (set-queue-start! q n)
+    (set-queue-end! q n)]
+   [else
+    (set-node-next! e n)
+    (set-node-prev! n e)])
+  n)
+
+(define (queue-remove-node! q n)
+  ;; get out of line
+  (if (node-prev n)
+      (set-node-next! (node-prev n) (node-next n))
+      (set-queue-start! q (node-next n)))
+  (if (node-next n)
+      (set-node-prev! (node-next n) (node-prev n))
+      (set-queue-end! q (node-prev n))))
