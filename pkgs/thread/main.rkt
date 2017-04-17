@@ -1,11 +1,13 @@
 #lang racket/base
 (require "thread.rkt"
          "thread-group.rkt"
+         (only-in "evt.rkt" evt?)
          (except-in "semaphore.rkt"
                     semaphore-peek-evt)
          (except-in "channel.rkt"
                     channel-put-evt)
          "sync.rkt"
+         "system-idle-evt.rkt"
          "api.rkt")
 
 (provide call-in-main-thread
@@ -16,6 +18,9 @@
          thread-running?
          thread-dead?
          thread-wait
+         thread-dead-evt
+         
+         sleep
          
          make-thread-group
          thread-group?
@@ -38,7 +43,10 @@
          sync
          sync/timeout
          
+         evt?
          wrap-evt
          handle-evt
          guard-evt
-         nack-guard-evt)
+         nack-guard-evt
+
+         system-idle-evt)

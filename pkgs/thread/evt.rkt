@@ -26,7 +26,10 @@
 ;;  evt poll-ctx -> (values results-or-#f replacing-evt-or-#f)
 ;; where either a list of results is returned, indicating
 ;; that the event is selected, or a replacement event
-;; is returned (possibly unchanged)
+;; is returned (possibly unchanged).
+;; If a poller does any work that can allow some thread to
+;; become unblocked, then it must tell the scheduler via
+;; `sechedule-info-did-work!`.
 (struct poller (proc))
 
 (struct poll-ctx (poll?         ; whether events are being polled

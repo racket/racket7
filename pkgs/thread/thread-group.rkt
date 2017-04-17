@@ -13,7 +13,10 @@
          
          ;; Called by thread creation and termination:
          thread-group-add!
-         thread-group-remove!)
+         thread-group-remove!
+         
+         thread-group-all-threads
+         num-threads-in-groups)
 
 (struct thread-group (parent
                       children ; maps children to nodes
@@ -27,6 +30,8 @@
         #:transparent)
 
 (define root-thread-group (thread-group #f (make-hasheq) #f #f #f))
+
+(define num-threads-in-groups 0)
 
 (define current-thread-group
   (make-parameter root-thread-group
@@ -65,7 +70,9 @@
        (set-node-next! t n)
        (set-thread-group-chain-start! parent n))
    (set-thread-group-chain-end! parent n)
-   (hash-set! (thread-group-children parent) child n)))
+   (hash-set! (thread-group-children parent) child n)
+   (unless (thread-group? child)
+     (set! num-threads-in-groups (add1 num-threads-in-groups)))))
 
 (define (thread-group-remove! parent child)
   (atomically
@@ -79,4 +86,17 @@
        (set-node-next! (node-prev n) (node-next n))
        (set-thread-group-chain-start! parent (node-next n)))
    (when (eq? n (thread-group-chain parent))
-     (set-thread-group-chain! parent (node-next n)))))
+     (set-thread-group-chain! parent (node-next n)))
+   (unless (thread-group? child)
+     (set! num-threads-in-groups (sub1 num-threads-in-groups)))))
+
+(define (thread-group-all-threads parent accum)
+  (cond
+   [(not (thread-group? parent)) (cons parent accum)]
+   [else
+    (let loop ([n (thread-group-chain-start parent)] [accum accum])
+      (cond
+       [(not n) accum]
+       [else (loop (node-next n)
+                   (thread-group-all-threads (node-child n) accum))]))]))
+

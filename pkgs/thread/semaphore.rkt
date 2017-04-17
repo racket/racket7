@@ -13,7 +13,9 @@
          semaphore-wait
          
          semaphore-peek-evt
-         semaphore-peek-evt?)
+         semaphore-peek-evt?
+         
+         semaphore-any-waiters?)
 
 (struct semaphore ([count #:mutable]
                    queue)
@@ -59,6 +61,10 @@
    (queue-remove-all!
     (semaphore-queue s)
     (lambda (w) (waiter-resume! w s)))))
+
+;; In atomic mode:
+(define (semaphore-any-waiters? s)
+  (not (queue-empty? (semaphore-queue s))))
 
 ;; ----------------------------------------
 

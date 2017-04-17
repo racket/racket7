@@ -3,13 +3,13 @@
          "evt.rkt"
          "atomic.rkt"
          "semaphore.rkt"
-         "thread.rkt")
+         "thread.rkt"
+         "schedule-info.rkt")
 
 (provide sync
          sync/timeout)
 
-(struct syncing (timeout  ; milliseconds to give up
-                 selected ; #f or a syncer that has been selected
+(struct syncing (selected ; #f or a syncer that has been selected
                  syncers  ; linked list of `syncer`s
                  wakeup)  ; a callback for when something is selected
         #:mutable)
@@ -46,12 +46,7 @@
               (or first sr)
               sr)])))
   
-  (define s (syncing (cond
-                      [(real? timeout)
-                       (+ (* timeout 1000) (current-inexact-milliseconds))]
-                      [(not timeout) +inf.0]
-                      [else 'poll])
-                     #f ; selected
+  (define s (syncing #f ; selected
                      syncers
                      void)) ; wakeup
   
@@ -61,22 +56,26 @@
    [(procedure? timeout)
     (sync-poll s (lambda (sched-info) (timeout)) #:just-poll? #t)]
    [else
-    (let loop ()
+    (define timeout-at
+      (and timeout
+           (+ (* timeout 1000) (current-inexact-milliseconds))))
+    (let loop ([did-work? #t])
       (cond
+       [(and timeout
+             (timeout . >= . (current-inexact-milliseconds)))
+        (syncing-done! s none-syncer)
+        #f]
        [(and (all-asynchronous? s)
              (not (syncing-selected s)))
-        (suspend-syncing-thread s)
-        (loop)]
+        (suspend-syncing-thread s timeout-at)
+        (loop #f)]
        [else
-        (sync-poll s (lambda (sched-info)
-                       (cond
-                        [(and timeout
-                              (timeout . >= . (current-inexact-milliseconds)))
-                         (syncing-done! s none-syncer)
-                         #f]
-                        [else
-                         (thread-pause sched-info)
-                         (loop)])))]))]))
+        (sync-poll s #:did-work? did-work?
+                   (lambda (sched-info)
+                     (when timeout-at
+                       (schedule-info-add-timeout-at! sched-info timeout-at))
+                     (thread-pause sched-info)
+                     (loop #f)))]))]))
 
 (define (sync . args)
   (do-sync 'sync #f args))
@@ -88,8 +87,10 @@
 
 ;; Run through the events of a `sync` one time; returns a thunk to
 ;; call in tail position --- possibly one that calls `none-k`.
-(define (sync-poll s none-k  #:just-poll? [just-poll? #f])
-  (define sched-info #f)
+(define (sync-poll s none-k
+                   #:just-poll? [just-poll? #f]
+                   #:did-work? [did-work? #f])
+  (define sched-info (make-schedule-info #:did-work? did-work?))
   (let loop ([sr (syncing-syncers s)])
     ((atomically
       (cond
@@ -124,11 +125,11 @@
           (set-syncer-wraps! sr (cons (wrap-evt-wrap new-evt)
                                       (let ([l (syncer-wraps sr)])
                                         (if (and (null? l)
-                                                 (not (handle-evt? l)))
+                                                 (not (handle-evt? new-evt)))
                                             ;; Prevent wrapper from being in tail position:
                                             (list values)
                                             ;; Allow handler in tail position:
-                                            null))))
+                                            l))))
           (set-syncer-evt! sr (wrap-evt-evt new-evt))
           (lambda () (loop sr))]
          [(nack-evt? new-evt)
@@ -199,7 +200,7 @@
 
 ;; Install a callback to reschedule the current thread if an
 ;; asynchronous selection happen, and then deschedule the thread
-(define (suspend-syncing-thread s)
+(define (suspend-syncing-thread s timeout-at)
   ((atomically
     (cond
      [(syncing-selected s)
@@ -212,7 +213,9 @@
        (lambda ()
          (set-syncing-wakeup! s void)
          (thread-internal-resume! t)))
-      (thread-internal-suspend! t (lambda ()
-                                    (unless (syncing-selected s)
-                                      (syncing-done! s none-syncer))))]))))
+      (thread-internal-suspend! t
+                                timeout-at
+                                (lambda ()
+                                  (unless (syncing-selected s)
+                                    (syncing-done! s none-syncer))))]))))
      

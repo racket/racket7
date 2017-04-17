@@ -1,6 +1,7 @@
 #lang racket/base
 
 (provide make-queue
+         queue-empty?
          queue-remove!
          queue-fremove!
          queue-remove-all!
@@ -14,6 +15,9 @@
 
 (define (make-queue)
   (queue #f #f))
+
+(define (queue-empty? q)
+  (not (queue-start q)))
 
 (define (queue-remove! q)
   (define qs (queue-start q))
