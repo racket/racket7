@@ -20,7 +20,12 @@
          thread-wait
          (rename-out [get-thread-dead-evt thread-dead-evt])
          
+         break-thread
+         
          sleep
+         
+         check-for-break
+         break-enabled-key
          
          thread-internal-suspend!
          thread-internal-resume!
@@ -30,14 +35,16 @@
 (module* scheduling #f
   (provide (struct-out thread)
 
-           make-thread
+           make-initial-thread
            thread-dead!
            thread-did-work!
            
            thread-internal-resume!
 
            sleeping-threads
-           poll-done-threads))
+           poll-done-threads
+           
+           check-for-break))
 
 ;; ----------------------------------------
 
@@ -51,7 +58,8 @@
                 [dead-sema #:mutable] ; created on demand
                 [dead-evt #:mutable] ; created on demand
                 [suspended? #:mutable]
-                [suspended-sema #:mutable])
+                [suspended-sema #:mutable]
+                [pending-break? #:mutable])
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t cb) (thread-internal-suspend! t #f cb))
@@ -64,6 +72,7 @@
 
 (define (do-make-thread who
                         proc
+                        #:initial? [initial? #f]
                         #:suspend-to-kill? [suspend-to-kill? #f])
   (check who
          (lambda (proc)
@@ -72,7 +81,14 @@
          #:contract "(procedure-arity-includes?/c 0)"
          proc)
   (define p (current-thread-group))
-  (define e (make-engine proc (gensym)))
+  (define bc (if initial?
+                 break-enabled-default-cell
+                 (current-break-enabled-cell)))
+  (define e (make-engine (lambda ()
+                           (with-continuation-mark
+                               break-enabled-key
+                             bc
+                             (proc)))))
   (define t (thread (gensym)
                     e
                     p
@@ -83,7 +99,8 @@
                     #f ; dead-sema
                     #f ; dead-evt
                     #f ; suspended?
-                    #f)) ; suspended-sema
+                    #f ; suspended-sema
+                    #f)) ; pending-break?
   (thread-group-add! p t)
   t)
 
@@ -94,6 +111,9 @@
 
 (define (thread/suspend-to-kill proc)
   (do-make-thread 'thread/suspend-to-kill proc #:suspend-to-kill? #t))
+
+(define (make-initial-thread thunk)
+  (do-make-thread 'thread thunk #:initial? #t))
 
 ;; ----------------------------------------
 ;; Thread status
@@ -241,7 +261,7 @@
                              void)))
 
 ;; ----------------------------------------
-;; Tracking tread process
+;; Tracking thread progress
 
 ;; If a thread does work before it is swapped out, then we should poll
 ;; all threads again. Accumulate a table of threads that we don't need
@@ -254,3 +274,37 @@
 
 (define (thread-did-work!)
   (set! poll-done-threads #hasheq()))
+
+;; ----------------------------------------
+;; Breaks
+
+;; A continuation-mark key (not made visible to regular Racket code):
+(define break-enabled-key (gensym))
+(define break-enabled-default-cell (make-thread-cell #t #t))
+
+(define (current-break-enabled-cell)
+  (continuation-mark-set-first #f
+                               break-enabled-key
+                               break-enabled-default-cell
+                               (root-continuation-prompt-tag)))
+
+;; When the continuation-mark mapping to `break-enabled-key` is
+;; changed, or when a thread is just swapped in, then
+;; `check-for-break` should be called.
+(define (check-for-break)
+  (define t (current-thread))
+  (when (thread-pending-break? t)
+    (when (thread-cell-ref (current-break-enabled-cell))
+      (set-thread-pending-break?! t #f)
+      (call-with-escape-continuation
+       (lambda (k)
+         (raise (exn:break "user break"
+                           (current-continuation-marks)
+                           k)))))))
+
+(define (break-thread t)
+  (check 'break-thread thread? t)
+  (unless (thread-pending-break? t)
+    (set-thread-pending-break?! t #t)
+    (when (eq? t (current-thread))
+      (check-for-break))))

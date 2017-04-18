@@ -79,10 +79,32 @@
    (define ts (thread (lambda () (sleep 0.1))))
    (check ts (sync ts))
    (check #t ((current-inexact-milliseconds) . >= . (+ now2 0.1)))
-   
+
    (define v 0)
    (thread (lambda () (set! v (add1 v))))
    (sync (system-idle-evt))
    (check 1 v)
+   
+   (define tinf (thread (lambda () (let loop () (loop)))))
+   (break-thread tinf)
+   (check tinf (sync tinf))
+   (printf "[That break was from a thread, and it's expected]\n")
+
+   (define now3 (current-inexact-milliseconds))
+   (define tdelay (with-continuation-mark
+                      break-enabled-key
+                    (make-thread-cell #f #t)
+                    (thread (lambda ()
+                              (sleep 0.1)
+                              (with-continuation-mark
+                                  break-enabled-key
+                                (make-thread-cell #t #t)
+                                (begin
+                                  ;(check-for-break)
+                                  (let loop () (loop))))))))
+   (break-thread tdelay)
+   (check tdelay (sync tdelay))
+   (printf "[That break was from a thread, and it's expected]\n")
+   (check #t ((current-inexact-milliseconds) . >= . (+ now3 0.1)))
    
    (void)))

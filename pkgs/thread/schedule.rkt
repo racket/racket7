@@ -17,7 +17,7 @@
 
 ;; Initializes the thread system:
 (define (call-in-main-thread thunk)
-  (make-thread thunk)
+  (make-initial-thread thunk)
   (select-thread!))
 
 ;; ----------------------------------------
@@ -25,7 +25,8 @@
 (define (select-thread!)
   (let loop ([g root-thread-group] [none-k maybe-done])
     (check-timeouts)
-    (when (all-threads-poll-done?)
+    (when (and (all-threads-poll-done?)
+               (maybe-future-work?))
       (or (post-idle)
           (process-sleep)))
     (define child (thread-group-next! g))
@@ -44,6 +45,8 @@
   (let loop ([e e])
     (e
      TICKS
+     (lambda ()
+       (check-for-break))
      (lambda args
        (current-thread #f)
        (unless (zero? (current-atomic))
@@ -62,7 +65,8 @@
 
 (define (maybe-done)
   (cond
-   [(tree-empty? sleeping-threads)
+   [(and (tree-empty? sleeping-threads)
+         (not (any-idle-waiters?)))
     ;; all threads done
     (void)]
    [else
@@ -84,10 +88,13 @@
 ;; Have we tried all threads without since most recently making
 ;; progress on some thread?
 (define (all-threads-poll-done?)
-  (and (= (hash-count poll-done-threads)
-          num-threads-in-groups)
-       (or (positive? num-threads-in-groups)
-           (not (tree-empty? sleeping-threads)))))
+  (= (hash-count poll-done-threads)
+     num-threads-in-groups))
+
+(define (maybe-future-work?)
+  (or (positive? num-threads-in-groups)
+      (not (tree-empty? sleeping-threads))
+      (any-idle-waiters?)))
 
 ;; Stop using the CPU for a while
 (define (process-sleep)

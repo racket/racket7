@@ -20,6 +20,7 @@
          thread-dead?
          thread-wait
          thread-dead-evt
+         break-thread
          
          sleep
          
@@ -50,4 +51,7 @@
          guard-evt
          nack-guard-evt
 
-         system-idle-evt)
+         system-idle-evt
+         
+         check-for-break
+         break-enabled-key)

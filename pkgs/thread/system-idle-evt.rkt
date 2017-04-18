@@ -4,6 +4,7 @@
 
 (provide (rename-out [get-system-idle-evt system-idle-evt])
 
+         any-idle-waiters?
          post-idle)
 
 (define idle-sema (make-semaphore))
@@ -18,6 +19,9 @@
          (lambda () the-idle-evt)])
     system-idle-evt))
 
+;; Called by the scheduler in atomic mode:
+(define (any-idle-waiters?)
+  (semaphore-any-waiters? idle-sema))
 
 ;; Called by the scheduler in atomic mode:
 (define (post-idle)
