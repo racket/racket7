@@ -22,8 +22,8 @@
 (define-values (prop:evt evt? evt-ref)
   (make-struct-type-property 'evt))
 
-;; A poller wraps a procedure
-;;  evt poll-ctx -> (values results-or-#f replacing-evt-or-#f)
+;; A poller as a `prop:evt` value wraps a procedure
+;;   evt poll-ctx -> (values results-or-#f replacing-evt-or-#f)
 ;; where either a list of results is returned, indicating
 ;; that the event is selected, or a replacement event
 ;; is returned (possibly unchanged).
@@ -32,7 +32,7 @@
 ;; `sechedule-info-did-work!`.
 (struct poller (proc))
 
-(struct poll-ctx (poll?         ; whether events are being polled
+(struct poll-ctx (poll?         ; whether events are being polled once (i.e., 0 timeout)
                   select-proc   ; callback to asynchornously select the event being polled
                   sched-info))  ; instructions to the scheduler, such as timeouts
 
@@ -60,6 +60,8 @@
 (struct guard-evt (proc)
         #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
+;; Check whether an event is ready; returns the same results
+;; as a poller
 (define (evt-poll evt poll-ctx)
   (let* ([v (evt-ref evt)]
          [v (if (fixnum? v)

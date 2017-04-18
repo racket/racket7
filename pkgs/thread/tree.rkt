@@ -1,6 +1,7 @@
 #lang racket/base
 
-;; Balanced binary tree
+;; Balanced binary tree ---- immutable and parameterized
+;; over the less-than function
 
 (provide empty-tree
          (rename-out [is-empty? tree-empty?]

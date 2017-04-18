@@ -8,6 +8,7 @@
                     channel-put-evt)
          "sync.rkt"
          "system-idle-evt.rkt"
+         "schedule.rkt"
          "api.rkt")
 
 (provide call-in-main-thread

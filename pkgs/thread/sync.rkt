@@ -74,7 +74,7 @@
                    (lambda (sched-info)
                      (when timeout-at
                        (schedule-info-add-timeout-at! sched-info timeout-at))
-                     (thread-pause sched-info)
+                     (thread-yield sched-info)
                      (loop #f)))]))]))
 
 (define (sync . args)

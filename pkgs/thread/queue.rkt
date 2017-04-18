@@ -1,5 +1,7 @@
 #lang racket/base
 
+;; Mutable queue
+
 (provide make-queue
          queue-empty?
          queue-remove!

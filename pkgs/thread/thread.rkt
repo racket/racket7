@@ -8,10 +8,9 @@
          "semaphore.rkt"
          "thread-group.rkt"
          "atomic.rkt"
-         "schedule-info.rkt"
-         "system-idle-evt.rkt")
+         "schedule-info.rkt")
 
-(provide (rename-out [-thread thread])
+(provide (rename-out [make-thread thread])
          thread?
          current-thread
          
@@ -19,28 +18,28 @@
          thread-dead?
          
          thread-wait
-         thread-dead-evt
+         (rename-out [get-thread-dead-evt thread-dead-evt])
          
-         (rename-out [thread-sleep sleep])
+         sleep
          
          thread-internal-suspend!
          thread-internal-resume!
-         
-         thread-pause
-         
-         call-in-main-thread)
+         thread-yield)
 
-(define TICKS 1000)
+;; Exports needed by "schedule.rkt":
+(module* scheduling #f
+  (provide (struct-out thread)
 
-;; A tree mapping times (in milliseconds) to a hash table of threads
-;; to make up at that time
-(define sleeping-threads empty-tree)
+           make-thread
+           thread-dead!
+           thread-did-work!
+           
+           thread-internal-resume!
 
-;; If a thread does work before it is suspended, then
-;; we should poll all threads again. Accumulate a table
-;; of threads that we don't need to poll because we've
-;; tried them since the last thread did work:
-(define poll-done-threads #hasheq())
+           sleeping-threads
+           poll-done-threads))
+
+;; ----------------------------------------
 
 (struct thread (name
                 [engine #:mutable]
@@ -49,21 +48,23 @@
                 [sched-info #:mutable]
                 suspend-to-kill?
                 [kill-callback #:mutable] ; non-#f when suspended
-                [done-sema #:mutable] ; created on demand
-                [done-evt #:mutable] ; created on demand
+                [dead-sema #:mutable] ; created on demand
+                [dead-evt #:mutable] ; created on demand
                 [suspended? #:mutable]
                 [suspended-sema #:mutable])
-        #:constructor-name make-thread
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t cb) (thread-internal-suspend! t #f cb))
          #:resume! (lambda (t v) (thread-internal-resume! t) v))
-        #:property prop:evt (lambda (t) (wrap-evt (thread-dead-evt t)
+        #:property prop:evt (lambda (t) (wrap-evt (get-thread-dead-evt t)
                                              (lambda (v) t))))
 
-(define (do-thread who
-                   proc
-                   #:suspend-to-kill? [suspend-to-kill? #f])
+;; ----------------------------------------
+;; Thread creation
+
+(define (do-make-thread who
+                        proc
+                        #:suspend-to-kill? [suspend-to-kill? #f])
   (check who
          (lambda (proc)
            (and (procedure? proc)
@@ -72,27 +73,30 @@
          proc)
   (define p (current-thread-group))
   (define e (make-engine proc (gensym)))
-  (define t (make-thread (gensym)
-                         e
-                         p
-                         #f ; sleep-until
-                         #f ; sched-info
-                         suspend-to-kill?
-                         #f ; kill-callback
-                         #f ; done-sema
-                         #f ; done-evt
-                         #f ; suspended?
-                         #f)) ; suspended-sema
+  (define t (thread (gensym)
+                    e
+                    p
+                    #f ; sleep-until
+                    #f ; sched-info
+                    suspend-to-kill?
+                    #f ; kill-callback
+                    #f ; dead-sema
+                    #f ; dead-evt
+                    #f ; suspended?
+                    #f)) ; suspended-sema
   (thread-group-add! p t)
   t)
 
-(define -thread
+(define make-thread
   (let ([thread (lambda (proc)
-                  (do-thread 'thread proc))])
+                  (do-make-thread 'thread proc))])
     thread))
 
 (define (thread/suspend-to-kill proc)
-  (do-thread 'thread/suspend-to-kill proc #:suspend-to-kill? #t))
+  (do-make-thread 'thread/suspend-to-kill proc #:suspend-to-kill? #t))
+
+;; ----------------------------------------
+;; Thread status
 
 (define (thread-running? t)
   (check 'thread-running? thread? t)
@@ -103,14 +107,49 @@
   (check 'thread-dead? thread? t)
   (eq? 'done (thread-engine t)))
 
-(define (thread-complete! t)
+(define (thread-dead! t)
   (set-thread-engine! t 'done)
-  (when (thread-done-sema t)
-    (semaphore-post-all (thread-done-sema t)))
+  (when (thread-dead-sema t)
+    (semaphore-post-all (thread-dead-sema t)))
   (thread-group-remove! (thread-parent t) t)
   (remove-from-sleeping-threads! t))
 
 ;; ----------------------------------------
+;; Thread status events
+
+(define (thread-wait t)
+  (check 'thread-wait thread? t)
+  (semaphore-wait (get-thread-dead-sema t)))
+
+(struct dead-evt (sema)
+        #:property prop:evt (lambda (tde) (wrap-evt (dead-evt-sema tde)
+                                               (lambda (s) tde)))
+        #:reflection-name 'thread-dead-evt)
+
+(define get-thread-dead-evt
+  (let ([thread-dead-evt
+         (lambda (t)
+           (check 'thread-dead-evt thread? t)
+           (atomically
+            (unless (thread-dead-evt t)
+              (set-thread-dead-evt! t (dead-evt (get-thread-dead-sema t)))))
+           (thread-dead-evt t))])
+    thread-dead-evt))
+
+(define (get-thread-dead-sema t)
+  (atomically
+   (unless (thread-dead-sema t)
+     (set-thread-dead-sema! t (make-semaphore 0))
+     (when (eq? 'done (thread-engine t))
+       (semaphore-post-all (thread-dead-sema t)))))
+  (thread-dead-sema t))
+
+;; ----------------------------------------
+;; Thread suspend and resume
+
+;; A tree mapping times (in milliseconds) to a hash table of threads
+;; to wake up at that time
+(define sleeping-threads empty-tree)
 
 ;; in atomic mode
 (define (remove-from-sleeping-threads! t)
@@ -137,8 +176,9 @@
                             #t)
                   <)))
 
-;; ----------------------------------------
-
+;; Removes a thread from its thread group, so it won't be scheduled,
+;; and returns a thunk to be called in out of atomic mode to swap out
+;; the thread
 (define (thread-internal-suspend! t timeout-at kill-callback)
   (atomically
    (set-thread-kill-callback! t kill-callback)
@@ -154,61 +194,32 @@
      (when (eq? t (current-thread))
        (engine-block)))))
 
+;; Add a thread back its thread group
 (define (thread-internal-resume! t)
   (set-thread-kill-callback! t #f)
   (remove-from-sleeping-threads! t)
   (thread-group-add! (thread-parent t) t))
 
-;; ----------------------------------------
-
-(define (thread-run t)
-  (define e (thread-engine t))
-  (set-thread-engine! t 'running)
-  (set-thread-sched-info! t #f)
-  (current-thread t)
-  (let loop ([e e])
-    (e
-     TICKS
-     (lambda args
-       (current-thread #f)
-       (unless (zero? (current-atomic))
-         (error 'thread-run "thread terminated in atomic mode!"))
-       (thread-complete! t)
-       (thread-did-work!)
-       (thread-select!))
-     (lambda (e)
-       (cond
-        [(zero? (current-atomic))
-         (current-thread #f)
-         (set-thread-engine! t e)
-         (thread-select!)]
-        [else
-         (loop e)])))))
-
-(define (thread-select!)
-  (let loop ([g root-thread-group] [none-k maybe-done])
-    (check-timeouts)
-    (when (all-threads-poll-done?)
-      (or (post-idle)
-          (process-sleep)))
-    (define child (thread-group-next! g))
+(define (thread-suspend t)
+  (check 'thread-suspend thread? t)
+  ((atomically
+    (unless (thread-suspended? t)
+      (set-thread-suspended?! t #t)
+      (when (thread-suspended-sema t)
+        (semaphore-post-all (thread-suspended-sema t))
+        (set-thread-suspended-sema! t #f)))
     (cond
-     [(not child) (none-k)]
-     [(thread? child)
-      (thread-run child)]
-     [else
-      (loop child (lambda () (loop g none-k)))])))
+     [(thread-parent t) ; might be internally suspended
+      (thread-internal-suspend! t #f void)]
+     [else void]))))
 
-(define (maybe-done)
-  (cond
-   [(tree-empty? sleeping-threads)
-    "all threads done"]
-   [else (thread-select!)]))
+;; ----------------------------------------
+;; Thread yielding
 
 ;; Pause the current thread to let other threads run. If all threads
-;; are paused, then `sched-info` contains information needed for a
-;; global sleep, such as a timeout for the current thread's sleep:
-(define (thread-pause sched-info)
+;; are paused, then `sched-info` contains information (such as a
+;; timeout for the current thread's sleep) needed for a global sleep
+(define (thread-yield sched-info)
   (atomically
    (cond
     [(or (not sched-info)
@@ -218,114 +229,28 @@
    (set-thread-sched-info! (current-thread) sched-info))
   (engine-block))
 
-;; ----------------------------------------
-
-(define thread-sleep
-  (let ([sleep (lambda ([secs 0])
-                 (check 'sleep
-                        (lambda (c) (and (real? c) (c . >=  . 0)))
-                        #:contract "(>=/c 0)"
-                        secs)
-                 ((thread-internal-suspend! (current-thread)
-                                            (+ (* secs 1000.0)
-                                               (current-inexact-milliseconds))
-                                            void)))])
-    sleep))
-
-(define (check-timeouts)
-  (unless (tree-empty? sleeping-threads)
-    (define-values (timeout-at threads) (tree-min sleeping-threads))
-    (when (timeout-at . <= . (current-inexact-milliseconds))
-      (unless (null? threads)
-        (for ([t (in-hash-keys threads)])
-          (thread-internal-resume! t))
-        (thread-did-work!)))))
+;; Sleep for a while
+(define (sleep [secs 0])
+  (check 'sleep
+         (lambda (c) (and (real? c) (c . >=  . 0)))
+         #:contract "(>=/c 0)"
+         secs)
+  ((thread-internal-suspend! (current-thread)
+                             (+ (* secs 1000.0)
+                                (current-inexact-milliseconds))
+                             void)))
 
 ;; ----------------------------------------
+;; Tracking tread process
+
+;; If a thread does work before it is swapped out, then we should poll
+;; all threads again. Accumulate a table of threads that we don't need
+;; to poll because we've tried them since the most recent thread
+;; performed work:
+(define poll-done-threads #hasheq())
 
 (define (thread-did-no-work!)
   (set! poll-done-threads (hash-set poll-done-threads (current-thread))))
 
 (define (thread-did-work!)
   (set! poll-done-threads #hasheq()))
-
-(define (all-threads-poll-done?)
-  (and (= (hash-count poll-done-threads)
-          num-threads-in-groups)
-       (or (positive? num-threads-in-groups)
-           (not (tree-empty? sleeping-threads)))))
-
-(define (distant-future)
-  (+ (current-inexact-milliseconds)
-     (* 1000.0 60 60 24 365)))
-
-(define (process-sleep)
-  (define ts (thread-group-all-threads root-thread-group null))
-  (define sleep-timeout (if (tree-empty? sleeping-threads)
-                            (distant-future)
-                            (let-values ([(timeout-at threads) (tree-min sleeping-threads)])
-                              timeout-at)))
-  (define timeout-at
-    (for/fold ([timeout-at sleep-timeout]) ([t (in-list ts)])
-      (define sched-info (thread-sched-info t))
-      (define t-timeout-at (and sched-info
-                                (schedule-info-timeout-at sched-info)))
-      (cond
-       [(not t-timeout-at) timeout-at]
-       [else (min timeout-at t-timeout-at)])))
-  (sleep (/ (- timeout-at (current-inexact-milliseconds)) 1000.0))
-  ;; Maybe some thread can proceed:
-  (thread-did-work!))
-
-;; ----------------------------------------
-
-(define (thread-wait t)
-  (check 'thread-wait thread? t)
-  (atomically
-   (unless (thread-done-sema t)
-     (set-thread-done-sema! t (make-semaphore 0))
-     (when (eq? 'done (thread-engine t))
-       (semaphore-post-all (thread-done-sema t)))))
-  (semaphore-wait (thread-done-sema t)))
-
-;; ----------------------------------------
-
-(define (thread-suspend t)
-  (check 'thread-suspend thread? t)
-  (atomically
-   (unless (thread-suspended? t)
-     (set-thread-suspended?! t #t)
-     (when (thread-suspended-sema t)
-       (semaphore-post-all (thread-suspended-sema t))
-       (set-thread-suspended-sema! t #f)))
-   (when (thread-parent t) ; might be internally suspended
-     (thread-group-remove! (thread-parent t) t))
-   (when (eq? t (current-thread))
-     (thread-did-work!)))
-  ;; Ok to be out of the atomic block; see
-  ;; `thread-internal-suspend!`
-  (when (eq? t (current-thread))
-    (engine-block)))
-
-(struct -thread-dead-evt (sema)
-        #:property
-        prop:evt
-        (lambda (tde) (wrap-evt (-thread-dead-evt-sema tde) (lambda (s) tde)))
-        #:reflection-name 'thread-dead-evt)
-
-(define (thread-dead-evt t)
-  (check 'thread-wait thread? t)
-  (atomically
-   (unless (thread-done-sema t)
-     (set-thread-done-sema! t (make-semaphore 0))
-     (when (and (eq? 'done (thread-engine t))
-                (thread-done-sema t))
-       (semaphore-post-all (thread-done-sema t)))
-     (set-thread-done-evt! t (-thread-dead-evt (thread-done-sema t)))))
-  (thread-done-evt t))
-
-;; ----------------------------------------
-
-(define (call-in-main-thread thunk)
-  (-thread thunk)
-  (thread-select!))
