@@ -1,7 +1,10 @@
 #lang racket/base
 (require "thread.rkt"
          "thread-group.rkt"
-         (only-in "evt.rkt" evt?)
+         (only-in "evt.rkt"
+                  evt? prop:evt
+                  always-evt
+                  never-evt)
          (except-in "semaphore.rkt"
                     semaphore-peek-evt)
          (except-in "channel.rkt"
@@ -19,6 +22,7 @@
          thread-running?
          thread-dead?
          thread-wait
+         thread-suspend
          thread-dead-evt
          break-thread
          
@@ -45,7 +49,9 @@
          sync
          sync/timeout
          
-         evt?
+         evt? prop:evt
+         always-evt
+         never-evt
          wrap-evt
          handle-evt
          guard-evt
@@ -55,3 +61,5 @@
          
          check-for-break
          break-enabled-key)
+
+(module main racket/base)

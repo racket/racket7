@@ -10,6 +10,7 @@
                     [channel-put-evt raw:channel-put-evt]))
 
 (provide wrap-evt
+         handle-evt
          guard-evt
          nack-guard-evt
          channel-put-evt

@@ -1,5 +1,6 @@
 #lang racket/base
 (require "atomic.rkt"
+         "internal-error.rkt"
          "tree.rkt"
          "parameter.rkt"
          "thread-group.rkt"
@@ -13,7 +14,7 @@
 
 (provide call-in-main-thread)
 
-(define TICKS 1000)
+(define TICKS 100000)
 
 ;; Initializes the thread system:
 (define (call-in-main-thread thunk)
@@ -50,7 +51,7 @@
      (lambda args
        (current-thread #f)
        (unless (zero? (current-atomic))
-         (error 'thread "terminated in atomic mode!"))
+         (internal-error "terminated in atomic mode!"))
        (thread-dead! t)
        (thread-did-work!)
        (select-thread!))

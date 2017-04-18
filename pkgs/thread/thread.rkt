@@ -1,5 +1,6 @@
 #lang racket/base
 (require "check.rkt"
+         "internal-error.rkt"
          "engine.rkt"
          "tree.rkt"
          "parameter.rkt"
@@ -18,6 +19,7 @@
          thread-dead?
          
          thread-wait
+         thread-suspend
          (rename-out [get-thread-dead-evt thread-dead-evt])
          
          break-thread
@@ -177,12 +179,12 @@
   (when sleep-until
     (set-thread-sleep-until! t #f)
     (define threads (tree-ref sleeping-threads sleep-until <))
-    (unless threads (error "thread not found among sleeping threads"))
+    (unless threads (internal-error "thread not found among sleeping threads"))
     (define new-threads (hash-remove threads t))
     (set! sleeping-threads
           (if (zero? (hash-count new-threads))
               (tree-remove sleeping-threads sleep-until <)
-              (tree-set sleeping-threads sleep-until new-threads)))))
+              (tree-set sleeping-threads sleep-until new-threads <)))))
 
 ;; in atomic mode
 (define (add-to-sleeping-threads! t timeout-at)

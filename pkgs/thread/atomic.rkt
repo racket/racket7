@@ -1,12 +1,15 @@
 #lang racket/base
-(require "engine.rkt")
 
 (provide atomically
          current-atomic
          
          end-atomic)
 
-(define current-atomic (make-global-parameter 0))
+(define atomic 0)
+(define current-atomic
+  (case-lambda
+    [() atomic]
+    [(v) (set! atomic v)]))
 
 (define-syntax-rule (atomically expr ...)
   (begin

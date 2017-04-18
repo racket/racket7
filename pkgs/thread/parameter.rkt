@@ -3,4 +3,8 @@
 
 (provide current-thread)
 
-(define current-thread (make-global-parameter #f))
+(define thread #f)
+(define current-thread
+  (case-lambda
+    [() thread]
+    [(v) (set! thread v)]))

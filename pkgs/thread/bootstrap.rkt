@@ -37,7 +37,7 @@
     (thread-resume t)
     (define t2
       (thread (lambda ()
-                (sleep (/ ticks 10000.0))
+                (sleep (/ ticks 1000000.0))
                 (thread-suspend t))))
     (sync t t2 (thread-suspend-evt t))
     (cond

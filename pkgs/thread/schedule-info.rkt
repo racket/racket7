@@ -20,9 +20,10 @@
 
 (define (schedule-info-add-timeout-at! sched-info timeout-at)
   (define tm (schedule-info-timeout-at sched-info))
-  (set-schedule-info-timeout-at! (if tm
-                                        (min tm timeout-at)
-                                        timeout-at)))
+  (set-schedule-info-timeout-at! sched-info
+                                 (if tm
+                                     (min tm timeout-at)
+                                     timeout-at)))
 
 (define (schedule-info-did-work! sched-info)
   (set-schedule-info-did-work?! sched-info #t))
