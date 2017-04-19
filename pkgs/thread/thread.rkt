@@ -285,10 +285,14 @@
 (define break-enabled-default-cell (make-thread-cell #t #t))
 
 (define (current-break-enabled-cell)
-  (continuation-mark-set-first #f
-                               break-enabled-key
-                               break-enabled-default-cell
-                               (root-continuation-prompt-tag)))
+  (or (continuation-mark-set-first #f
+                                   break-enabled-key
+                                   break-enabled-default-cell
+                                   (root-continuation-prompt-tag))
+      ;; FIXME (actually, fix other...): The implementation of break
+      ;; parameterizations currently doesn't use the root prompt tag,
+      ;; so it can fail to find a break-enabled cell.
+      break-enabled-default-cell))
 
 ;; When the continuation-mark mapping to `break-enabled-key` is
 ;; changed, or when a thread is just swapped in, then
