@@ -3,8 +3,9 @@
 
 ;; Simulate engines by using the host system's threads.
 
-;; This simulation does not support using an exception
-;; handler in an engine.
+;; This simulation doesn't provide a `dynamic-wind` that cooperates
+;; with `break-enabled-key`, and it does not support using an
+;; exception handler in an engine.
 
 (define (make-engine thunk init-break-enabled-cell)
   (define ready-s (make-semaphore))

@@ -353,6 +353,14 @@
 ;; ----------------------------------------
 ;; Breaks
 
+;; The host implementation of `dynamic-wind` is expected to cooperate
+;; with the implementation of breaks in terms of `break-enabled-key`
+;; and boolean-valued, preserved thread cells. That's cooperattion is
+;; awkward, in the sense that it defies the intended layering of
+;; subsystems, but it allows the pre and post thunks of `dynamic-wind`
+;; to reliably run with breaks disabled (especially during the
+;; transition from one thunk to another during a jump).
+
 ;; A continuation-mark key (not made visible to regular Racket code):
 (define break-enabled-default-cell (make-thread-cell #t #t))
 
