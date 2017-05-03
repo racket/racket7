@@ -41,25 +41,30 @@
 (define (channel-get ch)
   (check 'channel-get channel? ch)
   (define b (box #f))
-  ((atomically
-    (define pw+v (queue-remove! (channel-put-queue ch)))
-    (define gw (current-thread))
-    (cond
-     [(not pw+v)
-      (define gq (channel-get-queue ch))
-      (define n (queue-add! gq (cons gw b)))
-      (waiter-suspend! gw (lambda () (queue-remove-node! gq n)))]
-     [else
-      (set-box! b (cdr pw+v))
-      (waiter-resume! (car pw+v) (void))
-      void])))
+  (let receive () ; loop if a retry is needed
+    ((atomically
+      (define pw+v (queue-remove! (channel-put-queue ch)))
+      (define gw (current-thread))
+      (cond
+       [(not pw+v)
+        (define gq (channel-get-queue ch))
+        (define n (queue-add! gq (cons gw b)))
+        (waiter-suspend! gw
+                         ;; On break/kill:
+                         (lambda () (queue-remove-node! gq n))
+                         ;; On retry after break:
+                         (lambda () (receive)))]
+       [else
+        (set-box! b (cdr pw+v))
+        (waiter-resume! (car pw+v) (void))
+        void]))))
   (unbox b))
 
 (define (channel-get/poll ch poll-ctx)
   ;; Similar to `channel-get`, but works in terms of a
   ;; `select-waiter` instead of a thread
-  (define pw+v (queue-fremove! (channel-put-queue ch)
-                               not-matching-select-waiter))
+  (define pq (channel-put-queue ch))
+  (define pw+v (queue-fremove! pq not-matching-select-waiter))
   (cond
    [pw+v
     (waiter-resume! (car pw+v) (void))
@@ -74,8 +79,20 @@
     (define n (queue-add! gq (cons gw b)))
     (values #f
             (wrap-evt
-             (nack-evt async-evt
-                       (lambda () (queue-remove-node! gq n)))
+             (control-state-evt async-evt
+                                (lambda () (queue-remove-node! gq n))
+                                void
+                                (lambda ()
+                                  ;; Retry: get ready value or requeue
+                                  (define pw+v (queue-fremove! pq not-matching-select-waiter))
+                                  (cond
+                                   [pw+v
+                                    (waiter-resume! (car pw+v) (void))
+                                    (set-box! b (cdr pw+v))
+                                    (values #t #t)]
+                                   [else
+                                    (set! n (queue-add! gq (cons gw b)))
+                                    (values #f #f)])))
              (lambda (v) (unbox b))))]))
 
 ;; ----------------------------------------
@@ -90,18 +107,21 @@
      [(not gw+b)
       (define pq (channel-put-queue ch))
       (define n (queue-add! pq (cons pw v)))
-      (waiter-suspend! pw (lambda () (queue-remove-node! pq n)))]
+      (waiter-suspend! pw
+                       ;; On break/kill:
+                       (lambda () (queue-remove-node! pq n))
+                       ;; On retry after break:
+                       (lambda () (channel-put ch v)))]
      [else
       (set-box! (cdr gw+b) v)
       (waiter-resume! (car gw+b) v)
-      void])))
-  (void))
+      void]))))
 
 (define (channel-put/poll ch v result poll-ctx)
   ;; Similar to `channel-put`, but works in terms of a
   ;; `select-waiter` instead of a thread
-  (define gw+b (queue-fremove! (channel-get-queue ch)
-                               not-matching-select-waiter))
+  (define gq (channel-get-queue ch))
+  (define gw+b (queue-fremove! gq not-matching-select-waiter))
   (cond
    [(not gw+b)
     (define pq (channel-put-queue ch))
@@ -110,8 +130,20 @@
     (define n (queue-add! pq (cons pw v)))
     (values #f
             (wrap-evt
-             (nack-evt async-evt
-                       (lambda () (queue-remove-node! pq n)))
+             (control-state-evt async-evt
+                                (lambda () (queue-remove-node! pq n))
+                                void
+                                (lambda ()
+                                  ;; Retry: put ready value or requeue
+                                  (define gw+b (queue-fremove! gq not-matching-select-waiter))
+                                  (cond
+                                   [gw+b
+                                    (set-box! (cdr gw+b) v)
+                                    (waiter-resume! (car gw+b) v)
+                                    (values result #t)]
+                                   [else
+                                    (set! n (queue-add! pq (cons pw v)))
+                                    (values #f #f)])))
              (lambda (v) result)))]
    [(poll-ctx-poll? poll-ctx)
     (values #f async-evt)]

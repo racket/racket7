@@ -80,13 +80,17 @@
       (define w (current-thread))
       (define q (semaphore-queue s))
       (define n (queue-add! q w))
-      (waiter-suspend!
-       w
-       ;; This callback doesn't refer to `s`, to the waiter can be
-       ;; potentially GCed if the semaphore can be GCed
-       (lambda ()
-         (queue-remove-node! q n)))])))
-  (void))
+      (let retry ()
+        (waiter-suspend!
+         w
+         ;; On break signal (possibly to be ignored) or kill:
+         (lambda ()
+           (queue-remove-node! q n))
+         ;; This callback is used, in addition to the previous one, if
+         ;; the thread receives a break signal but doesn't escape
+         ;; (either because breaks are disabled or the handler
+         ;; continues):
+         (lambda () (semaphore-wait s))))]))))
 
 (define (semaphore-wait/poll s poll-ctx
                              #:peek? [peek? #f]
@@ -103,8 +107,8 @@
     (values #f never-evt)]
    [else
     (define w (if peek?
-                  (select-waiter (poll-ctx-select-proc poll-ctx))
-                  (semaphore-peek-select-waiter (poll-ctx-select-proc poll-ctx))))
+                  (semaphore-peek-select-waiter (poll-ctx-select-proc poll-ctx))
+                  (select-waiter (poll-ctx-select-proc poll-ctx))))
     (define q (semaphore-queue s))
     (define n (queue-add! q w))
     ;; Replace with `async-evt`, but the `sema-waiter` can select the
@@ -112,6 +116,18 @@
     ;; to get back out of line.
     (values #f
             (wrap-evt
-             (nack-evt async-evt
-                       (lambda () (queue-remove-node! q n)))
+             (control-state-evt async-evt
+                                (lambda () (queue-remove-node! q n))
+                                void
+                                (lambda ()
+                                  ;; Retry: decrement or requeue
+                                  (define c (semaphore-count s))
+                                  (cond
+                                   [(positive? c)
+                                    (unless peek?
+                                      (set-semaphore-count! s (sub1 c)))
+                                    (values result #t)]
+                                   [else
+                                    (set! n (queue-add! q w))
+                                    (values #f #f)])))
              (lambda (v) result)))]))

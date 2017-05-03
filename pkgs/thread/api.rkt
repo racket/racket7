@@ -40,11 +40,19 @@
          proc)
   (raw:guard-evt (lambda ()
                    (define s (make-semaphore))
-                   (define v (proc (raw:semaphore-peek-evt s)))
-                   (nack-evt (if (evt? v)
-                                 v
-                                 (wrap-evt always-evt (lambda () v)))
-                             (lambda () (semaphore-post s))))))
+                   ;; Return control-state-evt to register
+                   ;; the nack semaphore before exposing it to
+                   ;; the `proc` callback:
+                   (control-state-evt
+                    (raw:guard-evt
+                     (lambda ()
+                       (define v (proc (raw:semaphore-peek-evt s)))
+                       (if (evt? v)
+                           v
+                           (wrap-evt always-evt (lambda () v)))))
+                    void
+                    (lambda () (semaphore-post s))
+                    void))))
 
 (define (channel-put-evt ch v)
   (check 'channel-put-evt channel? ch)
@@ -53,4 +61,3 @@
 (define (semaphore-peek-evt s)
   (check 'semaphore-peek-evt semaphore? s)
   (raw:semaphore-peek-evt s))
-

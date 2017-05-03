@@ -1,6 +1,11 @@
 #lang racket/base
 (require "bootstrap-main.rkt")
 
+;; Don't use exception handlers here, because the "bootstrap.rkt"
+;; implementation of engines can't support it.
+
+(define done? #f)
+
 (call-in-main-thread
  (lambda ()
    (define-syntax-rule (check a b)
@@ -88,7 +93,11 @@
    (define tinf (thread (lambda () (let loop () (loop)))))
    (break-thread tinf)
    (check tinf (sync tinf))
-   (printf "[That break was from a thread, and it's expected]\n")
+   (define (report-expected-exn what)
+     (printf "[That ~a was from a thread, and it's expected]\n" what))
+   (define (report-expected-break)
+     (report-expected-exn "break"))
+   (report-expected-break)
 
    (define now3 (current-inexact-milliseconds))
    (define tdelay (with-continuation-mark
@@ -104,7 +113,37 @@
                                   (let loop () (loop))))))))
    (break-thread tdelay)
    (check tdelay (sync tdelay))
-   (printf "[That break was from a thread, and it's expected]\n")
+   (report-expected-break)
    (check #t ((current-inexact-milliseconds) . >= . (+ now3 0.1)))
    
-   (void)))
+   (define tstuck (thread (lambda () (semaphore-wait (make-semaphore)))))
+   (sync (system-idle-evt))
+   (break-thread tstuck)
+   (check tstuck (sync tstuck))
+   (report-expected-break)
+
+   (define nack1 #f)
+   (define nack2 #f)
+   (define tstuck2 (thread (lambda ()
+                             (sync (nack-guard-evt
+                                    (lambda (s) (set! nack1 s) never-evt))
+                                   (nack-guard-evt
+                                    (lambda (s) (set! nack2 s) never-evt))))))
+   (sync (system-idle-evt))
+   (break-thread tstuck2)
+   (thread-wait tstuck2)
+   (report-expected-break)
+   (check nack1 (sync nack1))
+   (check nack2 (sync nack2))
+   
+   (define tfail (thread (lambda ()
+                           (sync (nack-guard-evt
+                                  (lambda (s) (set! nack1 s) (error "oops")))))))
+   (check tfail (sync tfail))
+   (check nack1 (sync nack1))
+   (report-expected-exn "oops")
+
+   (set! done? #t)))
+
+(unless done?
+  (error "main thread stopped running due to deadlock?"))

@@ -1,5 +1,6 @@
 #lang racket/base
 (require "check.rkt"
+         "internal-error.rkt"
          "evt.rkt"
          "atomic.rkt"
          "semaphore.rkt"
@@ -16,12 +17,18 @@
 
 (struct syncer (evt   ; the evt to sync; can get updated in sync loop
                 wraps ; list of wraps to apply if selected
-                nacks ; list of thunks to run if not selected
+                interrupted? ; kill/break in progerss?
+                interrupts ; list of thunks to run on kill/break initiation
+                abandons ; list of thunks to run on kill/break completion
+                retries ; list of thunks to run on retry: returns `(values _val _ready?)`
                 prev  ; previous in linked list
                 next) ; next in linked list
         #:mutable)
 
-(define none-syncer (syncer #f null null #f #f))
+(define (make-syncer arg last)
+  (syncer arg null #f null null null last #f))
+
+(define none-syncer (make-syncer #f #f))
 
 (define (do-sync who timeout args)
   (check who
@@ -39,7 +46,7 @@
        [else
         (define arg (car args))
         (check who evt? arg)
-        (define sr (syncer arg null null last #f))
+        (define sr (make-syncer arg last))
         (when last
           (set-syncer-next! last sr))
         (loop (cdr args)
@@ -49,33 +56,46 @@
   (define s (syncing #f ; selected
                      syncers
                      void)) ; wakeup
-  
-  (cond
-   [(and (real? timeout) (zero? timeout))
-    (sync-poll s (lambda (sched-info) #f) #:just-poll? #t)]
-   [(procedure? timeout)
-    (sync-poll s (lambda (sched-info) (timeout)) #:just-poll? #t)]
-   [else
-    (define timeout-at
-      (and timeout
-           (+ (* timeout 1000) (current-inexact-milliseconds))))
-    (let loop ([did-work? #t])
-      (cond
-       [(and timeout
-             (timeout . >= . (current-inexact-milliseconds)))
-        (syncing-done! s none-syncer)
-        #f]
-       [(and (all-asynchronous? s)
-             (not (syncing-selected s)))
-        (suspend-syncing-thread s timeout-at)
-        (loop #f)]
-       [else
-        (sync-poll s #:did-work? did-work?
-                   (lambda (sched-info)
-                     (when timeout-at
-                       (schedule-info-add-timeout-at! sched-info timeout-at))
-                     (thread-yield sched-info)
-                     (loop #f)))]))]))
+
+  (dynamic-wind
+   (lambda ()
+     (atomically
+      (thread-push-kill-callback!
+       (lambda () (syncing-abandon! s)))))
+   (lambda ()
+     (cond
+      [(and (real? timeout) (zero? timeout))
+       (sync-poll s (lambda (sched-info) #f) #:just-poll? #t)]
+      [(procedure? timeout)
+       (sync-poll s (lambda (sched-info) (timeout)) #:just-poll? #t)]
+      [else
+       ;; Loop to poll; if all events end up with asynchronous-select
+       ;; callbacks, then the loop can suspend the current thread
+       (define timeout-at
+         (and timeout
+              (+ (* timeout 1000) (current-inexact-milliseconds))))
+       (let loop ([did-work? #t])
+         (cond
+          [(and timeout
+                (timeout . >= . (current-inexact-milliseconds)))
+           (syncing-done! s none-syncer)
+           #f]
+          [(and (all-asynchronous? s)
+                (not (syncing-selected s)))
+           (suspend-syncing-thread s timeout-at)
+           (loop #f)]
+          [else
+           (sync-poll s #:did-work? did-work?
+                      (lambda (sched-info)
+                        (when timeout-at
+                          (schedule-info-add-timeout-at! sched-info timeout-at))
+                        (thread-yield sched-info)
+                        (loop #f)))]))]))
+   (lambda ()
+     (atomically
+      (thread-pop-kill-callback!)
+      ;; On escape, post nacks, etc.:
+      (syncing-abandon! s)))))
 
 (define (sync . args)
   (do-sync 'sync #f args))
@@ -132,9 +152,11 @@
                                             l))))
           (set-syncer-evt! sr (wrap-evt-evt new-evt))
           (lambda () (loop sr))]
-         [(nack-evt? new-evt)
-          (set-syncer-nacks! sr (cons (nack-evt-nack-proc new-evt) (syncer-nacks sr)))
-          (set-syncer-evt! sr (nack-evt-evt new-evt))
+         [(control-state-evt? new-evt)
+          (set-syncer-interrupts! sr (cons (control-state-evt-interrupt-proc new-evt) (syncer-interrupts sr)))
+          (set-syncer-abandons! sr (cons (control-state-evt-abandon-proc new-evt) (syncer-abandons sr)))
+          (set-syncer-retries! sr (cons (control-state-evt-retry-proc new-evt) (syncer-retries sr)))
+          (set-syncer-evt! sr (control-state-evt-evt new-evt))
           (lambda () (loop sr))]
          [(guard-evt? new-evt)
           (lambda ()
@@ -145,7 +167,7 @@
                                     (wrap-evt always-evt (lambda (a) generated))))
             (loop sr))]
          [(and (never-evt? new-evt)
-               (null? (syncer-nacks sr)))
+               (null? (syncer-interrupts sr)))
           ;; Drop this event, since it will never get selected
           (if (syncer-prev sr)
               (set-syncer-next! (syncer-prev sr) (syncer-next sr))
@@ -174,15 +196,60 @@
 ;; ----------------------------------------
 
 ;; Called in atomic mode
+;;  Finalizes a decision for the sychronization, calling
+;;  interrupt+abandon (or just abandon, if already interrupted)
+;;  on non-selected events to indicate that they will never be
+;;  selected for this synchronization
 (define (syncing-done! s selected-sr)
   (set-syncing-selected! s selected-sr)
   (let loop ([sr (syncing-syncers s)])
     (when sr
       (unless (eq? sr selected-sr)
-        (for ([nack (in-list (syncer-nacks sr))])
-          (nack)))
+        (unless (syncer-interrupted? sr)
+          (for ([interrupt (in-list (syncer-interrupts sr))])
+            (interrupt)))
+        (for ([abandon (in-list (syncer-abandons sr))])
+          (abandon)))
       (loop (syncer-next sr))))
   ((syncing-wakeup s)))
+
+;; Called in atomic mode
+(define (syncing-abandon! s)
+  (unless (syncing-selected s)
+    (syncing-done! s none-syncer)))
+
+;; Called in atomic mode
+;;  For each syncer that needs a notification (e.g., to get out of
+;;  a queue of waiters), call its `interrupt` callback
+(define (syncing-interrupt! s)
+  (let loop ([sr (syncing-syncers s)])
+    (when sr
+      (when (syncer-interrupted? sr)
+        (internal-error "interrupting an already-interrupted syncer"))
+      (set-syncer-interrupted?! sr #t)
+      (for ([interrupt (in-list (syncer-interrupts sr))])
+        (interrupt))
+      (loop (syncer-next sr)))))
+
+;; Called in atomic mode
+;;  For each syncer that needs a notification (e.g., to get back into
+;;  a queue of waiters), call its `retry` callback; a retry might
+;;  succeed immediately, moving the synchronization into "selected"
+;;  state
+(define (syncing-retry! s)
+  (let loop ([sr (syncing-syncers s)] [done? #f])
+    (when (and sr
+               (not (syncing-selected s)))
+      (unless (syncer-interrupted? sr)
+        (internal-error "retrying a non-interrupted syncer"))
+      (set-syncer-interrupted?! sr #f)
+      ;; Although we keep a list of retries, we expect only
+      ;; one to be relevant
+      (for ([retry (in-list (syncer-retries sr))])
+        (define-values (result ready?) (retry))
+        (when ready?
+          (set-syncer-wraps! sr (cons (lambda args result) (syncer-wraps sr)))
+          (syncing-done! s sr))))))
 
 ;; ----------------------------------------
 
@@ -194,28 +261,40 @@
    (let loop ([sr (syncing-syncers s)])
     (cond
      [(not sr) #t]
-     [(async-evt? (syncer-evt sr))
-      (loop (syncer-next sr))]
-     [else #f]))))
+     [else
+      (define e (syncer-evt sr))
+      (and (or (async-evt? e)
+               ;; REMOVEME
+               #;(never-evt? e))
+           (loop (syncer-next sr)))]))))
 
 ;; Install a callback to reschedule the current thread if an
-;; asynchronous selection happen, and then deschedule the thread
+;; asynchronous selection happens, and then deschedule the thread
 (define (suspend-syncing-thread s timeout-at)
   ((atomically
-    (cond
-     [(syncing-selected s)
-      ;; don't suspend after all
-      void]
-     [else
-      (define t (current-thread))
-      (set-syncing-wakeup!
-       s
-       (lambda ()
-         (set-syncing-wakeup! s void)
-         (thread-internal-resume! t)))
-      (thread-internal-suspend! t
-                                timeout-at
-                                (lambda ()
-                                  (unless (syncing-selected s)
-                                    (syncing-done! s none-syncer))))]))))
-     
+    (let retry ()
+      (cond
+       [(syncing-selected s)
+        ;; don't suspend after all
+        void]
+       [else
+        (define t (current-thread))
+        (set-syncing-wakeup!
+         s
+         (lambda ()
+           (set-syncing-wakeup! s void)
+           (thread-internal-resume! t)))
+        (thread-internal-suspend! t
+                                  timeout-at
+                                  (lambda ()
+                                    ;; Break/kill signal
+                                    (set-syncing-wakeup! s void)
+                                    (unless (syncing-selected s)
+                                      (syncing-interrupt! s)))
+                                  (lambda ()
+                                    ;; Continue from or ignore break...
+                                    ;; In non-atomic mode and tail position:
+                                    (atomically
+                                     (unless (syncing-selected s)
+                                       (syncing-retry! s))
+                                     (retry))))])))))

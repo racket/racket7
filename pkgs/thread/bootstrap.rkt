@@ -3,6 +3,9 @@
 
 ;; Simulate engines by using the host system's threads.
 
+;; This simulation does not support using an exception
+;; handler in an engine.
+
 (define (make-engine thunk)
   (define ready-s (make-semaphore))
   (define s (make-semaphore))
@@ -13,21 +16,33 @@
                       (define (run-prefix)
                         (prefix)
                         (set! prefix void))
-                      (uncaught-exception-handler
+                      (call-with-exception-handler
                        (lambda (exn)
-                         (if (exn:break? exn)
-                             (begin
+                         (if (and (exn:break? exn)
+                                  (not (exn:break/non-engine? exn)))
+                             (with-handlers ([exn:break/non-engine?
+                                              (lambda (exn)
+                                                ;; Avoid exception-during-exception
+                                                ;; error by propagating the original,
+                                                ;; even though it's a different kind
+                                                ;; of break exn:
+                                                exn)])
                                (run-prefix)
                                ((exn:break-continuation exn)))
-                             (orig exn))))
-                      (call-with-continuation-prompt
+                             (abort-current-continuation
+                              the-root-continuation-prompt-tag
+                              exn)))
                        (lambda ()
-                         (semaphore-post ready-s)
-                         (semaphore-wait s)
-                         (run-prefix)
-                         (set! results
-                               (call-with-values thunk list)))
-                       the-root-continuation-prompt-tag))))
+                         (call-with-continuation-prompt
+                          (lambda ()
+                            (semaphore-post ready-s)
+                            (semaphore-wait s)
+                            (run-prefix)
+                            (set! results
+                                  (call-with-values thunk list)))
+                          the-root-continuation-prompt-tag
+                          (lambda (exn)
+                            ((error-display-handler) (exn-message exn) exn))))))))
   (semaphore-wait ready-s)
   (thread-suspend t)
   (semaphore-post s)
@@ -53,6 +68,8 @@
 (define the-root-continuation-prompt-tag (make-continuation-prompt-tag 'root))
 (define (root-continuation-prompt-tag) the-root-continuation-prompt-tag)
 
+(struct exn:break/non-engine exn:break ())
+
 (primitive-table '#%engine
                  (hash 
                   'make-engine
@@ -63,4 +80,6 @@
                   (lambda args
                     (error "engine-return: not ready"))
                   'root-continuation-prompt-tag
-                  root-continuation-prompt-tag))
+                  root-continuation-prompt-tag
+                  'exn:break/non-engine
+                  exn:break/non-engine))

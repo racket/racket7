@@ -13,7 +13,7 @@
 
          (struct-out wrap-evt)
          (struct-out handle-evt)
-         (struct-out nack-evt)
+         (struct-out control-state-evt)
          (struct-out guard-evt)
 
          (struct-out poller)
@@ -54,7 +54,10 @@
         #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 (struct handle-evt wrap-evt ())
 
-(struct nack-evt (evt nack-proc)
+(struct control-state-evt (evt
+                           interrupt-proc ; thunk for break/kill initiated
+                           abandon-proc ; thunk for break/kill complete
+                           retry-proc) ; thunk for resume from break; return `(values _val _ready?)`
         #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
 (struct guard-evt (proc)

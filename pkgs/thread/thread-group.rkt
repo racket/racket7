@@ -1,6 +1,7 @@
 #lang racket/base
 (require "engine.rkt"
          "check.rkt"
+         "internal-error.rkt"
          "atomic.rkt")
 
 (provide thread-group?
@@ -22,7 +23,8 @@
                       children ; maps children to nodes
                       [chain-start #:mutable] ; all children
                       [chain #:mutable] ; children remaining to be scheduled round-robin
-                      [chain-end #:mutable]))
+                      [chain-end #:mutable])
+        #:transparent)
 
 (struct node (child
               [prev #:mutable]
@@ -64,6 +66,8 @@
 
 (define (thread-group-add! parent child)
   (atomically
+   (when (hash-ref (thread-group-children parent) child #f)
+     (internal-error "adding a thread that is already added"))
    (define t (thread-group-chain-end parent))
    (define n (node child t #f))
    (if t
