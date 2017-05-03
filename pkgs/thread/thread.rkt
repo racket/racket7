@@ -93,14 +93,9 @@
          #:contract "(procedure-arity-includes?/c 0)"
          proc)
   (define p (current-thread-group))
-  (define bc (if initial?
-                 break-enabled-default-cell
-                 (current-break-enabled-cell)))
-  (define e (make-engine (lambda ()
-                           (with-continuation-mark
-                               break-enabled-key
-                             bc
-                             (proc)))))
+  (define e (make-engine proc (if initial?
+                                  break-enabled-default-cell
+                                  (current-break-enabled-cell))))
   (define t (thread (gensym)
                     e
                     p
@@ -359,18 +354,13 @@
 ;; Breaks
 
 ;; A continuation-mark key (not made visible to regular Racket code):
-(define break-enabled-key (gensym))
 (define break-enabled-default-cell (make-thread-cell #t #t))
 
 (define (current-break-enabled-cell)
-  (or (continuation-mark-set-first #f
-                                   break-enabled-key
-                                   break-enabled-default-cell
-                                   (root-continuation-prompt-tag))
-      ;; FIXME (actually, fix other...): The implementation of break
-      ;; parameterizations currently doesn't use the root prompt tag,
-      ;; so it can fail to find a break-enabled cell.
-      break-enabled-default-cell))
+  (continuation-mark-set-first #f
+                               break-enabled-key
+                               break-enabled-default-cell
+                               (root-continuation-prompt-tag)))
 
 ;; When the continuation-mark mapping to `break-enabled-key` is
 ;; changed, or when a thread is just swapped in, then

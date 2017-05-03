@@ -6,7 +6,7 @@
 ;; This simulation does not support using an exception
 ;; handler in an engine.
 
-(define (make-engine thunk)
+(define (make-engine thunk init-break-enabled-cell)
   (define ready-s (make-semaphore))
   (define s (make-semaphore))
   (define prefix void)
@@ -33,16 +33,19 @@
                               the-root-continuation-prompt-tag
                               exn)))
                        (lambda ()
-                         (call-with-continuation-prompt
-                          (lambda ()
-                            (semaphore-post ready-s)
-                            (semaphore-wait s)
-                            (run-prefix)
-                            (set! results
-                                  (call-with-values thunk list)))
-                          the-root-continuation-prompt-tag
-                          (lambda (exn)
-                            ((error-display-handler) (exn-message exn) exn))))))))
+                         (with-continuation-mark
+                             break-enabled-key
+                           init-break-enabled-cell
+                           (call-with-continuation-prompt
+                            (lambda ()
+                              (semaphore-post ready-s)
+                              (semaphore-wait s)
+                              (run-prefix)
+                              (set! results
+                                    (call-with-values thunk list)))
+                            the-root-continuation-prompt-tag
+                            (lambda (exn)
+                              ((error-display-handler) (exn-message exn) exn)))))))))
   (semaphore-wait ready-s)
   (thread-suspend t)
   (semaphore-post s)
@@ -67,6 +70,7 @@
 
 (define the-root-continuation-prompt-tag (make-continuation-prompt-tag 'root))
 (define (root-continuation-prompt-tag) the-root-continuation-prompt-tag)
+(define break-enabled-key (gensym 'break-enabled))
 
 (struct exn:break/non-engine exn:break ())
 
@@ -81,5 +85,7 @@
                     (error "engine-return: not ready"))
                   'root-continuation-prompt-tag
                   root-continuation-prompt-tag
+                  'break-enabled-key
+                  break-enabled-key
                   'exn:break/non-engine
                   exn:break/non-engine))
