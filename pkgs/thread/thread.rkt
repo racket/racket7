@@ -23,6 +23,7 @@
          (rename-out [get-thread-dead-evt thread-dead-evt])
          
          break-thread
+         kill-thread
          
          sleep
          
@@ -71,11 +72,6 @@
 
                 [delay-break-for-retry? #:mutable] ; => continuing implies an retry action
                 [pending-break? #:mutable])
-        #:property prop:custom-write
-        (lambda (t port mode)
-          (write-string "#<thread:" port)
-          (write (thread-name t) port)
-          (write-string ">" port))
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t i-cb r-cb) (thread-internal-suspend! t #f i-cb r-cb))
@@ -149,12 +145,20 @@
   (check 'thread-dead? thread? t)
   (eq? 'done (thread-engine t)))
 
+;; In atomic mode
 (define (thread-dead! t)
   (set-thread-engine! t 'done)
   (when (thread-dead-sema t)
     (semaphore-post-all (thread-dead-sema t)))
-  (thread-group-remove! (thread-parent t) t)
-  (remove-from-sleeping-threads! t))
+  (cond
+   [(thread-interrupt-callback t)
+    => (lambda (interrupt)
+         (set-thread-interrupt-callback! t void)
+         (interrupt))]
+   [else
+    (thread-group-remove! (thread-parent t) t)])
+  (remove-from-sleeping-threads! t)
+  (run-kill-callbacks! t))
 
 ;; ----------------------------------------
 ;; Thread termination
@@ -168,6 +172,19 @@
 (define (thread-pop-kill-callback!)
   (define t (current-thread))
   (set-thread-kill-callbacks! t (cdr (thread-kill-callbacks t))))
+
+(define (kill-thread t)
+  (check 'kill-thread thread? t)
+  (atomically
+   (unless (thread-dead? t)
+     (thread-dead! t)))
+  (when (eq? t (current-thread))
+    (engine-block)))
+
+(define (run-kill-callbacks! t)
+  (for ([cb (in-list (thread-kill-callbacks t))])
+    (cb))
+  (set-thread-kill-callbacks! t null))
 
 ;; ----------------------------------------
 ;; Thread status events

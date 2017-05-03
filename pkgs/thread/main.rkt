@@ -25,7 +25,8 @@
          thread-suspend
          thread-dead-evt
          break-thread
-         
+         kill-thread
+
          sleep
          
          make-thread-group

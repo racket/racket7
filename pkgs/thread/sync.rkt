@@ -264,8 +264,7 @@
      [else
       (define e (syncer-evt sr))
       (and (or (async-evt? e)
-               ;; REMOVEME
-               #;(never-evt? e))
+               (never-evt? e))
            (loop (syncer-next sr)))]))))
 
 ;; Install a callback to reschedule the current thread if an
