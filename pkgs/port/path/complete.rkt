@@ -4,7 +4,8 @@
          "check.rkt"
          "check-path.rkt"
          "relativity.rkt"
-         "build.rkt")
+         "build.rkt"
+         "parameter.rkt")
 
 (provide path->complete-path)
 

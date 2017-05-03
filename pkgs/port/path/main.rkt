@@ -9,6 +9,7 @@
          "relativity.rkt"
          "cleanse.rkt"
          "simplify.rkt"
+         "parameter.rkt"
          "directory-path.rkt"
          "complete.rkt")
 (provide (rename-out [is-path? path?])
@@ -37,6 +38,8 @@
          absolute-path?
          relative-path?
          complete-path?
+         
+         current-directory
          
          path->complete-path
          path->directory-path
