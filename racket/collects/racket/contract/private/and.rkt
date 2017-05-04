@@ -4,6 +4,7 @@
                      "arr-util.rkt")
          racket/promise
          (only-in "../../private/promise.rkt" prop:force promise-forcer)
+         "../../private/math-predicates.rkt"
          "prop.rkt"
          "blame.rkt"
          "guts.rkt"
@@ -185,61 +186,157 @@
       [(andmap flat-contract? contracts)
        (define preds (map flat-contract-predicate contracts))
        (cond
-         [(and (chaperone-of? (car preds) real?)
-               (pair? (cdr preds))
+         [(and (pair? (cdr preds))
                (null? (cddr preds)))
-          (define second-pred (cadr preds))
           (cond
-            [(chaperone-of? second-pred negative?)
-             (</c 0)]
-            [(chaperone-of? second-pred positive?)
-             (>/c 0)]
-            [else
-             (define second-contract (cadr contracts))
+            [(chaperone-of? (car preds) real?)
+             (define second-pred (cadr preds))
              (cond
-               [(equal? (contract-name second-contract) '(not/c positive?))
-                (<=/c 0)]
-               [(equal? (contract-name second-contract) '(not/c negative?))
-                (>=/c 0)]
+               [(chaperone-of? second-pred negative?)
+                (</c 0)]
+               [(chaperone-of? second-pred positive?)
+                (>/c 0)]
                [else
-                (make-first-order-and/c contracts preds)])])]
+                (define second-contract (cadr contracts))
+                (cond
+                  [(equal? (contract-name second-contract) '(not/c positive?))
+                   (<=/c 0)]
+                  [(equal? (contract-name second-contract) '(not/c negative?))
+                   (>=/c 0)]
+                  [else
+                   (make-first-order-and/c contracts preds)])])]
+            [(or (chaperone-of? (car preds) exact-nonnegative-integer?)
+                 (chaperone-of? (car preds) natural?)
+                 (chaperone-of? (cadr preds) exact-nonnegative-integer?)
+                 (chaperone-of? (cadr preds) natural?))
+             (define other (if (procedure? (car preds)) (cadr contracts) (car contracts)))
+             (cond
+               [(between/c-s? other)
+                (define other-low (between/c-s-low other))
+                (define other-high (between/c-s-high other))
+                (integer-in (exact-ceiling (max 0 (if (= other-low -inf.0) 0 other-low)))
+                            (if (= other-high +inf.0) #f (exact-floor other-high)))]
+               [else (make-first-order-and/c contracts preds)])]
+            [(or (chaperone-of? (car preds) exact-positive-integer?)
+                 (chaperone-of? (cadr preds) exact-positive-integer?))
+             (define other (if (procedure? (car preds)) (cadr contracts) (car contracts)))
+             (cond
+               [(between/c-s? other)
+                (define other-low (between/c-s-low other))
+                (define other-high (between/c-s-high other))
+                (integer-in (exact-ceiling (max 1 (if (= other-low -inf.0) 1 other-low)))
+                            (if (= other-high +inf.0) #f (exact-floor other-high)))]
+               [else (make-first-order-and/c contracts preds)])]
+            [(or (chaperone-of? (car preds) exact-integer?)
+                 (chaperone-of? (cadr preds) exact-integer?))
+             (define other (if (procedure? (car preds)) (cadr contracts) (car contracts)))
+             (cond
+               [(between/c-s? other)
+                (define other-low (between/c-s-low other))
+                (define other-high (between/c-s-high other))
+                (integer-in (if (= other-low -inf.0) #f (exact-ceiling other-low))
+                            (if (= other-high +inf.0) #f (exact-floor other-high)))]
+               [else (make-first-order-and/c contracts preds)])]
+            [else
+             (make-first-order-and/c contracts preds)])]
          [else
           (make-first-order-and/c contracts preds)])]
       [(andmap chaperone-contract? contracts)
        (make-chaperone-and/c contracts)]
       [else (make-impersonator-and/c contracts)])))
 
+(define (exact-floor x) (floor (inexact->exact x)))
+(define (exact-ceiling x) (ceiling (inexact->exact x)))
 
+(define (integer-in-name ctc)
+  (define start (integer-in-ctc-start ctc))
+  (define end (integer-in-ctc-end ctc))
+  (cond
+    [(and (not end) (equal? start 0)) 'natural?]
+    [(and (not end) (equal? start 1)) 'exact-positive-integer?]
+    [(or start end)
+     `(integer-in ,(integer-in-ctc-start ctc)
+                  ,(integer-in-ctc-end ctc))]
+    [else 'exact-integer?]))
+
+(define (integer-in-first-order ctc)
+  (define start (integer-in-ctc-start ctc))
+  (define end (integer-in-ctc-end ctc))
+  (cond
+    [(and start end) (λ (x) (and (exact-integer? x) (<= start x end)))]
+    [start
+     (case start
+       [(0) exact-nonnegative-integer?]
+       [(1) exact-positive-integer?]
+       [else
+        (λ (x) (and (exact-integer? x) (<= start x)))])]
+    [end (λ (x) (and (exact-integer? x) (<= x end)))]
+    [else exact-integer?]))
+
+(define (integer-in-stronger this that)
+  (define this-start (or (integer-in-ctc-start this) -inf.0))
+  (define this-end (or (integer-in-ctc-end this) +inf.0))
+  (cond
+    [(integer-in-ctc? that)
+     (define that-start (or (integer-in-ctc-start that) -inf.0))
+     (define that-end (or (integer-in-ctc-end that) +inf.0))
+     (<= that-start this-start this-end that-end)]
+    [else #f]))
+
+(define (integer-in-generate ctc)
+  (define start (integer-in-ctc-start ctc))
+  (define end (integer-in-ctc-end ctc))
+  (define max-random-range 4294967087)
+  (cond
+    [(or start end)
+     (define _start (or start (- end max-random-range)))
+     (define _end (or end (+ start max-random-range)))
+     (λ (fuel)
+       (λ ()
+         (+ _start (random (min 4294967087 (+ (- _end _start) 1))))))]
+    [else
+     (λ (fuel)
+       (λ ()
+         (cond
+           [(zero? (random 20)) 0]
+           [else
+            (* (if (zero? (random 2)) -1 1)
+               (+ (expt 2 (geo-dist 1/2))
+                  (geo-dist 1/2)))])))]))
 
 (struct integer-in-ctc (start end)
+  #:property prop:custom-write custom-write-property-proc
   #:property prop:flat-contract
   (build-flat-contract-property
-   #:name (λ (ctc) 
-            `(integer-in ,(integer-in-ctc-start ctc)
-                         ,(integer-in-ctc-end ctc)))
-   #:first-order (λ (ctc)
-                   (define start (integer-in-ctc-start ctc))
-                   (define end (integer-in-ctc-end ctc))
-                   (λ (x) (and (exact-integer? x)
-                               (<= start x end))))
-   #:stronger (λ (this that)
-                (define this-start (integer-in-ctc-start this))
-                (define this-end (integer-in-ctc-end that))
-                (cond
-                  [(integer-in-ctc? that)
-                   (define that-start (integer-in-ctc-start that))
-                   (define that-end (integer-in-ctc-end that))
-                   (<= that-start this-start this-end that-end)]
-                  [else #f]))
-   #:generate (λ (ctc)
-                (define start (integer-in-ctc-start ctc))
-                (define end (integer-in-ctc-end ctc))
-                (λ (fuel)
-                  (λ ()
-                    (+ start (random (min 4294967087 (+ (- end start) 1)))))))))
+   #:name integer-in-name
+   #:first-order integer-in-first-order
+   #:stronger integer-in-stronger
+   #:generate integer-in-generate))
+
+(struct renamed-integer-in integer-in-ctc (name)
+  #:property prop:flat-contract
+  (build-flat-contract-property
+   #:name (λ (ctc) (renamed-integer-in-name ctc))
+   #:first-order integer-in-first-order
+   #:stronger integer-in-stronger
+   #:generate integer-in-generate))
+
+(define (geo-dist p)
+  (let loop ([n 0])
+    (cond
+      [(< (random) p) (loop (+ n 1))]
+      [else n])))
 
 (define/final-prop (integer-in start end)
-  (check-two-args 'integer-in start end exact-integer? exact-integer?)
-  (if (= start end)
-      (and/c start exact?)
-      (integer-in-ctc start end)))
+  (define (|(or/c #f exact-integer?)| x) (or (not x) (exact-integer? x)))
+  (check-two-args 'integer-in start end |(or/c #f exact-integer?)| |(or/c #f exact-integer?)|)
+  (cond
+    [(and start end (= start end))
+     (and/c start exact?)]
+    [else
+     (integer-in-ctc start end)]))
+
+(set-some-basic-integer-in-contracts! renamed-integer-in
+                                      (integer-in #f #f)
+                                      (integer-in 0 #f)
+                                      (integer-in 1 #f))

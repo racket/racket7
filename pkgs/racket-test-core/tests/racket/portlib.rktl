@@ -22,6 +22,17 @@
   (test '("hello" "" "there") port->lines (p) #:line-mode 'any-one)
   (test '(#"hello" #"" #"there") port->bytes-lines (p) #:line-mode 'any-one))
 
+(let* ([p (lambda () (open-input-string "nothing\r\nwill come of nothing"))]
+       [closes? (lambda (f) (let ([port (p)]) (f port) (port-closed? port)))])
+  (test #t closes? (curryr port->string #:close? #t))
+  (test #f closes? port->string)
+  (test #t closes? (curryr port->bytes #:close? #t))
+  (test #f closes? port->bytes)
+  (test #t closes? (curryr port->lines #:close? #t))
+  (test #f closes? port->lines)
+  (test #t closes? (curryr port->bytes-lines #:close? #t))
+  (test #f closes? port->bytes-lines))
+
 (let* ([x (make-string 50000 #\x)]
        [p (lambda () (open-input-string x))])
   (test (string-length x) 'long-string (string-length (port->string (p))))
@@ -1187,6 +1198,45 @@
                                  (lambda (v) (if (eof-object? v) v bstr))))
                      read-bytes write-bytes integer->byte list->bytes bytes?))
   (check-can-reuse read-string-evt read-string write-string integer->char list->string string?))
+
+;; --------------------------------------------------
+
+(let ()
+  ;; Check `special-filter-input-port`
+  (define-values (i o) (make-pipe-with-specials))
+  (define fi (special-filter-input-port
+              i
+              (lambda (proc bstr)
+                (bytes-set! bstr 0 (char->integer #\z))
+                1)))
+  (write-bytes #"abc" o)
+  (test #"abc" read-bytes 3 fi)
+  (write-special 'hello o)
+  (test #"z" read-bytes 1 fi)
+  (write-bytes #"ab" o)
+  (write-bytes #"c" o)
+  (write-special 'ok o)
+  (write-special 'bye o)
+  (test #"abczz" peek-bytes 5 0 fi)
+  (test #"abczz" peek-bytes 5 0 fi)
+  (test #"abcz" read-bytes 4 fi)
+  (define bstr (make-bytes 5))
+  (test 1 peek-bytes-avail! bstr 0 #f fi)
+  (test #"z" subbytes bstr 0 1))
+
+(let ()
+  ;; Check `special-filter-input-port` with `peeking-input-port`
+  (define-values (i o) (make-pipe-with-specials))
+  (define fi (special-filter-input-port
+              i
+              (lambda (proc bstr)
+                (bytes-set! bstr 0 (char->integer #\z))
+                1)))
+  (define pi (peeking-input-port fi))
+  (write-bytes #"abc" o)
+  (write-special 'hello o)
+  (write-special 'again o)
+  (test #"abczz" peek-bytes 5 0 pi))
 
 ;; --------------------------------------------------
 

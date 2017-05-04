@@ -260,7 +260,7 @@
           (bad-table "~a line must be a string: ~e" (car spec) line))
         (begin
           (unless (and (list? line) (= (length line) 3))
-            (bad-table "spec-line must be a list of at three or four items: ~e" line))
+            (bad-table "spec-line must be a list of three or four items: ~e" line))
           (unless (list? (car line))
             (bad-table "flags part of a spec-line must be a list: ~e" (car line)))
           (for ([flag (in-list (car line))])
@@ -413,6 +413,8 @@
                [(eq? (car spec) 'usage-help)
                 null]
                [(eq? (car spec) 'help-labels)
+                null]
+               [(eq? (car spec) 'ps)
                 null]
                [(eq? (car spec) 'multi)
                 (map

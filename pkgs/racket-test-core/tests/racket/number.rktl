@@ -2119,7 +2119,11 @@
 (test +inf.0 real-part (log -inf.0))
 (test +3142.0 round (* 1000 (imag-part (log -inf.0))))
 (test +nan.0 log +nan.0)
+(test 2.0 log 100 10)
+(test 3.0 log 8 2)
+(test 1.0 log 5 5)
 (err/rt-test (log 0) exn:fail:contract:divide-by-zero?)
+(err/rt-test (log 5 1) exn:fail:contract:divide-by-zero?)
 
 (test 1 cos 0)
 (test 1.0 cos 0.0)
@@ -2205,7 +2209,9 @@
 (map (lambda (f) 
        (err/rt-test (f "a"))
        (arity-test f 1 1))
-     (list log exp asin acos tan))
+     (list exp asin acos tan))
+(arity-test log 1 2)
+(err/rt-test (log "a"))
 (err/rt-test (atan "a" 1))
 (err/rt-test (atan 2+i 1))
 (err/rt-test (atan "a"))
@@ -2462,9 +2468,15 @@
 (test (begin (random-seed 23) (list (random 10) (random 20) (random 30)))
       'random-seed-same
       (begin (random-seed 23) (list (random 10) (random 20) (random 30))))
-(test (begin (random-seed 23) (list (random 10 20) (random 20 30) (random 30 40)))
+(test (begin (random-seed 23) (list (random 10 20) (random 20 30) (random 30 40)
+                                    (random 0 5) (random -10 10) (random -9 -3)
+                                    (random big-num (+ 10 big-num))
+                                    (random (- -3 big-num) (- big-num))))
       'random-seed-same2
-      (begin (random-seed 23) (list (random 10 20) (random 20 30) (random 30 40))))
+      (begin (random-seed 23) (list (random 10 20) (random 20 30) (random 30 40)
+                                    (random 0 5) (random -10 10) (random -9 -3)
+                                    (random big-num (+ 10 big-num))
+                                    (random (- -3 big-num) (- big-num)))))
 (test (begin (random-seed 23) (list (random-ref '(1 2 3)) (random-ref '(4 5 6)) (random-ref '(7 8 9))))
       'random-seed-same3
       (begin (random-seed 23) (list (random-ref '#(1 2 3)) (random-ref '#(4 5 6)) (random-ref '#(7 8 9)))))
@@ -2484,7 +2496,11 @@
 (err/rt-test (random 4294967088))
 (err/rt-test (random (expt 2 32)))
 (err/rt-test (random big-num))
+(err/rt-test (random big-num))
 (err/rt-test (random 10 5))
+(err/rt-test (random -2 -3))
+(err/rt-test (random 0 big-num))
+(err/rt-test (random -big-num 0))
 
 (random-seed 101)
 (define x (list (random 10) (random 20) (random 30)))
@@ -3164,7 +3180,8 @@
 
 (define ((check-single-flonum #:real-only? [real-only? #f]
                               #:integer-only? [integer-only? #f]
-                              #:two-arg-real-only? [two-arg-real-only? real-only?])
+                              #:two-arg-real-only? [two-arg-real-only? real-only?]
+                              #:arity-one-only? [arity-one-only? #f])
          op)
   (define (single-flonum-ish? op . args)
     (define v (apply op args))
@@ -3177,7 +3194,7 @@
     (unless real-only?
       (test #t single-flonum-ish? op 2.0f0+4.0f0i)
       (test #t single-flonum-ish? op 0+4.0f0i)))
-  (when (procedure-arity-includes? op 2)
+  (when (and (procedure-arity-includes? op 2) (not arity-one-only?))
     (test #t single-flonum-ish? op 2.0f0 4.0f0)
     (test #f single-flonum-ish? op 2.0 4.0f0)
     (test #f single-flonum-ish? op 2.0f0 4.0)
@@ -3205,12 +3222,14 @@
            sqrt
            expt
            exp
-           log
            sin
            cos
            tan
            asin
            acos))
+
+(map (check-single-flonum #:arity-one-only? #t)
+     (list log))
 
 (map (check-single-flonum #:two-arg-real-only? #t)
      (list atan))
@@ -3375,6 +3394,12 @@
 ;; Cases that real->double-flonum used to get wrong
 (test -4882.526517254422 real->double-flonum -13737024017780747/2813507303900)
 (test -9.792844933246106e-14 real->double-flonum -1656/16910305547451097)
+
+;; Arbitrary base log
+(test (/ (log 5) (log 20)) log 5 20)
+(test (/ (log 5) (log -8)) log 5 -8)
+(test (/ (log 7) (log 3+5i)) log 7 3+5i)
+(test (/ (log -5+2i) (log 12)) log -5+2i 12)
 
 ;; Hack to use the "math" package when it's available:
 (when (collection-file-path "base.rkt" "math" #:fail (lambda (x) #f))

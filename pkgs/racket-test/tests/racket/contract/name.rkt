@@ -15,6 +15,7 @@
                  `(,test ,name contract-name (opt/c ,contract-exp))))
 
 (parameterize ([current-contract-namespace (make-basic-contract-namespace
+                                            'racket/math
                                             'racket/contract
                                             'racket/set
                                             'racket/class)])
@@ -57,7 +58,13 @@
                                             (and/c frotz/c
                                                    (not/c bazzle/c)))))
   (test-name 'Real (flat-named-contract 'Real real?))
+  (test-name 'Natural (flat-named-contract 'Natural exact-nonnegative-integer?))
+  (test-name '_Natural (flat-named-contract '_Natural natural?))
+  (test-name 'Integer (flat-named-contract 'Integer exact-integer?))
+  (test-name 'kalidoscope (flat-named-contract 'kalidoscope exact-positive-integer?))
+  (test-name 'brick (flat-named-contract 'brick (integer-in 11 22)))
 
+  (test-name 'brick (flat-contract-with-explanation (let ([brick (λ (x) #t)]) brick)))
   
   (test-name '(-> integer? integer?) (-> integer? integer?))
   (test-name '(-> integer? any) (-> integer? any))
@@ -249,6 +256,11 @@
   (test-name 'real? (between/c -inf.0 +inf.0))
   (test-name '5 (between/c 5 5))
   (test-name '(integer-in 0 10) (integer-in 0 10))
+  (test-name '(integer-in 10 #f) (integer-in 10 #f))
+  (test-name '(integer-in #f 10) (integer-in #f 10))
+  (test-name 'exact-integer? (integer-in #f #f))
+  (test-name 'natural? (integer-in 0 #f))
+  (test-name 'exact-positive-integer? (integer-in 1 #f))
   (test-name '(char-in #\a #\z) (char-in #\a #\z))
   (test-name '(and/c 0 exact?) (integer-in 0 0))
   (test-name '(real-in 1 10) (real-in 1 10))

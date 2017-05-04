@@ -5,7 +5,7 @@
 @title[#:tag "runtime"]{Environment and Runtime Information}
 
 @defproc[(system-type [mode (or/c 'os 'word 'vm 'gc 'link 'machine
-                                  'so-suffix 'so-mode 'fs-change)
+                                  'so-suffix 'so-mode 'fs-change 'cross)
                             'os])
          (or/c symbol? string? bytes? exact-positive-integer? vector?)]{
 
@@ -90,7 +90,22 @@ are:
  file's directory; this property is @racket[#f] on Windows}
 ]
 
-@history[#:changed "6.8.0.2" @elem{Added @racket['vm] mode.}]}
+In @indexed-racket['cross] mode, the result reports whether
+cross-platform build mode has been selected (through the @Flag{C} or
+@DFlag{cross} argument to @exec{racket}; see @secref["mz-cmdline"]).
+The possible symbols are:
+
+@itemize[
+@item{@indexed-racket['infer] --- infer cross-platform mode based on
+ whether @racket[(system-type)] and @racket[(cross-system-type)] report
+ the same symbol}
+@item{@indexed-racket['force] --- use cross-platform mode, even if the
+ current and target system types are the same, because the current and target
+ executables can be different}
+]
+
+@history[#:changed "6.8.0.2" @elem{Added @racket['vm] mode.}
+         #:changed "6.9.0.1" @elem{Added @racket['cross] mode.}]}
 
 
 @defproc[(system-language+country) string?]{
@@ -152,7 +167,12 @@ ends with a newline.}
 
 A @tech{parameter} that is initialized with command-line arguments when
 Racket starts (not including any command-line arguments that were
-treated as flags for the system).}
+treated as flags for the system).
+
+On Unix and Mac OS, command-line arguments are provided to the
+Racket process as @tech{byte strings}. The arguments are converted to
+@tech{strings} using @racket[bytes->string/locale] and
+@racketvalfont{#\uFFFD} as the encoding-error character.}
 
 
 @defparam[current-thread-initial-stack-size size exact-positive-integer?]{

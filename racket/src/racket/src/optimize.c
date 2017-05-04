@@ -3802,6 +3802,7 @@ static Scheme_Object *optimize_application(Scheme_Object *o, Optimize_Info *info
       && SAME_OBJ(scheme_hash_ref_proc, app->args[0])
       && SCHEME_HASHTRP(app->args[1])
       && SAME_TYPE(scheme_ir_lambda_type, SCHEME_TYPE(app->args[3]))
+      && (((Scheme_Lambda *)(app->args[3]))->num_params == 0)
       && (SCHEME_TYPE(((Scheme_Lambda *)app->args[3])->body) > _scheme_ir_values_types_)
       && !SCHEME_PROCP(((Scheme_Lambda *)app->args[3])->body)) {
     app->args[3] = ((Scheme_Lambda *)app->args[3])->body;
@@ -7159,13 +7160,14 @@ static void flip_transitive(Scheme_Hash_Table *ht, int on)
       tvar = SCHEME_VAR(ht->keys[j]);
       if (on) {
         if (tvar->optimize_used) {
-          /* use of `tvar` is no longer dependent on anohter variable */
+          /* use of `tvar` is no longer dependent on another variable */
           to_remove = scheme_make_pair((Scheme_Object *)tvar,
                                        to_remove);
         } else
           tvar->optimize_used = 1;
       } else {
-        MZ_ASSERT(tvar->optimize_used);
+        /* It's possible that `tvar->optimize_used` is already 0; a variable
+           is sometimes tenatively marked as used, and then unmarked */
         tvar->optimize_used = 0;
       }
     }

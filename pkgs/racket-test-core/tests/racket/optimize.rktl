@@ -3234,6 +3234,26 @@
               (hash-ref '#hash((x . y)) x add1))
            #f)
 
+(test-comp '(lambda ()
+             (hash-ref #hash()
+                       'missing
+                       (λ ()
+                         'UNEXPECTED!)))
+           '(lambda ()
+             (hash-ref #hash()
+                       'missing
+                       'UNEXPECTED!)))
+(test-comp '(lambda ()
+             (hash-ref #hash()
+                       'missing
+                       (λ (required-arg)
+                         'UNEXPECTED!)))
+           '(lambda ()
+             (hash-ref #hash()
+                       'missing
+                       'UNEXPECTED!))
+           #f)
+
 ;; Check elimination of ignored structure predicate
 ;; and constructor applications:
 
@@ -5997,6 +6017,24 @@
              'mongo-dict-pull!)]
       [#:pull* 'pull]
       [_ 'err])))
+
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; At the time of its addition, this example causes the
+;; optimizer to initially use the `random-configuration`
+;; variable, instead of substituting `(unknown)`, because it
+;; can't provide that the substitution is ok --- but later it
+;; learns enough to decide the the substitution is ok after
+;; all
+
+(module optimizer-decides-to-inline-once-use-after-all racket/base
+  (define unknown #f)
+  (set! unknown unknown)
+  (define (generate-samples)
+    (define random-configuration (unknown))
+    (for ([i 0])
+      (for ([s (in-list 'obviously-not-a-list)])
+        (unknown random-configuration)))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

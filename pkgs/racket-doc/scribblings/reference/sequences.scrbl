@@ -180,6 +180,11 @@ each element in the sequence.
   
   @examples[#:label "Example: sum of even numbers" #:eval sequence-evaluator
     (for/sum ([x (in-range 0 100 2)]) x)]
+
+  When given zero as @racket[step], @racket[in-range] returns an infinite
+  sequence. It may also return infinite sequences when @racket[step] is a very
+  small number, and either @racket[step] or the sequence elements are
+  floating-point numbers.
 }
 
 
@@ -1088,7 +1093,8 @@ stream, but plain lists can be used as streams, and functions such as
          any/c]{
   Folds @racket[f] over each element of @racket[s] with @racket[i] as
   the initial accumulator.  If @racket[s] is infinite, this function
-  does not terminate.
+  does not terminate. The @racket[f] function takes the accumulator as
+  its first argument and the next stream element as its second.
 }
 
 @defproc[(stream-count [f procedure?] [s stream?])

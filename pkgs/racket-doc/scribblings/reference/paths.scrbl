@@ -561,22 +561,25 @@ extension separator.
 
 
 @defproc[(path-add-extension [path (or/c path-string? path-for-some-system?)]
-                             [ext (or/c string? bytes?)])
+                             [ext (or/c string? bytes?)]
+                             [sep (or/c string? bytes?) #"_"])
          path-for-some-system?]{
 
 Similar to @racket[path-replace-extension], but any existing extension on
 @racket[path] is preserved by replacing the @litchar{.} before the extension
-with @litchar{_}, and then the @racket[ext] is added
+with @racket[sep], and then the @racket[ext] is added
 to the end.
 
 @examples[
 (path-add-extension "x/y.ss" #".rkt")
 (path-add-extension "x/y" #".rkt")
 (path-add-extension "x/y.tar.gz" #".rkt")
+(path-add-extension "x/y.tar.gz" #".rkt" #".")
 (path-add-extension "x/.racketrc" #".rkt")
 ]
 
-@history[#:added "6.5.0.3"]}
+@history[#:changed "6.8.0.2" @elem{Added the @racket[sep] optional argument.}
+         #:added "6.5.0.3"]}
 
 
 @defproc[(path-replace-suffix [path (or/c path-string? path-for-some-system?)]
@@ -691,7 +694,8 @@ no extension, @racket[#f] is returned.}
 
 @defproc[(find-relative-path [base (or/c path-string? path-for-some-system?)]
                              [path (or/c path-string?  path-for-some-system?)]
-                             [#:more-than-root? more-than-root? any/c #f])
+                             [#:more-than-root? more-than-root? any/c #f]
+                             [#:normalize-case? normalize-case? any/c #t])
          path-for-some-system?]{
 
 Finds a relative pathname with respect to @racket[base] that names the
@@ -703,7 +707,19 @@ common with @racket[base], @racket[path] is returned.
 If @racket[more-than-root?] is true, if @racket[base] and
 @racket[path] share only a Unix root in common, and if neither
 @racket[base] nor @racket[path] is just a root path, then
-@racket[path] is returned.}
+@racket[path] is returned.
+
+If @racket[normalize-case?] is true (the default), then pairs of path
+elements to be compared are first converted via
+@racket[normal-case-path], which means that path elements are
+comparsed case-insentively on Windows. If @racket[normalize-case?] is
+@racket[#f], then path elements and the path roots match only if they
+have the same case.
+
+@history[#:changed "6.8.0.3" @elem{Made path elements case-normalized
+                                   for comparison by default, and
+                                   added the @racket[#:normalize-case?]
+                                   argument.}]}
 
 @defproc[(normalize-path [path path-string?]
                          [wrt (and/c path-string? complete-path?)

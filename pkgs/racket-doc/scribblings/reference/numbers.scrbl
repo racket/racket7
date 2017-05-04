@@ -5,7 +5,9 @@
                      racket/fixnum
                      racket/unsafe/ops
                      racket/require
-                     racket/random))
+                     racket/random
+                     racket/list
+                     math/flonum))
 
 @(define math-eval (make-base-eval))
 @examples[#:hidden #:eval math-eval (require racket/math)]
@@ -352,7 +354,7 @@ If @racket[m] is exact @racket[0], the
 
 Returns the largest of the @racket[x]s, or @racket[+nan.0] if any
  @racket[x] is @racket[+nan.0].  If any @racket[x] is inexact, the
- result is coerced to inexact.
+ result is coerced to inexact.  See also @racket[argmax].
 
 @mz-examples[(max 1 3 2) (max 1 3 2.0)]}
 
@@ -361,7 +363,7 @@ Returns the largest of the @racket[x]s, or @racket[+nan.0] if any
 
 Returns the smallest of the @racket[x]s, or @racket[+nan.0] if any
  @racket[x] is @racket[+nan.0].  If any @racket[x] is inexact, the
- result is coerced to inexact.
+ result is coerced to inexact.  See also @racket[argmin].
 
 @mz-examples[(min 1 3 2) (min 1 3 2.0)]}
 
@@ -605,19 +607,29 @@ integer.}
 
 Returns Euler's number raised to the power of @racket[z]. The result
  is normally inexact, but it is exact @racket[1] when @racket[z] is an
- exact @racket[0].
+ exact @racket[0]. See also @racket[expt].
 
 @mz-examples[(exp 1) (exp 2+3i) (exp 0)]}
 
 
-@defproc[(log [z number?]) number?]{
+@defproc[(log [z number?] [b number? (exp 1)]) number?]{
 
 Returns the natural logarithm of @racket[z].  The result is normally
  inexact, but it is exact @racket[0] when @racket[z] is an exact
  @racket[1]. When @racket[z] is exact @racket[0],
  @exnraise[exn:fail:contract:divide-by-zero].
 
-@mz-examples[(log (exp 1)) (log 2+3i) (log 1)]}
+ If @racket[b] is provided, it serves as an alternative
+ base. It is equivalent to @racket[(/ (log z) (log b))], but
+ can potentially run faster. If @racket[b] is exact
+ @racket[1], @exnraise[exn:fail:contract:divide-by-zero].
+
+ Consider using @racket[fllogb] instead when accuracy is
+ important.
+
+@mz-examples[(log (exp 1)) (log 2+3i) (log 1) (log 100 10) (log 8 2) (log 5 5)]
+
+@history[#:changed "6.9.0.1" @elem{Added second argument for arbitrary bases.}]}
 
 
 @; ------------------------------------------------------------------------
@@ -787,7 +799,7 @@ but it is faster and runs in constant time when @racket[n] is positive.
 @defproc[(bitwise-bit-field [n exact-integer?] 
                             [start exact-nonnegative-integer?] 
                             [end (and/c exact-nonnegative-integer?
-                                        (start . <= . end))])
+                                        (>=/c start))])
          exact-integer?]{
 
 Extracts the bits between position @racket[start] and @racket[(- end 1)] (inclusive)
@@ -842,8 +854,8 @@ both in binary and as integers.
                     [rand-gen pseudo-random-generator?
                                (current-pseudo-random-generator)])
             exact-nonnegative-integer?]
-           [(random [min (integer-in 1 4294967087)]
-                    [max (integer-in 1 4294967087)]
+           [(random [min exact-integer?]
+                    [max (integer-in (+ 1 min) (+ 4294967087 min))]
                     [rand-gen pseudo-random-generator?
                               (current-pseudo-random-generator)])
             exact-nonnegative-integer?]

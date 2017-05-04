@@ -3,6 +3,7 @@
 (require racket/contract
          racket/contract/private/generate-base
          rackunit
+         racket/math
          (for-syntax racket/base))
 
 ;; this is expected to never have a generator.
@@ -40,8 +41,13 @@
 (check-not-exn (λ () (test-contract-generation (listof boolean?))))
 (check-not-exn (λ () (test-contract-generation (listof number?))))
 
+(check-not-exn (λ () (test-contract-generation exact-nonnegative-integer?)))
+(check-not-exn (λ () (test-contract-generation natural?)))
 (check-not-exn (λ () (test-contract-generation (integer-in 0 100))))
 (check-not-exn (λ () (test-contract-generation (integer-in 0 (expt 2 1000)))))
+(check-not-exn (λ () (test-contract-generation (integer-in 0 #f))))
+(check-not-exn (λ () (test-contract-generation (integer-in #f 0))))
+(check-not-exn (λ () (test-contract-generation (integer-in #f #f))))
 (check-not-exn (λ () (test-contract-generation (char-in #\a #\z))))
 (check-not-exn (λ () (test-contract-generation #\a)))
 (check-not-exn (λ () (test-contract-generation (between/c 1 100))))
@@ -358,3 +364,49 @@
            (λ (x) (if x 'fail 11))
            'pos
            'neg))
+
+(let () ;; test generate / exercise for `build-flat-contract-property contracts
+  (define even-list/c
+    (let ()
+      (struct ctc ()
+        #:property
+        prop:flat-contract
+        (build-flat-contract-property
+         #:name (λ (c) 'even-list/c)
+         #:first-order (λ (c) (λ (v) (and (list? v) (andmap even? v))))
+         #:late-neg-projection
+         (λ (c)
+           (λ (b)
+             (λ (v neg-party)
+               (unless (and (list? v) (andmap even? v))
+                 (raise-blame-error b v
+                                    #:missing-party neg-party
+                                    "expected even list, got ~v" v))
+               (map values v))))))
+      (ctc)))
+  (define even-list/c/generate
+    (let ()
+      (struct ctc ()
+        #:property
+        prop:flat-contract
+        (build-flat-contract-property
+         #:name (λ (c) 'even-list/c)
+         #:first-order (λ (c) (λ (v) (and (list? v) (andmap even? v))))
+         #:late-neg-projection
+         (λ (c)
+           (λ (b)
+             (λ (v neg-party)
+               (unless (and (list? v) (andmap even? v))
+                 (raise-blame-error b v
+                                    #:missing-party neg-party
+                                    "expected even list, got ~v" v))
+               (map values v))))
+         #:generate
+         (λ (c)
+           (λ (fuel)
+             (λ () '(2))))))
+      (ctc)))
+  (check-exn cannot-generate-exn? (λ () (test-contract-generation even-list/c)))
+  (check-not-exn (λ () (test-contract-generation even-list/c/generate)))
+  (check-exercise 2 void? even-list/c)
+  (check-exercise 2 void? even-list/c/generate))
