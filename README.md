@@ -1,7 +1,14 @@
-[![Linux/Mac Build
-Status](https://travis-ci.org/racket/racket.svg?branch=master)](https://travis-ci.org/racket/racket)
-[![Windows build status](https://ci.appveyor.com/api/projects/status/hqir4eib0okk6xar?svg=true)](https://ci.appveyor.com/project/plt/racket)
+This is a work-in-progress implementation of Racket with
 
+ * the macro and module system implemented in Racket; see
+
+     pkgs/expander/README.txt
+
+ * reimplementation to run on top of Chez Scheme; see
+
+     racket/src/cs/README.txt
+
+----------------------------------------
 
 This is the source code for the core of Racket.  See
 "INSTALL.txt" for full information on building Racket.

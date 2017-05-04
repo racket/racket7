@@ -1,0 +1,7 @@
+(library (regexp)
+  (export)
+  (import (chezpart)
+          (core)
+          (port))
+  (define (char-graphic? x) #f)
+  (include "compiled/regexp.scm"))

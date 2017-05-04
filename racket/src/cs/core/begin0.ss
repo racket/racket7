@@ -1,0 +1,15 @@
+
+(define-syntax begin0
+  (syntax-rules ()
+    [(_ expr0 expr ...)
+     (call-with-values (lambda ()
+                         (call-with-values (lambda () expr0)
+                           (case-lambda
+                            [(x) (values x #f)]
+                            [args (values args #t)])))
+       (lambda (l apply?)
+         expr ...
+         (if apply?
+             (chez:apply values l)
+             l)))]))
+

@@ -1,0 +1,4 @@
+*.so
+
+# Also generated:
+known-primitive.sls

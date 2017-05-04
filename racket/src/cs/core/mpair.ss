@@ -1,0 +1,6 @@
+(define-record mpair (car cdr))
+(define (mcons a b) (make-mpair a b))
+(define (mcar m) (mpair-car m))
+(define (mcdr m) (mpair-cdr m))
+(define (set-mcar! m v) (set-mpair-car! m v))
+(define (set-mcdr! m v) (set-mpair-cdr! m v))
