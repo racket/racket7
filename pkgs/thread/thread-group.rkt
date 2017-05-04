@@ -4,7 +4,9 @@
          "internal-error.rkt"
          "atomic.rkt")
 
-(provide thread-group?
+(provide (struct-out node)
+         
+         thread-group?
          make-thread-group
          current-thread-group
 
@@ -19,19 +21,20 @@
          thread-group-all-threads
          num-threads-in-groups)
 
-(struct thread-group (parent
-                      children ; maps children to nodes
-                      [chain-start #:mutable] ; all children
-                      [chain #:mutable] ; children remaining to be scheduled round-robin
-                      [chain-end #:mutable])
-        #:transparent)
-
-(struct node (child
-              [prev #:mutable]
+;; Threads and thread groups subtype `node`:
+(struct node ([prev #:mutable]
               [next #:mutable])
         #:transparent)
+(define (child-node child) child) ; a child instantiates a `node` subtype
+(define (node-child n) n)
 
-(define root-thread-group (thread-group #f (make-hasheq) #f #f #f))
+(struct thread-group node (parent
+                           [chain-start #:mutable] ; all children
+                           [chain #:mutable] ; children remaining to be scheduled round-robin
+                           [chain-end #:mutable])
+        #:transparent)
+
+(define root-thread-group (thread-group #f #f #f #f #f #f))
 
 (define num-threads-in-groups 0)
 
@@ -43,7 +46,7 @@
 
 (define (make-thread-group [parent (current-thread-group)])
   (check 'make-thread-group thread-group? parent)
-  (define tg (thread-group parent (make-hasheq) #f #f #f))
+  (define tg (thread-group #f #f parent #f #f #f))
   (thread-group-add! parent tg)
   tg)
 
@@ -59,30 +62,27 @@
       #f]
      [else
       (set-thread-group-chain! tg (node-next n))
-      (node-child n)])]
+      n])]
    [else
     (set-thread-group-chain! tg (node-next n))
     (node-child n)]))
 
 (define (thread-group-add! parent child)
   (atomically
-   (when (hash-ref (thread-group-children parent) child #f)
-     (internal-error "adding a thread that is already added"))
    (define t (thread-group-chain-end parent))
-   (define n (node child t #f))
+   (define n (child-node child))
+   (set-node-prev! n t)
+   (set-node-next! n #f)
    (if t
        (set-node-next! t n)
        (set-thread-group-chain-start! parent n))
    (set-thread-group-chain-end! parent n)
-   (hash-set! (thread-group-children parent) child n)
    (unless (thread-group? child)
      (set! num-threads-in-groups (add1 num-threads-in-groups)))))
 
 (define (thread-group-remove! parent child)
   (atomically
-   (define children (thread-group-children parent))
-   (define n (hash-ref children child))
-   (hash-remove! children child)
+   (define n (child-node child))
    (if (node-next n)
        (set-node-prev! (node-next n) (node-prev n))
        (set-thread-group-chain-end! parent (node-prev n)))

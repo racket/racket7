@@ -54,24 +54,24 @@
 
 ;; ----------------------------------------
 
-(struct thread (name
-                [engine #:mutable]
-                parent
-                [sleep-until #:mutable] ; non-#f => in `sleeping-threads`
-                [sched-info #:mutable]
+(struct thread node (name
+                     [engine #:mutable]
+                     parent
+                     [sleep-until #:mutable] ; non-#f => in `sleeping-threads`
+                     [sched-info #:mutable]
 
-                suspend-to-kill?
-                [kill-callbacks #:mutable] ; list of callbacks
-                
-                [interrupt-callback #:mutable] ; non-#f when suspended
-                
-                [dead-sema #:mutable] ; created on demand
-                [dead-evt #:mutable] ; created on demand
-                [suspended? #:mutable]
-                [suspended-sema #:mutable]
+                     suspend-to-kill?
+                     [kill-callbacks #:mutable] ; list of callbacks
+                     
+                     [interrupt-callback #:mutable] ; non-#f when suspended
+                     
+                     [dead-sema #:mutable] ; created on demand
+                     [dead-evt #:mutable] ; created on demand
+                     [suspended? #:mutable]
+                     [suspended-sema #:mutable]
 
-                [delay-break-for-retry? #:mutable] ; => continuing implies an retry action
-                [pending-break? #:mutable])
+                     [delay-break-for-retry? #:mutable] ; => continuing implies an retry action
+                     [pending-break? #:mutable])
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t i-cb r-cb) (thread-internal-suspend! t #f i-cb r-cb))
@@ -96,7 +96,10 @@
   (define e (make-engine proc (if initial?
                                   break-enabled-default-cell
                                   (current-break-enabled-cell))))
-  (define t (thread (gensym)
+  (define t (thread #f ; node prev
+                    #f ; node next
+                    
+                    (gensym)
                     e
                     p
                     #f ; sleep-until
