@@ -16,8 +16,7 @@
          "pipe.rkt"
          "close.rkt"
          "count.rkt"
-         "parameter.rkt"
-         "name.rkt")
+         "parameter.rkt")
 
 (provide read-byte
          read-bytes
@@ -82,6 +81,4 @@
 
          current-input-port
          current-output-port
-         current-error-port
-         
-         port-name)
+         current-error-port)

@@ -31,7 +31,8 @@
                                                         #"#px"
                                                         #"#rx")
                                                     port)
-                                       (write (rx:regexp-source rx) port)))
+                                       (write (rx:regexp-source rx) port))
+        #:property prop:object-name (struct-field-index source))
 
 (define (make-regexp who orig-p px? as-bytes? handler)
   (call-with-continuation-prompt

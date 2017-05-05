@@ -3,7 +3,7 @@
 
 (define-values (prop:procedure procedure-struct? procedure-struct-ref)
   (make-struct-type-property 'procedure (lambda (v info)
-                                          (if (integer? v)
+                                          (if (exact-integer? v)
                                               (+ v (let ([p (list-ref info 6)])
                                                      (if p
                                                          (struct-type-field-count p)

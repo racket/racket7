@@ -69,6 +69,7 @@
                                           ,syntax-literals-id]
                                          ,instance-imports))
                     #:to-source? to-source?
+                    #:serializable? serializable?
                     #:definition-callback (lambda () (set! purely-functional? #f))
                     #:compiled-expression-callback
                     (lambda (e expected-results phase required-reference?)
@@ -105,7 +106,7 @@
          (define link-linklet
            ((if to-source? values (lambda (s) (performance-region
                                           ['compile 'top 'linklet]
-                                          (compile-linklet s))))
+                                          (compile-linklet s #f #f #f))))
             `(linklet
               ;; imports
               (,deserialize-imports

@@ -81,8 +81,8 @@
    [(keyword? v)
     (let ([max-length (write-string/max "#:" o max-length)])
       (case mode
-        [(#f) (write-string/max (symbol->string v) o max-length)]
-        [else (print-symbol v o max-length)]))]
+        [(#f) (write-string/max (keyword->string v) o max-length)]
+        [else (print-symbol (string->symbol (keyword->string v)) o max-length)]))]
    [(char? v)
     (case mode
       [(#f) (write-string/max (string v) o max-length)]

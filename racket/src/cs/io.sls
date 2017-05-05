@@ -48,7 +48,6 @@
   (define (directory-exists? p)
     (file-directory? (->string p)))
   (define (resolve-path p) p)
-  (define (object-name n) 'unknown-name)
   (define (system-path-convention-type) 'unix)
 
   (include "compiled/io.scm")

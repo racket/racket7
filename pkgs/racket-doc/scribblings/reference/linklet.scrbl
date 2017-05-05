@@ -118,18 +118,21 @@ otherwise.}
 @defproc*[([(compile-linklet [form (or/c correlated? any/c)]
                              [name any/c #f]
                              [import-keys #f #f]
-                             [get-import #f #f])
+                             [get-import #f #f]
+                             [serializable? any/c #t])
             linklet?]
            [(compile-linklet [form (or/c correlated? any/c)]
                              [name any/c]
                              [import-keys vector?]
                              [get-import (or/c #f (any/c . -> . (values (or/c linklet? instance? #f)
                                                                         (or/c vector? #f))))
-                                         #f])
+                                         #f]
+                             [serializable? any/c #t])
             (values linklet? vector?)])]{
 
 Takes an S-expression or @tech{correlated object} for a
-@schemeidfont{linklet} form and produces a @tech{linklet}. The
+@schemeidfont{linklet} form and produces a @tech{linklet}.
+As long as @racket[serializable?] is true, the
 resulting linklet can be marshaled to and from a byte stream when it is
 part of a @tech{linklet bundle}.
 

@@ -48,6 +48,17 @@
       (pretty-print v))
     v)
 
+  (define (compile-to-bytevector s)
+    (let-values ([(o get) (open-bytevector-output-port)])
+      (compile-to-port (list s) o)
+      (get)))
+
+  (define (eval-from-bytevector bv)
+    ;; HACK: This probably always works for the `lambda` or
+    ;; `let`+`lambda` forms that we compile as linklets, but we need a
+    ;; better function from the host Scheme:
+    ((cdr (vector-ref (fasl-read (open-bytevector-input-port bv)) 1))))
+
   ;; A linklet is implemented as a procedure that takes an argument
   ;; for each import plus an `variable` for each export, and calling
   ;; the procedure runs the linklet body.
@@ -71,13 +82,15 @@
 
   (define compile-linklet
     (case-lambda
-     [(c) (compile-linklet c #f #f (lambda (key) (values #f #f)))]
-     [(c name) (compile-linklet c name #f (lambda (key) (values #f #f)))]
-     [(c name import-keys) (compile-linklet c name import-keys (lambda (key) (values #f #f)))]
-     [(c name import-keys get-import)
+     [(c) (compile-linklet c #f #f (lambda (key) (values #f #f)) #t)]
+     [(c name) (compile-linklet c name #f (lambda (key) (values #f #f)) #t)]
+     [(c name import-keys) (compile-linklet c name import-keys (lambda (key) (values #f #f)) #t)]
+     [(c name import-keys get-import) (compile-linklet c name import-keys get-import #t)]
+     [(c name import-keys get-import serializable?)
       ;; Convert the linklet S-expression to a `lambda` S-expression:
       (define-values (impl-lam importss-abi exports-info)
         (schemify-linklet (show "linklet" c)
+                          serializable?
                           convert-to-annotation
                           unannotate
                           prim-knowns
@@ -86,8 +99,9 @@
                           (lambda (index)
                             (lookup-linklet get-import import-keys index))))
       ;; Create the linklet:
-      (let ([lk (make-linklet (show "schemified" (remove-annotation-boundary impl-lam))
-                              #f
+      (let ([lk (make-linklet ((if serializable? compile-to-bytevector compile)
+                               (show "schemified" (remove-annotation-boundary impl-lam)))
+                              (not serializable?)
                               importss-abi
                               exports-info
                               name
@@ -123,7 +137,7 @@
   (define (eval-linklet linklet)
     (if (linklet-compiled? linklet)
         linklet
-        (make-linklet (eval (linklet-code linklet))
+        (make-linklet (eval-from-bytevector (linklet-code linklet))
                       #t
                       (linklet-importss-abi linklet)
                       (linklet-exports-info linklet)
@@ -148,7 +162,7 @@
         (apply
          (if (linklet-compiled? linklet)
              (linklet-code linklet)
-             (eval (linklet-code linklet)))
+             (eval-from-bytevector (linklet-code linklet)))
          (make-variable-reference target-instance #f)
          (append (apply append
                         (map extract-variables

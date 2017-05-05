@@ -168,7 +168,8 @@
                                                 (define ht (and modules-being-compiled
                                                                 (hash-ref modules-being-compiled mod-name #f)))
                                                 (and ht (hash-ref ht phase #f)))
-                    #:to-source? to-source?))
+                    #:to-source? to-source?
+                    #:serializable? serializable?))
    
    (when modules-being-compiled
      ;; Record this module's linklets for cross-module inlining among (sub)modules
@@ -210,9 +211,10 @@
    ;; objects in the module.
    (define syntax-literals-linklet
      (and (not (syntax-literals-empty? syntax-literals))
-          ((if to-source? values (lambda (s) (performance-region
-                                         ['compile 'module 'linklet]
-                                         (compile-linklet s 'syntax-literals))))
+          ((if to-source? values (lambda (s)
+                                   (performance-region
+                                    ['compile 'module 'linklet]
+                                    (compile-linklet s 'syntax-literals #f #F serializable?))))
            `(linklet
              ;; imports
              (,deserialize-imports

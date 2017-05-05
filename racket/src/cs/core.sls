@@ -127,6 +127,9 @@
           inspector?
           inspector-superior?
 
+          prop:object-name
+          object-name
+
           eq-hash-code
           eqv-hash-code
           equal-hash-code
@@ -329,6 +332,7 @@
   (include "core/symbol.ss")
   (include "core/struct.ss")
   (include "core/procedure.ss")
+  (include "core/object-name.ss")
   (include "core/hamt.ss")
   (include "core/hash.ss")
   (include "core/lock.ss")

@@ -8,7 +8,9 @@
          "find-definition.rkt"
          "mutated.rkt"
          "mutated-state.rkt"
-         "left-to-right.rkt")
+         "left-to-right.rkt"
+         "serialize.rkt"
+         "let.rkt")
 
 (provide schemify-linklet
          schemify-body
@@ -49,7 +51,7 @@
 ;; When called from the Racket expander, those syntax objects
 ;; will be "correlated" objects that just support source locations.
 ;; The job of `annotate` is to take an original term (which might
-;; be `syntax?`) and a schemified term an potentially make it
+;; be `syntax?`) and a schemified term and potentially make it
 ;; an annotatation. The `unannotate` function should return a
 ;; stripped S-expression back; it's used for post-Schemify checks,
 ;; and `unannotate` is expected to be constant time.
@@ -58,7 +60,7 @@
 ;; An import ABI is a list of list of booleans, parallel to the
 ;; linklet imports, where #t to means that a value is expected, and #f
 ;; means that a variable (which boxes a value) is expected
-(define (schemify-linklet lk annotate unannotate prim-knowns get-import-knowns)
+(define (schemify-linklet lk serializable? annotate unannotate prim-knowns get-import-knowns)
   (define (im-int-id id) (unwrap (if (pair? id) (cadr id) id)))
   (define (im-ext-id id) (unwrap (if (pair? id) (car id) id)))
   (define (ex-int-id id) (unwrap (if (pair? id) (car id) id)))
@@ -80,18 +82,25 @@
        (for/fold ([exports (hasheq)]) ([ex-id (in-list ex-ids)])
          (define id (ex-int-id ex-id))
          (hash-set exports id (gensym (symbol->string id)))))
+     ;; Lift any quoted constants that can't be serialized
+     (define-values (bodys/constants-lifted lifted-constants)
+       (if serializable?
+           (convert-for-serialize bodys)
+           (values bodys null)))
      ;; Schemify the body, collecting information about defined names:
      (define-values (new-body defn-info mutated)
-       (schemify-body* bodys annotate unannotate prim-knowns imports exports))
+       (schemify-body* bodys/constants-lifted annotate unannotate prim-knowns imports exports))
      (values
       ;; Build `lambda` with schemified body:
-      `(lambda (instance-variable-reference
-           ,@(for*/list ([im-ids (in-list im-idss)]
-                         [im-id (in-list im-ids)])
-               (import-id (hash-ref imports (im-int-id im-id))))
-           ,@(for/list ([ex-id (in-list ex-ids)])
-               (hash-ref exports (ex-int-id ex-id))))
-        ,@new-body)
+      (make-let
+       lifted-constants
+       `(lambda (instance-variable-reference
+                 ,@(for*/list ([im-ids (in-list im-idss)]
+                               [im-id (in-list im-ids)])
+                     (import-id (hash-ref imports (im-int-id im-id))))
+                 ,@(for/list ([ex-id (in-list ex-ids)])
+                     (hash-ref exports (ex-int-id ex-id))))
+          ,@new-body))
       ;; Import ABI: request values for constants, `variable`s otherwise
       (for/list ([im-ids (in-list im-idss)])
         (define im-knowns (and (pair? (unwrap im-ids))

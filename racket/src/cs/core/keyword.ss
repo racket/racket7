@@ -1,5 +1,7 @@
 
-(define-record keyword (symbol))
+(define-record-type keyword
+  (fields symbol)
+  (nongenerative #{keyword dhghafpy3v03qbye1a9lwf-0}))
 
 (define (string->keyword s)
   (define sym (string->symbol s))

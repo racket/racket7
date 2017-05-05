@@ -56,12 +56,6 @@
 (define make-shared-flvector make-flvector)
 (define (flvector-copy vec) 'flvector)
 
-(define (object-name o)
-  (cond
-   [(input-port? o) (port-name o)]
-   [(output-port? o) (port-name o)]
-   [else 'unknown-name]))
-
 (define string-locale-downcase string-downcase)
 
 (define (integer->integer-bytes num size signed? big-endian?)

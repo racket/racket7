@@ -119,7 +119,7 @@ void scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_IMMED_PRIM("compiled-position->primitive", position_to_primitive, 1, 1, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
-  ADD_PRIM_W_ARITY2("compile-linklet", compile_linklet, 1, 4, 2, 2, env);
+  ADD_PRIM_W_ARITY2("compile-linklet", compile_linklet, 1, 5, 2, 2, env);
   ADD_PRIM_W_ARITY2("recompile-linklet", recompile_linklet, 1, 4, 2, 2, env);
   ADD_IMMED_PRIM("eval-linklet", eval_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY("read-compiled-linklet", read_compiled_linklet, 1, 1, env);
@@ -294,6 +294,8 @@ void extract_import_info(const char *who, int argc, Scheme_Object **argv,
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
 {
   Scheme_Object *name, *e, *import_keys, *get_import, *a[2];
+
+  /* Last argument, `serializable?`, is ignored */
 
   extract_import_info("compile-linklet", argc, argv, &import_keys, &get_import);
 

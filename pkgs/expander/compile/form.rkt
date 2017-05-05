@@ -43,6 +43,7 @@
                        #:other-form-callback [other-form-callback void]
                        #:get-module-linklet-info [get-module-linklet-info (lambda (mod-name p) #f)] ; to support submodules
                        #:to-source? [to-source? #f]
+                       #:serializable? [serializable? #t]
                        #:cross-linklet-inlining? [cross-linklet-inlining? #t])
   (define phase (compile-context-phase cctx))
   (define self (compile-context-self cctx))
@@ -246,8 +247,8 @@
               (lambda (l name keys getter) (values l keys))
               (lambda (l name keys getter)
                 (if cross-linklet-inlining?
-                    (compile-linklet l name keys getter)
-                    (values (compile-linklet l name) keys))))
+                    (compile-linklet l name keys getter serializable?)
+                    (values (compile-linklet l name #f #f serializable?) keys))))
           `(linklet
             ;; imports
             (,@body-imports

@@ -8,7 +8,7 @@ COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort)'
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
                     schemify/struct-type-info.rkt schemify/import.rkt schemify/mutated-state.rkt \
-                    schemify/simple.rkt
+                    schemify/simple.rkt schemify/serialize.rkt schemify/let.rkt
 CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS)
 
 THREAD_DEPS = chezpart.so core.so
@@ -116,6 +116,7 @@ CORE_SRCS = core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \
             core/procedure.ss \
+            core/object-name.ss \
             core/hamt.ss \
             core/hash.ss \
 	    core/lock.ss \

@@ -17,7 +17,8 @@
                      [offset #:mutable] ; count plain bytes
                      [line #:mutable]   ; count newlines
                      [column #:mutable] ; count UTF-8 characters in line
-                     [position #:mutable]))  ; count UTF-8 characters
+                     [position #:mutable])  ; count UTF-8 characters
+  #:property prop:object-name (struct-field-index name))
 
 (define (make-output-port #:name name
                           #:data [data #f]
