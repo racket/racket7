@@ -7,10 +7,13 @@
                         close-input-port close-output-port
                         current-directory
                         format
-                        error)
+                        error
+                        input-port? output-port?)
                   [standard-input-port current-input-port]
                   [standard-output-port current-output-port]
-                  [standard-error-port current-error-port])
+                  [standard-error-port current-error-port]
+                  [input-port? chez:input-port?]
+                  [output-port? chez:output-port?])
           (core)
           (thread))
   ;; Tie knots:
@@ -38,6 +41,24 @@
     (put-bytevector out bstr start-pos len)
     (flush-output-port out)
     len)
+  (define file-stream-buffer-mode
+    (case-lambda
+     [(p)
+      (if (chez:input-port? p)
+          (if (zero? (binary-port-input-size p))
+              'none
+              'block)
+          (if (zero? (binary-port-output-size p))
+              'none
+              'block))]
+     [(p mode)
+      (if (chez:input-port? p)
+          (set-binary-port-input-buffer! p (if (eq? mode 'block)
+                                               (make-bytevector 4096)
+                                               (make-bytevector 0)))
+          (set-binary-port-output-buffer! p (if (eq? mode 'block)
+                                                (make-bytevector 4096)
+                                                (make-bytevector 0))))]))
   (define peek-byte lookahead-u8)
   (define (->string p)
     (if (1/path? p) (1/path->string p) p))

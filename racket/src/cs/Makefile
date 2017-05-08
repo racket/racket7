@@ -31,6 +31,12 @@ racket.so: main.so
 main.so: $(MAIN_DEPS) main.sps
 	$(COMP) '(compile-file "main.sps")' | $(SCHEME) -q $(MAIN_DEPS)
 
+rktl:
+	$(MAKE) thread-rktl
+	$(MAKE) io-rktl
+	$(MAKE) regexp-rktl
+	$(MAKE) expander-rktl
+
 PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm
 
 expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS)
@@ -40,6 +46,9 @@ compiled/expander.scm: ../../../pkgs/expander/compiled/expander.rktl $(CONVERT_D
 	$(RACKET) convert.rkt ../../../pkgs/expander/compiled/expander.rktl compiled/expander.scm
 
 ../../../pkgs/expander/compiled/expander.rktl:
+	$(MAKE) expander-rtkl
+
+expander-rktl:
 	$(MAKE) bounce BOUNCE_DIR=../../../pkgs/expander BOUNCE_TARGET=expander-src
 
 linklet-demo: linklet.so
@@ -67,7 +76,7 @@ known-primitive.sls: known-primitive.rkt
 	$(RACKET) known-primitive.rkt
 
 
-regexp-demo: regexp.so demo/regexp.scm
+regexp-demo: regexp.so
 	$(SCHEME) $(REGEXP_DEPS) regexp.so demo/regexp.ss
 
 regexp.so: compiled/regexp.scm regexp.sls $(REGEXP_DEPS)
@@ -77,6 +86,9 @@ compiled/regexp.scm: ../regexp/compiled/regexp.rktl $(CONVERT_DEPS)
 	$(RACKET) convert.rkt ../regexp/compiled/regexp.rktl compiled/regexp.scm
 
 ../regexp/compiled/regexp.rktl:
+	$(MAKE) regexp-rktl
+
+regexp-rktl:
 	$(MAKE) bounce BOUNCE_DIR=../regexp BOUNCE_TARGET=regexp-src
 
 
@@ -90,6 +102,9 @@ compiled/io.scm: ../io/compiled/io.rktl $(CONVERT_DEPS)
 	$(RACKET) convert.rkt ../io/compiled/io.rktl compiled/io.scm
 
 ../io/compiled/io.rktl:
+	$(MAKE) io-rktl
+
+io-rktl:
 	$(MAKE) bounce BOUNCE_DIR=../io BOUNCE_TARGET=io-src
 
 
@@ -103,6 +118,9 @@ compiled/thread.scm: ../thread/compiled/thread.rktl $(CONVERT_DEPS)
 	$(RACKET) convert.rkt ../thread/compiled/thread.rktl compiled/thread.scm
 
 ../thread/compiled/thread.rktl:
+	$(MAKE) thread-rktl
+
+thread-rktl:
 	$(MAKE) bounce BOUNCE_DIR=../thread BOUNCE_TARGET=thread-src
 
 

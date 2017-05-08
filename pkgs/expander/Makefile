@@ -14,6 +14,9 @@ expander:
 
 expander-src:
 	$(RACO) make bootstrap-run.rkt
+	$(MAKE) compiled/expander.rktl
+
+compiled/expander.rktl: compiled/main_rkt.zo
 	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) -s -x -o compiled/expander.rktl
 
 demo:

@@ -206,6 +206,11 @@
           arithmetic-shift
           random
           pseudo-random-generator?
+          integer->integer-bytes
+          integer-bytes->integer
+          real->floating-point-bytes
+          floating-point-bytes->real
+          system-big-endian?
 
           mpair? mcons mcar mcdr set-mcar! set-mcdr!
           

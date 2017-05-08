@@ -11,7 +11,8 @@
                eval
                dynamic-require
                namespace-require
-               version)
+               version
+               exit)
          (io)
          (thread))
 

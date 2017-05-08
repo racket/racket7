@@ -6,8 +6,12 @@ RACO = ../../bin/raco
 # appear in the simplified expansion:
 IGNORE = ++knot read -
 
-regexp-src:
+io-src:
+	$(RACO) make main.rkt
 	$(RACO) make ../../../pkgs/expander/bootstrap-run.rkt
+	$(MAKE) compiled/io.rktl
+
+compiled/io.rktl:
 	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t main.rkt -c compiled/cache-src  $(IGNORE) -s -x -o compiled/regexp.rktl
 
 demo:

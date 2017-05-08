@@ -36,7 +36,7 @@
                         (end-uninterrupted 'reset)
                         (if (current-engine-state)
                             (engine-return (void))
-                            (exit))))
+                            (chez:exit))))
        (timer-interrupt-handler engine-block-via-timer)
        (end-implicit-uninterrupted 'create)
        (set-timer ticks)

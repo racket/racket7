@@ -6,7 +6,9 @@
           flush
           call-in-main-thread
           set-exec-file!
-          version)
+          set-run-file!
+          version
+          exit)
   (import (chezpart)
           (rename (core)
                   ;; These names are not public primitives, so "expander.scm"

@@ -1,7 +1,10 @@
 #lang racket/base
 (require racket/include
          racket/unsafe/ops
-         (only-in '#%kernel open-input-file))
+         (only-in '#%kernel open-input-file)
+         (only-in '#%paramz
+                  parameterization-key
+                  extend-parameterization))
 
 (provide (rename-out
           (1/build-path/convention-type build-path/convention-type)
@@ -88,4 +91,4 @@
 (define-syntax-rule (linklet () (ex ...) body ...)
   (begin body ...))
 
-(include "port.rktl")
+(include "../../io/compiled/io.rktl")

@@ -1,5 +1,5 @@
 #lang racket/base
-(require "port.rkt"
+(require "io-impl.rkt"
          (only-in racket/base
                   [open-input-file c:open-input-file]
                   [port-count-lines! c:port-count-lines!]
@@ -12,7 +12,7 @@
  (let loop ([j 10])
    (unless (zero? j)
      (let ()
-       (define p (open-input-file "port.rktl"))
+       (define p (open-input-file "compiled/io.scm"))
        (port-count-lines! p)
        (let loop ()
          (define s (read-string 100 p))
@@ -26,7 +26,7 @@
  (let loop ([j 10])
    (unless (zero? j)
      (let ()
-       (define p (c:open-input-file "port.rktl"))
+       (define p (c:open-input-file "compiled/io.scm"))
        (c:port-count-lines! p)
        (let loop ()
          (define s (c:read-string 100 p))
@@ -40,7 +40,7 @@
  (let loop ([j 10])
    (unless (zero? j)
      (let ()
-       (define p (open-input-file "port.rktl"))
+       (define p (open-input-file "compiled/io.scm"))
        (port-count-lines! p)
        (let loop ()
          (unless (eof-object? (read-byte p))

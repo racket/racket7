@@ -117,9 +117,9 @@
                                                                    (string-length str))])
   (do-string->bytes/utf-8 'string->bytes/utf-8 str err-byte start end))
 
-(define (string-utf-8-length str [err-byte #f] [start 0] [end (and (string? str)
-                                                                   (string-length str))])
-  (do-string->bytes/utf-8 'string-utf-8-length str err-byte start end #:just-length? #t))
+(define (string-utf-8-length str [start 0] [end (and (string? str)
+                                                     (string-length str))])
+  (do-string->bytes/utf-8 'string-utf-8-length str #f start end #:just-length? #t))
 
 ;; For now, always use UTF-8 as locale encoding
 (define (string->bytes/locale str [err-byte #f] [start 0] [end (and (string? str)

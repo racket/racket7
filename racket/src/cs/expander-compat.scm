@@ -58,14 +58,6 @@
 
 (define string-locale-downcase string-downcase)
 
-(define (integer->integer-bytes num size signed? big-endian?)
-  (define bstr (make-bytes 4))
-  (bytes-set! bstr 0 (bitwise-and num #xFF))
-  (bytes-set! bstr 1 (bitwise-and (arithmetic-shift num -8) #xFF))
-  (bytes-set! bstr 2 (bitwise-and (arithmetic-shift num -16) #xFF))
-  (bytes-set! bstr 3 (bitwise-and (arithmetic-shift num -24) #xFF))
-  bstr)
-
 (define (char-graphic? x) #f)
 
 (define (system-library-subpath) "x86_64-macosx/3m")
@@ -108,6 +100,19 @@
 
 (define current-eval
   (make-parameter (lambda args (error "eval not ready"))))
+
+(define exit-handler
+  (make-parameter (lambda (v)
+                    (cond
+                     [(byte? v)
+                      (chez:exit v)]
+                     [else
+                      (chez:exit 0)]))))
+
+(define exit
+  (case-lambda
+   [() ((exit-handler) #t)]
+   [(v) ((exit-handler) v)]))
              
 (define read-decimal-as-inexact
   (make-parameter #t))
@@ -117,6 +122,9 @@
 
 (define read-case-sensitive
   (make-parameter #t))
+
+(define current-command-line-arguments
+  (make-parameter '#()))
 
 (define current-library-collection-paths
   (make-parameter null))
@@ -185,6 +193,9 @@
 (define exec-file #f)
 (define (set-exec-file! p) (set! exec-file p))
 
+(define run-file #f)
+(define (set-run-file! p) (set! run-file p))
+
 (define (find-system-path key)
   (case key
     [(exec-file) (or exec-file
@@ -193,6 +204,8 @@
     [(collects-dir) (string->path "../collects")]
     [(addon-dir) (string->path "/tmp/addon")]
     [(orig-dir) (string->path (current-directory))]
+    [(run-file) (or run-file
+                    (find-system-path 'exec-file))]
     [else `(find-system-path-not-ready ,key)]))
 
 (define (version) "0.1")
@@ -496,8 +509,6 @@
 
    string-locale-downcase
 
-   integer->integer-bytes
-
    char-graphic?
 
    system-type
@@ -514,7 +525,10 @@
    file-or-directory-modify-seconds
    resolve-path
    expand-user-path
-   
+
+   exit
+   exit-handler
+
    reparameterize
    current-eval
    read-decimal-as-inexact
@@ -524,6 +538,7 @@
 
    current-library-collection-paths
    current-library-collection-links
+   current-command-line-arguments
    use-collection-link-paths
    use-user-specific-search-paths
    use-compiled-file-paths

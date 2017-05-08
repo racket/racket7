@@ -51,8 +51,12 @@
    bytes->string/locale
    bytes->string/utf-8
    bytes-append
+   bytes-convert
+   bytes-convert-end
+   bytes-converter?
    bytes-copy!
    bytes-length
+   bytes-open-converter
    bytes-ref
    bytes-set!
    bytes-utf-8-length
@@ -103,6 +107,7 @@
    continuation-mark-set-first
    continuation-prompt-available?
    current-code-inspector
+   current-command-line-arguments
    current-compile
    current-compiled-file-roots
    current-continuation-marks
@@ -160,6 +165,8 @@
    exact?
    exact->inexact
    exception-handler-key
+   exit
+   exit-handler
    exn-continuation-marks
    exn-message
    exn?
@@ -169,12 +176,15 @@
    file-exists?
    file-or-directory-modify-seconds
    file-position
+   file-stream-buffer-mode
+   file-stream-port?
    filesystem-change-evt
    filesystem-change-evt-cancel
    find-system-path
    fixnum?
    flonum?
    floor
+   floating-point-bytes->real
    flvector-length
    flvector-set!
    flvector?
@@ -224,6 +234,7 @@
    inspector?
    integer->char
    integer->integer-bytes
+   integer-bytes->integer
    integer?
    interned-char?
    kill-thread
@@ -304,9 +315,11 @@
    parameterization-key
    path->bytes
    path->complete-path
+   path->directory-path
    path->string
    path-convention-type
    path-element->bytes
+   path-element->string
    path-for-some-system?
    path?
    path<?
@@ -366,6 +379,7 @@
    read-string
    read-string!
    real?
+   real->floating-point-bytes
    regexp
    regexp-match
    regexp-match/end
@@ -403,6 +417,7 @@
    string->list
    string->number
    string->path
+   string->path-element
    string->symbol
    string->uninterned-symbol
    string->unreadable-symbol
@@ -436,6 +451,7 @@
    symbol?
    sync
    sync/timeout
+   system-big-endian?
    system-library-subpath
    system-path-convention-type
    system-type
@@ -449,6 +465,7 @@
    time-apply
    thread
    unbox
+   uncaught-exception-handler
    use-collection-link-paths
    use-compiled-file-paths
    use-user-specific-search-paths

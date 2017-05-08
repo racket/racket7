@@ -19,7 +19,7 @@
          path->string
          bytes->path
          path->bytes
-         
+
          string->path-element
          bytes->path-element
          path-element->string
@@ -69,6 +69,19 @@
 (define (string->path-element s)
   (check 'string->path-element string? s)  
   (check-path-string 'string->path-element s)
+  (case (system-path-convention-type)
+    [(unix)
+     (check-path-string 'string->path-element s)
+     (when (or (equal? s "..")
+               (equal? s ".")
+               (for/or ([c (in-string s)])
+                 (eqv? c #\/)))
+       (raise-arguments-error 'string->path-element
+                              "cannot be converted to a path element"
+                              "path" s
+                              "explanation" "path can be split, is not relative, or names a special element"))]
+    [(windows)
+     (error 'string->path-element "fixme")])
   (do-bytes->path-element (string->bytes/locale s #\?)
                           (system-path-convention-type)
                           'string->path-element

@@ -9,6 +9,7 @@
          "string-output.rkt"
          "line-input.rkt"
          "file-port.rkt"
+         "file-stream.rkt"
          "bytes-port.rkt"
          "string-port.rkt"
          "custom-input-port.rkt"
@@ -16,6 +17,7 @@
          "pipe.rkt"
          "close.rkt"
          "count.rkt"
+         "buffer-mode.rkt"
          "parameter.rkt")
 
 (provide read-byte
@@ -59,7 +61,9 @@
          call-with-output-file
          with-input-from-file
          with-output-to-file
-         
+
+         file-stream-port?
+
          open-input-bytes
          open-output-bytes
          get-output-bytes
@@ -75,6 +79,8 @@
          
          close-input-port
          close-output-port
+         
+         file-stream-buffer-mode
          
          port-count-lines!
          port-next-location

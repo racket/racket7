@@ -74,8 +74,8 @@ Files in this directory:
          Racket) of the thread and event subsystem.
 
          CAUTION: The makefile here doesn't track dependencies for
-         "*.rktl" files, so run `make` in the corresponding source
-         directory if you change the implementation.
+         "*.rktl" files, so run `make rktl` if you change any of those
+         implementations.
 
  primitive/*.scm - for "expander.sls", tables of bindings for
          primitive linklet instances.

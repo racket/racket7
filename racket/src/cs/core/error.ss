@@ -310,7 +310,7 @@
     ((error-display-handler) (exn->string exn) exn))
   (when (or (exn:break:hang-up? exn)
             (exn:break:terminate? exn))
-    (exit 1))
+    (chez:exit 1))
   ((error-escape-handler)))
 
 (define (default-error-display-handler msg v)

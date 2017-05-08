@@ -6,6 +6,7 @@
 (provide open-input-peek-to-read)
 
 (define (open-input-peek-to-read #:name name
+                                 #:data [data #f]
                                  #:read-byte read-byte
                                  #:read-in read-in
                                  #:peek-byte [peek-byte #f]
@@ -16,6 +17,7 @@
   (define buf (make-bytes 4096))
   (make-input-port
    #:name name
+   #:data data
    
    #:read-byte
    (lambda ()

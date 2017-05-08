@@ -5,16 +5,29 @@
                   [read-bytes-avail!* host:read-bytes-avail!*]
                   [write-bytes-avail* host:write-bytes-avail*]
                   [close-input-port host:close-input-port]
-                  [close-output-port host:close-output-port])
+                  [close-output-port host:close-output-port]
+                  [file-stream-buffer-mode host:file-stream-buffer-mode])
          "output-port.rkt"
-         "peek-to-read-port.rkt")
+         "peek-to-read-port.rkt"
+         "file-stream.rkt"
+         "buffer-mode.rkt")
 
 (provide open-input-host
          open-output-host)
 
+(struct host-data (host-port)
+  #:property prop:file-stream #t
+  #:property prop:buffer-mode (case-lambda
+                                [(hid)
+                                 (host:file-stream-buffer-mode (host-data-host-port hid))]
+                                [(hid mode)
+                                 (host:file-stream-buffer-mode (host-data-host-port hid) mode)]))
+
+
 (define (open-input-host host-in name)
   (open-input-peek-to-read
    #:name name
+   #:data (host-data host-in)
    #:read-byte (lambda () (host:read-byte host-in))
    #:read-in (lambda (dest-bstr start end copy?)
                (host:read-bytes-avail!* dest-bstr host-in start end))
@@ -26,7 +39,8 @@
 (define (open-output-host host-out name)
   (make-output-port
    #:name name
-   
+   #:data (host-data host-out)
+
    #:evt 'evt
    
    #:write-out

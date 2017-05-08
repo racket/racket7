@@ -28,7 +28,8 @@
                            call-with-current-continuation
                            make-engine engine-block engine-return
                            current-eval load
-                           sleep thread?)
+                           sleep thread? buffer-mode?
+                           exit-handler)
                    [make-parameter chez:make-parameter]
                    [void chez:void]
                    [date-second chez:date-second]
@@ -53,4 +54,5 @@
                    [directory-list chez:directory-list]
                    [filter chez:filter]
                    [member chez:member]
-                   [raise chez:raise]))))
+                   [raise chez:raise]
+                   [exit chez:exit]))))

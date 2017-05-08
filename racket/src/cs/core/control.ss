@@ -194,7 +194,7 @@
 (define (resume-metacontinuation results)
   ;; pop a metacontinuation frame
   (cond
-   [(null? *metacontinuation*) (exit)]
+   [(null? *metacontinuation*) (chez:exit)]
    [else
     (start-uninterrupted 'resume-mc)
     (let ([mf (car *metacontinuation*)])

@@ -32,7 +32,7 @@
   (check 'call-with-input-file (lambda (v) (and (procedure? v) (procedure-arity-includes? v 1)))
          #:contract "(procedure-arity-includes?/c 1)"
          proc)
-  (define i (host:open-input-file (path->string (path->complete-path path))))
+  (define i (open-input-file path mode))
   (begin0
    (proc i)
    (close-input-port i)))
@@ -42,7 +42,7 @@
   (check 'call-with-output-file (lambda (v) (and (procedure? v) (procedure-arity-includes? v 1)))
          #:contract "(procedure-arity-includes?/c 1)"
          proc)
-  (define o (host:open-output-file (path->string (path->complete-path path))))
+  (define o (open-output-file path mode1 mode2))
   (begin0
    (proc o)
    (close-output-port o)))
@@ -52,7 +52,7 @@
   (check 'with-input-from-file (lambda (v) (and (procedure? v) (procedure-arity-includes? v 0)))
          #:contract "(procedure-arity-includes?/c 0)"
          proc)
-  (define i (host:open-input-file (path->string (path->complete-path path))))
+  (define i (open-input-file path mode))
   (parameterize ([current-input-port i])
     (dynamic-wind
      void
@@ -65,7 +65,7 @@
   (check 'with-output-to-file (lambda (v) (and (procedure? v) (procedure-arity-includes? v 0)))
          #:contract "(procedure-arity-includes?/c 0)"
          proc)
-  (define o (host:open-output-file (path->string (path->complete-path path))))
+  (define o (open-output-file path mode1 mode2))
   (parameterize ([current-output-port o])
     (dynamic-wind
      void
