@@ -127,7 +127,7 @@
 (define use-user-specific-search-paths
   (make-parameter #t))
 (define use-compiled-file-paths
-  (make-parameter null))
+  (make-parameter (list (string->path (string-append "compiled/" (symbol->string (machine-type)))))))
 (define current-compiled-file-roots
   (make-parameter null))
 
@@ -141,14 +141,25 @@
 (define current-print
   (make-parameter (lambda (v)
                     (unless (void? v)
-                      (write v)
+                      (print v)
                       (newline)))))
 (define current-read-interaction
-  (make-parameter #f))
+  (make-parameter
+   (lambda (src in)
+     (parameterize ([1/read-accept-reader #t]
+                    [1/read-accept-lang #f])
+       (1/read-syntax src in)))))
 (define error-print-source-location
   (make-parameter #t))
 (define current-prompt-read
-  (make-parameter #f))
+  (make-parameter
+   (lambda ()
+     (display "> ")
+     (let ([in ((current-get-interaction-input-port))])
+       ((current-read-interaction) (object-name in) in)))))
+(define current-get-interaction-input-port
+  (make-parameter
+   (lambda () (current-input-port))))
 
 (define current-compile
   (make-parameter 'current-compile))
@@ -171,11 +182,12 @@
 
 (define (open-input-output-file . args) (error "no open-input-output-file"))
 
+(define exec-file #f)
+(define (set-exec-file! p) (set! exec-file p))
+
 (define (find-system-path key)
   (case key
-    [(exec-file) (or (let ([s (getenv "LINKLET_RACKET")])
-                       (and s
-                            (build-path s "racket" "bin" "racket")))
+    [(exec-file) (or exec-file
                      (string->path "/usr/local/bin/racket"))]
     [(config-dir) (string->path "../config")]
     [(collects-dir) (string->path "../collects")]
@@ -198,7 +210,17 @@
 (define (current-logger) 'logger)
 (define (logger? v) (eq? v 'logger))
 
-(define (port-read-handler p) read)
+(define the-default-read-handler
+  (let ([default-read-handler
+          (case-lambda
+           [(in) (1/read in)]
+           [(in src) (1/read-syntax src in)])])
+    default-read-handler))
+
+(define port-read-handler
+  (case-lambda
+   [(p) the-default-read-handler]
+   [(p read) (void)]))
 
 ;; Not good enough...
 (define (make-ephemeron k v)
@@ -340,7 +362,7 @@
                          [correlated-property syntax-property]
                          [correlated-property-symbol-keys syntax-property-symbol-keys])
                  (thread)
-                 (port)
+                 (io)
                  (regexp)
                  (linklet)))
   
@@ -513,6 +535,7 @@
    current-code-inspector
    current-print
    current-read-interaction
+   current-get-interaction-input-port
    error-print-source-location
    current-prompt-read
 
@@ -531,8 +554,6 @@
    open-input-output-file
 
    find-system-path
-
-   version
 
    prop:exn:srclocs exn:srclocs? exn:srclocs-accessor
 

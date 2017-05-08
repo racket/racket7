@@ -74,7 +74,7 @@
 (struct exn:fail:contract:divide-by-zero exn:fail:contract ())
 (struct exn:fail:contract:non-fixnum-result exn:fail:contract ())
 (struct exn:fail:contract:continuation exn:fail:contract ())
-(struct exn:fail:contract:variable exn:fail:contract ())
+(struct exn:fail:contract:variable exn:fail:contract (id))
 (struct exn:fail:read exn:fail (srclocs))
 (struct exn:fail:read:non-char exn:fail:read ())
 (struct exn:fail:read:eof exn:fail:read ())
@@ -227,28 +227,45 @@
                (loop (cdr more)))])))
     (current-continuation-marks))))
 
-(define (raise-range-error who
-                           type-description	 	 	 	 
-                           index-prefix	 	 	 	 
-                           index	 	 	 	 
-                           in-value	 	 	 	 
-                           lower-bound	 	 	 	 
-                           upper-bound	 	 	 	 
-                           alt-lower-bound)
-  (unless (symbol? who)
-    (raise-argument-error 'raise-range-error "symbol?" who))
-  (unless (string? type-description)
-    (raise-argument-error 'raise-range-error "string?" type-description))
-  (unless (string? index-prefix)
-    (raise-argument-error 'raise-range-error "string?" index-prefix))
-  (raise
-   (exn:fail:contract
-    (apply
-     string-append
-     (symbol->string who)
-     ": "
-     "range error...")
-    (current-continuation-marks))))
+(define raise-range-error
+  (case-lambda
+   [(who
+     type-description
+     index-prefix
+     index
+     in-value
+     lower-bound
+     upper-bound
+     alt-lower-bound)
+    (unless (symbol? who)
+      (raise-argument-error 'raise-range-error "symbol?" who))
+    (unless (string? type-description)
+      (raise-argument-error 'raise-range-error "string?" type-description))
+    (unless (string? index-prefix)
+      (raise-argument-error 'raise-range-error "string?" index-prefix))
+    (raise
+     (exn:fail:contract
+      (apply
+       string-append
+       (symbol->string who)
+       ": "
+       "range error...")
+      (current-continuation-marks)))]
+   [(who
+     type-description
+     index-prefix
+     index
+     in-value
+     lower-bound
+     upper-bound)
+    (raise-range-error who
+                       type-description
+                       index-prefix
+                       index
+                       in-value
+                       lower-bound
+                       upper-bound
+                       #f)]))
 
 (define (raise-arity-error name arity . args)
   (raise

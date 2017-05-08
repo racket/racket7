@@ -7,7 +7,7 @@
                   [correlated? core:correlated?]
                   [correlated-e core:correlated-e])
           (regexp)
-          (port)
+          (io)
           (known-primitive))
   
   ;; Bridge for flattened "schemify/wrap.rkt":

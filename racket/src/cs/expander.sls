@@ -4,7 +4,9 @@
           current-library-collection-paths
           find-library-collection-paths
           flush
-          call-in-main-thread)
+          call-in-main-thread
+          set-exec-file!
+          version)
   (import (chezpart)
           (rename (core)
                   ;; These names are not public primitives, so "expander.scm"
@@ -22,7 +24,7 @@
                   [correlated-property-symbol-keys core:correlated-property-symbol-keys])
           (thread)
           (regexp)
-          (port)
+          (io)
           (linklet))
   (include "expander-compat.scm")
   (include "compiled/expander.scm")

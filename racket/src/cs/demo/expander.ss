@@ -1,5 +1,5 @@
 (import (expander)
-        (port))
+        (io))
 
 (define (show v) (write v) (newline))
 
@@ -7,6 +7,8 @@
  (lambda ()
    (boot)
 
+   (set-exec-file! (path->complete-path (string->path "../../bin/racket")))
+   
    (namespace-require ''|#%kernel|)
    (expand '1)
    (eval '((lambda (x) x) 1))

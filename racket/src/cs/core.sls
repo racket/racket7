@@ -60,7 +60,7 @@
           struct:exn:fail:contract:divide-by-zero exn:fail:contract:divide-by-zero exn:fail:contract:divide-by-zero?
           struct:exn:fail:contract:non-fixnum-result exn:fail:contract:non-fixnum-result exn:fail:contract:non-fixnum-result?
           struct:exn:fail:contract:continuation exn:fail:contract:continuation exn:fail:contract:continuation?
-          struct:exn:fail:contract:variable exn:fail:contract:variable exn:fail:contract:variable?
+          struct:exn:fail:contract:variable exn:fail:contract:variable exn:fail:contract:variable? exn:fail:contract:variable-id
           struct:exn:fail:read exn:fail:read exn:fail:read? exn:fail:read-srclocs
           struct:exn:fail:read:eof exn:fail:read:eof exn:fail:read:eof?
           struct:exn:fail:read:non-char exn:fail:read:non-char exn:fail:read:non-char?

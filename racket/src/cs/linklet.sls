@@ -32,7 +32,7 @@
   (import (chezpart)
           (only (chezscheme) printf)
           (core)
-          (only (port)
+          (only (io)
                 path?
                 path->string)
           (regexp)
@@ -204,7 +204,8 @@
          (exn:fail:contract:variable
           (string-append (symbol->string (variable-name var))
                          ": undefined;\n cannot reference undefined identifier")
-          (current-continuation-marks)))
+          (current-continuation-marks)
+          (variable-name var)))
         v))
 
   (define (variable-ref/no-check var)

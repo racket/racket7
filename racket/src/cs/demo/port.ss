@@ -1,4 +1,4 @@
-(import (port))
+(import (io))
 
 (time
  (let loop ([j 10])

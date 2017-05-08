@@ -2,6 +2,6 @@
   (export)
   (import (chezpart)
           (core)
-          (port))
+          (io))
   (define (char-graphic? x) #f)
   (include "compiled/regexp.scm"))

@@ -1,4 +1,5 @@
 *.so
+*.wpo
 
 # Also generated:
 known-primitive.sls

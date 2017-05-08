@@ -3,7 +3,7 @@ RACKET = ../../bin/racket
 SCHEME = scheme
 UNSAFE = # '(optimize-level 3)'
 
-COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort)'
+COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort) (generate-wpo-files \#t)'
 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
@@ -17,9 +17,19 @@ REGEXP_DEPS = $(IO_DEPS) io.so
 SCHEMIFY_DEPS = $(REGEXP_DEPS) regexp.so known-primitive.so
 LINKLET_DEPS = $(SCHEMIFY_DEPS) schemify.so
 EXPANDER_DEPS = $(LINKLET_DEPS) linklet.so
+MAIN_DEPS = $(EXPANDER_DEPS) expander.so
 
 expander-demo: expander.so demo/expander.ss
-	env LINKLET_RACKET=`$(RACKET) absify.rkt ../../..` $(SCHEME) $(EXPANDER_DEPS) expander.so demo/expander.ss
+	env $(SCHEME) $(EXPANDER_DEPS) expander.so demo/expander.ss
+
+run: main.so
+	${SCHEME} --script main.so ../../bin/racket $(ARGS)
+
+racket.so: main.so
+	echo '(compile-whole-program "main.wpo" "racket.so" #t)' | $(SCHEME) -q
+
+main.so: $(MAIN_DEPS) main.sps
+	$(COMP) '(compile-file "main.sps")' | $(SCHEME) -q $(MAIN_DEPS)
 
 PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm
 

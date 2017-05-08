@@ -1,5 +1,5 @@
 (import (core)
         (regexp)
-        (port))
+        (io))
 
 (include "demo/regexp.scm")
