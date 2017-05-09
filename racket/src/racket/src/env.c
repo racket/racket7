@@ -377,6 +377,7 @@ static void init_unsafe(Scheme_Startup_Env *env)
   scheme_init_unsafe_hash(env);
   scheme_init_unsafe_vector(env);
   scheme_init_unsafe_fun(env);
+  scheme_init_unsafe_thread(env);
 
   scheme_init_extfl_unsafe_number(env);
   scheme_init_extfl_unsafe_numarith(env);
