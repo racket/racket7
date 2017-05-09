@@ -213,16 +213,6 @@
 (define-values (prop:exn:srclocs exn:srclocs? exn:srclocs-accessor)
   (make-struct-type-property 'exn:srclocs))
 
-(define (make-logger . args) 'logger)
-(define (log-level? logger level . args) #f)
-(define (log-message logger level topic message . args)
-  (when (log-level? logger level)
-    (chez:fprintf (chez:current-error-port) "~a\n" (if (string? topic)
-                                                       topic
-                                                       message))))
-(define (current-logger) 'logger)
-(define (logger? v) (eq? v 'logger))
-
 (define the-default-read-handler
   (let ([default-read-handler
           (case-lambda

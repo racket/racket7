@@ -1,5 +1,5 @@
 #lang racket/base
-(require "main.rkt"
+(require "bootstrap-main.rkt"
          (only-in racket/base
                   [string->bytes/utf-8 host:string->bytes/utf-8]
                   [bytes->string/utf-8 host:bytes->string/utf-8]

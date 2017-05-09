@@ -4,7 +4,7 @@
          "parameter.rkt"
          "evt.rkt"
          "waiter.rkt"
-         "queue.rkt")
+         "../common/queue.rkt")
 
 (provide make-channel
          channel?

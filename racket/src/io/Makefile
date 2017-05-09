@@ -12,7 +12,7 @@ io-src:
 	$(MAKE) compiled/io.rktl
 
 compiled/io.rktl: compiled/main_rkt.zo ../../../pkgs/expander/compiled/bootstrap-run_rkt.zo
-	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t main.rkt -c compiled/cache-src  $(IGNORE) -s -x -o compiled/io.rktl
+	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t main.rkt --submod main -c compiled/cache-src  $(IGNORE) -s -x -o compiled/io.rktl
 
 demo:
 	$(RACO) make demo.rkt

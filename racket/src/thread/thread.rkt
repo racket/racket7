@@ -29,6 +29,7 @@
          
          check-for-break
          break-enabled-key
+         current-break-suspend
          
          thread-push-kill-callback!
          thread-pop-kill-callback!
@@ -367,6 +368,13 @@
 ;; A continuation-mark key (not made visible to regular Racket code):
 (define break-enabled-default-cell (make-thread-cell #t #t))
 
+;; For disabling breaks, such as through `unsafe-start-atomic`:
+(define break-suspend 0)
+(define current-break-suspend
+  (case-lambda
+    [() break-suspend]
+    [(v) (set! break-suspend v)]))
+
 (define (current-break-enabled-cell)
   (continuation-mark-set-first #f
                                break-enabled-key
@@ -382,6 +390,7 @@
     (cond
      [(and (thread-pending-break? t)
            (thread-cell-ref (current-break-enabled-cell))
+           (zero? (current-break-suspend))
            ;; If delaying for retry, then defer
            ;; break checking to the continuation (instead
            ;; of raising an asynchronous exception now)

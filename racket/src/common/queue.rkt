@@ -11,7 +11,7 @@
          queue-remove-node!)
 
 (struct queue (start end) #:mutable)
-(struct node (waiter
+(struct node (elem
               [prev #:mutable]
               [next #:mutable]))
 
@@ -31,13 +31,13 @@
     (if n
         (set-node-prev! n #f)
         (set-queue-end! q #f))
-    (node-waiter qs)]))
+    (node-elem qs)]))
 
 (define (queue-fremove! q pred)
   (let loop ([qs (queue-start q)])
     (cond
      [qs
-      (define w (node-waiter qs))
+      (define w (node-elem qs))
       (cond
        [(pred w)
         (queue-remove-node! q qs)
@@ -49,7 +49,7 @@
 (define (queue-remove-all! q proc)
   (let loop ([qs (queue-start q)])
     (when qs
-      (proc (node-waiter qs))
+      (proc (node-elem qs))
       (loop (node-next qs))))
   (set-queue-start! q #f)
   (set-queue-end! q #f))

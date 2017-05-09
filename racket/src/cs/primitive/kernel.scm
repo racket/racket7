@@ -252,8 +252,13 @@
    load-extension
    load-on-demand-enabled
    logger?
+   logger-name
+   log-all-levels
    log-level?
+   log-level-evt
+   log-max-level
    log-message
+   log-receiver?
    make-bytes
    make-continuation-prompt-tag
    make-ephemeron
@@ -271,6 +276,7 @@
    make-immutable-hasheqv
    make-inspector
    make-logger
+   make-log-receiver
    make-output-port
    make-parameter
    make-placeholder

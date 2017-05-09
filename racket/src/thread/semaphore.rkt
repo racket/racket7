@@ -1,9 +1,9 @@
 #lang racket/base
 (require "check.rkt"
+         "../common/queue.rkt"
          "atomic.rkt"
          "parameter.rkt"
          "waiter.rkt"
-         "queue.rkt"
          "evt.rkt")
 
 (provide make-semaphore

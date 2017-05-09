@@ -4,7 +4,8 @@
          (only-in "evt.rkt"
                   evt? prop:evt
                   always-evt
-                  never-evt)
+                  never-evt
+                  #%evt-instance)
          (except-in "semaphore.rkt"
                     semaphore-peek-evt)
          (except-in "channel.rkt"
@@ -12,7 +13,8 @@
          "sync.rkt"
          "system-idle-evt.rkt"
          "schedule.rkt"
-         "api.rkt")
+         "api.rkt"
+         "unsafe.rkt")
 
 (provide call-in-main-thread
          
@@ -61,6 +63,14 @@
          system-idle-evt
          
          check-for-break
-         break-enabled-key)
+         break-enabled-key
+
+         unsafe-start-atomic
+         unsafe-end-atomic
+         unsafe-start-breakable-atomic
+         unsafe-end-breakable-atomic
+         unsafe-in-atomic?
+
+         #%evt-instance)
 
 (module main racket/base)

@@ -2,7 +2,8 @@
 
 (provide atomically
          current-atomic
-         
+
+         start-atomic
          end-atomic)
 
 (define atomic 0)

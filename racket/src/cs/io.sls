@@ -41,6 +41,9 @@
     (put-bytevector out bstr start-pos len)
     (flush-output-port out)
     len)
+  (define (write-bytes bstr out)
+    (put-bytevector out bstr 0 (bytevector-length bstr)))
+
   (define file-stream-buffer-mode
     (case-lambda
      [(p)
@@ -70,6 +73,11 @@
     (file-directory? (->string p)))
   (define (resolve-path p) p)
   (define (system-path-convention-type) 'unix)
+
+  (define (primitive-table key)
+    (case key
+      [(|#%evt|) |#%evt-instance|]
+      [else #f]))
 
   (include "compiled/io.scm")
 

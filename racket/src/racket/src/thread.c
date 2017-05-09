@@ -636,29 +636,29 @@ void scheme_init_thread(Scheme_Startup_Env *env)
 }
 
 void
-scheme_init_unsafe_thread (Scheme_Env *env)
+scheme_init_unsafe_thread (Scheme_Startup_Env *env)
 {
-  scheme_add_global_constant("unsafe-start-atomic",
+  scheme_addto_prim_instance("unsafe-start-atomic",
 			     scheme_make_prim_w_arity(unsafe_start_atomic,
 						      "unsafe-start-atomic",
 						      0, 0),
 			     env);
-  scheme_add_global_constant("unsafe-end-atomic",
+  scheme_addto_prim_instance("unsafe-end-atomic",
 			     scheme_make_prim_w_arity(unsafe_end_atomic,
 						      "unsafe-end-atomic",
 						      0, 0),
 			     env);
-  scheme_add_global_constant("unsafe-start-breakable-atomic",
+  scheme_addto_prim_instance("unsafe-start-breakable-atomic",
 			     scheme_make_prim_w_arity(unsafe_start_breakable_atomic,
 						      "unsafe-start-breakable-atomic",
 						      0, 0),
 			     env);
-  scheme_add_global_constant("unsafe-end-breakable-atomic",
+  scheme_addto_prim_instance("unsafe-end-breakable-atomic",
 			     scheme_make_prim_w_arity(unsafe_end_breakable_atomic,
 						      "unsafe-end-breakable-atomic",
 						      0, 0),
 			     env);
-  scheme_add_global_constant("unsafe-in-atomic?",
+  scheme_addto_prim_instance("unsafe-in-atomic?",
 			     scheme_make_prim_w_arity(unsafe_in_atomic_p,
 						      "unsafe-in-atomic?",
 						      0, 0),
