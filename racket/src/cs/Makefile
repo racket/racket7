@@ -179,4 +179,4 @@ chezpart.so: chezpart.sls
 
 clean:
 	rm -f chezpart.so core.so regexp.so io.so immutable-hash.so linklet.so known-primitive.so linklet.so expander.so schemify.so
-	rm -f compiled
+	rm -rf compiled
