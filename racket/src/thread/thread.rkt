@@ -75,10 +75,12 @@
                      [dead-evt #:mutable] ; created on demand
                      [suspended? #:mutable]
                      [suspended-sema #:mutable]
-
+                    
                      [delay-break-for-retry? #:mutable] ; => continuing implies an retry action
                      [pending-break? #:mutable]
-                     [ignore-break-cells #:mutable]) ; => #f, a single cell, or a set of cells
+                     [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
+                     [mbx-head #:mutable]
+                     [mbx-tail #:mutable]) ;; mailbox
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t i-cb r-cb) (thread-internal-suspend! t #f i-cb r-cb))
@@ -124,7 +126,9 @@
                     
                     #f ; delay-break-for-retry?
                     #f ; pending-break?
-                    #f)) ; ignore-thread-cells
+                    #f ; ignore-thread-cells
+                    '()
+                    '())) ; mailbox
   (thread-group-add! p t)
   t)
 
@@ -479,3 +483,84 @@
       (set-thread-ignore-break-cells! t (cond
                                           [(eq? ignore bc) #f]
                                           [else (hash-remove ignore bc)])))))
+;; ----------------------------------------
+;; Thread mailboxes
+(define (enqueue-mail! thd v)
+  (define tail (thread-mbx-tail thd))
+  (cond
+    [(empty? tail) ;; if tail is empty then so is head
+     (set-thread-mbx-tail! thd (mcons v tail))
+     (set-thread-mbx-head! thd (thread-mbx-tail thd))]
+    [else ;; mcdr of tail should always be '()
+     (set-mcdr! tail (mcons v (mcdr tail)))]))
+
+(define (dequeue-mail! thd)
+  (define head (thread-mbx-head thd))
+  (cond
+    [(empty? head)
+     #f]
+    [(empty? (mcdr head))
+     (set-thread-mbx-head! thd (mcdr head))
+     (set-thread-mbx-tail! thd (mcdr head))
+     (mcar head)] ;; need to update tail too
+    [else
+     (set-thread-mbx-head! thd (mcdr head))
+     (mcar head)]))
+
+(define (push-mail! thd v)
+  (define head (thread-mbx-head thd))
+  (cond
+    [(empty? head)
+     (set-thread-mbx-head! thd (mcons v head))
+     (set-thread-mbx-tail! thd (mcons v head))]
+    [else
+     (set-thread-mbx-head! thd (mcons v head))]))
+
+(define (thread-send thd v [fail-thunk 
+                            (lambda ()
+                              (raise-mismatch-error 'thread-send "Thread ~a is not running.\n" thd))])
+  (check 'thread-send thread? thd)
+  (check fail-thunk
+         (lambda (proc)
+           (or (not proc) ;; check if it is #f
+               (and (procedure? proc)
+                    (procedure-arity-includes? proc 0))))
+         #:contract "(procedure-arity-includes?/c 0)"
+         fail-thunk)
+  (atomically 
+   (cond
+     [(thread-running? thd)
+      (enqueue-mail! thd v)]
+     [fail-thunk
+      (fail-thunk)]
+     [else
+      #f])))
+
+(define (thread-receive)
+  (atomically
+   (define msg (dequeue-mail! (current-thread)))
+   (if msg
+       msg
+       (engine-block))))
+
+(define (thread-try-receive)
+  (atomically
+   (dequeue-mail! (current-thread))))
+
+(define (thread-rewind-receive lst)
+  (check 'thread-rewind-receive list? lst)
+  (atomically
+   (define t (current-thread))
+   (for-each (lambda (msg)
+               (push-mail! t msg))
+             lst)))
+
+;; todo: thread-receive-evt
+
+
+
+
+
+
+   
+   
