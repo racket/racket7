@@ -714,7 +714,9 @@
    thread-resume
    thread-running?
    thread-send
+   thread-receive
    thread-suspend
+   thread-try-receive
    thread-wait
    true-object?
    truncate

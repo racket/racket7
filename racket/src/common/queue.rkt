@@ -8,6 +8,7 @@
          queue-fremove!
          queue-remove-all!
          queue-add!
+         queue-add-front!
          queue-remove-node!)
 
 (struct queue (start end) #:mutable)
@@ -63,7 +64,19 @@
     (set-queue-end! q n)]
    [else
     (set-node-next! e n)
-    (set-node-prev! n e)])
+    (set-queue-end! q n)])
+  n)
+
+(define (queue-add-front! q w)
+  (define e (queue-start q))
+  (define n (node w #f e))
+  (cond
+    [(not e)
+     (set-queue-start! q n)
+     (set-queue-end! q n)]
+    [else
+     (set-node-prev! e n)
+     (set-queue-start! q n)])
   n)
 
 (define (queue-remove-node! q n)

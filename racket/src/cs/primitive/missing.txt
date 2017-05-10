@@ -64,6 +64,5 @@ thread-cell-values?
 thread-resume-evt
 thread-rewind-receive
 thread-suspend-evt
-thread-try-receive
 thread/suspend-to-kill
 vector-set-performance-stats!
