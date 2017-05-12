@@ -51,6 +51,15 @@
                   (dynamic-require `(lib ,(next-arg "-l" args)) #f))
                 loads))
          (loop (cddr args))]
+        [(equal? arg "-t")
+         (no-repl-by-default!)
+         (no-init!)
+         (set! loads
+               (cons
+                (lambda ()
+                  (dynamic-require `(file ,(next-arg "-t" args)) #f))
+                loads))
+         (loop (cddr args))]
         [(equal? arg "-I")
          (set! init-library `(lib ,(next-arg "-I" args)))
          (loop (cddr args))]

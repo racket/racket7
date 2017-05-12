@@ -95,6 +95,11 @@
           procedure-arity-includes?
           procedure-arity
           procedure-extract-target
+
+          impersonator*?
+          impersonator*-val
+          impersonate*-ref
+          impersonate*-set!
           
           raise-argument-error
           raise-arguments-error
@@ -337,6 +342,7 @@
   (include "core/symbol.ss")
   (include "core/struct.ss")
   (include "core/procedure.ss")
+  (include "core/chaperone.ss")
   (include "core/object-name.ss")
   (include "core/hamt.ss")
   (include "core/hash.ss")
@@ -362,7 +368,7 @@
   (include "core/memory.ss")
   (include "core/system.ss")
   (include "core/unsafe.ss")
-  
+
   (set-base-exception-handler!)
   (set-primitive-applicables!)
   (set-continuation-applicables!))

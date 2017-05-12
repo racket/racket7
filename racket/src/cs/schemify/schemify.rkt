@@ -196,7 +196,7 @@
 
 (define (make-expr-defns accum-exprs)
   (for/list ([expr (in-list (reverse accum-exprs))])
-    `(define ,(gensym) ,expr)))
+    `(define ,(gensym) (begin ,expr (void)))))
 
 ;; ----------------------------------------
 
@@ -234,6 +234,8 @@
                  ;; reordering it's definition with respect to some arguments
                  ;; of `make-struct-type`:
                  (simple-mutated-state? (hash-ref mutated (unwrap struct:) #f)))
+            (define can-impersonate? #t)
+            (define raw-s? (if can-impersonate? (gensym s?) s?))
             `(begin
               (define ,struct:s (make-record-type-descriptor ',(struct-type-info-name sti)
                                                              ,(schemify (struct-type-info-parent sti))
@@ -251,16 +253,35 @@
                                                          ,@(map schemify (struct-type-info-rest sti))))))
               (define ,make-s (record-constructor
                                (make-record-constructor-descriptor ,struct:s #f #f)))
-              (define ,s? (record-predicate ,struct:s))
+              (define ,raw-s? (record-predicate ,struct:s))
+              ,@(if can-impersonate?
+                    `((define ,s? (lambda (v) (or (,raw-s? v) (pariah (and (impersonator*? v) (,raw-s? (impersonator*-val v))))))))
+                    null)
               ,@(for/list ([acc/mut (in-list acc/muts)]
                            [make-acc/mut (in-list make-acc/muts)])
-                  `(define ,acc/mut
-                    ,(match make-acc/mut
-                       [`(make-struct-field-accessor ,(? (lambda (v) (wrap-eq? v -ref))) ,pos ,_)
-                        `(record-accessor ,struct:s ,pos)]
-                       [`(make-struct-field-mutator ,(? (lambda (v) (wrap-eq? v -set!))) ,pos ,_)
-                        `(record-mutator ,struct:s ,pos)]
-                       [`,_ (error "oops")]))))]
+                  (define raw-acc/mut (if can-impersonate? (gensym acc/mut) acc/mut))
+                  (match make-acc/mut
+                    [`(make-struct-field-accessor ,(? (lambda (v) (wrap-eq? v -ref))) ,pos ,_)
+                     (define raw-def `(define ,raw-acc/mut (record-accessor ,struct:s ,pos)))
+                     (if can-impersonate?
+                         `(begin
+                            ,raw-def
+                            (define ,acc/mut
+                              (lambda (s) (if (,raw-s? s)
+                                              (,raw-acc/mut s)
+                                              (pariah (impersonate*-ref ,raw-s? ,raw-acc/mut s))))))
+                         raw-def)]
+                    [`(make-struct-field-mutator ,(? (lambda (v) (wrap-eq? v -set!))) ,pos ,_)
+                     (define raw-def `(define ,raw-acc/mut (record-mutator ,struct:s ,pos)))
+                     (if can-impersonate?
+                         `(begin
+                            ,raw-def
+                            (define ,acc/mut
+                              (lambda (s v) (if (,raw-s? s)
+                                                (,raw-acc/mut s v)
+                                                (pariah (impersonate*-set! ,raw-s? ,raw-acc/mut s v))))))
+                         raw-def)]
+                    [`,_ (error "oops")])))]
            [else
             (match v
               [`(,_ ,ids ,rhs)

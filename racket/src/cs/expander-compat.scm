@@ -562,8 +562,6 @@
 
    prop:exn:srclocs exn:srclocs? exn:srclocs-accessor
 
-   make-logger log-level? log-message current-logger logger?
-
    port-read-handler
 
    gensym

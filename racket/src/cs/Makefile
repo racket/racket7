@@ -1,5 +1,4 @@
 RACKET = ../../bin/racket
-
 SCHEME = scheme
 UNSAFE = # '(optimize-level 3)'
 
@@ -144,6 +143,7 @@ CORE_SRCS = core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \
             core/procedure.ss \
+            core/chaperone.ss \
             core/object-name.ss \
             core/hamt.ss \
             core/hash.ss \
