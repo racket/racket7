@@ -395,18 +395,24 @@
   (current-exception-state (create-exception-state))
   (base-exception-handler
    (lambda (v)
-     (let ([hs (continuation-mark-set->list (current-continuation-marks the-root-continuation-prompt-tag)
-                                            exception-handler-key
-                                            the-root-continuation-prompt-tag)])
-       (let loop ([hs hs])
-         (cond
-          [(null? hs)
-           ((uncaught-exception-handler) v)]
-          [else
-           (let ([h (car hs)]
-                 [hs (cdr hs)])
-             (h v)
-             (loop hs))]))))))
+     (cond
+      [(and (warning? v)
+            (not (non-continuable-violation? v)))
+       ;; FIXME: log message (instead of just throwing it away)
+       (void)]
+      [else
+       (let ([hs (continuation-mark-set->list (current-continuation-marks the-root-continuation-prompt-tag)
+                                              exception-handler-key
+                                              the-root-continuation-prompt-tag)])
+         (let loop ([hs hs])
+           (cond
+            [(null? hs)
+             ((uncaught-exception-handler) v)]
+            [else
+             (let ([h (car hs)]
+                   [hs (cdr hs)])
+               (h v)
+               (loop hs))])))]))))
 
 ;;
 ;; (when (serious-condition? v)
