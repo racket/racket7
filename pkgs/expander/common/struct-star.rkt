@@ -99,8 +99,10 @@
         #`(begin
             (struct outer-name outer-parent-name ... (chain-field ... outer-field ...)
                     option ...
-                    #:reflection-name 'name)
-            (struct inner-name inner-parent-name ... (inner-field ...))
+                    #:reflection-name 'name
+                    #:authentic)
+            (struct inner-name inner-parent-name ... (inner-field ...)
+                    #:authentic)
             (define-syntax name (struct*-shape
                                  (quote-syntax make-name)
                                  (quote-parent-syntax parent-name)

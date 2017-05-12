@@ -43,6 +43,7 @@
 ;; ----------------------------------------
 
 (struct resolved-module-path (name)
+        #:authentic
         #:property prop:equal+hash
         ;; Although equal resolved module paths are `eq?` externally,
         ;; we need this equality predicate to hash them for the
@@ -128,6 +129,7 @@
 ;; ----------------------------------------
 
 (struct module-path-index (path base [resolved #:mutable] [shift-cache #:mutable])
+        #:authentic
         #:property prop:equal+hash
         (list (lambda (a b eql?)
                 (and (eql? (module-path-index-path a)

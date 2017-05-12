@@ -37,6 +37,7 @@
                 srcloc  ; source location
                 props   ; properties
                 inspector) ; inspector for access to protected bindings
+        #:authentic
         ;; Custom printer:
         #:property prop:custom-write
         (lambda (s port mode)

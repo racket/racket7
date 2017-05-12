@@ -14,12 +14,12 @@
 ;; When expanding a module, we may need to compile and instantiate it,
 ;; too (as or for submodules), so keep both expanded and compiled
 ;; variants of a form together:
-(struct expanded+parsed (s parsed))
+(struct expanded+parsed (s parsed) #:authentic)
 
 ;; A `define-values` or `begin-for-syntax-form` is in limbo though
 ;; some passes.
-(struct semi-parsed-define-values (s syms ids rhs))
-(struct semi-parsed-begin-for-syntax (s body))
+(struct semi-parsed-define-values (s syms ids rhs) #:authentic)
+(struct semi-parsed-begin-for-syntax (s body) #:authentic)
 
 (define (parsed-only l)
   (for/list ([i (in-list l)]

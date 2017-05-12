@@ -73,6 +73,7 @@
 (struct scope (id             ; internal scope identity; used for sorting
                kind           ; debug info
                [binding-table #:mutable]) ; see "binding-table.rkt"
+        #:authentic
         ;; Custom printer:
         #:property prop:custom-write
         (lambda (sc port mode)
@@ -136,6 +137,7 @@
                      scopes   ; phase -> representative-scope
                      shifted  ; box of table: interned shifted-multi-scopes for non-label phases
                      label-shifted) ; box of table: interned shifted-multi-scopes for label phases
+        #:authentic
         #:property prop:serialize
         (lambda (ms ser-push! state)
           (ser-push! 'tag '#:multi-scope)
@@ -150,6 +152,7 @@
 
 (struct representative-scope scope (owner   ; a multi-scope for which this one is a phase-specific identity
                                     phase)  ; phase of this scope
+        #:authentic
         #:mutable ; to support serialization
         #:property prop:custom-write
         (lambda (sc port mode)
@@ -186,6 +189,7 @@
 
 (struct shifted-multi-scope (phase        ; non-label phase shift or shifted-to-label-phase
                              multi-scope) ; a multi-scope
+        #:authentic
         #:property prop:custom-write
         (lambda (sms port mode)
           (write-string "#<scope:" port)
@@ -426,6 +430,7 @@
                      add-mpi-shifts ; #f or (mpi-shifts -> mpi-shifts)
                      inspector  ; #f or inspector
                      tamper)    ; see "tamper.rkt"
+        #:authentic
         #:property prop:propagation syntax-e
         #:property prop:propagation-tamper (lambda (p) (propagation-tamper p))
         #:property prop:propagation-set-tamper (lambda (p v) (propagation-set-tamper p v)))

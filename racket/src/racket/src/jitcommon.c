@@ -1549,20 +1549,21 @@ int scheme_generate_struct_op(mz_jit_state *jitter, int kind, int for_branch,
     jit_ldxi_s(JIT_R2, JIT_R1, &((Scheme_Object *)0x0)->type);
     __START_INNER_TINY__(1);
     ref2 = jit_beqi_i(jit_forward(), JIT_R2, scheme_structure_type);
-    ref3 = jit_beqi_i(jit_forward(), JIT_R2, scheme_proc_struct_type);
-    CHECK_LIMIT();
     if (!authentic) {
+      ref3 = jit_beqi_i(jit_forward(), JIT_R2, scheme_proc_struct_type);
+      CHECK_LIMIT();
       ref9 = jit_beqi_i(jit_forward(), JIT_R2, scheme_chaperone_type);
       __END_INNER_TINY__(1);
       bref2 = jit_bnei_i(jit_forward(), JIT_R2, scheme_proc_chaperone_type);
       CHECK_LIMIT();
       __START_INNER_TINY__(1);
       mz_patch_branch(ref9);
-    } else
-      bref2 = NULL;
-    jit_ldxi_p(JIT_R1, JIT_R1, &SCHEME_CHAPERONE_VAL(0x0));
-    (void)jit_jmpi(refretry);
-    mz_patch_branch(ref3);
+      jit_ldxi_p(JIT_R1, JIT_R1, &SCHEME_CHAPERONE_VAL(0x0));
+      (void)jit_jmpi(refretry);
+      mz_patch_branch(ref3);
+    } else {
+      bref2 = jit_bnei_i(jit_forward(), JIT_R2, scheme_proc_struct_type);
+    }
     __END_INNER_TINY__(1);
   } else {
     if (check_arg_fixnum) {

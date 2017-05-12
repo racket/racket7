@@ -22,6 +22,7 @@
 ;; the binding was local. The `frame-id` field is used to
 ;; trigger use-site scopes as needed
 (struct full-local-binding full-binding (key)
+        #:authentic
         #:property prop:serialize
         (lambda (b ser-push! state)
           ;; Data that is interpreted by the deserializer:

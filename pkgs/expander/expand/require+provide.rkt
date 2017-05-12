@@ -50,13 +50,14 @@
                            provides   ; phase -> sym -> binding or protected
                            phase-to-defined-syms ; phase -> sym -> boolean
                            [can-cross-phase-persistent? #:mutable]
-                           [all-bindings-simple? #:mutable])) ; tracks whether bindings are easily reconstructed
+                           [all-bindings-simple? #:mutable]) ; tracks whether bindings are easily reconstructed
+  #:authentic)
 
 ;; A `required` represents an identifier required into a module
 (struct required (id phase can-be-shadowed? as-transformer?))
 
 ;; A `nominal` supports a reverse mapping of bindings to nominal info
-(struct nominal (module provide-phase require-phase sym) #:transparent)
+(struct nominal (module provide-phase require-phase sym) #:transparent #:authentic)
 
 ;; A `bulk-required` can be converted into a `required` given the
 ;; module path, phase, and symbol that are mapped to it
@@ -64,7 +65,8 @@
                        prefix-len ; length of a prefix to remove
                        s        ; combine with the sym to create an identifier
                        provide-phase-level ; phase of `provide` in immediately providing module
-                       can-be-shadowed?))  ; shadowed because, e.g., an initial import
+                       can-be-shadowed?)  ; shadowed because, e.g., an initial import
+  #:authentic)
 
 (define (make-requires+provides self)
   (requires+provides self

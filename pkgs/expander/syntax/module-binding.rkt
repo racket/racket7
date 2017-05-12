@@ -84,6 +84,7 @@
                                            nominal-require-phase
                                            extra-inspector ; preserves access to protected definitions
                                            extra-nominal-bindings)
+        #:authentic
         #:transparent
         #:property prop:serialize
         (lambda (b ser-push! state)
@@ -111,6 +112,7 @@
             (ser-push! simplified-b)])))
 
 (struct simple-module-binding (module phase sym nominal-module)
+        #:authentic
         #:transparent
         #:property prop:serialize
         (lambda (b ser-push! state)

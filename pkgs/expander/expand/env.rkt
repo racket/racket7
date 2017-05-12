@@ -47,7 +47,7 @@
 
 ;; A `local-variable` records a binding identifier, so that a
 ;; reference can be replaced with the binding identifier
-(struct local-variable (id))
+(struct local-variable (id) #:authentic)
 
 ;; If a variable binding corresponds to a local binding, substitute
 ;; the binding identifier in place of the original reference
@@ -76,7 +76,7 @@
    [else t]))
 
 ;; A subset of compile-time values are primitive forms
-(struct core-form (expander name) #:transparent)
+(struct core-form (expander name) #:transparent #:authentic)
 
 ;; ---------------------------------------- 
 

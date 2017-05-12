@@ -8,36 +8,36 @@
 ;; `to-parsed?` field in an `expand-context` indicates whether the
 ;; expander should produce a syntax object or a `parsed` structure.
 
-(struct parsed (s) #:transparent)
+(struct parsed (s) #:authentic #:transparent)
 
-(struct parsed-id parsed (binding inspector))
-(struct parsed-primitive-id parsed-id ())
-(struct parsed-top-id parsed-id ())
+(struct parsed-id parsed (binding inspector) #:authentic)
+(struct parsed-primitive-id parsed-id () #:authentic)
+(struct parsed-top-id parsed-id () #:authentic)
 
-(struct parsed-lambda parsed (keys body))
-(struct parsed-case-lambda parsed (clauses))
-(struct parsed-app parsed (rator rands))
-(struct parsed-if parsed (tst thn els))
-(struct parsed-set! parsed (id rhs))
-(struct parsed-with-continuation-mark parsed (key val body))
-(struct parsed-#%variable-reference parsed (id))
-(struct parsed-begin parsed (body))
-(struct parsed-begin0 parsed (body))
-(struct parsed-quote parsed (datum))
-(struct parsed-quote-syntax parsed (datum))
+(struct parsed-lambda parsed (keys body) #:authentic)
+(struct parsed-case-lambda parsed (clauses) #:authentic)
+(struct parsed-app parsed (rator rands) #:authentic)
+(struct parsed-if parsed (tst thn els) #:authentic)
+(struct parsed-set! parsed (id rhs) #:authentic)
+(struct parsed-with-continuation-mark parsed (key val body) #:authentic)
+(struct parsed-#%variable-reference parsed (id) #:authentic)
+(struct parsed-begin parsed (body) #:authentic)
+(struct parsed-begin0 parsed (body) #:authentic)
+(struct parsed-quote parsed (datum) #:authentic)
+(struct parsed-quote-syntax parsed (datum) #:authentic)
 
-(struct parsed-let_-values parsed (idss clauses body))
-(struct parsed-let-values parsed-let_-values ())
-(struct parsed-letrec-values parsed-let_-values ())
+(struct parsed-let_-values parsed (idss clauses body) #:authentic)
+(struct parsed-let-values parsed-let_-values () #:authentic)
+(struct parsed-letrec-values parsed-let_-values () #:authentic)
 
-(struct parsed-define-values parsed (ids syms rhs))
-(struct parsed-define-syntaxes parsed (ids syms rhs))
-(struct parsed-begin-for-syntax parsed (body))
+(struct parsed-define-values parsed (ids syms rhs) #:authentic)
+(struct parsed-define-syntaxes parsed (ids syms rhs) #:authentic)
+(struct parsed-begin-for-syntax parsed (body) #:authentic)
 
-(struct parsed-#%declare parsed ())
-(struct parsed-require parsed ())
+(struct parsed-#%declare parsed () #:authentic)
+(struct parsed-require parsed () #:authentic)
 
-(struct parsed-#%module-begin parsed (body))
+(struct parsed-#%module-begin parsed (body) #:authentic)
 (struct parsed-module parsed (star?
                               name-id
                               self
@@ -47,4 +47,5 @@
                               encoded-root-ctx
                               body
                               compiled-module       ; #f or already-compiled module
-                              compiled-submodules)) ; already-compiled submodules
+                              compiled-submodules)  ; already-compiled submodules
+  #:authentic)
