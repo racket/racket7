@@ -48,6 +48,7 @@ READ_ONLY Scheme_Object *scheme_write_special_symbol;
 READ_ONLY Scheme_Object *scheme_app_mark_impersonator_property;
 READ_ONLY Scheme_Object *scheme_object_name_property;
 READ_ONLY Scheme_Object *scheme_struct_to_vector_proc;
+READ_ONLY Scheme_Object *scheme_authentic_property;
 
 READ_ONLY static Scheme_Object *location_struct;
 READ_ONLY static Scheme_Object *write_property;
@@ -461,6 +462,12 @@ scheme_init_struct (Scheme_Startup_Env *env)
     REGISTER_SO(method_property);
     method_property = scheme_make_struct_type_property(scheme_intern_symbol("method-arity-error"));
     scheme_addto_prim_instance("prop:method-arity-error", method_property, env);
+  }
+
+  {
+    REGISTER_SO(scheme_authentic_property);
+    scheme_authentic_property = scheme_make_struct_type_property(scheme_intern_symbol("authentic"));
+    scheme_addto_prim_instance("prop:authentic", scheme_authentic_property, env);
   }
 
   REGISTER_SO(scheme_recur_symbol);
@@ -3312,8 +3319,9 @@ intptr_t scheme_get_or_check_structure_shape(Scheme_Object *e, Scheme_Object *ex
     if (st->num_slots != st->num_islots)
       want_v = STRUCT_PROC_SHAPE_OTHER;
     else
-      want_v = ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT) 
-                | STRUCT_PROC_SHAPE_STRUCT);
+      want_v = ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT)
+                | STRUCT_PROC_SHAPE_STRUCT
+                | (st->authentic ? STRUCT_PROC_SHAPE_AUTHENTIC : 0));
   } else if (!SCHEME_PRIMP(e)) {
     want_v = -1;
   } else {
@@ -3324,16 +3332,20 @@ intptr_t scheme_get_or_check_structure_shape(Scheme_Object *e, Scheme_Object *ex
       want_v = ((st->num_islots << STRUCT_PROC_SHAPE_SHIFT) 
                 | STRUCT_PROC_SHAPE_CONSTR);
     } else if (i == SCHEME_PRIM_STRUCT_TYPE_PRED) {
-      want_v = STRUCT_PROC_SHAPE_PRED;
+      st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
+      want_v = (STRUCT_PROC_SHAPE_PRED
+                | (st->authentic ? STRUCT_PROC_SHAPE_AUTHENTIC : 0));
     } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_SETTER) {
       st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
       want_v = ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT)
-                | STRUCT_PROC_SHAPE_SETTER);
+                | STRUCT_PROC_SHAPE_SETTER
+                | (st->authentic ? STRUCT_PROC_SHAPE_AUTHENTIC : 0));
     } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_GETTER) {
       int pos = SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(e)[1]);
       st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
       want_v = ((pos << STRUCT_PROC_SHAPE_SHIFT) 
-                | STRUCT_PROC_SHAPE_GETTER);
+                | STRUCT_PROC_SHAPE_GETTER
+                | (st->authentic ? STRUCT_PROC_SHAPE_AUTHENTIC : 0));
     } else if ((i == SCHEME_PRIM_STRUCT_TYPE_INDEXLESS_SETTER)
                || (i == SCHEME_PRIM_STRUCT_TYPE_BROKEN_INDEXED_SETTER)
                || (i == SCHEME_PRIM_STRUCT_TYPE_INDEXLESS_GETTER)) {
@@ -4591,6 +4603,7 @@ Scheme_Struct_Type *scheme_make_prefab_struct_type_raw(Scheme_Object *base,
   struct_type->num_slots = num_fields + num_uninit_fields + (parent_type ? parent_type->num_slots : 0);
   struct_type->num_islots = num_fields + (parent_type ? parent_type->num_islots : 0);
   struct_type->name_pos = depth;
+  struct_type->authentic = 0;
   struct_type->inspector = scheme_false;
   struct_type->uninit_val = uninit_val;
   struct_type->props = NULL;
@@ -4777,6 +4790,8 @@ static Scheme_Object *_make_struct_type(Scheme_Object *base,
           checked_proc = 1;
         if (SAME_OBJ(prop, scheme_chaperone_undefined_property))
           chaperone_undefined = 1;
+        if (SAME_OBJ(prop, scheme_authentic_property))
+          struct_type->authentic = 1;
 
         propv = guard_property(prop, SCHEME_CDR(a), struct_type);
         
@@ -4837,6 +4852,8 @@ static Scheme_Object *_make_struct_type(Scheme_Object *base,
           checked_proc = 1;
         if (SAME_OBJ(prop, scheme_chaperone_undefined_property))
           chaperone_undefined = 1;
+        if (SAME_OBJ(prop, scheme_authentic_property))
+          struct_type->authentic = 1;
 
         propv = guard_property(prop, SCHEME_CDR(a), struct_type);
 
@@ -4890,7 +4907,21 @@ static Scheme_Object *_make_struct_type(Scheme_Object *base,
     }
   }
 
-
+  if (parent_type && (parent_type->authentic != struct_type->authentic)) {
+    if (parent_type->authentic)
+      scheme_contract_error("make-struct-type",
+                            "cannot make a non-authentic subtype of an authentic type",
+                            "type name", 1, struct_type->name,
+                            "authentic type", 1, parent,
+                            NULL);
+    else
+      scheme_contract_error("make-struct-type",
+                            "cannot make an authentic subtype of a non-authentic type",
+                            "type name", 1, struct_type->name,
+                            "non-authentic type", 1, parent,
+                            NULL);
+  }
+  
   if (guard) {
     if (!scheme_check_proc_arity(NULL, struct_type->num_islots + 1, -1, 0, &guard)) {
       scheme_contract_error("make-struct-type",
@@ -6064,6 +6095,16 @@ static Scheme_Object *do_chaperone_struct(const char *name, int is_impersonator,
                           "explanation", 0, ("a structure type, accessor, or mutator acts as a witness\n"
                                              "   that the given value's representation can be chaperoned or impersonated"),
                           "given value", 1, argv[0],
+                          NULL);
+    return NULL;
+  }
+
+  if (SCHEME_STRUCTP(val) && ((Scheme_Structure *)val)->stype->authentic) {
+    scheme_contract_error(name,
+                          (is_impersonator
+                           ? "cannot impersonate instance of an authentic structure type"
+                           : "cannot chaperone instance of an authentic structure type"),
+                          "given value", 1, val,
                           NULL);
     return NULL;
   }

@@ -86,60 +86,43 @@ the same reason that they should avoid @racket[impersonator?].}
 Indicates whether @racket[v1] can be considered equivalent modulo
 impersonators to @racket[v2].
 
-For values that include no impersonators, @racket[v1] and @racket[v2] can
-be considered impersonators of each other if they are @racket[equal?].
+Any two values that are @racket[eq?] to one another are also @racket[impersonator-of?].
+For values that include no impersonators, @racket[v1] and @racket[v2] are
+considered impersonators of each other if they are @racket[equal?].
 
-Otherwise, impersonators within @racket[v2] must be intact within
-@racket[v1]:
-
+If at least one of @racket[v1] or @racket[v2] is an impersonator:
 @itemlist[
+          @item{If @racket[v1] impersonates @racket[_v1*] then @racket[(impersonator-of? v1 v2)]
+                   is @racket[#t] if and only if @racket[(impersonator-of? _v1* v2)] is @racket[#t].}
+          @item{If @racket[v2] is a non-interposing impersonator that impersonates @racket[_v2*], i.e.,
+                   all of its interposition procedures are @racket[#f], then @racket[(impersonator-of? v1 v2)]
+                   is @racket[#t] if and only if @racket[(impersonator-of? v1 _v2*)] is @racket[#t].}
+          @item{When @racket[v2] is an impersonator constructed with at least one non-@racket[#f] interposition procedure,
+                     but @racket[v1] is not an impersonator then @racket[(impersonator-of? v1 v2)] is @racket[#f].}]}
 
- @item{If a part of @racket[v2] is an impersonator created from one of
-       the impersonator constructors (e.g.,
-       @racket[impersonate-procedure] or
-       @racket[chaperone-procedure]), and if the impersonator is
-       constructed with at least one redirection procedure (i.e., a
-       value other than @racket[#f] was supplied for a redirection
-       procedure), then the corresponding part of @racket[v1] must be
-       one of the following:
+Otherwise, if neither @racket[v1] or @racket[v2] is an impersonator, but either
+of them contains an impersonator as a subpart (e.g., @racket[v1] is a list with
+an impersonator as one of its elements), then @racket[(impersonator-of? v1 v2)]
+proceeds by comparing @racket[v1] and @racket[v2] recursively (as with
+@racket[equal?]), returning true if all subparts are @racket[impersonator-of?].
 
-       @itemlist[
-
-         @item{the same value that is a part of @racket[v2] (with a
-         special meaning of ``the same value`` in the case of
-         immutable hash tables, as described below);}
-
-         @item{a value further derived from the same value that is
-               part of @racket[v2] using an impersonator constructor;
-               or}
-
-         @item{a value with the @racket[prop:impersonator-of] property
-               whose procedure produces an impersonator of the same value
-               that is part of @racket[v2].}
-
-      ]
-
-      For most kinds of values, ``the same value'' means equal
-      according to @racket[eq?]. In the case of an immutable hash
-      table, two impersonated hash tables count as ``the same value''
-      when their redirection procedures were originally attached to a
-      hash table by the same call to @racket[impersonate-hash] or
-      @racket[chaperone-hash] (and potentially propagated by
-      @racket[hash-set], @racket[hash-remove], or
-      @racket[hash-clear]), as long as the content of the first hash
-      table is @racket[impersonator-of?] of the second hash table.}
-
- @item{If a part of @racket[v2] is a structure or procedure impersonator that was
-       created with no redirection procedures (i.e, @racket[#f] in
-       place of all redirection procedures for specified operations),
-       then the impersonated value is considered in place of that part
-       of @racket[v2]. In other words, an impersonator construction
-       that does not redirect any access or mutation (but that
-       includes some @tech{impersonator properties}) need not be
-       preserved in @racket[v1].}
-
-]}
-
+@examples[
+(impersonator-of? (impersonate-procedure add1 (λ (x) x))
+                  add1)
+(impersonator-of? (impersonate-procedure add1 (λ (x) x))
+                  sub1)
+(impersonator-of? (impersonate-procedure
+                    (impersonate-procedure add1 (λ (x) x)) (λ (x) x))
+                  add1)
+(impersonator-of? (impersonate-procedure add1 (λ (x) x))
+                  (impersonate-procedure add1 #f))
+(impersonator-of? (impersonate-procedure add1 (λ (x) x))
+                  (impersonate-procedure add1 (λ (x) x)))
+(impersonator-of? (list 1 2)
+                  (list 1 2))
+(impersonator-of? (list (impersonate-procedure add1 (λ (x) x)) sub1)
+                  (list add1 sub1))
+]
 
 @defproc[(chaperone-of? [v1 any/c] [v2 any/c]) boolean?]{
 
@@ -554,6 +537,14 @@ Pairs of @racket[prop] and @racket[prop-val] (the number of arguments
 to @racket[impersonate-hash] must be odd) add impersonator properties
 or override impersonator-property values of @racket[hash].
 
+In the case of an immutable hash table, two impersonated hash tables count as
+``the same value'' (for purposes of @racket[impersonator-of?]) when their
+redirection procedures were originally attached to a hash table by the same
+call to @racket[impersonate-hash] or @racket[chaperone-hash] (and potentially
+propagated by @racket[hash-set], @racket[hash-remove], or @racket[hash-clear]),
+as long as the content of the first hash table is @racket[impersonator-of?] of
+the second hash table.
+
 @history[#:changed "6.3.0.11" @elem{Added the @racket[equal-key-proc]
                                     argument.}]}
 
@@ -715,6 +706,30 @@ checked (recursively).
 @history[#:changed "6.1.1.8" @elem{Made @tech{impersonator property}
                                    predicates and accessors sensitive
                                    to @racket[prop:impersonator-of].}]}
+
+
+@defthing[prop:authentic struct-type-property?]{
+
+A @tech{structure type property} that declares a structure type as
+@deftech{authentic}. The value associated with the property is ignored;
+the presence of the property itself makes the structure type
+authentic.
+
+Instances of an @tech{authentic} structure type cannot be impersonated
+via @racket[impersonate-struct] or chaperoned via
+@racket[chaperone-struct]. As a consequence, an instance of an
+@tech{authentic} structure type can be given a contract (see
+@racket[struct/c]) only if it is a @tech{flat contract}.
+
+Declaring a structure type as @tech{authentic} can prevent unwanted
+structure impersonation, but exposed structure types normally should
+support impersonators or chaperones to facilitate contracts. Declaring
+a structure type as @tech{authentic} can also slightly improve the
+performance of structure predicates, selectors, and mutators, which
+can be appropriate for data structures that are private
+and frequently used within a library.
+
+@history[#:added "6.9.0.4"]}
 
 @; ------------------------------------------------------------
 @section{Chaperone Constructors}
