@@ -228,8 +228,6 @@
 (define (ephemeron? x) (weak-pair? x))
 
 (define (thread-resume t) (void))
-(define (thread-send t v) t)
-(define (thread-receive) (void))
 (define (thread-receive-evt t) 'thread-receive-evt)
 (define filesystem-change-evt
   (case-lambda

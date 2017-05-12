@@ -41,7 +41,13 @@
          thread-yield
 
          thread-ignore-break-cell!
-         thread-remove-ignored-break-cell!)
+         thread-remove-ignored-break-cell!
+         
+         thread-send
+         thread-receive
+         thread-try-receive
+         thread-rewind-receive
+         )
 
 ;; Exports needed by "schedule.rkt":
 (module* scheduling #f
@@ -79,6 +85,7 @@
                      [delay-break-for-retry? #:mutable] ; => continuing implies an retry action
                      [pending-break? #:mutable]
                      [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
+                     [waiting-mail? #:mutable]
                      [mbx-head #:mutable]
                      [mbx-tail #:mutable]) ;; mailbox
         #:property prop:waiter
@@ -127,6 +134,7 @@
                     #f ; delay-break-for-retry?
                     #f ; pending-break?
                     #f ; ignore-thread-cells
+                    #f ; waiting for mail?
                     '()
                     '())) ; mailbox
   (thread-group-add! p t)
@@ -314,7 +322,7 @@
   (when (thread-dead? t)
     (internal-error "tried to resume a dead thread"))
   (set-thread-interrupt-callback! t #f)
-  (when undelay-break?
+  (when undelay-break? ;; what is this?
     (set-thread-delay-break-for-retry?! t #f))
   (remove-from-sleeping-threads! t)
   (thread-group-add! (thread-parent t) t))
@@ -488,7 +496,7 @@
 (define (enqueue-mail! thd v)
   (define tail (thread-mbx-tail thd))
   (cond
-    [(empty? tail) ;; if tail is empty then so is head
+    [(null? tail) ;; if tail is empty then so is head
      (set-thread-mbx-tail! thd (mcons v tail))
      (set-thread-mbx-head! thd (thread-mbx-tail thd))]
     [else ;; mcdr of tail should always be '()
@@ -497,9 +505,9 @@
 (define (dequeue-mail! thd)
   (define head (thread-mbx-head thd))
   (cond
-    [(empty? head)
-     #f]
-    [(empty? (mcdr head))
+    [(null? head)
+     (error "NO MAIL~\n")]
+    [(null? (mcdr head))
      (set-thread-mbx-head! thd (mcdr head))
      (set-thread-mbx-tail! thd (mcdr head))
      (mcar head)] ;; need to update tail too
@@ -507,10 +515,14 @@
      (set-thread-mbx-head! thd (mcdr head))
      (mcar head)]))
 
+(define (is-mail? thd)
+  (define head (thread-mbx-head thd))
+  (not (null? head)))
+
 (define (push-mail! thd v)
   (define head (thread-mbx-head thd))
   (cond
-    [(empty? head)
+    [(null? head)
      (set-thread-mbx-head! thd (mcons v head))
      (set-thread-mbx-tail! thd (mcons v head))]
     [else
@@ -518,7 +530,7 @@
 
 (define (thread-send thd v [fail-thunk 
                             (lambda ()
-                              (raise-mismatch-error 'thread-send "Thread ~a is not running.\n" thd))])
+                              (raise-mismatch-error 'thread-send "Thread is not running.\n" thd))])
   (check 'thread-send thread? thd)
   (check fail-thunk
          (lambda (proc)
@@ -530,18 +542,31 @@
   (atomically 
    (cond
      [(thread-running? thd)
-      (enqueue-mail! thd v)]
+      (enqueue-mail! thd v)
+      (if (thread-waiting-mail? thd)
+          (begin
+            (set-thread-waiting-mail?! thd #f)
+            (thread-internal-resume! thd #:undelay-break? #f))
+          void)] 
      [fail-thunk
       (fail-thunk)]
      [else
       #f])))
 
 (define (thread-receive)
-  (atomically
-   (define msg (dequeue-mail! (current-thread)))
-   (if msg
-       msg
-       (engine-block))))
+  (start-atomic)
+   (define t (current-thread))
+   (cond
+     [(is-mail? t)
+      (let ([msg (dequeue-mail! t)])
+        (end-atomic)
+        msg)]
+     [else
+      (set-thread-waiting-mail?! t #t)
+      (thread-internal-suspend! t #f void void)
+      (end-atomic)
+      (engine-block)
+      (dequeue-mail! t)])) ;; this part doesn't need to be atomic right?
 
 (define (thread-try-receive)
   (atomically

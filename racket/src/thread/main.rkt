@@ -32,6 +32,10 @@
          thread-dead-evt?
          break-thread
          kill-thread
+         thread-send
+         thread-receive
+         thread-try-receive
+         thread-rewind-receive
 
          sleep
          
