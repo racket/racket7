@@ -1561,7 +1561,8 @@ int scheme_generate_struct_op(mz_jit_state *jitter, int kind, int for_branch,
                               Branch_Info *branch_info, int branch_short, 
                               int result_ignored,
                               int check_proc, int check_arg_fixnum,
-                              int type_pos, int field_pos, 
+                              int type_pos, int field_pos,
+                              int authentic,
                               int pop_and_jump,
                               GC_CAN_IGNORE jit_insn *refslow, GC_CAN_IGNORE jit_insn *refslow2,
                               GC_CAN_IGNORE jit_insn *bref_false, GC_CAN_IGNORE jit_insn *bref_true)
@@ -1595,12 +1596,15 @@ int scheme_generate_struct_op(mz_jit_state *jitter, int kind, int for_branch,
     ref2 = jit_beqi_i(jit_forward(), JIT_R2, scheme_structure_type);
     ref3 = jit_beqi_i(jit_forward(), JIT_R2, scheme_proc_struct_type);
     CHECK_LIMIT();
-    ref9 = jit_beqi_i(jit_forward(), JIT_R2, scheme_chaperone_type);
-    __END_INNER_TINY__(1);
-    bref2 = jit_bnei_i(jit_forward(), JIT_R2, scheme_proc_chaperone_type);
-    CHECK_LIMIT();
-    __START_INNER_TINY__(1);
-    mz_patch_branch(ref9);
+    if (!authentic) {
+      ref9 = jit_beqi_i(jit_forward(), JIT_R2, scheme_chaperone_type);
+      __END_INNER_TINY__(1);
+      bref2 = jit_bnei_i(jit_forward(), JIT_R2, scheme_proc_chaperone_type);
+      CHECK_LIMIT();
+      __START_INNER_TINY__(1);
+      mz_patch_branch(ref9);
+    } else
+      bref2 = NULL;
     jit_ldxi_p(JIT_R1, JIT_R1, &SCHEME_CHAPERONE_VAL(0x0));
     (void)jit_jmpi(refretry);
     mz_patch_branch(ref3);
@@ -1713,13 +1717,15 @@ int scheme_generate_struct_op(mz_jit_state *jitter, int kind, int for_branch,
     /* False branch: */
     if (branch_info) {
       scheme_add_branch_false(branch_info, bref1);
-      scheme_add_branch_false(branch_info, bref2);
+      if (bref2)
+        scheme_add_branch_false(branch_info, bref2);
       if (bref3)
         scheme_add_branch_false(branch_info, bref3);
       scheme_add_branch_false(branch_info, bref4);
     } else {
       mz_patch_branch(bref1);
-      mz_patch_branch(bref2);
+      if (bref2)
+        mz_patch_branch(bref2);
       if (bref3)
         mz_patch_branch(bref3);
       mz_patch_branch(bref4);
@@ -2036,7 +2042,7 @@ static int common4(mz_jit_state *jitter, void *_data)
       __END_SHORT_JUMPS__(1);
 
       scheme_generate_struct_op(jitter, kind, for_branch, NULL, 1, 0,
-                                1, 1, -1, -1,
+                                1, 1, -1, -1, 0,
                                 1, refslow, refslow2, bref5, bref6);
       CHECK_LIMIT();
 
