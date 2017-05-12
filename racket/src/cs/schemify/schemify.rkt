@@ -234,7 +234,7 @@
                  ;; reordering it's definition with respect to some arguments
                  ;; of `make-struct-type`:
                  (simple-mutated-state? (hash-ref mutated (unwrap struct:) #f)))
-            (define can-impersonate? #t)
+            (define can-impersonate? (not (struct-type-info-authentic? sti)))
             (define raw-s? (if can-impersonate? (gensym s?) s?))
             `(begin
               (define ,struct:s (make-record-type-descriptor ',(struct-type-info-name sti)

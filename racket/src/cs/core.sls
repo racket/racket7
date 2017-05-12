@@ -128,6 +128,7 @@
           prefab-struct-key
           prefab-key->struct-type
           make-prefab-struct
+          prop:authentic
           prop:equal+hash
           inspector?
           inspector-superior?

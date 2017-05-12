@@ -11,7 +11,7 @@
          make-struct-type-info
          pure-properties-list?)
 
-(struct struct-type-info (name parent immediate-field-count field-count pure-constructor? rest))
+(struct struct-type-info (name parent immediate-field-count field-count pure-constructor? authentic? rest))
 (define struct-type-info-rest-properties-list-pos 0)
 
 ;; Parse `make-struct-type` forms, returning a `struct-type-info`
@@ -34,9 +34,16 @@
                                             (known-struct-type-field-count
                                              (hash-ref-either knowns imports u-parent))
                                             0))
-                              ;; no guard => pur constructor
+                              ;; no guard => pure constructor
                               (or ((length rest) . < . 4)
                                   (not (list-ref rest 3)))
+                              ;; look for `prop:authentic`
+                              (and (pair? rest)
+                                   (match (car rest)
+                                     [`(list (cons ,props ,vals) ...)
+                                      (for/or ([prop (in-list props)])
+                                        (eq? (unwrap prop) 'prop:authentic))]
+                                     [`,_ #f]))
                               rest)))]
     [`(let-values () ,body)
      (make-struct-type-info body prim-knowns knowns imports mutated)]

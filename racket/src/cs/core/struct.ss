@@ -241,6 +241,9 @@
                              (lambda (val info)
                                (cons (gensym) val))))
 
+(define-values (prop:authentic authentic? authentic-ref)
+  (make-struct-type-property 'authentic))
+
 (define (struct-type-transparent? rtd)
   (let ([insp (inspector-ref rtd)])
     (and (not (eq? insp none))
