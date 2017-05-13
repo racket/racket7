@@ -21,8 +21,8 @@
 ;; IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 ;; CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-(define array-length vector-length)
-(define array-ref vector-ref)
+(define array-length #%vector-length)
+(define array-ref #%vector-ref)
 (define array vector)
 
 (define (array-replace arr idx val)
@@ -31,10 +31,10 @@
     (let loop ([i 0])
       (cond
        [(fx= i idx)
-        (vector-set! new i val)
+        (#%vector-set! new i val)
         (loop (fx+ i 1))]
        [(fx< i len)
-        (vector-set! new i (vector-ref arr i))
+        (#%vector-set! new i (vector-ref arr i))
         (loop (fx+ i 1))]
        [else
         new]))))
@@ -42,7 +42,7 @@
 (define (array-insert arr idx val)
   (let ([new (make-vector (fx+ (vector-length arr) 1))])
     (vector-copy! new 0 arr 0 idx)
-    (vector-set! new idx val)
+    (#%vector-set! new idx val)
     (vector-copy! new (fx+ idx 1) arr idx (vector-length arr))
     new))
 

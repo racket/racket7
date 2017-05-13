@@ -29,7 +29,10 @@
                            make-engine engine-block engine-return
                            current-eval load
                            sleep thread? buffer-mode?
-                           exit-handler)
+                           exit-handler
+                           equal?
+                           vector? mutable-vector? vector-length vector-ref vector-set!
+                           vector-copy vector-fill! vector->immutable-vector)
                    [make-parameter chez:make-parameter]
                    [void chez:void]
                    [date-second chez:date-second]

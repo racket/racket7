@@ -267,15 +267,8 @@
 (define (procedure-rename p name)
   p)
 
-(define (chaperone-procedure p . args) p)
-(define (chaperone-procedure* p . args) p)
-(define (impersonate-procedure p . args) p)
-(define (impersonate-procedure* p . args) p)
 (define (chaperone-struct s . args) s)
 (define (impersonate-struct s . args) s)
-
-(define (chaperone-of? a b) (equal? a b))
-(define (impersonator-of? a b) (equal? a b))
 
 (define (impersonator-property? v) #f)
 

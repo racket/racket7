@@ -255,7 +255,7 @@
                                (make-record-constructor-descriptor ,struct:s #f #f)))
               (define ,raw-s? (record-predicate ,struct:s))
               ,@(if can-impersonate?
-                    `((define ,s? (lambda (v) (or (,raw-s? v) (pariah (and (impersonator*? v) (,raw-s? (impersonator*-val v))))))))
+                    `((define ,s? (lambda (v) (or (,raw-s? v) (pariah (and (impersonator? v) (,raw-s? (impersonator-val v))))))))
                     null)
               ,@(for/list ([acc/mut (in-list acc/muts)]
                            [make-acc/mut (in-list make-acc/muts)])
@@ -269,7 +269,7 @@
                             (define ,acc/mut
                               (lambda (s) (if (,raw-s? s)
                                               (,raw-acc/mut s)
-                                              (pariah (impersonate*-ref ,raw-s? ,raw-acc/mut s))))))
+                                              (pariah (impersonate-ref ,raw-s? ,raw-acc/mut s))))))
                          raw-def)]
                     [`(make-struct-field-mutator ,(? (lambda (v) (wrap-eq? v -set!))) ,pos ,_)
                      (define raw-def `(define ,raw-acc/mut (record-mutator ,struct:s ,pos)))
@@ -279,7 +279,7 @@
                             (define ,acc/mut
                               (lambda (s v) (if (,raw-s? s)
                                                 (,raw-acc/mut s v)
-                                                (pariah (impersonate*-set! ,raw-s? ,raw-acc/mut s v))))))
+                                                (pariah (impersonate-set! ,raw-s? ,raw-acc/mut s v))))))
                          raw-def)]
                     [`,_ (error "oops")])))]
            [else

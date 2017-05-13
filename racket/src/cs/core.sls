@@ -96,10 +96,22 @@
           procedure-arity
           procedure-extract-target
 
-          impersonator*?
-          impersonator*-val
-          impersonate*-ref
-          impersonate*-set!
+          equal?
+
+          impersonator?
+          chaperone?
+          impersonator-of?
+          chaperone-of?
+          impersonator-val
+          impersonate-ref
+          impersonate-set!
+          make-impersonator-property
+
+          impersonate-procedure
+          chaperone-procedure
+          impersonate-procedure*
+          chaperone-procedure*
+          impersonator-prop:application-mark
           
           raise-argument-error
           raise-arguments-error
@@ -187,9 +199,22 @@
 
           list?
 
+          vector?
+          mutable-vector?
+          vector-length
+          vector-ref
+          vector-set!
+          vector-copy
           vector-copy!
           vector-immutable
           vector->values
+          vector-fill!
+          vector->immutable-vector
+
+          impersonate-vector
+          impersonate-vector*
+          chaperone-vector
+          chaperone-vector*
 
           box-cas!
           make-weak-box weak-box? weak-box-value
@@ -342,8 +367,9 @@
   (include "core/hash-code.ss")
   (include "core/symbol.ss")
   (include "core/struct.ss")
-  (include "core/procedure.ss")
   (include "core/chaperone.ss")
+  (include "core/equal.ss")
+  (include "core/procedure.ss")
   (include "core/object-name.ss")
   (include "core/hamt.ss")
   (include "core/hash.ss")
@@ -372,4 +398,8 @@
 
   (set-base-exception-handler!)
   (set-primitive-applicables!)
-  (set-continuation-applicables!))
+  (set-continuation-applicables!)
+  (set-impersonator-applicables!)
+  (set-impersonator-hash!)
+  (set-procedure-impersonator-hash!)
+  (set-vector-impersonator-hash!))

@@ -130,6 +130,9 @@ bounce-go:
 	cd $(BOUNCE_DIR); $(MAKE) RACO="$(RACKET) -N raco -l- raco" $(BOUNCE_TARGET)
 
 
+chaperone-demo: core.so
+	$(SCHEME) chezpart.so core.so demo/chaperone.ss
+
 hash-demo: core.so
 	$(SCHEME) chezpart.so core.so demo/hash.ss
 
@@ -144,6 +147,7 @@ CORE_SRCS = core/constant.ss \
             core/struct.ss \
             core/procedure.ss \
             core/chaperone.ss \
+            core/equal.ss \
             core/object-name.ss \
             core/hamt.ss \
             core/hash.ss \

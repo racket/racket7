@@ -288,7 +288,7 @@
 
 (define (raise-result-arity-error expected-args args)
   (raise
-   (exn:fail:contract
+   (exn:fail:contract:arity
     (string-append
      "result arity mismatch;\n"
      " expected number of values not received\n"
@@ -297,6 +297,15 @@
     (current-continuation-marks))))
 
 ;; ----------------------------------------
+
+(define (nth-str n)
+  (string-append
+   (number->string n)
+   (case (modulo n 10)
+     [(1) "st"]
+     [(2) "nd"]
+     [(3) "rd"]
+     [else "th"])))
 
 (define (eprintf fmt . args)
   (apply fprintf (current-error-port) fmt args))
