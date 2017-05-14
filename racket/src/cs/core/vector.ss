@@ -1,4 +1,3 @@
-
 (define (vector-immutable . args)
   (let ([vec (apply vector args)])
     (#%$vector-set-immutable! vec)

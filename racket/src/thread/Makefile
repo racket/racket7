@@ -12,7 +12,7 @@ thread-src:
 	$(MAKE) compiled/thread.rktl
 
 compiled/thread.rktl: compiled/main_rkt.zo ../../../pkgs/expander/compiled/bootstrap-run_rkt.zo
-	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t main.rkt --submod main -c compiled/cache-src $(IGNORE) -s -x -o compiled/thread.rktl
+	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t main.rkt --submod main -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/thread.rktl
 
 demo:
 	$(RACO) make demo.rkt

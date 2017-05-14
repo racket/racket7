@@ -56,7 +56,7 @@
     (set! print-extracted-to (build-path checkout-directory "src" "racket" "src" "startup.inc"))]
    #:once-each
    [("-k") dir "Use Racket checkout at <dir>"
-    (set! checkout-directory dir)]
+    (set! checkout-directory (path->complete-path dir))]
    [("-c" "--cache") dir "Save and load from <dir>"
     (set! cache-dir (path->complete-path dir))]
    [("-r" "--read-only") "Use cache in read-only mode"

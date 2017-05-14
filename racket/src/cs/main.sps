@@ -1,6 +1,7 @@
 (top-level-program
  (import (except (chezpart)
                  eval)
+         (core)
          (only (expander)
                set-exec-file!
                boot

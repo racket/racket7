@@ -1,5 +1,6 @@
 RACKET = ../../bin/racket
 SCHEME = scheme
+#SCHEME = /Users/mflatt/repo/ChezScheme-if/a6osx/bin/a6osx/scheme -b /Users/mflatt/repo/ChezScheme-if/a6osx/boot/a6osx/petite.boot -b /Users/mflatt/repo/ChezScheme-if/a6osx/boot/a6osx/scheme.boot
 UNSAFE = # '(optimize-level 3)'
 
 COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort) (generate-wpo-files \#t)'
@@ -45,7 +46,7 @@ compiled/expander.scm: ../../../pkgs/expander/compiled/expander.rktl $(CONVERT_D
 	$(RACKET) convert.rkt ../../../pkgs/expander/compiled/expander.rktl compiled/expander.scm
 
 ../../../pkgs/expander/compiled/expander.rktl:
-	$(MAKE) expander-rtkl
+	$(MAKE) expander-rktl
 
 expander-rktl:
 	$(MAKE) bounce BOUNCE_DIR=../../../pkgs/expander BOUNCE_TARGET=expander-src
@@ -65,7 +66,7 @@ compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
 
 compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
 	$(RACKET) -N raco -l- raco make ../../../pkgs/expander/bootstrap-run.rkt
-	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t schemify/schemify.rkt -c compiled/cache-src ++knot read - -s -x -o compiled/schemify.rktl
+	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t schemify/schemify.rkt -c compiled/cache-src -k ../.. ++knot read - -s -x -o compiled/schemify.rktl
 
 
 known-primitive.so: known-primitive.sls
@@ -124,7 +125,7 @@ thread-rktl:
 
 
 bounce:
-	$(MAKE) bounce-go RACKET="`$(RACKET) absify.rkt $(RACKET)`"
+	$(MAKE) bounce-go RACKET="`$(RACKET) absify.rkt --exec $(RACKET)`"
 
 bounce-go:
 	cd $(BOUNCE_DIR); $(MAKE) RACO="$(RACKET) -N raco -l- raco" $(BOUNCE_TARGET)
