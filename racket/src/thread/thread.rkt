@@ -102,7 +102,7 @@
                         proc
                         #:initial? [initial? #f]
                         #:suspend-to-kill? [suspend-to-kill? #f])
-  (check who
+ #; (check who
          (lambda (proc)
            (and (procedure? proc)
                 (procedure-arity-includes? proc 0)))
@@ -155,7 +155,7 @@
 ;; Thread status
 
 (define (thread-running? t)
-  (check 'thread-running? thread? t)
+ ;; (check 'thread-running? thread? t)
   (and (not (eq? 'done (thread-engine t)))
        (not (thread-suspended? t))))
 
@@ -163,6 +163,7 @@
   (check 'thread-dead? thread? t)
   (eq? 'done (thread-engine t)))
 
+;; set to be done here........
 ;; In atomic mode
 (define (thread-dead! t)
   (set-thread-engine! t 'done)
@@ -322,7 +323,7 @@
   (when (thread-dead? t)
     (internal-error "tried to resume a dead thread"))
   (set-thread-interrupt-callback! t #f)
-  (when undelay-break? ;; what is this?
+  (when undelay-break?
     (set-thread-delay-break-for-retry?! t #f))
   (remove-from-sleeping-threads! t)
   (thread-group-add! (thread-parent t) t))
@@ -497,34 +498,36 @@
   (define tail (thread-mbx-tail thd))
   (cond
     [(null? tail) ;; if tail is empty then so is head
-     (set-thread-mbx-tail! thd (mcons v tail))
-     (set-thread-mbx-head! thd (thread-mbx-tail thd))]
-    [else ;; mcdr of tail should always be '()
-     (set-mcdr! tail (mcons v (mcdr tail)))]))
+     (let ([new-t (mcons v '())])
+       (set-thread-mbx-tail! thd new-t)
+       (set-thread-mbx-head! thd new-t))]
+    [else
+     (set-mcdr! tail (mcons v '()))
+     (set-thread-mbx-tail! thd (mcdr tail))]))
 
 (define (dequeue-mail! thd)
   (define head (thread-mbx-head thd))
   (cond
     [(null? head)
-     (error "NO MAIL~\n")]
+     (error "NO MAIL\n")]
     [(null? (mcdr head))
-     (set-thread-mbx-head! thd (mcdr head))
-     (set-thread-mbx-tail! thd (mcdr head))
-     (mcar head)] ;; need to update tail too
+     (set-thread-mbx-head! thd '())
+     (set-thread-mbx-tail! thd '())
+     (mcar head)]
     [else
      (set-thread-mbx-head! thd (mcdr head))
      (mcar head)]))
 
 (define (is-mail? thd)
-  (define head (thread-mbx-head thd))
-  (not (null? head)))
+  (not (null? (thread-mbx-head thd))))
 
 (define (push-mail! thd v)
   (define head (thread-mbx-head thd))
   (cond
     [(null? head)
-     (set-thread-mbx-head! thd (mcons v head))
-     (set-thread-mbx-tail! thd (mcons v head))]
+     (let ([new-h (mcons v head)])
+       (set-thread-mbx-head! thd new-h)
+       (set-thread-mbx-tail! thd new-h))]
     [else
      (set-thread-mbx-head! thd (mcons v head))]))
 
@@ -543,11 +546,10 @@
    (cond
      [(thread-running? thd)
       (enqueue-mail! thd v)
-      (if (thread-waiting-mail? thd)
-          (begin
-            (set-thread-waiting-mail?! thd #f)
-            (thread-internal-resume! thd #:undelay-break? #f))
-          void)] 
+      (when (and (thread-waiting-mail? thd) ;; check so we don't resume a suspended thread. 
+                 (not (thread-suspended? thd)))
+        (set-thread-waiting-mail?! thd #f)
+        (thread-internal-resume! thd #:undelay-break? #f))]
      [fail-thunk
       (fail-thunk)]
      [else
@@ -566,11 +568,21 @@
       (thread-internal-suspend! t #f void void)
       (end-atomic)
       (engine-block)
-      (dequeue-mail! t)])) ;; this part doesn't need to be atomic right?
+      (let loop () ;; does this need to be atomic?
+        (if (is-mail? t)
+            (dequeue-mail! t)
+            (begin
+              (thread-internal-suspend! t #f void void)
+              (engine-block)
+              (loop))))
+      ]))
 
 (define (thread-try-receive)
   (atomically
-   (dequeue-mail! (current-thread))))
+   (define t (current-thread))
+   (if (is-mail? t)
+       (dequeue-mail! t)
+       #f)))
 
 (define (thread-rewind-receive lst)
   (check 'thread-rewind-receive list? lst)
@@ -582,6 +594,8 @@
 
 ;; todo: thread-receive-evt
 
+;; simpler send and receive program. time it.
+;; pull request for this code.
 
 
 
