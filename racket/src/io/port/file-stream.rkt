@@ -11,12 +11,12 @@
 (define (file-stream-port? p)
   (cond
     [(input-port? p)
-     (file-stream? (input-port-data p))]
+     (let ([p (->core-input-port p)])
+       (file-stream? (core-input-port-data p)))]
     [(output-port? p)
-     (file-stream? (output-port-data p))]
+     (let ([p (->core-output-port p)])
+       (file-stream? (core-output-port-data p)))]
     [else
      (raise-argument-error 'file-stream-port?
                            "port?"
                            p)]))
-
-    

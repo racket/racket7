@@ -70,9 +70,11 @@
    unsafe-vector-length
    unsafe-vector*-length
    
+   unsafe-fxvector-length
    unsafe-fxvector-ref
    unsafe-fxvector-set!
 
+   unsafe-flvector-length
    unsafe-flvector-ref
    unsafe-flvector-set!
 
@@ -111,4 +113,10 @@
    check-not-unsafe-undefined
    check-not-unsafe-undefined/assign
    prop:chaperone-unsafe-undefined
-   chaperone-struct-unsafe-undefined))
+   chaperone-struct-unsafe-undefined
+
+   unsafe-start-atomic
+   unsafe-end-atomic
+   unsafe-start-breakable-atomic
+   unsafe-end-breakable-atomic
+   unsafe-in-atomic?))

@@ -44,31 +44,33 @@
 
 (define (read-byte [in (current-input-port)])
   (check 'read-byte input-port? in)
-  (define read-byte (input-port-read-byte in))
-  (cond
-   [read-byte
-    ;; Shortcut is available
-    (define b (read-byte))
-    (unless (eof-object? b) (input-port-count-byte! in b))
-    b]
-   [else
-    ;; Use the general path
-    (define bstr (make-bytes 1))
-    (define v (read-some-bytes! 'read-byte in bstr 0 1 #:copy-bstr? #f))
-    (if (eq? v 1)
-        (bytes-ref bstr 1)
-        v)]))
+  (let ([in (->core-input-port in)])
+    (define read-byte (core-input-port-read-byte in))
+    (cond
+      [read-byte
+       ;; Shortcut is available
+       (define b (read-byte))
+       (unless (eof-object? b) (input-port-count-byte! in b))
+       b]
+      [else
+       ;; Use the general path
+       (define bstr (make-bytes 1))
+       (define v (read-some-bytes! 'read-byte in bstr 0 1 #:copy-bstr? #f))
+       (if (eq? v 1)
+           (bytes-ref bstr 1)
+           v)])))
 
 (define (read-bytes amt [in (current-input-port)])
   (check 'read-bytes exact-nonnegative-integer? amt)
   (check 'read-bytes input-port? in)
-  (define bstr (make-bytes amt))
-  (define v (do-read-bytes! 'read-bytes in bstr 0 amt))
-  (if (exact-integer? v)
-      (if (= v amt)
-          bstr
-          (subbytes bstr 0 v))
-      v))
+  (let ([in (->core-input-port in)])
+    (define bstr (make-bytes amt))
+    (define v (do-read-bytes! 'read-bytes in bstr 0 amt))
+    (if (exact-integer? v)
+        (if (= v amt)
+            bstr
+            (subbytes bstr 0 v))
+        v)))
 
 (define (read-bytes! bstr [in (current-input-port)] [start-pos 0] [end-pos (and (bytes? bstr)
                                                                                 (bytes-length bstr))])
@@ -77,7 +79,8 @@
   (check 'read-bytes! exact-nonnegative-integer? start-pos)
   (check 'read-bytes! exact-nonnegative-integer? end-pos)
   (check-range 'read-bytes! start-pos end-pos (bytes-length bstr) bstr)
-  (do-read-bytes! 'read-bytes! in bstr start-pos end-pos))
+  (let ([in (->core-input-port in)])
+    (do-read-bytes! 'read-bytes! in bstr start-pos end-pos)))
 
 (define (read-bytes-avail! bstr [in (current-input-port)] [start-pos 0] [end-pos (and (bytes? bstr)
                                                                                       (bytes-length bstr))])
@@ -86,7 +89,8 @@
   (check 'read-bytes-avail! exact-nonnegative-integer? start-pos)
   (check 'read-bytes-avail! exact-nonnegative-integer? end-pos)
   (check-range 'read-bytes-avail! start-pos end-pos (bytes-length bstr) bstr)
-  (read-some-bytes! 'read-bytes-avail! in bstr start-pos end-pos))
+  (let ([in (->core-input-port in)])
+    (read-some-bytes! 'read-bytes-avail! in bstr start-pos end-pos)))
 
 (define (read-bytes-avail!* bstr [in (current-input-port)] [start-pos 0] [end-pos (and (bytes? bstr)
                                                                                        (bytes-length bstr))])
@@ -95,7 +99,8 @@
   (check 'read-bytes-avail!* exact-nonnegative-integer? start-pos)
   (check 'read-bytes-avail!* exact-nonnegative-integer? end-pos)
   (check-range 'read-bytes-avail!* start-pos end-pos (bytes-length bstr) bstr)
-  (read-some-bytes! 'read-bytes-avail!* in bstr start-pos end-pos #:zero-ok? #t))
+  (let ([in (->core-input-port in)])
+    (read-some-bytes! 'read-bytes-avail!* in bstr start-pos end-pos #:zero-ok? #t)))
 
 ;; ----------------------------------------
 
@@ -123,7 +128,7 @@
   (check 'peek-byte input-port? in)
   (check 'peek-byte exact-nonnegative-integer? skip-k)
   (define peek-byte (and (zero? skip-k)
-                         (input-port-peek-byte in)))
+                         (core-input-port-peek-byte in)))
   (cond
    [peek-byte
     ;; Shortcut is available
@@ -140,13 +145,14 @@
   (check 'peek-bytes exact-nonnegative-integer? amt)
   (check 'peek-bytes exact-nonnegative-integer? skip-k)
   (check 'peek-bytes input-port? in)
-  (define bstr (make-bytes amt))
-  (define v (do-peek-bytes! 'read-bytes in bstr 0 amt skip-k))
-  (if (exact-integer? v)
-      (if (= v amt)
-          bstr
-          (subbytes bstr 0 v))
-      v))
+  (let ([in (->core-input-port in)])
+    (define bstr (make-bytes amt))
+    (define v (do-peek-bytes! 'read-bytes in bstr 0 amt skip-k))
+    (if (exact-integer? v)
+        (if (= v amt)
+            bstr
+            (subbytes bstr 0 v))
+        v)))
 
 (define (peek-bytes! bstr skip-k [in (current-input-port)] [start-pos 0] [end-pos (and (bytes? bstr)
                                                                                        (bytes-length bstr))])
@@ -156,7 +162,8 @@
   (check 'peek-bytes! exact-nonnegative-integer? start-pos)
   (check 'peek-bytes! exact-nonnegative-integer? end-pos)
   (check-range 'peek-bytes! start-pos end-pos (bytes-length bstr) bstr)
-  (do-peek-bytes! 'peek-bytes! in bstr start-pos end-pos skip-k))
+  (let ([in (->core-input-port in)])
+    (do-peek-bytes! 'peek-bytes! in bstr start-pos end-pos skip-k)))
 
 (define (peek-bytes-avail! bstr skip-k [progress-evt #f] [in (current-input-port)]
                            [start-pos 0] [end-pos (and (bytes? bstr)
@@ -167,7 +174,8 @@
   (check 'peek-bytes-avail! exact-nonnegative-integer? start-pos)
   (check 'peek-bytes-avail! exact-nonnegative-integer? end-pos)
   (check-range 'peek-bytes-avail! start-pos end-pos (bytes-length bstr) bstr)
-  (peek-some-bytes! 'peek-bytes-avail! in bstr start-pos end-pos skip-k))
+  (let ([in (->core-input-port in)])
+    (peek-some-bytes! 'peek-bytes-avail! in bstr start-pos end-pos skip-k)))
 
 (define (peek-bytes-avail!* bstr skip-k [progress-evt #f] [in (current-input-port)]
                             [start-pos 0] [end-pos (and (bytes? bstr)
@@ -178,4 +186,5 @@
   (check 'peek-bytes-avail!* exact-nonnegative-integer? start-pos)
   (check 'peek-bytes-avail!* exact-nonnegative-integer? end-pos)
   (check-range 'peek-bytes-avail!* start-pos end-pos (bytes-length bstr) bstr)
-  (peek-some-bytes! 'peek-bytes-avail!* in bstr start-pos end-pos skip-k #:zero-ok? #t))
+  (let ([in (->core-input-port in)])
+    (peek-some-bytes! 'peek-bytes-avail!* in bstr start-pos end-pos skip-k #:zero-ok? #t)))

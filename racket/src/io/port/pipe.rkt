@@ -14,18 +14,18 @@
 
 (define (pipe-input-port? p)
   (and (input-port? p)
-       (pipe-data? (input-port-data p))))
+       (pipe-data? (core-input-port-data (->core-input-port p)))))
 
 (define (pipe-output-port? p)
   (and (output-port? p)
-       (pipe-data? (output-port-data p))))
+       (pipe-data? (core-output-port-data (->core-output-port p)))))
 
 (define (pipe-content-length p)
   (cond
    [(pipe-input-port? p)
-    ((pipe-data-get-content-length (input-port-data p)))]
+    ((pipe-data-get-content-length (core-input-port-data (->core-input-port p))))]
    [(pipe-output-port? p)
-    ((pipe-data-get-content-length (output-port-data p)))]
+    ((pipe-data-get-content-length (core-output-port-data (->core-input-port p))))]
    [else
     (raise-argument-error 'pipe-contact-length "(or/c pipe-input-port? pipe-output-port?)" p)]))
 
@@ -45,7 +45,7 @@
            (+ end (- (bytes-length bstr) start))))))
   (values
    ;; input ----------------------------------------
-   (make-input-port
+   (make-core-input-port
     #:name input-name
     #:data data
     
@@ -130,7 +130,7 @@
     void)
    
    ;; out ----------------------------------------
-   (make-output-port
+   (make-core-output-port
     #:name output-name
     #:data data
 

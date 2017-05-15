@@ -30,4 +30,8 @@
           (linklet))
   (include "expander-compat.scm")
   (include "compiled/expander.scm")
-  (fill-environment!))
+  (fill-environment!)
+
+  ;; `install-reader!` is from the `io` library, where the
+  ;; given functions are used by the default port read handler
+  (install-reader! 1/read 1/read-syntax))

@@ -124,9 +124,13 @@
 
           make-struct-type-property
           make-struct-type
-          struct-type-install-properties!
+          struct-type-install-properties! ; not exported to Racket
           make-struct-field-accessor
           make-struct-field-mutator
+          register-struct-field-accessor! ; not exported to Racket
+          register-struct-field-mutator! ; not exported to Racket
+          struct-accessor-procedure?
+          struct-mutator-procedure?
           struct?
           struct-type?
           struct-type
@@ -244,6 +248,19 @@
           system-big-endian?
 
           mpair? mcons mcar mcdr set-mcar! set-mcdr!
+
+          flvector?
+          (rename [new-flvector flvector])
+          make-flvector
+          flvector-length
+          flvector-ref
+          flvector-set!
+          flvector-copy
+          shared-flvector
+          make-shared-flvector
+          unsafe-flvector-length
+          unsafe-flvector-set!
+          unsafe-flvector-ref
           
           correlated?
           correlated-source
@@ -338,6 +355,7 @@
           unsafe-vector-length
           unsafe-vector*-length
           
+          unsafe-fxvector-length
           unsafe-fxvector-ref
           unsafe-fxvector-set!
 
@@ -390,6 +408,7 @@
   (include "core/keyword.ss")
   (include "core/mpair.ss")
   (include "core/number.ss")
+  (include "core/flvector.ss")
   (include "core/correlated.ss")
   (include "core/time.ss")
   (include "core/memory.ss")

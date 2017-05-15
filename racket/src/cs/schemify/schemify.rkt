@@ -281,7 +281,18 @@
                                                 (,raw-acc/mut s v)
                                                 (pariah (impersonate-set! ,raw-s? ,raw-acc/mut s v))))))
                          raw-def)]
-                    [`,_ (error "oops")])))]
+                    [`,_ (error "oops")]))
+              (define ,(gensym)
+                (begin
+                  ,@(for/list ([acc/mut (in-list acc/muts)]
+                               [make-acc/mut (in-list make-acc/muts)])
+                      (match make-acc/mut
+                        [`(make-struct-field-accessor . ,_)
+                         `(register-struct-field-accessor! ,acc/mut)]
+                        [`(make-struct-field-mutator . ,_)
+                         `(register-struct-field-mutator! ,acc/mut)]
+                        [`,_ (error "oops")]))
+                  (void))))]
            [else
             (match v
               [`(,_ ,ids ,rhs)

@@ -92,6 +92,12 @@
              [(#\v #\V)
               (print (car args) o)
               (next i (cdr args))]
+             [(#\e #\E)
+              (write-string ((error-value->string-handler)
+                             (car args)
+                             (error-print-width))
+                            o)
+              (next i (cdr args))]
              [(#\.)
               (let ([i (add1 i)])
                 (case (string-ref fmt i)

@@ -1,6 +1,5 @@
 #lang racket/base
-(require (rename-in "input-port.rkt"
-                    [make-input-port raw:make-input-port])
+(require "input-port.rkt"
          "peek-to-read-port.rkt")
 
 (provide make-input-port)
@@ -52,7 +51,7 @@
   
   (cond
    [user-peek-in
-    (raw:make-input-port
+    (make-core-input-port
      #:name name
      #:read-in 
      (if (input-port? user-read-in)

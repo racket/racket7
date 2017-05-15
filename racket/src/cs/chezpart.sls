@@ -20,8 +20,10 @@
                            open-input-output-file
                            with-input-from-file with-output-to-file
                            call-with-input-file call-with-output-file
+                           file-position
                            format printf
                            write display newline port-name
+                           print-graph print-vector-length
                            error
                            date? make-date
                            dynamic-wind

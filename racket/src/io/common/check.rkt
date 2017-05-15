@@ -2,7 +2,8 @@
 (require (for-syntax racket/base))
 
 (provide check
-         check-range)
+         check-range
+         check-immutable-field)
 
 (define-syntax (check stx)
   (syntax-case stx ()
@@ -32,3 +33,9 @@
                        0
                        max-end
                        start-pos)))
+
+(define (check-immutable-field who v sti)
+  (when (exact-integer? v)
+    (unless (memv v (list-ref sti 5))
+      (raise-arguments-error who "field index not declared immutable"
+                             "field index" v))))

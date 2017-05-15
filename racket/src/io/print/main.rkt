@@ -10,7 +10,8 @@
          "string.rkt"
          "bytes.rkt"
          "symbol.rkt"
-         "char.rkt")
+         "char.rkt"
+         "parameter.rkt")
 
 (provide display
          write
@@ -18,7 +19,9 @@
 
          newline
          
-         prop:custom-write)
+         prop:custom-write
+
+         (all-from-out "parameter.rkt"))
 
 (define (display v [o (current-output-port)] [max-length #f])
   (check 'display output-port? o)

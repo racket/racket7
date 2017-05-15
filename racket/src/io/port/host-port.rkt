@@ -6,10 +6,15 @@
                   [write-bytes-avail* host:write-bytes-avail*]
                   [close-input-port host:close-input-port]
                   [close-output-port host:close-output-port]
-                  [file-stream-buffer-mode host:file-stream-buffer-mode])
+                  [file-stream-buffer-mode host:file-stream-buffer-mode]
+                  [file-position host:file-position]
+                  [file-truncate host:file-truncate]
+                  [flush-output host:flush-output])
          "output-port.rkt"
          "peek-to-read-port.rkt"
          "file-stream.rkt"
+         "file-position.rkt"
+         "file-truncate.rkt"
          "buffer-mode.rkt")
 
 (provide open-input-host
@@ -17,12 +22,19 @@
 
 (struct host-data (host-port)
   #:property prop:file-stream #t
+  #:property prop:file-position (case-lambda
+                                  [(hd)
+                                   (host:file-position hd)]
+                                  [(hd pos)
+                                   (host:file-position hd pos)])
+  #:property prop:file-truncate (case-lambda
+                                  [(hd pos)
+                                   (host:file-truncate hd pos)])
   #:property prop:buffer-mode (case-lambda
-                                [(hid)
-                                 (host:file-stream-buffer-mode (host-data-host-port hid))]
-                                [(hid mode)
-                                 (host:file-stream-buffer-mode (host-data-host-port hid) mode)]))
-
+                                [(hd)
+                                 (host:file-stream-buffer-mode (host-data-host-port hd))]
+                                [(hd mode)
+                                 (host:file-stream-buffer-mode (host-data-host-port hd) mode)]))
 
 (define (open-input-host host-in name)
   (open-input-peek-to-read
@@ -37,7 +49,7 @@
 ;; ----------------------------------------
 
 (define (open-output-host host-out name)
-  (make-output-port
+  (make-core-output-port
    #:name name
    #:data (host-data host-out)
 
@@ -45,7 +57,13 @@
    
    #:write-out
    (lambda (src-bstr src-start src-end nonblock? enable-break?)
-     (host:write-bytes-avail* src-bstr host-out src-start src-end))
+     (cond
+       [(= src-start src-end)
+        ;; Flush request
+        (host:flush-output host-out)
+        0]
+       [else
+        (host:write-bytes-avail* src-bstr host-out src-start src-end)]))
 
    #:close
    (lambda ()

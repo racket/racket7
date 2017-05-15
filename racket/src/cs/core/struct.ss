@@ -214,6 +214,23 @@
     [(pbm pos name)
      (make-struct-field-mutator pbm pos)]))
 
+(define struct-field-accessors (make-weak-eq-hashtable))
+(define struct-field-mutators (make-weak-eq-hashtable))
+
+(define (register-struct-field-accessor! p)
+  (hashtable-set! struct-field-accessors p #t))
+
+(define (register-struct-field-mutator! p)
+  (hashtable-set! struct-field-mutators p #t))
+
+(define (struct-accessor-procedure? v)
+  (and (procedure? v)
+       (hashtable-ref struct-field-accessors v #f)))
+
+(define (struct-mutator-procedure? v)
+  (and (procedure? v)
+       (hashtable-ref struct-field-mutators v #f)))
+
 (define struct? record?)
 (define struct-type? record-type-descriptor?)
 (define struct-type record-rtd)

@@ -16,7 +16,7 @@
   (check 'open-input-bytes bytes? bstr)
   (define i 0)
   (define len (bytes-length bstr))
-  (make-input-port
+  (make-core-input-port
    #:name name
    #:data (input-bytes-data)
    
@@ -65,34 +65,37 @@
 
 (define (open-output-bytes [name 'string])
   (define-values (i o) (make-pipe))
-  (make-output-port
+  (make-core-output-port
    #:name name
    #:data (output-bytes-data i)
    #:evt o
-   #:write-out (output-port-write-out o)
-   #:close (output-port-close o)
-   #:get-write-evt (output-port-get-write-evt o)
-   #:get-location (output-port-get-location o)
-   #:count-lines! (output-port-count-lines! o)))
+   #:write-out (core-output-port-write-out o)
+   #:close (core-output-port-close o)
+   #:get-write-evt (core-output-port-get-write-evt o)
+   #:get-location (core-output-port-get-location o)
+   #:count-lines! (core-output-port-count-lines! o)))
 
 (define (get-output-bytes o [reset? #f] [start-pos 0] [end-pos #f])
   (check 'get-output-bytes (lambda (v) (and (output-port? o) (string-port? o)))
          #:contract "(and/c output-port? string-port?)"
          o)
-  (define i (output-bytes-data-i (output-port-data o)))
-  (define len (pipe-content-length i))
-  (define amt (- (min len (or end-pos len)) start-pos))
-  (define bstr (make-bytes amt))
-  (peek-bytes! bstr start-pos i)
-  bstr)
+  (let ([o (->core-output-port o)])
+    (define i (output-bytes-data-i (core-output-port-data o)))
+    (define len (pipe-content-length i))
+    (define amt (- (min len (or end-pos len)) start-pos))
+    (define bstr (make-bytes amt))
+    (peek-bytes! bstr start-pos i)
+    bstr))
 
 ;; ----------------------------------------
 
 (define (string-port? p)
   (cond
-   [(input-port? p)
-    (input-bytes-data? (input-port-data p))]
-   [(output-port? p)
-    (output-bytes-data? (output-port-data p))]
-   [else
-    (raise-argument-error 'string-port? "port?" p)]))
+    [(input-port? p)
+     (let ([p (->core-input-port p)])
+       (input-bytes-data? (core-input-port-data p)))]
+    [(output-port? p)
+     (let ([p (->core-output-port p)])
+       (output-bytes-data? (core-output-port-data p)))]
+    [else
+     (raise-argument-error 'string-port? "port?" p)]))

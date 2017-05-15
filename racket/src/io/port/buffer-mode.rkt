@@ -13,13 +13,15 @@
     [(p)
      (cond
        [(input-port? p)
-        (define data (input-port-data p))
-        (and (buffer-mode? data)
-             ((buffer-mode-ref data) data))]
+        (let ([p (->core-input-port p)])
+          (define data (core-input-port-data p))
+          (and (buffer-mode? data)
+               ((buffer-mode-ref data) data)))]
        [(output-port? p)
-        (define data (output-port-data p))
-        (and (buffer-mode? data)
-             ((buffer-mode-ref data) data))]
+        (let ([p (->core-output-port p)])
+          (define data (core-output-port-data p))
+          (and (buffer-mode? data)
+               ((buffer-mode-ref data) data)))]
        [else
         (raise-argument-error 'file-stream-buffer-mode "port?" p)])]
     [(p mode)
@@ -29,18 +31,20 @@
        (raise-argument-error 'file-stream-buffer-mode "(or/c 'none 'line 'block)" mode))
      (cond
        [(input-port? p)
-        (define data (input-port-data p))
-        (if (buffer-mode? data)
-            ((buffer-mode-ref data) data mode)
-            (raise-arguments-error 'file-stream-buffer-mode
-                                   "buffering not supported for input port"
-                                   "mode" mode
-                                   "input port" p))]
+        (let ([p (->core-input-port p)])
+          (define data (core-input-port-data p))
+          (if (buffer-mode? data)
+              ((buffer-mode-ref data) data mode)
+              (raise-arguments-error 'file-stream-buffer-mode
+                                     "buffering not supported for input port"
+                                     "mode" mode
+                                     "input port" p)))]
        [else
-        (define data (output-port-data p))
-        (if (buffer-mode? data)
-            ((buffer-mode-ref data) data mode)
-            (raise-arguments-error 'file-stream-buffer-mode
-                                   "buffering not supported for output port"
-                                   "mode" mode
-                                   "output port" p))])]))
+        (let ([p (->core-output-port p)])
+          (define data (core-output-port-data p))
+          (if (buffer-mode? data)
+              ((buffer-mode-ref data) data mode)
+              (raise-arguments-error 'file-stream-buffer-mode
+                                     "buffering not supported for output port"
+                                     "mode" mode
+                                     "output port" p)))])]))

@@ -23,18 +23,18 @@
                           #:keep-eof? [keep-eof? #f])
   (let loop ([in orig-in])
     (cond
-     [(input-port-closed? in)
+     [(core-input-port-closed? in)
       (raise-arguments-error who
                              "input port is closed"
                              "input port" orig-in)]
      ;; previously detected EOF?
-     [(input-port-pending-eof? in) ;; FIXME: sync
+     [(core-input-port-pending-eof? in) ;; FIXME: sync
       (unless keep-eof?
-        (set-input-port-pending-eof?! in #f))
+        (set-core-input-port-pending-eof?! in #f))
       eof]
      [else
       ;; normal mode...
-      (define read-in (input-port-read-in in))
+      (define read-in (core-input-port-read-in in))
       (cond
        [(procedure? read-in)
         (define v (read-in bstr start end copy-bstr?))
@@ -66,16 +66,16 @@
                           #:copy-bstr? [copy-bstr? #t])
   (let loop ([in orig-in])
     (cond
-     [(input-port-closed? in)
+     [(core-input-port-closed? in)
       (raise-arguments-error who
                              "input port is closed"
                              "input port" orig-in)]
      ;; previously detected EOF? (never skip past it)
-     [(input-port-pending-eof? in)
+     [(core-input-port-pending-eof? in)
       eof]
      [(zero? (bytes-length bstr)) 0]
      [else
-      (define peek-in (input-port-peek-in in))
+      (define peek-in (core-input-port-peek-in in))
       (cond
        [(procedure? peek-in)
         (define v (peek-in bstr start end skip copy-bstr?))

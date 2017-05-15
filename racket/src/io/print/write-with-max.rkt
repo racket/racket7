@@ -45,8 +45,8 @@
 (define (make-output-port/max o max-length)
   (cond
    [max-length
-    (make-output-port
-     #:name (output-port-name o)
+    (make-core-output-port
+     #:name (object-name o)
      #:data (lambda () max-length)
      #:evt o
      #:write-out
@@ -64,4 +64,4 @@
 
 (define (output-port/max-max-length o max-length)
   (and max-length
-       ((output-port-data o))))
+       ((core-output-port-data o))))

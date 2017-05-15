@@ -207,28 +207,30 @@
 
 (define (read-char [in (current-input-port)])
   (check 'read-char input-port? in)
-  (define read-byte (input-port-read-byte in))
-  (cond
-   [(not read-byte)
-    (define str (make-string 1))
-    (define v (read-some-chars! 'read-char in str 0 1))
-    (if (eq? v 1)
-        (string-ref str 1)
-        v)]
-   [else
-    ;; Byte-level shortcut is available, so try it as a char shortcut
-    (read-char-via-read-byte 'read-char in read-byte)]))
+  (let ([in (->core-input-port in)])
+    (define read-byte (core-input-port-read-byte in))
+    (cond
+      [(not read-byte)
+       (define str (make-string 1))
+       (define v (read-some-chars! 'read-char in str 0 1))
+       (if (eq? v 1)
+           (string-ref str 1)
+           v)]
+      [else
+       ;; Byte-level shortcut is available, so try it as a char shortcut
+       (read-char-via-read-byte 'read-char in read-byte)])))
 
 (define (read-string amt [in (current-input-port)])
   (check 'read-string exact-nonnegative-integer? amt)
   (check 'read-string input-port? in)
-  (define bstr (make-string amt))
-  (define v (do-read-string! 'read-string in bstr 0 amt))
-  (if (exact-integer? v)
-      (if (= v amt)
-          bstr
-          (substring bstr 0 v))
-      v))
+  (let ([in (->core-input-port in)])
+    (define bstr (make-string amt))
+    (define v (do-read-string! 'read-string in bstr 0 amt))
+    (if (exact-integer? v)
+        (if (= v amt)
+            bstr
+            (substring bstr 0 v))
+        v)))
 
 (define (read-string! str [in (current-input-port)] [start-pos 0] [end-pos (and (string? str)
                                                                                 (string-length str))])
@@ -237,7 +239,8 @@
   (check 'read-string! exact-nonnegative-integer? start-pos)
   (check 'read-string! exact-nonnegative-integer? end-pos)
   (check-range 'read-string! start-pos end-pos (string-length str) str)
-  (do-read-string! 'read-string! in str start-pos end-pos))
+  (let ([in (->core-input-port in)])
+    (do-read-string! 'read-string! in str start-pos end-pos)))
 
 ;; ----------------------------------------
 
@@ -247,34 +250,36 @@
 (define (peek-char [in (current-input-port)] [skip-k 0])
   (check 'peek-char input-port? in)
   (check 'peek-char exact-nonnegative-integer? skip-k)
-  (define peek-byte (and (zero? skip-k)
-                         (input-port-peek-byte in)))
-  (define b (and peek-byte (peek-byte)))
-  (cond
-   [(and b
-         (or (eof-object? b)
-             (b . < . 128)))
-    ;; Shortcut worked
-    (if (eof-object? b) b (integer->char b))]
-   [else
-    ;; General mode
-    (define bstr (make-string 1))
-    (define v (do-peek-string! 'peek-char in bstr 0 1 skip-k))
-    (if (eq? v 1)
-        (string-ref bstr 0)
-        v)]))
+  (let ([in (->core-input-port in)])
+    (define peek-byte (and (zero? skip-k)
+                           (core-input-port-peek-byte in)))
+    (define b (and peek-byte (peek-byte)))
+    (cond
+      [(and b
+            (or (eof-object? b)
+                (b . < . 128)))
+       ;; Shortcut worked
+       (if (eof-object? b) b (integer->char b))]
+      [else
+       ;; General mode
+       (define bstr (make-string 1))
+       (define v (do-peek-string! 'peek-char in bstr 0 1 skip-k))
+       (if (eq? v 1)
+           (string-ref bstr 0)
+           v)])))
 
 (define (peek-string amt skip-k [in (current-input-port)])
   (check 'peek-string exact-nonnegative-integer? amt)
   (check 'peek-string exact-nonnegative-integer? skip-k)
   (check 'peek-string input-port? in)
-  (define bstr (make-string amt))
-  (define v (do-peek-string! 'peek-string bstr in 0 amt skip-k))
-  (if (exact-integer? v)
-      (if (= v amt)
-          bstr
-          (substring bstr 0 v))
-      v))
+  (let ([in (->core-input-port in)])
+    (define bstr (make-string amt))
+    (define v (do-peek-string! 'peek-string bstr in 0 amt skip-k))
+    (if (exact-integer? v)
+        (if (= v amt)
+            bstr
+            (substring bstr 0 v))
+        v)))
 
 (define (peek-string! str skip-k [in (current-input-port)] [start-pos 0] [end-pos (and (string? str)
                                                                                        (string-length str))])
@@ -284,4 +289,5 @@
   (check 'peek-string! exact-nonnegative-integer? start-pos)
   (check 'peek-string! exact-nonnegative-integer? end-pos)
   (check-range 'peek-string! start-pos end-pos (string-length str) str)
-  (do-peek-string! 'peek-string! str in start-pos end-pos skip-k))
+  (let ([in (->core-input-port in)])
+    (do-peek-string! 'peek-string! str in start-pos end-pos skip-k)))

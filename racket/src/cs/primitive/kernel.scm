@@ -171,11 +171,14 @@
    exn-message
    exn?
    expand-user-path
+   explode-path
    expt
    extend-parameterization
    file-exists?
    file-or-directory-modify-seconds
    file-position
+   file-position*
+   file-truncate
    file-stream-buffer-mode
    file-stream-port?
    filesystem-change-evt
@@ -185,7 +188,10 @@
    flonum?
    floor
    floating-point-bytes->real
+   flush-output
+   flvector-copy
    flvector-length
+   flvector-ref
    flvector-set!
    flvector?
    for-each
@@ -239,6 +245,7 @@
    interned-char?
    kill-thread
    length
+   link-exists?
    list
    list*
    list->bytes
@@ -283,6 +290,7 @@
    make-prefab-struct
    make-reader-graph
    make-semaphore
+   make-shared-flvector
    make-string
    make-struct-field-accessor
    make-struct-field-mutator
@@ -338,7 +346,12 @@
    plumber-add-flush!
    port-count-lines!
    port-next-location
+   port-display-handler
+   port-print-handler
    port-read-handler
+   port-write-handler
+   port-writes-atomic?
+   port-writes-special?
    positive?
    prefab-key->struct-type
    prefab-key?
@@ -349,6 +362,16 @@
    printf
    print
    print-as-expression
+   print-boolean-long-form
+   print-box
+   print-graph
+   print-hash-table
+   print-mpair-curly-braces
+   print-pair-curly-braces
+   print-reader-abbreviations
+   print-struct
+   print-vector-length
+   print-unreadable
    procedure-arity
    procedure-arity?
    procedure-arity-includes?
@@ -366,6 +389,8 @@
    prop:incomplete-arity
    prop:method-arity-error
    prop:procedure
+   prop:output-port
+   prop:input-port
    pseudo-random-generator?
    random
    raise
@@ -412,6 +437,7 @@
    semaphore-post
    semaphore-wait
    set-box!
+   shared-flvector
    simplify-path
    sleep
    split-path
@@ -448,6 +474,8 @@
    struct->vector
    struct-type?
    struct?
+   struct-accessor-procedure?
+   struct-mutator-procedure?
    sub1
    subbytes
    substring
@@ -497,6 +525,9 @@
    write-bytes-avail
    write-bytes-avail*
    write-bytes-avail/enable-break
+   write-bytes-avail-evt
+   write-special
+   write-special-evt
    write-string
    zero?
 

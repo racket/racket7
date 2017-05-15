@@ -8,12 +8,15 @@
                         current-directory
                         format
                         error
-                        input-port? output-port?)
+                        input-port? output-port?
+                        file-position flush-output-port
+                        file-symbolic-link?)
                   [standard-input-port current-input-port]
                   [standard-output-port current-output-port]
                   [standard-error-port current-error-port]
                   [input-port? chez:input-port?]
-                  [output-port? chez:output-port?])
+                  [output-port? chez:output-port?]
+                  [flush-output-port flush-output])
           (core)
           (thread))
   ;; Tie knots:
@@ -73,6 +76,7 @@
     (file-directory? (->string p)))
   (define (resolve-path p) p)
   (define (system-path-convention-type) 'unix)
+  (define file-truncate truncate-file)
 
   (define (primitive-table key)
     (case key

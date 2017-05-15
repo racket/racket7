@@ -41,21 +41,6 @@
 (define flimag-part imag-part)
 (define make-flrectangular make-rectangular)
 
-(define (flvector . args) 'flvector)
-(define (flvector? v) #f)
-(define (flvector-length v) 0)
-(define (flvector-ref v i) 0)
-(define (unsafe-flvector-ref v i) 0)
-(define (flvector-set! v i val) (void))
-(define (unsafe-flvector-set! v i val) (void))
-(define make-flvector
-  (case-lambda
-   [(n) 'no-flvector]
-   [(n val) 'no-flvector]))
-(define shared-flvector flvector)
-(define make-shared-flvector make-flvector)
-(define (flvector-copy vec) 'flvector)
-
 (define string-locale-downcase string-downcase)
 
 (define (char-graphic? x) #f)
@@ -70,13 +55,16 @@
   (error "environment-variables-set! not ready"))
 
 (define (->string p)
-  (if (path? p) (path->string p) p))
+  (path->string (path->complete-path p)))
 
 (define (directory-exists? p)
   (file-directory? (->string p)))
 
 (define (file-exists? p)
   (chez:file-exists? (->string p)))
+
+(define (link-exists? p)
+  (file-symbolic-link? (->string p)))
 
 (define (directory-list p)
   (map string->path (chez:directory-list (->string p))))
@@ -176,9 +164,6 @@
 (define load-on-demand-enabled
   (make-parameter #f))
 
-(define print-as-expression
-  (make-parameter #t))
-
 (define compile-enforce-module-constants
   (make-parameter #t))
 
@@ -212,18 +197,6 @@
 
 (define-values (prop:exn:srclocs exn:srclocs? exn:srclocs-accessor)
   (make-struct-type-property 'exn:srclocs))
-
-(define the-default-read-handler
-  (let ([default-read-handler
-          (case-lambda
-           [(in) (1/read in)]
-           [(in src) (1/read-syntax src in)])])
-    default-read-handler))
-
-(define port-read-handler
-  (case-lambda
-   [(p) the-default-read-handler]
-   [(p read) (void)]))
 
 ;; Not good enough...
 (define (make-ephemeron k v)
@@ -477,19 +450,6 @@
    flimag-part
    make-flrectangular
 
-   flvector
-   flvector?
-   flvector-length
-   flvector-ref
-   unsafe-flvector-ref
-   flvector-set!
-   unsafe-flvector-set!
-   make-flvector
-   shared-flvector
-   make-shared-flvector
-
-   object-name
-
    string-locale-downcase
 
    char-graphic?
@@ -542,8 +502,6 @@
    load
    load-on-demand-enabled
 
-   print-as-expression
-
    compile-enforce-module-constants
 
    load-extension
@@ -554,8 +512,6 @@
    find-system-path
 
    prop:exn:srclocs exn:srclocs? exn:srclocs-accessor
-
-   port-read-handler
 
    gensym
 
@@ -577,15 +533,8 @@
    procedure->method
    procedure-rename
 
-   chaperone-procedure
-   chaperone-procedure*
-   impersonate-procedure
-   impersonate-procedure*
    chaperone-struct
    impersonate-struct
-   chaperone-of?
-   impersonator-of?
-   impersonator-property?
 
    make-hash-placeholder
    make-hasheq-placeholder

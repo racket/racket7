@@ -15,7 +15,7 @@
   (define peek-pipe-o #f)
   (define peeked-eof? #f)
   (define buf (make-bytes 4096))
-  (make-input-port
+  (make-core-input-port
    #:name name
    #:data data
    
@@ -24,7 +24,7 @@
      (cond
       [(and peek-pipe-i
             (positive? (pipe-content-length peek-pipe-i)))
-       ((input-port-read-byte peek-pipe-i))]
+       ((core-input-port-read-byte peek-pipe-i))]
       [peeked-eof?
        (set! peeked-eof? #f)
        eof]
@@ -36,7 +36,7 @@
      (cond
       [(and peek-pipe-i
             (positive? (pipe-content-length peek-pipe-i)))
-       ((input-port-read-in peek-pipe-i) dest-bstr start end copy?)]
+       ((core-input-port-read-in peek-pipe-i) dest-bstr start end copy?)]
       [peeked-eof?
        (set! peeked-eof? #f)
        eof]
@@ -49,7 +49,7 @@
           (cond
            [(and peek-pipe-i
                  (positive? (pipe-content-length peek-pipe-i)))
-            ((input-port-peek-byte peek-pipe-i))]
+            ((core-input-port-peek-byte peek-pipe-i))]
            [else
             (peek-byte)])))
    
@@ -62,7 +62,7 @@
        (cond
         [(and peek-pipe-i
               (peeked-amt . > . skip))
-         ((input-port-peek-in peek-pipe-i) dest-bstr start end skip copy?)]
+         ((core-input-port-peek-in peek-pipe-i) dest-bstr start end skip copy?)]
         [peeked-eof? eof]
         [else
          (when (not peek-pipe-i)
@@ -75,7 +75,7 @@
           [(zero? v) 0]
           [else
            (let loop ([wrote 0])
-             (define just-wrote ((output-port-write-out peek-pipe-o) buf wrote v #t #f))
+             (define just-wrote ((core-output-port-write-out peek-pipe-o) buf wrote v #t #f))
              (define next-wrote (+ wrote just-wrote))
              (unless (= v next-wrote)
                (loop next-wrote)))

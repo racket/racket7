@@ -67,6 +67,7 @@
 (define unsafe-string-ref #3%string-ref)
 (define unsafe-string-set! #3%string-set!)
 
+(define unsafe-fxvector-length #3%fxvector-length)
 (define unsafe-fxvector-ref #3%fxvector-ref)
 (define unsafe-fxvector-set! #3%fxvector-set!)
 
