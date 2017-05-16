@@ -114,30 +114,6 @@
 (define (hamt-empty? h)
   (fxzero? (hamt-count h)))
 
-(define-syntax define-hash-constructors
-  (syntax-rules ()
-    [(_ vararg-ctor list-ctor eqtype)
-     (begin
-       (define (vararg-ctor . kvs)
-         (let loop ([kvs kvs] [h (make-empty-bnode eqtype)])
-           (cond [(null? kvs) h]
-                 [else
-                  (loop (cddr kvs) (hamt-set h (car kvs) (cadr kvs)))])))
-
-       (define list-ctor
-         (case-lambda
-          [() (vararg-ctor)]
-          [(assocs)
-           (let loop ([h (vararg-ctor)] [assocs assocs])
-             (if (null? assocs)
-                 h
-                 (loop (hamt-set h (caar assocs) (cdar assocs))
-                       (cdr assocs))))])))]))
-
-(define-hash-constructors hash make-immutable-hash 'equal)
-(define-hash-constructors hasheqv make-immutable-hasheqv 'eqv)
-(define-hash-constructors hasheq make-immutable-hasheq 'eq)
-
 (define (hamt=? a b eql?)
   (node=? a b eql? 0))
 

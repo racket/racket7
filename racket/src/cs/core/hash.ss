@@ -12,6 +12,30 @@
 (define (make-hasheqv) (create-mutable-hash (make-eqv-hashtable)))
 (define (make-weak-hasheqv) (create-mutable-hash (make-weak-eqv-hashtable)))
 
+(define-syntax define-hash-constructors
+  (syntax-rules ()
+    [(_ vararg-ctor list-ctor empty-hash)
+     (begin
+       (define (vararg-ctor . kvs)
+         (let loop ([kvs kvs] [h empty-hash])
+           (cond [(null? kvs) h]
+                 [else
+                  (loop (cddr kvs) (hamt-set h (car kvs) (cadr kvs)))])))
+
+       (define list-ctor
+         (case-lambda
+          [() (vararg-ctor)]
+          [(assocs)
+           (let loop ([h (vararg-ctor)] [assocs assocs])
+             (if (null? assocs)
+                 h
+                 (loop (hamt-set h (caar assocs) (cdar assocs))
+                       (cdr assocs))))])))]))
+
+(define-hash-constructors hash make-immutable-hash empty-hash)
+(define-hash-constructors hasheqv make-immutable-hasheqv empty-hasheqv)
+(define-hash-constructors hasheq make-immutable-hasheq empty-hasheq)
+
 (define (hash-set! ht k v)
   (cond
    [(mutable-hash? ht)
