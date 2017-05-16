@@ -239,13 +239,22 @@
           exact-positive-integer?
           byte?
           arithmetic-shift
-          random
-          pseudo-random-generator?
           integer->integer-bytes
           integer-bytes->integer
           real->floating-point-bytes
           floating-point-bytes->real
           system-big-endian?
+          string->number
+
+          random
+          random-seed
+          pseudo-random-generator?
+          make-pseudo-random-generator
+          current-pseudo-random-generator
+          vector->pseudo-random-generator
+          vector->pseudo-random-generator!
+          pseudo-random-generator->vector
+          pseudo-random-generator-vector?
 
           mpair? mcons mcar mcdr set-mcar! set-mcdr!
 
@@ -411,6 +420,7 @@
   (include "core/flvector.ss")
   (include "core/correlated.ss")
   (include "core/time.ss")
+  (include "core/random.ss")
   (include "core/memory.ss")
   (include "core/system.ss")
   (include "core/unsafe.ss")

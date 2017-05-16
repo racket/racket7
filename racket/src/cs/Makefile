@@ -170,6 +170,7 @@ CORE_SRCS = core/constant.ss \
             core/keyword.ss \
             core/mpair.ss \
             core/number.ss \
+            core/random.ss \
             core/flvector.ss \
             core/correlated.ss \
             core/time.ss \

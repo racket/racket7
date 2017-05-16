@@ -135,36 +135,13 @@
    [(bstr big-endian? start)
     (floating-point-bytes->real bstr big-endian? start (and (bytes? bstr) (bytes-length bstr)))]))
 
-;; ----------------------------------------
-
-;; FIXME: change to MRG32k3a
-
-(define-record pseudo-random-generator ())
-
-(define random
+(define string->number
   (case-lambda
-    [() (random 1.0)]
-    [(n)
-     (unless (and (integer? n)
-                  (exact? n)
-                  (<= 1 n 4294967087))
-       (raise-argument-error 'random "(integer-in 1 4294967087)" n))
-     (chez:random n)]
-    [(n)
-     (cond
-      [(pseudo-random-generator? n)
-       (random 1.0)]
-      [else
-       (unless (and (integer? n)
-                    (exact? n)
-                    (<= 1 n 4294967087))
-         (raise-argument-error 'random "(or/c (integer-in 1 4294967087) pseudo-random-generator?)" n))
-       (chez:random n)])]
-    [(n prg)
-     (unless (and (integer? n)
-                  (exact? n)
-                  (<= 1 n 4294967087))
-       (raise-argument-error 'random "(integer-in 1 4294967087)" n))
-     (unless (pseudo-random-generator? prg)
-       (raise-argument-error 'random "pseudo-random-generator?" prg))
-     (chez:random n)]))
+   [(s) (string->number s 10 #f 'decimal-as-inexact)]
+   [(s radix) (string->number s radix #f 'decimal-as-inexact)]
+   [(s radix mode) (string->number s radix mode 'decimal-as-inexact)]
+   [(s radix mode decimal)
+    ;; FIXME
+    (cond
+     [(equal? s "+nan.f") +nan.0]
+     [else (chez:string->number s radix)])]))

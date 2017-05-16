@@ -20,6 +20,12 @@
          newline
          
          prop:custom-write
+         custom-write?
+         custom-write-accessor
+
+         prop:custom-print-quotable
+         custom-print-quotable?
+         custom-print-quotable-accessor
 
          (all-from-out "parameter.rkt"))
 
@@ -111,7 +117,7 @@
           (write-string/max ")" o max-length))]))]
    [(custom-write? v)
     (let ([o (make-output-port/max o max-length)])
-      ((custom-write-ref v) v o mode)
+      ((custom-write-accessor v) v o mode)
       (output-port/max-max-length o max-length))]
    [else
     ;; As a last resort, fall back to the host `format`:

@@ -131,12 +131,18 @@
    current-plumber
    current-print
    current-prompt-read
+   current-pseudo-random-generator
    current-read-interaction
    current-seconds
    current-thread
    current-thread-group
+   custom-print-quotable?
+   custom-print-quotable-accessor
+   custom-write?
+   custom-write-accessor
    datum-intern-literal
    default-continuation-prompt-tag
+   denominator
    directory-exists?
    directory-list
    display
@@ -202,6 +208,7 @@
    fxvector?
    gensym
    get-output-bytes
+   get-output-string
    hash
    hash-clear!
    hash-copy
@@ -227,6 +234,7 @@
    hash?
    hasheq
    hasheqv
+   imag-part
    immutable?
    impersonate-procedure
    impersonate-procedure*
@@ -288,6 +296,7 @@
    make-parameter
    make-placeholder
    make-prefab-struct
+   make-pseudo-random-generator
    make-reader-graph
    make-semaphore
    make-shared-flvector
@@ -314,6 +323,7 @@
    null?
    number->string
    number?
+   numerator
    object-name
    odd?
    open-input-bytes
@@ -382,6 +392,7 @@
    procedure?
    prop:arity-string
    prop:checked-procedure
+   prop:custom-print-quotable
    prop:custom-write
    prop:equal+hash
    prop:evt
@@ -392,8 +403,12 @@
    prop:output-port
    prop:input-port
    pseudo-random-generator?
+   pseudo-random-generator->vector
+   pseudo-random-generator-vector?
    random
+   random-seed
    raise
+   rational?
    read-accept-bar-quote
    read-byte
    read-bytes
@@ -410,6 +425,7 @@
    read-string
    read-string!
    real?
+   real-part
    real->floating-point-bytes
    regexp
    regexp-match
@@ -489,6 +505,9 @@
    system-library-subpath
    system-path-convention-type
    system-type
+   thread-cell?
+   thread-cell-ref
+   thread-cell-set!
    thread-group?
    thread-receive-evt
    thread-resume
@@ -507,6 +526,8 @@
    vector
    vector->immutable-vector
    vector->list
+   vector->pseudo-random-generator
+   vector->pseudo-random-generator!
    vector-copy!
    vector-immutable
    vector-length

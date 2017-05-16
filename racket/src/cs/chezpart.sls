@@ -34,7 +34,8 @@
                            exit-handler
                            equal?
                            vector? mutable-vector? vector-length vector-ref vector-set!
-                           vector-copy vector-fill! vector->immutable-vector)
+                           vector-copy vector-fill! vector->immutable-vector
+                           random random-seed)
                    [make-parameter chez:make-parameter]
                    [void chez:void]
                    [date-second chez:date-second]
@@ -51,7 +52,6 @@
                    [substring chez:substring]
                    [gensym chez:gensym]
                    [symbol->string chez:symbol->string]
-                   [random chez:random]
                    [fprintf chez:fprintf]
                    [current-error-port chez:current-error-port]
                    [string->number chez:string->number]

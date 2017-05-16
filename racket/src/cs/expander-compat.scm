@@ -304,14 +304,6 @@
 (define current-load-extension
   (make-parameter (lambda args (error "no extensions"))))
 
-(define string->number
-  (case-lambda [(s) (string->number s 10 #f 'decimal-as-inexact)]
-               [(s radix) (string->number s radix #f 'decimal-as-inexact)]
-               [(s radix mode) (string->number s radix mode 'decimal-as-inexact)]
-               [(s radix mode decimal)
-                ;; FIXME
-                (chez:string->number s radix)]))
-
 ;; ----------------------------------------
 
 ;; The environment is used to evaluate linklets, so all
