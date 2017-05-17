@@ -245,11 +245,6 @@
 (define (procedure-rename p name)
   p)
 
-(define (chaperone-struct s . args) s)
-(define (impersonate-struct s . args) s)
-
-(define (impersonator-property? v) #f)
-
 (define (make-hash-placeholder v) #f)
 (define (make-hasheq-placeholder v) #f)
 (define (make-hasheqv-placeholder v) #f)
@@ -533,9 +528,6 @@
    procedure-reduce-arity
    procedure->method
    procedure-rename
-
-   chaperone-struct
-   impersonate-struct
 
    make-hash-placeholder
    make-hasheq-placeholder

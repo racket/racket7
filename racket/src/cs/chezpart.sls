@@ -8,7 +8,6 @@
            (rename (except (chezscheme)
                            sort vector-sort vector-sort!
                            force delay identifier?
-                           memv memq
                            output-port-buffer-mode
                            read-char peek-char char-ready?
                            make-input-port make-output-port
@@ -60,5 +59,7 @@
                    [directory-list chez:directory-list]
                    [filter chez:filter]
                    [member chez:member]
+                   [memv chez:memv]
+                   [memq chez:memq]
                    [raise chez:raise]
                    [exit chez:exit]))))

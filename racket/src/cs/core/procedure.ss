@@ -407,18 +407,38 @@
   (struct-property-set! prop:procedure
                         (record-type-descriptor position-based-accessor)
                         (lambda (pba s p)
-                          (if (and (record? s (position-based-accessor-rtd pba))
-                                   (< p (position-based-accessor-field-count pba)))
-                              (unsafe-struct-ref s (+ p (position-based-accessor-offset pba)))
-                              (error 'struct-ref "bad access"))))
+                          (cond
+                           [(and (record? s (position-based-accessor-rtd pba))
+                                 (< p (position-based-accessor-field-count pba)))
+                            (unsafe-struct-ref s (+ p (position-based-accessor-offset pba)))]
+                           [(and (impersonator? s)
+                                 (record? (impersonator-val s) (position-based-accessor-rtd pba))
+                                 (< p (position-based-accessor-field-count pba)))
+                            (impersonate-ref (lambda (s)
+                                               (unsafe-struct-ref s (+ p (position-based-accessor-offset pba))))
+                                             (position-based-accessor-rtd pba)
+                                             p
+                                             s)]
+                           [else (error 'struct-ref "bad access")])))
 
   (struct-property-set! prop:procedure
                         (record-type-descriptor position-based-mutator)
                         (lambda (pbm s p v)
-                          (if (and (record? s (position-based-mutator-rtd pbm))
-                                   (< p (position-based-mutator-field-count pbm)))
-                              (unsafe-struct-set! s (+ p (position-based-mutator-offset pbm)) v)
-                              (error 'struct-set! "bad assignment"))))
+                          (cond
+                           [(and (record? s (position-based-mutator-rtd pbm))
+                                 (< p (position-based-mutator-field-count pbm)))
+                            (unsafe-struct-set! s (+ p (position-based-mutator-offset pbm)) v)]
+                           [(and (impersonator? s)
+                                 (record? (impersonator-val s) (position-based-mutator-rtd pbm))
+                                 (< p (position-based-mutator-field-count pbm)))
+                            (impersonate-set! (lambda (s v)
+                                                (unsafe-struct-set! s (+ p (position-based-mutator-offset pbm)) v))
+                                              (position-based-mutator-rtd pbm)
+                                              p
+                                              s
+                                              v)]
+                           [else
+                            (error 'struct-set! "bad assignment")])))
 
   (struct-property-set! prop:procedure
                         (record-type-descriptor named-procedure)

@@ -1,21 +1,66 @@
 (define-record struct-type-prop (name guard supers))
 
 (define rtd-props (make-weak-eq-hashtable))
+(define rtd-immutables (make-weak-eq-hashtable))
 (define prefabs #f)
+(define property-accessors (make-weak-eq-hashtable))
 
 (define make-struct-type-property
   (case-lambda
     [(name) (make-struct-type-property name #f '() #f)]
     [(name guard) (make-struct-type-property name guard '() #f)]
     [(name guard supers) (make-struct-type-property name guard supers #f)]
-    [(name guard supers can-inpersonate?)
-     (let ([st (make-struct-type-prop name guard supers)])
-       (values st
-               (lambda (v)
-                 (and (record? v)
-                      (not (eq? none (struct-property-ref st (record-rtd v) none)))))
-               (lambda (v)
-                 (struct-property-ref st (record-rtd v) #f))))]))
+    [(name guard supers can-impersonate?)
+     (let* ([st (make-struct-type-prop name guard supers)]
+            [pred (lambda (v)
+                    (let* ([v (strip-impersonator v)]
+                           [rtd (if (record-type-descriptor? v)
+                                    v
+                                    (and (record? v)
+                                         (record-rtd v)))])
+                      (and rtd
+                           (not (eq? none (struct-property-ref st rtd none))))))]
+            [fail (lambda (v)
+                    (raise-argument-error (string->symbol (string-append
+                                                           (symbol->string name)
+                                                           "-ref"))
+                                          (string-append
+                                           (symbol->string name)
+                                           "?")
+                                          v))])
+       (letrec ([acc (lambda (v)
+                       (cond
+                        [(and (impersonator? v)
+                              (pred v))
+                         (impersonate-struct-or-property-ref acc #f acc v)]
+                        [else
+                         (let* ([rtd (if (record-type-descriptor? v)
+                                         v
+                                         (and (record? v)
+                                              (record-rtd v)))])
+                           (if rtd
+                               (let ([v (struct-property-ref st rtd none)])
+                                 (if (eq? v none)
+                                     (fail v)
+                                     v))
+                               (fail v)))]))])
+         (hashtable-set! property-accessors
+                         acc
+                         (cons pred can-impersonate?))
+         (values st
+                 pred
+                 acc)))]))
+
+(define (struct-type-property-accessor-procedure? v)
+  (and (procedure? v)
+       (hashtable-ref property-accessors v #f)
+       #t))
+
+(define (struct-type-property-accessor-procedure-pred v)
+  (car (hashtable-ref property-accessors v #f)))
+
+(define (struct-type-property-accessor-procedure-can-impersonate? v)
+  (cdr (hashtable-ref property-accessors v #f)))
 
 (define (struct-property-ref prop rtd default)
   (getprop (record-type-uid rtd) prop default))
@@ -159,7 +204,10 @@
      (let ([parent-props
             (if parent-rtd
                 (hashtable-ref rtd-props parent-rtd '())
-                '())])
+                '())]
+           [all-immutables (if (integer? proc-spec)
+                               (cons proc-spec immutables)
+                               immutables)])
        (when (not parent-rtd)
          (record-type-equal-procedure rtd default-struct-equal?)
          (record-type-hash-procedure rtd default-struct-hash))
@@ -168,6 +216,7 @@
                                        (if proc-spec
                                            (cons prop:procedure props)
                                            props)))
+       (hashtable-set! rtd-immutables rtd all-immutables)
        ;; Copy parent properties for this type:
        (for-each (lambda (prop)
                    (struct-property-set! prop rtd (struct-property-ref prop parent-rtd #f)))
@@ -188,9 +237,7 @@
                                                  auto-fields
                                                  (make-position-based-accessor rtd parent-count (+ fields auto-fields))
                                                  (make-position-based-mutator rtd parent-count (+ fields auto-fields))
-                                                 (if (integer? proc-spec)
-                                                     (cons proc-spec immutables)
-                                                     immutables)
+                                                 all-immutables
                                                  parent-rtd
                                                  #f)))
                                   val))])
@@ -211,34 +258,59 @@
 (define make-struct-field-accessor
   (case-lambda
     [(pba pos)
-     (record-field-accessor (position-based-accessor-rtd pba)
-                            (+ pos (position-based-accessor-offset pba)))]
+     (let* ([rtd (position-based-accessor-rtd pba)]
+            [p (record-field-accessor rtd
+                                      (+ pos (position-based-accessor-offset pba)))]
+           [wrap-p
+            (lambda (v)
+              (if (impersonator? v)
+                  (impersonate-ref p rtd pos v)
+                  (p v)))])
+       (register-struct-field-accessor! wrap-p rtd pos)
+       wrap-p)]
     [(pba pos name)
      (make-struct-field-accessor pba pos)]))
+
 (define make-struct-field-mutator
   (case-lambda
-    [(pbm pos)
-     (record-field-mutator (position-based-mutator-rtd pbm)
-                           (+ pos (position-based-mutator-offset pbm)))]
-    [(pbm pos name)
-     (make-struct-field-mutator pbm pos)]))
+   [(pbm pos)
+    (let* ([rtd (position-based-mutator-rtd pbm)]
+           [p (record-field-mutator rtd
+                                    (+ pos (position-based-mutator-offset pbm)))]
+           [wrap-p
+            (lambda (v a)
+              (if (impersonator? v)
+                  (impersonate-set! p rtd pos v a)
+                  (p v a)))])
+      (register-struct-field-mutator! wrap-p rtd pos)
+      wrap-p)]
+   [(pbm pos name)
+    (make-struct-field-mutator pbm pos)]))
 
 (define struct-field-accessors (make-weak-eq-hashtable))
 (define struct-field-mutators (make-weak-eq-hashtable))
 
-(define (register-struct-field-accessor! p)
-  (hashtable-set! struct-field-accessors p #t))
+(define (register-struct-field-accessor! p rtd pos)
+  (hashtable-set! struct-field-accessors p (cons rtd pos)))
 
-(define (register-struct-field-mutator! p)
-  (hashtable-set! struct-field-mutators p #t))
+(define (register-struct-field-mutator! p rtd pos)
+  (hashtable-set! struct-field-mutators p (cons rtd pos)))
 
 (define (struct-accessor-procedure? v)
   (and (procedure? v)
-       (hashtable-ref struct-field-accessors v #f)))
+       (hashtable-ref struct-field-accessors (if (impersonator? v) (impersonator-val v) v) #f)
+       #t))
 
 (define (struct-mutator-procedure? v)
   (and (procedure? v)
-       (hashtable-ref struct-field-mutators v #f)))
+       (hashtable-ref struct-field-mutators (if (impersonator? v) (impersonator-val v) v) #f)
+       #t))
+
+(define (struct-accessor-procedure-rtd+pos v)
+  (hashtable-ref struct-field-accessors v #f))
+
+(define (struct-mutator-procedure-rtd+pos v)
+  (hashtable-ref struct-field-mutators v #f))
 
 (define struct? record?)
 (define struct-type? record-type-descriptor?)
@@ -256,6 +328,15 @@
     (if p-rtd
         (struct-type-field-count p-rtd)
         0)))
+
+(define (struct-type-field-mutable? rtd pos)
+  (let ([immutables (hashtable-ref rtd-immutables rtd '())])
+    (not (chez:memv pos immutables))))
+
+(define (struct-info st)
+  (unless (struct-type? st)
+    (raise-argument-error 'struct-info "struct-type?" st))
+  #f)
 
 (define (unsafe-struct-ref s i)
   (#3%vector-ref s i))

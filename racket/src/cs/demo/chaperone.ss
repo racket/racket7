@@ -203,3 +203,54 @@
                              (lambda (x) (values 'mark 'a 'b x)))
         1)
        '((b) 1))
+
+;; ----------------------------------------
+
+(let ()
+  (define-values (prop:x x? x-ref) (make-struct-type-property 'x))
+  (define-values (struct:s-a make-s-a s-a? s-a-ref s-a-set!)
+    (make-struct-type 'x #f 2 0 #f (list (cons prop:x 5))))
+  (define s-a-x (make-struct-field-accessor s-a-ref 0 'x))
+  (define s-a-y (make-struct-field-accessor s-a-ref 1 'y))
+  (define set-s-a-x! (make-struct-field-mutator s-a-set! 0 'x))
+  (define counter 0)
+
+  (define s1 (make-s-a 1 2))
+  (define s1c (chaperone-struct s1
+                                s-a-x (lambda (s v) (set! counter (add1 counter)) v)
+                                x-ref (lambda (s v) (set! counter (add1 counter)) v)))
+  (define s1i (impersonate-struct s1
+                                  s-a-x (lambda (s v) (list v))
+                                  set-s-a-x! (lambda (s v) (box v))))
+
+  (check (chaperone-struct 7) 7)
+  (check (impersonate-struct 7) 7)
+
+  (check (impersonator-of? s1c s1) #t)
+
+  (check (s-a-x s1) 1)
+  (check (s-a-y s1) 2)
+
+  (check counter 0)
+  (check (s-a-x s1c) 1)
+  (check counter 1)
+  (check (s-a-y s1c) 2)
+  (check counter 1)
+
+  (check (s-a-x s1i) '(1))
+  (check (s-a-y s1i) 2)
+  (check (set-s-a-x! s1i 0) (void))
+  (check (s-a-x s1i) '(#&0))
+
+  (check counter 1)
+  (check (|#%app| s-a-ref s1c 1) 2)
+  (check counter 1)
+  (check (|#%app| s-a-ref s1c 0) '#&0)
+  (check counter 2)
+
+  (check (|#%app| x-ref s1) 5)
+  (check counter 2)
+  (check (|#%app| x-ref s1c) 5)
+  (check counter 3)
+
+  (void))

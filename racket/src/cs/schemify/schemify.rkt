@@ -269,7 +269,7 @@
                             (define ,acc/mut
                               (lambda (s) (if (,raw-s? s)
                                               (,raw-acc/mut s)
-                                              (pariah (impersonate-ref ,raw-s? ,raw-acc/mut s))))))
+                                              (pariah (impersonate-ref ,raw-acc/mut ,struct:s ,pos s))))))
                          raw-def)]
                     [`(make-struct-field-mutator ,(? (lambda (v) (wrap-eq? v -set!))) ,pos ,_)
                      (define raw-def `(define ,raw-acc/mut (record-mutator ,struct:s ,pos)))
@@ -279,7 +279,7 @@
                             (define ,acc/mut
                               (lambda (s v) (if (,raw-s? s)
                                                 (,raw-acc/mut s v)
-                                                (pariah (impersonate-set! ,raw-s? ,raw-acc/mut s v))))))
+                                                (pariah (impersonate-set! ,raw-acc/mut ,struct:s ,pos s v))))))
                          raw-def)]
                     [`,_ (error "oops")]))
               (define ,(gensym)
@@ -287,10 +287,10 @@
                   ,@(for/list ([acc/mut (in-list acc/muts)]
                                [make-acc/mut (in-list make-acc/muts)])
                       (match make-acc/mut
-                        [`(make-struct-field-accessor . ,_)
-                         `(register-struct-field-accessor! ,acc/mut)]
-                        [`(make-struct-field-mutator . ,_)
-                         `(register-struct-field-mutator! ,acc/mut)]
+                        [`(make-struct-field-accessor ,_ ,pos ,_)
+                         `(register-struct-field-accessor! ,acc/mut ,struct:s ,pos)]
+                        [`(make-struct-field-mutator ,_ ,pos ,_)
+                         `(register-struct-field-mutator! ,acc/mut ,struct:s ,pos)]
                         [`,_ (error "oops")]))
                   (void))))]
            [else

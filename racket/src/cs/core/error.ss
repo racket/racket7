@@ -114,7 +114,7 @@
    (exn:fail:contract
     (string-append (symbol->string who)
                    ": contract violation\n  expected: "
-                   what
+                   (reindent what (string-length "  expected: "))
                    "\n  " tag ": "
                    (error-value->string
                     (if pos (list-ref (cons arg args) pos) arg))
@@ -130,7 +130,24 @@
                                        (loop (sub1 pos) (cdr args)))])))
                        ""))
     (current-continuation-marks))))
-    
+
+(define (reindent s amt)
+  (let loop ([i (string-length s)] [s s] [end (string-length s)])
+    (cond
+     [(zero? i)
+      (if (= end (string-length s))
+          s
+          (substring s 0 end))]
+     [else
+      (let ([i (fx1- i)])
+        (cond
+         [(eqv? #\newline (string-ref s i))
+          (string-append
+           (loop i s (fx1+ i))
+           (make-string amt #\space)
+           (substring s (fx1+ i) end))]
+         [else
+          (loop i s end)]))])))
 
 (define (error-value->string v)
   ((|#%app| error-value->string-handler)

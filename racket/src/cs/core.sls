@@ -111,6 +111,7 @@
           impersonator-val
           impersonate-ref
           impersonate-set!
+          impersonator-property?
           make-impersonator-property
           impersonator-property-accessor-procedure?
 
@@ -142,6 +143,7 @@
           struct-type?
           struct-type
           struct-type-field-count
+          struct-info
           unsafe-struct-ref
           unsafe-struct-set!
           struct->vector
@@ -155,6 +157,8 @@
           prop:equal+hash
           inspector?
           inspector-superior?
+          impersonate-struct
+          chaperone-struct
 
           prop:object-name
           object-name
