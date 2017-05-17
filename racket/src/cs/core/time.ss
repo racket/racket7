@@ -1,3 +1,16 @@
+(define-struct date (second
+                     minute
+                     hour
+                     day
+                     month
+                     year
+                     week-day
+                     year-day
+                     dst?
+                     time-zone-offset))
+
+(define-struct date* date (nanosecond time-zone-name))
+
 (define (time->ms t)
   (+ (* 1000. (time-second t))
      (/ (time-nanosecond t) 1000000.)))

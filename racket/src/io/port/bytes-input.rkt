@@ -14,7 +14,9 @@
          peek-bytes
          peek-bytes!
          peek-bytes-avail!
-         peek-bytes-avail!*)
+         peek-bytes-avail!*
+
+         byte-ready?)
 
 (module+ internal
   (provide do-read-bytes!))

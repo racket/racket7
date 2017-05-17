@@ -25,7 +25,8 @@
          "file-position.rkt"
          "file-truncate.rkt"
          "flush-output.rkt"
-         "parameter.rkt")
+         "parameter.rkt"
+         "ready.rkt")
 
 (provide read-byte
          read-bytes
@@ -46,6 +47,9 @@
          peek-char
          peek-string
          peek-string!
+
+         byte-ready?
+         char-ready?
          
          write-bytes
          write-bytes-avail

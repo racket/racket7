@@ -322,30 +322,63 @@
     (chez:exit 1))
   ((error-escape-handler)))
 
+;; Convert a contination to a list of function-name and
+;; source information. Unfortuately, this traversal takes
+;; a while, so we limit it by `(error-print-context-length)`.
+;; (Even caching half-way up is not good enough; traversing
+;; a long continuation once takes a long time.)
+(define (continuation->context k)
+  (let ([i (inspect/object k)])
+    (let loop ([i i] [n (error-print-context-length)])
+      (cond
+       [(or (not (eq? (i 'type) 'continuation))
+            (zero? n))
+        '()]
+       [else
+        (let* ([name (let* ([c (i 'code)]
+                            [n (c 'name)])
+                       n)]
+               [desc
+                (call-with-values (lambda ()(i 'source-path))
+                  (case-lambda
+                   [()
+                    (and name (cons name #f))]
+                   [(path line col)
+                    (cons name (srcloc path line col #f #f))]
+                   [(path pos)
+                    (cons name (srcloc path #f #f pos #f))]))])
+          (let ([l (let ([depth (i 'depth)])
+                     (if (zero? depth)
+                         (loop (i 'link) (sub1 n))
+                         '()))])
+            (if desc
+                (cons desc l)
+                l)))]))))
+
 (define (default-error-display-handler msg v)
   (eprintf "~a" msg)
   (when (or (continuation-condition? v)
             (exn? v))
     (eprintf "\n  context...:")
-    (let loop ([i (inspect/object (if (exn? v)
-                                      (continuation-mark-set-k (exn-continuation-marks v))
-                                      (condition-continuation v)))]
-               [n 10])
-      (unless (or (zero? n)
-                  (not (eq? (i 'type) 'continuation)))
-        (call-with-values (lambda () (i 'source-path))
-          (case-lambda
-            [()
-             (let* ([c (i 'code)]
-                    [n (c 'name)])
-               (when n
-                 (eprintf "\n   ~a" n)))]
-            [(path line col)
-             (eprintf "\n   ~a:~a:~a" path line col)]
-            [(path pos)
-             (eprintf "\n   ~a::~a" path pos)]))
-        (unless (zero? (i 'depth))
-          (loop (i 'link) (sub1 n))))))
+    (let loop ([l (if (exn? v)
+                      (continuation-mark-set-context (exn-continuation-marks v))
+                      (continuation->context
+                       (condition-continuation v)))]
+               [n (error-print-context-length)])
+      (unless (or (null? l) (zero? n))
+        (let ([p (car l)])
+          (cond
+           [(car p) 
+            (eprintf "\n   ~a" (car p))]
+           [else
+            (let ([s (cdr p)])
+              (cond
+               [(and (srcloc-line s)
+                     (srcloc-column s))
+                (eprintf "\n   ~a:~a:~a" (srcloc-source s) (srcloc-line s) (srcloc-column s))]
+               [(srcloc-position s)
+                (eprintf "\n   ~a::~a" (srcloc-source s) (srcloc-position s))]))]))
+        (loop (cdr l) (sub1 n)))))
   (eprintf "\n"))
 
 (define (default-error-escape-handler)

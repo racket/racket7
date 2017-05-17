@@ -382,6 +382,25 @@
      "  received: " (number->string got-n))
     (current-continuation-marks))))
 
+(define (procedure-closure-contents-eq?	p1 p2)
+  (unless (procedure? p1)
+    (raise-argument-error 'procedure-closure-contents-eq? "procedure?" p1))
+  (unless (procedure? p2)
+    (raise-argument-error 'procedure-closure-contents-eq? "procedure?" p2))
+  (when (and (#%procedure? p1)
+             (#%procedure? p2))
+    (let* ([i1 (inspect/object p1)]
+           [i2 (inspect/object p2)]
+           [l1 (i2 'length)]
+           [l2 (i2 'length)])
+      (and (eq? ((i1 'code) 'value)
+                ((i2 'code) 'value))
+           (= l1 l2)
+           (let loop ([i 0])
+             (or (fx= i l1)
+                 (and (eq? (((i1 'ref i) 'ref) 'value) (((i2 'ref i) 'ref) 'value))
+                      (loop (fx1+ i)))))))))
+  
 ;; ----------------------------------------
 
 (define (set-primitive-applicables!)

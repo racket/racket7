@@ -10,7 +10,7 @@
                            force delay identifier?
                            memv memq
                            output-port-buffer-mode
-                           read-char peek-char
+                           read-char peek-char char-ready?
                            make-input-port make-output-port
                            close-input-port close-output-port
                            list? input-port? output-port?

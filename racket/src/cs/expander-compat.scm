@@ -44,6 +44,10 @@
 (define string-locale-downcase string-downcase)
 
 (define (char-graphic? x) #f)
+(define (char-blank? x) #f)
+(define (char-iso-control? x) #f)
+(define (char-punctuation? x) #f)
+(define (char-symbolic? x) #f)
 
 (define (system-library-subpath) "x86_64-macosx/3m")
 (define (system-path-convention-type) 'unix)
@@ -206,6 +210,7 @@
    [(car p) (cdr p)]
    [(cdr p) (set-cdr! p #f) #f]
    [else #f]))
+(define (ephemeron? x) (weak-pair? x))
 
 (define (thread-resume t) (void))
 (define (thread-send t v) t)
@@ -445,6 +450,10 @@
    string-locale-downcase
 
    char-graphic?
+   char-blank?
+   char-iso-control?
+   char-punctuation?
+   char-symbolic?
 
    system-type
    system-library-subpath

@@ -4,6 +4,9 @@
 (define (exact-positive-integer? n) (and (exact-integer? n) (> n 0)))
 (define (byte? n) (and (exact-integer? n) (>= n 0) (<= n 255)))
 
+(define (double-flonum? x) (flonum? x))
+(define (single-flonum? x) #f)
+
 (define arithmetic-shift bitwise-arithmetic-shift)
 
 (define (system-big-endian?)

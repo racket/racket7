@@ -7,8 +7,10 @@
           call-with-current-continuation
           call-with-composable-continuation
           call-with-escape-continuation
+          continuation?
 
           make-continuation-prompt-tag
+          continuation-prompt-tag?
           default-continuation-prompt-tag
           root-continuation-prompt-tag
           call-with-continuation-prompt
@@ -22,6 +24,7 @@
           continuation-mark-set-first
           continuation-mark-set->list
           continuation-mark-set->list*
+          continuation-mark-set->context
           current-continuation-marks
           continuation-marks
           continuation-mark-set?
@@ -95,6 +98,7 @@
           procedure-arity-includes?
           procedure-arity
           procedure-extract-target
+          procedure-closure-contents-eq?
 
           equal?
 
@@ -238,6 +242,8 @@
           exact-nonnegative-integer?
           exact-positive-integer?
           byte?
+          double-flonum?
+          single-flonum?
           arithmetic-shift
           integer->integer-bytes
           integer-bytes->integer

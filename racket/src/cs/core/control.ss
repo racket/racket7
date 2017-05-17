@@ -642,7 +642,7 @@
 
 ;; ----------------------------------------
 
-(define-record continuation-mark-set (mark-chain k))
+(define-record continuation-mark-set (mark-chain context))
 (define-record mark-stack-frame (prev   ; prev frame
                                  k      ; continuation for this frame
                                  table  ; hamt mapping keys to values
@@ -975,16 +975,21 @@
                              (vector-set! tmp i v)
                              (key-loop (cdr keys) (add1 i) #t)]))])))]))]))])))]))
 
+(define (continuation-mark-set->context marks)
+  (unless (continuation-mark-set? marks)
+    (raise-argument-error 'continuation-mark-set->context "continuation-mark-set?" marks))
+  (continuation-mark-set-context marks))
+
 (define current-continuation-marks
   (case-lambda
     [() (current-continuation-marks the-default-continuation-prompt-tag)]
     [(tag)
      (unless (continuation-prompt-tag? tag)
        (raise-argument-error 'current-continuation-marks "continuation-prompt-tag?" tag))
-     ;; For now, keep `k` for error context:
      (call/cc
       (lambda (k)
-        (make-continuation-mark-set (prune-mark-chain-suffix tag (current-mark-chain)) k)))]))
+        (make-continuation-mark-set (prune-mark-chain-suffix tag (current-mark-chain))
+                                    (continuation->context k))))]))
 
 (define continuation-marks
   (case-lambda

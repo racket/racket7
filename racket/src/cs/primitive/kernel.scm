@@ -37,6 +37,7 @@
    break-enabled-key
    break-thread
    build-path
+   byte-ready?
    byte-pregexp
    byte-pregexp?
    byte-regexp
@@ -70,6 +71,7 @@
    call-with-continuation-prompt
    call-with-current-continuation
    call-with-escape-continuation
+   call-with-immediate-continuation-mark
    call-with-input-file
    call-with-output-file
    call-with-semaphore
@@ -77,6 +79,7 @@
    ceiling
    channel?
    channel-put-evt
+   chaperone?
    chaperone-of?
    chaperone-procedure
    chaperone-procedure*
@@ -87,7 +90,15 @@
    char-foldcase
    char-general-category
    char-graphic?
+   char-blank?
+   char-iso-control?
    char-numeric?
+   char-ready?
+   char-lower-case?
+   char-punctuation?
+   char-symbolic?
+   char-title-case?
+   char-upper-case?
    char-upcase
    char-whitespace?
    char<=?
@@ -102,10 +113,18 @@
    close-input-port
    close-output-port
    collect-garbage
+   complex?
    compile-enforce-module-constants
    complete-path?
+   continuation-marks
+   continuation-mark-set?
    continuation-mark-set-first
+   continuation-mark-set->list
+   continuation-mark-set->list*
+   continuation-mark-set->context
    continuation-prompt-available?
+   continuation-prompt-tag?
+   continuation?
    current-code-inspector
    current-command-line-arguments
    current-compile
@@ -136,6 +155,8 @@
    current-seconds
    current-thread
    current-thread-group
+   custodian?
+   custodian-box?
    custom-print-quotable?
    custom-print-quotable-accessor
    custom-write?
@@ -146,11 +167,13 @@
    directory-exists?
    directory-list
    display
+   double-flonum?
    dynamic-wind
    environment-variables-ref
    environment-variables-set!
    eof
    eof-object?
+   ephemeron?
    ephemeron-value
    eq-hash-code
    eq?
@@ -239,6 +262,7 @@
    impersonate-procedure
    impersonate-procedure*
    impersonate-struct
+   impersonator?
    impersonator-of?
    impersonator-property?
    inexact?
@@ -289,6 +313,7 @@
    make-immutable-hash
    make-immutable-hasheq
    make-immutable-hasheqv
+   make-impersonator-property
    make-inspector
    make-logger
    make-log-receiver
@@ -390,6 +415,7 @@
    procedure-rename
    procedure->method
    procedure?
+   procedure-closure-contents-eq?
    prop:arity-string
    prop:checked-procedure
    prop:custom-print-quotable
@@ -455,6 +481,7 @@
    set-box!
    shared-flvector
    simplify-path
+   single-flonum?
    sleep
    split-path
    string

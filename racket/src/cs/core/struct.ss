@@ -472,17 +472,4 @@
 
 (define-struct srcloc (source line column position span))
 
-(define-struct date (second
-                     minute
-                     hour
-                     day
-                     month
-                     year
-                     week-day
-                     year-day
-                     dst?
-                     time-zone-offset))
-
-(define-struct date* date (nanosecond time-zone-name))
-
 (define-struct arity-at-least (value))

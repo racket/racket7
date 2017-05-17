@@ -13,6 +13,7 @@
          "sync.rkt"
          "system-idle-evt.rkt"
          "schedule.rkt"
+         "custodian.rkt"
          "api.rkt"
          "unsafe.rkt")
 
@@ -61,7 +62,10 @@
          nack-guard-evt
 
          system-idle-evt
-         
+
+         custodian?
+         custodian-box?
+
          check-for-break
          break-enabled-key
 
