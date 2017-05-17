@@ -30,14 +30,16 @@
       (namespace-require 'racket/fixnum))
     (for/fold ([known-procedures null] [known-constants null]) ([s (in-list (namespace-mapped-symbols ns))])
       (with-handlers ([exn:fail? (lambda (x) (values known-procedures known-constants))])
-        (cond
-         [(procedure? (eval s ns))
-          (values (cons s known-procedures) known-constants)]
-         [(or (memq s known-struct-type-property/immediate-guards)
-              (assq s known-constructors))
-          (values known-procedures known-constants)]
-         [else
-          (values known-procedures (cons s known-constants))])))))
+        (let ([v (eval s ns)])
+          (cond
+            [(and (procedure? v)
+                  (not (parameter? v)))
+             (values (cons s known-procedures) known-constants)]
+            [(or (memq s known-struct-type-property/immediate-guards)
+                 (assq s known-constructors))
+             (values known-procedures known-constants)]
+            [else
+             (values known-procedures (cons s known-constants))]))))))
 
 (module+ main
   (require racket/pretty)

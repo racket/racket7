@@ -650,6 +650,7 @@
 
 ;; A mark stack is made of marks-stack frames:
 (define *mark-stack* #f)
+(define ($current-mark-stack) *mark-stack*)
 
 (define-syntax with-continuation-mark
   (syntax-rules ()

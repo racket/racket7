@@ -135,7 +135,7 @@
            (#%vector? (impersonator-val orig)))
       (let loop ([o orig])
         (cond
-         [(#%vector? o) (#2%vector-ref o idx)]
+         [(#%vector? o) (#%vector-ref o idx)]
          [(vector-chaperone? o)
           (let* ([val (loop (impersonator-next o))]
                  [new-val (if (vector*-chaperone? o)

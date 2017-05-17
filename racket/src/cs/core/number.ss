@@ -2,6 +2,7 @@
 (define (exact-integer? n) (and (integer? n) (exact? n)))
 (define (exact-nonnegative-integer? n) (and (exact-integer? n) (>= n 0)))
 (define (exact-positive-integer? n) (and (exact-integer? n) (> n 0)))
+(define (inexact-real? n) (and (real? n) (inexact? n)))
 (define (byte? n) (and (exact-integer? n) (>= n 0) (<= n 255)))
 
 (define (double-flonum? x) (flonum? x))

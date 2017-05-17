@@ -43,27 +43,6 @@
 
 ;; ----------------------------------------
 
-(define current-inspector
-  (make-parameter root-inspector
-                  (lambda (v)
-                    (unless (inspector? v)
-                      (raise-argument-error 'current-inspector
-                                            "inspector?"
-                                            v))
-                    v)))
-
-(define make-inspector
-  (case-lambda
-    [() (new-inspector (current-inspector))]
-    [(i)
-     (unless (inspector? i)
-       (raise-argument-error 'current-inspector
-                             "inspector?"
-                             i))
-     (new-inspector i)]))
-
-;; ----------------------------------------
-
 (struct exn (message continuation-marks))
 (struct exn:break exn (continuation))
 (struct exn:break:hang-up exn:break ())
@@ -154,9 +133,9 @@
     
 
 (define (error-value->string v)
-  ((error-value->string-handler)
+  ((|#%app| error-value->string-handler)
    v
-   (error-print-width)))
+   (|#%app| error-print-width)))
 
 (define raise-argument-error
   (case-lambda
@@ -221,9 +200,9 @@
        (cond
         [(null? more) '()]
         [else
-         (cons ((error-value->string-handler)
+         (cons ((|#%app| error-value->string-handler)
                 (cadr more)
-                (error-print-width))
+                (|#%app| error-print-width))
                (loop (cdr more)))])))
     (current-continuation-marks))))
 
@@ -316,11 +295,11 @@
 
 (define (default-uncaught-exception-handler exn)
   (unless (exn:break:hang-up? exn)
-    ((error-display-handler) (exn->string exn) exn))
+    ((|#%app| error-display-handler) (exn->string exn) exn))
   (when (or (exn:break:hang-up? exn)
             (exn:break:terminate? exn))
     (chez:exit 1))
-  ((error-escape-handler)))
+  ((|#%app| error-escape-handler)))
 
 ;; Convert a contination to a list of function-name and
 ;; source information. Unfortuately, this traversal takes
@@ -329,7 +308,7 @@
 ;; a long continuation once takes a long time.)
 (define (continuation->context k)
   (let ([i (inspect/object k)])
-    (let loop ([i i] [n (error-print-context-length)])
+    (let loop ([i i] [n (|#%app| error-print-context-length)])
       (cond
        [(or (not (eq? (i 'type) 'continuation))
             (zero? n))
@@ -364,7 +343,7 @@
                       (continuation-mark-set-context (exn-continuation-marks v))
                       (continuation->context
                        (condition-continuation v)))]
-               [n (error-print-context-length)])
+               [n (|#%app| error-print-context-length)])
       (unless (or (null? l) (zero? n))
         (let ([p (car l)])
           (cond
@@ -449,7 +428,7 @@
          (let loop ([hs hs])
            (cond
             [(null? hs)
-             ((uncaught-exception-handler) v)]
+             ((|#%app| uncaught-exception-handler) v)]
             [else
              (let ([h (car hs)]
                    [hs (cdr hs)])

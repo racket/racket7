@@ -11,7 +11,7 @@
    (define-syntax-rule (check a b)
      (unless (equal? a b)
        (error 'failed "~s: ~e vs. ~e" 'b a b)))
-   
+
    ;; Check semaphores
    (check #t (thread? (current-thread)))
    (check #t (evt? (current-thread)))
@@ -95,6 +95,12 @@
    (define ts (thread (lambda () (sleep 0.1))))
    (check ts (sync ts))
    (check #t ((current-inexact-milliseconds) . >= . (+ now2 0.1)))
+
+   ;; Check `alarm-evt`
+   (define now2+ (current-inexact-milliseconds))
+   (define alm (alarm-evt (+ 0.1 now2+)))
+   (check alm (sync alm))
+   (check #t ((current-inexact-milliseconds) . >= . (+ now2+ 0.1)))
 
    ;; Check system-idle event
    (define v 0)

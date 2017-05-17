@@ -11,7 +11,8 @@
          channel-put
          channel-get
          
-         channel-put-evt)
+         channel-put-evt
+         channel-put-evt?)
 
 (struct channel (get-queue
                  put-queue)

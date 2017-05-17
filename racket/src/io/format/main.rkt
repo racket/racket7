@@ -6,8 +6,9 @@
          "printf.rkt")
 
 (provide format
+         fprintf
          printf
-         fprintf)
+         eprintf)
 
 (define (format fmt . args)
   (check 'format string? fmt)
@@ -15,11 +16,15 @@
   (do-printf 'printf o fmt args)
   (get-output-string o))
 
-(define (printf fmt . args)
-  (check 'printf string? fmt)
-  (do-printf 'printf (current-output-port) fmt args))
-
 (define (fprintf o fmt . args)
   (check 'fprintf output-port? o)
   (check 'fprintf string? fmt)
   (do-printf 'fprintf o fmt args))
+
+(define (printf fmt . args)
+  (check 'printf string? fmt)
+  (do-printf 'printf (current-output-port) fmt args))
+
+(define (eprintf fmt . args)
+  (check 'eprintf string? fmt)
+  (do-printf 'eprintf (current-error-port) fmt args))

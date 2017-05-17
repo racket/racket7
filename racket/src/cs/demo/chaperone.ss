@@ -84,6 +84,19 @@
 
 ;; ----------------------------------------
 
+(define b1 (box 1))
+(define b1c (chaperone-box b1 (lambda (b v) v) (lambda (b v) v)))
+(define b1i (impersonate-box b1 (lambda (b v) (add1 v)) (lambda (b v) (sub1 v))))
+
+(check (unbox b1) 1)
+(check (set-box! b1 0) (void))
+(check (unbox b1) 0)
+
+(check (unbox b1c) 0)
+(check (unbox b1i) 1)
+
+;; ----------------------------------------
+
 (define (f x y)
   (list x y))
 

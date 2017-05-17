@@ -35,7 +35,8 @@
                            equal?
                            vector? mutable-vector? vector-length vector-ref vector-set!
                            vector-copy vector-fill! vector->immutable-vector
-                           random random-seed)
+                           random random-seed
+                           box? unbox set-box!)
                    [make-parameter chez:make-parameter]
                    [void chez:void]
                    [date-second chez:date-second]

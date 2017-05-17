@@ -28,6 +28,7 @@
           current-continuation-marks
           continuation-marks
           continuation-mark-set?
+          $current-mark-stack
 
           make-engine
           engine-block
@@ -40,6 +41,7 @@
 
           parameterization-key
           make-parameter
+          parameter?
           extend-parameterization
           parameterization?
 
@@ -110,6 +112,7 @@
           impersonate-ref
           impersonate-set!
           make-impersonator-property
+          impersonator-property-accessor-procedure?
 
           impersonate-procedure
           chaperone-procedure
@@ -191,7 +194,7 @@
           bytes-ref bytes-set!
           bytes->list list->bytes
           bytes->immutable-bytes
-          bytes-copy! bytes-copy
+          bytes-copy! bytes-copy bytes-fill!
           bytes=? bytes<? bytes>? bytes<=? bytes>=?
           bytes-append
           subbytes
@@ -224,8 +227,11 @@
           chaperone-vector
           chaperone-vector*
 
+          box? unbox set-box!
           box-cas!
           make-weak-box weak-box? weak-box-value
+          impersonate-box
+          chaperone-box
 
           immutable?
 
@@ -241,6 +247,7 @@
           exact-integer?
           exact-nonnegative-integer?
           exact-positive-integer?
+          inexact-real?
           byte?
           double-flonum?
           single-flonum?
@@ -363,6 +370,11 @@
           extfltruncate extflround extflfloor extflceiling
           extflexp extfllog extflexpt
 
+          unsafe-unbox
+          unsafe-unbox*
+          unsafe-set-box!
+          unsafe-set-box*!
+
           unsafe-vector-ref
           unsafe-vector-set!
           unsafe-vector*-ref
@@ -437,4 +449,5 @@
   (set-impersonator-applicables!)
   (set-impersonator-hash!)
   (set-procedure-impersonator-hash!)
-  (set-vector-impersonator-hash!))
+  (set-vector-impersonator-hash!)
+  (set-box-impersonator-hash!))

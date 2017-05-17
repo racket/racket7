@@ -28,13 +28,17 @@
             key
             #f))
 
+(define-record-type (parameter create-parameter parameter?)
+  (fields proc))
+
 (define make-parameter
   (case-lambda
     [(v) (make-parameter v #f)]
     [(v guard)
      (let ([default-c (make-thread-cell v #t)])
        (define self
-         (case-lambda
+         (create-parameter
+          (case-lambda
            [() 
             (let ([c (or (parameter-cell self)
                          default-c)])
@@ -44,5 +48,17 @@
                          default-c)])
               (thread-cell-set! c (if guard
                                       (guard v)
-                                      v)))]))
+                                      v)))])))
        self)]))
+
+;; ----------------------------------------
+
+(define current-inspector
+  (make-parameter root-inspector
+                  (lambda (v)
+                    (unless (inspector? v)
+                      (raise-argument-error 'current-inspector
+                                            "inspector?"
+                                            v))
+                    v)))
+

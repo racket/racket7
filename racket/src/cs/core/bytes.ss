@@ -20,6 +20,11 @@
        (raise-argument-error 'bytes-set! "(and/c bytes? (not/c immutable?))" dest))
      (bytevector-copy! src s-start dest d-start (- s-end s-start))]))
 
+(define (bytes-fill! bstr b)
+  (unless (byte? b)
+    (raise-argument-error 'bytes-fill! "byte?" b))
+  (bytevector-fill! bstr b))
+
 (define bytes-copy bytevector-copy)
 
 (define bytes=? bytevector=?)

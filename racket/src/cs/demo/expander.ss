@@ -1,4 +1,5 @@
-(import (expander)
+(import (core)
+        (expander)
         (io))
 
 (define (show v) (write v) (newline))
@@ -30,9 +31,9 @@
      ;; (run "'x")
      (void))
    
-   (current-library-collection-links
+   (|#%app| current-library-collection-links
     (find-library-collection-links))
-   (current-library-collection-paths
+   (|#%app| current-library-collection-paths
     (find-library-collection-paths))
      
    (time (eval '(|#%require| racket/base)))

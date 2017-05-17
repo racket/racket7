@@ -86,4 +86,4 @@
   (include "compiled/io.scm")
 
   ;; Initialize:
-  (1/current-directory (current-directory)))
+  (|#%app| 1/current-directory (current-directory)))

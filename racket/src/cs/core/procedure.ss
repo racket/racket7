@@ -370,13 +370,9 @@
      ": arity mismatch;\n"
      " expected number of results not received from wrapper on the original\n"
      " procedure's arguments\n"
-     "  original: " ((error-value->string-handler)
-                     proc
-                     (error-print-width))
+     "  original: " (error-value->string proc)
      "\n"
-     "  wrapper: " ((error-value->string-handler)
-                    wrapper
-                    (error-print-width))
+     "  wrapper: " (error-value->string wrapper)
      "\n"
      "  expected: " (number->string expected-n) " or more\n"
      "  received: " (number->string got-n))
@@ -404,6 +400,10 @@
 ;; ----------------------------------------
 
 (define (set-primitive-applicables!)
+  (struct-property-set! prop:procedure
+                        (record-type-descriptor parameter)
+                        0)
+
   (struct-property-set! prop:procedure
                         (record-type-descriptor position-based-accessor)
                         (lambda (pba s p)

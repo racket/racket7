@@ -21,12 +21,14 @@
          thread-wait
          thread-suspend
          (rename-out [get-thread-dead-evt thread-dead-evt])
+         thread-dead-evt?
          
          break-thread
          kill-thread
          
          sleep
-         
+
+         break-enabled
          check-for-break
          break-enabled-key
          current-break-suspend
@@ -196,6 +198,9 @@
         #:property prop:evt (lambda (tde) (wrap-evt (dead-evt-sema tde)
                                                (lambda (s) tde)))
         #:reflection-name 'thread-dead-evt)
+
+(define (thread-dead-evt? v)
+  (dead-evt? v))
 
 (define get-thread-dead-evt
   (let ([thread-dead-evt
@@ -381,6 +386,11 @@
                                break-enabled-default-cell
                                (root-continuation-prompt-tag)))
 
+(define break-enabled
+  (case-lambda
+    [() (thread-cell-ref (current-break-enabled-cell))]
+    [(on?) (thread-cell-set! (current-break-enabled-cell) on?)]))
+
 ;; When the continuation-mark mapping to `break-enabled-key` is
 ;; changed, or when a thread is just swapped in, then
 ;; `check-for-break` should be called.
@@ -389,7 +399,7 @@
   ((atomically
     (cond
      [(and (thread-pending-break? t)
-           (thread-cell-ref (current-break-enabled-cell))
+           (break-enabled)
            (zero? (current-break-suspend))
            ;; If delaying for retry, then defer
            ;; break checking to the continuation (instead

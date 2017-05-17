@@ -5,6 +5,7 @@
                   evt? prop:evt
                   always-evt
                   never-evt
+                  handle-evt?
                   #%evt-instance)
          (except-in "semaphore.rkt"
                     semaphore-peek-evt)
@@ -14,6 +15,7 @@
          "system-idle-evt.rkt"
          "schedule.rkt"
          "custodian.rkt"
+         "alarm.rkt"
          "api.rkt"
          "unsafe.rkt")
 
@@ -27,6 +29,7 @@
          thread-wait
          thread-suspend
          thread-dead-evt
+         thread-dead-evt?
          break-thread
          kill-thread
 
@@ -49,6 +52,7 @@
          channel-put
          channel-get         
          channel-put-evt
+         channel-put-evt?
          
          sync
          sync/timeout
@@ -58,14 +62,17 @@
          never-evt
          wrap-evt
          handle-evt
+         handle-evt?
          guard-evt
          nack-guard-evt
 
          system-idle-evt
+         alarm-evt
 
          custodian?
          custodian-box?
 
+         break-enabled
          check-for-break
          break-enabled-key
 

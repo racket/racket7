@@ -35,11 +35,11 @@
                          (and
                           (equal? (car a) (car b) ctx)
                           (equal? (cdr a) (cdr b) ctx)))))]
-             [(box? a)
-              (and (box? b)
+             [(#%box? a)
+              (and (#%box? b)
                    (or (check-union-find ctx a b)
                        (let ([ctx (deeper-context ctx)])
-                         (equal? (unbox a) (unbox b) ctx))))]
+                         (equal? (#%unbox a) (#%unbox b) ctx))))]
              [(record? a)
               (and (record? b)
                    (let ([rec-equal? (record-equal-procedure a b)])

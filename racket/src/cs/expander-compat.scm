@@ -137,7 +137,7 @@
   (make-parameter #f))
 
 (define current-code-inspector
-  (make-parameter (current-inspector)))
+  (make-parameter (|#%app| current-inspector)))
 (define current-print
   (make-parameter (lambda (v)
                     (unless (void? v)
@@ -155,11 +155,11 @@
   (make-parameter
    (lambda ()
      (display "> ")
-     (let ([in ((current-get-interaction-input-port))])
-       ((current-read-interaction) (object-name in) in)))))
+     (let ([in ((|#%app| current-get-interaction-input-port))])
+       (|#%app| (|#%app| current-read-interaction) (object-name in) in)))))
 (define current-get-interaction-input-port
   (make-parameter
-   (lambda () (current-input-port))))
+   (lambda () (|#%app| current-input-port))))
 
 (define current-compile
   (make-parameter 'current-compile))
@@ -171,7 +171,7 @@
 (define compile-enforce-module-constants
   (make-parameter #t))
 
-(define (load s) ((current-load) s #f))
+(define (load s) (|#%app| (|#%app| current-load) s #f))
 
 (define (load-extension f) (error "no load-extension"))
 
@@ -192,7 +192,7 @@
     [(config-dir) (string->path "../config")]
     [(collects-dir) (string->path "../collects")]
     [(addon-dir) (string->path "/tmp/addon")]
-    [(orig-dir) (string->path (current-directory))]
+    [(orig-dir) (string->path (|#%app| current-directory))]
     [(run-file) (or run-file
                     (find-system-path 'exec-file))]
     [else `(find-system-path-not-ready ,key)]))

@@ -3,6 +3,7 @@
 
 (provide bytes-converter?
          bytes-open-converter
+         bytes-close-converter
          bytes-convert
          bytes-convert-end)
 

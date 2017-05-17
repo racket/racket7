@@ -27,6 +27,16 @@
 
 (define root-inspector (new-inspector #f))
 
+(define make-inspector
+  (case-lambda
+    [() (new-inspector (|#%app| current-inspector))]
+    [(i)
+     (unless (inspector? i)
+       (raise-argument-error 'current-inspector
+                             "inspector?"
+                             i))
+     (new-inspector i)]))
+
 (define (inspector-superior? sup-insp sub-insp)
   (unless (inspector? sup-insp)
     (raise-argument-error 'inspector-superior? "inspector?" sup-insp))
@@ -44,18 +54,17 @@
 (define (inspector-set! rtd insp)
   (putprop (record-type-uid rtd) 'inspector insp))
 
-
 (define-record position-based-accessor (rtd offset field-count))
 (define-record position-based-mutator (rtd offset field-count))
 
 (define make-struct-type
   (case-lambda 
     [(name parent-rtd fields auto-fields)
-     (make-struct-type name parent-rtd fields auto-fields #f '() (current-inspector) #f '() #f name)]
+     (make-struct-type name parent-rtd fields auto-fields #f '() (|#%app| current-inspector) #f '() #f name)]
     [(name parent-rtd fields auto-fields auto-val)
-     (make-struct-type name parent-rtd fields auto-fields auto-val '() (current-inspector) #f '() #f name)]
+     (make-struct-type name parent-rtd fields auto-fields auto-val '() (|#%app| current-inspector) #f '() #f name)]
     [(name parent-rtd fields auto-fields auto-val props)
-     (make-struct-type name parent-rtd fields auto-fields auto-val props (current-inspector) #f '() #f name)]
+     (make-struct-type name parent-rtd fields auto-fields auto-val props (|#%app| current-inspector) #f '() #f name)]
     [(name parent-rtd fields auto-fields auto-val props insp)
      (make-struct-type name parent-rtd fields auto-fields auto-val props insp #f '() #f name)]
     [(name parent-rtd fields auto-fields auto-val props insp proc-spec)
@@ -135,9 +144,9 @@
 (define struct-type-install-properties!
   (case-lambda
     [(rtd name fields auto-fields parent-rtd)
-     (struct-type-install-properties! rtd name fields auto-fields parent-rtd '() (current-inspector) #f '() #f name)]
+     (struct-type-install-properties! rtd name fields auto-fields parent-rtd '() (|#%app| current-inspector) #f '() #f name)]
     [(rtd name fields auto-fields parent-rtd props)
-     (struct-type-install-properties! rtd name fields auto-fields parent-rtd props '(current-inspector) #f '() #f name)]
+     (struct-type-install-properties! rtd name fields auto-fields parent-rtd props '(|#%app| current-inspector) #f '() #f name)]
     [(rtd name fields auto-fields parent-rtd props insp)
      (struct-type-install-properties! rtd name fields auto-fields parent-rtd props insp #f name)]
     [(rtd name fields auto-fields parent-rtd props insp proc-spec)
@@ -266,7 +275,7 @@
     (and (not (eq? insp none))
          (or (not insp)
              (eq? insp 'prefab)
-             (inspector-superior? (current-inspector) insp))
+             (inspector-superior? (|#%app| current-inspector) insp))
          (let ([p-rtd (record-type-parent rtd)])
            (or (not p-rtd)
                (struct-type-transparent? p-rtd))))))
@@ -317,7 +326,7 @@
                              [(or (not insp)
                                   (eq? insp 'prefab)
                                   (and (not (eq? insp none))
-                                       (inspector-superior? (current-inspector) insp)))
+                                       (inspector-superior? (|#%app| current-inspector) insp)))
                               ;; A transparent region
                               (loop (+ vec-len len) (+ rec-len len) (record-type-parent rtd) #f)]
                              [dots-already?
@@ -338,7 +347,7 @@
                    [(or (not insp)
                         (eq? insp 'prefab)
                         (and (not (eq? insp none))
-                             (inspector-superior? (current-inspector) insp)))
+                             (inspector-superior? (|#%app| current-inspector) insp)))
                     ;; Copy over a transparent region
                     (let ([vec-pos (- vec-pos len)])
                       (let floop ([n 0])

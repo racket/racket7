@@ -517,10 +517,11 @@
 ;; Parameters:
 
 (define my-param (make-parameter 'init))
-(let ([e (parameterize ([my-param 'set])
-           (make-engine (lambda () (my-param)) #f))])
-  (check 'init (my-param))
-  (check 'set (e 100 void (lambda (remain v) v) (lambda (e) (error 'engine "oops")))))
+(let ([e (with-continuation-mark parameterization-key
+             (extend-parameterization (continuation-mark-set-first #f parameterization-key) my-param 'set)
+           (make-engine (lambda () (|#%app| my-param)) #f))])
+  (check (|#%app| my-param) 'init)
+  (check (e 1000 void (lambda (remain v) v) (lambda (e) (error 'engine "oops"))) 'set))
 
 ;; ----------------------------------------
 

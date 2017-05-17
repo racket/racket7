@@ -16,27 +16,36 @@
    abs
    absolute-path?
    add1
+   acos
+   alarm-evt
    always-evt
    andmap
+   angle
    append
    apply
    arithmetic-shift
+   asin
    assoc
    assq
    assv
+   atan
    bitwise-and
    bitwise-bit-set?
    bitwise-bit-field
    bitwise-ior
+   bitwise-not
    bitwise-xor
    boolean?
+   bound-identifier=?
    box
    box-cas!
    box-immutable
    box?
+   break-enabled
    break-enabled-key
    break-thread
    build-path
+   build-path/convention-type
    byte-ready?
    byte-pregexp
    byte-pregexp?
@@ -52,17 +61,23 @@
    bytes->string/locale
    bytes->string/utf-8
    bytes-append
+   bytes-close-converter
    bytes-convert
    bytes-convert-end
    bytes-converter?
+   bytes-copy
    bytes-copy!
+   bytes-fill!
    bytes-length
    bytes-open-converter
    bytes-ref
    bytes-set!
    bytes-utf-8-length
+   bytes>?
    bytes<?
    bytes=?
+   bytes<=?
+   bytes>=?
    bytes?
    caadr
    cache-configuration
@@ -79,11 +94,15 @@
    ceiling
    channel?
    channel-put-evt
+   channel-put-evt?
    chaperone?
    chaperone-of?
+   chaperone-box
    chaperone-procedure
    chaperone-procedure*
    chaperone-struct
+   chaperone-vector
+   chaperone-vector*
    char->integer
    char-alphabetic?
    char-downcase
@@ -100,6 +119,7 @@
    char-title-case?
    char-upper-case?
    char-upcase
+   char-titlecase
    char-whitespace?
    char<=?
    char<?
@@ -107,12 +127,19 @@
    char>=?
    char>?
    char?
+   char-ci<=?
+   char-ci<?
+   char-ci=?
+   char-ci>=?
+   char-ci>?
+   ;; char-utf-8-length
    check-for-break
    checked-procedure-check-and-extract
    cleanse-path
    close-input-port
    close-output-port
    collect-garbage
+   compile
    complex?
    compile-enforce-module-constants
    complete-path?
@@ -125,6 +152,7 @@
    continuation-prompt-available?
    continuation-prompt-tag?
    continuation?
+   cos
    current-code-inspector
    current-command-line-arguments
    current-compile
@@ -132,6 +160,7 @@
    current-continuation-marks
    current-directory
    current-environment-variables
+   current-error-port
    current-eval
    current-gc-milliseconds
    current-inexact-milliseconds
@@ -175,12 +204,14 @@
    eof-object?
    ephemeron?
    ephemeron-value
+   eprintf
    eq-hash-code
    eq?
    equal-hash-code
    equal-secondary-hash-code
    equal?
    eqv?
+   eqv-hash-code
    error
    error-print-source-location
    error-print-width
@@ -200,6 +231,7 @@
    exn-message
    exn?
    expand-user-path
+   exp
    explode-path
    expt
    extend-parameterization
@@ -229,9 +261,12 @@
    fxvector-length
    fxvector-set!
    fxvector?
+   gcd
    gensym
    get-output-bytes
    get-output-string
+   handle-evt
+   handle-evt?
    hash
    hash-clear!
    hash-copy
@@ -259,13 +294,19 @@
    hasheqv
    imag-part
    immutable?
+   impersonate-box
    impersonate-procedure
    impersonate-procedure*
    impersonate-struct
+   impersonate-vector
+   impersonate-vector*
    impersonator?
    impersonator-of?
    impersonator-property?
+   impersonator-prop:application-mark
+   impersonator-property-accessor-procedure?
    inexact?
+   inexact-real?
    inexact->exact
    input-port?
    inspector-superior?
@@ -276,6 +317,7 @@
    integer?
    interned-char?
    kill-thread
+   lcm
    length
    link-exists?
    list
@@ -290,6 +332,7 @@
    load
    load-extension
    load-on-demand-enabled
+   log
    logger?
    logger-name
    log-all-levels
@@ -298,6 +341,7 @@
    log-max-level
    log-message
    log-receiver?
+   magnitude
    make-bytes
    make-continuation-prompt-tag
    make-ephemeron
@@ -323,6 +367,7 @@
    make-prefab-struct
    make-pseudo-random-generator
    make-reader-graph
+   make-rectangular
    make-semaphore
    make-shared-flvector
    make-string
@@ -341,7 +386,9 @@
    max
    min
    modulo
+   nack-guard-evt
    negative?
+   never-evt
    newline
    not
    null
@@ -360,6 +407,7 @@
    open-output-string
    ormap
    output-port?
+   parameter?
    parameterization?
    parameterization-key
    path->bytes
@@ -374,6 +422,7 @@
    path<?
    peek-byte
    peek-bytes
+   peek-bytes!
    peek-bytes-avail!
    peek-bytes-avail!*
    peek-char-or-special
@@ -481,9 +530,11 @@
    set-box!
    shared-flvector
    simplify-path
+   sin
    single-flonum?
    sleep
    split-path
+   sqrt
    string
    string->bytes/latin-1
    string->bytes/locale
@@ -497,16 +548,25 @@
    string->uninterned-symbol
    string->unreadable-symbol
    string-append
+   string-ci=?
    string-ci<=?
    string-ci<?
    string-ci>=?
    string-ci>?
+   string-copy
    string-copy!
+   string-downcase
    string-foldcase
    string-length
    string-locale-downcase
+   string-normalize-nfc
+   string-normalize-nfd
+   string-normalize-nfkc
+   string-normalize-nfkd
    string-ref
    string-set!
+   string-titlecase
+   string-upcase
    string-utf-8-length
    string<=?
    string<?
@@ -532,18 +592,24 @@
    system-library-subpath
    system-path-convention-type
    system-type
+   tan
+   time-apply
+   thread
+   thread?
    thread-cell?
    thread-cell-ref
    thread-cell-set!
+   thread-dead-evt
+   thread-dead-evt?
    thread-group?
    thread-receive-evt
    thread-resume
+   thread-running?
    thread-send
    thread-suspend
    thread-wait
    true-object?
-   time-apply
-   thread
+   truncate
    unbox
    uncaught-exception-handler
    use-collection-link-paths
@@ -555,7 +621,9 @@
    vector->list
    vector->pseudo-random-generator
    vector->pseudo-random-generator!
+   vector->values
    vector-copy!
+   vector-fill!
    vector-immutable
    vector-length
    vector-ref
@@ -564,6 +632,7 @@
    version
    void
    void?
+   weak-box?
    weak-box-value
    with-input-from-file
    with-output-to-file
@@ -627,7 +696,7 @@
    struct:exn:fail:contract:divide-by-zero exn:fail:contract:divide-by-zero exn:fail:contract:divide-by-zero?
    struct:exn:fail:contract:non-fixnum-result exn:fail:contract:non-fixnum-result exn:fail:contract:non-fixnum-result?
    struct:exn:fail:contract:continuation exn:fail:contract:continuation exn:fail:contract:continuation?
-   struct:exn:fail:contract:variable exn:fail:contract:variable exn:fail:contract:variable?
+   struct:exn:fail:contract:variable exn:fail:contract:variable exn:fail:contract:variable? exn:fail:contract:variable-id
    struct:exn:fail:read exn:fail:read exn:fail:read? exn:fail:read-srclocs
    struct:exn:fail:read:eof exn:fail:read:eof exn:fail:read:eof?
    struct:exn:fail:read:non-char exn:fail:read:non-char exn:fail:read:non-char?
