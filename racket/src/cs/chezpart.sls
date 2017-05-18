@@ -49,6 +49,7 @@
                    [string-copy! chez:string-copy!]
                    [apply chez:apply]
                    [procedure? chez:procedure?]
+                   [procedure-arity-mask chez:procedure-arith-mask]
                    [substring chez:substring]
                    [gensym chez:gensym]
                    [symbol->string chez:symbol->string]

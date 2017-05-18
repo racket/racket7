@@ -10,6 +10,9 @@
                                                          0)))
                                               v))))
 
+(define-values (prop:procedure-arity procedure-arity? procedure-arity-ref)
+  (make-struct-type-property 'procedure-arity))
+
 (define (procedure? v)
   (or (chez:procedure? v)
       (and (record? v)
@@ -56,53 +59,43 @@
    [else #f]))
 
 (define (procedure-arity-includes? orig-f orig-n)
-  (cond
-   [(chez:procedure? orig-f)
+  (let ([mask (get-procedure-arity-mask 'procedure-arity-includes? orig-f)])
     (unless (exact-nonnegative-integer? orig-n)
       (raise-argument-error 'procedure-arity-includes? "exact-nonnegative-integer?" orig-n))
-    (bitwise-bit-set? (procedure-arity-mask orig-f) orig-n)]
-   [else
-    (let arity-includes? ([f orig-f] [n orig-n])
-      (cond
-       [(chez:procedure? f)
-        (cond
-         [(exact-nonnegative-integer? n)
-          (bitwise-bit-set? (procedure-arity-mask f) n)]
-         [(exact-nonnegative-integer? orig-n)
-          #f]
-         [else
-          (raise-argument-error 'procedure-arity-includes? "exact-nonnegative-integer?" orig-n)])]
-       [(record? f)
-        (let* ([v (struct-property-ref prop:procedure (record-rtd f) #f)])
-          (cond
-           [(fixnum? v)
-            (arity-includes? (unsafe-struct-ref f v) n)]
-           [else
-            (arity-includes? v (if (exact-integer? n)
-                                   (add1 n)
-                                   n))]))]
-       [else
-        (raise-argument-error 'procedure-arity-includes? "procedure?" orig-f)]))]))
+    (bitwise-bit-set? mask orig-n)))
 
 (define (procedure-arity orig-f)
+  (mask->arity (get-procedure-arity-mask 'procedure-arity orig-f)))
+
+(define (procedure-arity-mask orig-f)
+  (get-procedure-arity-mask procedure-arity-mask orig-f))
+
+(define (get-procedure-arity-mask who orig-f)
   (cond
    [(chez:procedure? orig-f)
-    (mask->arity (procedure-arity-mask orig-f))]
+    (#%procedure-arity-mask orig-f)]
    [else
-    (let proc-arity ([f orig-f] [shift 0])
+    (let proc-arity-mask ([f orig-f] [shift 0])
       (cond
        [(chez:procedure? f)
-        (mask->arity (bitwise-arithmetic-shift-right (procedure-arity-mask f) shift))]
+        (bitwise-arithmetic-shift-right (#%procedure-arity-mask f) shift)]
        [(record? f)
         (let* ([rtd (record-rtd f)]
-               [v (struct-property-ref prop:procedure rtd #f)])
+               [a (struct-property-ref prop:procedure-arity rtd #f)])
           (cond
-           [(fixnum? v)
-            (proc-arity (unsafe-struct-ref f v) shift)]
+           [a
+            (if (exact-integer? a)
+                (proc-arity-mask (unsafe-struct-ref f a) shift)
+                -1)]
            [else
-            (proc-arity v (add1 shift))]))]
+            (let ([v (struct-property-ref prop:procedure rtd #f)])
+              (cond
+               [(fixnum? v)
+                (proc-arity-mask (unsafe-struct-ref f v) shift)]
+               [else
+                (proc-arity-mask v (add1 shift))]))]))]
        [else
-        (raise-argument-error 'procedure-arity "procedure?" orig-f)]))]))
+        (raise-argument-error who "procedure?" orig-f)]))]))
 
 (define (mask->arity mask)
   (let loop ([mask mask] [pos 0])
@@ -447,15 +440,13 @@
                         (record-type-descriptor named-procedure)
                         1)
 
-  (struct-property-set! prop:procedure
-                        (record-type-descriptor procedure-chaperone)
-                        impersonate-apply)
-  (struct-property-set! prop:procedure
-                        (record-type-descriptor procedure-impersonator)
-                        impersonate-apply)
-  (struct-property-set! prop:procedure
-                        (record-type-descriptor procedure*-chaperone)
-                        impersonate-apply)
-  (struct-property-set! prop:procedure
-                        (record-type-descriptor procedure*-impersonator)
-                        impersonate-apply))
+  (let ([register-procedure-impersonator-struct-type!
+         (lambda (rtd)
+           (struct-property-set! prop:procedure rtd impersonate-apply)
+           (struct-property-set! prop:procedure-arity rtd 0))])
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-chaperone))
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-impersonator))
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure*-chaperone))
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure*-impersonator))
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-chaperone))
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-impersonator))))

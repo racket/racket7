@@ -149,13 +149,16 @@
 (define-record struct-impersonator impersonator (procs)) ; hash of proc -> (cons orig-orig wrapper-proc)
 (define-record struct-chaperone struct-impersonator ())
 
+(define-record procedure-struct-impersonator struct-impersonator ())
+(define-record procedure-struct-chaperone struct-chaperone ())
+
 (define (impersonate-struct v . args)
-  (do-impersonate-struct 'impersonate-struct #f v args make-struct-impersonator))
+  (do-impersonate-struct 'impersonate-struct #f v args make-struct-impersonator make-procedure-struct-impersonator))
 
 (define (chaperone-struct v . args)
-  (do-impersonate-struct 'chaperone-struct #t v args make-struct-chaperone))
+  (do-impersonate-struct 'chaperone-struct #t v args make-struct-chaperone make-procedure-struct-chaperone))
 
-(define (do-impersonate-struct who as-chaperone? v args make-struct-impersonator)
+(define (do-impersonate-struct who as-chaperone? v args make-struct-impersonator make-procedure-struct-impersonator)
   (cond
    [(null? args) v]
    [else
@@ -240,7 +243,8 @@
             (if (and (zero? (hash-count props))
                      (eq? iprops orig-iprops))
                 v
-                (make-struct-impersonator val v iprops props))]
+                (let ([mk (if (procedure? v) make-procedure-struct-impersonator make-struct-impersonator)])
+                  (mk val v iprops props)))]
            [(impersonator-property? (car args))
             (loop #f
                   '()

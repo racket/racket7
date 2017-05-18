@@ -209,11 +209,15 @@
 (let ()
   (define-values (prop:x x? x-ref) (make-struct-type-property 'x))
   (define-values (struct:s-a make-s-a s-a? s-a-ref s-a-set!)
-    (make-struct-type 'x #f 2 0 #f (list (cons prop:x 5))))
+    (make-struct-type 's-a #f 2 0 #f (list (cons prop:x 5))))
+  (define-values (struct:s-b make-s-b s-b? s-b-ref s-b-set!)
+    (make-struct-type 's-b #f 2 0 #f (list (cons prop:procedure 0)) #f))
   (define s-a-x (make-struct-field-accessor s-a-ref 0 'x))
   (define s-a-y (make-struct-field-accessor s-a-ref 1 'y))
+  (define s-b-y (make-struct-field-accessor s-b-ref 1 'y))
   (define set-s-a-x! (make-struct-field-mutator s-a-set! 0 'x))
   (define counter 0)
+  (define last-flavor #f)
 
   (define s1 (make-s-a 1 2))
   (define s1c (chaperone-struct s1
@@ -222,6 +226,15 @@
   (define s1i (impersonate-struct s1
                                   s-a-x (lambda (s v) (list v))
                                   set-s-a-x! (lambda (s v) (box v))))
+
+  (define ps1 (make-s-b (lambda (c) (list c c)) 2))
+  (define ps1i (impersonate-struct ps1 s-b-y (lambda (s v) (box v))))
+  (define ps1ic (chaperone-procedure* ps1i (lambda (p v)
+                                             (set! last-flavor (and (|#%app| flavor? p)
+                                                                    (|#%app| flavor-ref p)))
+                                             (set! counter (add1 counter))
+                                             v)))
+  (define ps1icp (impersonate-struct ps1ic struct:s-b iprop:flavor 'chocolate))
 
   (check (chaperone-struct 7) 7)
   (check (impersonate-struct 7) 7)
@@ -253,4 +266,17 @@
   (check (|#%app| x-ref s1c) 5)
   (check counter 3)
 
+  (check (|#%app| ps1 3) '(3 3))
+  (check (|#%app| ps1i 3) '(3 3))
+  (check (s-b-y ps1) 2)
+  (check (s-b-y ps1i) '#&2)
+
+  (check counter 3)
+  (check (|#%app| ps1ic 3) '(3 3))
+  (check counter 4)
+  (check last-flavor #f)
+  (check (|#%app| ps1icp 3) '(3 3))
+  (check counter 5)
+  (check last-flavor 'chocolate)
+  
   (void))
