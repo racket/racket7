@@ -509,7 +509,7 @@
   (define head (thread-mbx-head thd))
   (cond
     [(null? head)
-     (error "NO MAIL\n")]
+     (internal-error "NO MAIL\n")]
     [(null? (mcdr head))
      (set-thread-mbx-head! thd '())
      (set-thread-mbx-tail! thd '())
