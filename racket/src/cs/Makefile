@@ -146,6 +146,7 @@ control-demo: core.so
 CORE_SRCS = core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \
+            core/prefab.ss \
             core/procedure.ss \
             core/chaperone.ss \
             core/equal.ss \

@@ -14,9 +14,9 @@
 ;; record types
 (define-record-type hnode
   [fields (immutable eqtype)
-          (immutable count)
-          (immutable keys)
-          (immutable vals)]
+          (mutable count)
+          (mutable keys)
+          (mutable vals)]
   [nongenerative #{hnode pfwh8wvaevt3r6pcwsqn90ry8-0}])
 
 (meta-cond
@@ -25,7 +25,7 @@
   ;; 64-bit bnode (pack the bitmaps into a single fixnum)
   (define-record-type (bnode make-raw-bnode bnode?)
     [parent hnode]
-    [fields (immutable bitmap)]
+    [fields (mutable bitmap)]
     [nongenerative #{bnode pfwhzqkm2ycuuyedzz2nxjx2e-0}]
     [sealed #t])
 
@@ -37,17 +37,24 @@
     (fxand #xffff (bnode-bitmap n)))
 
   (define (bnode-childmap n)
-    (fxsrl (bnode-bitmap n) 16))]
+    (fxsrl (bnode-bitmap n) 16))
+
+  (define (bnode-copy-bitmaps! dest src)
+    (bnode-bitmap-set! dest (bnode-bitmap src)))]
 
  [else
 
   ;; 32-bit bnode (separate bitmaps)
   (define-record-type bnode
     [parent hnode]
-    [fields (immutable keymap)
-            (immutable childmap)]
+    [fields (mutable keymap)
+            (mutable childmap)]
     [nongenerative #{bnode pfwhzqkm2ycuuyedzz2nxjx2e-1}]
-    [sealed #t])])
+    [sealed #t])
+
+  (define (bnode-copy-bitmaps! dest src)
+    (bnode-set-keymap! dest (bnode-keymap src))
+    (bnode-set-childmap! dest (bnode-childmap src)))])
 
 (define-record-type cnode
   [parent hnode]
@@ -73,6 +80,15 @@
 (define empty-hasheq (make-empty-bnode 'eq))
 (define empty-hasheqv (make-empty-bnode 'eqv))
 (define empty-hash (make-empty-bnode 'equal))
+
+(define (make-hamt-shell eqtype)
+  (make-empty-bnode eqtype))
+
+(define (hamt-shell-sync! dest src)
+  (hnode-count-set! dest (hnode-count src))
+  (hnode-keys-set! dest (hnode-keys src))
+  (hnode-vals-set! dest (hnode-vals src))
+  (bnode-copy-bitmaps! dest src))
 
 ;; hamt interface
 (define hamt? hnode?)

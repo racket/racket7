@@ -284,6 +284,8 @@
                     [`,_ (error "oops")]))
               (define ,(gensym)
                 (begin
+                  (register-struct-constructor! ,make-s)
+                  (register-struct-predicate! ,s?)
                   ,@(for/list ([acc/mut (in-list acc/muts)]
                                [make-acc/mut (in-list make-acc/muts)])
                       (match make-acc/mut

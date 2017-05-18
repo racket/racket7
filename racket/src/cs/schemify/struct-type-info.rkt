@@ -19,6 +19,8 @@
 (define (make-struct-type-info v prim-knowns knowns imports mutated)
   (match v
     [`(make-struct-type (quote ,name) ,parent ,fields 0 #f . ,rest)
+     ;; Note: auto-field count must be zero, because a non-zero count involves
+     ;; an arity-reduced procedure
      (let ([u-name (unwrap name)]
            [u-parent (unwrap parent)])
        (and (symbol? u-name)
@@ -27,6 +29,13 @@
                 (and (known-struct-type? (hash-ref-either knowns imports u-parent))
                      (simple-mutated-state? (hash-ref mutated u-parent #f))))
             (exact-nonnegative-integer? fields)
+            ;; The inspector argument cannot be 'insp:
+            (match rest
+              [`() #t]
+              [`(,_) #t]
+              [`(,_ #f . ,_) #t]
+              [`(,_ (current-inspector) . ,_) #t]
+              [`,_ #f])
             (struct-type-info name
                               parent
                               fields

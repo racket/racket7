@@ -1,3 +1,5 @@
+(define-struct arity-at-least (value))
+
 (define-values (prop:method-arity-error method-arity-error? method-arity-error-ref)
   (make-struct-type-property 'method-arity-error))
 
@@ -10,6 +12,7 @@
                                                          0)))
                                               v))))
 
+;; Integer value is a field to use; boxed value is a field taht provides a mask
 (define-values (prop:procedure-arity procedure-arity? procedure-arity-ref)
   (make-struct-type-property 'procedure-arity))
 
@@ -86,7 +89,7 @@
            [a
             (if (exact-integer? a)
                 (proc-arity-mask (unsafe-struct-ref f a) shift)
-                -1)]
+                (bitwise-arithmetic-shift-right (unsafe-struct-ref f (unbox a)) shift))]
            [else
             (let ([v (struct-property-ref prop:procedure rtd #f)])
               (cond
@@ -129,7 +132,50 @@
 
 ;; ----------------------------------------
 
+(define-record reduced-arity-procedure (proc mask))
+
+(define (procedure-reduce-arity proc a)
+  (unless (procedure? proc)
+    (raise-argument-error 'procedure-reduce-arity "procedure?" proc))
+  (let ([mask (arity->mask a)])
+    (unless mask
+      (raise-arguments-error 'procedure-reduce-arity "procedure-arity?" a))
+    (unless (= mask (bitwise-and (procedure-arity-mask proc)))
+      (raise-arguments-error 'procedure-reduce-arity
+                             "arity of procedure does not include requested arity"
+                             "procedure" proc
+                             "requested arity" a))
+    (make-reduced-arity-procedure proc mask)))
+
+(define (arity->mask a)
+  (cond
+   [(exact-nonnegative-integer? a)
+    (bitwise-arithmetic-shift-left 1 a)]
+   [(arity-at-least? a)
+    (- -1 (bitwise-arithmetic-shift-left 1 (arity-at-least-value a)))]
+   [(list? a)
+    (let loop ([mask 0] [l a])
+      (cond
+       [(null? l) mask]
+       [else
+        (let ([a (car l)])
+          (cond
+           [(or (exact-nonnegative-integer? a)
+                (arity-at-least? a))
+            (loop (bitwise-ior mask (arity->mask a)) (cdr l))]
+           [else #f]))]))]
+   [else #f]))
+
+;; ----------------------------------------
+
 (define-record named-procedure (proc name))
+
+(define (procedure-rename proc name)
+  (unless (procedure? proc)
+    (raise-argument-error 'procedure-rename "procedure?" proc))
+  (unless (symbol? name)
+    (raise-argument-error 'procedure-rename "symbol?" name))
+  (make-named-procedure proc name))
 
 ;; ----------------------------------------
 
@@ -439,6 +485,13 @@
   (struct-property-set! prop:object-name
                         (record-type-descriptor named-procedure)
                         1)
+
+  (struct-property-set! prop:procedure
+                        (record-type-descriptor reduced-arity-procedure)
+                        0)
+  (struct-property-set! prop:procedure-arity
+                        (record-type-descriptor reduced-arity-procedure)
+                        (box 1))
 
   (let ([register-procedure-impersonator-struct-type!
          (lambda (rtd)

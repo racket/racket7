@@ -6,7 +6,7 @@
   (import (chezscheme))
   (export (import
            (rename (except (chezscheme)
-                           sort vector-sort vector-sort!
+                           sort vector-sort!
                            force delay identifier?
                            output-port-buffer-mode
                            read-char peek-char char-ready?
@@ -63,4 +63,5 @@
                    [memv chez:memv]
                    [memq chez:memq]
                    [raise chez:raise]
-                   [exit chez:exit]))))
+                   [exit chez:exit]
+                   [vector-sort chez:vector-sort]))))

@@ -42,7 +42,7 @@
 
          
 (define-values (struct:p make-p p? p-ref p-set!)
-  (make-struct-type 'p #f 2 0 #f (list (cons prop:procedure 0))))
+  (make-struct-type 'p #f 2 0 #f (list (cons prop:procedure 0)) (|#%app| current-inspector) #f '(0 1)))
 
 (check (|#%app| (make-p (lambda (x) (cons x x)) 'whatever) 10) '(10 . 10))
 
@@ -63,7 +63,7 @@
 (define-values (struct:p0 make-p0 p0? p0-ref p0-set!)
   (make-struct-type 'p0 #f 2 0 #f))
 (define-values (struct:p1 make-p1 p1? p1-ref p1-set!)
-  (make-struct-type 'p1 struct:p0 2 0 #f (list (cons prop:procedure 0))))
+  (make-struct-type 'p1 struct:p0 2 0 #f '() (|#%app| current-inspector) 0))
 
 (check (|#%app| (make-p (lambda (x) (cons x x)) 'whatever) 10) '(10 . 10))
 (check (|#%app| (make-p1 'no 'nope (lambda (x) (list x x)) 'whatever) 11) '(11 11))
@@ -84,7 +84,7 @@
 
 (check (struct->vector an-a) '#(struct:a ...))
 
-(define sub-i (make-inspector (current-inspector)))
+(define sub-i (make-inspector (|#%app| current-inspector)))
 (define-values (struct:q make-q q? q-ref q-set!)
   (make-struct-type 'q #f 2 0 #f '() sub-i))
 
@@ -138,6 +138,36 @@
 (check (prefab-key? '(a 3 (0 #f) #(2) b)) #f)
 (check (prefab-key? '(a 3 (0 #f) #(2) "b" 1)) #f)
 (check (prefab-key? '(a 3 (0 #f) #(2) b -1)) #f)
+
+(check (prefab-struct-key (make-prefab-struct 'a 1)) 'a)
+(check (prefab-struct-key (make-prefab-struct '(a 1) 1)) 'a)
+(check (prefab-struct-key (make-prefab-struct 'a 1 2)) 'a)
+(check (equal? (make-prefab-struct 'a 1 2)
+               (make-prefab-struct 'a 1 2))
+       #t)
+(check (equal? (make-prefab-struct 'a 1)
+               (make-prefab-struct 'a 1 2))
+       #f)
+
+(check (prefab-struct-key (make-prefab-struct '(a 1 (0 #f) #()) 1)) 'a)
+(check (prefab-struct-key (make-prefab-struct '(a 1 (0 #f)) 1)) 'a)
+(check (prefab-struct-key (make-prefab-struct '(a 1 #()) 1)) 'a)
+(check (prefab-struct-key (make-prefab-struct '(a (0 #f) #()) 1)) 'a)
+(check (prefab-struct-key (make-prefab-struct '(a (0 #f) #(0)) 1)) '(a #(0)))
+
+(let ()
+  (define-values (struct:f make-f f? f-ref f-set!)
+    (make-struct-type 'f #f 1 0 #f '() 'prefab #f '(0)))
+  (define-values (struct:g make-g g? g-ref g-set!)
+    (make-struct-type 'g struct:f 2 0 #f '() 'prefab #f '(0 1)))
+  (define-values (struct:h make-h h? h-ref h-set!)
+    (make-struct-type 'h struct:g 3 0 #f '() 'prefab #f '(0 1 2)))
+
+  (check (prefab-struct-key (make-f 1)) 'f)
+  (check (prefab-struct-key (make-g 1 2 3)) '(g f 1))
+  (check (prefab-struct-key (make-h 1 2 3 4 5 6)) '(h g 2 f 1))
+
+  (void))
 
 ;; ----------------------------------------
 

@@ -141,8 +141,12 @@
           struct-type-install-properties! ; not exported to Racket
           make-struct-field-accessor
           make-struct-field-mutator
+          register-struct-constructor! ; not exported to Racket
+          register-struct-predicate! ; not exported to Racket
           register-struct-field-accessor! ; not exported to Racket
           register-struct-field-mutator! ; not exported to Racket
+          struct-constructor-procedure?
+          struct-predicate-procedure?
           struct-accessor-procedure?
           struct-mutator-procedure?
           struct?
@@ -425,6 +429,7 @@
   (include "core/hash-code.ss")
   (include "core/symbol.ss")
   (include "core/struct.ss")
+  (include "core/prefab.ss")
   (include "core/chaperone.ss")
   (include "core/equal.ss")
   (include "core/procedure.ss")
