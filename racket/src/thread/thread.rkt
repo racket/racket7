@@ -252,9 +252,14 @@
                             #t)
                   <)))
 
-;; Removes a thread from its thread group, so it won't be scheduled,
-;; and returns a thunk to be called in out of atomic mode to swap out
-;; the thread, and the thunk returns `(void)`
+;; Removes a thread from its thread group, so it won't be scheduled;
+;; returns a thunk to be called in out of atomic mode to swap out
+;; the thread, where the thunk returns `(void)`; the `interrupt-callback`
+;; is called if the thread receives a break signal or is killed; if
+;; the break signal is supressed or resumed, then `retry-callback`
+;; is called to try again --- but `retry-callback` will only be used
+;; if `interrupt-callback` was previously called, and neither is called
+;; if the thread is resumed normally instead of by a break signal
 (define (thread-internal-suspend! t timeout-at interrupt-callback retry-callback)
   (atomically
    (set-thread-interrupt-callback! t interrupt-callback)
@@ -262,7 +267,11 @@
    (when timeout-at
      (add-to-sleeping-threads! t timeout-at))
    (when (eq? t (current-thread))
-     (thread-did-work!))
+     (thread-did-work!)
+     ;; Don't let a break get handled inplicitly in `(engine-block)`,
+     ;; because we want to call `retry-callback` if woken up for a
+     ;; break signal:
+     (set-thread-delay-break-for-retry?! t #t))
    ;; It's ok if the thread gets interrupted
    ;; outside the atomic region, because we'd
    ;; swap it out anyway
@@ -288,7 +297,10 @@
         (retry-callback))]
      [else void]))))
 
-;; Add a thread back to its thread group
+;; Add a thread back to its thread group; the `undelay-break?`
+;; argument should only be `#f` when `break-thread` wakes up a thread,
+;; instead of the normal wake-up action, and it causes the
+;; `retry-callback` to be called from `thread-internal-suspend!`
 (define (thread-internal-resume! t #:undelay-break? [undelay-break? #t])
   (when (thread-dead? t)
     (internal-error "tried to resume a dead thread"))

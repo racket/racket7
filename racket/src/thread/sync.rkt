@@ -293,7 +293,7 @@
                                   (lambda ()
                                     ;; Continue from or ignore break...
                                     ;; In non-atomic mode and tail position:
-                                    (atomically
-                                     (unless (syncing-selected s)
-                                       (syncing-retry! s))
-                                     (retry))))])))))
+                                    ((atomically
+                                      (unless (syncing-selected s)
+                                        (syncing-retry! s))
+                                      (retry)))))])))))

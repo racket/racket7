@@ -195,6 +195,31 @@
    (check-break/kill #:kill? #f)
    (check-break/kill #:kill? #t)
 
+   ;; Check that an ignored break doesn't interfere with semaphore waiting
+   (define (check-ignore-break-retry make-trigger trigger-post trigger-wait)
+     (define s/nb (make-trigger))
+     (define done?/nb #f)
+     (define t/nb (with-continuation-mark
+                      break-enabled-key
+                      (make-thread-cell #f #t)
+                    (thread (lambda ()
+                              (trigger-wait s/nb)
+                              (set! done?/nb #t)))))
+     (sync (system-idle-evt))
+     (break-thread t/nb)
+     (sync (system-idle-evt))
+     (check #f (sync/timeout 0 t/nb))
+     (check #f done?/nb)
+     (trigger-post s/nb)
+     (sync (system-idle-evt))
+     (check t/nb (sync/timeout 0 t/nb))
+     (check #t done?/nb))
+
+   (check-ignore-break-retry make-semaphore semaphore-post sync)
+   (check-ignore-break-retry make-semaphore semaphore-post semaphore-wait)
+   (check-ignore-break-retry make-channel (lambda (c) (channel-put c 'go)) channel-get)
+   (check-ignore-break-retry make-channel channel-get (lambda (c) (channel-put c 'go)))
+
    (set! done? #t)))
 
 (unless done?

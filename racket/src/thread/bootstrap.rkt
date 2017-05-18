@@ -34,19 +34,20 @@
                               the-root-continuation-prompt-tag
                               exn)))
                        (lambda ()
-                         (with-continuation-mark
-                             break-enabled-key
-                           init-break-enabled-cell
-                           (call-with-continuation-prompt
-                            (lambda ()
-                              (semaphore-post ready-s)
-                              (semaphore-wait s)
-                              (run-prefix)
-                              (set! results
-                                    (call-with-values thunk list)))
-                            the-root-continuation-prompt-tag
-                            (lambda (exn)
-                              ((error-display-handler) (exn-message exn) exn)))))))))
+                         (call-with-continuation-prompt
+                          (lambda ()
+                            (with-continuation-mark
+                                break-enabled-key
+                                init-break-enabled-cell
+                              (begin
+                                (semaphore-post ready-s)
+                                (semaphore-wait s)
+                                (run-prefix)
+                                (set! results
+                                      (call-with-values thunk list)))))
+                          the-root-continuation-prompt-tag
+                          (lambda (exn)
+                            ((error-display-handler) (exn-message exn) exn))))))))
   (semaphore-wait ready-s)
   (thread-suspend t)
   (semaphore-post s)
