@@ -70,12 +70,12 @@
  (when (or version? version-by-default?)
    (printf "Welcome to Racket v~a [cs]\n" (version)))
  (call-in-main-thread
- (lambda ()
-   (boot)
-   (current-library-collection-links
-    (find-library-collection-links))
-   (current-library-collection-paths
-    (find-library-collection-paths))
+  (lambda ()
+    (boot)
+    (|#%app| current-library-collection-links
+     (find-library-collection-links))
+    (|#%app| current-library-collection-paths
+     (find-library-collection-paths))
 
    (when init-library
      (namespace-require init-library))
@@ -85,6 +85,6 @@
              (reverse loads))
 
    (when (or repl? repl-by-default?)
-     ((dynamic-require 'racket/base 'read-eval-print-loop)))
+     (|#%app| (dynamic-require 'racket/base 'read-eval-print-loop)))
 
    (exit))))

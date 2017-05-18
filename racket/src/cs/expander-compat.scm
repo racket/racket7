@@ -103,8 +103,8 @@
 
 (define exit
   (case-lambda
-   [() ((exit-handler) #t)]
-   [(v) ((exit-handler) v)]))
+   [() (|#%app| (|#%app| exit-handler) #t)]
+   [(v) (|#%app| (|#%app| exit-handler) v)]))
              
 (define read-decimal-as-inexact
   (make-parameter #t))
