@@ -214,6 +214,9 @@
    eqv?
    eqv-hash-code
    error
+   error-display-handler
+   error-escape-handler
+   error-print-context-length
    error-print-source-location
    error-print-width
    error-value->string-handler
@@ -269,6 +272,7 @@
    handle-evt
    handle-evt?
    hash
+   hash-clear
    hash-clear!
    hash-copy
    hash-count
@@ -345,6 +349,7 @@
    log-receiver?
    magnitude
    make-bytes
+   make-channel
    make-continuation-prompt-tag
    make-ephemeron
    make-flvector
@@ -366,6 +371,7 @@
    make-output-port
    make-parameter
    make-placeholder
+   make-polar
    make-prefab-struct
    make-pseudo-random-generator
    make-reader-graph
@@ -468,6 +474,7 @@
    procedure?
    procedure-closure-contents-eq?
    prop:arity-string
+   prop:authentic
    prop:checked-procedure
    prop:custom-print-quotable
    prop:custom-write
@@ -526,6 +533,7 @@
    reverse
    round
    seconds->date
+   semaphore?
    semaphore-peek-evt
    semaphore-post
    semaphore-wait
@@ -558,6 +566,7 @@
    string-copy
    string-copy!
    string-downcase
+   string-fill!
    string-foldcase
    string-length
    string-locale-downcase

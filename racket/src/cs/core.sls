@@ -51,6 +51,8 @@
           error-print-context-length
           exception-handler-key
           uncaught-exception-handler
+          error-display-handler
+          error-escape-handler
 
           current-inspector
           make-inspector
@@ -172,7 +174,7 @@
           make-immutable-hash make-immutable-hasheqv make-immutable-hasheq
           make-weak-hash make-weak-hasheq make-weak-hasheqv
           hash-ref hash-set hash-set! hash-remove hash-remove!
-          hash-for-each hash-map hash-copy hash-clear!
+          hash-for-each hash-map hash-copy hash-clear hash-clear!
           hash-iterate-first hash-iterate-next
           hash-iterate-key hash-iterate-value
           hash-iterate-key+value hash-iterate-pair

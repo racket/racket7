@@ -131,6 +131,22 @@
     (impersonate-hash-remove ht k)]
    [else (raise-argument-error 'hash-remove "(and/c hash? immutable?)" ht)]))
 
+(define (hash-clear ht)
+  (cond
+   [(hamt? ht)
+    (cond
+     [(hash-eq? ht) empty-hasheq]
+     [(hash-eqv? ht) empty-hasheqv]
+     [else empty-hash])]
+   [(and (impersonator? ht)
+         (hamt? (impersonator-val ht)))
+    (let loop ([ht ht])
+      (let ([i (hash-iterate-first ht)])
+        (if i
+            (loop (hash-remove ht (hash-iterate-key ht i)))
+            ht)))]
+   [else (raise-argument-error 'hash-clear! "(and/c hash? immutable?)" ht)]))
+
 (define (hash-eq? ht)
   (cond
    [(mutable-hash? ht)

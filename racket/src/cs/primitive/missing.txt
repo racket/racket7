@@ -42,9 +42,6 @@ environment-variables-copy
 environment-variables-names
 environment-variables?
 equal?/recur
-error-display-handler
-error-escape-handler
-error-print-context-length
 executable-yield-handler
 file-or-directory-identity
 file-or-directory-permissions
@@ -52,7 +49,6 @@ file-size
 filesystem-change-evt?
 filesystem-root-list
 global-port-print-handler
-hash-clear
 hash-placeholder?
 impersonate-channel
 impersonate-continuation-mark-key
@@ -62,7 +58,6 @@ integer-length
 integer-sqrt
 integer-sqrt/remainder
 locale-string-encoding
-make-channel
 make-continuation-mark-key
 make-custodian
 make-custodian-box
@@ -74,7 +69,6 @@ make-known-char-range-list
 make-phantom-bytes
 make-pipe
 make-plumber
-make-polar
 make-security-guard
 make-shared-bytes
 make-sibling-inspector
@@ -114,7 +108,6 @@ procedure-result-arity
 procedure-specialize
 procedure-struct-type?
 progress-evt?
-prop:authentic
 prop:object-name
 quotient/remainder
 raise-user-error
@@ -128,14 +121,12 @@ security-guard?
 semaphore-peek-evt?
 semaphore-try-wait?
 semaphore-wait/enable-break
-semaphore?
 set-phantom-bytes!
 set-port-next-location!
 shared-bytes
 shell-execute
 special-comment-value
 special-comment?
-string-fill!
 string-locale-ci<?
 string-locale-ci=?
 string-locale-ci>?
