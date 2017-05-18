@@ -98,6 +98,7 @@
    chaperone?
    chaperone-of?
    chaperone-box
+   chaperone-continuation-mark-key
    chaperone-hash
    chaperone-procedure
    chaperone-procedure*
@@ -145,6 +146,7 @@
    compile-enforce-module-constants
    complete-path?
    continuation-marks
+   continuation-mark-key?
    continuation-mark-set?
    continuation-mark-set-first
    continuation-mark-set->list
@@ -300,6 +302,7 @@
    imag-part
    immutable?
    impersonate-box
+   impersonate-continuation-mark-key
    impersonate-hash
    impersonate-procedure
    impersonate-procedure*
@@ -350,6 +353,7 @@
    magnitude
    make-bytes
    make-channel
+   make-continuation-mark-key
    make-continuation-prompt-tag
    make-ephemeron
    make-flvector

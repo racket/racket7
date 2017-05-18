@@ -28,6 +28,10 @@
           current-continuation-marks
           continuation-marks
           continuation-mark-set?
+          make-continuation-mark-key
+          continuation-mark-key?
+          impersonate-continuation-mark-key
+          chaperone-continuation-mark-key
           $current-mark-stack
 
           make-engine

@@ -669,9 +669,9 @@
          (begin
            (unless (eq? key none)
              (set-mark-stack-frame-table! *mark-stack*
-                                          (hamt-set (mark-stack-frame-table *mark-stack*)
-                                                    key
-                                                    val))
+                                          (hamt-set/cm-key (mark-stack-frame-table *mark-stack*)
+                                                           key
+                                                           val))
              (set-mark-stack-frame-flat! *mark-stack* #f))
            (proc))
          (begin0
@@ -682,7 +682,7 @@
                                           k
                                           (if (eq? key none)
                                               empty-hasheq
-                                              (hasheq key val))
+                                              (hamt-set/cm-key empty-hasheq key val))
                                           #f))
              (proc)))
           (set! *mark-stack* (mark-stack-frame-prev *mark-stack*))
@@ -759,18 +759,19 @@
      (unless (and (procedure? proc)
                   (procedure-arity-includes? proc 1))
        (raise-argument-error 'call-with-immediate-continuation-mark "(procedure-arity-includes/c 1)" proc))
-     (cond
-      [(not *mark-stack*) (proc default-v)]
-      [else
-       (call/cc (lambda (k)
-                  (if (eq? k (mark-stack-frame-k *mark-stack*))
-                      (proc (let ([v (hamt-ref (mark-stack-frame-table *mark-stack*)
-                                               key
-                                               none)])
-                              (if (eq? v none)
-                                  default-v
-                                  v)))
-                      (proc default-v))))])]))
+     (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'call-with-immediate-continuation-mark key)])
+       (cond
+        [(not *mark-stack*) (proc default-v)]
+        [else
+         (call/cc (lambda (k)
+                    (if (eq? k (mark-stack-frame-k *mark-stack*))
+                        (proc (let ([v (hamt-ref (mark-stack-frame-table *mark-stack*)
+                                                 key
+                                                 none)])
+                                (if (eq? v none)
+                                    default-v
+                                    (wrapper v))))
+                        (proc default-v))))]))]))
 
 (define continuation-mark-set-first
   (case-lambda
@@ -790,46 +791,47 @@
        (raise-argument-error 'continuation-mark-set-first "(or/c continuation-mark-set? #f)" marks))
      (unless (continuation-prompt-tag? prompt-tag)
        (raise-argument-error 'continuation-mark-set-first "continuation-prompt-tag?" prompt-tag))
-     (let ([v (marks-search (or (and marks
-                                     (continuation-mark-set-mark-chain marks))
-                                (current-mark-chain))
-                            key
-                            ;; elem-stop?:
-                            (lambda (mcf)
-                              (eq? (mark-chain-frame-tag mcf) prompt-tag))
-                            ;; elem-ref:
-                            (lambda (mcf key none)
-                              ;; Search within a metacontinuation frame
-                              (let ([marks (mark-chain-frame-marks mcf)])
-                                (marks-search marks
-                                              key
-                                              ;; elem-stop?:
-                                              (lambda (t) #f)
-                                              ;; elem-ref:
-                                              hamt-ref
-                                              ;; fail-k:
-                                              (lambda () none)
-                                              ;; strip & combine:
-                                              (lambda (v) v)
-                                              (lambda (v old) v))))
-                            ;; fail-k:
-                            (lambda () none)
-                            ;; strip & combine --- cache results at the metafunction
-                            ;; level should depend on the prompt tag, so make the cache
-                            ;; value another table level mapping the prompt tag to the value:
-                            (lambda (v) (hash-ref v prompt-tag none2))
-                            (lambda (v old) (hamt-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
-       (cond
-        [(eq? v none)
-         ;; More special treatment of built-in keys
+     (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set-first key)])
+       (let ([v (marks-search (or (and marks
+                                       (continuation-mark-set-mark-chain marks))
+                                  (current-mark-chain))
+                              key
+                              ;; elem-stop?:
+                              (lambda (mcf)
+                                (eq? (mark-chain-frame-tag mcf) prompt-tag))
+                              ;; elem-ref:
+                              (lambda (mcf key none)
+                                ;; Search within a metacontinuation frame
+                                (let ([marks (mark-chain-frame-marks mcf)])
+                                  (marks-search marks
+                                                key
+                                                ;; elem-stop?:
+                                                (lambda (t) #f)
+                                                ;; elem-ref:
+                                                hamt-ref
+                                                ;; fail-k:
+                                                (lambda () none)
+                                                ;; strip & combine:
+                                                (lambda (v) v)
+                                                (lambda (v old) v))))
+                              ;; fail-k:
+                              (lambda () none)
+                              ;; strip & combine --- cache results at the metafunction
+                              ;; level should depend on the prompt tag, so make the cache
+                              ;; value another table level mapping the prompt tag to the value:
+                              (lambda (v) (hash-ref v prompt-tag none2))
+                              (lambda (v old) (hamt-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
          (cond
-          [(eq? key parameterization-key)
-           empty-parameterization]
-          [(eq? key break-enabled-key)
-           (current-engine-init-break-enabled-cell none-v)]
-          [else
-           none-v])]
-        [else v]))]))
+          [(eq? v none)
+           ;; More special treatment of built-in keys
+           (cond
+            [(eq? key parameterization-key)
+             empty-parameterization]
+            [(eq? key break-enabled-key)
+             (current-engine-init-break-enabled-cell none-v)]
+            [else
+             none-v])]
+          [else (wrapper v)])))]))
 
 ;; To make `continuation-mark-set-first` constant-time, if we traverse
 ;; N elements to get an answer, then cache the answer at N/2 elements.
@@ -905,42 +907,7 @@
        (raise-argument-error 'continuation-mark-set->list "(or/c continuation-mark-set? #f)" marks))
      (unless (continuation-prompt-tag? prompt-tag)
        (raise-argument-error 'continuation-mark-set->list "continuation-prompt-tag?" prompt-tag))
-     (let chain-loop ([mark-chain (or (and marks
-                                           (continuation-mark-set-mark-chain marks))
-                                      (current-mark-chain))])
-       (cond
-        [(null? mark-chain)
-         null]
-        [else
-         (let* ([mcf (elem+cache-strip (car mark-chain))])
-           (cond
-            [(eq? (mark-chain-frame-tag mcf) prompt-tag)
-             null]
-            [else
-             (let loop ([marks (mark-chain-frame-marks mcf)])
-               (cond
-                [(null? marks)
-                 (chain-loop (cdr mark-chain))]
-                [else
-                 (let* ([v (hamt-ref (elem+cache-strip (car marks)) key none)])
-                   (if (eq? v none)
-                       (loop (cdr marks))
-                       (cons v (loop (cdr marks)))))]))]))]))]))
-
-(define continuation-mark-set->list*
-  (case-lambda
-    [(marks keys) (continuation-mark-set->list* marks keys the-default-continuation-prompt-tag #f)]
-    [(marks keys prompt-tag) (continuation-mark-set->list* marks keys prompt-tag #f)]
-    [(marks keys prompt-tag none-v)
-     (unless (or (not marks)
-                 (continuation-mark-set? marks))
-       (raise-argument-error 'continuation-mark-set->list "(or/c continuation-mark-set? #f)" marks))
-     (unless (list? keys)
-       (raise-argument-error 'continuation-mark-set->list "list?" keys))
-     (unless (continuation-prompt-tag? prompt-tag)
-       (raise-argument-error 'continuation-mark-set->list "continuation-prompt-tag?" prompt-tag))
-     (let* ([n (length keys)]
-            [tmp (make-vector n)])
+     (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list key)])
        (let chain-loop ([mark-chain (or (and marks
                                              (continuation-mark-set-mark-chain marks))
                                         (current-mark-chain))])
@@ -958,23 +925,62 @@
                   [(null? marks)
                    (chain-loop (cdr mark-chain))]
                   [else
-                   (let ([t (elem+cache-strip (car marks))])
-                     (let key-loop ([keys keys] [i 0] [found? #f])
-                       (cond
-                        [(null? keys)
-                         (if found?
-                             (let ([vec (vector-copy tmp)])
-                               (cons vec (loop (cdr marks))))
-                             (loop (cdr marks)))]
-                        [else
-                         (let ([v (hamt-ref t (car keys) none)])
-                           (cond
-                            [(eq? v none)
-                             (vector-set! tmp i none-v)
-                             (key-loop (cdr keys) (add1 i) found?)]
-                            [else
-                             (vector-set! tmp i v)
-                             (key-loop (cdr keys) (add1 i) #t)]))])))]))]))])))]))
+                   (let* ([v (hamt-ref (elem+cache-strip (car marks)) key none)])
+                     (if (eq? v none)
+                         (loop (cdr marks))
+                         (cons (wrapper v) (loop (cdr marks)))))]))]))])))]))
+
+(define continuation-mark-set->list*
+  (case-lambda
+    [(marks keys) (continuation-mark-set->list* marks keys the-default-continuation-prompt-tag #f)]
+    [(marks keys prompt-tag) (continuation-mark-set->list* marks keys prompt-tag #f)]
+    [(marks keys prompt-tag none-v)
+     (unless (or (not marks)
+                 (continuation-mark-set? marks))
+       (raise-argument-error 'continuation-mark-set->list "(or/c continuation-mark-set? #f)" marks))
+     (unless (list? keys)
+       (raise-argument-error 'continuation-mark-set->list "list?" keys))
+     (unless (continuation-prompt-tag? prompt-tag)
+       (raise-argument-error 'continuation-mark-set->list "continuation-prompt-tag?" prompt-tag))
+     (let-values ([(keys wrappers) (map/2-values (lambda (k)
+                                                   (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list* k))
+                                                 keys)])
+       (let* ([n (length keys)]
+              [tmp (make-vector n)])
+         (let chain-loop ([mark-chain (or (and marks
+                                               (continuation-mark-set-mark-chain marks))
+                                          (current-mark-chain))])
+           (cond
+            [(null? mark-chain)
+             null]
+            [else
+             (let* ([mcf (elem+cache-strip (car mark-chain))])
+               (cond
+                [(eq? (mark-chain-frame-tag mcf) prompt-tag)
+                 null]
+                [else
+                 (let loop ([marks (mark-chain-frame-marks mcf)])
+                   (cond
+                    [(null? marks)
+                     (chain-loop (cdr mark-chain))]
+                    [else
+                     (let ([t (elem+cache-strip (car marks))])
+                       (let key-loop ([keys keys] [wrappers wrappers] [i 0] [found? #f])
+                         (cond
+                          [(null? keys)
+                           (if found?
+                               (let ([vec (vector-copy tmp)])
+                                 (cons vec (loop (cdr marks))))
+                               (loop (cdr marks)))]
+                          [else
+                           (let ([v (hamt-ref t (car keys) none)])
+                             (cond
+                              [(eq? v none)
+                               (vector-set! tmp i none-v)
+                               (key-loop (cdr keys) (cdr wrappers) (add1 i) found?)]
+                              [else
+                               (vector-set! tmp i ((car wrappers) v))
+                               (key-loop (cdr keys) (cdr wrappers) (add1 i) #t)]))])))]))]))]))))]))
 
 (define (continuation-mark-set->context marks)
   (unless (continuation-mark-set? marks)
@@ -1029,6 +1035,114 @@
                            (mark-stack-frame-k a)
                            (mark-stack-frame-table a)
                            #f)]))
+
+;; ----------------------------------------
+
+(define-record-type (continuation-mark-key create-continuation-mark-key authentic-continuation-mark-key?)
+  (fields (mutable name))) ; `mutable` ensures that `create-...` allocates
+
+(define-record continuation-mark-key-impersonator impersonator (get set))
+(define-record continuation-mark-key-chaperone chaperone (get set))
+
+(define make-continuation-mark-key
+  (case-lambda
+   [() (make-continuation-mark-key (gensym))]
+   [(name) (create-continuation-mark-key name)]))
+
+(define (continuation-mark-key? v)
+  (or (authentic-continuation-mark-key? v)
+      (and (impersonator? v)
+           (authentic-continuation-mark-key? (impersonator-val v)))))
+
+;; Like `hamt-set`, but handles continuation-mark-key impersonators
+(define (hamt-set/cm-key ht k v)
+  (cond
+   [(and (impersonator? k)
+         (authentic-continuation-mark-key? (impersonator-val k)))
+    (let loop ([k k] [v v])
+      (cond
+       [(or (continuation-mark-key-impersonator? k)
+            (continuation-mark-key-chaperone? k))
+        (let ([new-v ((if (continuation-mark-key-impersonator? k)
+                          (continuation-mark-key-impersonator-set k)
+                          (continuation-mark-key-chaperone-set k))
+                      v)])
+          (unless (or (continuation-mark-key-impersonator? k)
+                      (chaperone-of? new-v v))
+            (raise-chaperone-error 'with-continuation-mark "value" v new-v))
+          (loop (impersonator-next k) new-v))]
+       [(impersonator? k)
+        (loop (impersonator-next k) v)]
+       [else
+        (hamt-set ht k v)]))]
+   [else (hamt-set ht k v)]))
+
+;; Extracts the key and converts the wrapper functions into
+;; a single function:
+(define (extract-continuation-mark-key-and-wrapper who k)
+  (cond
+   [(and (impersonator? k)
+         (authentic-continuation-mark-key? (impersonator-val k)))
+    (let loop ([k k])
+      (cond
+       [(or (continuation-mark-key-impersonator? k)
+            (continuation-mark-key-chaperone? k))
+        (let ([get (if (continuation-mark-key-impersonator? k)
+                       (continuation-mark-key-impersonator-get k)
+                       (continuation-mark-key-chaperone-get k))]
+              [get-rest (loop (impersonator-next k))])
+          (lambda (v)
+            (let* ([v (get-rest v)]
+                   [new-v (get v)])
+              (unless (or (continuation-mark-key-impersonator? k)
+                          (chaperone-of? new-v v))
+                (raise-chaperone-error who "value" v new-v))
+              new-v)))]
+       [(impersonator? k)
+        (loop (impersonator-next k))]
+       [else
+        (lambda (v) v)]))]
+   [else
+    (values k (lambda (v) v))]))
+
+(define (map/2-values f l)
+  (cond
+   [(null? l) (values '() '())]
+   [else
+    (let-values ([(a b) (f (car l))])
+      (let-values ([(a-r b-r) (map/2-values f (cdr l))])
+        (values (cons a a-r) (cons b b-r))))]))
+
+(define (impersonate-continuation-mark-key key get set . props)
+  (do-impersonate-continuation-mark-key 'impersonate-continuation-mark-key
+                                        key get set props
+                                        make-continuation-mark-key-impersonator))
+
+(define (chaperone-continuation-mark-key key get set . props)
+  (do-impersonate-continuation-mark-key 'chaperone-continuation-mark-key
+                                        key get set props
+                                        make-continuation-mark-key-chaperone))
+
+(define (do-impersonate-continuation-mark-key who
+                                              key get set props
+                                              make-continuation-mark-key-impersonator)
+  (unless (continuation-mark-key? key)
+    (raise-argument-error who "continuation-mark-key?" key))
+  (unless (and (procedure? get)
+               (procedure-arity-includes? get 1))
+    (raise-argument-error who "(procedure-arity-includes/c 1)" get))
+  (unless (and (procedure? get)
+               (procedure-arity-includes? set 1))
+    (raise-argument-error who "(procedure-arity-includes/c 1)" set))
+  (make-continuation-mark-key-impersonator (strip-impersonator key)
+                                           key
+                                           (add-impersonator-properties who
+                                                                        props
+                                                                        (if (impersonator? key)
+                                                                            (impersonator-props key)
+                                                                            empty-hasheq))
+                                           get
+                                           set))
 
 ;; ----------------------------------------
 

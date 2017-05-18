@@ -6,7 +6,6 @@ bytes-utf-8-ref
 call-in-nested-thread
 call-with-semaphore/enable-break
 chaperone-channel
-chaperone-continuation-mark-key
 chaperone-evt
 chaperone-prompt-tag
 chaperone-struct-type
@@ -14,7 +13,6 @@ char-utf-8-length
 choice-evt
 compile-allow-set!-undefined
 compile-context-preservation-enabled
-continuation-mark-key?
 copy-file
 current-custodian
 current-directory-for-user
@@ -51,14 +49,12 @@ filesystem-root-list
 global-port-print-handler
 hash-placeholder?
 impersonate-channel
-impersonate-continuation-mark-key
 impersonate-prompt-tag
 impersonator-ephemeron
 integer-length
 integer-sqrt
 integer-sqrt/remainder
 locale-string-encoding
-make-continuation-mark-key
 make-custodian
 make-custodian-box
 make-derived-parameter
