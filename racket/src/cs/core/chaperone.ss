@@ -17,8 +17,9 @@
              (record? (impersonator-val orig) rtd)))
     (let loop ([v orig])
       (cond
-       [(struct-impersonator? v)
-        (let ([wrapper (hash-ref (struct-impersonator-procs v) key #f)])
+       [(or (struct-impersonator? v)
+            (struct-chaperone? v))
+        (let ([wrapper (hash-ref (struct-impersonator/chaperone-procs v) key #f)])
           (cond
            [wrapper
             (let* ([r (cond
@@ -55,8 +56,9 @@
     (let ([key (vector rtd pos)])
       (let loop ([v orig] [a a])
         (cond
-         [(struct-impersonator? v)
-          (let ([wrapper (hash-ref (struct-impersonator-procs v) key #f)])
+         [(or (struct-impersonator? v)
+              (struct-chaperone? v))
+          (let ([wrapper (hash-ref (struct-impersonator/chaperone-procs v) key #f)])
             (cond
              [wrapper
               (let ([new-a (cond
@@ -144,10 +146,26 @@
      [else
       (raise-argument-error who "impersonator-property?" (car props))])))
 
+(define (rewrap-props-impersonator orig new)
+  ((cond
+    [(props-procedure-impersonator? orig) make-props-procedure-impersonator]
+    [(props-procedure-chaperone? orig) make-props-procedure-chaperone]
+    [(props-chaperone? orig) make-props-chaperone]
+    [(props-impersonator? orig) make-props-impersonator]
+    [else (raise-arguments-error 'rewrap-props-impersonator "internal error: unknown impersonator variant")])
+   (strip-impersonator new)
+   new
+   (impersonator-props orig)))
+
 ;; ----------------------------------------
 
 (define-record struct-impersonator impersonator (procs)) ; hash of proc -> (cons orig-orig wrapper-proc)
-(define-record struct-chaperone struct-impersonator ())
+(define-record struct-chaperone chaperone (procs))
+
+(define (struct-impersonator/chaperone-procs i)
+  (if (struct-impersonator? i)
+      (struct-impersonator-procs i)
+      (struct-chaperone-procs i)))
 
 (define-record procedure-struct-impersonator struct-impersonator ())
 (define-record procedure-struct-chaperone struct-chaperone ())

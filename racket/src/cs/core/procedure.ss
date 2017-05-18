@@ -256,7 +256,7 @@
                        (when chaperone?
                          (for-each (lambda (e e2)
                                      (unless (chaperone-of? e2 e)
-                                       (raise-chaperone-error who e e2)))
+                                       (raise-chaperone-error who "argument" e e2)))
                                    args
                                    new-args)))]
                     [continue
@@ -313,11 +313,11 @@
                               (lambda (i hash-code)
                                 (hash-code (impersonator-next i)))))
 
-(define (raise-chaperone-error who e e2)
+(define (raise-chaperone-error who what e e2)
   (raise-arguments-error
    who
-   (string-append "non-chaperone result; received an argument"
-                  " that is not a chaperone of the original argument")
+   (string-append "non-chaperone result; received a" (if (equal? what "argument") "n" "") " " what
+                  " that is not a chaperone of the original " what)
    "original" e
    "received" e2))
 

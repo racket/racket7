@@ -192,6 +192,9 @@
           ;; For intern tables:
           weak-hash-ref-key
 
+          impersonate-hash
+          chaperone-hash
+
           bytes bytes?
           bytes-length
           make-bytes
@@ -446,11 +449,12 @@
   (include "core/memory.ss")
   (include "core/system.ss")
   (include "core/unsafe.ss")
-
+  
   (set-base-exception-handler!)
   (set-primitive-applicables!)
   (set-continuation-applicables!)
   (set-impersonator-applicables!)
+  (set-hash-hash!)
   (set-impersonator-hash!)
   (set-procedure-impersonator-hash!)
   (set-vector-impersonator-hash!)

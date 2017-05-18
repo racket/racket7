@@ -8,7 +8,6 @@ call-with-semaphore/enable-break
 chaperone-channel
 chaperone-continuation-mark-key
 chaperone-evt
-chaperone-hash
 chaperone-prompt-tag
 chaperone-struct-type
 char-utf-8-length
@@ -57,7 +56,6 @@ hash-clear
 hash-placeholder?
 impersonate-channel
 impersonate-continuation-mark-key
-impersonate-hash
 impersonate-prompt-tag
 impersonator-ephemeron
 integer-length

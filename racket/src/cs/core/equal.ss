@@ -7,7 +7,25 @@
       (let loop ([a orig-a] [b orig-b])
         (or (eq? a b)
             (cond
+             [(and (hash-impersonator? a)
+                   (hash-impersonator? b))
+              ;; For immutable hashes, it's ok for the two objects to not be eq,
+              ;; as long as the interpositions are the same and the underlying
+              ;; values are `{impersonator,chaperone}-of?`:
+              (and (eq? (hash-impersonator-procs a)
+                        (hash-impersonator-procs b))
+                   (loop (impersonator-next a)
+                         (impersonator-next b)))]
+             [(and (hash-chaperone? a)
+                   (hash-chaperone? b))
+              ;; Same as above
+              (and (eq? (hash-chaperone-procs a)
+                        (hash-chaperone-procs b))
+                   (loop (impersonator-next a)
+                         (impersonator-next b)))]
              [(props-impersonator? b)
+              (equal? a (impersonator-next b) ctx)]
+             [(props-chaperone? b)
               (equal? a (impersonator-next b) ctx)]
              [(impersonator? a)
               (equal? (impersonator-next a) b ctx)]

@@ -98,6 +98,7 @@
    chaperone?
    chaperone-of?
    chaperone-box
+   chaperone-hash
    chaperone-procedure
    chaperone-procedure*
    chaperone-struct
@@ -295,6 +296,7 @@
    imag-part
    immutable?
    impersonate-box
+   impersonate-hash
    impersonate-procedure
    impersonate-procedure*
    impersonate-struct

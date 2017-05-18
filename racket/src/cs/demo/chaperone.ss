@@ -280,3 +280,83 @@
   (check last-flavor 'chocolate)
   
   (void))
+
+;; ----------------------------------------
+
+(let ()
+  (define ops null)
+  (define (push! v) (set! ops (cons v ops)))
+  (define (ops!) (begin0 (reverse ops) (set! ops '())))
+  (define (ch ht)
+    (chaperone-hash ht
+                    (lambda (ht k)
+                      (push! 'get)
+                      (values k (lambda (ht k v)
+                                  (push! 'got)
+                                  v)))
+                    (lambda (ht k v) (push! 'set) (values k v))
+                    (lambda (ht k) (push! 'remove) k)
+                    (lambda (ht k) (push! 'key) k)
+                    (lambda (ht) (push! 'clear))
+                    (lambda (ht k) (push! 'equal-key) k)))
+  (define ht1 (hash 1 'a 2 'b))
+  (define ht1c (ch ht1))
+  (define ht2 (make-hash))
+  (define ht2c (ch ht2))
+
+  (hash-set! ht2 1 'a)
+  (hash-set! ht2 2 'b)
+
+  (check (ops!) '())
+  
+  (check (hash-ref ht1c 1) 'a)
+  (check (ops!) '(get equal-key got))
+  (check (hash-ref ht2c 1) 'a)
+  (check (ops!) '(get equal-key got))
+  
+  (check (hash-ref ht1c 2) 'b)
+  (check (ops!) '(get equal-key got))
+  (check (hash-ref ht2c 2) 'b)
+  (check (ops!) '(get equal-key got))
+  
+  (check (hash-ref (hash-set ht1c 3 'c) 3) 'c)
+  (check (ops!) '(set equal-key get equal-key got))
+  (check (begin (hash-set! ht2c 3 'c)
+                (hash-ref ht2c 3))
+         'c)
+  (check (ops!) '(set equal-key get equal-key got))
+  (check (begin (hash-set! ht2c 4 'd)
+                (hash-ref ht2 4))
+         'd)
+  (check (ops!) '(set equal-key))
+  
+  (check (hash-ref (hash-remove ht1c 1) 1 'none) 'none)
+  (check (ops!) '(remove equal-key get equal-key))
+  (check (begin
+           (hash-remove! ht2c 1)
+           (hash-ref ht2c 1 'none))
+         'none)
+  (check (ops!) '(remove equal-key get equal-key))
+
+  (check (hash-clear! ht2c) (void))
+  (check (ops!) '(clear))
+  (check (hash-set! ht2c 1 'a) (void))
+  (check (ops!) '(set equal-key))
+
+  (check (hash-map ht2c cons) '((1 . a)))
+  (check (ops!) '(key get equal-key got))
+
+  (let ([i (hash-iterate-first ht2c)])
+    (check (ops!) '())
+    (check (hash-iterate-key ht2c i) 1)
+    (check (ops!) '(key))
+    (check (hash-iterate-value ht2c i) 'a)
+    (check (ops!) '(key get equal-key got)))
+
+  ;; Check that hash table updates maintain chaperone identity
+  (check (chaperone-of? (hash-remove ht1c 5) ht1c) #t)
+  (check (chaperone-of? (hash-set (hash-remove ht1c 1) 1 'a) ht1c) #t)
+  (check (chaperone-of? (hash-set (hash-remove ht1c 1) 1 'aa) ht1c) #f)
+  (check (chaperone-of? ht1 (hash-remove ht1c 5)) #f)
+  
+  (void))
