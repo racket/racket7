@@ -174,6 +174,7 @@ CORE_SRCS = core/constant.ss \
             core/random.ss \
             core/flvector.ss \
             core/correlated.ss \
+            core/graph.ss \
             core/time.ss \
             core/memory.ss \
             core/system.ss \

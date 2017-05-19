@@ -187,6 +187,37 @@
   (void))
 
 ;; ----------------------------------------
+;; Graphs
+
+(let* ([p (make-placeholder #f)]
+       [c (cons 1 p)])
+  (placeholder-set! p c)
+  (check (make-reader-graph p)
+         '#0=(1 . #0#)))
+
+(let* ([p (make-placeholder #f)]
+       [v (vector-immutable p 2 3)]
+       [b (box-immutable v)])
+  (placeholder-set! p b)
+  (check (make-reader-graph v)
+         '#0=#(#&#0# 2 3)))
+
+(let* ([p (make-placeholder #f)]
+       [hp (make-hash-placeholder (list (cons 1 'a) (cons 2 p)))])
+  (placeholder-set! p hp)
+  (let ([ht (make-reader-graph p)])
+    (check (hash-ref ht 1) 'a)
+    (check (hash-ref (hash-ref ht 2) 1) 'a)))
+
+(let* ([p (make-placeholder #f)]
+       [a (make-prefab-struct 'a 1 2 p)])
+  (define-values (struct:a make-a a? a-ref a-set!)
+    (make-struct-type 'a #f 3 0 #f '() 'prefab #f '(0 1 2)))
+  (placeholder-set! p a)
+  (check (|#%app| a-ref (|#%app| a-ref (|#%app| a-ref (make-reader-graph a) 2) 2) 0)
+         1))
+
+;; ----------------------------------------
 
 (let ()
   (define-values (struct:s-a make-s-a s-a? s-a-ref s-a-set!)

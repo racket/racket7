@@ -47,7 +47,6 @@ file-size
 filesystem-change-evt?
 filesystem-root-list
 global-port-print-handler
-hash-placeholder?
 impersonate-channel
 impersonate-prompt-tag
 impersonator-ephemeron
@@ -78,8 +77,6 @@ peek-string
 peek-string!
 phantom-bytes?
 pipe-content-length
-placeholder-get
-placeholder?
 plumber-flush-all
 plumber-flush-handle-remove!
 plumber-flush-handle?

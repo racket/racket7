@@ -290,6 +290,7 @@
    hash-iterate-value
    hash-keys-subset?
    hash-map
+   hash-placeholder?
    hash-ref
    hash-remove
    hash-remove!
@@ -438,6 +439,8 @@
    peek-bytes-avail!
    peek-bytes-avail!*
    peek-char-or-special
+   placeholder?
+   placeholder-get
    placeholder-set!
    plumber-add-flush!
    port-count-lines!

@@ -13,7 +13,7 @@
   (set-placeholder-val! ph datum))
 
 (define (placeholder-get ph)
-  (placeholder-val! ph))
+  (placeholder-val ph))
 
 (define (make-hash-placeholder alst)
   (unless (and (list? alst)
@@ -39,8 +39,8 @@
     (cond
      [(hashtable-ref ht v #f)
       => (lambda (p) p)]
-     [(placeholder? p)
-      (loop (placeholder-val p))]
+     [(placeholder? v)
+      (loop (placeholder-val v))]
      [(pair? v)
       (let ([p (cons #f #f)])
         (hashtable-set! ht v p)
@@ -52,12 +52,12 @@
           ;; No change, so we don't have to make a copy:
           (hashtable-set! ht v v)
           v]
-         [else p)])]
+         [else p]))]
      [(vector? v)
       (let* ([len (vector-length v)]
              [p (make-vector len)])
         (hashtable-set! ht v p)
-        (let loop ([i 0] [diff? #f])
+        (let vloop ([i 0] [diff? #f])
           (cond
            [(fx= i len)
             (cond
@@ -66,13 +66,13 @@
                   p
                   (begin
                     (#%$vector-set-immutable! p)
-                    p))
-              [else
-               (hashtable-set! ht v v)
-               v)])]
+                    p))]
+             [else
+              (hashtable-set! ht v v)
+              v])]
            [else
             (vector-set! p i (loop (vector-ref v i)))
-            (loop (fx1+ i) (or diff? (not (eq? (vector-ref v i) (vector-ref p i)))))])))]
+            (vloop (fx1+ i) (or diff? (not (eq? (vector-ref v i) (vector-ref p i)))))])))]
      [(box? v)
       (let ([p (box #f)])
         (hashtable-set! ht v p)
@@ -103,7 +103,7 @@
                           [(hash-eqv? v) (make-hamt-shell 'eqv)]
                           [else (make-hamt-shell 'equal)]))])
         (hashtable-set! ht v orig-p)
-        (let loop ([p orig-p] [i (hash-iterate-first v)] [diff? #f])
+        (let hloop ([p orig-p] [i (hash-iterate-first v)] [diff? #f])
           (cond
            [(not i)
             (cond
@@ -120,24 +120,42 @@
             (let-values ([(key val) (hash-iterate-key+value v i)])
               (let ([new-key (loop key)]
                     [new-val (loop val)])
-                (loop (if mutable?
-                          (hash-set! orig-p key val)
-                          (hash-set p key val))
-                      (or diff? (not (and (eq? key new-key) (val new-val)))))))])))]
+                (hloop (if mutable?
+                           (hash-set! orig-p key val)
+                           (hash-set p key val))
+                       (hash-iterate-next v i)
+                       (or diff? (not (and (eq? key new-key) (val new-val)))))))])))]
      [(hash-placeholder? v)
       (let* ([orig-p (cond
                       [(hasheq-placeholder? v) (make-hamt-shell 'eq)]
                       [(hasheqv-placeholder? v) (make-hamt-shell 'eqv)]
                       [else (make-hamt-shell 'equal)])])
         (hashtable-set! ht v orig-p)
-        (let loop ([p orig-p] [alst (hash-placeholder-alist)])
+        (let hloop ([p orig-p] [alst (hash-placeholder-alist v)])
           (cond
            [(null? alst)
             (hamt-shell-sync! orig-p p)
             orig-p]
            [else
-            (loop (hash-set p (caar alst) (cdar alst))
-                  (cdr alst))])))]
+            (hloop (hash-set p (loop (caar alst)) (loop (cdar alst)))
+                   (cdr alst))])))]
+     [(prefab-struct-key v)
+      => (lambda (key)
+           (let ([args (cdr (vector->list (struct->vector v)))])
+             (let ([p (apply make-prefab-struct key args)])
+               (hashtable-set! ht v p)
+               (let aloop ([args args] [i 0] [diff? #f])
+                 (cond
+                  [(null? args)
+                   (cond
+                    [diff? p]
+                    [else
+                     (hashtable-set! ht v v)
+                     v])]
+                  [else
+                   (let* ([a (car args)]
+                          [new-a (loop a)])
+                     (unless (eq? a new-a)
+                       (unsafe-struct-set! p i new-a))
+                     (aloop (cdr args) (fx1+ i) (or diff? (not (eq? a new-a)))))])))))]
      [else v])))
-      
-     

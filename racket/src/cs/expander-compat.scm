@@ -245,13 +245,6 @@
 (define (procedure-rename p name)
   p)
 
-(define (make-hash-placeholder v) #f)
-(define (make-hasheq-placeholder v) #f)
-(define (make-hasheqv-placeholder v) #f)
-(define (make-placeholder v) #f)
-(define (placeholder-set! ph v) (error "no placeholders, yet"))
-(define (make-reader-graph v) v)
-
 (define (list-pair? v) #f)
 (define (interned-char? v) #f)
 (define (true-object? v) (eq? v #t))
@@ -528,13 +521,6 @@
    procedure-reduce-arity
    procedure->method
    procedure-rename
-
-   make-hash-placeholder
-   make-hasheq-placeholder
-   make-hasheqv-placeholder
-   make-placeholder
-   placeholder-set!
-   make-reader-graph
 
    list-pair?
    interned-char?

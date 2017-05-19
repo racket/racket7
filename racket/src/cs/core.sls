@@ -313,6 +313,16 @@
           correlated-property
           correlated-property-symbol-keys
 
+          make-reader-graph
+          make-placeholder
+          placeholder?
+          placeholder-set!
+          placeholder-get
+          hash-placeholder?
+          make-hash-placeholder
+          make-hasheq-placeholder
+          make-hasheqv-placeholder
+
           time-apply
           current-inexact-milliseconds
           current-milliseconds
@@ -455,6 +465,7 @@
   (include "core/number.ss")
   (include "core/flvector.ss")
   (include "core/correlated.ss")
+  (include "core/graph.ss")
   (include "core/time.ss")
   (include "core/random.ss")
   (include "core/memory.ss")
