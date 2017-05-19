@@ -89,7 +89,6 @@ port-try-file-lock?
 print-syntax-width
 procedure-impersonator*?
 procedure-result-arity
-procedure-specialize
 progress-evt?
 prop:object-name
 quotient/remainder
@@ -119,13 +118,10 @@ subprocess-kill
 subprocess-pid
 subprocess-status
 subprocess-wait
-subprocess?
-symbol-unreadable?
 sync/enable-break
 sync/timeout/enable-break
 system-idle-evt
 system-language+country
-terminal-port?
 thread-cell-values?
 thread-receive
 thread-resume-evt

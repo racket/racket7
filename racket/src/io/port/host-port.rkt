@@ -9,7 +9,9 @@
                   [file-stream-buffer-mode host:file-stream-buffer-mode]
                   [file-position host:file-position]
                   [file-truncate host:file-truncate]
-                  [flush-output host:flush-output])
+                  [flush-output host:flush-output]
+                  [terminal-port? host:terminal-port?])
+         "input-port.rkt"
          "output-port.rkt"
          "peek-to-read-port.rkt"
          "file-stream.rkt"
@@ -18,7 +20,8 @@
          "buffer-mode.rkt")
 
 (provide open-input-host
-         open-output-host)
+         open-output-host
+         terminal-port?)
 
 (struct host-data (host-port)
   #:property prop:file-stream #t
@@ -68,3 +71,17 @@
    #:close
    (lambda ()
      (host:close-output-port host-out))))
+
+;; ----------------------------------------
+
+(define (terminal-port? p)
+  (define data
+    (cond
+      [(input-port? p)
+       (core-input-port-data (->core-input-port p))]
+      [(output-port? p)
+       (core-output-port-data (->core-output-port p))]
+      [else
+       (raise-argument-error 'terminal-port? "port?" p)]))
+  (and (host-data? p)
+       (host:terminal-port? (host-data-host-port p))))

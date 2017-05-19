@@ -13,6 +13,8 @@
          "line-input.rkt"
          "file-port.rkt"
          "file-stream.rkt"
+         (only-in "host-port.rkt"
+                  terminal-port?)
          "bytes-port.rkt"
          "string-port.rkt"
          "custom-input-port.rkt"
@@ -89,6 +91,7 @@
          with-output-to-file
 
          file-stream-port?
+         terminal-port?
 
          open-input-bytes
          open-output-bytes

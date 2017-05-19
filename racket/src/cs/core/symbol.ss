@@ -15,6 +15,11 @@
     (raise-argument-error 'symbol-interned? "symbol?" s))
   (not (gensym? s)))
 
+(define (symbol-unreadable? s)
+  (unless (symbol? s)
+    (raise-argument-error 'symbol-unreadable? "symbol?" s))
+  (and (getprop s 'racket-unreadable) #t))
+
 (define (symbol->string s)
   (unless (symbol? s)
     (raise-argument-error 'symbol->string "symbol?" s))

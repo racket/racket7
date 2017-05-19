@@ -21,6 +21,11 @@
       (and (record? v)
            (struct-property-ref prop:procedure (record-rtd v) #f))))
 
+(define (procedure-specialize proc)
+  (unless (procedure? proc)
+    (raise-argument-error 'procedure-specialize "procedure?" proc))
+  proc)
+
 (define apply
   (case-lambda
     [(proc args)

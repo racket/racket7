@@ -385,7 +385,6 @@
    make-security-guard
    make-semaphore
    make-shared-flvector
-   make-special-comment
    make-string
    make-struct-field-accessor
    make-struct-field-mutator
@@ -488,6 +487,7 @@
    procedure-rename
    procedure->method
    procedure?
+   procedure-specialize
    procedure-struct-type?
    procedure-closure-contents-eq?
    prop:arity-string
@@ -563,8 +563,6 @@
    sin
    single-flonum?
    sleep
-   special-comment-value
-   special-comment?
    split-path
    sqrt
    string
@@ -622,9 +620,11 @@
    struct-type-property?
    sub1
    subbytes
+   subprocess?
    substring
    symbol->string
    symbol-interned?
+   symbol-unreadable?
    symbol<?
    symbol?
    sync
@@ -634,12 +634,14 @@
    system-path-convention-type
    system-type
    tan
+   terminal-port?
    time-apply
    thread
    thread?
    thread-cell?
    thread-cell-ref
    thread-cell-set!
+   thread-dead?
    thread-dead-evt
    thread-dead-evt?
    thread-group?

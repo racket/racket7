@@ -102,6 +102,7 @@
           prop:method-arity-error
           apply
           procedure?
+          procedure-specialize
           |#%app|
           procedure-arity-includes?
           procedure-arity
@@ -224,6 +225,7 @@
 
           gensym
           symbol-interned?
+          symbol-unreadable?
           string->uninterned-symbol
           string->unreadable-symbol
           symbol->string

@@ -57,6 +57,8 @@
 (define (system-library-subpath) "x86_64-macosx/3m")
 (define (system-path-convention-type) 'unix)
 
+(define (subprocess? v) #f)
+
 (define (environment-variables-ref e k)
   (getenv (bytes->string/utf-8 k)))
 (define (current-environment-variables) #f)
@@ -456,6 +458,8 @@
    system-library-subpath
    system-path-convention-type
 
+   subprocess?
+
    environment-variables-ref
    current-environment-variables
    environment-variables-set!
@@ -512,10 +516,6 @@
    prop:exn:srclocs exn:srclocs? exn:srclocs-accessor
 
    gensym
-
-   symbol-interned?
-   string->uninterned-symbol
-   string->unreadable-symbol
 
    make-ephemeron
    ephemeron-value

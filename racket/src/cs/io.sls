@@ -83,6 +83,8 @@
       [(|#%evt|) |#%evt-instance|]
       [else #f]))
 
+  (define (terminal-port? p) #f)
+
   (include "compiled/io.scm")
 
   ;; Initialize:
