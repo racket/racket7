@@ -380,7 +380,10 @@
                          (lambda args
                            (apply c (auto-field-adder args)))
                          (- total-field-count total-auto-field-count))))]
-             [pred (lambda (v) (record? v rtd))])
+             [pred (lambda (v)
+                     (or (record? v rtd)
+                         (and (impersonator? v)
+                              (record? (impersonator-val v) rtd))))])
          (register-struct-constructor! ctr)
          (register-struct-constructor! pred)
          (values rtd
@@ -572,9 +575,84 @@
 
 ;; ----------------------------------------
 
-(define (struct? v) (record? v))
 (define (struct-type? v) (record-type-descriptor? v))
-(define (struct-type v) (record-rtd v))
+
+(define (struct? v)
+  (and (record? v)
+       (struct-type-any-transparent? (record-rtd v))))
+
+(define (struct-info v)
+  (cond
+   [(not (record? v)) (values #f #t)]
+   [else (next-visible-struct-type (record-rtd v))]))
+
+(define (next-visible-struct-type rtd)
+  (let loop ([rtd rtd] [skipped? #f])
+    (cond
+     [(struct-type-immediate-transparent? rtd)
+      (values rtd skipped?)]
+     [else
+      (let ([parent-rtd (record-type-parent rtd)])
+        (if parent-rtd
+            (loop parent-rtd #t)
+            (values #f #t)))])))
+
+(define (struct-type-info rtd)
+  (unless (struct-type? rtd)
+    (raise-argument-error 'struct-type-info "struct-type?" rtd))
+  (check-inspector-access 'struct-type-info rtd)
+  (let* ([auto-fields (struct-type-auto-field-count rtd)]
+         [fields-count (- (#%vector-length (record-type-field-names rtd))
+                          auto-fields)]
+         [parent-rtd (record-type-parent rtd)]
+         [parent-count (if parent-rtd
+                           (struct-type-field-count parent-rtd)
+                           0)])
+    (let-values ([(next-rtd skipped?)
+                  (if parent-rtd
+                      (next-visible-struct-type parent-rtd)
+                      (values #f #f))])
+      (values (record-type-name rtd)
+              fields-count
+              auto-fields
+              (make-position-based-accessor rtd parent-count (+ fields-count auto-fields))
+              (make-position-based-mutator rtd parent-count (+ fields-count auto-fields))
+              (mutables->immutables (hashtable-ref rtd-mutables rtd '#()) fields-count)
+              next-rtd
+              skipped?))))
+
+(define (check-inspector-access who rtd)
+  (unless (struct-type-immediate-transparent? rtd)
+    (raise-arguments-error who
+                           "current inspector cannot extract info for structure type"
+                           "structure type" rtd)))
+
+(define (struct-type-make-constructor rtd)
+  (unless (struct-type? rtd)
+    (raise-argument-error 'struct-type-make-constructor "struct-type?" rtd))
+  (check-inspector-access 'struct-type-make-constructor rtd)
+  (let ([ctr (let ([c (record-constructor rtd)]
+                   [auto-field-adder (struct-type-auto-field-adder rtd)])
+               (if auto-field-adder
+                   (procedure-reduce-arity
+                    (lambda args
+                      (apply c (auto-field-adder args)))
+                    (- (#%vector-length (record-type-field-names rtd))
+                       (struct-type-auto-field-count rtd)))
+                   c))])
+    (register-struct-constructor! ctr)
+    ctr))
+
+(define (struct-type-make-predicate rtd)
+  (unless (struct-type? rtd)
+    (raise-argument-error 'struct-type-make-predicate "struct-type?" rtd))
+  (check-inspector-access 'struct-type-make-predicate rtd)
+  (let ([pred (lambda (v)
+                (or (record? v rtd)
+                    (and (impersonator? v)
+                         (record? (impersonator-val v) rtd))))])
+    (register-struct-constructor! pred)
+    pred))
 
 (define (struct-type-auto-field-count rtd)
   (car (getprop (record-type-uid rtd) 'auto-field '(0 . #f))))
@@ -605,11 +683,6 @@
           (or (eqv? pos (#%vector-ref mutables j))
               (loop (fx1- j))))]))))
 
-(define (struct-info st)
-  (unless (struct-type? st)
-    (raise-argument-error 'struct-info "struct-type?" st))
-  #f)
-
 (define (unsafe-struct-ref s i)
   (#3%vector-ref s i))
 (define (unsafe-struct-set! s i v)
@@ -623,15 +696,26 @@
 (define-values (prop:authentic authentic? authentic-ref)
   (make-struct-type-property 'authentic (lambda (val info) #t)))
 
-(define (struct-type-transparent? rtd)
+(define (struct-type-immediate-transparent? rtd)
   (let ([insp (inspector-ref rtd)])
     (and (not (eq? insp none))
          (or (not insp)
              (eq? insp 'prefab)
-             (inspector-superior? (|#%app| current-inspector) insp))
-         (let ([p-rtd (record-type-parent rtd)])
-           (or (not p-rtd)
-               (struct-type-transparent? p-rtd))))))
+             (inspector-superior? (|#%app| current-inspector) insp)))))
+
+;; Check whether a structure type is fully transparent
+(define (struct-type-transparent? rtd)
+  (and (struct-type-immediate-transparent? rtd)
+       (let ([p-rtd (record-type-parent rtd)])
+         (or (not p-rtd)
+             (struct-type-transparent? p-rtd)))))
+
+;; Checks whether a structure type is at least partially trasparent
+(define (struct-type-any-transparent? rtd)
+  (or (struct-type-immediate-transparent? rtd)
+      (let ([p-rtd (record-type-parent rtd)])
+        (and p-rtd
+             (struct-type-any-transparent? p-rtd)))))
 
 (define (struct-transparent-type r)
   (let ([t (record-rtd r)])
@@ -673,13 +757,9 @@
                         (cond
                          [(not rtd) (values vec-len rec-len)]
                          [else
-                          (let ([insp (inspector-ref rtd)]
-                                [len (vector-length (record-type-field-names rtd))])
+                          (let ([len (vector-length (record-type-field-names rtd))])
                             (cond
-                             [(or (not insp)
-                                  (eq? insp 'prefab)
-                                  (and (not (eq? insp none))
-                                       (inspector-superior? (|#%app| current-inspector) insp)))
+                             [(struct-type-immediate-transparent? rtd)
                               ;; A transparent region
                               (loop (+ vec-len len) (+ rec-len len) (record-type-parent rtd) #f)]
                              [dots-already?
@@ -693,14 +773,10 @@
             (vector-set! vec 0 (string->symbol (format "struct:~a" (record-type-name rtd))))
             (let loop ([vec-pos vec-len] [rec-pos rec-len] [rtd rtd] [dots-already? #f])
               (when rtd
-                (let* ([insp (inspector-ref rtd)]
-                       [len (vector-length (record-type-field-names rtd))]
+                (let* ([len (vector-length (record-type-field-names rtd))]
                        [rec-pos (- rec-pos len)])
                   (cond
-                   [(or (not insp)
-                        (eq? insp 'prefab)
-                        (and (not (eq? insp none))
-                             (inspector-superior? (|#%app| current-inspector) insp)))
+                   [(struct-type-immediate-transparent? rtd)
                     ;; Copy over a transparent region
                     (let ([vec-pos (- vec-pos len)])
                       (let floop ([n 0])

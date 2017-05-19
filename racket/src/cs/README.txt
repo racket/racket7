@@ -112,16 +112,11 @@ Dumping linklets and schemified linklets:
 
 Status and thoughts on various Racket subsystems:
 
- * "core/struct.ss" is half an implementation of Racket structures,
-   with structure-type properties, applicable structs,
-   `gen:equal+hash`, and so on in terms of Chez Scheme records.
-   Applicable structs work by adding an indirection to each function
-   call (in a little compiler from fully-expanded code to Chez Scheme)
-   when the target is not obviously a plain procedure; with the
+ * Applicable structs work by adding an indirection to each function
+   call when the target is not obviously a plain procedure; with the
    analysis in "schemify/schemify.rkt", the indirection is not needed
    often in a typical program, and the overhead appears to be light
-   when it is needed. The rest of the implementation of Racket
-   structures looks straightforward.
+   when it is needed.
 
  * Racket's delimited continuations, continuation marks, threads, and
    events are mostly in place (see "core/control.ss",

@@ -84,11 +84,28 @@
 
 (check (struct->vector an-a) '#(struct:a ...))
 
+(check (call-with-values (lambda () (struct-info an-a)) list) '(#f #t))
+(check (call-with-values (lambda () (struct-info 7)) list) '(#f #t))
+
 (define sub-i (make-inspector (|#%app| current-inspector)))
 (define-values (struct:q make-q q? q-ref q-set!)
   (make-struct-type 'q #f 2 0 #f '() sub-i))
 
-(check (struct->vector (make-q 9 10)) '#(struct:q 9 10))
+(define a-q (make-q 9 10))
+(check (struct->vector a-q) '#(struct:q 9 10))
+(check (call-with-values (lambda () (struct-info a-q)) list) (list struct:q #f))
+(check ((struct-type-make-constructor struct:q) 9 10) a-q)
+(check ((struct-type-make-predicate struct:q) a-q) #t)
+
+(check (andmap (lambda (a b)
+                 (or (equal? a b)
+                     (and (struct-accessor-procedure? a)
+                          (struct-accessor-procedure? b))
+                     (and (struct-mutator-procedure? a)
+                          (struct-mutator-procedure? b))))
+               (call-with-values (lambda () (struct-type-info struct:q)) list)
+               (list 'q 2 0 q-ref q-set! '() #f #f))
+       #t)
 
 (define-values (struct:q+3 make-q+3 q+3? q+3-ref q+3-set!)
   (make-struct-type 'q+3 struct:q 3 0))

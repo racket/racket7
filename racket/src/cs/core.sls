@@ -152,14 +152,13 @@
           struct-mutator-procedure?
           struct?
           struct-type?
-          struct-type
-          struct-type-field-count
+          struct-type-info
           struct-info
+          struct-type-make-constructor
+          struct-type-make-predicate
           unsafe-struct-ref
           unsafe-struct-set!
           struct->vector
-          struct-type-transparent?
-          struct-transparent-type
           prefab-key?
           prefab-struct-key
           prefab-key->struct-type
