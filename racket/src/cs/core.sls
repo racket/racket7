@@ -139,6 +139,7 @@
           make-struct-type-property
           make-struct-type
           struct-type-install-properties! ; not exported to Racket
+          structure-type-lookup-prefab-uid ; not exported to Racket
           make-struct-field-accessor
           make-struct-field-mutator
           register-struct-constructor! ; not exported to Racket

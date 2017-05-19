@@ -239,7 +239,16 @@
             `(begin
               (define ,struct:s (make-record-type-descriptor ',(struct-type-info-name sti)
                                                              ,(schemify (struct-type-info-parent sti))
-                                                             #f #f #f
+                                                             ,(if (not (struct-type-info-prefab-immutables sti))
+                                                                  #f
+                                                                  `(structure-type-lookup-prefab-uid
+                                                                    ',(struct-type-info-name sti)
+                                                                    ,(schemify (struct-type-info-parent sti))
+                                                                    ,(struct-type-info-immediate-field-count sti)
+                                                                    0 #f
+                                                                    ',(struct-type-info-prefab-immutables sti)))
+                                                             #f
+                                                             #f
                                                              ',(for/vector ([i (in-range (struct-type-info-immediate-field-count sti))])
                                                                  `(mutable ,(string->symbol (format "f~a" i))))))
               ,@(if (null? (struct-type-info-rest sti))

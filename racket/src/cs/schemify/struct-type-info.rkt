@@ -11,7 +11,13 @@
          make-struct-type-info
          pure-properties-list?)
 
-(struct struct-type-info (name parent immediate-field-count field-count pure-constructor? authentic? rest))
+(struct struct-type-info (name parent
+                               immediate-field-count
+                               field-count
+                               pure-constructor?
+                               authentic?
+                               prefab-immutables ; #f or immutable expression to be quoted
+                               rest)) ; argument expressions after auto-field value
 (define struct-type-info-rest-properties-list-pos 0)
 
 ;; Parse `make-struct-type` forms, returning a `struct-type-info`
@@ -29,31 +35,41 @@
                 (and (known-struct-type? (hash-ref-either knowns imports u-parent))
                      (simple-mutated-state? (hash-ref mutated u-parent #f))))
             (exact-nonnegative-integer? fields)
-            ;; The inspector argument cannot be 'insp:
-            (match rest
-              [`() #t]
-              [`(,_) #t]
-              [`(,_ #f . ,_) #t]
-              [`(,_ (current-inspector) . ,_) #t]
-              [`,_ #f])
-            (struct-type-info name
-                              parent
-                              fields
-                              (+ fields (if parent
-                                            (known-struct-type-field-count
-                                             (hash-ref-either knowns imports u-parent))
-                                            0))
-                              ;; no guard => pure constructor
-                              (or ((length rest) . < . 4)
-                                  (not (list-ref rest 3)))
-                              ;; look for `prop:authentic`
-                              (and (pair? rest)
-                                   (match (car rest)
-                                     [`(list (cons ,props ,vals) ...)
-                                      (for/or ([prop (in-list props)])
-                                        (eq? (unwrap prop) 'prop:authentic))]
-                                     [`,_ #f]))
-                              rest)))]
+            (let ([prefab-imms
+                   ;; The inspector argument needs to be missing or duplicable,
+                   ;; and if it's not known to produce a value other than 'prefab,
+                   ;; the list of immutables must be duplicable:
+                   (match rest
+                     [`() 'non-prefab]
+                     [`(,_) 'non-prefab]
+                     [`(,_ #f . ,_) 'non-prefab]
+                     [`(,_ (current-inspector) . ,_) 'non-prefab]
+                     [`(,_ 'prefab ,_ ',immutables . ,_) immutables]
+                     [`(,_ 'prefab ,_) '()]
+                     [`(,_ 'prefab) '()]
+                     [`,_ #f])])
+              (and prefab-imms
+                   (struct-type-info name
+                                     parent
+                                     fields
+                                     (+ fields (if parent
+                                                   (known-struct-type-field-count
+                                                    (hash-ref-either knowns imports u-parent))
+                                                   0))
+                                     ;; no guard => pure constructor
+                                     (or ((length rest) . < . 4)
+                                         (not (list-ref rest 3)))
+                                     ;; look for `prop:authentic`
+                                     (and (pair? rest)
+                                          (match (car rest)
+                                            [`(list (cons ,props ,vals) ...)
+                                             (for/or ([prop (in-list props)])
+                                               (eq? (unwrap prop) 'prop:authentic))]
+                                            [`,_ #f]))
+                                     (if (eq? prefab-imms 'non-prefab)
+                                         #f
+                                         prefab-imms)
+                                     rest)))))]
     [`(let-values () ,body)
      (make-struct-type-info body prim-knowns knowns imports mutated)]
     [`,_ #f]))

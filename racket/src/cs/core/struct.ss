@@ -268,8 +268,9 @@
 
 ;; ----------------------------------------
 
-;; Records which fields of an rtd are immutable:
-(define rtd-immutables (make-weak-eq-hashtable))
+;; Records which fields of an rtd are mutable, where an rtd that is
+;; not in the table has no mutable fields:
+(define rtd-mutables (make-weak-eq-hashtable))
 
 ;; Accessors and mutators that need a position are wrapped in these records:
 (define-record position-based-accessor (rtd offset field-count))
@@ -323,7 +324,9 @@
   (hashtable-ref struct-field-mutators v #f))
 
 ;; ----------------------------------------
-    
+
+;; General structure-type creation, but not called when a `schemify`
+;; transformation keeps the record type exposed to the compiler
 (define make-struct-type
   (case-lambda 
     [(name parent-rtd fields auto-fields)
@@ -343,46 +346,17 @@
     [(name parent-rtd fields-count auto-fields auto-val props insp proc-spec immutables guard constructor-name)
      (check-make-struct-type-arguments 'make-struct-type name parent-rtd fields-count auto-fields
                                        props insp proc-spec immutables guard constructor-name)
-     (let* ([fields (make-field-names (+ fields-count auto-fields))]
-            [prefab-key (and (eq? insp 'prefab)
-                             (let* ([l (if parent-rtd
-                                           (prefab-key+size->prefab-key-tail
-                                            (getprop (record-type-uid parent-rtd) 'prefab-key+count))
-                                           null)]
-                                    [l (if (= (length immutables) fields-count)
-                                           l
-                                           (cons (vector->immutable-vector
-                                                  (list->vector
-                                                   (let loop ([i 0])
-                                                     (cond
-                                                      [(= i fields-count) null]
-                                                      [(chez:member i immutables) (loop (add1 i))]
-                                                      [else (cons i (loop (add1 i)))]))))
-                                                 l))]
-                                    [l (if (zero? auto-fields)
-                                           l
-                                           (cons (list auto-fields l)
-                                                 l))])
-                               (if (null? l)
-                                   name
-                                   (cons name l))))]
+     (let* ([prefab-uid (and (eq? insp 'prefab)
+                             (structure-type-lookup-prefab-uid name parent-rtd fields-count auto-fields auto-val immutables))]
             [total-field-count (+ (if parent-rtd
                                       (struct-type-field-count parent-rtd)
                                       0)
                                   fields-count
                                   auto-fields)]
-            [prefab-key+count (and prefab-key (cons prefab-key total-field-count))]
-            [rtd (cond
-                  [(and prefab-key
-                        (begin
-                          (unless prefabs (set! prefabs (make-weak-hash)))
-                          #t)
-                        (hash-ref prefabs prefab-key+count #f))
-                   => (lambda (rtd) rtd)]
-                  [parent-rtd
-                   (make-record-type parent-rtd (symbol->string name) fields)]
-                  [else
-                   (make-record-type (symbol->string name) fields)])]
+            [rtd (make-record-type-descriptor name
+                                              parent-rtd
+                                              prefab-uid #f #f
+                                              (make-fields (+ fields-count auto-fields)))]
             [parent-count (if parent-rtd
                               (struct-type-field-count parent-rtd)
                               0)]
@@ -397,9 +371,6 @@
        (struct-type-install-properties! rtd name fields-count auto-fields parent-rtd
                                         props insp proc-spec immutables guard constructor-name
                                         #t)
-       (when prefab-key
-         (putprop (record-type-uid rtd) 'prefab-key+count prefab-key+count)
-         (hash-set! prefabs prefab-key+count rtd))
        (when auto-field-adder
          (putprop (record-type-uid rtd) 'auto-field (cons total-auto-field-count auto-field-adder)))
        (let ([ctr (let ([c (record-constructor rtd)])
@@ -418,6 +389,7 @@
                  (make-position-based-accessor rtd parent-count (+ fields-count auto-fields))
                  (make-position-based-mutator rtd parent-count (+ fields-count auto-fields)))))]))
 
+;; Called both by `make-struct-type` and by a `schemify` transformation:
 (define struct-type-install-properties!
   (case-lambda
    [(rtd name fields auto-fields parent-rtd)
@@ -438,59 +410,122 @@
     (unless skip-checks?
       (check-make-struct-type-arguments 'make-struct-type name parent-rtd fields auto-fields
                                         props insp proc-spec immutables guard constructor-name))
-    (let ([parent-props
-            (if parent-rtd
-                (hashtable-ref rtd-props parent-rtd '())
-                '())]
-           [all-immutables (if (integer? proc-spec)
-                               (cons proc-spec immutables)
-                               immutables)])
-       (when (not parent-rtd)
-         (record-type-equal-procedure rtd default-struct-equal?)
-         (record-type-hash-procedure rtd default-struct-hash))
-       ;; Record properties implemented by this type:
-       (hashtable-set! rtd-props rtd (let ([props (append (map car props) parent-props)])
-                                       (if proc-spec
-                                           (cons prop:procedure props)
-                                           props)))
-       (hashtable-set! rtd-immutables rtd all-immutables)
-       ;; Copy parent properties for this type:
-       (for-each (lambda (prop)
-                   (struct-property-set! prop rtd (struct-property-ref prop parent-rtd #f)))
-                 parent-props)
-       ;; Install new property values
-       (for-each (lambda (prop+val)
-                   (let loop ([prop (car prop+val)]
-                              [val (cdr prop+val)])
-                     (let ([guarded-val
-                            (let ([guard (struct-type-prop-guard prop)])
-                              (if guard
-                                  (let ([parent-count (if parent-rtd
-                                                          (struct-type-field-count parent-rtd)
-                                                          0)])
-                                    (guard val
-                                           (list name
-                                                 fields
-                                                 auto-fields
-                                                 (make-position-based-accessor rtd parent-count (+ fields auto-fields))
-                                                 (make-position-based-mutator rtd parent-count (+ fields auto-fields))
-                                                 all-immutables
-                                                 parent-rtd
-                                                 #f)))
-                                  val))])
-                       (when (eq? prop prop:equal+hash)
-                         (record-type-equal-procedure rtd (car val))
-                         (record-type-hash-procedure rtd (cadr val)))
-                       (struct-property-set! prop rtd guarded-val)
-                       (for-each (lambda (super)
-                                   (loop (car super)
-                                         ((cdr super) guarded-val)))
-                                 (struct-type-prop-supers prop)))))
-                 (if proc-spec
-                     (cons (cons prop:procedure proc-spec) props)
-                     props))
-       ;; Record inspector
-       (inspector-set! rtd insp))]))
+    (unless (eq? insp 'prefab) ; everything for prefab must be covered in `prefab-key+count->rtd`
+      (let* ([parent-props
+              (if parent-rtd
+                  (hashtable-ref rtd-props parent-rtd '())
+                  '())]
+             [all-immutables (if (integer? proc-spec)
+                                 (cons proc-spec immutables)
+                                 immutables)]
+             [mutables (immutables->mutables all-immutables fields)])
+        (when (not parent-rtd)
+          (record-type-equal-procedure rtd default-struct-equal?)
+          (record-type-hash-procedure rtd default-struct-hash))
+        ;; Record properties implemented by this type:
+        (hashtable-set! rtd-props rtd (let ([props (append (map car props) parent-props)])
+                                        (if proc-spec
+                                            (cons prop:procedure props)
+                                            props)))
+        (unless (equal? '#() mutables)
+          (hashtable-set! rtd-mutables rtd mutables))
+        ;; Copy parent properties for this type:
+        (for-each (lambda (prop)
+                    (struct-property-set! prop rtd (struct-property-ref prop parent-rtd #f)))
+                  parent-props)
+        ;; Install new property values
+        (for-each (lambda (prop+val)
+                    (let loop ([prop (car prop+val)]
+                               [val (cdr prop+val)])
+                      (let ([guarded-val
+                             (let ([guard (struct-type-prop-guard prop)])
+                               (if guard
+                                   (let ([parent-count (if parent-rtd
+                                                           (struct-type-field-count parent-rtd)
+                                                           0)])
+                                     (guard val
+                                            (list name
+                                                  fields
+                                                  auto-fields
+                                                  (make-position-based-accessor rtd parent-count (+ fields auto-fields))
+                                                  (make-position-based-mutator rtd parent-count (+ fields auto-fields))
+                                                  all-immutables
+                                                  parent-rtd
+                                                  #f)))
+                                   val))])
+                        (when (eq? prop prop:equal+hash)
+                          (record-type-equal-procedure rtd (car val))
+                          (record-type-hash-procedure rtd (cadr val)))
+                        (struct-property-set! prop rtd guarded-val)
+                        (for-each (lambda (super)
+                                    (loop (car super)
+                                          ((cdr super) guarded-val)))
+                                  (struct-type-prop-supers prop)))))
+                  (if proc-spec
+                      (cons (cons prop:procedure proc-spec) props)
+                      props))
+        ;; Record inspector
+        (inspector-set! rtd insp)))]))
+
+;; Used by a `schemify` transformation:
+(define (structure-type-lookup-prefab-uid name parent-rtd fields-count auto-fields auto-val immutables)
+  ;; Return a UID for a prefab structure type. We can assume that
+  ;; `immutables` is well-formed, and checking an error reporting will
+  ;; happen latter if necessary.
+  (let ([prefab-key (derive-prefab-key name
+                                       (and parent-rtd
+                                            (getprop (record-type-uid parent-rtd) 'prefab-key+count))
+                                       fields-count
+                                       immutables auto-fields auto-val)]
+        [total-field-count (+ (if parent-rtd
+                                  (struct-type-field-count parent-rtd)
+                                  0)
+                              fields-count
+                              auto-fields)])
+    (record-type-uid
+     (prefab-key+count->rtd (cons prefab-key total-field-count)))))
+
+(define (prefab-key+count->rtd prefab-key+count)
+  (cond
+   [(and prefabs
+         (hash-ref prefabs prefab-key+count #f))
+    => (lambda (rtd) rtd)]
+   [else
+    (let* ([prefab-key (car prefab-key+count)]
+           [name (if (symbol? prefab-key)
+                     prefab-key
+                     (car prefab-key))]
+           [parent-prefab-key+count
+            (prefab-key->parent-prefab-key+count (car prefab-key+count))]
+           [parent-rtd (and parent-prefab-key+count
+                            (prefab-key+count->rtd parent-prefab-key+count))]
+           [num-fields (- (cdr prefab-key+count)
+                          (if parent-prefab-key+count
+                              (cdr parent-prefab-key+count)
+                              0))]
+           [uid (gensym name)]
+           [rtd (make-record-type-descriptor name
+                                             parent-rtd
+                                             uid #f #f
+                                             (make-fields num-fields))]
+           [mutables (prefab-key-mutables prefab-key)])
+      (with-interrupts-disabled
+       (cond
+        [(and prefabs
+              (hash-ref prefabs prefab-key+count #f))
+         ;; rtd was created concurrently
+         => (lambda (rtd) rtd)]
+        [else
+         (putprop uid 'prefab-key+count prefab-key+count)
+         (unless prefabs (set! prefabs (make-weak-hash)))
+         (hash-set! prefabs prefab-key+count rtd)
+         (unless parent-rtd
+           (record-type-equal-procedure rtd default-struct-equal?)
+           (record-type-hash-procedure rtd default-struct-hash))
+         (unless (equal? mutables '#())
+           (hashtable-set! rtd-mutables rtd mutables))
+         (inspector-set! rtd 'prefab)
+         rtd])))]))
 
 (define make-struct-field-accessor
   (case-lambda
@@ -561,8 +596,14 @@
         0)))
 
 (define (struct-type-field-mutable? rtd pos)
-  (let ([immutables (hashtable-ref rtd-immutables rtd '())])
-    (not (chez:memv pos immutables))))
+  (let ([mutables (hashtable-ref rtd-mutables rtd '#())])
+    (let loop ([j (#%vector-length mutables)])
+      (cond
+       [(fx= j 0) #f]
+       [else
+        (let ([j (fx1- j)])
+          (or (eqv? pos (#%vector-ref mutables j))
+              (loop (fx1- j))))]))))
 
 (define (struct-info st)
   (unless (struct-type? st)
@@ -681,12 +722,13 @@
 
 ;; ----------------------------------------
 
-(define (make-field-names field-count)
-  (let loop ([fields field-count])
-    (if (zero? fields)
-        '()
-        (cons (string->symbol (format "a~a" fields))
-              (loop (sub1 fields))))))
+(define (make-fields field-count)
+  (list->vector
+   (let loop ([i 0])
+     (if (= i field-count)
+         '()
+         (cons `(mutable ,(string->symbol (format "f~a" i)))
+               (loop (fx1+ i)))))))
 
 ;; ----------------------------------------
 ;; Convenience for core:

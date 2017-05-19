@@ -7,46 +7,14 @@
          (and p (car p)))))
 
 (define (prefab-key->struct-type key field-count)
-  (let ([norm-key (normalized-prefab-key/check 'prefab-key->struct-type key field-count)])
-    (let ([prefab-key+count (cons norm-key field-count)])
-      (unless prefabs (set! prefabs (make-weak-hash)))
-      (cond
-       [(and prefabs
-             (hash-ref prefabs prefab-key+count #f))
-        => (lambda (rtd) rtd)]
-       [else
-        (let* ([parent-prefab-key+count (prefab-key->parent-prefab-key+count norm-key)]
-               [parent-rtd (and parent-prefab-key+count
-                                (prefab-key->struct-type (car parent-prefab-key+count)
-                                                         (cdr parent-prefab-key+count)))]
-               [name (if (symbol? norm-key)
-                         norm-key
-                         (car norm-key))]
-               [rtd (make-record-type parent-rtd
-                                      (symbol->string name)
-                                      (make-field-names
-                                       (- field-count
-                                          (if parent-rtd
-                                              (struct-type-field-count parent-rtd)
-                                              0))))])
-          ;; FIXME: make atomic
-          (hash-set! prefabs prefab-key+count rtd)
-          (putprop (record-type-uid rtd) 'prefab-key+count prefab-key+count)
-          (inspector-set! rtd #f)
-          (unless parent-rtd
-            (record-type-equal-procedure rtd default-struct-equal?)
-            (record-type-hash-procedure rtd default-struct-hash))
-          rtd)]))))
+  (prefab-key+count->rtd
+   (cons (normalized-prefab-key/check 'prefab-key->struct-type key field-count)
+         field-count)))
 
 (define (make-prefab-struct key . args)
   (let* ([field-count (length args)]
          [norm-key (normalized-prefab-key/check 'make-prefab-struct key field-count)])
-    (let ([rtd
-           (cond
-            [(and prefabs
-                  (hash-ref prefabs (cons norm-key field-count) #f))
-             => (lambda (rtd) rtd)]
-            [else (prefab-key->struct-type key field-count)])])
+    (let ([rtd (prefab-key->struct-type key field-count)])
       (apply (record-constructor rtd) args))))
 
 ;; ----------------------------------------
@@ -306,3 +274,52 @@
               (cons name total-count)]
              [else
               (cons (cons name rest-k) total-count)]))))]))
+
+(define (derive-prefab-key name parent-key+size fields-count immutables auto-fields auto-val)
+  (let* ([l (if parent-key+size
+                (prefab-key+size->prefab-key-tail parent-key+size)
+                '())]
+         [l (let ([mutables (immutables->mutables immutables fields-count)])
+              (if (fx= 0 (#%vector-length mutables))
+                  l
+                  (cons mutables l)))]
+         [l (if (zero? auto-fields)
+                l
+                (cons (list auto-fields auto-val)
+                      l))])
+    (if (null? l)
+        name
+        (cons name l))))
+
+(define (prefab-key-mutables prefab-key)
+  (if (pair? prefab-key)
+      (if (vector? (cadr prefab-key))
+          (cadr prefab-key)
+          (if (and (pair? (cddr prefab-key))
+                   (vector? (caddr prefab-key)))
+              (caddr prefab-key)
+              '#()))
+      '#()))
+
+(define (immutables->mutables immutables fields-count)
+  (vector->immutable-vector
+   (list->vector
+    (let loop ([i 0])
+      (cond
+       [(= i fields-count) null]
+       [(chez:member i immutables) (loop (add1 i))]
+       [else (cons i (loop (add1 i)))])))))
+
+(define (mutables->immutables mutables fields-count)
+  (let loop ([i 0])
+    (cond
+     [(fx= i fields-count) '()]
+     [else
+      (let jloop ([j (vector-length mutables)])
+        (cond
+         [(fx= j 0) (cons i (loop (fx1+ i)))]
+         [else
+          (let ([j (fx1- j)])
+            (if (eqv? i (vector-ref mutables j))
+                (loop (fx1+ i))
+                (jloop j)))]))])))
