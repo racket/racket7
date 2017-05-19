@@ -12,9 +12,22 @@
   (let loop ([ht (parameterization-ht p)] [args args])
     (cond
      [(null? args) (make-parameterization ht)]
-     [else (loop (hamt-set ht (car args) (make-thread-cell (cadr args) #t))
-                 (cddr args))])))
-
+     [(and (parameter? (car args))
+           (pair? (cdr args)))
+      (let* ([p (car args)]
+             [v (let loop ([p p] [v (cadr args)])
+                  (if (derived-parameter? p)
+                      ((derived-parameter-guard p) (loop (derived-parameter-next p) v))
+                      v))])
+        (loop (hamt-set ht p (make-thread-cell v #t))
+              (cddr args)))]
+     [(parameter? (car args))
+      (raise-arguments-error 'extend-parameterization
+                             "missing value for parameter"
+                             "parameter" (car args))]
+     [else
+      (raise-argument-error 'extend-parameterization "parameter?" (car args))])))
+     
 (define (current-parameterization)
   (continuation-mark-set-first
    #f
@@ -30,6 +43,10 @@
 
 (define-record-type (parameter create-parameter parameter?)
   (fields proc))
+
+(define-record-type (derived-parameter create-derived-parameter derived-parameter?)
+  (parent parameter)
+  (fields next guard))
 
 (define make-parameter
   (case-lambda
@@ -50,6 +67,22 @@
                                       (guard v)
                                       v)))])))
        self)]))
+
+(define (make-derived-parameter p guard wrap)
+  (unless (parameter? p)
+    (raise-argument-error 'make-derived-parameter parameter? p))
+  (unless (and (procedure? guard)
+               (procedure-arity-includes? guard 1))
+    (raise-argument-error 'make-derived-parameter "(procedure-arity-includes/c 1)" guard))
+  (unless (and (procedure? wrap)
+               (procedure-arity-includes? wrap 1))
+    (raise-argument-error 'make-derived-parameter "(procedure-arity-includes/c 1)" wrap))
+  (create-derived-parameter (let ([self (parameter-proc p)])
+                              (case-lambda
+                               [(v) (self (guard v))]
+                               [() (wrap (self))]))
+                            p
+                            guard))
 
 ;; ----------------------------------------
 

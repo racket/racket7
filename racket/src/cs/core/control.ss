@@ -112,19 +112,25 @@
 (define *metacontinuation* '())
 (define *empty-k* #f)
 
+;; A *cc-guard* callback can is installed by the
+;; application of a non-composable continuation
+;; with an impersonated prompt tag.
+(define *cc-guard* values)
+
 (define-record metacontinuation-frame (tag          ; continuation prompt tag or #f
                                        resume-k     ; delivers values to the prompt
                                        resume-k/no-wind ; same, but doesn't run winders jumping in
                                        empty-k      ; deepest end of this frame
                                        mark-stack   ; mark stack to restore
-                                       mark-chain)) ; #f or a cached list of mark-chain-frame or elem+cache
+                                       mark-chain   ; #f or a cached list of mark-chain-frame or elem+cache
+                                       cc-guard))   ; cc-guard to restore
 
 ;; Messages to `resume-k[/no-wind]`:
 (define-record appending (resume))  ; composing the frame, so run "in" winders
 (define-record aborting (tag args)) ; aborting, so run "out" winders
 (define-record applying (c args))   ; applying a non-composable continuation
 
-(define-record-type (continuation-prompt-tag create-continuation-prompt-tag continuation-prompt-tag?)
+(define-record-type (continuation-prompt-tag create-continuation-prompt-tag authentic-continuation-prompt-tag?)
   (fields (mutable name))) ; mutable => constructor generates fresh instances
 
 (define the-default-continuation-prompt-tag (create-continuation-prompt-tag 'default))
@@ -155,15 +161,16 @@
 (define (continuation-prompt-available? tag)
   (unless (continuation-prompt-tag? tag)
     (raise-argument-error 'continuation-prompt-tag-available? "continuation-prompt-tag?" tag))
-  (or (eq? tag the-default-continuation-prompt-tag)
-      (eq? tag the-root-continuation-prompt-tag)
-      (let loop ([mc *metacontinuation*])
-        (cond
-         [(null? mc)
-          #f]
-         [(eq? tag (metacontinuation-frame-tag (car mc)))
-          #t]
-         [else (loop (cdr mc))]))))
+  (let ([tag (strip-impersonator tag)])
+    (or (eq? tag the-default-continuation-prompt-tag)
+        (eq? tag the-root-continuation-prompt-tag)
+        (let loop ([mc *metacontinuation*])
+          (cond
+           [(null? mc)
+            #f]
+           [(eq? tag (metacontinuation-frame-tag (car mc)))
+            #t]
+           [else (loop (cdr mc))])))))
 
 (define call-with-continuation-prompt
   (case-lambda
@@ -178,11 +185,16 @@
        (raise-argument-error 'call-with-continuation-prompt "(or/c #f procedure?)" handler))
      (start-uninterrupted 'prompt)
      (call-in-empty-metacontinuation-frame
-      tag
-      (or handler (make-default-abort-handler tag))
+      (strip-impersonator tag)
+      (wrap-handler-for-impersonator
+       tag
+       (or handler (make-default-abort-handler tag)))
       (lambda ()
         (end-uninterrupted 'prompt)
-        (apply proc args)))]))
+        (compose-cc-guard-for-impersonator! tag)
+        (call-with-values (lambda () (apply proc args))
+          (lambda results
+            (apply *cc-guard* results)))))]))
 
 (define (make-default-abort-handler tag)
   (lambda (abort-thunk)
@@ -260,9 +272,11 @@
                                                                                k/no-wind
                                                                                *empty-k*
                                                                                *mark-stack*
-                                                                               #f)])
+                                                                               #f
+                                                                               *cc-guard*)])
                                           (set! *empty-k* empty-k)
                                           (set! *mark-stack* #f)
+                                          (set! *cc-guard* values)
                                           ;; push the metacontinuation:
                                           (set! *metacontinuation* (cons mf *metacontinuation*))
                                           ;; ready:
@@ -327,16 +341,19 @@
                                (metacontinuation-frame-empty-k current-mf)
                                (mark-stack-append mark-stack
                                                   (metacontinuation-frame-mark-stack current-mf))
-                               #f))
+                               #f
+                               (metacontinuation-frame-cc-guard current-mf)))
 
 ;; ----------------------------------------
 
 (define (abort-current-continuation tag . args)
   (unless (continuation-prompt-tag? tag)
     (raise-argument-error 'abort-current-continuation "continuation-prompt-tag?" tag))
-  (check-prompt-tag-available 'abort-current-continuation tag)
+  (check-prompt-tag-available 'abort-current-continuation (strip-impersonator tag))
   (start-uninterrupted 'abort)
-  (do-abort-current-continuation tag args))
+  (let ([args (apply-impersonator-abort-wrapper tag args)]
+        [tag (strip-impersonator tag)])
+    (do-abort-current-continuation tag args)))
   
 (define (do-abort-current-continuation tag args)
   (assert-in-uninterrupted)
@@ -363,6 +380,7 @@
      (p))))
 
 ;; ----------------------------------------
+;; Capturing and applying continuations
 
 (define-record continuation ())
 (define-record full-continuation continuation (k mark-stack empty-k mc))
@@ -389,7 +407,7 @@
              k
              *mark-stack*
              *empty-k*
-             (extract-metacontinuation 'call-with-current-continuation tag #t)
+             (extract-metacontinuation 'call-with-current-continuation (strip-impersonator tag) #t)
              tag))))))]))
 
 (define call-with-composable-continuation
@@ -410,7 +428,7 @@
              k
              *mark-stack*
              *empty-k*
-             (extract-metacontinuation 'call-with-composable-continuation tag #f)))))))]))
+             (extract-metacontinuation 'call-with-composable-continuation (strip-impersonator tag) #f)))))))]))
 
 (define (call-with-escape-continuation p)
   (unless (and (procedure? p)
@@ -445,12 +463,14 @@
             ;; change the current continuation out from under us.
             (find-common-metacontinuation (full-continuation-mc c)
                                           *metacontinuation*
-                                          tag)])
+                                          (strip-impersonator tag))])
       (cond
        [(eq? common-mc *metacontinuation*)
+        ;; Add a cc guard if `tag` is impersonated:
+        (wrap-cc-guard-for-impersonator! tag)
         ;; Replace the current metacontinuation frame's continuation
         ;; with the saved one; this replacement will take care of any
-        ;; shared winders within the frame:
+        ;; shared winders within the frame.
         (apply-immediate-continuation c args)]
        [else
         ;; Jump back to the nearest prompt, then continue jumping
@@ -560,6 +580,7 @@
     (add (record-type-descriptor escape-continuation))))
 
 ;; ----------------------------------------
+;; Metacontinuation operations for continutions
 
 ;; Extract a prefix of `*metacontinuation*` up to `tag`
 (define (extract-metacontinuation who tag barrier-ok?)
@@ -641,6 +662,7 @@
                  l)))]))
 
 ;; ----------------------------------------
+;; Continuation marks
 
 (define-record continuation-mark-set (mark-chain context))
 (define-record mark-stack-frame (prev   ; prev frame
@@ -743,6 +765,7 @@
                 rest-mark-chain)))]))
 
 ;; ----------------------------------------
+;; Continuation-mark caching
 
 ;; A `elem+cache` can replace a plain table in a "flat" variant of the
 ;; mark stack within a metacontinuation frame, or in a mark-stack
@@ -791,47 +814,48 @@
        (raise-argument-error 'continuation-mark-set-first "(or/c continuation-mark-set? #f)" marks))
      (unless (continuation-prompt-tag? prompt-tag)
        (raise-argument-error 'continuation-mark-set-first "continuation-prompt-tag?" prompt-tag))
-     (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set-first key)])
-       (let ([v (marks-search (or (and marks
-                                       (continuation-mark-set-mark-chain marks))
-                                  (current-mark-chain))
-                              key
-                              ;; elem-stop?:
-                              (lambda (mcf)
-                                (eq? (mark-chain-frame-tag mcf) prompt-tag))
-                              ;; elem-ref:
-                              (lambda (mcf key none)
-                                ;; Search within a metacontinuation frame
-                                (let ([marks (mark-chain-frame-marks mcf)])
-                                  (marks-search marks
-                                                key
-                                                ;; elem-stop?:
-                                                (lambda (t) #f)
-                                                ;; elem-ref:
-                                                hamt-ref
-                                                ;; fail-k:
-                                                (lambda () none)
-                                                ;; strip & combine:
-                                                (lambda (v) v)
-                                                (lambda (v old) v))))
-                              ;; fail-k:
-                              (lambda () none)
-                              ;; strip & combine --- cache results at the metafunction
-                              ;; level should depend on the prompt tag, so make the cache
-                              ;; value another table level mapping the prompt tag to the value:
-                              (lambda (v) (hash-ref v prompt-tag none2))
-                              (lambda (v old) (hamt-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
-         (cond
-          [(eq? v none)
-           ;; More special treatment of built-in keys
+     (let ([prompt-tag (strip-impersonator prompt-tag)])
+       (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set-first key)])
+         (let ([v (marks-search (or (and marks
+                                         (continuation-mark-set-mark-chain marks))
+                                    (current-mark-chain))
+                                key
+                                ;; elem-stop?:
+                                (lambda (mcf)
+                                  (eq? (mark-chain-frame-tag mcf) prompt-tag))
+                                ;; elem-ref:
+                                (lambda (mcf key none)
+                                  ;; Search within a metacontinuation frame
+                                  (let ([marks (mark-chain-frame-marks mcf)])
+                                    (marks-search marks
+                                                  key
+                                                  ;; elem-stop?:
+                                                  (lambda (t) #f)
+                                                  ;; elem-ref:
+                                                  hamt-ref
+                                                  ;; fail-k:
+                                                  (lambda () none)
+                                                  ;; strip & combine:
+                                                  (lambda (v) v)
+                                                  (lambda (v old) v))))
+                                ;; fail-k:
+                                (lambda () none)
+                                ;; strip & combine --- cache results at the metafunction
+                                ;; level should depend on the prompt tag, so make the cache
+                                ;; value another table level mapping the prompt tag to the value:
+                                (lambda (v) (hash-ref v prompt-tag none2))
+                                (lambda (v old) (hamt-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
            (cond
-            [(eq? key parameterization-key)
-             empty-parameterization]
-            [(eq? key break-enabled-key)
-             (current-engine-init-break-enabled-cell none-v)]
-            [else
-             none-v])]
-          [else (wrapper v)])))]))
+            [(eq? v none)
+             ;; More special treatment of built-in keys
+             (cond
+              [(eq? key parameterization-key)
+               empty-parameterization]
+              [(eq? key break-enabled-key)
+               (current-engine-init-break-enabled-cell none-v)]
+              [else
+               none-v])]
+            [else (wrapper v)]))))]))
 
 ;; To make `continuation-mark-set-first` constant-time, if we traverse
 ;; N elements to get an answer, then cache the answer at N/2 elements.
@@ -907,46 +931,8 @@
        (raise-argument-error 'continuation-mark-set->list "(or/c continuation-mark-set? #f)" marks))
      (unless (continuation-prompt-tag? prompt-tag)
        (raise-argument-error 'continuation-mark-set->list "continuation-prompt-tag?" prompt-tag))
-     (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list key)])
-       (let chain-loop ([mark-chain (or (and marks
-                                             (continuation-mark-set-mark-chain marks))
-                                        (current-mark-chain))])
-         (cond
-          [(null? mark-chain)
-           null]
-          [else
-           (let* ([mcf (elem+cache-strip (car mark-chain))])
-             (cond
-              [(eq? (mark-chain-frame-tag mcf) prompt-tag)
-               null]
-              [else
-               (let loop ([marks (mark-chain-frame-marks mcf)])
-                 (cond
-                  [(null? marks)
-                   (chain-loop (cdr mark-chain))]
-                  [else
-                   (let* ([v (hamt-ref (elem+cache-strip (car marks)) key none)])
-                     (if (eq? v none)
-                         (loop (cdr marks))
-                         (cons (wrapper v) (loop (cdr marks)))))]))]))])))]))
-
-(define continuation-mark-set->list*
-  (case-lambda
-    [(marks keys) (continuation-mark-set->list* marks keys the-default-continuation-prompt-tag #f)]
-    [(marks keys prompt-tag) (continuation-mark-set->list* marks keys prompt-tag #f)]
-    [(marks keys prompt-tag none-v)
-     (unless (or (not marks)
-                 (continuation-mark-set? marks))
-       (raise-argument-error 'continuation-mark-set->list "(or/c continuation-mark-set? #f)" marks))
-     (unless (list? keys)
-       (raise-argument-error 'continuation-mark-set->list "list?" keys))
-     (unless (continuation-prompt-tag? prompt-tag)
-       (raise-argument-error 'continuation-mark-set->list "continuation-prompt-tag?" prompt-tag))
-     (let-values ([(keys wrappers) (map/2-values (lambda (k)
-                                                   (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list* k))
-                                                 keys)])
-       (let* ([n (length keys)]
-              [tmp (make-vector n)])
+     (let ([prompt-tag (strip-impersonator prompt-tag)])
+       (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list key)])
          (let chain-loop ([mark-chain (or (and marks
                                                (continuation-mark-set-mark-chain marks))
                                           (current-mark-chain))])
@@ -964,23 +950,63 @@
                     [(null? marks)
                      (chain-loop (cdr mark-chain))]
                     [else
-                     (let ([t (elem+cache-strip (car marks))])
-                       (let key-loop ([keys keys] [wrappers wrappers] [i 0] [found? #f])
-                         (cond
-                          [(null? keys)
-                           (if found?
-                               (let ([vec (vector-copy tmp)])
-                                 (cons vec (loop (cdr marks))))
-                               (loop (cdr marks)))]
-                          [else
-                           (let ([v (hamt-ref t (car keys) none)])
-                             (cond
-                              [(eq? v none)
-                               (vector-set! tmp i none-v)
-                               (key-loop (cdr keys) (cdr wrappers) (add1 i) found?)]
-                              [else
-                               (vector-set! tmp i ((car wrappers) v))
-                               (key-loop (cdr keys) (cdr wrappers) (add1 i) #t)]))])))]))]))]))))]))
+                     (let* ([v (hamt-ref (elem+cache-strip (car marks)) key none)])
+                       (if (eq? v none)
+                           (loop (cdr marks))
+                           (cons (wrapper v) (loop (cdr marks)))))]))]))]))))]))
+
+(define continuation-mark-set->list*
+  (case-lambda
+    [(marks keys) (continuation-mark-set->list* marks keys the-default-continuation-prompt-tag #f)]
+    [(marks keys prompt-tag) (continuation-mark-set->list* marks keys prompt-tag #f)]
+    [(marks keys prompt-tag none-v)
+     (unless (or (not marks)
+                 (continuation-mark-set? marks))
+       (raise-argument-error 'continuation-mark-set->list "(or/c continuation-mark-set? #f)" marks))
+     (unless (list? keys)
+       (raise-argument-error 'continuation-mark-set->list "list?" keys))
+     (unless (continuation-prompt-tag? prompt-tag)
+       (raise-argument-error 'continuation-mark-set->list "continuation-prompt-tag?" prompt-tag))
+     (let ([prompt-tag (strip-impersonator prompt-tag)])
+       (let-values ([(keys wrappers) (map/2-values (lambda (k)
+                                                     (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list* k))
+                                                   keys)])
+         (let* ([n (length keys)]
+                [tmp (make-vector n)])
+           (let chain-loop ([mark-chain (or (and marks
+                                                 (continuation-mark-set-mark-chain marks))
+                                            (current-mark-chain))])
+             (cond
+              [(null? mark-chain)
+               null]
+              [else
+               (let* ([mcf (elem+cache-strip (car mark-chain))])
+                 (cond
+                  [(eq? (mark-chain-frame-tag mcf) prompt-tag)
+                   null]
+                  [else
+                   (let loop ([marks (mark-chain-frame-marks mcf)])
+                     (cond
+                      [(null? marks)
+                       (chain-loop (cdr mark-chain))]
+                      [else
+                       (let ([t (elem+cache-strip (car marks))])
+                         (let key-loop ([keys keys] [wrappers wrappers] [i 0] [found? #f])
+                           (cond
+                            [(null? keys)
+                             (if found?
+                                 (let ([vec (vector-copy tmp)])
+                                   (cons vec (loop (cdr marks))))
+                                 (loop (cdr marks)))]
+                            [else
+                             (let ([v (hamt-ref t (car keys) none)])
+                               (cond
+                                [(eq? v none)
+                                 (vector-set! tmp i none-v)
+                                 (key-loop (cdr keys) (cdr wrappers) (add1 i) found?)]
+                                [else
+                                 (vector-set! tmp i ((car wrappers) v))
+                                 (key-loop (cdr keys) (cdr wrappers) (add1 i) #t)]))])))]))]))])))))]))
 
 (define (continuation-mark-set->context marks)
   (unless (continuation-mark-set? marks)
@@ -995,7 +1021,7 @@
        (raise-argument-error 'current-continuation-marks "continuation-prompt-tag?" tag))
      (call/cc
       (lambda (k)
-        (make-continuation-mark-set (prune-mark-chain-suffix tag (current-mark-chain))
+        (make-continuation-mark-set (prune-mark-chain-suffix (strip-impersonator tag) (current-mark-chain))
                                     (continuation->context k))))]))
 
 (define continuation-marks
@@ -1006,25 +1032,26 @@
        (raise-argument-error 'continuation-marks "(or/c continuation? #f)" k))
      (unless (continuation-prompt-tag? tag)
        (raise-argument-error 'continuation-marks "continuation-prompt-tag?" tag))
-     (cond
-      [(full-continuation? k)
-       (make-continuation-mark-set
-        (prune-mark-chain-suffix
-         tag
-         (get-current-mark-chain (full-continuation-mark-stack k)
-                                 (full-continuation-mc k)))
-        k)]
-      [(escape-continuation? k)
-       (unless (continuation-prompt-available? (escape-continuation-tag k))
-         (raise-arguments-error '|continuation application|
-                                "escape continuation not in the current continuation"))
-       (make-continuation-mark-set
-        (prune-mark-chain-suffix
-         tag
-         (prune-mark-chain-prefix (escape-continuation-tag k) (current-mark-chain)))
-        k)]
-      [else
-       (make-continuation-mark-set null #f)])]))
+     (let ([tag (strip-impersonator tag)])
+       (cond
+        [(full-continuation? k)
+         (make-continuation-mark-set
+          (prune-mark-chain-suffix
+           tag
+           (get-current-mark-chain (full-continuation-mark-stack k)
+                                   (full-continuation-mc k)))
+          k)]
+        [(escape-continuation? k)
+         (unless (continuation-prompt-available? (escape-continuation-tag k))
+           (raise-arguments-error '|continuation application|
+                                  "escape continuation not in the current continuation"))
+         (make-continuation-mark-set
+          (prune-mark-chain-suffix
+           tag
+           (prune-mark-chain-prefix (escape-continuation-tag k) (current-mark-chain)))
+          k)]
+        [else
+         (make-continuation-mark-set null #f)]))]))
 
 (define (mark-stack-append a b)
   (cond
@@ -1037,6 +1064,7 @@
                            #f)]))
 
 ;; ----------------------------------------
+;; Continuation-mark keys: impersonators, and chaperones
 
 (define-record-type (continuation-mark-key create-continuation-mark-key authentic-continuation-mark-key?)
   (fields (mutable name))) ; `mutable` ensures that `create-...` allocates
@@ -1145,6 +1173,150 @@
                                            set))
 
 ;; ----------------------------------------
+;; Continuation prompt tags: impersonators, and chaperones
+
+(define (continuation-prompt-tag? v)
+  (or (authentic-continuation-prompt-tag? v)
+      (and (impersonator? v)
+           (authentic-continuation-prompt-tag? (impersonator-val v)))))
+
+(define-record continuation-prompt-tag-impersonator impersonator (procs))
+(define-record continuation-prompt-tag-chaperone chaperone (procs))
+
+(define-record continuation-prompt-tag-procs (handler abort cc-guard cc-impersonate))
+
+(define (continuation-prompt-tag-impersonator-or-chaperone? tag)
+  (or (continuation-prompt-tag-impersonator? tag)
+      (continuation-prompt-tag-chaperone? tag)))
+
+(define (continuation-prompt-tag-impersonator-or-chaperone-procs tag)
+  (if (continuation-prompt-tag-impersonator? tag)
+      (continuation-prompt-tag-impersonator-procs tag)
+      (continuation-prompt-tag-chaperone-procs tag)))
+
+(define (impersonate-prompt-tag tag handler abort . args)
+  (do-impersonate-prompt-tag 'impersonate-prompt-tag tag handler abort args
+                             make-continuation-prompt-tag-impersonator))
+
+(define (chaperone-prompt-tag tag handler abort . args)
+  (do-impersonate-prompt-tag 'chaperone-prompt-tag tag handler abort args
+                             make-continuation-prompt-tag-chaperone))
+
+(define (do-impersonate-prompt-tag who tag handler abort args
+                                   make-continuation-prompt-tag-impersonator)
+  (unless (continuation-prompt-tag? tag)
+    (raise-argument-error who "continuation-prompt-tag?" tag))
+  (unless (procedure? handler)
+    (raise-argument-error who "procedure?" handler))
+  (unless (procedure? abort)
+    (raise-argument-error who "procedure?" abort))
+  (let* ([cc-guard (and (pair? args)
+                        (procedure? (car args))
+                        (car args))]
+         [args (if cc-guard (cdr args) args)]
+         [callcc-impersonate (and (pair? args)
+                                  (procedure? (car args))
+                                  (car args))]
+         [args (if callcc-impersonate (cdr args) args)])
+    (when callcc-impersonate
+      (unless (procedure-arity-includes? callcc-impersonate 1)
+        (raise-argument-error who "(procedure-arith-includes/c 1)" abort)))
+    (make-continuation-prompt-tag-impersonator
+     (strip-impersonator tag)
+     tag
+     (add-impersonator-properties who
+                                  args
+                                  (if (impersonator? tag)
+                                      (impersonator-props tag)
+                                      empty-hasheq))
+     (make-continuation-prompt-tag-procs handler abort cc-guard (or callcc-impersonate values)))))
+
+(define (apply-prompt-tag-interposition who at-when what
+                                        wrapper args chaperone?)
+  (call-with-values (lambda () (apply wrapper args))
+    (lambda new-args
+      (unless (= (length args) (length new-args))
+        (raise-result-arity-error at-when (length args) new-args))
+      (when chaperone?
+        (for-each (lambda (arg new-arg)
+                    (unless (chaperone-of? new-arg arg)
+                      (raise-chaperone-error who what arg new-arg)))
+                  args new-args))
+      new-args)))
+
+(define (wrap-handler-for-impersonator tag handler)
+  (let loop ([tag tag])
+    (cond
+     [(continuation-prompt-tag-impersonator-or-chaperone? tag)
+      (let ([handler (loop (impersonator-next tag))]
+            [h (continuation-prompt-tag-procs-handler
+                (continuation-prompt-tag-impersonator-or-chaperone-procs tag))]
+            [chaperone? (continuation-prompt-tag-chaperone? tag)])
+        (lambda args
+          (apply handler
+                 (apply-prompt-tag-interposition 'call-with-continuation-prompt
+                                                 "use of prompt-handler redirecting procedure"
+                                                 "prompt-handler argument"
+                                                 h args chaperone?))))]
+     [(impersonator? tag)
+      (loop (impersonator-next tag))]
+     [else handler])))
+
+(define (apply-impersonator-abort-wrapper tag args)
+  (let loop ([tag tag] [args args])
+    (cond
+     [(continuation-prompt-tag-impersonator-or-chaperone? tag)
+      (let ([a (continuation-prompt-tag-procs-abort
+                (continuation-prompt-tag-impersonator-or-chaperone-procs tag))]
+            [chaperone? (continuation-prompt-tag-chaperone? tag)])
+        (loop (impersonator-next tag)
+              (apply-prompt-tag-interposition 'abort-current-continuation
+                                               "use of prompt-abort redirecting procedure"
+                                               "prompt-abort argument"
+                                               a args chaperone?)))]
+     [(impersonator? tag)
+      (loop (impersonator-next tag) args)]
+     [else args])))
+
+(define (compose-cc-guard-for-impersonator! tag)
+  (let loop! ([tag tag])
+    (cond
+     [(continuation-prompt-tag-impersonator-or-chaperone? tag)
+      (let ([cc-guard (continuation-prompt-tag-procs-cc-guard
+                       (continuation-prompt-tag-impersonator-or-chaperone-procs tag))]
+            [chaperone? (continuation-prompt-tag-chaperone? tag)])
+        (loop! (impersonator-next tag))
+        (when cc-guard
+          (let ([old-cc-guard *cc-guard*])
+            (set! *cc-guard*
+                  (lambda args
+                    (apply old-cc-guard
+                           (apply-prompt-tag-interposition 'call-with-continuation-prompt
+                                                           "use of `call/cc` result guard"
+                                                           "prompt-result argument"
+                                                           cc-guard args chaperone?)))))))]
+     [(impersonator? tag)
+      (loop! (impersonator-next tag))]
+     [else (void)])))
+
+(define (wrap-cc-guard-for-impersonator! tag)
+  (let loop! ([tag tag])
+    (cond
+     [(continuation-prompt-tag-impersonator-or-chaperone? tag)
+      (let ([cc-impersonate (continuation-prompt-tag-procs-cc-impersonate
+                             (continuation-prompt-tag-impersonator-or-chaperone-procs tag))]
+            [chaperone? (continuation-prompt-tag-chaperone? tag)])
+        (loop! (impersonator-next tag))
+        (let ([new-cc-guard (cc-impersonate *cc-guard*)])
+          (when chaperone?
+            (unless (chaperone-of? new-cc-guard *cc-guard*)
+              (raise-chaperone-error 'call-with-current-continuation "continuation-result guard" *cc-guard* new-cc-guard)))
+          (set! *cc-guard* new-cc-guard)))]
+     [(impersonator? tag)
+      (loop! (impersonator-next tag))]
+     [else (void)])))
+
+;; ----------------------------------------
 
 ;; Wrap `dynamic-wind` for three tasks:
 
@@ -1193,6 +1365,7 @@
      (end-uninterrupted 'dw))))
 
 ;; ----------------------------------------
+;; Metacontinuation swapping for engines
 
 (define-record saved-metacontinuation (mc exn-state))
 

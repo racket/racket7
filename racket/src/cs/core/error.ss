@@ -282,15 +282,19 @@
                                             (number->string (arity-at-least-value arity))))]
    [else ""]))
 
-(define (raise-result-arity-error expected-args args)
+(define (raise-result-arity-error where num-expected-args args)
   (raise
    (exn:fail:contract:arity
     (string-append
      "result arity mismatch;\n"
      " expected number of values not received\n"
      "  received: " (number->string (length args)) "\n" 
-     "  in: local-binding form")
+     "  expected: " (number->string num-expected-args) "\n" 
+     "  in: " where)
     (current-continuation-marks))))
+
+(define (raise-binding-result-arity-error expected-args args)
+  (raise-result-arity-error "local-binding form" (length expected-args) args))
 
 ;; ----------------------------------------
 

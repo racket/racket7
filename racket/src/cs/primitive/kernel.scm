@@ -102,6 +102,7 @@
    chaperone-hash
    chaperone-procedure
    chaperone-procedure*
+   chaperone-prompt-tag
    chaperone-struct
    chaperone-vector
    chaperone-vector*
@@ -308,6 +309,7 @@
    impersonate-hash
    impersonate-procedure
    impersonate-procedure*
+   impersonate-prompt-tag
    impersonate-struct
    impersonate-vector
    impersonate-vector*
@@ -357,6 +359,7 @@
    make-channel
    make-continuation-mark-key
    make-continuation-prompt-tag
+   make-derived-parameter
    make-ephemeron
    make-flvector
    make-fxvector

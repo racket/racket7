@@ -17,6 +17,8 @@
           call-with-continuation-barrier
           abort-current-continuation
           continuation-prompt-available?
+          impersonate-prompt-tag
+          chaperone-prompt-tag
           (rename [break-enabled-key core:break-enabled-key])
           
           with-continuation-mark
@@ -45,6 +47,7 @@
 
           parameterization-key
           make-parameter
+          make-derived-parameter
           parameter?
           extend-parameterization
           parameterization?
@@ -135,7 +138,7 @@
           raise-range-error
           raise-arity-error
           raise-type-error
-          raise-result-arity-error
+          raise-binding-result-arity-error
 
           make-struct-type-property
           struct-type-property?

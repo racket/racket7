@@ -256,7 +256,8 @@
 (define (interned-char? v) #f)
 (define (true-object? v) (eq? v #t))
 
-(define (eval-jit-enabled) #t)
+(define eval-jit-enabled
+  (make-parameter #t))
 
 (define (current-plumber) 'plumber)
 (define (plumber-add-flush! p v) (set! at-exit (cons v null)))

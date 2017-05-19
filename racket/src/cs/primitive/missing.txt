@@ -7,7 +7,6 @@ call-in-nested-thread
 call-with-semaphore/enable-break
 chaperone-channel
 chaperone-evt
-chaperone-prompt-tag
 chaperone-struct-type
 char-utf-8-length
 choice-evt
@@ -47,7 +46,6 @@ filesystem-change-evt?
 filesystem-root-list
 global-port-print-handler
 impersonate-channel
-impersonate-prompt-tag
 impersonator-ephemeron
 integer-length
 integer-sqrt
@@ -55,7 +53,6 @@ integer-sqrt/remainder
 locale-string-encoding
 make-custodian
 make-custodian-box
-make-derived-parameter
 make-directory
 make-environment-variables
 make-file-or-directory-link

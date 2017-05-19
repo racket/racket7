@@ -524,6 +524,69 @@
   (check (e 1000 void (lambda (remain v) v) (lambda (e) (error 'engine "oops"))) 'set))
 
 ;; ----------------------------------------
+;; Prompt-tag impersonators
+
+(let ([tag1i (impersonate-prompt-tag tag1
+                                     ;; handle
+                                     (lambda (args) (list 'handle args))
+                                     ;; abort:
+                                     (lambda (args) (list 'abort args))
+                                     ;; cc-guard:
+                                     (lambda (result) (list 'cc-guard result))
+                                     ;; call-triggered guard impersonator:
+                                     (lambda (proc) (lambda (result)
+                                                      (list 'cc-use (proc result)))))])
+  (check (call-with-continuation-prompt
+          (lambda ()
+            (abort-current-continuation tag1 'bye))
+          tag1
+          (lambda (arg)
+            (list 'aborted arg)))
+         (list 'aborted 'bye))
+  (check (call-with-continuation-prompt
+          (lambda ()
+            (abort-current-continuation tag1 'bye))
+          tag1i
+          (lambda (arg)
+            (list 'aborted arg)))
+         (list 'aborted (list 'handle 'bye)))
+  (check (call-with-continuation-prompt
+          (lambda ()
+            (abort-current-continuation tag1i 'bye))
+          tag1
+          (lambda (arg)
+            (list 'aborted arg)))
+         (list 'aborted (list 'abort 'bye)))
+  (check (call-with-continuation-prompt
+          (lambda ()
+            (call-with-current-continuation
+             (lambda (k)
+               (|#%app| k 'jump))
+             tag1))
+          tag1i
+          (lambda (arg) 'oops))
+  (list 'cc-guard 'jump))
+  (check (call-with-continuation-prompt
+          (lambda ()
+            (call-with-current-continuation
+             (lambda (k)
+               (|#%app| k 'jump))
+             tag1i))
+          tag1
+          (lambda (arg) 'oops))
+  (list 'cc-use 'jump))
+  (check (call-with-continuation-prompt
+          (lambda ()
+            (call-with-current-continuation
+             (lambda (k)
+               (|#%app| k 'jump))
+             tag1i))
+          tag1i
+          (lambda (arg) 'oops))
+         (list 'cc-use (list 'cc-guard 'jump)))
+  (void))
+
+;; ----------------------------------------
 
 (call-with-continuation-prompt
  (lambda ()
