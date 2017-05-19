@@ -177,6 +177,7 @@ CORE_SRCS = core/constant.ss \
             core/graph.ss \
             core/time.ss \
             core/memory.ss \
+            core/will-executor.ss \
             core/system.ss \
             core/unsafe.ss
 

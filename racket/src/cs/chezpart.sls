@@ -21,7 +21,7 @@
                            call-with-input-file call-with-output-file
                            file-position
                            format printf
-                           write display newline port-name
+                           write display newline port-name port-closed?
                            print-graph print-vector-length
                            error
                            date? make-date

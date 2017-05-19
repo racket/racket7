@@ -16,7 +16,8 @@
          peek-bytes-avail!
          peek-bytes-avail!*
 
-         byte-ready?)
+         byte-ready?
+         port-provides-progress-evts?)
 
 (module+ internal
   (provide do-read-bytes!))
@@ -190,3 +191,8 @@
   (check-range 'peek-bytes-avail!* start-pos end-pos (bytes-length bstr) bstr)
   (let ([in (->core-input-port in)])
     (peek-some-bytes! 'peek-bytes-avail!* in bstr start-pos end-pos skip-k #:zero-ok? #t)))
+
+(define (port-provides-progress-evts? in)
+  (check 'port-provides-progress-evts? input-port? in)
+  (let ([in (->core-input-port in)])
+    (and (core-input-port-get-progress-evt in) #t)))

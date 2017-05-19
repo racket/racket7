@@ -26,6 +26,11 @@
 
 (define (equal-secondary-hash-code v) (equal-hash-code v))
 
+(define (primitive? v) #f)
+(define (primitive-closure? v) #f)
+(define (primitive-result-arity prim)
+  (raise-argument-error 'primitive-result-arity "primitive?" prim))
+
 (define fx->fl fixnum->flonum)
 (define fxrshift fxarithmetic-shift-right)
 (define fxlshift fxarithmetic-shift-left)
@@ -419,6 +424,10 @@
    unsafe-impersonate-procedure
 
    equal-secondary-hash-code
+
+   primitive?
+   primitive-closure?
+   primitive-result-arity
 
    fx->fl
    fxrshift

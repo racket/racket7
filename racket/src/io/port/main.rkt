@@ -39,6 +39,7 @@
          peek-bytes!
          peek-bytes-avail!
          peek-bytes-avail!*
+         port-provides-progress-evts?
          
          read-char
          read-string
@@ -101,7 +102,8 @@
          pipe-input-port?
          pipe-output-port?
          pipe-content-length
-         
+
+         port-closed?
          close-input-port
          close-output-port
          

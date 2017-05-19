@@ -3,8 +3,20 @@
          "input-port.rkt"
          "output-port.rkt")
 
-(provide close-input-port
+(provide port-closed?
+         close-input-port
          close-output-port)
+
+(define (port-closed? p)
+  (cond
+    [(input-port? p)
+     (let ([p (->core-input-port p)])
+       (core-input-port-closed? p))]
+    [(output-port? p)
+     (let ([p (->core-output-port p)])
+       (core-output-port-closed? p))]
+    [else
+     (raise-argument-error 'close-input-port "port?" p)]))
 
 (define (close-input-port p)
   (check 'close-input-port input-port? p)

@@ -577,6 +577,11 @@
 
 (define (struct-type? v) (record-type-descriptor? v))
 
+(define (procedure-struct-type? v)
+  (unless (struct-type? v)
+    (raise-argument-error 'procedure-struct-type? "struct-type?" v))
+  (procedure-struct? v))
+
 (define (struct? v)
   (and (record? v)
        (struct-type-any-transparent? (record-rtd v))))

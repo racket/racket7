@@ -137,6 +137,8 @@
           raise-result-arity-error
 
           make-struct-type-property
+          struct-type-property?
+          struct-type-property-accessor-procedure?
           make-struct-type
           struct-type-install-properties! ; not exported to Racket
           structure-type-lookup-prefab-uid ; not exported to Racket
@@ -152,6 +154,7 @@
           struct-mutator-procedure?
           struct?
           struct-type?
+          procedure-struct-type?
           struct-type-info
           struct-info
           struct-type-make-constructor
@@ -333,6 +336,11 @@
           collect-garbage
           current-memory-use
 
+          make-will-executor
+          will-executor?
+          will-register
+          will-try-execute
+
           system-type
 
           unsafe-car
@@ -469,6 +477,7 @@
   (include "core/time.ss")
   (include "core/random.ss")
   (include "core/memory.ss")
+  (include "core/will-executor.ss")
   (include "core/system.ss")
   (include "core/unsafe.ss")
   

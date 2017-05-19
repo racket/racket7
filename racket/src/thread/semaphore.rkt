@@ -11,6 +11,7 @@
          semaphore-post
          semaphore-post-all
          semaphore-wait
+         semaphore-try-wait?
          
          semaphore-peek-evt
          semaphore-peek-evt?
@@ -67,6 +68,16 @@
   (not (queue-empty? (semaphore-queue s))))
 
 ;; ----------------------------------------
+
+(define (semaphore-try-wait? s)
+  (check 'semaphore-wait semaphore? s)
+  (atomically
+   (define c (semaphore-count s))
+   (cond
+     [(positive? c)
+      (set-semaphore-count! s (sub1 c))
+      #t]
+     [else #f])))
 
 (define (semaphore-wait s)
   (check 'semaphore-wait semaphore? s)

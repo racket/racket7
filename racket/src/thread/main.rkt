@@ -42,6 +42,7 @@
          make-semaphore
          semaphore-post
          semaphore-wait
+         semaphore-try-wait?
          semaphore?
 
          semaphore-peek-evt

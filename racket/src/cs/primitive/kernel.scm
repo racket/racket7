@@ -185,6 +185,7 @@
    current-pseudo-random-generator
    current-read-interaction
    current-seconds
+   current-security-guard
    current-thread
    current-thread-group
    custodian?
@@ -381,6 +382,7 @@
    make-pseudo-random-generator
    make-reader-graph
    make-rectangular
+   make-security-guard
    make-semaphore
    make-shared-flvector
    make-string
@@ -395,6 +397,7 @@
    make-weak-hash
    make-weak-hasheq
    make-weak-hasheqv
+   make-will-executor
    map
    max
    min
@@ -443,10 +446,12 @@
    placeholder-get
    placeholder-set!
    plumber-add-flush!
+   port-closed?
    port-count-lines!
    port-next-location
    port-display-handler
    port-print-handler
+   port-provides-progress-evts?
    port-read-handler
    port-write-handler
    port-writes-atomic?
@@ -458,6 +463,9 @@
    pregexp
    pregexp?
    primitive-table
+   primitive?
+   primitive-closure?
+   primitive-result-arity
    printf
    print
    print-as-expression
@@ -479,6 +487,7 @@
    procedure-rename
    procedure->method
    procedure?
+   procedure-struct-type?
    procedure-closure-contents-eq?
    prop:arity-string
    prop:authentic
@@ -540,9 +549,12 @@
    reverse
    round
    seconds->date
+   security-guard?
    semaphore?
    semaphore-peek-evt
+   semaphore-peek-evt?
    semaphore-post
+   semaphore-try-wait?
    semaphore-wait
    set-box!
    shared-flvector
@@ -597,6 +609,14 @@
    struct?
    struct-accessor-procedure?
    struct-mutator-procedure?
+   struct-constructor-procedure?
+   struct-info
+   struct-predicate-procedure?
+   struct-type-info
+   struct-type-make-constructor
+   struct-type-make-predicate
+   struct-type-property-accessor-procedure?
+   struct-type-property?
    sub1
    subbytes
    substring
@@ -652,6 +672,9 @@
    void?
    weak-box?
    weak-box-value
+   will-executor?
+   will-register
+   will-try-execute
    with-input-from-file
    with-output-to-file
    wrap-evt
