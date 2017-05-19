@@ -3357,8 +3357,6 @@ void scheme_dup_symbol_check(DupCheckRecord *r, const char *where,
 void scheme_check_identifier(const char *formname, Scheme_Object *id, 
 			     const char *where, Scheme_Object *form);
 
-Scheme_Object *scheme_special_comment_value(Scheme_Object *o);
-
 Scheme_Object *scheme_get_stack_trace(Scheme_Object *mark_set);
 
 XFORM_NONGCING int scheme_fast_check_arity(Scheme_Object *v, int a);

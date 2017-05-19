@@ -278,8 +278,6 @@ scheme_init_type ()
 
   set_name(scheme_channel_syncer_type, "<channel-syncer>");
 
-  set_name(scheme_special_comment_type, "<special-comment>");
-
   set_name(scheme_global_ref_type, "<variable-reference>");
 
   set_name(scheme_delay_syntax_type, "<on-demand-stub>");
@@ -709,8 +707,6 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_rt_pipe, mark_pipe);
 
   GC_REG_TRAV(scheme_tcp_accept_evt_type, twoptr_obj);
-
-  GC_REG_TRAV(scheme_special_comment_type, small_object);
 
   GC_REG_TRAV(scheme_progress_evt_type, twoptr_obj);
 

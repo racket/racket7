@@ -385,6 +385,7 @@
    make-security-guard
    make-semaphore
    make-shared-flvector
+   make-special-comment
    make-string
    make-struct-field-accessor
    make-struct-field-mutator
@@ -562,6 +563,8 @@
    sin
    single-flonum?
    sleep
+   special-comment-value
+   special-comment?
    split-path
    sqrt
    string

@@ -172,10 +172,6 @@ static void active_replace_evt_needs_wakeup(Scheme_Object *s, void *fds);
 static int chaperone_evt_is_ready(Scheme_Object *o, Scheme_Schedule_Info *sinfo);
 static int is_chaperone_evt(Scheme_Object *o);
 
-Scheme_Object *make_special_comment(int argc, Scheme_Object **argv);
-Scheme_Object *special_comment_value(int argc, Scheme_Object **argv);
-Scheme_Object *special_comment_p(int argc, Scheme_Object **argv);
-
 static Scheme_Object *check_arity_at_least_fields(int argc, Scheme_Object **argv);
 static Scheme_Object *check_date_fields(int argc, Scheme_Object **argv);
 static Scheme_Object *check_date_star_fields(int argc, Scheme_Object **argv);
@@ -697,23 +693,6 @@ scheme_init_struct (Scheme_Startup_Env *env)
 			     scheme_register_parameter(current_code_inspector,
 						       "current-code-inspector",
 						       MZCONFIG_CODE_INSPECTOR),
-			     env);
-
-
-  scheme_addto_prim_instance("make-special-comment", 
-			     scheme_make_immed_prim(make_special_comment,
-                                                    "make-special-comment",
-                                                    1, 1),
-			     env);
-  scheme_addto_prim_instance("special-comment-value", 
-			     scheme_make_immed_prim(special_comment_value,
-                                                    "special-comment-value",
-                                                    1, 1),
-			     env);
-  scheme_addto_prim_instance("special-comment?", 
-			     scheme_make_folding_prim(special_comment_p,
-						      "special-comment?",
-						      1, 1, 1),
 			     env);
 
   REGISTER_SO(ellipses_symbol);
@@ -5729,46 +5708,6 @@ static Scheme_Object *check_date_star_fields(int argc, Scheme_Object **argv)
   }
    
   return scheme_values(12, args);
-}
-
-/*========================================================================*/
-/*                        special-comment struct                          */
-/*========================================================================*/
-
-Scheme_Object *scheme_special_comment_value(Scheme_Object *o)
-{
-  if (SAME_TYPE(SCHEME_TYPE(o), scheme_special_comment_type))
-    return ((Scheme_Small_Object *)o)->u.ptr_val;
-  else
-    return NULL;
-}
-
-Scheme_Object *make_special_comment(int argc, Scheme_Object **argv)
-{
-  Scheme_Object *o;
-
-  o = scheme_alloc_small_object();
-  o->type = scheme_special_comment_type;
-  SCHEME_PTR_VAL(o) = argv[0];
-
-  return o;
-}
-
-Scheme_Object *special_comment_value(int argc, Scheme_Object **argv)
-{
-  Scheme_Object *v;
-
-  v = scheme_special_comment_value(argv[0]);
-  if (!v)
-    scheme_wrong_contract("special-comment-value", "special-comment?", 0, argc, argv);
-  return v;
-}
-
-Scheme_Object *special_comment_p(int argc, Scheme_Object **argv)
-{
-  return (SAME_TYPE(SCHEME_TYPE(argv[0]), scheme_special_comment_type)
-	  ? scheme_true
-	  : scheme_false);
 }
 
 /**********************************************************************/

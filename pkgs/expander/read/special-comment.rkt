@@ -4,5 +4,6 @@
          make-special-comment
          special-comment-value)
 
-(define-struct special-comment (value))
-
+(struct special-comment (value)
+  #:authentic
+  #:constructor-name make-special-comment)
