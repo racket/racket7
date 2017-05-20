@@ -5,9 +5,6 @@ bytes-utf-8-index
 bytes-utf-8-ref
 call-in-nested-thread
 call-with-semaphore/enable-break
-chaperone-channel
-chaperone-evt
-chaperone-struct-type
 char-utf-8-length
 choice-evt
 compile-allow-set!-undefined
@@ -45,7 +42,6 @@ file-size
 filesystem-change-evt?
 filesystem-root-list
 global-port-print-handler
-impersonate-channel
 impersonator-ephemeron
 integer-length
 integer-sqrt
@@ -84,8 +80,6 @@ port-file-unlock
 port-progress-evt
 port-try-file-lock?
 print-syntax-width
-procedure-impersonator*?
-procedure-result-arity
 progress-evt?
 prop:object-name
 quotient/remainder

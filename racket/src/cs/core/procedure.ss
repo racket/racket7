@@ -12,6 +12,9 @@
                                                          0)))
                                               v))))
 
+(define-values (prop:incomplete-arity incomplete-arity? incomplete-arity-ref)
+  (make-struct-type-property 'incomplete-arity))
+
 ;; Integer value is a field to use; boxed value is a field taht provides a mask
 (define-values (prop:procedure-arity procedure-arity? procedure-arity-ref)
   (make-struct-type-property 'procedure-arity))
@@ -66,11 +69,16 @@
        [else #f]))]
    [else #f]))
 
-(define (procedure-arity-includes? orig-f orig-n)
-  (let ([mask (get-procedure-arity-mask 'procedure-arity-includes? orig-f)])
-    (unless (exact-nonnegative-integer? orig-n)
-      (raise-argument-error 'procedure-arity-includes? "exact-nonnegative-integer?" orig-n))
-    (bitwise-bit-set? mask orig-n)))
+(define procedure-arity-includes?
+  (case-lambda
+   [(f n incomplete-ok?)
+    (let ([mask (get-procedure-arity-mask 'procedure-arity-includes? f)])
+      (unless (exact-nonnegative-integer? n)
+        (raise-argument-error 'procedure-arity-includes? "exact-nonnegative-integer?" n))
+      (and (bitwise-bit-set? mask n)
+           (or incomplete-ok?
+               (not (incomplete-arity? (strip-impersonator f))))))]
+   [(f n) (procedure-arity-includes? f n #f)]))
 
 (define (procedure-arity orig-f)
   (mask->arity (get-procedure-arity-mask 'procedure-arity orig-f)))
@@ -134,6 +142,11 @@
 
 (define (not-a-procedure f)
   (error 'apply (format "not a procedure: ~s" f)))
+
+(define (procedure-result-arity p)
+  (unless (procedure? p)
+    (raise-argument-error 'procedure-result-arity "procedure?" p))
+  #f)
 
 ;; ----------------------------------------
 
@@ -240,6 +253,12 @@
     (if wrapper
         (make-procedure-impersonator val proc props wrapper)
         (make-props-procedure-impersonator val proc props))))
+
+(define (procedure-impersonator*? v)
+  (or (procedure*-impersonator? v)
+      (procedure*-chaperone? v)
+      (and (impersonator? v)
+           (procedure-impersonator*? (impersonator-next v)))))
 
 (define (call-with-application-mark props k)
   (let ([mark (hamt-ref props impersonator-prop:application-mark #f)])
@@ -351,6 +370,10 @@
                    (raise-wrapper-bad-extra-result-error chaperone? pos (car new-args) next-p wrapper)]
                   [else
                    (raise-wrapper-result-arity-error chaperone? proc wrapper n nn)])))))]
+         [(unsafe-procedure-impersonator? p)
+          (apply p args)]
+         [(unsafe-procedure-chaperone? p)
+          (apply p args)]
          [(impersonator? p)
           (loop (impersonator-next p) args)]
          [else
@@ -421,6 +444,38 @@
      "  expected: " (number->string expected-n) " or more\n"
      "  received: " (number->string got-n))
     (current-continuation-marks))))
+  
+;; ----------------------------------------
+
+(define-record unsafe-procedure-impersonator impersonator (replace-proc))
+(define-record unsafe-procedure-chaperone chaperone (replace-proc))
+
+(define (unsafe-impersonate-procedure proc replace-proc . props)
+  (do-unsafe-impersonate-procedure 'unsafe-impersonate-procedure make-unsafe-procedure-impersonator
+                                   proc replace-proc props))
+
+(define (unsafe-chaperone-procedure proc replace-proc . props)
+  (do-unsafe-impersonate-procedure 'unsafe-chaperone-procedure make-unsafe-procedure-chaperone
+                                   proc replace-proc props))
+
+(define (do-unsafe-impersonate-procedure who make-unsafe-procedure-impersonator proc replace-proc props)
+  (let ([m (procedure-arity-mask proc)])
+    (unless (= m (bitwise-and m (procedure-arity-mask replace-proc)))
+      (raise-arguments-error who
+                             "arity of replacement procedure does not cover arity of original procedure"
+                             "replacement" replace-proc
+                             "original" proc))
+    (make-unsafe-procedure-impersonator
+     (strip-impersonator proc)
+     proc
+     (add-impersonator-properties who
+                                  props
+                                  (if (impersonator? proc)
+                                      (impersonator-props proc)
+                                      empty-hasheq))
+     replace-proc)))
+
+;; ----------------------------------------
 
 (define (procedure-closure-contents-eq?	p1 p2)
   (unless (procedure? p1)
@@ -440,7 +495,7 @@
              (or (fx= i l1)
                  (and (eq? (((i1 'ref i) 'ref) 'value) (((i2 'ref i) 'ref) 'value))
                       (loop (fx1+ i)))))))))
-  
+
 ;; ----------------------------------------
 
 (define (set-primitive-applicables!)
@@ -507,4 +562,13 @@
     (register-procedure-impersonator-struct-type! (record-type-descriptor procedure*-chaperone))
     (register-procedure-impersonator-struct-type! (record-type-descriptor procedure*-impersonator))
     (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-chaperone))
-    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-impersonator))))
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-impersonator)))
+
+  (let ([register-unsafe-procedure-impersonator-struct-type!
+         (lambda (rtd)
+           (struct-property-set! prop:procedure rtd 3)
+           (struct-property-set! prop:procedure-arity rtd 0))])
+    (register-unsafe-procedure-impersonator-struct-type! (record-type-descriptor unsafe-procedure-impersonator))
+    (register-unsafe-procedure-impersonator-struct-type! (record-type-descriptor unsafe-procedure-chaperone)))
+
+  )

@@ -99,11 +99,14 @@
    chaperone-of?
    chaperone-box
    chaperone-continuation-mark-key
+   chaperone-channel
+   chaperone-evt
    chaperone-hash
    chaperone-procedure
    chaperone-procedure*
    chaperone-prompt-tag
    chaperone-struct
+   chaperone-struct-type
    chaperone-vector
    chaperone-vector*
    char->integer
@@ -305,6 +308,7 @@
    imag-part
    immutable?
    impersonate-box
+   impersonate-channel
    impersonate-continuation-mark-key
    impersonate-hash
    impersonate-procedure
@@ -486,8 +490,10 @@
    procedure-arity?
    procedure-arity-includes?
    procedure-extract-target
+   procedure-impersonator*?
    procedure-reduce-arity
    procedure-rename
+   procedure-result-arity
    procedure->method
    procedure?
    procedure-specialize

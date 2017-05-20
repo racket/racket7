@@ -37,7 +37,7 @@ rktl:
 	$(MAKE) regexp-rktl
 	$(MAKE) expander-rktl
 
-PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm
+PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm primitive/extfl.scm
 
 expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS)
 	$(COMP) '(compile-file "expander.sls")' | $(SCHEME) -q $(EXPANDER_DEPS)

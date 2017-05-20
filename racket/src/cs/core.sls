@@ -102,6 +102,7 @@
           arity-at-least-value
 
           prop:procedure
+          prop:incomplete-arity
           prop:method-arity-error
           apply
           procedure?
@@ -109,6 +110,7 @@
           |#%app|
           procedure-arity-includes?
           procedure-arity
+          procedure-result-arity
           procedure-extract-target
           procedure-closure-contents-eq?
 
@@ -129,7 +131,10 @@
           chaperone-procedure
           impersonate-procedure*
           chaperone-procedure*
+          procedure-impersonator*?
           impersonator-prop:application-mark
+          unsafe-impersonate-procedure
+          unsafe-chaperone-procedure
           
           raise-argument-error
           raise-arguments-error

@@ -686,7 +686,7 @@
        [else
         (let ([j (fx1- j)])
           (or (eqv? pos (#%vector-ref mutables j))
-              (loop (fx1- j))))]))))
+              (loop j)))]))))
 
 (define (unsafe-struct-ref s i)
   (#3%vector-ref s i))

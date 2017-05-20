@@ -136,6 +136,12 @@
                                       (values x y))))
 (check (|#%app| fc* 'a 'b) '(a b))
 
+(define fiu (unsafe-chaperone-procedure f (lambda (x y) 'unsafe)))
+(check (chaperone-of? fiu f) #t)
+(check (|#%app| fiu 'a 'b) 'unsafe)
+(check (|#%app| (chaperone-procedure fiu (lambda (x y) (values x y))) 'a 'b)
+       'unsafe)
+
 ;; ----------------------------------------
 
 (define-values (iprop:flavor flavor? flavor-ref)
@@ -211,7 +217,7 @@
   (define-values (struct:s-a make-s-a s-a? s-a-ref s-a-set!)
     (make-struct-type 's-a #f 2 0 #f (list (cons prop:x 5))))
   (define-values (struct:s-b make-s-b s-b? s-b-ref s-b-set!)
-    (make-struct-type 's-b #f 2 0 #f (list (cons prop:procedure 0)) #f))
+    (make-struct-type 's-b #f 2 0 #f '() #f 0))
   (define s-a-x (make-struct-field-accessor s-a-ref 0 'x))
   (define s-a-y (make-struct-field-accessor s-a-ref 1 'y))
   (define s-b-y (make-struct-field-accessor s-b-ref 1 'y))

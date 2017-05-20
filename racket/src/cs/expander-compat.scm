@@ -6,8 +6,6 @@
   (make-struct-type-property 'impersonator-of))
 (define-values (prop:arity-string arity-string? arity-string-ref)
   (make-struct-type-property 'arity-string))
-(define-values (prop:incomplete-arity incomplete-arity? incomplete-arity-ref)
-  (make-struct-type-property 'incomplete-arity))
 
 (define (checked-procedure-check-and-extract st v alt-proc v1 v2)
   (if (and (record? v st)
@@ -16,13 +14,15 @@
       (unsafe-struct-ref v 1)
       (|#%app| alt-proc v v1 v2)))
 
-(define (unsafe-chaperone-procedure . args) (error "unsafe-chaperone-procedure not ready"))
-(define (unsafe-impersonate-procedure . args) (error "unsafe-impersonate-procedure not ready"))
-
 (define (prop:chaperone-unsafe-undefined chaperone-unsafe-undefined? chaperone-unsafe-undefined-ref)
   (make-struct-type-property 'chaperone-unsafe-undefined))
 
 (define (chaperone-struct-unsafe-undefined v) v)
+
+(define (chaperone-evt v . args) v)
+(define (chaperone-channel v . args) v)
+(define (impersonate-channel v . args) v)
+(define (chaperone-struct-type v . args) v)
 
 (define (equal-secondary-hash-code v) (equal-hash-code v))
 
@@ -353,7 +353,7 @@
     [(|#%futures|) tbd-table]
     [(|#%place|) tbd-table]
     [(|#%flfxnum|) flfxnum-table]
-    [(|#%extfl|) tbd-table]
+    [(|#%extfl|) extfl-table]
     [(|#%network|) tbd-table]
     [else #f]))
 
@@ -373,6 +373,7 @@
 (include "primitive/kernel.scm")
 (include "primitive/unsafe.scm")
 (include "primitive/flfxnum.scm")
+(include "primitive/extfl.scm")
 
 (define linklet-table
   (make-primitive-table
@@ -419,12 +420,13 @@
    prop:checked-procedure checked-procedure? checked-procedure-ref
    prop:impersonator-of -impersonator-of? impersonator-of-ref
    prop:arity-string arity-string? arity-string-ref
-   prop:incomplete-arity incomplete-arity? incomplete-arity-ref
 
    checked-procedure-check-and-extract
 
-   unsafe-chaperone-procedure
-   unsafe-impersonate-procedure
+   chaperone-evt
+   chaperone-channel
+   impersonate-channel
+   chaperone-struct-type
 
    equal-secondary-hash-code
 
@@ -467,6 +469,7 @@
 
    directory-exists?
    file-exists?
+   link-exists?
    directory-list
    file-or-directory-modify-seconds
    resolve-path
@@ -518,6 +521,7 @@
 
    gensym
 
+   ephemeron?
    make-ephemeron
    ephemeron-value
    thread-send
@@ -545,6 +549,8 @@
    datum-intern-literal
    current-load-extension
    string->number
+
+   version
 
    prop:chaperone-unsafe-undefined
    chaperone-struct-unsafe-undefined))

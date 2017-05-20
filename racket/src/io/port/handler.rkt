@@ -51,7 +51,7 @@
   (case-lambda
     [(o)
      (check 'port-write-handler output-port? o)
-     (let ([o (->core-input-port o)])
+     (let ([o (->core-output-port o)])
        (or (core-output-port-write-handler o)
            default-port-write-handler))]
     [(o h)
@@ -61,7 +61,7 @@
                                        (procedure-arity-includes? p 2)))
             #:contract "(procedure-arity-includes/c 2)"
             h)
-     (let ([o (->core-input-port o)])
+     (let ([o (->core-output-port o)])
        (set-core-output-port-write-handler! o h))]))
 
 (define (default-port-write-handler v o)
@@ -72,7 +72,7 @@
   (case-lambda
     [(o)
      (check 'port-display-handler output-port? o)
-     (let ([o (->core-input-port o)])
+     (let ([o (->core-output-port o)])
        (or (core-output-port-display-handler o)
            default-port-display-handler))]
     [(o h)
@@ -82,7 +82,7 @@
                                        (procedure-arity-includes? p 2)))
             #:contract "(procedure-arity-includes/c 2)"
             h)
-     (let ([o (->core-input-port o)])
+     (let ([o (->core-output-port o)])
        (set-core-output-port-display-handler! o h))]))
 
 (define (default-port-display-handler v o)
@@ -93,7 +93,7 @@
   (case-lambda
     [(o)
      (check 'port-print-handler output-port? o)
-     (let ([o (->core-input-port o)])
+     (let ([o (->core-output-port o)])
        (or (core-output-port-print-handler o)
            default-port-print-handler))]
     [(o h)
@@ -103,7 +103,7 @@
                                        (procedure-arity-includes? p 2)))
             #:contract "(procedure-arity-includes/c 2)"
             h)
-     (let ([o (->core-input-port o)])
+     (let ([o (->core-output-port o)])
        (set-core-output-port-print-handler! o (if (procedure-arity-includes? h 3)
                                                   h
                                                   (lambda (v o [w #f]) (h v o)))))]))
