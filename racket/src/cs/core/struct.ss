@@ -18,11 +18,12 @@
      (unless (symbol? name)
        (raise-argument-error 'make-struct-type-property "symbol?" name))
      (unless (or (not guard)
+                 (eq? guard 'can-impersonate)
                  (and (#%procedure? guard) ; avoid `procedure?` until it's defined
                       (bitwise-bit-set? (#%procedure-arity-mask guard) 2))
                  (and (procedure? guard)
                       (procedure-arity-includes? guard 2)))
-       (raise-argument-error 'make-struct-type-property "(procedure-arity-includes/c 2)" guard))
+       (raise-argument-error 'make-struct-type-property "(or/c (procedure-arity-includes/c 2) #f 'can-impersonate)" guard))
      (unless (and (or (null? supers) ; avoid `list?` until it's defined
                       (list? supers))
                   (andmap (lambda (p)
@@ -32,8 +33,8 @@
                                  (procedure-arity-includes? (cdr p) 1)))
                           supers))
        (raise-argument-error 'make-struct-type-property "(listof (cons/c struct-type-property? (procedure-arity-includes/c 1)))" supers))
-     (let* ([can-impersonate? (and can-impersonate? #t)]
-            [st (make-struct-type-prop name guard supers)]
+     (let* ([can-impersonate? (and (or can-impersonate? (eq? guard 'can-impersonate)) #t)]
+            [st (make-struct-type-prop name (and (not (eq? guard 'can-impersonate)) guard) supers)]
             [pred (lambda (v)
                     (let* ([v (strip-impersonator v)]
                            [rtd (if (record-type-descriptor? v)

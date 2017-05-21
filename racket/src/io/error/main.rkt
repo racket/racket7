@@ -3,9 +3,16 @@
          "../print/main.rkt"
          "../format/printf.rkt")
 
-(provide error)
+(provide error
+         raise-user-error)
 
 (define (error init . args)
+  (do-error 'error exn:fail init args))
+
+(define (raise-user-error init . args)
+  (do-error 'raise-user-error exn:fail:user init args))
+
+(define (do-error who exn:fail init . args)
   (cond
    [(and (symbol? init)
          (null? args))
@@ -15,9 +22,9 @@
       (current-continuation-marks)))]
    [(symbol? init)
     (unless (string? (car args))
-      (raise-argument-error 'error "string?" (car args)))
+      (raise-argument-error who "string?" (car args)))
     (define o (open-output-string))
-    (do-printf 'error o (car args) (cdr args))
+    (do-printf who o (car args) (cdr args))
     (raise
      (exn:fail
       (string-append (symbol->string init)
@@ -36,7 +43,7 @@
                                (error-print-width)))))
       (current-continuation-marks)))]
    [else
-    (raise-argument-error 'error "(or/c symbol? string?)" init)]))
+    (raise-argument-error who "(or/c symbol? string?)" init)]))
 
 ;; Install the default error-value->string handler,
 ;; replacing the non-working primitive placeholder

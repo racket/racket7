@@ -21,7 +21,7 @@
                            call-with-input-file call-with-output-file
                            file-position
                            format
-                           write display newline port-name port-closed?
+                           write display newline port-name port-closed? write-char
                            print-graph print-vector-length
                            error
                            date? make-date

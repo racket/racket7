@@ -11,6 +11,7 @@
    >
    >=
    quotient
+   quotient/remainder
    remainder
    abort-current-continuation
    abs
@@ -141,6 +142,7 @@
    ;; char-utf-8-length
    check-for-break
    checked-procedure-check-and-extract
+   choice-evt
    cleanse-path
    close-input-port
    close-output-port
@@ -219,6 +221,9 @@
    dynamic-wind
    environment-variables-ref
    environment-variables-set!
+   environment-variables-copy
+   environment-variables-names
+   environment-variables?
    eof
    eof-object?
    ephemeron?
@@ -346,6 +351,7 @@
    integer->char
    integer->integer-bytes
    integer-bytes->integer
+   integer-length
    integer?
    interned-char?
    kill-thread
@@ -402,7 +408,9 @@
    make-log-receiver
    make-output-port
    make-parameter
+   make-pipe
    make-placeholder
+   make-plumber
    make-polar
    make-prefab-struct
    make-pseudo-random-generator
@@ -468,16 +476,24 @@
    peek-bytes-avail!
    peek-bytes-avail!*
    peek-char-or-special
+   pipe-content-length
    placeholder?
    placeholder-get
    placeholder-set!
    plumber-add-flush!
+   plumber-flush-all
+   plumber-flush-handle-remove!
+   plumber-flush-handle?
+   plumber?
+   poll-guard-evt
    port-closed?
+   port-commit-peeked
    port-count-lines!
    port-file-unlock
    port-next-location
    port-display-handler
    port-print-handler
+   port-progress-evt
    port-provides-progress-evts?
    port-read-handler
    port-try-file-lock?
@@ -520,6 +536,7 @@
    procedure-specialize
    procedure-struct-type?
    procedure-closure-contents-eq?
+   progress-evt?
    prop:arity-string
    prop:authentic
    prop:checked-procedure
@@ -539,6 +556,7 @@
    random
    random-seed
    raise
+   raise-user-error
    rational?
    read-accept-bar-quote
    read-byte
@@ -652,6 +670,12 @@
    sub1
    subbytes
    subprocess?
+   subprocess
+   subprocess-group-enabled
+   subprocess-kill
+   subprocess-pid
+   subprocess-status
+   subprocess-wait
    substring
    symbol->string
    symbol-interned?
@@ -676,6 +700,7 @@
    thread-dead-evt
    thread-dead-evt?
    thread-group?
+   thread-receive
    thread-receive-evt
    thread-resume
    thread-running?
@@ -708,6 +733,7 @@
    void?
    weak-box?
    weak-box-value
+   will-execute
    will-executor?
    will-register
    will-try-execute
@@ -715,12 +741,15 @@
    with-output-to-file
    wrap-evt
    write
+   write-byte
    write-bytes
    write-bytes-avail
    write-bytes-avail*
    write-bytes-avail/enable-break
    write-bytes-avail-evt
+   write-char
    write-special
+   write-special-avail*
    write-special-evt
    write-string
    zero?

@@ -17,7 +17,7 @@
 
 (struct syncer (evt   ; the evt to sync; can get updated in sync loop
                 wraps ; list of wraps to apply if selected
-                interrupted? ; kill/break in progerss?
+                interrupted? ; kill/break in progress?
                 interrupts ; list of thunks to run on kill/break initiation
                 abandons ; list of thunks to run on kill/break completion
                 retries ; list of thunks to run on retry: returns `(values _val _ready?)`
@@ -25,34 +25,21 @@
                 next) ; next in linked list
         #:mutable)
 
-(define (make-syncer arg last)
-  (syncer arg null #f null null null last #f))
+(define (make-syncer evt wraps)
+  (syncer evt null #f wraps null null #f #f))
 
-(define none-syncer (make-syncer #f #f))
+(define none-syncer (make-syncer #f null))
 
 (define (do-sync who timeout args)
   (check who
          (lambda (timeout) (or (not timeout)
-                          (and (real? timeout) (timeout . >= . 0))
-                          (and (procedure? timeout)
-                               (procedure-arity-includes? timeout 0))))
+                               (and (real? timeout) (timeout . >= . 0))
+                               (and (procedure? timeout)
+                                    (procedure-arity-includes? timeout 0))))
          #:contract "(or/c #f (and/c real? (not/c negative?)) (-> any))"
          timeout)
-  
-  (define syncers
-    (let loop ([args args] [first #f] [last #f])
-      (cond
-       [(null? args) first]
-       [else
-        (define arg (car args))
-        (check who evt? arg)
-        (define sr (make-syncer arg last))
-        (when last
-          (set-syncer-next! last sr))
-        (loop (cdr args)
-              (or first sr)
-              sr)])))
-  
+
+  (define syncers (evts->syncers who args null))
   (define s (syncing #f ; selected
                      syncers
                      void)) ; wakeup
@@ -105,6 +92,49 @@
 
 ;; ----------------------------------------
 
+(define (evts->syncers who evts wraps)
+  (let loop ([evts evts] [first #f] [last #f])
+    (cond
+      [(null? evts) first]
+      [else
+       (define arg (car evts))
+       (when who
+         (check who evt? arg))
+       (define sr (make-syncer arg wraps))
+       (set-syncer-prev! sr last)
+       (when last
+         (set-syncer-next! last sr))
+       (loop (cdr evts)
+             (or first sr)
+             sr)])))
+
+;; remove a syncer from its chain in `s`
+(define (syncer-remove! sr s)
+  (if (syncer-prev sr)
+      (set-syncer-next! (syncer-prev sr) (syncer-next sr))
+      (set-syncing-syncers! s (syncer-next sr)))
+  (when (syncer-next sr)
+    (set-syncer-prev! (syncer-next sr) (syncer-prev sr))))
+
+;; Replace one syncer with a new, non-empty chain of syncers in `s`
+(define (syncer-replace! sr new-syncers s)
+  (let ([prev (syncer-prev sr)])
+    (set-syncer-prev! new-syncers prev)
+    (if prev
+        (set-syncer-next! prev new-syncers)
+        (set-syncing-syncers! s new-syncers)))
+  (let loop ([new-syncers new-syncers])
+    (cond
+      [(syncer-next new-syncers)
+       => (lambda (next) (loop next))]
+      [else
+       (let ([next (syncer-next sr)])
+         (set-syncer-next! new-syncers next)
+         (when next
+           (set-syncer-prev! next new-syncers)))])))
+
+;; ----------------------------------------
+
 ;; Run through the events of a `sync` one time; returns a thunk to
 ;; call in tail position --- possibly one that calls `none-k`.
 (define (sync-poll s none-k
@@ -138,9 +168,21 @@
          [results
           (syncing-done! s sr)
           (make-result-thunk sr results)]
-         #;
          [(choice-evt? new-evt)
-          (error "flatten")]
+          (when (or (pair? (syncer-interrupts sr))
+                    (pair? (syncer-abandons sr))
+                    (pair? (syncer-retries sr)))
+            (internal-error "choice event discovered after interrupt/abandon/retry callbacks"))
+          (let ([new-syncers (evts->syncers #f (choice-evt-evts new-evt) (syncer-wraps sr))])
+            (cond
+              [(not new-syncers)
+               ;; Empy choice, so drop it:
+               (syncer-remove! sr s)
+               (lambda () (loop (syncer-next sr)))]
+              [else
+               ;; Splice in new syncers, and start there
+               (syncer-replace! sr new-syncers s)
+               (lambda () (loop new-syncers))]))]
          [(wrap-evt? new-evt)
           (set-syncer-wraps! sr (cons (wrap-evt-wrap new-evt)
                                       (let ([l (syncer-wraps sr)])
@@ -158,10 +200,10 @@
           (set-syncer-retries! sr (cons (control-state-evt-retry-proc new-evt) (syncer-retries sr)))
           (set-syncer-evt! sr (control-state-evt-evt new-evt))
           (lambda () (loop sr))]
-         [(guard-evt? new-evt)
+         [(poll-guard-evt? new-evt)
           (lambda ()
             ;; Out of atomic region:
-            (define generated ((guard-evt-proc new-evt)))
+            (define generated ((poll-guard-evt-proc new-evt) just-poll?))
             (set-syncer-evt! sr (if (evt? generated)
                                     generated
                                     (wrap-evt always-evt (lambda (a) generated))))
@@ -169,11 +211,7 @@
          [(and (never-evt? new-evt)
                (null? (syncer-interrupts sr)))
           ;; Drop this event, since it will never get selected
-          (if (syncer-prev sr)
-              (set-syncer-next! (syncer-prev sr) (syncer-next sr))
-              (set-syncing-syncers! s (syncer-next sr)))
-          (when (syncer-next sr)
-            (set-syncer-prev! (syncer-next sr) (syncer-prev sr)))
+          (syncer-remove! sr s)
           (lambda () (loop (syncer-next sr)))]
          [else
           (set-syncer-evt! sr new-evt)

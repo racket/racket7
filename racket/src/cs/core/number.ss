@@ -149,3 +149,10 @@
     (cond
      [(equal? s "+nan.f") +nan.0]
      [else (chez:string->number s radix)])]))
+
+(define (quotient/remainder n m)
+  (unless (integer? n)
+    (raise-argument-error 'quotient/remainder "integer?" n))
+  (unless (integer? m)
+    (raise-argument-error 'quotient/remainder "integer?" m))
+  (values (quotient n m) (remainder n m)))

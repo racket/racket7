@@ -65,7 +65,9 @@
          handle-evt
          handle-evt?
          guard-evt
+         poll-guard-evt
          nack-guard-evt
+         choice-evt
 
          system-idle-evt
          alarm-evt

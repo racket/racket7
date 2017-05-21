@@ -19,6 +19,9 @@
 
 (define (chaperone-struct-unsafe-undefined v) v)
 
+(define (will-execute e)
+  (raise-arguments-error 'will-execute "not yet ready"))
+
 (define (chaperone-evt v . args) v)
 (define (chaperone-channel v . args) v)
 (define (impersonate-channel v . args) v)
@@ -61,12 +64,26 @@
 (define (system-path-convention-type) 'unix)
 
 (define (subprocess? v) #f)
+(define (subprocess . args) #f)
+(define subprocess-group-enabled
+  (make-parameter #f (lambda (v) (and v #t))))
+(define (subprocess-kill p force?) (void))
+(define (subprocess-pid p) 0)
+(define (subprocess-status p) 'something)
+(define (subprocess-wait p) (void))
+
 
 (define (environment-variables-ref e k)
   (getenv (bytes->string/utf-8 k)))
 (define (current-environment-variables) #f)
 (define (environment-variables-set! e k v)
   (error "environment-variables-set! not ready"))
+(define (environment-variables-copy e)
+  'copy)
+(define (environment-variables-names e)
+  'names)
+(define (environment-variables? e)
+  #f)
 
 (define (reparameterize . args) (void))
 
@@ -194,6 +211,7 @@
 
 (define (thread-resume t) (void))
 (define (thread-send t v) t)
+(define (thread-receive) (void))
 (define (thread-receive-evt t) 'thread-receive-evt)
 (define filesystem-change-evt
   (case-lambda
@@ -232,8 +250,13 @@
 (define eval-jit-enabled
   (make-parameter #t))
 
+(define (plumber? p) (eq? p 'plumber))
+(define (make-plumber) 'plumber)
 (define (current-plumber) 'plumber)
 (define (plumber-add-flush! p v) (set! at-exit (cons v null)))
+(define (plumber-flush-all p) (void))
+(define (plumber-flush-handle-remove! h) (void))
+(define (plumber-flush-handle? p) #f)
 
 (define at-exit null)
 (define (flush)
@@ -370,9 +393,9 @@
     [(|#%read|) tbd-table]
     [(|#%paramz|) paramz-table]
     [(|#%unsafe|) unsafe-table]
-    [(|#%foreign|) tbd-table]
+    [(|#%foreign|) foreign-table]
     [(|#%futures|) futures-table]
-    [(|#%place|) tbd-table]
+    [(|#%place|) place-table]
     [(|#%flfxnum|) flfxnum-table]
     [(|#%extfl|) extfl-table]
     [(|#%network|) network-table]
@@ -398,6 +421,8 @@
 (include "primitive/extfl.scm")
 (include "primitive/network.scm")
 (include "primitive/futures.scm")
+(include "primitive/place.scm")
+(include "primitive/foreign.scm")
 
 (define linklet-table
   (make-primitive-table
@@ -489,10 +514,19 @@
    system-path-convention-type
 
    subprocess?
+   subprocess
+   subprocess-group-enabled
+   subprocess-kill
+   subprocess-pid
+   subprocess-status
+   subprocess-wait
 
    environment-variables-ref
    current-environment-variables
    environment-variables-set!
+   environment-variables-copy
+   environment-variables-names
+   environment-variables?
 
    exit
    exit-handler
@@ -544,9 +578,20 @@
    make-ephemeron
    ephemeron-value
    thread-send
+   thread-receive
+   thread-receive-evt
    filesystem-change-evt
    filesystem-change-evt-cancel
    call-with-semaphore
+   will-execute
+
+   make-plumber
+   current-plumber
+   plumber-add-flush!
+   plumber-flush-all
+   plumber-flush-handle-remove!
+   plumber-flush-handle?
+   plumber?
 
    srcloc->string
    

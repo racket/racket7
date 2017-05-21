@@ -42,7 +42,7 @@ rktl:
 
 PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm \
                     primitive/paramz.scm primitive/extfl.scm primitive/network.scm \
-                    primitive/futures.scm
+                    primitive/futures.scm primitive/foreign.scm primitive/place.scm
 
 expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS)
 	$(COMP) '(compile-file "expander.sls")' | $(SCHEME) -q $(EXPANDER_DEPS)
@@ -186,7 +186,9 @@ CORE_SRCS = core/constant.ss \
             core/system.ss \
             core/unsafe.ss \
             core/extfl.ss \
-            core/network.ss
+            core/network.ss \
+            core/place.ss \
+            core/foreign.ss
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
 	$(COMP) $(UNSAFE) '(compile-file "core.sls")' | $(SCHEME) -q

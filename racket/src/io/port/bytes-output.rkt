@@ -4,7 +4,8 @@
          "parameter.rkt"
          "write.rkt")
 
-(provide write-bytes
+(provide write-byte
+         write-bytes
          write-bytes-avail
          write-bytes-avail*
          write-bytes-avail/enable-break

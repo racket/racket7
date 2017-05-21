@@ -46,6 +46,14 @@
    (check 'got-s2 (sync s (wrap-evt s2 (lambda (v) (check v s2) 'got-s2))))
    (check #f (sync/timeout 0 s2 s))
 
+   ;; Choice evts
+   (define choice1 (choice-evt s s2))
+   (semaphore-post s2)
+   (check s2 (sync choice1))
+   (semaphore-post s)
+   (check s (sync choice1))
+   (check #f (sync/timeout 0 choice1))
+
    ;; Check channel and `sync`
    (void (thread (lambda () (channel-put ch 'c2))))
    (check 'c2 (sync ch))

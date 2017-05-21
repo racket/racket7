@@ -288,6 +288,7 @@
           floating-point-bytes->real
           system-big-endian?
           string->number
+          quotient/remainder
 
           random
           random-seed
@@ -435,6 +436,24 @@
           udp-send* udp-send-evt udp-send-ready-evt udp-send-to udp-send-to* udp-send-to-evt
           udp-send-to/enable-break udp-send/enable-break
 
+          place-enabled? place? place-channel? place-break
+          place-channel-get place-channel-put place-sleep
+          place-channel place-dead-evt place-kill place-message-allowed?
+          dynamic-place place-wait place-pumper-threads place-shared?
+
+          _bool _bytes _double _double* _fixint _fixnum _float _fpointer _gcpointer
+          _int16 _int32 _int64 _int8 _longdouble _path _pointer _scheme _stdbool _void
+          _string/ucs-4 _string/utf-16 _symbol _ufixint _ufixnum _uint16 _uint32 _uint64 _uint8
+          compiler-sizeof cpointer-gcable? cpointer-tag cpointer?
+          ctype-alignof ctype-basetype ctype-c->scheme ctype-scheme->c ctype-sizeof ctype?
+          end-stubborn-change extflvector->cpointer
+          ffi-call ffi-callback ffi-callback? ffi-lib ffi-lib-name ffi-lib? ffi-obj ffi-obj-lib
+          ffi-obj-name  ffi-obj? flvector->cpointer free free-immobile-cell lookup-errno
+          make-array-type make-cstruct-type make-ctype make-late-weak-box make-late-weak-hasheq
+          make-sized-byte-string make-stubborn-will-executor make-union-type malloc malloc-immobile-cell
+          memcpy memmove memset offset-ptr? prop:cpointer ptr-add ptr-add! ptr-equal? ptr-offset ptr-ref
+          ptr-set! saved-errno set-cpointer-tag! set-ptr-offset! vector->cpointer
+
           unsafe-unbox
           unsafe-unbox*
           unsafe-set-box!
@@ -512,6 +531,8 @@
   (include "core/unsafe.ss")
   (include "core/extfl.ss")
   (include "core/network.ss")
+  (include "core/place.ss")
+  (include "core/foreign.ss")
   
   (set-base-exception-handler!)
   (set-primitive-applicables!)

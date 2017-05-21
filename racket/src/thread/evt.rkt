@@ -14,7 +14,8 @@
          (struct-out wrap-evt)
          (struct-out handle-evt)
          (struct-out control-state-evt)
-         (struct-out guard-evt)
+         (struct-out poll-guard-evt)
+         (struct-out choice-evt)
 
          (struct-out poller)
          (struct-out poll-ctx)
@@ -80,7 +81,10 @@
                            retry-proc) ; thunk for resume from break; return `(values _val _ready?)`
         #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
-(struct guard-evt (proc)
+(struct poll-guard-evt (proc)
+        #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+
+(struct choice-evt (evts)
         #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
 ;; Check whether an event is ready; returns the same results

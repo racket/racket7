@@ -1,4 +1,4 @@
-;; All the bindings that are still missing in "kernel.cm":
+;; All the bindings that are still missing in "kernel.scm":
 
 banner
 bytes-utf-8-index
@@ -6,7 +6,6 @@ bytes-utf-8-ref
 call-in-nested-thread
 call-with-semaphore/enable-break
 char-utf-8-length
-choice-evt
 compile-allow-set!-undefined
 compile-context-preservation-enabled
 current-directory-for-user
@@ -20,23 +19,17 @@ current-subprocess-custodian-mode
 current-thread-initial-stack-size
 current-write-relative-directory
 dump-memory-stats
-environment-variables-copy
-environment-variables-names
-environment-variables?
 equal?/recur
 executable-yield-handler
 filesystem-change-evt?
 global-port-print-handler
 impersonator-ephemeron
-integer-length
 integer-sqrt
 integer-sqrt/remainder
 locale-string-encoding
 make-environment-variables
 make-known-char-range-list
 make-phantom-bytes
-make-pipe
-make-plumber
 make-shared-bytes
 make-sibling-inspector
 parameter-procedure=?
@@ -46,25 +39,14 @@ peek-char
 peek-string
 peek-string!
 phantom-bytes?
-pipe-content-length
-plumber-flush-all
-plumber-flush-handle-remove!
-plumber-flush-handle?
-plumber?
-poll-guard-evt
 port-closed-evt
-port-commit-peeked
 port-count-lines-enabled
 port-counts-lines?
 port-file-identity
 port-file-unlock
-port-progress-evt
 port-try-file-lock?
 print-syntax-width
-progress-evt?
 prop:object-name
-quotient/remainder
-raise-user-error
 read-byte-or-special
 read-bytes-avail!/enable-break
 real->double-flonum
@@ -83,18 +65,11 @@ string-locale<?
 string-locale=?
 string-locale>?
 string-port?
-subprocess
-subprocess-group-enabled
-subprocess-kill
-subprocess-pid
-subprocess-status
-subprocess-wait
 sync/enable-break
 sync/timeout/enable-break
 system-idle-evt
 system-language+country
 thread-cell-values?
-thread-receive
 thread-resume-evt
 thread-rewind-receive
 thread-suspend-evt
@@ -102,7 +77,3 @@ thread-try-receive
 thread/suspend-to-kill
 use-compiled-file-check
 vector-set-performance-stats!
-will-execute
-write-byte
-write-char
-write-special-avail*

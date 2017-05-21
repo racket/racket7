@@ -4,7 +4,13 @@
          "../string/convert.rkt"
          (submod "bytes-output.rkt" internal))
 
-(provide write-string)
+(provide write-char
+         write-string)
+
+(define (write-char ch [out (current-output-port)])
+  (check 'write-char char? ch)
+  (check 'write-char output-port? out)
+  (write-string (string ch) out 0 1))
 
 (define (write-string str [out (current-output-port)] [start 0] [end (and (string? str)
                                                                           (string-length str))])

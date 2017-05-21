@@ -2,7 +2,8 @@
 (require "../common/check.rkt"
          "read-and-peek.rkt"
          "input-port.rkt"
-         "count.rkt")
+         "count.rkt"
+         "progress-evt.rkt")
 
 (provide read-byte
          read-bytes
@@ -14,10 +15,7 @@
          peek-bytes
          peek-bytes!
          peek-bytes-avail!
-         peek-bytes-avail!*
-
-         byte-ready?
-         port-provides-progress-evts?)
+         peek-bytes-avail!*)
 
 (module+ internal
   (provide do-read-bytes!))
@@ -173,9 +171,13 @@
                                                        (bytes-length bstr))])
   (check 'peek-bytes-avail! bytes? bstr)
   (check 'peek-bytes-avail! exact-nonnegative-integer? skip-k)
+  (check 'peek-bytes-avail! (lambda (e) (or (not e) (progress-evt? e)))
+         #:contract "(or/c #f progress-evt?)" progress-evt)
   (check 'peek-bytes-avail! input-port? in)
   (check 'peek-bytes-avail! exact-nonnegative-integer? start-pos)
   (check 'peek-bytes-avail! exact-nonnegative-integer? end-pos)
+  (when progress-evt
+    (check-progress-evt 'peek-bytes-avail! progress-evt in))
   (check-range 'peek-bytes-avail! start-pos end-pos (bytes-length bstr) bstr)
   (let ([in (->core-input-port in)])
     (peek-some-bytes! 'peek-bytes-avail! in bstr start-pos end-pos skip-k)))
@@ -185,14 +187,13 @@
                                                         (bytes-length bstr))])
   (check 'peek-bytes-avail!* bytes? bstr)
   (check 'peek-bytes-avail! exact-nonnegative-integer? skip-k)
+  (check 'peek-bytes-avail! (lambda (e) (or (not e) (progress-evt? e)))
+         #:contract "(or/c #f progress-evt?)" progress-evt)
   (check 'peek-bytes-avail!* input-port? in)
   (check 'peek-bytes-avail!* exact-nonnegative-integer? start-pos)
   (check 'peek-bytes-avail!* exact-nonnegative-integer? end-pos)
+  (when progress-evt
+    (check-progress-evt 'peek-bytes-avail!* progress-evt in))
   (check-range 'peek-bytes-avail!* start-pos end-pos (bytes-length bstr) bstr)
   (let ([in (->core-input-port in)])
     (peek-some-bytes! 'peek-bytes-avail!* in bstr start-pos end-pos skip-k #:zero-ok? #t)))
-
-(define (port-provides-progress-evts? in)
-  (check 'port-provides-progress-evts? input-port? in)
-  (let ([in (->core-input-port in)])
-    (and (core-input-port-get-progress-evt in) #t)))
