@@ -20,10 +20,13 @@ EXPANDER_DEPS = $(LINKLET_DEPS) linklet.so
 MAIN_DEPS = $(EXPANDER_DEPS) expander.so
 
 expander-demo: expander.so demo/expander.ss
-	env $(SCHEME) $(EXPANDER_DEPS) expander.so demo/expander.ss
+	$(SCHEME) $(EXPANDER_DEPS) expander.so demo/expander.ss
 
 run: main.so
 	${SCHEME} --script main.so ../../bin/racket $(ARGS)
+
+run-wpo: racket.so
+	${SCHEME} --script racket.so ../../bin/racket $(ARGS)
 
 racket.so: main.so
 	echo '(compile-whole-program "main.wpo" "racket.so" #t)' | $(SCHEME) -q
@@ -37,7 +40,9 @@ rktl:
 	$(MAKE) regexp-rktl
 	$(MAKE) expander-rktl
 
-PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm primitive/extfl.scm
+PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm \
+                    primitive/paramz.scm primitive/extfl.scm primitive/network.scm \
+                    primitive/futures.scm
 
 expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS)
 	$(COMP) '(compile-file "expander.sls")' | $(SCHEME) -q $(EXPANDER_DEPS)
@@ -179,7 +184,9 @@ CORE_SRCS = core/constant.ss \
             core/memory.ss \
             core/will-executor.ss \
             core/system.ss \
-            core/unsafe.ss
+            core/unsafe.ss \
+            core/extfl.ss \
+            core/network.ss
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
 	$(COMP) $(UNSAFE) '(compile-file "core.sls")' | $(SCHEME) -q

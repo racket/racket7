@@ -339,7 +339,7 @@
                             [n (c 'name)])
                        n)]
                [desc
-                (call-with-values (lambda ()(i 'source-path))
+                (call-with-values (lambda () (i 'source-path))
                   (case-lambda
                    [()
                     (and name (cons name #f))]
@@ -349,8 +349,8 @@
                     (cons name (srcloc path #f #f pos #f))]))])
           (let ([l (let ([depth (i 'depth)])
                      (if (zero? depth)
-                         (loop (i 'link) (sub1 n))
-                         '()))])
+                         '()
+                         (loop (i 'link) (sub1 n))))])
             (if desc
                 (cons desc l)
                 l)))]))))

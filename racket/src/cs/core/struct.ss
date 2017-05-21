@@ -365,7 +365,8 @@
                                          0)]
             [total-auto-field-count (+ auto-fields parent-auto-field-count)]
             [auto-field-adder (and (positive? total-auto-field-count)
-                                   (let ([pfa (struct-type-auto-field-adder parent-rtd)])
+                                   (let ([pfa (and parent-rtd
+                                                   (struct-type-auto-field-adder parent-rtd))])
                                      (lambda (args)
                                        (args-insert args fields-count auto-fields auto-val pfa))))])
        (struct-type-install-properties! rtd name fields-count auto-fields parent-rtd

@@ -159,16 +159,19 @@
    continuation-prompt-available?
    continuation-prompt-tag?
    continuation?
+   copy-file
    cos
    current-code-inspector
    current-command-line-arguments
    current-compile
    current-compiled-file-roots
    current-continuation-marks
+   current-custodian
    current-directory
    current-environment-variables
    current-error-port
    current-eval
+   current-force-delete-permissions
    current-gc-milliseconds
    current-inexact-milliseconds
    current-input-port
@@ -194,12 +197,20 @@
    current-thread-group
    custodian?
    custodian-box?
+   custodian-box-value
+   custodian-limit-memory
+   custodian-managed-list
+   custodian-memory-accounting-available?
+   custodian-require-memory
+   custodian-shutdown-all
    custom-print-quotable?
    custom-print-quotable-accessor
    custom-write?
    custom-write-accessor
    datum-intern-literal
    default-continuation-prompt-tag
+   delete-directory
+   delete-file
    denominator
    directory-exists?
    directory-list
@@ -248,13 +259,17 @@
    extend-parameterization
    file-exists?
    file-or-directory-modify-seconds
+   file-or-directory-identity
+   file-or-directory-permissions
    file-position
    file-position*
-   file-truncate
+   file-size
    file-stream-buffer-mode
    file-stream-port?
+   file-truncate
    filesystem-change-evt
    filesystem-change-evt-cancel
+   filesystem-root-list
    find-system-path
    fixnum?
    flonum?
@@ -363,8 +378,12 @@
    make-channel
    make-continuation-mark-key
    make-continuation-prompt-tag
+   make-custodian
+   make-custodian-box
    make-derived-parameter
+   make-directory
    make-ephemeron
+   make-file-or-directory-link
    make-flvector
    make-fxvector
    make-hash
@@ -455,11 +474,13 @@
    plumber-add-flush!
    port-closed?
    port-count-lines!
+   port-file-unlock
    port-next-location
    port-display-handler
    port-print-handler
    port-provides-progress-evts?
    port-read-handler
+   port-try-file-lock?
    port-write-handler
    port-writes-atomic?
    port-writes-special?
@@ -554,6 +575,7 @@
    regexp-replace*
    regexp?
    relative-path?
+   rename-file-or-directory
    reparameterize
    resolve-path
    reverse
@@ -707,12 +729,6 @@
    flasin flacos flatan
    fltruncate flround flfloor flceiling
    flexp fllog flexpt
-
-   extflsin extflcos extfltan
-   extflasin extflacos extflatan
-   extfltruncate extflround extflfloor extflceiling
-   extflexp extfllog extflexpt
-
    
    keyword<?
    string->keyword

@@ -1,50 +1,48 @@
-(define (extfl-not-ready . args)
-  (error 'extfl... "not available"))
 
 (define extfl-table
   (make-primitive-table
-   [extfl-not-ready extflmin]
-   [extfl-not-ready extflatan]
-   [extfl-not-ready extfl+]
-   [extfl-not-ready extflmax]
-   [extfl-not-ready extflfloor]
-   [extfl-not-ready extfl<=]
-   [extfl-not-ready extflvector]
-   [extfl-not-ready extfl->floating-point-bytes]
-   [extfl-not-ready extfltruncate]
-   [extfl-not-ready ->extfl]
-   [extfl-not-ready extflsin]
-   [extfl-not-ready extflonum?]
-   [extfl-not-ready extflacos]
-   [extfl-not-ready extflvector-ref]
-   [extfl-not-ready extflexp]
-   [extfl-not-ready extflabs]
-   [extfl-not-ready extflonum-available?]
-   [extfl-not-ready extfl<]
-   [extfl-not-ready extfl->exact]
-   [extfl-not-ready extfl->fx]
-   [extfl-not-ready extfl->inexact]
-   [extfl-not-ready extflvector-set!]
-   [extfl-not-ready make-extflvector]
-   [extfl-not-ready extflcos]
-   [extfl-not-ready extflvector-length]
-   [extfl-not-ready extfl/]
-   [extfl-not-ready extflceiling]
-   [extfl-not-ready floating-point-bytes->extfl]
-   [extfl-not-ready extfl>=]
-   [extfl-not-ready make-shared-extflvector]
-   [extfl-not-ready extflround]
-   [extfl-not-ready extfl->exact-integer]
-   [extfl-not-ready real->extfl]
-   [extfl-not-ready extflexpt]
-   [extfl-not-ready fx->extfl]
-   [extfl-not-ready shared-extflvector]
-   [extfl-not-ready extfl>]
-   [extfl-not-ready extfllog]
-   [extfl-not-ready extflvector?]
-   [extfl-not-ready extfl=]
-   [extfl-not-ready extflsqrt]
-   [extfl-not-ready extfl*]
-   [extfl-not-ready extfl-]
-   [extfl-not-ready extfltan]
-   [extfl-not-ready extflasin]))
+   extflmin
+   extflatan
+   extfl+
+   extflmax
+   extflfloor
+   extfl<=
+   extflvector
+   extfl->floating-point-bytes
+   extfltruncate
+   ->extfl
+   extflsin
+   extflonum?
+   extflacos
+   extflvector-ref
+   extflexp
+   extflabs
+   extflonum-available?
+   extfl<
+   extfl->exact
+   extfl->fx
+   extfl->inexact
+   extflvector-set!
+   make-extflvector
+   extflcos
+   extflvector-length
+   extfl/
+   extflceiling
+   floating-point-bytes->extfl
+   extfl>=
+   make-shared-extflvector
+   extflround
+   extfl->exact-integer
+   real->extfl
+   extflexpt
+   fx->extfl
+   shared-extflvector
+   extfl>
+   extfllog
+   extflvector?
+   extfl=
+   extflsqrt
+   extfl*
+   extfl-
+   extfltan
+   extflasin))

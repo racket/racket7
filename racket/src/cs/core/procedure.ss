@@ -22,7 +22,7 @@
 (define (procedure? v)
   (or (chez:procedure? v)
       (and (record? v)
-           (struct-property-ref prop:procedure (record-rtd v) #f))))
+           (not (eq? (struct-property-ref prop:procedure (record-rtd v) none) none)))))
 
 (define (procedure-specialize proc)
   (unless (procedure? proc)
@@ -158,7 +158,7 @@
   (let ([mask (arity->mask a)])
     (unless mask
       (raise-arguments-error 'procedure-reduce-arity "procedure-arity?" a))
-    (unless (= mask (bitwise-and (procedure-arity-mask proc)))
+    (unless (= mask (bitwise-and mask (procedure-arity-mask proc)))
       (raise-arguments-error 'procedure-reduce-arity
                              "arity of procedure does not include requested arity"
                              "procedure" proc
@@ -501,6 +501,9 @@
 (define (set-primitive-applicables!)
   (struct-property-set! prop:procedure
                         (record-type-descriptor parameter)
+                        0)
+  (struct-property-set! prop:procedure
+                        (record-type-descriptor derived-parameter)
                         0)
 
   (struct-property-set! prop:procedure

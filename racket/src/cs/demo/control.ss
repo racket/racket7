@@ -517,11 +517,23 @@
 ;; Parameters:
 
 (define my-param (make-parameter 'init))
+(check (procedure? my-param) #t)
 (let ([e (with-continuation-mark parameterization-key
              (extend-parameterization (continuation-mark-set-first #f parameterization-key) my-param 'set)
            (make-engine (lambda () (|#%app| my-param)) #f))])
   (check (|#%app| my-param) 'init)
   (check (e 1000 void (lambda (remain v) v) (lambda (e) (error 'engine "oops"))) 'set))
+
+(let ([also-my-param (make-derived-parameter my-param
+                                             (lambda (v) (list v))
+                                             (lambda (v) (box v)))])
+  (check (procedure? also-my-param) #t)
+  (check (|#%app| my-param) 'init)
+  (with-continuation-mark parameterization-key
+      (extend-parameterization (continuation-mark-set-first #f parameterization-key) also-my-param 'set)
+    (begin
+      (check (|#%app| my-param) '(set))
+      (check (|#%app| also-my-param) '#&(set)))))
 
 ;; ----------------------------------------
 ;; Prompt-tag impersonators

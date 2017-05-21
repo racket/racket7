@@ -70,8 +70,18 @@
          system-idle-evt
          alarm-evt
 
+         current-custodian
+         make-custodian
+         make-custodian-from-main
          custodian?
+         custodian-shutdown-all
+         custodian-managed-list
+         make-custodian-box
          custodian-box?
+         custodian-box-value
+         custodian-memory-accounting-available?
+         custodian-require-memory
+         custodian-limit-memory
 
          break-enabled
          check-for-break

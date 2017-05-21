@@ -24,6 +24,9 @@
 (define (impersonate-channel v . args) v)
 (define (chaperone-struct-type v . args) v)
 
+(define (port-try-file-lock? port mode) #f)
+(define (port-file-unlock port) (void))
+
 (define (equal-secondary-hash-code v) (equal-hash-code v))
 
 (define (primitive? v) #f)
@@ -64,36 +67,6 @@
 (define (current-environment-variables) #f)
 (define (environment-variables-set! e k v)
   (error "environment-variables-set! not ready"))
-
-(define (->string p)
-  (path->string (path->complete-path p)))
-
-(define (directory-exists? p)
-  (file-directory? (->string p)))
-
-(define (file-exists? p)
-  (chez:file-exists? (->string p)))
-
-(define (link-exists? p)
-  (file-symbolic-link? (->string p)))
-
-(define (directory-list p)
-  (map string->path (chez:directory-list (->string p))))
-
-(define file-or-directory-modify-seconds
-  (case-lambda
-   [(p)
-    (time-second (file-modification-time (->string p)))]
-   [(p secs)
-    (if secs
-        (error 'file-or-directory-modify-seconds "cannot set modify seconds")
-        (file-or-directory-modify-seconds p))]
-   [(p secs fail)
-    (file-or-directory-modify-seconds p secs)]))
-
-(define (resolve-path p) p)
-(define (expand-user-path p) p)
-
 
 (define (reparameterize . args) (void))
 
@@ -302,8 +275,56 @@
           v))]
    [else v]))
 
+;; ----------------------------------------
+
 (define current-load-extension
   (make-parameter (lambda args (error "no extensions"))))
+
+(define (futures-enabled?) #f)
+(define (processor-count) 1)
+
+(define-record-type (future* make-future future?)
+  (fields (mutable thunk) (mutable result)))
+
+(define (future thunk)
+  (make-future thunk #f))
+
+(define (touch f)
+  ;; FIXME
+  (when (future*-thunk f)
+    (let ([t (future*-thunk f)])
+      (future*-thunk-set! f #f)
+      (future*-result-set! f (t))))
+  (future*-result f))
+  
+(define (would-be-future thunk)
+  (future thunk))
+
+(define (current-future) #f)
+
+(define-record-type (fsemaphore create-fsemaphore fsemaphore?)
+  (fields sema))
+
+(define (make-fsemaphore init)
+  (create-fsemaphore (make-semaphore init)))
+
+(define (fsemaphore-post f)
+  (semaphore-post (fsemaphore-sema f)))
+
+(define (fsemaphore-wait f)
+  (semaphore-wait (fsemaphore-sema f)))
+
+(define (fsemaphore-try-wait? f)
+  (semaphore-try-wait? (fsemaphore-sema f)))
+
+(define (fsemaphore-count f)
+  ;; FIXME
+  0)
+
+(define (reset-future-logs-for-tracing!)
+  (void))
+(define (mark-future-trace-end!)
+  (void))
 
 ;; ----------------------------------------
 
@@ -347,14 +368,14 @@
     [(|#%linklet|) linklet-table]
     [(|#%kernel|) kernel-table]
     [(|#%read|) tbd-table]
-    [(|#%paramz|) tbd-table]
+    [(|#%paramz|) paramz-table]
     [(|#%unsafe|) unsafe-table]
     [(|#%foreign|) tbd-table]
-    [(|#%futures|) tbd-table]
+    [(|#%futures|) futures-table]
     [(|#%place|) tbd-table]
     [(|#%flfxnum|) flfxnum-table]
     [(|#%extfl|) extfl-table]
-    [(|#%network|) tbd-table]
+    [(|#%network|) network-table]
     [else #f]))
 
 (define-syntax hash-primitive-set!
@@ -373,7 +394,10 @@
 (include "primitive/kernel.scm")
 (include "primitive/unsafe.scm")
 (include "primitive/flfxnum.scm")
+(include "primitive/paramz.scm")
 (include "primitive/extfl.scm")
+(include "primitive/network.scm")
+(include "primitive/futures.scm")
 
 (define linklet-table
   (make-primitive-table
@@ -430,6 +454,9 @@
 
    equal-secondary-hash-code
 
+   port-try-file-lock?
+   port-file-unlock
+
    primitive?
    primitive-closure?
    primitive-result-arity
@@ -466,14 +493,6 @@
    environment-variables-ref
    current-environment-variables
    environment-variables-set!
-
-   directory-exists?
-   file-exists?
-   link-exists?
-   directory-list
-   file-or-directory-modify-seconds
-   resolve-path
-   expand-user-path
 
    exit
    exit-handler
@@ -553,4 +572,20 @@
    version
 
    prop:chaperone-unsafe-undefined
-   chaperone-struct-unsafe-undefined))
+   chaperone-struct-unsafe-undefined
+
+   futures-enabled?
+   processor-count
+   future
+   future?
+   touch
+   would-be-future
+   current-future
+   make-fsemaphore
+   fsemaphore?
+   fsemaphore-post
+   fsemaphore-wait
+   fsemaphore-try-wait?
+   fsemaphore-count
+   reset-future-logs-for-tracing!
+   mark-future-trace-end!))

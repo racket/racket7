@@ -72,6 +72,7 @@
  (call-in-main-thread
   (lambda ()
     (boot)
+    (add-stderr-log-receiver! (|#%app| current-logger) 'error)
     (|#%app| current-library-collection-links
      (find-library-collection-links))
     (|#%app| current-library-collection-paths

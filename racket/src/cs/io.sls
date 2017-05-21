@@ -66,16 +66,85 @@
                                                 (make-bytevector 4096)
                                                 (make-bytevector 0))))]))
   (define peek-byte lookahead-u8)
-  (define (->string p)
-    (if (1/path? p) (1/path->string p) p))
-  (define (open-input-file path mode mode2)
-    (open-file-input-port (->string path)))
-  (define (open-output-file path mode mode2)
-    (open-file-output-port (->string path)))
-  (define (directory-exists? p)
-    (file-directory? (->string p)))
-  (define (resolve-path p) p)
+
+  ;; Host's notion of path is just a string:
+  (define (bytes->path bstr)
+    (1/bytes->string/utf-8 bstr))
+  (define (path->bytes p)
+    (1/string->bytes/utf-8 p))
+
   (define (system-path-convention-type) 'unix)
+
+  (define (directory-exists? p)
+    (file-directory? p))
+  
+  (define (file-exists? p)
+    (chez:file-exists? p))
+  
+  (define (link-exists? p)
+    (file-symbolic-link? p))
+  
+  (define (directory-list p)
+    (chez:directory-list p))
+
+  (define (make-directory p)
+    (mkdir p))
+
+  (define (delete-file p)
+    (chez:delete-file p))
+  
+  (define (delete-directory p)
+    (chez:delete-directory p))
+  
+  (define file-or-directory-modify-seconds
+    (case-lambda
+     [(p)
+      (time-second (file-modification-time p))]
+     [(p secs)
+      (if secs
+          (error 'file-or-directory-modify-seconds "cannot set modify seconds")
+          (file-or-directory-modify-seconds p))]
+     [(p secs fail)
+      (file-or-directory-modify-seconds p secs)]))
+
+  (define (file-or-directory-permissions path mode)
+    (cond
+     [(eq? 'bits mode) (get-mode path #f)]
+     [(not mode)
+      (let ([bits (get-mode path #f)])
+        (append
+         (if (zero? (bitwise-and #o100  bits)) '() '(read))
+         (if (zero? (bitwise-and #o200  bits)) '() '(write))
+         (if (zero? (bitwise-and #o400  bits)) '() '(execute))))]
+     [else
+      (chmod path mod)]))
+
+  (define (rename-file-or-directory old-pathname new-pathname exists-ok?) 
+    (rename-file old-pathname new-pathname))
+
+  (define (file-or-directory-identity p as-link?)
+    (1/error 'file-or-directory-identity "not yet supported"))
+
+  (define (file-size p)
+    (1/error 'file-size "not yet supported"))
+
+  (define (copy-file src dest exists-ok?)
+    (1/error 'copy-file "not yet supported"))
+
+  (define (make-file-or-directory-link to path)
+    (1/error 'make-file-or-directory-link "not yet supported"))
+
+  (define (filesystem-root-list)
+    (1/error 'filesystem-root-list "not yet supported"))
+  
+  (define (resolve-path p) p)
+  
+  (define (open-input-file path mode mode2)
+    (open-file-input-port path))
+
+  (define (open-output-file path mode mode2)
+    (open-file-output-port path))
+
   (define file-truncate truncate-file)
 
   (define (primitive-table key)
@@ -86,6 +155,6 @@
   (define (terminal-port? p) #f)
 
   (include "compiled/io.scm")
-
+  
   ;; Initialize:
   (|#%app| 1/current-directory (current-directory)))

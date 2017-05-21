@@ -4,6 +4,7 @@
                   [open-output-file host:open-output-file])
          "../common/check.rkt"
          "../path/path.rkt"
+         "../file/host.rkt"
          "host-port.rkt"
          "close.rkt"
          "parameter.rkt")
@@ -19,12 +20,12 @@
 
 (define (open-input-file path [mode1 none] [mode2 none])
   (check 'open-input-file path-string? path)
-  (open-input-host (host:open-input-file (path->string (path->complete-path path)))
+  (open-input-host (host:open-input-file (->host path))
                    path))
 
 (define (open-output-file path [mode1 none] [mode2 none])
   (check 'open-output-file path-string? path)
-  (open-output-host (host:open-output-file (path->string (path->complete-path path)))
+  (open-output-host (host:open-output-file (->host path))
                     path))
 
 (define (call-with-input-file path proc mode)

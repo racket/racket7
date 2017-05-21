@@ -84,20 +84,3 @@
 (define (check-not-unsafe-undefined/assign v sym)
   (when (eq? v unsafe-undefined)
     (raise-arguments-error sym "assignment disallowed;\n cannot assign before initialization")))
-
-(define-syntax (define-extfl-ids stx)
-  (syntax-case stx ()
-    [(_ ids ...)
-     (with-syntax ([(extflids ...) (map (lambda (i)
-                                          (datum->syntax i (string->symbol (format "extfl~s" (syntax->datum i)))))
-                                        (syntax->list #'(ids ...)))])
-       #'(begin
-           (define (extflids v)
-             (error 'extflids "extflonums are unsupported"))
-           ...))]))
-
-(define-extfl-ids
-  sin cos tan
-  asin acos atan
-  truncate round floor ceiling
-  exp log expt)

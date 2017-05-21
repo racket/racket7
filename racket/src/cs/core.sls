@@ -410,10 +410,30 @@
           unsafe-flsqrt
           unsafe-flexpt
 
-          extflsin extflcos extfltan
-          extflasin extflacos extflatan
-          extfltruncate extflround extflfloor extflceiling
-          extflexp extfllog extflexpt
+          extfl* extfl+ extfl- ->extfl
+          extfl->exact extfl->exact-integer
+          extfl->floating-point-bytes extfl->fx
+          extfl->inexact
+          extfl/ extfl< extfl<= extfl= extfl> extfl>=
+          extflabs extflacos extflasin extflatan extflceiling
+          extflcos extflexp extflexpt floating-point-bytes->extfl
+          extflfloor fx->extfl extfllog make-shared-extflvector
+          make-extflvector extflmax extflmin extflonum-available?
+          extflonum? real->extfl extflround shared-extflvector
+          extflsin extflsqrt extfltan extfltruncate extflvector
+          extflvector-length extflvector-ref extflvector-set! extflvector?
+
+          tcp-listener? tcp-port?
+          tcp-abandon-port tcp-accept tcp-accept-evt tcp-accept-ready?
+          tcp-accept/enable-break tcp-addresses tcp-close tcp-connect
+          tcp-connect/enable-break tcp-listen
+          udp? udp-bind! udp-bound? udp-close udp-connect! udp-connected?
+          udp-multicast-interface udp-multicast-join-group! udp-multicast-leave-group!
+          udp-multicast-loopback? udp-multicast-set-interface! udp-multicast-set-loopback!
+          udp-multicast-set-ttl! udp-multicast-ttl udp-open-socket udp-receive! udp-receive!*
+          udp-receive!-evt udp-receive!/enable-break udp-receive-ready-evt udp-send
+          udp-send* udp-send-evt udp-send-ready-evt udp-send-to udp-send-to* udp-send-to-evt
+          udp-send-to/enable-break udp-send/enable-break
 
           unsafe-unbox
           unsafe-unbox*
@@ -490,6 +510,8 @@
   (include "core/will-executor.ss")
   (include "core/system.ss")
   (include "core/unsafe.ss")
+  (include "core/extfl.ss")
+  (include "core/network.ss")
   
   (set-base-exception-handler!)
   (set-primitive-applicables!)

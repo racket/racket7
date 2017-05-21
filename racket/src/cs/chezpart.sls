@@ -20,7 +20,7 @@
                            with-input-from-file with-output-to-file
                            call-with-input-file call-with-output-file
                            file-position
-                           format printf
+                           format
                            write display newline port-name port-closed?
                            print-graph print-vector-length
                            error
@@ -54,10 +54,13 @@
                    [gensym chez:gensym]
                    [symbol->string chez:symbol->string]
                    [fprintf chez:fprintf]
+                   [printf chez:printf]
                    [current-error-port chez:current-error-port]
                    [string->number chez:string->number]
                    [file-exists? chez:file-exists?]
                    [directory-list chez:directory-list]
+                   [delete-file chez:delete-file]
+                   [delete-directory chez:delete-directory]
                    [filter chez:filter]
                    [member chez:member]
                    [memv chez:memv]

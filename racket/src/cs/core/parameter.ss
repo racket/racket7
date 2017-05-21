@@ -14,13 +14,11 @@
      [(null? args) (make-parameterization ht)]
      [(and (parameter? (car args))
            (pair? (cdr args)))
-      (let* ([p (car args)]
-             [v (let loop ([p p] [v (cadr args)])
-                  (if (derived-parameter? p)
-                      ((derived-parameter-guard p) (loop (derived-parameter-next p) v))
-                      v))])
-        (loop (hamt-set ht p (make-thread-cell v #t))
-              (cddr args)))]
+      (let dloop ([p (car args)] [v (cadr args)])
+        (if (derived-parameter? p)
+            (dloop (derived-parameter-next p) ((derived-parameter-guard p) v))
+            (loop (hamt-set ht p (make-thread-cell v #t))
+                  (cddr args))))]
      [(parameter? (car args))
       (raise-arguments-error 'extend-parameterization
                              "missing value for parameter"
