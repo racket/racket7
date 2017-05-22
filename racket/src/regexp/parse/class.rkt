@@ -77,13 +77,13 @@
         [(#"digit") (range-add-span 
                      empty-range
                      (chyte #\0) (chyte #\9))]
-        [(#"digit") (range-add-span 
-                     (range-add-span 
+        [(#"xdigit") (range-add-span 
                       (range-add-span 
-                       empty-range
-                       (chyte #\0) (chyte #\9))
-                      (chyte #\a) (chyte #\f))
-                     (chyte #\A) (chyte #\F))]
+                       (range-add-span 
+                        empty-range
+                        (chyte #\0) (chyte #\9))
+                       (chyte #\a) (chyte #\f))
+                      (chyte #\A) (chyte #\F))]
         [(#"alnum") (range-add-span 
                      (range-add-span 
                       (range-add-span 

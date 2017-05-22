@@ -1,5 +1,7 @@
 (library (core)
-  (export null eof void void?
+  (export version
+
+          null eof void void?
 
           begin0
 
@@ -157,6 +159,7 @@
           register-struct-predicate! ; not exported to Racket
           register-struct-field-accessor! ; not exported to Racket
           register-struct-field-mutator! ; not exported to Racket
+          struct-property-set!  ; not exported to Racket
           struct-constructor-procedure?
           struct-predicate-procedure?
           struct-accessor-procedure?
@@ -488,6 +491,8 @@
           (only (chezscheme csv7)
                 record-field-accessor
                 record-field-mutator))
+
+  (define (version) "6.9.1.5")
 
   (define none (chez:gensym "none"))
   (define none2 (chez:gensym "none2"))

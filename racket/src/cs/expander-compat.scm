@@ -125,8 +125,19 @@
   (make-parameter #t))
 (define use-compiled-file-paths
   (make-parameter (list (string->path (string-append "compiled/" (symbol->string (machine-type)))))))
+(define use-compiled-file-check
+  (make-parameter 'modify-seconds
+                  (lambda (v)
+                    (unless (or (eq? v 'exists)
+                                (eq? v 'modify-seconds))
+                      (raise-argument-error 'use-compiled-file-check
+                                            "(or/c 'modify-seconds 'exists)"
+                                            v))
+                    v)))
 (define current-compiled-file-roots
-  (make-parameter null))
+  (make-parameter '(same)))
+(define current-write-relative-directory
+  (make-parameter #f))
 
 (define current-load/use-compiled
   (make-parameter #f))
@@ -186,15 +197,13 @@
   (case key
     [(exec-file) (or exec-file
                      (string->path "/usr/local/bin/racket"))]
-    [(config-dir) (string->path "../config")]
-    [(collects-dir) (string->path "../collects")]
+    [(config-dir host-config-dir) (string->path "../config")]
+    [(collects-dir host-collects-dir) (string->path "../collects")]
     [(addon-dir) (string->path "/tmp/addon")]
     [(orig-dir) (string->path (|#%app| current-directory))]
     [(run-file) (or run-file
                     (find-system-path 'exec-file))]
     [else `(find-system-path-not-ready ,key)]))
-
-(define (version) "0.1")
 
 (define-values (prop:exn:srclocs exn:srclocs? exn:srclocs-accessor)
   (make-struct-type-property 'exn:srclocs))
@@ -544,7 +553,9 @@
    use-collection-link-paths
    use-user-specific-search-paths
    use-compiled-file-paths
+   use-compiled-file-check
    current-compiled-file-roots
+   current-write-relative-directory
 
    current-load/use-compiled
    read-on-demand-source
@@ -613,8 +624,6 @@
    datum-intern-literal
    current-load-extension
    string->number
-
-   version
 
    prop:chaperone-unsafe-undefined
    chaperone-struct-unsafe-undefined

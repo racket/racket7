@@ -47,6 +47,33 @@
   (define (write-bytes bstr out)
     (put-bytevector out bstr 0 (bytevector-length bstr)))
 
+  (define-syntax with-exn:fail:filesystem
+    (syntax-rules ()
+      [(_ expr)
+       (guard
+        (x [else (convert-exception-to-exn:fail:filesystem x)])
+        expr)]))
+
+  (define (convert-exception-to-exn:fail:filesystem v)
+    (raise
+     ((if (i/o-file-already-exists-error? v)
+          exn:fail:filesystem:exists
+          exn:fail:filesystem)
+      (string-append
+       (if (who-condition? v)
+           (chez:format "~a: " (condition-who v))
+           "")
+       (cond
+        [(format-condition? v)
+         (apply chez:format
+                (condition-message v)
+                (condition-irritants v))]
+        [(message-condition? v)
+         (condition-message v)]
+        [else
+         (chez:format "~s" v)]))
+      (current-continuation-marks))))
+
   (define file-stream-buffer-mode
     (case-lambda
      [(p)
@@ -88,24 +115,33 @@
     (chez:directory-list p))
 
   (define (make-directory p)
-    (mkdir p))
+    (with-exn:fail:filesystem
+     (mkdir p)))
 
   (define (delete-file p)
-    (chez:delete-file p))
+    (with-exn:fail:filesystem
+     (chez:delete-file p)))
   
   (define (delete-directory p)
-    (chez:delete-directory p))
+    (with-exn:fail:filesystem
+     (chez:delete-directory p)))
   
   (define file-or-directory-modify-seconds
     (case-lambda
      [(p)
-      (time-second (file-modification-time p))]
+      (time-second (with-exn:fail:filesystem
+                    (file-modification-time p)))]
      [(p secs)
       (if secs
           (error 'file-or-directory-modify-seconds "cannot set modify seconds")
-          (file-or-directory-modify-seconds p))]
+          (with-exn:fail:filesystem
+           (file-or-directory-modify-seconds p)))]
      [(p secs fail)
-      (file-or-directory-modify-seconds p secs)]))
+      (if secs
+          (file-or-directory-modify-seconds p secs)
+          (guard
+           (exn [else (fail)])
+           (time-second (file-modification-time p))))]))
 
   (define (file-or-directory-permissions path mode)
     (cond
@@ -119,8 +155,9 @@
      [else
       (chmod path mod)]))
 
-  (define (rename-file-or-directory old-pathname new-pathname exists-ok?) 
-    (rename-file old-pathname new-pathname))
+  (define (rename-file-or-directory old-pathname new-pathname exists-ok?)
+    (with-exn:fail:filesystem
+     (rename-file old-pathname new-pathname)))
 
   (define (file-or-directory-identity p as-link?)
     (1/error 'file-or-directory-identity "not yet supported"))
@@ -140,10 +177,21 @@
   (define (resolve-path p) p)
   
   (define (open-input-file path mode mode2)
-    (open-file-input-port path))
+    (with-exn:fail:filesystem
+     (open-file-input-port path)))
 
   (define (open-output-file path mode mode2)
-    (open-file-output-port path))
+    (let ([mode? (lambda (s) (or (eq? mode s) (eq? mode2 s)))])
+      (with-exn:fail:filesystem
+       (open-file-output-port path (cond
+                                    [(mode? 'truncate) (file-options no-fail)]
+                                    [(mode? 'must-truncate) (file-options no-create)]
+                                    [(mode? 'update) (file-options no-create no-truncate)]
+                                    [(mode? 'can-update) (file-options no-fail no-truncate)]
+                                    [(mode? 'replace) (file-options no-fail)]
+                                    [(mode? 'truncate/replace) (file-options no-fail)]
+                                    [(mode? 'append) (chez:error 'open-output-file "'append mode not supported")]
+                                    [else (file-options)])))))
 
   (define file-truncate truncate-file)
 

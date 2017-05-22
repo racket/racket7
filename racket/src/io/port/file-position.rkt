@@ -30,6 +30,7 @@
           (define data (core-input-port-data p))
           (cond
             [(file-position? data)
+             ((core-input-port-on-file-position p))
              ((file-position-ref data) data pos)]
             [else
              (raise-arguments-error 'file-position

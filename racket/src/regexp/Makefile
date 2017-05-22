@@ -11,7 +11,7 @@ regexp-src:
 	$(RACO) make ../../../pkgs/expander/bootstrap-run.rkt
 	$(MAKE) compiled/regexp.rktl
 
-compiled/regexp.rktl:
+compiled/regexp.rktl: compiled/main_rkt.zo ../../../pkgs/expander/compiled/bootstrap-run_rkt.zo
 	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/regexp.rktl
 
 demo:

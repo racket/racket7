@@ -12,7 +12,7 @@
 (define (raise-user-error init . args)
   (do-error 'raise-user-error exn:fail:user init args))
 
-(define (do-error who exn:fail init . args)
+(define (do-error who exn:fail init args)
   (cond
    [(and (symbol? init)
          (null? args))

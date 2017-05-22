@@ -75,7 +75,7 @@
 (define (rename-file-or-directory old new [exists-ok? #f])
   (check 'rename-file-or-directory path-string? old)
   (check 'rename-file-or-directory path-string? new)
-  (host:rename-file-or-directory old new exists-ok?))
+  (host:rename-file-or-directory (->host old) (->host new) exists-ok?))
 
 (define file-or-directory-modify-seconds
   (case-lambda

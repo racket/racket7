@@ -203,6 +203,9 @@
 (define (make-stubborn-will-executor)
   (make-will-executor))
 
+(define (ffi-lib name . args)
+  #f)
+
 (define-syntax define-foreign-not-yet-available
   (syntax-rules ()
     [(_ id)
@@ -219,7 +222,6 @@
   ffi-call
   ffi-callback
   ffi-callback?
-  ffi-lib
   ffi-lib-name
   ffi-lib?
   ffi-obj

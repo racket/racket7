@@ -1,5 +1,5 @@
 #lang racket/base
-(require (only-in racket/base
+(require (only-in '#%kernel
                   [open-input-file host:open-input-file]
                   [open-output-file host:open-output-file])
          "../common/check.rkt"
@@ -20,12 +20,12 @@
 
 (define (open-input-file path [mode1 none] [mode2 none])
   (check 'open-input-file path-string? path)
-  (open-input-host (host:open-input-file (->host path))
+  (open-input-host (host:open-input-file (->host path) mode1 mode2)
                    path))
 
 (define (open-output-file path [mode1 none] [mode2 none])
   (check 'open-output-file path-string? path)
-  (open-output-host (host:open-output-file (->host path))
+  (open-output-host (host:open-output-file (->host path) mode1 mode2)
                     path))
 
 (define (call-with-input-file path proc mode)

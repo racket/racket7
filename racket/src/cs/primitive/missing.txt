@@ -17,7 +17,6 @@ current-preserved-thread-cell-values
 current-process-milliseconds
 current-subprocess-custodian-mode
 current-thread-initial-stack-size
-current-write-relative-directory
 dump-memory-stats
 equal?/recur
 executable-yield-handler
@@ -75,5 +74,4 @@ thread-rewind-receive
 thread-suspend-evt
 thread-try-receive
 thread/suspend-to-kill
-use-compiled-file-check
 vector-set-performance-stats!

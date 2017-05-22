@@ -27,12 +27,12 @@
   #:property prop:file-stream #t
   #:property prop:file-position (case-lambda
                                   [(hd)
-                                   (host:file-position hd)]
+                                   (host:file-position (host-data-host-port hd))]
                                   [(hd pos)
-                                   (host:file-position hd pos)])
+                                   (host:file-position (host-data-host-port hd) pos)])
   #:property prop:file-truncate (case-lambda
                                   [(hd pos)
-                                   (host:file-truncate hd pos)])
+                                   (host:file-truncate (host-data-host-port hd) pos)])
   #:property prop:buffer-mode (case-lambda
                                 [(hd)
                                  (host:file-stream-buffer-mode (host-data-host-port hd))]

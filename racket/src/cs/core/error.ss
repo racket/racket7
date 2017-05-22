@@ -218,7 +218,7 @@
         [(null? more) '()]
         [else
          (cons ((|#%app| error-value->string-handler)
-                (cadr more)
+                (car more)
                 (|#%app| error-print-width))
                (loop (cdr more)))])))
     (current-continuation-marks))))

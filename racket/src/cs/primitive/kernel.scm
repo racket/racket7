@@ -197,6 +197,7 @@
    current-security-guard
    current-thread
    current-thread-group
+   current-write-relative-directory
    custodian?
    custodian-box?
    custodian-box-value
@@ -712,6 +713,7 @@
    unbox
    uncaught-exception-handler
    use-collection-link-paths
+   use-compiled-file-check
    use-compiled-file-paths
    use-user-specific-search-paths
    values

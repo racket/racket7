@@ -6,7 +6,7 @@
   (import (chezscheme))
   (export (import
            (rename (except (chezscheme)
-                           sort vector-sort!
+                           sort
                            force delay identifier?
                            output-port-buffer-mode
                            read-char peek-char char-ready?
@@ -20,10 +20,8 @@
                            with-input-from-file with-output-to-file
                            call-with-input-file call-with-output-file
                            file-position
-                           format
                            write display newline port-name port-closed? write-char
                            print-graph print-vector-length
-                           error
                            date? make-date
                            dynamic-wind
                            call-with-current-continuation
@@ -55,6 +53,7 @@
                    [symbol->string chez:symbol->string]
                    [fprintf chez:fprintf]
                    [printf chez:printf]
+                   [format chez:format]
                    [current-error-port chez:current-error-port]
                    [string->number chez:string->number]
                    [file-exists? chez:file-exists?]
@@ -65,6 +64,8 @@
                    [member chez:member]
                    [memv chez:memv]
                    [memq chez:memq]
+                   [error chez:error]
                    [raise chez:raise]
                    [exit chez:exit]
+                   [vector-sort! chez:vector-sort!]
                    [vector-sort chez:vector-sort]))))

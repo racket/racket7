@@ -3720,7 +3720,7 @@ static Scheme_Object *read_compiled(Scheme_Object *port,
       if (directory) {
         Scheme_Object *v;
 
-        /* Find bundle's symbol path by it's starting position */
+        /* Find bundle's symbol path by its starting position */
         v = scheme_hash_get(directory, scheme_make_integer(bundle_pos));
         if (!v)
           scheme_read_err(port, "read (compiled): cannot match bundle position to linklet-directory path");

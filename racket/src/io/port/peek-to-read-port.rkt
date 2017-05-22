@@ -81,6 +81,12 @@
                (loop next-wrote)))
            (try-again)])])))
 
+   #:on-file-position
+   (lambda ()
+     (set! peek-pipe-i #f)
+     (set! peek-pipe-o #f)
+     (set! peeked-eof? #f))
+
    #:close
    (lambda ()
      (close)

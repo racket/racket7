@@ -47,6 +47,7 @@
                          commit
                          get-location
                          count-lines!
+                         on-file-position
                          [closed? #:mutable]
                          [offset #:mutable] ; count plain bytes
                          [state #:mutable] ; state of UTF-8 decoding
@@ -68,7 +69,8 @@
                               #:get-progress-evt [get-progress-evt #f]
                               #:commit [commit #f]
                               #:get-location [get-location #f]
-                              #:count-lines! [count-lines! #f])
+                              #:count-lines! [count-lines! #f]
+                              #:on-file-position [on-file-position void])
   (core-input-port name
                    data
                    read-byte
@@ -80,6 +82,7 @@
                    commit
                    get-location
                    count-lines!
+                   on-file-position
                    #f   ; closed?
                    0    ; offset
                    #f   ; state

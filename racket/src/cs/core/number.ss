@@ -43,7 +43,8 @@
                                                    (endianness little))))]
       [else
        (raise-argument-error 'integer->integer-bytes
-                             "(or/c 2 4 8)" size)])]
+                             "(or/c 2 4 8)" size)])
+    bstr]
    [(num size signed?)
     (integer->integer-bytes num size signed? (system-big-endian?)
                             (and (exact-integer? size) (<= 2 size 8) (make-bytevector size)) 0)]
