@@ -29,26 +29,43 @@
 
 (define bytes=? bytevector=?)
 
-(define-syntax define-comparison
-  (syntax-rules ()
-    [(_ bytes?? ??)
-     (define (bytes?? a b)
-       (define alen (bytes-length a))
-       (define blen (bytes-length b))
-       (let loop ([i 0])
-         (cond
-          [(= i alen) (if (= i blen)
-                          #f
-                          #t)]
-          [(= i blen) #f]
-          [(?? (bytes-ref a i) (bytes-ref b i))
-           (loop (add1 i))]
-          [else #f])))]))
+(define (bytes<? a b)
+  (define alen (bytes-length a))
+  (define blen (bytes-length b))
+  (let loop ([i 0])
+    (cond
+     [(= i alen) (if (= i blen)
+                     #f
+                     #t)]
+     [(= i blen) #f]
+     [else
+      (let ([va (bytes-ref a i)]
+            [vb (bytes-ref b i)])
+        (cond
+         [(fx< va vb) #t]
+         [(fx= va vb) (loop (fx1+ i))]
+         [else #f]))])))
 
-(define-comparison bytes<? <)
-(define-comparison bytes>? >)
-(define-comparison bytes<=? <=)
-(define-comparison bytes>=? >=)
+(define (bytes>? a b)
+  (define alen (bytes-length a))
+  (define blen (bytes-length b))
+  (let loop ([i 0])
+    (cond
+     [(= i alen) #f]
+     [(= i blen) #t]
+     [else
+      (let ([va (bytes-ref a i)]
+            [vb (bytes-ref b i)])
+        (cond
+         [(fx> va vb) #t]
+         [(fx= va vb) (loop (fx1+ i))]
+         [else #f]))])))
+
+(define(bytes>=? a b)
+  (not (bytes<? a b)))
+
+(define(bytes<=? a b)
+  (not (bytes>? a b)))
 
 (define bytes-append
   (case-lambda 

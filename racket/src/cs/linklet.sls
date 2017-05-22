@@ -568,7 +568,6 @@
            [else
             (let ([name (hash-ref position-to-name (- (file-position in) pos) #f)])
               (unless name
-                (printf "~s ~s\n" (- (file-position in) pos) position-to-name)
                 (raise-arguments-error 'read-compiled-linklet
                                        "bundle not at an expected file position"))
               (let ([bstr (read-bytes 2 in)])

@@ -25,21 +25,24 @@
 ;; Read `(- end start)` bytes, stopping early only if an EOF is found
 (define (do-read-bytes! who in bstr start end)
   (define amt (- end start))
-  (define v (read-some-bytes! who in bstr start end))
   (cond
-   [(not (exact-integer? v)) v]
-   [(= v amt) v]
-   [else
-    (let loop ([got v])
-      (define v (read-some-bytes! who in bstr got amt #:keep-eof? #t))
-      (cond
-       [(eof-object? v)
-        got]
+    [(zero? amt) 0]
+    [else
+     (define v (read-some-bytes! who in bstr start end))
+     (cond
+       [(not (exact-integer? v)) v]
+       [(= v amt) v]
        [else
-        (define new-got (+ got v))
-        (cond
-         [(= new-got amt) amt]
-         [else (loop new-got)])]))]))
+        (let loop ([got v])
+          (define v (read-some-bytes! who in bstr got amt #:keep-eof? #t))
+          (cond
+            [(eof-object? v)
+             got]
+            [else
+             (define new-got (+ got v))
+             (cond
+               [(= new-got amt) amt]
+               [else (loop new-got)])]))])]))
 
 ;; ----------------------------------------
 
