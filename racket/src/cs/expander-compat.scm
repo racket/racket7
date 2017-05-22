@@ -74,7 +74,8 @@
 
 
 (define (environment-variables-ref e k)
-  (getenv (bytes->string/utf-8 k)))
+  (let ([v (getenv (bytes->string/utf-8 k))])
+    (and v (string->bytes/utf-8 v))))
 (define (current-environment-variables) #f)
 (define (environment-variables-set! e k v)
   (error "environment-variables-set! not ready"))
