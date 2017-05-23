@@ -714,6 +714,7 @@
    thread-resume
    thread-running?
    thread-send
+   thread-receive
    thread-suspend
    thread-wait
    true-object?
