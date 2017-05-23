@@ -494,10 +494,12 @@
                                           [else (hash-remove ignore bc)])))))
 ;; ----------------------------------------
 ;; Thread mailboxes
+
+;; called atomically
 (define (enqueue-mail! thd v)
   (queue-add! (thread-mailbox thd) v))
 
-
+;; called atomically
 (define (dequeue-mail! thd)
   (define mbx (thread-mailbox thd))
   (cond
@@ -506,6 +508,7 @@
     [else
      (queue-remove! mbx)]))
 
+;; called atomically and NOT atomically
 (define (is-mail? thd)
   (not (queue-empty? (thread-mailbox thd))))
 
@@ -524,32 +527,32 @@
                     (procedure-arity-includes? proc 0))))
          #:contract "(procedure-arity-includes?/c 0)"
          fail-thunk)
-  ( (atomically 
-     (cond
-       [(thread-running? thd)
-        (enqueue-mail! thd v)
-        (when (and (thread-waiting-mail? thd) ;; check so we don't resume a suspended thread. 
-                   (not (thread-suspended? thd)))
-          (set-thread-waiting-mail?! thd #f)
-          (thread-internal-resume! thd))
-        void]
-       [fail-thunk
-        fail-thunk]
-       [else
-        (lambda () #f)]))))
+  ((atomically 
+    (cond
+      [(thread-running? thd)
+       (enqueue-mail! thd v)
+       (when (and (thread-waiting-mail? thd) ;; check so we don't resume a suspended thread. 
+                  (not (thread-suspended? thd)))
+         (set-thread-waiting-mail?! thd #f)
+         (thread-internal-resume! thd))
+       void]
+      [fail-thunk
+       fail-thunk]
+      [else
+       (lambda () #f)]))))
 
 (define (block)
   ((thread-internal-suspend! (current-thread) #f void block)))
 
 (define (thread-receive)
-  ( (atomically
-     (define t (current-thread))
-     (cond
-       [(not (is-mail? t))
-        (set-thread-waiting-mail?! t #t)
-        (thread-internal-suspend! t #f void block)]
-       [else
-        void])))
+  ((atomically
+    (define t (current-thread))
+    (cond
+      [(not (is-mail? t))
+       (set-thread-waiting-mail?! t #t)
+       (thread-internal-suspend! t #f void block)]
+      [else
+       void])))
   ;; awoken or there was already mail.
   (define t (current-thread))
   (let loop ()
@@ -558,7 +561,7 @@
        (atomically
         (dequeue-mail! t))]
       [else
-       ( (thread-internal-suspend! t #f void block) )
+       ((thread-internal-suspend! t #f void block))
        (loop)])))
  
 (define (thread-try-receive)
