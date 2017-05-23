@@ -596,9 +596,6 @@
    ephemeron?
    make-ephemeron
    ephemeron-value
-   thread-send
-   thread-receive
-   thread-receive-evt
    filesystem-change-evt
    filesystem-change-evt-cancel
    call-with-semaphore

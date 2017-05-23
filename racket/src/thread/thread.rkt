@@ -9,7 +9,8 @@
          "semaphore.rkt"
          "thread-group.rkt"
          "atomic.rkt"
-         "schedule-info.rkt")
+         "schedule-info.rkt"
+         "../common/queue.rkt")
 
 (provide (rename-out [make-thread thread])
          thread?
@@ -86,8 +87,7 @@
                      [pending-break? #:mutable]
                      [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
                      [waiting-mail? #:mutable]
-                     [mbx-head #:mutable]
-                     [mbx-tail #:mutable]) ;; mailbox
+                     [mailbox #:mutable]) ;; mailbox
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t i-cb r-cb) (thread-internal-suspend! t #f i-cb r-cb))
@@ -102,7 +102,7 @@
                         proc
                         #:initial? [initial? #f]
                         #:suspend-to-kill? [suspend-to-kill? #f])
- #; (check who
+  (check who
          (lambda (proc)
            (and (procedure? proc)
                 (procedure-arity-includes? proc 0)))
@@ -135,8 +135,7 @@
                     #f ; pending-break?
                     #f ; ignore-thread-cells
                     #f ; waiting for mail?
-                    '()
-                    '())) ; mailbox
+                    (make-queue))) ; mailbox
   (thread-group-add! p t)
   t)
 
@@ -339,7 +338,8 @@
     (cond
      [(thread-parent t) ; => not internally suspended already
       (thread-internal-suspend! t #f void void)]
-     [else void]))))
+     [else 
+      void]))))
 
 ;; ----------------------------------------
 ;; Thread yielding
@@ -495,45 +495,27 @@
 ;; ----------------------------------------
 ;; Thread mailboxes
 (define (enqueue-mail! thd v)
-  (define tail (thread-mbx-tail thd))
-  (cond
-    [(null? tail) ;; if tail is empty then so is head
-     (let ([new-t (mcons v '())])
-       (set-thread-mbx-tail! thd new-t)
-       (set-thread-mbx-head! thd new-t))]
-    [else
-     (set-mcdr! tail (mcons v '()))
-     (set-thread-mbx-tail! thd (mcdr tail))]))
+  (queue-add! (thread-mailbox thd) v))
+
 
 (define (dequeue-mail! thd)
-  (define head (thread-mbx-head thd))
+  (define mbx (thread-mailbox thd))
   (cond
-    [(null? head)
-     (internal-error "NO MAIL\n")]
-    [(null? (mcdr head))
-     (set-thread-mbx-head! thd '())
-     (set-thread-mbx-tail! thd '())
-     (mcar head)]
+    [(queue-empty? mbx)
+     (internal-error "No Mail!\n")]
     [else
-     (set-thread-mbx-head! thd (mcdr head))
-     (mcar head)]))
+     (queue-remove! mbx)]))
 
 (define (is-mail? thd)
-  (not (null? (thread-mbx-head thd))))
+  (not (queue-empty? (thread-mailbox thd))))
 
 (define (push-mail! thd v)
-  (define head (thread-mbx-head thd))
-  (cond
-    [(null? head)
-     (let ([new-h (mcons v head)])
-       (set-thread-mbx-head! thd new-h)
-       (set-thread-mbx-tail! thd new-h))]
-    [else
-     (set-thread-mbx-head! thd (mcons v head))]))
+  (queue-add-front! (thread-mailbox thd) v))
 
 (define (thread-send thd v [fail-thunk 
                             (lambda ()
-                              (raise-mismatch-error 'thread-send "Thread is not running.\n" thd))])
+                              (raise-mismatch-error 'thread-send "Thread is not running.\n"))])
+  
   (check 'thread-send thread? thd)
   (check fail-thunk
          (lambda (proc)
@@ -542,41 +524,43 @@
                     (procedure-arity-includes? proc 0))))
          #:contract "(procedure-arity-includes?/c 0)"
          fail-thunk)
-  (atomically 
-   (cond
-     [(thread-running? thd)
-      (enqueue-mail! thd v)
-      (when (and (thread-waiting-mail? thd) ;; check so we don't resume a suspended thread. 
-                 (not (thread-suspended? thd)))
-        (set-thread-waiting-mail?! thd #f)
-        (thread-internal-resume! thd #:undelay-break? #f))]
-     [fail-thunk
-      (fail-thunk)]
-     [else
-      #f])))
+  ( (atomically 
+     (cond
+       [(thread-running? thd)
+        (enqueue-mail! thd v)
+        (when (and (thread-waiting-mail? thd) ;; check so we don't resume a suspended thread. 
+                   (not (thread-suspended? thd)))
+          (set-thread-waiting-mail?! thd #f)
+          (thread-internal-resume! thd))
+        void]
+       [fail-thunk
+        fail-thunk]
+       [else
+        (lambda () #f)]))))
+
+(define (block)
+  ((thread-internal-suspend! (current-thread) #f void block)))
 
 (define (thread-receive)
-  (start-atomic)
-   (define t (current-thread))
-   (cond
-     [(is-mail? t)
-      (let ([msg (dequeue-mail! t)])
-        (end-atomic)
-        msg)]
-     [else
-      (set-thread-waiting-mail?! t #t)
-      (thread-internal-suspend! t #f void void)
-      (end-atomic)
-      (engine-block)
-      (let loop () ;; does this need to be atomic?
-        (if (is-mail? t)
-            (dequeue-mail! t)
-            (begin
-              (thread-internal-suspend! t #f void void)
-              (engine-block)
-              (loop))))
-      ]))
-
+  ( (atomically
+     (define t (current-thread))
+     (cond
+       [(not (is-mail? t))
+        (set-thread-waiting-mail?! t #t)
+        (thread-internal-suspend! t #f void block)]
+       [else
+        void])))
+  ;; awoken or there was already mail.
+  (define t (current-thread))
+  (let loop ()
+    (cond
+      [(is-mail? t)
+       (atomically
+        (dequeue-mail! t))]
+      [else
+       ( (thread-internal-suspend! t #f void block) )
+       (loop)])))
+ 
 (define (thread-try-receive)
   (atomically
    (define t (current-thread))
@@ -593,9 +577,6 @@
              lst)))
 
 ;; todo: thread-receive-evt
-
-;; simpler send and receive program. time it.
-;; pull request for this code.
 
 
 
