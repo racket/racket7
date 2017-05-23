@@ -522,6 +522,9 @@
   ;; --------------------------------------------------
 
   (define (read-compiled-linklet in)
+    (read-compiled-linklet-or-directory in #t))
+  
+  (define (read-compiled-linklet-or-directory in initial?)
     ;; `#~` has already been read
     (let* ([start-pos (- (file-position in) 2)]
            [vers-len (min 63 (read-byte in))]
@@ -537,8 +540,14 @@
           (read-bytes 20 in) ; skip SHA-1
           (let ([len (read-int in)])
             (let ([bstr (read-bytes len in)])
-              (fasl-read (open-bytevector-input-port bstr))))]
+              (let ([b (fasl-read (open-bytevector-input-port bstr))])
+                (if initial?
+                    (strip-submodule-references b)
+                    b))))]
          [(equal? tag (char->integer #\D))
+          (unless initial?
+            (raise-argument-error 'read-compiled-linklet
+                                  "expected a linklet bundle"))
           (read-bundle-directory in start-pos)]
          [else
           (raise-arguments-error 'read-compiled-linklet
@@ -555,8 +564,8 @@
                 [(zero? count) accum]
                 [else
                  (let ([bstr (read-bytes (read-int in) in)])
-                   (let ([offset (read-int in)]
-                         [len (read-int in)])
+                   (let* ([offset (read-int in)]
+                          [len (read-int in)])
                      (read-int in) ; left
                      (read-int in) ; right
                      (loop (fx1- count)
@@ -643,6 +652,10 @@
                                                               (hasheq #f v)
                                                               (hasheq))))))]))])))))
 
+  ;; When a bundle is loaded by itself, remove any `pre` and `post`
+  ;; submodule descriptions:
+  (define (strip-submodule-references b)
+    (make-linklet-bundle (hash-remove (hash-remove (linklet-bundle-hash b) 'pre) 'post)))
   
   ;; --------------------------------------------------
 
