@@ -508,10 +508,11 @@
     [else
      (queue-remove! mbx)]))
 
-;; called atomically and NOT atomically
+;; called atomically
 (define (is-mail? thd)
   (not (queue-empty? (thread-mailbox thd))))
 
+;; called atomically
 (define (push-mail! thd v)
   (queue-add-front! (thread-mailbox thd) v))
 
@@ -556,13 +557,16 @@
   ;; awoken or there was already mail.
   (define t (current-thread))
   (let loop ()
-    (cond
-      [(is-mail? t)
-       (atomically
-        (dequeue-mail! t))]
-      [else
-       ((thread-internal-suspend! t #f void block))
-       (loop)])))
+    ((atomically
+      (cond
+        [(is-mail? t)
+         (let ([msg (dequeue-mail! t)])
+           (lambda () msg))]
+        [else
+         (let ([f (thread-internal-suspend! t #f void block)])
+           (lambda ()
+             (f)
+             (loop)))])))))
  
 (define (thread-try-receive)
   (atomically
