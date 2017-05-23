@@ -9,8 +9,10 @@
 (call-in-main-thread
  (lambda ()
    (define-syntax-rule (check a b)
-     (unless (equal? a b)
-       (error 'failed "~s: ~e vs. ~e" 'b a b)))
+     (let ([a-v a]
+           [b-v b])
+       (unless (equal? a-v b-v)
+         (error 'failed "~s: ~e vs. ~e" 'b a-v b-v))))
 
    ;; Check semaphores
    (check #t (thread? (current-thread)))
@@ -227,6 +229,33 @@
    (check-ignore-break-retry make-semaphore semaphore-post semaphore-wait)
    (check-ignore-break-retry make-channel (lambda (c) (channel-put c 'go)) channel-get)
    (check-ignore-break-retry make-channel channel-get (lambda (c) (channel-put c 'go)))
+
+   ;; Check sync/enable-break => break
+   (define tbe (with-continuation-mark
+                break-enabled-key
+                (make-thread-cell #f #t)
+                (thread (lambda ()
+                          (sync/enable-break (make-semaphore))))))
+   (sync (system-idle-evt))
+   (check #f (sync/timeout 0 tbe))
+   (break-thread tbe)
+   (sync (system-idle-evt))
+   (check tbe (sync/timeout 0 tbe))
+   (printf "[That break was from a thread, and it's expected]\n")
+
+   ;; Check sync/enable-break => semaphore
+   (check #f (sync/timeout 0 s2))
+   (define tbe2 (with-continuation-mark
+                 break-enabled-key
+                 (make-thread-cell #f #t)
+                 (thread (lambda ()
+                           (sync/enable-break s2)))))
+   (sync (system-idle-evt))
+   (semaphore-post s2) ; => chooses `s2` in `sync/enable-break`
+   (break-thread tbe2)
+   (sync (system-idle-evt))
+   (check tbe2 (sync/timeout 0 tbe2))
+   (check #f (sync/timeout 0 s2))
 
    (set! done? #t)))
 

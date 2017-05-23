@@ -120,7 +120,7 @@
     [(vector? q) (for/or ([e (in-vector q)])
                    (lift-quoted? e))]
     [(box? q) (lift-quoted? (unbox q))]
-    [(prefab-struct-key q) (lift-quoted? (struct->vector q))]
+    [(prefab-struct-key q) #t]
     [else #f]))
 
 ;; Construct an expression to be lifted

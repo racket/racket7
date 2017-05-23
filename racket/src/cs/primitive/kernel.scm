@@ -389,6 +389,7 @@
    make-custodian-box
    make-derived-parameter
    make-directory
+   make-environment-variables
    make-ephemeron
    make-file-or-directory-link
    make-flvector
@@ -477,6 +478,9 @@
    peek-bytes-avail!
    peek-bytes-avail!*
    peek-char-or-special
+   peek-char
+   peek-string
+   peek-string!
    pipe-content-length
    placeholder?
    placeholder-get
@@ -607,6 +611,7 @@
    semaphore-post
    semaphore-try-wait?
    semaphore-wait
+   semaphore-wait/enable-break
    set-box!
    shared-flvector
    simplify-path
@@ -685,7 +690,10 @@
    symbol?
    sync
    sync/timeout
+   sync/enable-break
+   sync/timeout/enable-break
    system-big-endian?
+   system-idle-evt
    system-library-subpath
    system-path-convention-type
    system-type

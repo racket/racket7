@@ -8,7 +8,9 @@
                     [poll-guard-evt raw:poll-guard-evt]
                     [choice-evt raw:choice-evt])
          (rename-in "channel.rkt"
-                    [channel-put-evt raw:channel-put-evt]))
+                    [channel-put-evt raw:channel-put-evt])
+         (only-in "sync.rkt"
+                  sync/enable-break))
 
 (provide wrap-evt
          handle-evt
@@ -17,7 +19,8 @@
          nack-guard-evt
          choice-evt
          channel-put-evt
-         semaphore-peek-evt)
+         semaphore-peek-evt
+         semaphore-wait/enable-break)
 
 (define (choice-evt . args)
   (for ([arg (in-list args)])
@@ -77,3 +80,8 @@
 (define (semaphore-peek-evt s)
   (check 'semaphore-peek-evt semaphore? s)
   (raw:semaphore-peek-evt s))
+
+(define (semaphore-wait/enable-break s)
+  (check 'semaphore-wait/enable-break semaphore? s)
+  (sync/enable-break s)
+  (void))

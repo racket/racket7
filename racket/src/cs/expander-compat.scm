@@ -60,7 +60,14 @@
 (define (char-punctuation? x) #f)
 (define (char-symbolic? x) #f)
 
-(define (system-library-subpath) "x86_64-macosx/3m")
+(define system-library-subpath
+  (case-lambda
+   [() (system-library-subpath (system-type 'gc))]
+   [(mode)
+    (case mode
+      [(3m) "x86_64-macosx/3m"]
+      [else "x86_64-macosx"])]))
+
 (define (system-path-convention-type) 'unix)
 
 (define (subprocess? v) #f)
@@ -72,7 +79,8 @@
 (define (subprocess-status p) 'something)
 (define (subprocess-wait p) (void))
 
-
+(define (make-environment-variables . args)
+  #f)
 (define (environment-variables-ref e k)
   (let ([v (getenv (bytes->string/utf-8 k))])
     (and v (string->bytes/utf-8 v))))
@@ -531,6 +539,7 @@
    subprocess-status
    subprocess-wait
 
+   make-environment-variables
    environment-variables-ref
    current-environment-variables
    environment-variables-set!

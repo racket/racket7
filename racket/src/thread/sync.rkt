@@ -8,11 +8,14 @@
          "schedule-info.rkt")
 
 (provide sync
-         sync/timeout)
+         sync/timeout
+         sync/enable-break
+         sync/timeout/enable-break)
 
 (struct syncing (selected ; #f or a syncer that has been selected
                  syncers  ; linked list of `syncer`s
-                 wakeup)  ; a callback for when something is selected
+                 wakeup   ; a callback for when something is selected
+                 disable-break) ; a thunk that disables breaks
         #:mutable)
 
 (struct syncer (evt   ; the evt to sync; can get updated in sync loop
@@ -30,7 +33,8 @@
 
 (define none-syncer (make-syncer #f null))
 
-(define (do-sync who timeout args)
+(define (do-sync who timeout args
+                  #:enable-break? [enable-break? #f])
   (check who
          (lambda (timeout) (or (not timeout)
                                (and (real? timeout) (timeout . >= . 0))
@@ -39,56 +43,79 @@
          #:contract "(or/c #f (and/c real? (not/c negative?)) (-> any))"
          timeout)
 
+  (define local-break-cell (and enable-break?
+                                (make-thread-cell #t #t)))
+
   (define syncers (evts->syncers who args null))
   (define s (syncing #f ; selected
                      syncers
-                     void)) ; wakeup
+                     void ; wakeup
+                     (and local-break-cell
+                          (let ([t (current-thread)])
+                            (lambda ()
+                              (thread-ignore-break-cell! t local-break-cell))))))
 
-  (dynamic-wind
-   (lambda ()
-     (atomically
-      (thread-push-kill-callback!
-       (lambda () (syncing-abandon! s)))))
-   (lambda ()
-     (cond
-      [(and (real? timeout) (zero? timeout))
-       (sync-poll s (lambda (sched-info) #f) #:just-poll? #t)]
-      [(procedure? timeout)
-       (sync-poll s (lambda (sched-info) (timeout)) #:just-poll? #t)]
-      [else
-       ;; Loop to poll; if all events end up with asynchronous-select
-       ;; callbacks, then the loop can suspend the current thread
-       (define timeout-at
-         (and timeout
-              (+ (* timeout 1000) (current-inexact-milliseconds))))
-       (let loop ([did-work? #t])
-         (cond
-          [(and timeout
-                (timeout . >= . (current-inexact-milliseconds)))
-           (syncing-done! s none-syncer)
-           #f]
-          [(and (all-asynchronous? s)
-                (not (syncing-selected s)))
-           (suspend-syncing-thread s timeout-at)
-           (loop #f)]
+  (begin0
+    (with-continuation-mark
+     break-enabled-key
+     (if enable-break?
+         local-break-cell
+         (continuation-mark-set-first #f break-enabled-key))
+     (dynamic-wind
+      (lambda ()
+        (atomically
+         (thread-push-kill-callback!
+          (lambda () (syncing-abandon! s)))))
+      (lambda ()
+        (cond
+          [(and (real? timeout) (zero? timeout))
+           (sync-poll s (lambda (sched-info) #f) #:just-poll? #t)]
+          [(procedure? timeout)
+           (sync-poll s (lambda (sched-info) (timeout)) #:just-poll? #t)]
           [else
-           (sync-poll s #:did-work? did-work?
-                      (lambda (sched-info)
-                        (when timeout-at
-                          (schedule-info-add-timeout-at! sched-info timeout-at))
-                        (thread-yield sched-info)
-                        (loop #f)))]))]))
-   (lambda ()
-     (atomically
-      (thread-pop-kill-callback!)
-      ;; On escape, post nacks, etc.:
-      (syncing-abandon! s)))))
+           ;; Loop to poll; if all events end up with asynchronous-select
+           ;; callbacks, then the loop can suspend the current thread
+           (define timeout-at
+             (and timeout
+                  (+ (* timeout 1000) (current-inexact-milliseconds))))
+           (let loop ([did-work? #t])
+             (cond
+               [(and timeout
+                     (timeout . >= . (current-inexact-milliseconds)))
+                (syncing-done! s none-syncer)
+                #f]
+               [(and (all-asynchronous? s)
+                     (not (syncing-selected s)))
+                (suspend-syncing-thread s timeout-at)
+                (loop #f)]
+               [else
+                (sync-poll s #:did-work? did-work?
+                           (lambda (sched-info)
+                             (when timeout-at
+                               (schedule-info-add-timeout-at! sched-info timeout-at))
+                             (thread-yield sched-info)
+                             (loop #f)))]))]))
+      (lambda ()
+        (atomically
+         (thread-pop-kill-callback!)
+         (when local-break-cell
+           (thread-remove-ignored-break-cell! (current-thread) local-break-cell))
+         ;; On escape, post nacks, etc.:
+         (syncing-abandon! s)))))
+    ;; In case old break cell was meanwhile enabled:
+    (check-for-break)))
 
 (define (sync . args)
   (do-sync 'sync #f args))
 
 (define (sync/timeout timeout . args)
   (do-sync 'sync/timeout timeout args))
+
+(define (sync/enable-break . args)
+  (do-sync 'sync/enable-break #f args #:enable-break? #t))
+
+(define (sync/timeout/enable-break timeout . args)
+  (do-sync 'sync/timeout/enable-break timeout args #:enable-break? #t))
 
 ;; ----------------------------------------
 
@@ -249,6 +276,8 @@
         (for ([abandon (in-list (syncer-abandons sr))])
           (abandon)))
       (loop (syncer-next sr))))
+  (when (syncing-disable-break s)
+    ((syncing-disable-break s)))
   ((syncing-wakeup s)))
 
 ;; Called in atomic mode

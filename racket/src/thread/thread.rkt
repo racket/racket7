@@ -38,7 +38,10 @@
          
          thread-internal-suspend!
          thread-internal-resume!
-         thread-yield)
+         thread-yield
+
+         thread-ignore-break-cell!
+         thread-remove-ignored-break-cell!)
 
 ;; Exports needed by "schedule.rkt":
 (module* scheduling #f
@@ -74,7 +77,8 @@
                      [suspended-sema #:mutable]
 
                      [delay-break-for-retry? #:mutable] ; => continuing implies an retry action
-                     [pending-break? #:mutable])
+                     [pending-break? #:mutable]
+                     [ignore-break-cells #:mutable]) ; => #f, a single cell, or a set of cells
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t i-cb r-cb) (thread-internal-suspend! t #f i-cb r-cb))
@@ -119,7 +123,8 @@
                     #f ; suspended-sema
                     
                     #f ; delay-break-for-retry?
-                    #f)) ; pending-break?
+                    #f ; pending-break?
+                    #f)) ; ignore-thread-cells
   (thread-group-add! p t)
   t)
 
@@ -412,6 +417,7 @@
     (cond
      [(and (thread-pending-break? t)
            (break-enabled)
+           (not (thread-ignore-break-cell? t (current-break-enabled-cell)))
            (zero? (current-break-suspend))
            ;; If delaying for retry, then defer
            ;; break checking to the continuation (instead
@@ -444,3 +450,32 @@
             (interrupt-callback))])))
   (when (eq? t (current-thread))
     (check-for-break)))
+
+;; in atomic mode:
+(define (thread-ignore-break-cell? t bc)
+  (let ([ignore (thread-ignore-break-cells t)])
+    (or (eq? ignore bc)
+        (and (hash? ignore)
+             (hash-ref ignore bc #f)))))
+
+;; in atomic mode:
+(define (thread-ignore-break-cell! t bc)
+  (let ([ignore (thread-ignore-break-cells t)])
+    (set-thread-ignore-break-cells! t (cond
+                                        [(not ignore)
+                                         ;; Singleton
+                                         bc]
+                                        [(hash? ignore)
+                                         ;; Add to set
+                                         (hash-set ignore bc #t)]
+                                        [else
+                                         ;; Convert to set
+                                         (hasheq ignore #t bc #t)]))))
+
+;; in atomic mode
+(define (thread-remove-ignored-break-cell! t bc)
+  (when (thread-ignore-break-cell? t bc)
+    (let ([ignore (thread-ignore-break-cells t)])
+      (set-thread-ignore-break-cells! t (cond
+                                          [(eq? ignore bc) #f]
+                                          [else (hash-remove ignore bc)])))))

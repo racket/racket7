@@ -26,7 +26,6 @@ impersonator-ephemeron
 integer-sqrt
 integer-sqrt/remainder
 locale-string-encoding
-make-environment-variables
 make-known-char-range-list
 make-phantom-bytes
 make-shared-bytes
@@ -34,9 +33,6 @@ make-sibling-inspector
 parameter-procedure=?
 peek-byte-or-special
 peek-bytes-avail!/enable-break
-peek-char
-peek-string
-peek-string!
 phantom-bytes?
 port-closed-evt
 port-count-lines-enabled
@@ -51,7 +47,6 @@ read-bytes-avail!/enable-break
 real->double-flonum
 real->single-flonum
 replace-evt
-semaphore-wait/enable-break
 set-phantom-bytes!
 set-port-next-location!
 shared-bytes
@@ -64,9 +59,6 @@ string-locale<?
 string-locale=?
 string-locale>?
 string-port?
-sync/enable-break
-sync/timeout/enable-break
-system-idle-evt
 system-language+country
 thread-cell-values?
 thread-resume-evt

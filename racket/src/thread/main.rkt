@@ -44,6 +44,7 @@
          semaphore-wait
          semaphore-try-wait?
          semaphore?
+         semaphore-wait/enable-break
 
          semaphore-peek-evt
          semaphore-peek-evt?
@@ -57,6 +58,8 @@
          
          sync
          sync/timeout
+         sync/enable-break
+         sync/timeout/enable-break
          
          evt? prop:evt
          always-evt
