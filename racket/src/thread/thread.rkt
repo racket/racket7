@@ -154,7 +154,7 @@
 ;; Thread status
 
 (define (thread-running? t)
- ;; (check 'thread-running? thread? t)
+  (check 'thread-running? thread? t)
   (and (not (eq? 'done (thread-engine t)))
        (not (thread-suspended? t))))
 
