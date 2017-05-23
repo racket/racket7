@@ -227,7 +227,6 @@
    [else #f]))
 (define (ephemeron? x) (weak-pair? x))
 
-(define (thread-resume t) (void))
 (define (thread-receive-evt t) 'thread-receive-evt)
 (define filesystem-change-evt
   (case-lambda

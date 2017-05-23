@@ -1,5 +1,6 @@
 #lang racket/base
-(require "check.rkt"
+(require "../common/queue.rkt"
+         "check.rkt"
          "internal-error.rkt"
          "engine.rkt"
          "tree.rkt"
@@ -10,7 +11,7 @@
          "thread-group.rkt"
          "atomic.rkt"
          "schedule-info.rkt"
-         "../common/queue.rkt")
+         "custodian.rkt")
 
 (provide (rename-out [make-thread thread])
          thread?
@@ -21,6 +22,7 @@
          
          thread-wait
          thread-suspend
+         thread-resume
          (rename-out [get-thread-dead-evt thread-dead-evt])
          thread-dead-evt?
          
@@ -83,7 +85,7 @@
                      [suspended? #:mutable]
                      [suspended-sema #:mutable]
                     
-                     [delay-break-for-retry? #:mutable] ; => continuing implies an retry action
+                     [needs-retry? #:mutable] ; => resuming implies an retry action
                      [pending-break? #:mutable]
                      [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
                      [waiting-mail? #:mutable]
@@ -131,7 +133,7 @@
                     #f ; suspended?
                     #f ; suspended-sema
                     
-                    #f ; delay-break-for-retry?
+                    #f ; needs-retry?
                     #f ; pending-break?
                     #f ; ignore-thread-cells
                     #f ; waiting for mail?
@@ -270,25 +272,26 @@
                   <)))
 
 ;; Removes a thread from its thread group, so it won't be scheduled;
-;; returns a thunk to be called in out of atomic mode to swap out
-;; the thread, where the thunk returns `(void)`; the `interrupt-callback`
-;; is called if the thread receives a break signal or is killed; if
-;; the break signal is supressed or resumed, then `retry-callback`
-;; is called to try again --- but `retry-callback` will only be used
-;; if `interrupt-callback` was previously called, and neither is called
-;; if the thread is resumed normally instead of by a break signal
+;; returns a thunk to be called in out of atomic mode to swap out the
+;; thread, where the thunk returns `(void)`; the `interrupt-callback`
+;; is called if the thread receives a break signal, is killed, or is
+;; suspended; if the break signal is supressed or resumed, then
+;; `retry-callback` is called to try again --- but `retry-callback`
+;; will only be used if `interrupt-callback` was previously called,
+;; and neither is called if the thread is "internal"-resumed normally
+;; instead of by a break signal of a `thread-resume`.
 (define (thread-internal-suspend! t timeout-at interrupt-callback retry-callback)
   (atomically
-   (set-thread-interrupt-callback! t interrupt-callback)
+   (set-thread-interrupt-callback! t (lambda ()
+                                       ;; If the interrupt callback gets invoked,
+                                       ;; then remember that we need a retry
+                                       (set-thread-needs-retry?! t #t)
+                                       (interrupt-callback)))
    (thread-group-remove! (thread-parent t) t)
    (when timeout-at
      (add-to-sleeping-threads! t timeout-at))
    (when (eq? t (current-thread))
-     (thread-did-work!)
-     ;; Don't let a break get handled inplicitly in `(engine-block)`,
-     ;; because we want to call `retry-callback` if woken up for a
-     ;; break signal:
-     (set-thread-delay-break-for-retry?! t #t))
+     (thread-did-work!))
    ;; It's ok if the thread gets interrupted
    ;; outside the atomic region, because we'd
    ;; swap it out anyway
@@ -303,10 +306,10 @@
 (define (check-for-retrying-break t retry-callback)
   ((atomically
     (cond
-     [(thread-delay-break-for-retry? t)
+     [(thread-needs-retry? t)
       ;; Since the callback wasn't cleared, the thread
       ;; was woken up to check for a break
-      (set-thread-delay-break-for-retry?! t #f)
+      (set-thread-needs-retry?! t #f)
       (thread-did-work!)
       (lambda ()
         ;; In non-atomic mode:
@@ -314,16 +317,12 @@
         (retry-callback))]
      [else void]))))
 
-;; Add a thread back to its thread group; the `undelay-break?`
-;; argument should only be `#f` when `break-thread` wakes up a thread,
-;; instead of the normal wake-up action, and it causes the
-;; `retry-callback` to be called from `thread-internal-suspend!`
-(define (thread-internal-resume! t #:undelay-break? [undelay-break? #t])
+;; in atomic mode
+;; Add a thread back to its thread group
+(define (thread-internal-resume! t)
   (when (thread-dead? t)
     (internal-error "tried to resume a dead thread"))
   (set-thread-interrupt-callback! t #f)
-  (when undelay-break?
-    (set-thread-delay-break-for-retry?! t #f))
   (remove-from-sleeping-threads! t)
   (thread-group-add! (thread-parent t) t))
 
@@ -332,14 +331,32 @@
   ((atomically
     (unless (thread-suspended? t)
       (set-thread-suspended?! t #t)
+      (let ([interrupt-callback (thread-interrupt-callback t)])
+        (when interrupt-callback
+          ;; Suspending a thread is similar to issuing a break;
+          ;; the thread should get out of any queues where it's
+          ;; waiting, etc.
+          (set-thread-interrupt-callback! t void)
+          (interrupt-callback)))
       (when (thread-suspended-sema t)
         (semaphore-post-all (thread-suspended-sema t))
         (set-thread-suspended-sema! t #f)))
     (cond
-     [(thread-parent t) ; => not internally suspended already
+     [(not (thread-interrupt-callback t)) ; => not internally suspended already
       (thread-internal-suspend! t #f void void)]
      [else 
       void]))))
+
+(define (thread-resume t [benefactor #f])
+  (check 'thread-resume thread? t)
+  (check 'thread-resume (lambda (p) (or (not p) (thread? p) (custodian? p)))
+         #:contract "(or/c #f thread? custodian?)"
+         benefactor)
+  (atomically
+   (unless (thread-dead? t)
+     (when (thread-suspended? t)
+       (set-thread-suspended?! t #f)
+       (thread-internal-resume! t)))))
 
 ;; ----------------------------------------
 ;; Thread yielding
@@ -432,10 +449,10 @@
            (break-enabled)
            (not (thread-ignore-break-cell? t (current-break-enabled-cell)))
            (zero? (current-break-suspend))
-           ;; If delaying for retry, then defer
+           ;; If a retry is pending, then defer
            ;; break checking to the continuation (instead
            ;; of raising an asynchronous exception now)
-           (not (thread-delay-break-for-retry? t)))
+           (not (thread-needs-retry? t)))
       (set-thread-pending-break?! t #f)
       (lambda ()
         ;; Out of atomic mode
@@ -452,15 +469,16 @@
   (atomically
    (unless (thread-pending-break? t)
      (set-thread-pending-break?! t #t)
-     (cond
-      [(thread-interrupt-callback t)
-       => (lambda (interrupt-callback)
-            ;; The interrupt callback might remove the thread as
-            ;; a waiter on a semaphore of channel; if breaks
-            ;; turn out to be disabled, the wait will be
-            ;; retried through the retry callback
-            (thread-internal-resume! t #:undelay-break? #f)
-            (interrupt-callback))])))
+     (unless (thread-suspended? t)
+       (cond
+         [(thread-interrupt-callback t)
+          => (lambda (interrupt-callback)
+               ;; The interrupt callback might remove the thread as
+               ;; a waiter on a semaphore of channel; if breaks
+               ;; turn out to be disabled, the wait will be
+               ;; retried through the retry callback
+               (interrupt-callback)
+               (thread-internal-resume! t))]))))
   (when (eq? t (current-thread))
     (check-for-break)))
 
@@ -492,12 +510,15 @@
       (set-thread-ignore-break-cells! t (cond
                                           [(eq? ignore bc) #f]
                                           [else (hash-remove ignore bc)])))))
+
 ;; ----------------------------------------
 ;; Thread mailboxes
+
+;; in atomic mode
 (define (enqueue-mail! thd v)
   (queue-add! (thread-mailbox thd) v))
 
-
+;; in atomic mode
 (define (dequeue-mail! thd)
   (define mbx (thread-mailbox thd))
   (cond
@@ -506,60 +527,59 @@
     [else
      (queue-remove! mbx)]))
 
+;; in atomic mode
 (define (is-mail? thd)
   (not (queue-empty? (thread-mailbox thd))))
 
+;; in atomic mode
 (define (push-mail! thd v)
   (queue-add-front! (thread-mailbox thd) v))
 
 (define (thread-send thd v [fail-thunk 
                             (lambda ()
-                              (raise-mismatch-error 'thread-send "Thread is not running.\n"))])
-  
+                              (raise-arguments-error 'thread-send "target thread is not running"))])
   (check 'thread-send thread? thd)
   (check fail-thunk
          (lambda (proc)
            (or (not proc) ;; check if it is #f
                (and (procedure? proc)
                     (procedure-arity-includes? proc 0))))
-         #:contract "(procedure-arity-includes?/c 0)"
+         #:contract "(or/c (procedure-arity-includes?/c 0) #f)"
          fail-thunk)
-  ( (atomically 
-     (cond
-       [(thread-running? thd)
-        (enqueue-mail! thd v)
-        (when (and (thread-waiting-mail? thd) ;; check so we don't resume a suspended thread. 
-                   (not (thread-suspended? thd)))
-          (set-thread-waiting-mail?! thd #f)
-          (thread-internal-resume! thd))
-        void]
-       [fail-thunk
-        fail-thunk]
-       [else
-        (lambda () #f)]))))
-
-(define (block)
-  ((thread-internal-suspend! (current-thread) #f void block)))
+  ((atomically
+    (cond
+      [(not (thread-dead? thd))
+       (enqueue-mail! thd v)
+       (when (thread-waiting-mail? thd)
+         (set-thread-waiting-mail?! thd #f)
+         (thread-internal-resume! thd))
+       void]
+      [fail-thunk
+       fail-thunk]
+      [else
+       (lambda () #f)]))))
 
 (define (thread-receive)
-  ( (atomically
-     (define t (current-thread))
-     (cond
-       [(not (is-mail? t))
-        (set-thread-waiting-mail?! t #t)
-        (thread-internal-suspend! t #f void block)]
-       [else
-        void])))
-  ;; awoken or there was already mail.
-  (define t (current-thread))
-  (let loop ()
+  ((atomically
+    (define t (current-thread))
     (cond
       [(is-mail? t)
-       (atomically
-        (dequeue-mail! t))]
+       (define v (dequeue-mail! t))
+       (lambda () v)]
       [else
-       ( (thread-internal-suspend! t #f void block) )
-       (loop)])))
+       (set-thread-waiting-mail?! t #t)
+       (define do-yield
+         (thread-internal-suspend! t
+                                   #f
+                                   ;; Interrupted for break => not waiting for mail
+                                   (lambda ()
+                                     (set-thread-waiting-mail?! t #f))
+                                   ;; No retry action, because we always retry:
+                                   void))
+       ;; called out of atomic mode:
+       (lambda ()
+         (do-yield)
+         (thread-receive))]))))
  
 (define (thread-try-receive)
   (atomically
@@ -577,10 +597,3 @@
              lst)))
 
 ;; todo: thread-receive-evt
-
-
-
-
-
-   
-   

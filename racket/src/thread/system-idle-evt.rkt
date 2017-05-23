@@ -1,6 +1,7 @@
 #lang racket/base
 (require "evt.rkt"
-         "semaphore.rkt")
+         "semaphore.rkt"
+         "internal-error.rkt")
 
 (provide (rename-out [get-system-idle-evt system-idle-evt])
 
@@ -10,7 +11,7 @@
 (define idle-sema (make-semaphore))
 (define wrapped-idle-sema (wrap-evt idle-sema void))
 (struct system-idle-evt ()
-        #:property prop:evt (lambda (i) wrapped-idle-sema))
+  #:property prop:evt (lambda (i) wrapped-idle-sema))
 
 (define the-idle-evt (system-idle-evt))
 

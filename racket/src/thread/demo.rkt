@@ -117,6 +117,20 @@
    (thread (lambda () (set! v (add1 v))))
    (sync (system-idle-evt))
    (check 1 v)
+
+   ;; Check `thread-send`
+   (check (void) (thread-send (current-thread) 'sent0))
+   (check (void) (thread-send (current-thread) 'sent1))
+   (check 'sent0 (thread-receive))
+   (check 'sent1 (thread-receive))
+   (check #f (thread-try-receive))
+   (check (void) (thread-send (current-thread) 'sent2))
+   (check 'sent2 (thread-try-receive))
+   (let ([t (current-thread)])
+     (thread (lambda ()
+               (sync (system-idle-evt))
+               (thread-send t 'sent3))))
+   (check 'sent3 (thread-receive))
    
    (define (check-break/kill #:kill? kill?)
      (define stop-thread (if kill? kill-thread break-thread))
@@ -205,7 +219,7 @@
    (check-break/kill #:kill? #f)
    (check-break/kill #:kill? #t)
 
-   ;; Check that an ignored break doesn't interfere with semaphore waiting
+   ;; Check that an ignored break doesn't interfere with semaphore waiting, etc.
    (define (check-ignore-break-retry make-trigger trigger-post trigger-wait)
      (define s/nb (make-trigger))
      (define done?/nb #f)
@@ -229,6 +243,46 @@
    (check-ignore-break-retry make-semaphore semaphore-post semaphore-wait)
    (check-ignore-break-retry make-channel (lambda (c) (channel-put c 'go)) channel-get)
    (check-ignore-break-retry make-channel channel-get (lambda (c) (channel-put c 'go)))
+   (check-ignore-break-retry (lambda () (box #f))
+                             (lambda (b) (thread-resume (unbox b)))
+                             (lambda (b) (set-box! b (current-thread)) (thread-suspend (current-thread))))
+   (check-ignore-break-retry (lambda () (box #f))
+                             (lambda (b) (thread-send (unbox b) 'ok))
+                             (lambda (b) (set-box! b (current-thread)) (thread-receive)))
+
+   ;; Check suspending and resuming a thread that is waiting on a semaphore
+   (check #f (sync/timeout 0 s2))
+   (define t/sw (thread
+                 (lambda ()
+                   (sync s2))))
+   (sync (system-idle-evt))
+   (check #f (sync/timeout 0 t/sw))
+   (thread-suspend t/sw)
+   (check #f (sync/timeout 0 t/sw))
+   (semaphore-post s2)
+   (sync (system-idle-evt))
+   (check #f (sync/timeout 0 t/sw))
+   (thread-resume t/sw)
+   (check t/sw (sync t/sw))
+   (check #f (sync/timeout 0 s2))
+
+   ;; Check suspending and resuming a thread that is waiting on a message
+   (define (check-suspend-thread-receive send-after-resume?)
+     (define t/sr (thread
+                   (lambda ()
+                     (channel-put ch (thread-receive)))))
+     (sync (system-idle-evt))
+     (thread-suspend t/sr)
+     (unless send-after-resume?
+       (thread-send t/sr 'ok))
+     (check #f (sync/timeout 0 ch))
+     (check #f (sync/timeout 0 t/sr))
+     (thread-resume t/sr)
+     (when send-after-resume?
+       (thread-send t/sr 'ok))
+     (check 'ok (sync ch)))
+   (check-suspend-thread-receive #t)
+   (check-suspend-thread-receive #f)
 
    ;; Check sync/enable-break => break
    (define tbe (with-continuation-mark

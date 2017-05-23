@@ -28,6 +28,7 @@
          thread-dead?
          thread-wait
          thread-suspend
+         thread-resume
          thread-dead-evt
          thread-dead-evt?
          break-thread
