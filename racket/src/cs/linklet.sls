@@ -60,13 +60,25 @@
   (define (compile-to-bytevector s)
     (let-values ([(o get) (open-bytevector-output-port)])
       (compile-to-port (list s) o)
-      (get)))
+      (strip (get))))
+
+  (define (strip s)
+    (let ([o (open-file-output-port "/tmp/s.fasl" (file-options no-fail))])
+      (put-bytevector o s)
+      (close-port o))
+    (parameterize ([compile-compressed #f])
+      (strip-fasl-file "/tmp/s.fasl" "/tmp/s2.fasl" (fasl-strip-options compile-time-information)))
+    (let ([i (open-file-input-port "/tmp/s2.fasl")])
+      (begin0
+       (get-bytevector-n i (* 2 (bytevector-length s)))
+       (close-port i))))
 
   (define (eval-from-bytevector bv)
     ;; HACK: This probably always works for the `lambda` or
     ;; `let`+`lambda` forms that we compile as linklets, but we need a
     ;; better function from the host Scheme:
-    ((cdr (vector-ref (fasl-read (open-bytevector-input-port bv)) 1))))
+    (let ([v (fasl-read (open-bytevector-input-port bv))])
+      ((cdr (if (vector? v) (vector-ref v 1) v)))))
 
   ;; A linklet is implemented as a procedure that takes an argument
   ;; for each import plus an `variable` for each export, and calling
@@ -537,13 +549,14 @@
       (let ([tag (read-byte in)])
         (cond
          [(equal? tag (char->integer #\B))
-          (read-bytes 20 in) ; skip SHA-1
-          (let ([len (read-int in)])
-            (let ([bstr (read-bytes len in)])
-              (let ([b (fasl-read (open-bytevector-input-port bstr))])
-                (if initial?
-                    (strip-submodule-references b)
-                    b))))]
+          (let ([sha-1 (read-bytes 20 in)])
+            (let ([len (read-int in)])
+              (let ([bstr (read-bytes len in)])
+                (let ([b (fasl-read (open-bytevector-input-port bstr))])
+                  (add-hash-code (if initial?
+                                     (strip-submodule-references b)
+                                     b)
+                                 sha-1)))))]
          [(equal? tag (char->integer #\D))
           (unless initial?
             (raise-argument-error 'read-compiled-linklet
@@ -652,10 +665,17 @@
                                                               (hasheq #f v)
                                                               (hasheq))))))]))])))))
 
-  ;; When a bundle is loaded by itself, remove any `pre` and `post`
+  ;; When a bundle is loaded by itself, remove any 'pre and 'post
   ;; submodule descriptions:
   (define (strip-submodule-references b)
     (make-linklet-bundle (hash-remove (hash-remove (linklet-bundle-hash b) 'pre) 'post)))
+
+  ;; If the bundle has a non-zero hash code, record it with the
+  ;; 'hash-code key to enable module caching
+  (define (add-hash-code b sha-1)
+    (if (bytevector=? sha-1 '#vu8(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+        b
+        (make-linklet-bundle (hash-set (linklet-bundle-hash b) 'hash-code sha-1))))
   
   ;; --------------------------------------------------
 

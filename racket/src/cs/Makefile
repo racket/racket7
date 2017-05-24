@@ -1,6 +1,6 @@
 RACKET = ../../bin/racket
 SCHEME = scheme
-#SCHEME = /Users/mflatt/repo/ChezScheme-if/a6osx/bin/a6osx/scheme -b /Users/mflatt/repo/ChezScheme-if/a6osx/boot/a6osx/petite.boot -b /Users/mflatt/repo/ChezScheme-if/a6osx/boot/a6osx/scheme.boot
+#SCHEME = /Users/mflatt/repo/ChezScheme-strip/a6osx/bin/a6osx/scheme -b /Users/mflatt/repo/ChezScheme-strip/a6osx/boot/a6osx/petite.boot -b /Users/mflatt/repo/ChezScheme-strip/a6osx/boot/a6osx/scheme.boot
 UNSAFE = # '(optimize-level 3)'
 
 COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort) (generate-wpo-files \#t)'
