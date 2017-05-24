@@ -515,9 +515,25 @@
           check-not-unsafe-undefined
           check-not-unsafe-undefined/assign
 
-          unsafe-string-length)
+          unsafe-string-length
+
+	  ;; queue stuff
+	  make-queue queue-empty? queue-remove! queue-fremove! 
+          queue-remove-all! queue-add! queue-add-front! queue-length
+	  queue-remove-end!
+
+	  ;; future scheduler functions
+	  start-scheduler
+	  schedule-future
+	  kill-scheduler
+
+	  future
+	  touch
+	  future?)	  
   (import (chezpart)
-          (only (chezscheme)
+	  (rename (only (chezscheme) sleep)
+		  (sleep chez:sleep))
+	  (only (chezscheme)
                 format
                 fprintf
                 current-error-port
@@ -578,7 +594,10 @@
   (include "core/network.ss")
   (include "core/place.ss")
   (include "core/foreign.ss")
-
+  (include "core/future.ss")	
+  (include "core/queue.ss")
+  (include "core/future-scheduler.ss")
+  
   (set-base-exception-handler!)
   (set-collect-handler!)
   (set-primitive-applicables!)

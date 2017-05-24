@@ -167,6 +167,12 @@ control-demo: core.so
 foreign-demo: core.so
 	$(SCHEME) chezpart.so core.so demo/foreign.ss
 
+future-demo: core.so
+	$(SCHEME) chezpart.so core.so demo/future.ss
+
+future-one-demo: core.so
+	$(SCHEME) chezpart.so core.so demo/future-one.ss
+
 CORE_SRCS = core/check.ss \
 	    core/syntax-rule.ss \
             core/constant.ss \
@@ -212,7 +218,11 @@ CORE_SRCS = core/check.ss \
             core/extfl.ss \
             core/network.ss \
             core/place.ss \
-            core/foreign.ss
+            core/foreign.ss \
+	    core/future.ss \
+	    core/fsemaphore.ss \
+	    core/queue.ss \
+	    core/future-scheduler.ss
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
 	$(COMP) $(CORE_UNSAFE_COMP) '(compile-file "core.sls")' | $(SCHEME) -q
