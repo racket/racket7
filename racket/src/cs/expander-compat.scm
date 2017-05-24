@@ -338,47 +338,6 @@
 (define current-load-extension
   (make-parameter (lambda args (error "no extensions"))))
 
-(define (futures-enabled?) #f)
-(define (processor-count) 1)
-
-(define-record-type (future* make-future future?)
-  (fields (mutable thunk) (mutable result)))
-
-(define (future thunk)
-  (make-future thunk #f))
-
-(define (touch f)
-  ;; FIXME
-  (when (future*-thunk f)
-    (let ([t (future*-thunk f)])
-      (future*-thunk-set! f #f)
-      (future*-result-set! f (t))))
-  (future*-result f))
-  
-(define (would-be-future thunk)
-  (future thunk))
-
-(define (current-future) #f)
-
-(define-record-type (fsemaphore create-fsemaphore fsemaphore?)
-  (fields sema))
-
-(define (make-fsemaphore init)
-  (create-fsemaphore (make-semaphore init)))
-
-(define (fsemaphore-post f)
-  (semaphore-post (fsemaphore-sema f)))
-
-(define (fsemaphore-wait f)
-  (semaphore-wait (fsemaphore-sema f)))
-
-(define (fsemaphore-try-wait? f)
-  (semaphore-try-wait? (fsemaphore-sema f)))
-
-(define (fsemaphore-count f)
-  ;; FIXME
-  0)
-
 (define (reset-future-logs-for-tracing!)
   (void))
 (define (mark-future-trace-end!)
@@ -578,19 +537,6 @@
    prop:chaperone-unsafe-undefined
    chaperone-struct-unsafe-undefined
 
-   futures-enabled?
-   processor-count
-   future
-   future?
-   touch
-   would-be-future
-   current-future
-   make-fsemaphore
-   fsemaphore?
-   fsemaphore-post
-   fsemaphore-wait
-   fsemaphore-try-wait?
-   fsemaphore-count
    reset-future-logs-for-tracing!
    mark-future-trace-end!
 
