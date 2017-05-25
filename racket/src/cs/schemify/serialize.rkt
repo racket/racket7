@@ -171,7 +171,11 @@
               (if (andmap quote? args)
                   `(quote ,q)
                   `(vector ,@args)))]
-           [(box? q) `(box ,(make-construct (unbox q)))]
+           [(box? q)
+            (let ([arg (make-construct (unbox q))])
+              (if (quote? arg)
+                  `(quote ,q)
+                  `(box ,arg)))]
            [(prefab-struct-key q)
             => (lambda (key)
                  `(make-prefab-struct ',key ,@(map make-construct

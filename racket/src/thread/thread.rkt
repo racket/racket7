@@ -14,6 +14,7 @@
          "custodian.rkt")
 
 (provide (rename-out [make-thread thread])
+         thread/suspend-to-kill
          thread?
          current-thread
          

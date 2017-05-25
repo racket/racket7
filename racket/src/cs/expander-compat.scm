@@ -187,6 +187,8 @@
 
 (define compile-enforce-module-constants
   (make-parameter #t))
+(define compile-context-preservation-enabled
+  (make-parameter #f))
 
 (define (load s) (|#%app| (|#%app| current-load) s #f))
 
@@ -216,16 +218,6 @@
 
 (define-values (prop:exn:srclocs exn:srclocs? exn:srclocs-accessor)
   (make-struct-type-property 'exn:srclocs))
-
-;; Not good enough...
-(define (make-ephemeron k v)
-  (weak-cons k v))
-(define (ephemeron-value p)
-  (cond
-   [(car p) (cdr p)]
-   [(cdr p) (set-cdr! p #f) #f]
-   [else #f]))
-(define (ephemeron? x) (weak-pair? x))
 
 (define (thread-receive-evt t) 'thread-receive-evt)
 (define filesystem-change-evt
@@ -471,6 +463,7 @@
    load-on-demand-enabled
 
    compile-enforce-module-constants
+   compile-context-preservation-enabled
 
    load-extension
    cache-configuration
@@ -483,9 +476,6 @@
 
    gensym
 
-   ephemeron?
-   make-ephemeron
-   ephemeron-value
    thread-receive-evt
    filesystem-change-evt
    filesystem-change-evt-cancel

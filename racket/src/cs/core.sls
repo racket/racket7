@@ -356,6 +356,10 @@
           will-register
           will-try-execute
 
+          make-ephemeron
+          ephemeron?
+          ephemeron-value
+
           system-type
 
           unsafe-car
@@ -532,6 +536,7 @@
   (include "core/time.ss")
   (include "core/random.ss")
   (include "core/memory.ss")
+  (include "core/ephemeron.ss")
   (include "core/will-executor.ss")
   (include "core/system.ss")
   (include "core/unsafe.ss")

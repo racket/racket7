@@ -122,14 +122,17 @@
 
 ;; ----------------------------------------
 
-(define (make-weak-box v) (weak-cons v #t))
+;; A wrapper to hide the pairness of weak pairs:
+(define-record-type (weak-box create-weak-box weak-box?)
+  (fields p))
 
-(define (weak-box? v) (weak-pair? v))
+(define (make-weak-box v)
+  (create-weak-box (weak-cons v #t)))
 
 (define (weak-box-value v)
-  (unless (weak-pair? v)
+  (unless (weak-box? v)
     (raise-argument-error 'weak-box-value "weak-box?" v))
-  (let ([c (car v)])
+  (let ([c (car (weak-box-p v))])
     (if (eq? c #!bwp)
         #f
         c)))

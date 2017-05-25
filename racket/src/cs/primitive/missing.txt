@@ -7,14 +7,12 @@ call-in-nested-thread
 call-with-semaphore/enable-break
 char-utf-8-length
 compile-allow-set!-undefined
-compile-context-preservation-enabled
 current-directory-for-user
 current-drive
 current-evt-pseudo-random-generator
 current-get-interaction-input-port
 current-locale
 current-preserved-thread-cell-values
-current-process-milliseconds
 current-subprocess-custodian-mode
 current-thread-initial-stack-size
 dump-memory-stats
@@ -62,7 +60,5 @@ string-port?
 system-language+country
 thread-cell-values?
 thread-resume-evt
-thread-rewind-receive
 thread-suspend-evt
-thread/suspend-to-kill
 vector-set-performance-stats!

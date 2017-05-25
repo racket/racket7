@@ -150,6 +150,7 @@
    compile
    complex?
    compile-enforce-module-constants
+   compile-context-preservation-enabled
    complete-path?
    continuation-marks
    continuation-mark-key?
@@ -283,17 +284,9 @@
    floor
    floating-point-bytes->real
    flush-output
-   flvector-copy
-   flvector-length
-   flvector-ref
-   flvector-set!
-   flvector?
    for-each
    format
    fprintf
-   fxvector-length
-   fxvector-set!
-   fxvector?
    gcd
    gensym
    get-output-bytes
@@ -393,8 +386,6 @@
    make-environment-variables
    make-ephemeron
    make-file-or-directory-link
-   make-flvector
-   make-fxvector
    make-hash
    make-hash-placeholder
    make-hasheq
@@ -702,6 +693,7 @@
    terminal-port?
    time-apply
    thread
+   thread/suspend-to-kill
    thread?
    thread-cell?
    thread-cell-ref
@@ -713,6 +705,7 @@
    thread-receive
    thread-receive-evt
    thread-resume
+   thread-rewind-receive
    thread-running?
    thread-send
    thread-receive

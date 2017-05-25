@@ -25,7 +25,7 @@ run: main.so
 	${SCHEME} --script main.so ../../bin/racket $(ARGS)
 
 setup:
-	$(MAKE) run ARGS="-W 'debug@compiler/cm error' -l setup"
+	$(MAKE) run ARGS="-W 'info@compiler/cm error' -l setup"
 
 run-wpo: racket.so
 	${SCHEME} --script racket.so ../../bin/racket $(ARGS)
@@ -185,6 +185,7 @@ CORE_SRCS = core/constant.ss \
             core/graph.ss \
             core/time.ss \
             core/memory.ss \
+            core/ephemeron.ss \
             core/will-executor.ss \
             core/system.ss \
             core/unsafe.ss \

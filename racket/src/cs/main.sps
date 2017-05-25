@@ -98,6 +98,18 @@
    ;; An element of `args` can become `(cons _arg _within-arg)`
    ;; due to splitting multiple flags with a single "-"
    (define (loop args) (flags-loop args saw))
+   ;; Called to handle remaining non-switch arguments:
+   (define (finish args saw)
+     (cond
+      [(and (pair? args)
+            (not (hash-ref saw 'non-config)))
+       (loop (cons "-u" args))]
+      [else
+       (|#%app| current-command-line-arguments (list->vector args))
+       (when (and (null? args) (not (saw? saw 'non-config)))
+         (set! repl? #t)
+         (set! version? #t))]))
+   ;; Dispatch on first argument:
    (unless (null? args)
      (let* ([arg (car args)]
             [within-arg (and (pair? arg) (cdr arg))]
@@ -153,13 +165,19 @@
          (let-values ([(spec rest-args) (next-arg "stderr level" arg within-arg args)])
            (set! stderr-logging (parse-logging-spec spec (format "after ~a switch" (or within-arg arg)) #t))
            (loop rest-args))]
+        [("--")
+         (cond
+          [(or (null? (cdr args)) (not (pair? (cadr args))))
+           (finish (cdr args) saw)]
+          [else
+           ;; Need to handle more switches from a combined flag
+           (loop (cons (cadr args) (cons (car args) (cddr args))))])]
         [else
          (cond
-          [(and (not (equal? arg ""))
+          [(and (> (string-length arg) 2)
                 (eqv? (string-ref arg 0) #\-))
            (cond
-            [(and (> (string-length arg) 2)
-                  (not (eqv? (string-ref arg 1) #\-)))
+            [(not (eqv? (string-ref arg 1) #\-))
              ;; Split flags
              (loop (append (map (lambda (c) (cons (string #\- c) arg))
                                 (cdr (string->list arg)))
@@ -172,15 +190,7 @@
                                    ""))])]
           [else
            ;; Non-flag argument
-           (cond
-            [(and (pair? args)
-                  (not (hash-ref saw 'non-config)))
-             (loop (cons "-u" args))]
-            [else
-             (|#%app| current-command-line-arguments (list->vector args))
-             (when (and (null? args) (not (saw? saw 'non-config)))
-               (set! repl? #t)
-               (set! version? #t))])])]))))
+           (finish args saw)])]))))
 
  (unless stderr-logging
    (let ([spec (getenv "PLTSTDERR")])
@@ -195,7 +205,6 @@
     (boot)
     (when (and stderr-logging
                (not (null? stderr-logging)))
-      (printf "~s\n" stderr-logging)
       (apply add-stderr-log-receiver! (|#%app| current-logger) stderr-logging))
     (|#%app| current-library-collection-links
      (find-library-collection-links))

@@ -583,11 +583,9 @@
                                                              (exn-message ex))
                                         (raise ex))])
                                   (compile-zo* path->mode roots path src-sha1 read-src-syntax zo-name up-to-date collection-cache)))
-                              (log-compile-event path 'end-compile)
                               (trace-printf "compiled ~a" actual-path)))
                           (lambda ()
-                            (when lc
-                              (log-compile-event path (if locked? 'finish-compile 'already-done)))
+                            (log-compile-event path (if (or (not lc) locked?) 'finish-compile 'already-done))
                             (when locked?
                               (lc 'unlock zo-name))))))))))))
      (unless sha1-only?

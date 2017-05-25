@@ -22,6 +22,7 @@
 (provide call-in-main-thread
          
          thread
+         thread/suspend-to-kill
          thread?
          current-thread
          thread-running?
