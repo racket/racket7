@@ -14,8 +14,15 @@
 ;; lift as a last resort.
 
 (define (convert-for-serialize bodys)
+  (define lifted-constants (make-hasheq))
   (define lift-bindings null)
   (define lifts-count 0)
+  (define (add-lifted rhs)
+    ;; FIXME: make sure these `id`s don't collide with anything
+    (define id (string->symbol (format "q:~a" lifts-count)))
+    (set! lifts-count (add1 lifts-count))
+    (set! lift-bindings (cons (list id rhs) lift-bindings))
+    id)
   (define new-bodys
     (for/list ([v (in-list bodys)])
       (cond
@@ -25,11 +32,7 @@
              [`(quote ,q)
               (cond
                 [(lift-quoted? q)
-                 ;; FIXME: make sure these don't collide with anything
-                 (define id (string->symbol (format "q:~a" lifts-count)))
-                 (set! lifts-count (add1 lifts-count))
-                 (set! lift-bindings (cons (list id (make-construct q)) lift-bindings))
-                 id]
+                 (make-construct q add-lifted lifted-constants)]
                 [else v])]
              [`(lambda ,formals ,body ...)
               `(lambda ,formals ,@(map convert body))]
@@ -124,36 +127,59 @@
     [else #f]))
 
 ;; Construct an expression to be lifted
-(define (make-construct q)
-  (cond
-    [(path? q) `(bytes->path ,(path->bytes q)
-                             ',(path-convention-type q))]
-    [(regexp? q)
-     `(,(if (pregexp? q) 'pregexp 'regexp) ,(object-name q))]
-    [(byte-regexp? q)
-     `(,(if (byte-pregexp? q) 'byte-pregexp 'byte-regexp) ,(object-name q))]
-    [(keyword? q) `(string->keyword ,(keyword->string q))]
-    [(hash? q)
-     `(,(cond
-          [(hash-eq? q) 'hasheq]
-          [(hash-eqv? q) 'hasheqv]
-          [else 'hash])
-       ,@(apply append
-                (for/list ([(k v) (in-hash q)])
-                  (list (make-construct k)
-                        (make-construct v)))))]
-    [(string? q) `(datum-intern-literal ,q)]
-    [(bytes? q) `(datum-intern-literal ,q)]
-    [(pair? q)
-     (if (list? q)
-         `(list ,@(map make-construct q))
-         `(cons ,(make-construct (car q))
-                ,(make-construct (cdr q))))]
-    [(vector? q)
-     `(vector ,@(map make-construct (vector->list q)))]
-    [(box? q) `(box ,(make-construct (unbox q)))]
-    [(prefab-struct-key q)
-     => (lambda (key)
-          `(make-prefab-struct ',key ,@(map make-construct
-                                            (cdr (vector->list (struct->vector q))))))]
-    [else `(quote ,q)]))
+(define (make-construct q add-lifted lifted-constants)
+  (define (quote? e) (and (pair? e) (eq? 'quote (car e))))
+  (let make-construct ([q q])
+    (cond
+      [(hash-ref lifted-constants q #f)
+       => (lambda (id) id)]
+      [else
+       (define rhs
+         (cond
+           [(path? q) `(bytes->path ,(path->bytes q)
+                                    ',(path-convention-type q))]
+           [(regexp? q)
+            `(,(if (pregexp? q) 'pregexp 'regexp) ,(object-name q))]
+           [(byte-regexp? q)
+            `(,(if (byte-pregexp? q) 'byte-pregexp 'byte-regexp) ,(object-name q))]
+           [(keyword? q)
+            `(string->keyword ,(keyword->string q))]
+           [(hash? q)
+            `(,(cond
+                 [(hash-eq? q) 'hasheq]
+                 [(hash-eqv? q) 'hasheqv]
+                 [else 'hash])
+              ,@(apply append
+                       (for/list ([(k v) (in-hash q)])
+                         (list (make-construct k)
+                               (make-construct v)))))]
+           [(string? q) `(datum-intern-literal ,q)]
+           [(bytes? q) `(datum-intern-literal ,q)]
+           [(pair? q)
+            (if (list? q)
+                (let ([args (map make-construct q)])
+                  (if (andmap quote? args)
+                      `(quote ,q)
+                      `(list ,@(map make-construct q))))
+                (let ([a (make-construct (car q))]
+                      [d (make-construct (cdr q))])
+                  (if (and (quote? a) (quote? d))
+                      `(quote ,q)
+                      `(cons ,a ,d))))]
+           [(vector? q)
+            (let ([args (map make-construct (vector->list q))])
+              (if (andmap quote? args)
+                  `(quote ,q)
+                  `(vector ,@args)))]
+           [(box? q) `(box ,(make-construct (unbox q)))]
+           [(prefab-struct-key q)
+            => (lambda (key)
+                 `(make-prefab-struct ',key ,@(map make-construct
+                                                   (cdr (vector->list (struct->vector q))))))]
+           [else `(quote ,q)]))
+       (cond
+         [(quote? rhs) rhs]
+         [else
+          (define id (add-lifted rhs))
+          (hash-set! lifted-constants q id)
+          id])])))

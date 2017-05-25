@@ -36,6 +36,9 @@
   (let ([stats (statistics)])
     (sstats-gc-cpu stats)))
 
+(define (current-process-milliseconds)
+  (cpu-time))
+
 (define (current-milliseconds)
   (inexact->exact (floor (current-inexact-milliseconds))))
 

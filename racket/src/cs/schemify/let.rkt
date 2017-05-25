@@ -1,8 +1,8 @@
 #lang racket/base
 
-(provide make-let)
+(provide make-let*)
 
-(define (make-let bindings body)
+(define (make-let* bindings body)
   (if (null? bindings)
       body
-      `(let ,bindings ,body)))
+      `(let* ,bindings ,body)))

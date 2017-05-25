@@ -59,26 +59,15 @@
 
   (define (compile-to-bytevector s)
     (let-values ([(o get) (open-bytevector-output-port)])
-      (compile-to-port (list s) o)
-      (strip (get))))
-
-  (define (strip s)
-    (let ([o (open-file-output-port "/tmp/s.fasl" (file-options no-fail))])
-      (put-bytevector o s)
-      (close-port o))
-    (parameterize ([compile-compressed #f])
-      (strip-fasl-file "/tmp/s.fasl" "/tmp/s2.fasl" (fasl-strip-options compile-time-information)))
-    (let ([i (open-file-input-port "/tmp/s2.fasl")])
-      (begin0
-       (get-bytevector-n i (* 2 (bytevector-length s)))
-       (close-port i))))
+      (compile-to-port (list `(lambda () ,s)) o)
+      (get)))
 
   (define (eval-from-bytevector bv)
     ;; HACK: This probably always works for the `lambda` or
     ;; `let`+`lambda` forms that we compile as linklets, but we need a
     ;; better function from the host Scheme:
     (let ([v (fasl-read (open-bytevector-input-port bv))])
-      ((cdr (if (vector? v) (vector-ref v 1) v)))))
+      (((cdr (if (vector? v) (vector-ref v 1) v))))))
 
   ;; A linklet is implemented as a procedure that takes an argument
   ;; for each import plus an `variable` for each export, and calling
@@ -95,7 +84,7 @@
 
   (define-record-type linklet
     (fields code           ; the procedure
-            compiled?      ; whether the procedure is in source or value form
+            faslable?      ; whether the procedure is in fasl-ready form
             importss-abi   ; ABI for each import, in parallel to `importss`
             exports-info   ; hash(sym -> known) for info about each export; see "known.rkt"
             name           ; name of the linklet (for debugging purposes)
@@ -124,7 +113,7 @@
       ;; Create the linklet:
       (let ([lk (make-linklet ((if serializable? compile-to-bytevector compile)
                                (show "schemified" (remove-annotation-boundary impl-lam)))
-                              (not serializable?)
+                              serializable?
                               importss-abi
                               exports-info
                               name
@@ -134,6 +123,7 @@
                                    (cadr c))
                               (map (lambda (p) (if (pair? p) (cadr p) p))
                                    (caddr c)))])
+        (show "compiled" 'done)
         ;; In general, `compile-linklet` is allowed to extend the set
         ;; of linklet imports if `import-keys` is provided (e.g., for
         ;; cross-linklet optimization where inlining needs a new
@@ -158,15 +148,15 @@
   ;; Intended to speed up reuse of a linklet in exchange for not being
   ;; able to serialize anymore
   (define (eval-linklet linklet)
-    (if (linklet-compiled? linklet)
-        linklet
+    (if (linklet-faslable? linklet)
         (make-linklet (eval-from-bytevector (linklet-code linklet))
-                      #t
+                      #f
                       (linklet-importss-abi linklet)
                       (linklet-exports-info linklet)
                       (linklet-name linklet)
                       (linklet-importss linklet)
-                      (linklet-exports linklet))))
+                      (linklet-exports linklet))
+        linklet))
 
   (define instantiate-linklet
     (case-lambda
@@ -180,9 +170,9 @@
         ;; Instantiate into the given instance and return the
         ;; result of the linklet body:
         (apply
-         (if (linklet-compiled? linklet)
-             (linklet-code linklet)
-             (eval-from-bytevector (linklet-code linklet)))
+         (if (linklet-faslable? linklet)
+             (eval-from-bytevector (linklet-code linklet))
+             (linklet-code linklet))
          (make-variable-reference target-instance #f)
          (append (apply append
                         (map extract-variables

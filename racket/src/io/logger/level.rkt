@@ -55,7 +55,7 @@
      (check-level who level)
      (cond
        [(null? (cdr l))
-        level]
+        (append accum level)]
        [else
         (define topic (cadr l))
         (unless (or (not topic) (symbol? topic))

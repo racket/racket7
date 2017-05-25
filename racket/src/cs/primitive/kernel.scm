@@ -190,6 +190,7 @@
    current-output-port
    current-plumber
    current-print
+   current-process-milliseconds
    current-prompt-read
    current-pseudo-random-generator
    current-read-interaction

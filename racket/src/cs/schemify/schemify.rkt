@@ -92,7 +92,7 @@
        (schemify-body* bodys/constants-lifted annotate unannotate prim-knowns imports exports))
      (values
       ;; Build `lambda` with schemified body:
-      (make-let
+      (make-let*
        lifted-constants
        `(lambda (instance-variable-reference
                  ,@(for*/list ([im-ids (in-list im-idss)]

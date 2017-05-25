@@ -1,6 +1,5 @@
 RACKET = ../../bin/racket
 SCHEME = scheme
-#SCHEME = /Users/mflatt/repo/ChezScheme-strip/a6osx/bin/a6osx/scheme -b /Users/mflatt/repo/ChezScheme-strip/a6osx/boot/a6osx/petite.boot -b /Users/mflatt/repo/ChezScheme-strip/a6osx/boot/a6osx/scheme.boot
 UNSAFE = # '(optimize-level 3)'
 
 COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort) (generate-wpo-files \#t)'
@@ -25,6 +24,9 @@ expander-demo: expander.so demo/expander.ss
 run: main.so
 	${SCHEME} --script main.so ../../bin/racket $(ARGS)
 
+setup:
+	$(MAKE) run ARGS="-W 'debug@compiler/cm error' -l setup"
+
 run-wpo: racket.so
 	${SCHEME} --script racket.so ../../bin/racket $(ARGS)
 
@@ -42,7 +44,8 @@ rktl:
 
 PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm \
                     primitive/paramz.scm primitive/extfl.scm primitive/network.scm \
-                    primitive/futures.scm primitive/foreign.scm primitive/place.scm
+                    primitive/futures.scm primitive/foreign.scm primitive/place.scm \
+                    primitive/linklet.scm
 
 expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS)
 	$(COMP) '(compile-file "expander.sls")' | $(SCHEME) -q $(EXPANDER_DEPS)

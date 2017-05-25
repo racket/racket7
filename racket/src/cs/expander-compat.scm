@@ -65,8 +65,8 @@
    [() (system-library-subpath (system-type 'gc))]
    [(mode)
     (case mode
-      [(3m) "x86_64-macosx/3m"]
-      [else "x86_64-macosx"])]))
+      [(3m) (string->path "x86_64-macosx/3m")]
+      [else (string->path "x86_64-macosx")])]))
 
 (define (system-path-convention-type) 'unix)
 
@@ -366,121 +366,12 @@
 
 ;; ----------------------------------------
 
-;; The environment is used to evaluate linklets, so all
-;; primitives need to be imported (prefered) or defined
-;; (less efficient to access) there
-(define (fill-environment!)
-  (eval `(import (rename (core)
-                         [correlated? syntax?]
-                         [correlated-source syntax-source]
-                         [correlated-line syntax-line]
-                         [correlated-column syntax-column]
-                         [correlated-position syntax-position]
-                         [correlated-span syntax-span]
-                         [correlated-e syntax-e]
-                         [correlated->datum syntax->datum]
-                         [datum->correlated datum->syntax]
-                         [correlated-property syntax-property]
-                         [correlated-property-symbol-keys syntax-property-symbol-keys])
-                 (thread)
-                 (io)
-                 (regexp)
-                 (linklet)))
-  
-  (let ([install-table
-         (lambda (table)
-           (hash-for-each table
-                          (lambda (k v)
-                            (eval `(define ,k ',v)))))])
-    (install-table compat-table)))
-
-;; ----------------------------------------
-
-;; The expander needs various tables to set up primitive modules, and
-;; the `primitive-table` function is the bridge between worlds
-
-(define tbd-table (make-hasheq))
-
-(define (primitive-table key)
-  (case key
-    [(|#%linklet|) linklet-table]
-    [(|#%kernel|) kernel-table]
-    [(|#%read|) tbd-table]
-    [(|#%paramz|) paramz-table]
-    [(|#%unsafe|) unsafe-table]
-    [(|#%foreign|) foreign-table]
-    [(|#%futures|) futures-table]
-    [(|#%place|) place-table]
-    [(|#%flfxnum|) flfxnum-table]
-    [(|#%extfl|) extfl-table]
-    [(|#%network|) network-table]
-    [else #f]))
-
-(define-syntax hash-primitive-set!
-  (syntax-rules ()
-    [(_ ht [local prim]) (hash-set! ht 'prim local)]
-    [(_ ht prim) (hash-set! ht 'prim prim)]))
-
-(define-syntax make-primitive-table
-  (syntax-rules ()
-    [(_ prim ...)
-     (let ([ht (make-hasheq)])
-       (hash-primitive-set! ht prim)
-       ...
-       ht)]))
-
-(include "primitive/kernel.scm")
-(include "primitive/unsafe.scm")
-(include "primitive/flfxnum.scm")
-(include "primitive/paramz.scm")
-(include "primitive/extfl.scm")
-(include "primitive/network.scm")
-(include "primitive/futures.scm")
-(include "primitive/place.scm")
-(include "primitive/foreign.scm")
-
-(define linklet-table
-  (make-primitive-table
-   linklet?
-   compile-linklet
-   recompile-linklet
-   eval-linklet
-   read-compiled-linklet
-   instantiate-linklet
-   
-   linklet-import-variables
-   linklet-export-variables
-   
-   instance?
-   make-instance
-   instance-name
-   instance-data
-   instance-variable-names
-   instance-variable-value
-   instance-set-variable-value!
-   instance-unset-variable!
-
-   linklet-directory?
-   hash->linklet-directory
-   linklet-directory->hash
-
-   linklet-bundle?
-   hash->linklet-bundle
-   linklet-bundle->hash
-   
-   variable-reference?
-   variable-reference->instance
-   variable-reference-constant?
-
-   primitive-table))
-
 ;; Table of things temporarily defined here; since these are not put
 ;; in the evaluation environment with `(import (core) (thread) ....)`,
 ;; each must be specifically defined
 (define compat-table
   (make-primitive-table
-   primitive-table
-   
+
    prop:checked-procedure checked-procedure? checked-procedure-ref
    prop:impersonator-of -impersonator-of? impersonator-of-ref
    prop:arity-string arity-string? arity-string-ref
