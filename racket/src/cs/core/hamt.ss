@@ -808,18 +808,16 @@
    (cnode? b)
    (fx= (cnode-hash a) (cnode-hash b))
    (let* ([akeys (hnode-keys a)]
-          [bkeys (hnode-keys b)]
-          [alen (#%vector-length akeys)]
-          [blen (#%vector-length bkeys)])
-     (and (fx= alen blen)
-          (let loop ([i 0])
+          [alen (#%vector-length akeys)])
+     (and (let loop ([i 0])
             (cond
              [(fx= i alen) #t]
              [else
-              (and
-               (key=? a (key-ref a i) (key-ref b i))
-               (eql? (val-ref a i) (val-ref b i))
-               (loop (fx1+ i)))]))))))
+              (let* ([akey (key-ref a i)]
+                     [bval (cnode-ref b akey)])
+                (and
+                 (eql? (val-ref a i) bval)
+                 (loop (fx1+ i))))]))))))
 
 (define (cnode-keys-subset? a b shift)
   (cond
