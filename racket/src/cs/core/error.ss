@@ -328,6 +328,13 @@
     (chez:exit 1))
   ((|#%app| error-escape-handler)))
 
+(define link-instantiate-continuations (make-weak-eq-hashtable))
+
+;; For `instantiate-linklet` to help report which linklet is being run:
+(define (register-linklet-instantiate-continuation! k name)
+  (when name
+    (hashtable-set! link-instantiate-continuations k name)))
+
 ;; Convert a contination to a list of function-name and
 ;; source information. Unfortuately, this traversal takes
 ;; a while, so we limit it by `(error-print-context-length)`.
@@ -341,9 +348,14 @@
             (zero? n))
         '()]
        [else
-        (let* ([name (let* ([c (i 'code)]
-                            [n (c 'name)])
-                       n)]
+        (let* ([name (or (let ([n (hashtable-ref link-instantiate-continuations
+                                                 (i 'value)
+                                                 #f)])
+                           (and n
+                                (string->symbol (format "body of ~a" n))))
+                         (let* ([c (i 'code)]
+                                [n (c 'name)])
+                           n))]
                [desc
                 (call-with-values (lambda () (i 'source-path)) ; this is the slow part
                   (case-lambda

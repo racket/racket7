@@ -107,6 +107,16 @@
   (lambda (x) (and x 0))
   (lambda (v) (not (zero? v))))
 
+(define make-cstruct-type
+  (case-lambda
+   [(types) (make-cstruct-type types #f #f)]
+   [(types abi) (make-cstruct-type types abi #f)]
+   [(types abi alignment)
+    (create-ctype 'struct
+                  types
+                  (lambda (s) (raise-unsupported-error 'struct-s->c))
+                  (lambda (c) (raise-unsupported-error 'struct-c->s)))]))
+
 (define (compiler-sizeof sl)
   (define (rest sl) (if (pair? sl) (cdr sl) '()))
   (unless (or (symbol? sl)
@@ -193,6 +203,29 @@
                                  "(or/c ctype-symbol? (listof ctype-symbol?))"
                                  sl)]))])))
 
+(define (ctype-sizeof c)
+  (unless (ctype? c)
+    (raise-argument-error 'ctype-sizeof "ctype?" c))
+  (case (ctype-s-exp c)
+    [(void) 0]
+    [(boolean int) 4]
+    [(double) 8]
+    [(float) 4]
+    [(integer-8 unsigned-8) 1]
+    [(integer-16 unsigned-16) 2]
+    [(integer-32 unsigned-32) 4]
+    [(integer-64 unsigned-64) 8]
+    [else
+     ;; Everything else is pointer-sized:
+     ;; FIXME
+     8]))
+
+(define (ctype-alignof c)
+  (unless (ctype? c)
+    (raise-argument-error 'ctype-alignof "ctype?" c))
+  ;; Until we get to structs, etc., alignof = sizeof
+  (ctype-sizeof c))
+
 (define (cpointer-gcable? p)
   (unless (cpointer? p)
     (raise-argument-error 'cpointer-gcable? "cpointer?" p))
@@ -206,6 +239,22 @@
 (define (ffi-lib name . args)
   #f)
 
+(define (ffi-lib? v)
+  #f)
+
+(define (ffi-obj sym lib)
+  (raise
+   (exn:fail:filesystem
+    (format "ffi-obj: counld't get ~a" sym)
+    (current-continuation-marks))))
+
+(define (ffi-obj? v)
+  #f)
+
+;; FIXME:
+(define (make-late-weak-hasheq)
+  (make-weak-hasheq))
+
 (define-syntax define-foreign-not-yet-available
   (syntax-rules ()
     [(_ id)
@@ -215,27 +264,20 @@
      (begin (define-foreign-not-yet-available id) ...)]))
 
 (define-foreign-not-yet-available
-  ctype-sizeof
-  ctype-alignof
   end-stubborn-change
   extflvector->cpointer
   ffi-call
   ffi-callback
   ffi-callback?
   ffi-lib-name
-  ffi-lib?
-  ffi-obj
   ffi-obj-lib
   ffi-obj-name
-  ffi-obj?
   flvector->cpointer
   free
   free-immobile-cell
   lookup-errno
   make-array-type
-  make-cstruct-type
   make-late-weak-box
-  make-late-weak-hasheq
   make-sized-byte-string
   make-union-type
   malloc

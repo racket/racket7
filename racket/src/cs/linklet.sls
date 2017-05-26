@@ -169,18 +169,21 @@
        [target-instance
         ;; Instantiate into the given instance and return the
         ;; result of the linklet body:
-        (apply
-         (if (linklet-faslable? linklet)
-             (eval-from-bytevector (linklet-code linklet))
-             (linklet-code linklet))
-         (make-variable-reference target-instance #f)
-         (append (apply append
-                        (map extract-variables
-                             import-instances
-                             (linklet-importss linklet)
-                             (linklet-importss-abi linklet)))
-                 (create-variables target-instance
-                                   (linklet-exports linklet))))]
+        (call/cc
+         (lambda (k)
+           (register-linklet-instantiate-continuation! k (instance-name target-instance))
+           (apply
+            (if (linklet-faslable? linklet)
+                (eval-from-bytevector (linklet-code linklet))
+                (linklet-code linklet))
+            (make-variable-reference target-instance #f)
+            (append (apply append
+                           (map extract-variables
+                                import-instances
+                                (linklet-importss linklet)
+                                (linklet-importss-abi linklet)))
+                    (create-variables target-instance
+                                      (linklet-exports linklet))))))]
        [else
         ;; Make a fresh instance, recur, and return the instance
         (let ([i (make-instance (linklet-name linklet))])
