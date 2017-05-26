@@ -10,7 +10,8 @@
 (provide sync
          sync/timeout
          sync/enable-break
-         sync/timeout/enable-break)
+         sync/timeout/enable-break
+         current-evt-pseudo-random-generator)
 
 (struct syncing (selected ; #f or a syncer that has been selected
                  syncers  ; linked list of `syncer`s
@@ -364,3 +365,11 @@
                                       (unless (syncing-selected s)
                                         (syncing-retry! s))
                                       (retry)))))])))))
+
+;; ----------------------------------------
+
+(define current-evt-pseudo-random-generator
+  (make-parameter (make-pseudo-random-generator)
+                  (lambda (v)
+                    (check 'current-evt-pseudo-random-generator pseudo-random-generator? v)
+                    v)))

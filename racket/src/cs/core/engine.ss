@@ -94,6 +94,19 @@
         (engine-state-thread-cell-values es)
         root-thread-cell-values)))
 
+(define (set-current-engine-thread-cell-values! new-t)
+  (let ([current-t (current-engine-thread-cell-values)])
+    (with-interrupts-disabled
+     (hash-table-for-each
+      current-t
+      (lambda (c v)
+        (when (thread-cell-preserved? c)
+          (hashtable-delete! new-t c))))
+     (hash-table-for-each
+      new-t
+      (lambda (c v)
+        (hashtable-set! current-t c v))))))
+
 (define (new-engine-thread-cell-values)
   (let ([current-t (current-engine-thread-cell-values)]
         [new-t (make-weak-eq-hashtable)])

@@ -8,10 +8,15 @@
          bytes->string/locale
          bytes-utf-8-length
          
+         bytes-utf-8-index
+         bytes-utf-8-ref
+         
          string->bytes/latin-1
          string->bytes/utf-8
          string->bytes/locale
-         string-utf-8-length)
+         string-utf-8-length
+
+         char-utf-8-length)
 
 ;; ----------------------------------------
 
@@ -46,15 +51,16 @@
                    #:error-char err-char
                    #:abort-mode 'error))
   (cond
-   [just-length? got-chars]
-   [else
-    ;; Create result string:
-    (define str (make-string got-chars))
-    (utf-8-decode! bstr start end
-                   str 0 #f
-                   #:error-char err-char
-                   #:abort-mode 'error)
-    str]))
+    [(eq? state 'error) (raise-encoding-error who bstr start end)]
+    [just-length? got-chars]
+    [else
+     ;; Create result string:
+     (define str (make-string got-chars))
+     (utf-8-decode! bstr start end
+                    str 0 #f
+                    #:error-char err-char
+                    #:abort-mode 'error)
+     str]))
 
 (define (bytes->string/utf-8 bstr [err-char #f] [start 0] [end (and (bytes? bstr)
                                                                     (bytes-length bstr))])
@@ -68,6 +74,58 @@
 (define (bytes->string/locale bstr [err-char #f] [start 0] [end (and (bytes? bstr)
                                                                     (bytes-length bstr))])
   (do-bytes->string/utf-8 'bytes->string/locale bstr err-char start end))
+
+(define (raise-encoding-error who bstr start end)
+  (raise-arguments-error who "byte string is not a well-formed UTF-8 encoding"
+                         "byte string" (subbytes bstr start end)))
+
+;; ----------------------------------------
+
+(define (do-bytes-utf-8-ref who bstr skip err-char start end
+                            #:get-index? [get-index? #f])
+  (check who bytes? bstr)
+  (check who exact-nonnegative-integer? skip)
+  (check who (lambda (c) (or (not c) (char? c)))
+         #:contract "(or/c char? #f)"
+         err-char)
+  (check who exact-nonnegative-integer? start)
+  (check who exact-nonnegative-integer? end)
+  (check-range 'string->bytes/latin-1 start end (bytes-length bstr) bstr)
+  ;; First, decode `skip` items:
+  (define-values (initial-used-bytes initial-got-chars state)
+    (utf-8-decode! bstr start end
+                   #f 0 skip 
+                   #:error-char err-char
+                   #:abort-mode 'error))
+  (cond
+    [(eq? state 'error)
+     (raise-encoding-error who bstr start end)]
+    [(eq? state 'continues)
+     ;; Get one more byte
+     (define str (and (not get-index?) (make-string 1)))
+     (define-values (used-bytes got-chars new-state)
+       (utf-8-decode! bstr (+ start initial-used-bytes) end
+                      str 0 1
+                      #:error-char err-char))
+     (cond
+       [(eq? state 'error)
+        (raise-encoding-error who bstr start end)]
+       [(or (eq? state 'continues)
+            (or (and (eq? state 'complete)
+                     (= got-chars 1))))
+        (if get-index?
+            (+ initial-used-bytes used-bytes)
+            (string-ref str 0))]
+       [else #f])]
+    [else #f]))
+
+(define (bytes-utf-8-ref bstr [skip 0] [err-char #f] [start 0] [end (and (bytes? bstr)
+                                                                         (bytes-length bstr))])
+  (do-bytes-utf-8-ref 'bytes-utf-8-ref bstr skip err-char start end))
+
+(define (bytes-utf-8-index bstr [skip 0] [err-char #f] [start 0] [end (and (bytes? bstr)
+                                                                         (bytes-length bstr))])
+  (do-bytes-utf-8-ref 'bytes-utf-8-index bstr skip err-char start end #:get-index? #t))
 
 ;; ----------------------------------------
 
@@ -125,3 +183,14 @@
 (define (string->bytes/locale str [err-byte #f] [start 0] [end (and (string? str)
                                                                     (string-length str))])
   (do-string->bytes/utf-8 'string->bytes/locale str err-byte start end))
+
+;; ----------------------------------------
+
+(define (char-utf-8-length c)
+  (check 'char-utf-8-length char? c)
+  (define n (char->integer c))
+  (cond
+    [(n . < . #x7F) 1]
+    [(n . < . #x7FF) 2]
+    [(n . < . #xFFFF) 3]
+    [else 4]))

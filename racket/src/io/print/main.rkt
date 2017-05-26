@@ -50,7 +50,8 @@
 
 (define (newline [o (current-output-port)])
   (check 'newline output-port? o)
-  (write-bytes #"\n" o))
+  (write-bytes #"\n" o)
+  (void))
 
 ;; ----------------------------------------
 

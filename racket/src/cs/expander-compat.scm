@@ -27,8 +27,11 @@
 (define (impersonate-channel v . args) v)
 (define (chaperone-struct-type v . args) v)
 
+(define (replace-evt a b) (error 'replace-evt "unsupported"))
+
 (define (port-try-file-lock? port mode) #f)
 (define (port-file-unlock port) (void))
+(define (port-file-identity port) (error 'port-file-identity "not yet supported"))
 
 (define (equal-secondary-hash-code v) (equal-hash-code v))
 
@@ -51,8 +54,6 @@
 (define flreal-part real-part)
 (define flimag-part imag-part)
 (define make-flrectangular make-rectangular)
-
-(define string-locale-downcase string-downcase)
 
 (define (char-graphic? x) #f)
 (define (char-blank? x) #f)
@@ -78,6 +79,15 @@
 (define (subprocess-pid p) 0)
 (define (subprocess-status p) 'something)
 (define (subprocess-wait p) (void))
+(define current-subprocess-custodian-mode
+  (make-parameter #f
+                  (lambda (v)
+                    (unless (or (not v) (eq? v 'kill) (eq? v 'interrupt))
+                      (raise-argument-error 'current-subprocess-custodian-mode
+                                            "(or/c #f 'kill 'interrupt)"))
+                    v)))
+
+(define (shell-execute . args) (error "shell-execute"))
 
 (define (make-environment-variables . args)
   #f)
@@ -111,7 +121,16 @@
   (case-lambda
    [() (|#%app| (|#%app| exit-handler) #t)]
    [(v) (|#%app| (|#%app| exit-handler) v)]))
-             
+
+(define executable-yield-handler
+  (make-parameter void (lambda (p)
+                         (unless (and (procedure? p)
+                                      (procedure-arity-includes? p 1))
+                           (raise-argument-error 'executable-yield-handler
+                                                 "(procedure-arity-includes/c 1)"
+                                                 p))
+                         p)))
+
 (define read-decimal-as-inexact
   (make-parameter #t))
 
@@ -189,6 +208,8 @@
   (make-parameter #t))
 (define compile-context-preservation-enabled
   (make-parameter #f))
+(define compile-allow-set!-undefined
+  (make-parameter #f))
 
 (define (load s) (|#%app| (|#%app| current-load) s #f))
 
@@ -220,17 +241,27 @@
   (make-struct-type-property 'exn:srclocs))
 
 (define (thread-receive-evt t) 'thread-receive-evt)
+
+(define current-thread-initial-stack-size
+  (make-parameter 64
+                  (lambda (v)
+                    (unless (exact-positive-integer? v)
+                      (raise-argument-error 'current-thread-initial-stack-size
+                                            "exact-positive-integer?"
+                                            v))
+                    v)))
+
 (define filesystem-change-evt
   (case-lambda
    [(p) (error 'filesystem-change-evt "unsupported")]
    [(p fail) (fail)]))
-(define (filesystem-change-evt-cancel e) (void))
-(define call-with-semaphore
-  (case-lambda
-   [(s proc) (proc)]
-   [(s proc try-fail) (proc)]
-   [(s proc try-fail . args) (apply proc args)]))
 
+(define (filesystem-change-evt-cancel e) (void))
+
+(define (filesystem-change-evt? v) #f)
+
+(define current-directory-for-user
+  (make-parameter (|#%app| current-directory)))
 (define (srcloc->string s)
   (and (srcloc-source s)
        (format "~a:~s:~s"
@@ -287,6 +318,19 @@
    [(in skip) (peek-char in skip)]
    [(in skip special src) (peek-char in skip)]))
 
+(define read-byte-or-special
+  (case-lambda
+   [() (read-byte)]
+   [(in) (read-byte in)]
+   [(in special src) (read-byte in)]))
+
+(define peek-byte-or-special
+  (case-lambda
+   [() (peek-byte)]
+   [(in) (peek-byte in)]
+   [(in skip) (peek-byte in skip)]
+   [(in skip special src) (peek-byte in skip)]))
+
 (define datums (make-weak-hash))
 
 (define (datum-intern-literal v)
@@ -304,6 +348,29 @@
           (hash-set! datums v #t)
           v))]
    [else v]))
+
+(define current-locale
+  (make-parameter (string->immutable-string "")
+                  (lambda (v)
+                    (unless (or (not v) (string? v))
+                      (raise-argument-error 'current-locale "(or/c #f string?)" v))
+                    (and v (string->immutable-string v)))))
+
+(define (string-locale-ci<? . args) (apply (string-ci<? args)))
+(define (string-locale-ci=? . args) (apply (string-ci=? args)))
+(define (string-locale-ci>? . args) (apply (string-ci>? args)))
+(define (string-locale<? . args) (apply (string<? args)))
+(define (string-locale=? . args) (apply (string=? args)))
+(define (string-locale>? . args) (apply (string>? args)))
+(define (string-locale-downcase s) (string-downcase s))
+(define (string-locale-upcase s) (string-upcase s))
+
+(define (locale-string-encoding) "UTF-8")
+
+(define (system-language+country) "en_US")
+
+(define (make-known-char-range-list)
+  '((0 255 #f)))
 
 ;; ----------------------------------------
 
@@ -356,6 +423,35 @@
 (define (mark-future-trace-end!)
   (void))
 
+(define vector-set-performance-stats!
+  (case-lambda
+   [(vec) (vector-set-performance-stats! vec #f)]
+   [(vec thd)
+    (define (maybe-set! i v)
+      (when (< i (vector-length vec))
+        (vector-set! vec i v)))
+    (cond
+     [(not thd)
+      (maybe-set! 0 (current-process-milliseconds))
+      (maybe-set! 1 (current-milliseconds))
+      (maybe-set! 2 (current-gc-milliseconds))
+      (maybe-set! 3 0) ; # of GCs
+      (maybe-set! 4 0) ; # of thread switches
+      (maybe-set! 5 0) ; # of stack overflows
+      (maybe-set! 6 0) ; # of threads scheduled for running
+      (maybe-set! 7 0) ; # of syntax objects read
+      (maybe-set! 8 0) ; # of hash table searches
+      (maybe-set! 9 0) ; # of hash table collisions
+      (maybe-set! 10 0) ; non-GCed memory allocated for machine code
+      (maybe-set! 11 0) ; peak memory use before a GC
+      (void)]
+     [else
+      (maybe-set! 0 (thread-running? thd))
+      (maybe-set! 1 (thread-dead? thd))
+      (maybe-set! 2 #f) ; blocked for synchronization?
+      (maybe-set! 3 #f) ; continuation size in bytes
+      (void)])]))
+
 ;; ----------------------------------------
 
 ;; Table of things temporarily defined here; since these are not put
@@ -375,10 +471,13 @@
    impersonate-channel
    chaperone-struct-type
 
+   replace-evt
+
    equal-secondary-hash-code
 
    port-try-file-lock?
    port-file-unlock
+   port-file-identity
 
    primitive?
    primitive-closure?
@@ -399,8 +498,6 @@
    flimag-part
    make-flrectangular
 
-   string-locale-downcase
-
    char-graphic?
    char-blank?
    char-iso-control?
@@ -418,6 +515,8 @@
    subprocess-pid
    subprocess-status
    subprocess-wait
+   current-subprocess-custodian-mode
+   shell-execute
 
    make-environment-variables
    environment-variables-ref
@@ -464,6 +563,7 @@
 
    compile-enforce-module-constants
    compile-context-preservation-enabled
+   compile-allow-set!-undefined
 
    load-extension
    cache-configuration
@@ -479,8 +579,9 @@
    thread-receive-evt
    filesystem-change-evt
    filesystem-change-evt-cancel
-   call-with-semaphore
+   filesystem-change-evt?
    will-execute
+   current-thread-initial-stack-size
 
    make-plumber
    current-plumber
@@ -490,7 +591,22 @@
    plumber-flush-handle?
    plumber?
 
+   current-directory-for-user
    srcloc->string
+
+   current-locale
+   string-locale-ci<?
+   string-locale-ci=?
+   string-locale-ci>?
+   string-locale-downcase
+   string-locale-upcase
+   string-locale<?
+   string-locale=?
+   string-locale>?
+   locale-string-encoding
+   system-language+country
+
+   make-known-char-range-list
    
    procedure-arity?
    procedure-reduce-arity
@@ -507,6 +623,8 @@
    current-load-relative-directory
    read-char-or-special
    peek-char-or-special
+   read-byte-or-special
+   peek-byte-or-special
    datum-intern-literal
    current-load-extension
    string->number
@@ -528,4 +646,6 @@
    fsemaphore-try-wait?
    fsemaphore-count
    reset-future-logs-for-tracing!
-   mark-future-trace-end!))
+   mark-future-trace-end!
+
+   vector-set-performance-stats!))

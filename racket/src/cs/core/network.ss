@@ -8,7 +8,7 @@
     [(_ id ...)
      #'(begin
          (define (id v)
-           (error 'id "network functions are not yet supported"))
+           (raise-unsupported-error 'id))
          ...)]))
 
 (define-network-ids

@@ -17,7 +17,21 @@
 
 ;; Returns (values bytes-used chars-written (or/c 'complete 'continues 'aborts 'error state-for-aborts)),
 ;; where the number of bytes used can go negative if a previous abort state is provided
-;; and furter decoding reveals that earlier bytes were in error.
+;; and further decoding reveals that earlier bytes were in error.
+;;
+;; The `abort-mode` argument determines what to do when reaching the end of the input
+;; and an encoding needs more ytes:
+;;   * 'error : treat the bytes as encoding errors
+;;   * 'aborts : report 'aborts
+;;   * 'state : return a value that encapsulates the state, so another call can continue
+;;
+;; The result state is
+;;  * 'complete : all input read, all output written
+;;  * 'continues : output full, and input contains more
+;;  * 'aborts : see `abort-mode` above
+;;  * 'error : encoding error, but only when `error-ch` is #f
+;;  * state-for-aborts : see `abort-mode` above
+;;
 (define (utf-8-decode! in-bstr in-start in-end
                        out-str out-start out-end  ; `out-str` and `out-end` can be #f no string result needed
                        #:error-char [error-ch #f] ; replaces an encoding error if non-#f

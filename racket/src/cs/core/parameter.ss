@@ -82,6 +82,13 @@
                             p
                             guard))
 
+(define (parameter-procedure=? a b)
+  (unless (parameter? a)
+    (raise-argument-error parameter-procedure=? "parameter?" a))
+  (unless (parameter? b)
+    (raise-argument-error parameter-procedure=? "parameter?" b))
+  (eq? (strip-impersonator a) (strip-impersonator b)))
+
 ;; ----------------------------------------
 
 (define current-inspector

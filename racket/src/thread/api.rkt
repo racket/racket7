@@ -20,7 +20,9 @@
          choice-evt
          channel-put-evt
          semaphore-peek-evt
-         semaphore-wait/enable-break)
+         semaphore-wait/enable-break
+         call-with-semaphore
+         call-with-semaphore/enable-break)
 
 (define (choice-evt . args)
   (for ([arg (in-list args)])
@@ -85,3 +87,42 @@
   (check 'semaphore-wait/enable-break semaphore? s)
   (sync/enable-break s)
   (void))
+
+;; ----------------------------------------
+
+(define (do-call-with-semaphore who s proc try-fail args #:enable-break? [enable-break? #f])
+  (check who semaphore? s)
+  (check who procedure? proc)
+  (check who (lambda (p) (or (not try-fail)
+                             (and (procedure? try-fail)
+                                  (procedure-arity-includes? try-fail 0))))
+         #:contract "(or/c #f (procedure-arity-includes/c 0))"
+         try-fail)
+  (define breaks-on? (or enable-break?
+                         (break-enabled)))
+  (define results #t) ; transitions to list of results unless semaphore-try fails
+  (dynamic-wind
+   (lambda ()
+     (if try-fail
+         (set! results (semaphore-try-wait? s))
+         (if breaks-on?
+             (semaphore-wait/enable-break s)
+             (semaphore-wait s))))             
+   (lambda ()
+     (when results
+       (call-with-continuation-barrier
+        (lambda ()
+          (set! results
+                (call-with-values (lambda () (apply proc args)) list))))))
+   (lambda ()
+     (when results
+       (semaphore-post s))))
+  (if results
+      (apply values results)
+      (try-fail)))
+
+(define (call-with-semaphore s proc [try-fail #f] . args)
+  (do-call-with-semaphore 'call-with-semaphore s proc try-fail args))
+
+(define (call-with-semaphore/enable-break s proc [try-fail #f] . args)
+  (do-call-with-semaphore 'call-with-semaphore/enable-break s proc try-fail args #:enable-break? #t))

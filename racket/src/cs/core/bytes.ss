@@ -1,8 +1,10 @@
 (define bytes bytevector)
+(define shared-bytes bytevector)
 (define bytes? bytevector?)
 
 (define bytes-length bytevector-length)
 (define make-bytes make-bytevector)    
+(define make-shared-bytes make-bytevector)    
 (define bytes->list bytevector->u8-list)
 (define list->bytes u8-list->bytevector)
 (define bytes-ref bytevector-u8-ref)

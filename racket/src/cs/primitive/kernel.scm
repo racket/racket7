@@ -30,6 +30,7 @@
    assq
    assv
    atan
+   banner
    bitwise-and
    bitwise-bit-set?
    bitwise-bit-field
@@ -73,7 +74,9 @@
    bytes-open-converter
    bytes-ref
    bytes-set!
+   bytes-utf-8-index
    bytes-utf-8-length
+   bytes-utf-8-ref
    bytes>?
    bytes<?
    bytes=?
@@ -82,6 +85,7 @@
    bytes?
    caadr
    cache-configuration
+   call-in-nested-thread
    call-with-composable-continuation
    call-with-continuation-barrier
    call-with-continuation-prompt
@@ -91,6 +95,7 @@
    call-with-input-file
    call-with-output-file
    call-with-semaphore
+   call-with-semaphore/enable-break
    call-with-values
    ceiling
    channel?
@@ -128,6 +133,7 @@
    char-upcase
    char-titlecase
    char-whitespace?
+   char-utf-8-length
    char<=?
    char<?
    char=?
@@ -149,6 +155,7 @@
    collect-garbage
    compile
    complex?
+   compile-allow-set!-undefined
    compile-enforce-module-constants
    compile-context-preservation-enabled
    complete-path?
@@ -171,11 +178,15 @@
    current-continuation-marks
    current-custodian
    current-directory
+   current-directory-for-user
+   current-drive
    current-environment-variables
    current-error-port
    current-eval
+   current-evt-pseudo-random-generator
    current-force-delete-permissions
    current-gc-milliseconds
+   current-get-interaction-input-port
    current-inexact-milliseconds
    current-input-port
    current-inspector
@@ -185,11 +196,13 @@
    current-load-extension
    current-load-relative-directory
    current-load/use-compiled
+   current-locale
    current-logger
    current-memory-use
    current-milliseconds
    current-output-port
    current-plumber
+   current-preserved-thread-cell-values
    current-print
    current-process-milliseconds
    current-prompt-read
@@ -197,8 +210,10 @@
    current-read-interaction
    current-seconds
    current-security-guard
+   current-subprocess-custodian-mode
    current-thread
    current-thread-group
+   current-thread-initial-stack-size
    current-write-relative-directory
    custodian?
    custodian-box?
@@ -221,6 +236,7 @@
    directory-list
    display
    double-flonum?
+   dump-memory-stats
    dynamic-wind
    environment-variables-ref
    environment-variables-set!
@@ -237,6 +253,7 @@
    equal-hash-code
    equal-secondary-hash-code
    equal?
+   equal?/recur
    eqv?
    eqv-hash-code
    error
@@ -255,6 +272,7 @@
    exact?
    exact->inexact
    exception-handler-key
+   executable-yield-handler
    exit
    exit-handler
    exn-continuation-marks
@@ -276,6 +294,7 @@
    file-stream-port?
    file-truncate
    filesystem-change-evt
+   filesystem-change-evt?
    filesystem-change-evt-cancel
    filesystem-root-list
    find-system-path
@@ -291,6 +310,7 @@
    gensym
    get-output-bytes
    get-output-string
+   global-port-print-handler
    handle-evt
    handle-evt?
    hash
@@ -333,6 +353,7 @@
    impersonate-vector
    impersonate-vector*
    impersonator?
+   impersonator-ephemeron
    impersonator-of?
    impersonator-property?
    impersonator-prop:application-mark
@@ -347,6 +368,8 @@
    integer->integer-bytes
    integer-bytes->integer
    integer-length
+   integer-sqrt
+   integer-sqrt/remainder
    integer?
    interned-char?
    kill-thread
@@ -365,6 +388,7 @@
    load
    load-extension
    load-on-demand-enabled
+   locale-string-encoding
    log
    logger?
    logger-name
@@ -398,10 +422,12 @@
    make-immutable-hasheqv
    make-impersonator-property
    make-inspector
+   make-known-char-range-list
    make-logger
    make-log-receiver
    make-output-port
    make-parameter
+   make-phantom-bytes
    make-pipe
    make-placeholder
    make-plumber
@@ -412,7 +438,9 @@
    make-rectangular
    make-security-guard
    make-semaphore
+   make-shared-bytes
    make-shared-flvector
+   make-sibling-inspector
    make-string
    make-struct-field-accessor
    make-struct-field-mutator
@@ -452,6 +480,7 @@
    ormap
    output-port?
    parameter?
+   parameter-procedure=?
    parameterization?
    parameterization-key
    path->bytes
@@ -465,14 +494,17 @@
    path?
    path<?
    peek-byte
+   peek-byte-or-special
    peek-bytes
    peek-bytes!
    peek-bytes-avail!
    peek-bytes-avail!*
+   peek-bytes-avail!/enable-break
    peek-char-or-special
    peek-char
    peek-string
    peek-string!
+   phantom-bytes?
    pipe-content-length
    placeholder?
    placeholder-get
@@ -484,8 +516,12 @@
    plumber?
    poll-guard-evt
    port-closed?
+   port-closed-evt
    port-commit-peeked
    port-count-lines!
+   port-count-lines-enabled
+   port-counts-lines?
+   port-file-identity
    port-file-unlock
    port-next-location
    port-display-handler
@@ -493,6 +529,7 @@
    port-progress-evt
    port-provides-progress-evts?
    port-read-handler
+   set-port-next-location!
    port-try-file-lock?
    port-write-handler
    port-writes-atomic?
@@ -518,6 +555,7 @@
    print-pair-curly-braces
    print-reader-abbreviations
    print-struct
+   print-syntax-width
    print-vector-length
    print-unreadable
    procedure-arity
@@ -545,6 +583,7 @@
    prop:incomplete-arity
    prop:method-arity-error
    prop:procedure
+   prop:object-name
    prop:output-port
    prop:input-port
    pseudo-random-generator?
@@ -557,10 +596,12 @@
    rational?
    read-accept-bar-quote
    read-byte
+   read-byte-or-special
    read-bytes
    read-bytes!
    read-bytes-avail!
    read-bytes-avail!*
+   read-bytes-avail!/enable-break
    read-bytes-line
    read-case-sensitive
    read-char
@@ -572,7 +613,9 @@
    read-string!
    real?
    real-part
+   real->double-flonum
    real->floating-point-bytes
+   real->single-flonum
    regexp
    regexp-match
    regexp-match/end
@@ -592,6 +635,7 @@
    relative-path?
    rename-file-or-directory
    reparameterize
+   replace-evt
    resolve-path
    reverse
    round
@@ -605,7 +649,10 @@
    semaphore-wait
    semaphore-wait/enable-break
    set-box!
+   set-phantom-bytes!
+   shared-bytes
    shared-flvector
+   shell-execute
    simplify-path
    sin
    single-flonum?
@@ -637,10 +684,18 @@
    string-foldcase
    string-length
    string-locale-downcase
+   string-locale-ci<?
+   string-locale-ci=?
+   string-locale-ci>?
+   string-locale-upcase
+   string-locale<?
+   string-locale=?
+   string-locale>?
    string-normalize-nfc
    string-normalize-nfd
    string-normalize-nfkc
    string-normalize-nfkd
+   string-port?
    string-ref
    string-set!
    string-titlecase
@@ -686,6 +741,7 @@
    sync/timeout/enable-break
    system-big-endian?
    system-idle-evt
+   system-language+country
    system-library-subpath
    system-path-convention-type
    system-type
@@ -698,6 +754,7 @@
    thread-cell?
    thread-cell-ref
    thread-cell-set!
+   thread-cell-values?
    thread-dead?
    thread-dead-evt
    thread-dead-evt?
@@ -705,11 +762,13 @@
    thread-receive
    thread-receive-evt
    thread-resume
+   thread-resume-evt
    thread-rewind-receive
    thread-running?
    thread-send
    thread-receive
    thread-suspend
+   thread-suspend-evt
    thread-try-receive
    thread-wait
    true-object?
@@ -733,6 +792,7 @@
    vector-length
    vector-ref
    vector-set!
+   vector-set-performance-stats!
    vector?
    version
    void

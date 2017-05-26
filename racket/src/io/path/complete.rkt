@@ -4,17 +4,11 @@
          "check.rkt"
          "check-path.rkt"
          "relativity.rkt"
-         "build.rkt"
-         "parameter.rkt")
+         "build.rkt")
 
 (provide path->complete-path)
 
-(define path->complete-path
-  (case-lambda
-    [(p) (->complete-path p (current-directory) #:wrt-given? #f)]
-    [(p wrt) (->complete-path p wrt #:wrt-given? #t)]))
-
-(define (->complete-path p-in wrt #:wrt-given? wrt-given?)
+(define (path->complete-path p-in wrt #:wrt-given? [wrt-given? #t])
   (check-path-argument 'path->complete-path p-in)
   (when wrt-given?
     (check 'path->complete-path (lambda (p) (and (or (path-string? p) (path-for-some-system? p))

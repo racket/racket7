@@ -24,6 +24,8 @@
          thread-wait
          thread-suspend
          thread-resume
+         thread-suspend-evt
+         thread-resume-evt
          (rename-out [get-thread-dead-evt thread-dead-evt])
          thread-dead-evt?
          
@@ -50,8 +52,7 @@
          thread-send
          thread-receive
          thread-try-receive
-         thread-rewind-receive
-         )
+         thread-rewind-receive)
 
 ;; Exports needed by "schedule.rkt":
 (module* scheduling #f
@@ -65,7 +66,8 @@
 
            sleeping-threads
            poll-done-threads
-           
+
+           current-break-enabled-cell
            check-for-break))
 
 ;; ----------------------------------------
@@ -85,10 +87,14 @@
                      [dead-evt #:mutable] ; created on demand
                      [suspended? #:mutable]
                      [suspended-sema #:mutable]
+                     [resumed-sema #:mutable]
                     
                      [needs-retry? #:mutable] ; => resuming implies an retry action
+                     
                      [pending-break? #:mutable]
                      [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
+                     [forward-break-to #:mutable] ; #f or a thread to receive ths thread's breaks
+                     
                      [waiting-mail? #:mutable]
                      [mailbox #:mutable]) ;; mailbox
         #:property prop:waiter
@@ -133,10 +139,14 @@
                     #f ; dead-evt
                     #f ; suspended?
                     #f ; suspended-sema
-                    
+                    #f ; resumed-sema
+
                     #f ; needs-retry?
+
                     #f ; pending-break?
                     #f ; ignore-thread-cells
+                    #f; forward-break-to
+
                     #f ; waiting for mail?
                     (make-queue))) ; mailbox
   (thread-group-add! p t)
@@ -356,8 +366,42 @@
   (atomically
    (unless (thread-dead? t)
      (when (thread-suspended? t)
+       (when (thread-resumed-sema t)
+         (semaphore-post-all (thread-resumed-sema t))
+         (set-thread-resumed-sema! t #f))
        (set-thread-suspended?! t #f)
        (thread-internal-resume! t)))))
+
+;; ----------------------------------------
+;; Suspend and resume events
+
+(struct suspend-evt (sema)
+  #:property prop:evt (lambda (se) (wrap-evt (suspend-evt-sema se)
+                                             (lambda (s) se)))
+  #:reflection-name 'thread-suspend-evt)
+
+(struct resume-evt (sema)
+  #:property prop:evt (lambda (re) (wrap-evt (resume-evt-sema re)
+                                             (lambda (s) re)))
+  #:reflection-name 'thread-resume-evt)
+
+(define (thread-resume-evt t)
+  (check 'thread-resume-evt thread? t)
+  (atomically
+   (let ([s (or (thread-resumed-sema t)
+                (let ([s (make-semaphore)])
+                  (set-thread-resumed-sema! t s)
+                  s))])
+     (resume-evt s))))
+
+(define (thread-suspend-evt t)
+  (check 'thread-suspend-evt thread? t)
+  (atomically
+   (let ([s (or (thread-suspended-sema t)
+                (let ([s (make-semaphore)])
+                  (set-thread-suspended-sema! t s)
+                  s))])
+     (suspend-evt s))))
 
 ;; ----------------------------------------
 ;; Thread yielding
@@ -419,7 +463,7 @@
 ;; transition from one thunk to another during a jump).
 
 ;; A continuation-mark key (not made visible to regular Racket code):
-(define break-enabled-default-cell (make-thread-cell #t #t))
+(define break-enabled-default-cell (make-thread-cell #t))
 
 ;; For disabling breaks, such as through `unsafe-start-atomic`:
 (define break-suspend 0)
@@ -467,19 +511,25 @@
 
 (define (break-thread t)
   (check 'break-thread thread? t)
-  (atomically
-   (unless (thread-pending-break? t)
-     (set-thread-pending-break?! t #t)
-     (unless (thread-suspended? t)
-       (cond
-         [(thread-interrupt-callback t)
-          => (lambda (interrupt-callback)
-               ;; The interrupt callback might remove the thread as
-               ;; a waiter on a semaphore of channel; if breaks
-               ;; turn out to be disabled, the wait will be
-               ;; retried through the retry callback
-               (interrupt-callback)
-               (thread-internal-resume! t))]))))
+  ((atomically
+    (unless (thread-pending-break? t)
+      (cond
+        [(thread-forward-break-to t)
+         => (lambda (other-t)
+              (lambda () (break-thread other-t)))]
+        [else
+         (set-thread-pending-break?! t #t)
+         (unless (thread-suspended? t)
+           (cond
+             [(thread-interrupt-callback t)
+              => (lambda (interrupt-callback)
+                   ;; The interrupt callback might remove the thread as
+                   ;; a waiter on a semaphore of channel; if breaks
+                   ;; turn out to be disabled, the wait will be
+                   ;; retried through the retry callback
+                   (interrupt-callback)
+                   (thread-internal-resume! t))]))
+         void]))))
   (when (eq? t (current-thread))
     (check-for-break)))
 

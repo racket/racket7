@@ -11,6 +11,7 @@
                find-library-collection-links
                current-library-collection-paths
                find-library-collection-paths
+               executable-yield-handler
                eval
                dynamic-require
                namespace-require
@@ -221,4 +222,6 @@
    (when repl?
      (|#%app| (dynamic-require 'racket/base 'read-eval-print-loop)))
 
+   (|#%app| (|#%app| executable-yield-handler) 0)
+   
    (exit))))

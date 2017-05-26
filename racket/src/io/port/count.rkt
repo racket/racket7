@@ -1,14 +1,22 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../common/atomic.rkt"
          "input-port.rkt"
          "output-port.rkt"
          "../string/utf-8-decode.rkt")
 
-(provide port-count-lines!
+(provide port-count-lines-enabled
+
+         port-count-lines!
+         port-counts-lines?
          port-next-location
+         set-port-next-location!
          
          input-port-count!
          input-port-count-byte!)
+
+(define port-count-lines-enabled
+  (make-parameter #f (lambda (v) (and v #t))))
 
 (define (port-count-lines! p)
   (cond
@@ -30,7 +38,18 @@
          (when count-lines! (count-lines!))))]
     [else
      (check 'port-count-lines! (lambda (x) #f)
-            #:contract "(or/c input-port? output-port?)"
+            #:contract "port?"
+            p)]))
+
+(define (port-counts-lines? p)
+  (cond
+    [(input-port? p)
+     (and (core-input-port-line (->core-input-port p)) #t)]
+    [(output-port? p)
+     (and (core-output-port-line (->core-output-port p)) #t)]
+    [else
+     (check 'port-counts-lines? (lambda (x) #f)
+            #:contract "port?"
             p)]))
 
 (define (port-next-location p)
@@ -47,8 +66,39 @@
                (core-output-port-position p)))]
     [else
      (check 'port-next-location (lambda (x) #f)
-            #:contract "(or/c input-port? output-port?)"
+            #:contract "port?"
             p)]))
+
+(define (set-port-next-location! p line col pos)
+  (check 'set-port-next-location! (lambda (p) (or (input-port? p) (output-port? p)))
+         #:contract "port?"
+         p)
+  (check 'set-port-next-location! (lambda (v) (or (not v) (exact-positive-integer? v)))
+         #:contract "(or/c #f exact-positive-integer?)"
+         line)
+  (check 'set-port-next-location! (lambda (v) (or (not v) (exact-nonnegative-integer? v)))
+         #:contract "(or/c #f exact-nonnegative-integer?)"
+         col)
+  (check 'set-port-next-location! (lambda (v) (or (not v) (exact-positive-integer? v)))
+         #:contract "(or/c #f exact-positive-integer?)"
+         pos)
+  (cond
+    [(input-port? p)
+     (let ([p (->core-input-port p)])
+       (atomically
+        (when (and (core-input-port-line p)
+                   (not (core-input-port-count-lines! p)))
+          (set-core-input-port-line! p line)
+          (set-core-input-port-column! p col)
+          (set-core-input-port-position! p pos))))]
+    [else
+     (let ([p (->core-output-port p)])
+       (atomically
+        (when (and (core-output-port-line p)
+                   (not (core-output-port-count-lines! p)))
+          (set-core-output-port-line! p line)
+          (set-core-output-port-column! p col)
+          (set-core-output-port-position! p pos))))]))
 
 ;; When line counting is enabled, increment line, column, etc. counts,
 ;; which involves UTF-8 decoding

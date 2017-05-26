@@ -36,12 +36,14 @@
          read-bytes!
          read-bytes-avail!
          read-bytes-avail!*
+         read-bytes-avail!/enable-break
          
          peek-byte
          peek-bytes
          peek-bytes!
          peek-bytes-avail!
          peek-bytes-avail!*
+         peek-bytes-avail!/enable-break
 
          port-provides-progress-evts?
          progress-evt?
@@ -85,6 +87,7 @@
          port-display-handler
          port-print-handler
          install-reader!
+         global-port-print-handler
 
          prop:input-port
          prop:output-port
@@ -117,7 +120,8 @@
          port-closed?
          close-input-port
          close-output-port
-         
+         port-closed-evt
+
          file-stream-buffer-mode
 
          file-position
@@ -125,7 +129,10 @@
          file-truncate
          
          port-count-lines!
+         port-counts-lines?
          port-next-location
+         set-port-next-location!
+         port-count-lines-enabled
 
          current-input-port
          current-output-port

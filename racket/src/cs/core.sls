@@ -1,5 +1,6 @@
 (library (core)
   (export version
+          banner
 
           null eof void void?
 
@@ -46,6 +47,8 @@
           thread-cell?
           thread-cell-ref
           thread-cell-set!
+          current-preserved-thread-cell-values
+          thread-cell-values?
 
           parameterization-key
           make-parameter
@@ -53,6 +56,7 @@
           parameter?
           extend-parameterization
           parameterization?
+          parameter-procedure=?
 
           raise
           error-print-width
@@ -65,6 +69,7 @@
 
           current-inspector
           make-inspector
+          make-sibling-inspector
 
           struct:exn exn exn? exn-message exn-continuation-marks
           struct:exn:break exn:break exn:break? exn:break-continuation
@@ -117,6 +122,7 @@
           procedure-closure-contents-eq?
 
           equal?
+          equal?/recur
 
           impersonator?
           chaperone?
@@ -128,6 +134,7 @@
           impersonator-property?
           make-impersonator-property
           impersonator-property-accessor-procedure?
+          impersonator-ephemeron
 
           impersonate-procedure
           chaperone-procedure
@@ -220,9 +227,10 @@
           impersonate-hash
           chaperone-hash
 
-          bytes bytes?
+          bytes shared-bytes
+          bytes?
           bytes-length
-          make-bytes
+          make-bytes make-shared-bytes
           bytes-ref bytes-set!
           bytes->list list->bytes
           bytes->immutable-bytes
@@ -284,7 +292,11 @@
           byte?
           double-flonum?
           single-flonum?
+          real->double-flonum
+          real->single-flonum
           arithmetic-shift
+          integer-sqrt
+          integer-sqrt/remainder
           integer->integer-bytes
           integer-bytes->integer
           real->floating-point-bytes
@@ -350,6 +362,10 @@
 
           collect-garbage
           current-memory-use
+          dump-memory-stats
+          phantom-bytes?
+          make-phantom-bytes
+          set-phantom-bytes!
 
           make-will-executor
           will-executor?
@@ -498,6 +514,7 @@
                 record-field-mutator))
 
   (define (version) "6.9.1.5")
+  (define (banner) (string-append "Welcome to Racket " (version) "\n"))
 
   (define none (chez:gensym "none"))
   (define none2 (chez:gensym "none2"))

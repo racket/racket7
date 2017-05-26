@@ -176,22 +176,32 @@
   
   (define (resolve-path p) p)
   
-  (define (open-input-file path mode mode2)
-    (with-exn:fail:filesystem
-     (open-file-input-port path)))
-
-  (define (open-output-file path mode mode2)
-    (let ([mode? (lambda (s) (or (eq? mode s) (eq? mode2 s)))])
+  (define open-input-file
+    (case-lambda
+     [(path mode mode2)
+      (open-input-file path)]
+     [(path mode)
+      (open-input-file path)]
+     [(path)
       (with-exn:fail:filesystem
-       (open-file-output-port path (cond
-                                    [(mode? 'truncate) (file-options no-fail)]
-                                    [(mode? 'must-truncate) (file-options no-create)]
-                                    [(mode? 'update) (file-options no-create no-truncate)]
-                                    [(mode? 'can-update) (file-options no-fail no-truncate)]
-                                    [(mode? 'replace) (file-options no-fail)]
-                                    [(mode? 'truncate/replace) (file-options no-fail)]
-                                    [(mode? 'append) (chez:error 'open-output-file "'append mode not supported")]
-                                    [else (file-options)])))))
+       (open-file-input-port path))]))
+
+  (define open-output-file
+    (case-lambda
+     [(path) (open-output-file path #f #f)]
+     [(path mode) (open-output-file path mode #f)]
+     [(path mode mode2)
+      (let ([mode? (lambda (s) (or (eq? mode s) (eq? mode2 s)))])
+        (with-exn:fail:filesystem
+         (open-file-output-port path (cond
+                                      [(mode? 'truncate) (file-options no-fail)]
+                                      [(mode? 'must-truncate) (file-options no-create)]
+                                      [(mode? 'update) (file-options no-create no-truncate)]
+                                      [(mode? 'can-update) (file-options no-fail no-truncate)]
+                                      [(mode? 'replace) (file-options no-fail)]
+                                      [(mode? 'truncate/replace) (file-options no-fail)]
+                                      [(mode? 'append) (chez:error 'open-output-file "'append mode not supported")]
+                                      [else (file-options)]))))]))
 
   (define file-truncate truncate-file)
 

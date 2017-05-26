@@ -102,10 +102,16 @@
     [() (new-inspector (|#%app| current-inspector))]
     [(i)
      (unless (inspector? i)
-       (raise-argument-error 'current-inspector
-                             "inspector?"
-                             i))
+       (raise-argument-error 'make-inspector "inspector?" i))
      (new-inspector i)]))
+
+(define make-sibling-inspector
+  (case-lambda
+   [() (make-sibling-inspector (current-inspector))]
+   [(i)
+    (unless (inspector? i)
+      (raise-argument-error 'make-sibling-inspector "inspector?" i))
+    (make-inspector (inspector-parent i))]))
 
 (define (inspector-superior? sup-insp sub-insp)
   (unless (inspector? sup-insp)

@@ -28,3 +28,15 @@
   (hashtable-set! (current-engine-thread-cell-values)
                   c
                   v))
+
+;; ----------------------------------------
+
+(define-record thread-cell-values (t))
+
+(define current-preserved-thread-cell-values
+  (case-lambda
+   [() (make-thread-cell-values (new-engine-thread-cell-values))]
+   [(tcvs)
+    (unless (thread-cell-values? tcvs)
+      (raise-argument-error 'current-preserved-thread-cell-values "thread-cell-values?" tcvs))
+    (set-current-engine-thread-cell-values! (thread-cell-values-t tcvs))]))

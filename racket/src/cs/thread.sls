@@ -30,4 +30,8 @@
                      'exn:break/non-engine exn:break)]
       [else #f]))
 
+  ;; Tie knots:
+  (define (check-for-break) (1/check-for-break))
+  (define (break-enabled) (1/break-enabled))
+
   (include "compiled/thread.scm"))

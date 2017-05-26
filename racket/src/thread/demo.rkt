@@ -151,12 +151,12 @@
      (define now3 (current-inexact-milliseconds))
      (define tdelay (with-continuation-mark
                         break-enabled-key
-                      (make-thread-cell #f #t)
+                      (make-thread-cell #f)
                       (thread (lambda ()
                                 (sleep 0.1)
                                 (with-continuation-mark
                                     break-enabled-key
-                                  (make-thread-cell #t #t)
+                                  (make-thread-cell #t)
                                   (begin
                                         ;(check-for-break)
                                     (let loop () (loop))))))))
@@ -225,7 +225,7 @@
      (define done?/nb #f)
      (define t/nb (with-continuation-mark
                       break-enabled-key
-                      (make-thread-cell #f #t)
+                      (make-thread-cell #f)
                     (thread (lambda ()
                               (trigger-wait s/nb)
                               (set! done?/nb #t)))))
@@ -287,7 +287,7 @@
    ;; Check sync/enable-break => break
    (define tbe (with-continuation-mark
                 break-enabled-key
-                (make-thread-cell #f #t)
+                (make-thread-cell #f)
                 (thread (lambda ()
                           (sync/enable-break (make-semaphore))))))
    (sync (system-idle-evt))
@@ -301,7 +301,7 @@
    (check #f (sync/timeout 0 s2))
    (define tbe2 (with-continuation-mark
                  break-enabled-key
-                 (make-thread-cell #f #t)
+                 (make-thread-cell #f)
                  (thread (lambda ()
                            (sync/enable-break s2)))))
    (sync (system-idle-evt))
@@ -311,6 +311,24 @@
    (check tbe2 (sync/timeout 0 tbe2))
    (check #f (sync/timeout 0 s2))
 
+   ;; Check call-with-semaphore
+   (semaphore-post s2)
+   (check #f (call-with-semaphore s2 (lambda () (sync/timeout 0 s2))))
+   (check s2 (sync/timeout 0 s2))
+   (define t/cws (thread (lambda () (call-with-semaphore s2 (lambda () (error "shouldn't get here"))))))
+   (sync (system-idle-evt))
+   (check #f (sync/timeout 0 t/cws))
+   (break-thread t/cws)
+   (sync (system-idle-evt))
+   (printf "[That break was from a thread, and it's expected]\n")
+   (check t/cws (sync/timeout 0 t/cws))
+
+   ;; Check call-in-nested-thread
+   (check 10 (call-in-nested-thread (lambda () 10)))
+   (check '(1 2) (call-with-values (lambda ()
+                                     (call-in-nested-thread (lambda () (values 1 2))))
+                   list))
+   
    (set! done? #t)))
 
 (unless done?

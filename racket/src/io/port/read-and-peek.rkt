@@ -11,6 +11,8 @@
 (define (read-some-bytes! who orig-in bstr start end
                           ;; Zero is ok for `read-bytes!*`:
                           #:zero-ok? [zero-ok? #f]
+                          ;; Enable breaks while blocking?
+                          #:enable-break? [enable-break? #f]
                           ;; When calling an externally implemented
                           ;; port, we normally make a fresh byte
                           ;; string, because we don't trust the
@@ -63,6 +65,7 @@
 ;; Like `read-some-bytes!`, but merely peeks
 (define (peek-some-bytes! who orig-in bstr start end skip
                           #:zero-ok? [zero-ok? #f]
+                          #:enable-break? [enable-break? #f]
                           #:copy-bstr? [copy-bstr? #t])
   (let loop ([in orig-in])
     (cond

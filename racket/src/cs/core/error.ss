@@ -296,6 +296,12 @@
 (define (raise-binding-result-arity-error expected-args args)
   (raise-result-arity-error "local-binding form" (length expected-args) args))
 
+(define (raise-unsupported-error id)
+  (raise
+   (exn:fail:unsupported
+    (string-append (symbol->string id) ": unsupported")
+    (current-continuation-marks))))
+
 ;; ----------------------------------------
 
 (define (nth-str n)
@@ -339,7 +345,7 @@
                             [n (c 'name)])
                        n)]
                [desc
-                (call-with-values (lambda () (i 'source-path))
+                (call-with-values (lambda () (i 'source-path)) ; this is the slow part
                   (case-lambda
                    [()
                     (and name (cons name #f))]
@@ -347,10 +353,7 @@
                     (cons name (srcloc path line col #f #f))]
                    [(path pos)
                     (cons name (srcloc path #f #f pos #f))]))])
-          (let ([l (let ([depth (i 'depth)])
-                     (if (zero? depth)
-                         '()
-                         (loop (i 'link) (sub1 n))))])
+          (let ([l (loop (i 'link) (sub1 n))])
             (if desc
                 (cons desc l)
                 l)))]))))

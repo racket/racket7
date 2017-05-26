@@ -5,6 +5,7 @@
           find-library-collection-paths
           use-compiled-file-paths
           current-command-line-arguments
+          executable-yield-handler
           flush
           call-in-main-thread
           set-exec-file!

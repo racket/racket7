@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../path/path.rkt"
          "../path/complete.rkt"
+         "../path/parameter.rkt"
          "../path/cleanse.rkt"
          (only-in racket/base
                   [bytes->path host:bytes->path]
@@ -11,7 +12,7 @@
          host->)
 
 (define (->host p)
-  (host:bytes->path (path-bytes (cleanse-path (path->complete-path p)))))
+  (host:bytes->path (path-bytes (cleanse-path (path->complete-path p (current-directory))))))
 
 (define (->host/as-is p)
   (let ([p (if (string? p) (string->path p) p)])

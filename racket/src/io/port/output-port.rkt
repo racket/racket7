@@ -48,6 +48,7 @@
                           count-lines!
                           buffer-mode
                           [closed? #:mutable]
+                          [closed-sema #:mutable] ; #f or a semaphore posed on close
                           [offset #:mutable] ; count plain bytes
                           [line #:mutable]   ; count newlines
                           [column #:mutable] ; count UTF-8 characters in line
@@ -79,6 +80,7 @@
                     count-lines!
                     'block ; buffer-mode
                     #f   ; closed?
+                    #f   ; closed-sema
                     0    ; offset
                     #f   ; line
                     #f   ; column

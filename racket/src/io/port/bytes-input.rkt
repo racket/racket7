@@ -10,12 +10,14 @@
          read-bytes!
          read-bytes-avail!
          read-bytes-avail!*
+         read-bytes-avail!/enable-break
          
          peek-byte
          peek-bytes
          peek-bytes!
          peek-bytes-avail!
-         peek-bytes-avail!*)
+         peek-bytes-avail!*
+         peek-bytes-avail!/enable-break)
 
 (module+ internal
   (provide do-read-bytes!))
@@ -86,26 +88,29 @@
   (let ([in (->core-input-port in)])
     (do-read-bytes! 'read-bytes! in bstr start-pos end-pos)))
 
+(define (do-read-bytes-avail! who bstr in start-pos end-pos
+                              #:zero-ok? [zero-ok? #f]
+                              #:enable-break? [enable-break? #f])
+  (check who bytes? bstr)
+  (check who input-port? in)
+  (check who exact-nonnegative-integer? start-pos)
+  (check who exact-nonnegative-integer? end-pos)
+  (check-range who start-pos end-pos (bytes-length bstr) bstr)
+  (let ([in (->core-input-port in)])
+    (read-some-bytes! who in bstr start-pos end-pos #:zero-ok? zero-ok? #:enable-break? enable-break?)))
+
 (define (read-bytes-avail! bstr [in (current-input-port)] [start-pos 0] [end-pos (and (bytes? bstr)
                                                                                       (bytes-length bstr))])
-  (check 'read-bytes-avail! bytes? bstr)
-  (check 'read-bytes-avail! input-port? in)
-  (check 'read-bytes-avail! exact-nonnegative-integer? start-pos)
-  (check 'read-bytes-avail! exact-nonnegative-integer? end-pos)
-  (check-range 'read-bytes-avail! start-pos end-pos (bytes-length bstr) bstr)
-  (let ([in (->core-input-port in)])
-    (read-some-bytes! 'read-bytes-avail! in bstr start-pos end-pos)))
-
+  (do-read-bytes-avail! 'read-bytes-avail! bstr in start-pos end-pos))
+   
 (define (read-bytes-avail!* bstr [in (current-input-port)] [start-pos 0] [end-pos (and (bytes? bstr)
                                                                                        (bytes-length bstr))])
-  (check 'read-bytes-avail!* bytes? bstr)
-  (check 'read-bytes-avail!* input-port? in)
-  (check 'read-bytes-avail!* exact-nonnegative-integer? start-pos)
-  (check 'read-bytes-avail!* exact-nonnegative-integer? end-pos)
-  (check-range 'read-bytes-avail!* start-pos end-pos (bytes-length bstr) bstr)
-  (let ([in (->core-input-port in)])
-    (read-some-bytes! 'read-bytes-avail!* in bstr start-pos end-pos #:zero-ok? #t)))
+  (do-read-bytes-avail! 'read-bytes-avail!* bstr in start-pos end-pos #:zero-ok? #t))
 
+(define (read-bytes-avail!/enable-break bstr [in (current-input-port)] [start-pos 0] [end-pos (and (bytes? bstr)
+                                                                                                   (bytes-length bstr))])
+  (do-read-bytes-avail! 'read-bytes-avail!/enable-break bstr in start-pos end-pos #:enable-break? #t))
+   
 ;; ----------------------------------------
 
 ;; Peek `(- end start)` bytes, stopping early only if an EOF is found
@@ -169,34 +174,36 @@
   (let ([in (->core-input-port in)])
     (do-peek-bytes! 'peek-bytes! in bstr start-pos end-pos skip-k)))
 
+(define (do-peek-bytes-avail! who bstr skip-k progress-evt in start-pos end-pos
+                              #:zero-ok? [zero-ok? #f]
+                              #:enable-break? [enable-break? #f])
+  (check who bytes? bstr)
+  (check who exact-nonnegative-integer? skip-k)
+  (check who (lambda (e) (or (not e) (progress-evt? e)))
+         #:contract "(or/c #f progress-evt?)" progress-evt)
+  (check who input-port? in)
+  (check who exact-nonnegative-integer? start-pos)
+  (check who exact-nonnegative-integer? end-pos)
+  (when progress-evt
+    (check-progress-evt who progress-evt in))
+  (check-range who start-pos end-pos (bytes-length bstr) bstr)
+  (let ([in (->core-input-port in)])
+    (peek-some-bytes! who in bstr start-pos end-pos skip-k #:zero-ok? zero-ok? #:enable-break? enable-break?)))
+
 (define (peek-bytes-avail! bstr skip-k [progress-evt #f] [in (current-input-port)]
                            [start-pos 0] [end-pos (and (bytes? bstr)
                                                        (bytes-length bstr))])
-  (check 'peek-bytes-avail! bytes? bstr)
-  (check 'peek-bytes-avail! exact-nonnegative-integer? skip-k)
-  (check 'peek-bytes-avail! (lambda (e) (or (not e) (progress-evt? e)))
-         #:contract "(or/c #f progress-evt?)" progress-evt)
-  (check 'peek-bytes-avail! input-port? in)
-  (check 'peek-bytes-avail! exact-nonnegative-integer? start-pos)
-  (check 'peek-bytes-avail! exact-nonnegative-integer? end-pos)
-  (when progress-evt
-    (check-progress-evt 'peek-bytes-avail! progress-evt in))
-  (check-range 'peek-bytes-avail! start-pos end-pos (bytes-length bstr) bstr)
-  (let ([in (->core-input-port in)])
-    (peek-some-bytes! 'peek-bytes-avail! in bstr start-pos end-pos skip-k)))
+  (do-peek-bytes-avail! 'peek-bytes-avail! bstr skip-k progress-evt in start-pos end-pos))
 
 (define (peek-bytes-avail!* bstr skip-k [progress-evt #f] [in (current-input-port)]
                             [start-pos 0] [end-pos (and (bytes? bstr)
                                                         (bytes-length bstr))])
-  (check 'peek-bytes-avail!* bytes? bstr)
-  (check 'peek-bytes-avail! exact-nonnegative-integer? skip-k)
-  (check 'peek-bytes-avail! (lambda (e) (or (not e) (progress-evt? e)))
-         #:contract "(or/c #f progress-evt?)" progress-evt)
-  (check 'peek-bytes-avail!* input-port? in)
-  (check 'peek-bytes-avail!* exact-nonnegative-integer? start-pos)
-  (check 'peek-bytes-avail!* exact-nonnegative-integer? end-pos)
-  (when progress-evt
-    (check-progress-evt 'peek-bytes-avail!* progress-evt in))
-  (check-range 'peek-bytes-avail!* start-pos end-pos (bytes-length bstr) bstr)
-  (let ([in (->core-input-port in)])
-    (peek-some-bytes! 'peek-bytes-avail!* in bstr start-pos end-pos skip-k #:zero-ok? #t)))
+  (do-peek-bytes-avail! 'peek-bytes-avail!* bstr skip-k progress-evt in start-pos end-pos
+                        #:zero-ok? #t))
+
+(define (peek-bytes-avail!/enable-break bstr skip-k [progress-evt #f] [in (current-input-port)]
+                                        [start-pos 0] [end-pos (and (bytes? bstr)
+                                                                    (bytes-length bstr))])
+  (do-peek-bytes-avail! 'peek-bytes-avail!/enable-break bstr skip-k progress-evt in start-pos end-pos
+                        #:enable-break? #t))
+

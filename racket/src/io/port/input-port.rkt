@@ -49,6 +49,7 @@
                          count-lines!
                          on-file-position
                          [closed? #:mutable]
+                         [closed-sema #:mutable] ; #f or a semaphore posed on close
                          [offset #:mutable] ; count plain bytes
                          [state #:mutable] ; state of UTF-8 decoding
                          [cr-state #:mutable] ; state of CRLF counting as a single LF
@@ -84,6 +85,7 @@
                    count-lines!
                    on-file-position
                    #f   ; closed?
+                   #f   ; closed-sema
                    0    ; offset
                    #f   ; state
                    #f   ; cr-state

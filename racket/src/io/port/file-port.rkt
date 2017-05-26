@@ -7,7 +7,8 @@
          "../file/host.rkt"
          "host-port.rkt"
          "close.rkt"
-         "parameter.rkt")
+         "parameter.rkt"
+         "count.rkt")
 
 (provide open-input-file
          open-output-file
@@ -20,13 +21,39 @@
 
 (define (open-input-file path [mode1 none] [mode2 none])
   (check 'open-input-file path-string? path)
-  (open-input-host (host:open-input-file (->host path) mode1 mode2)
-                   path))
+  (define p
+    (open-input-host (let ([path (->host path)])
+                       (cond
+                         [(and (eq? mode1 none) (eq? mode2 none))
+                          (host:open-input-file path)]
+                         [(eq? mode1 none)
+                          (host:open-input-file path mode2)]
+                         [(eq? mode2 none)
+                          (host:open-input-file path mode1)]
+                         [else
+                          (host:open-input-file path mode1 mode2)]))
+                     path))
+  (when (port-count-lines-enabled)
+    (port-count-lines! p))
+  p)
 
 (define (open-output-file path [mode1 none] [mode2 none])
   (check 'open-output-file path-string? path)
-  (open-output-host (host:open-output-file (->host path) mode1 mode2)
-                    path))
+  (define p
+    (open-output-host (let ([path (->host path)])
+                        (cond
+                          [(and (eq? mode1 none) (eq? mode2 none))
+                           (host:open-output-file path)]
+                          [(eq? mode1 none)
+                           (host:open-output-file path mode2)]
+                          [(eq? mode2 none)
+                           (host:open-output-file path mode1)]
+                          [else
+                           (host:open-output-file path mode1 mode2)]))
+                      path))
+  (when (port-count-lines-enabled)
+    (port-count-lines! p))
+  p)
 
 (define (call-with-input-file path proc mode)
   (check 'call-with-input-file path-string? path)

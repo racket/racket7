@@ -9,6 +9,8 @@
          port-display-handler
          port-print-handler
 
+         global-port-print-handler
+
          install-reader!)
 
 (define port-read-handler
@@ -113,4 +115,23 @@
   (check 'default-port-print-handler (lambda (d) (or (eq? d 0) (eq? d 1)))
          #:contract "(or/c 0 1)"
          quote-depth)
-  (print v o quote-depth))
+  ((global-port-print-handler) v o quote-depth))
+
+(define global-port-print-handler
+  (make-parameter (lambda (v o [quote-depth 0])
+                    (check 'default-global-port-print-handler output-port? o)
+                    (check 'default-global-port-print-handler (lambda (d) (or (eq? d 0) (eq? d 1)))
+                           #:contract "(or/c 0 1)"
+                           quote-depth)
+                    (print v o quote-depth))
+                  (lambda (p)
+                    (check 'global-port-print-handler
+                           (lambda (p) (and (procedure? p)
+                                            (procedure-arity-includes? p 2)))
+                           #:contract (string-append
+                                       "(or/c (->* (any/c output-port?) ((or/c 0 1)) any)\n"
+                                       "      (any/c output-port? . -> . any))")
+                           p)
+                    (if (procedure-arity-includes? p 3)
+                        p
+                        (lambda (v o [quote-depth 0]) (p v o))))))

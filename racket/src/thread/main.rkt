@@ -16,6 +16,7 @@
          "schedule.rkt"
          "custodian.rkt"
          "alarm.rkt"
+         "nested-thread.rkt"
          "api.rkt"
          "unsafe.rkt")
 
@@ -23,6 +24,7 @@
          
          thread
          thread/suspend-to-kill
+         call-in-nested-thread
          thread?
          current-thread
          thread-running?
@@ -30,6 +32,8 @@
          thread-wait
          thread-suspend
          thread-resume
+         thread-suspend-evt
+         thread-resume-evt
          thread-dead-evt
          thread-dead-evt?
          break-thread
@@ -51,6 +55,8 @@
          semaphore-try-wait?
          semaphore?
          semaphore-wait/enable-break
+         call-with-semaphore
+         call-with-semaphore/enable-break
 
          semaphore-peek-evt
          semaphore-peek-evt?
@@ -66,6 +72,7 @@
          sync/timeout
          sync/enable-break
          sync/timeout/enable-break
+         current-evt-pseudo-random-generator
          
          evt? prop:evt
          always-evt

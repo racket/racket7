@@ -15,7 +15,7 @@
      [else
       (define b (char->integer (string-ref in-str i)))
       (cond
-       [(byte? b)
+       [(b . < . #x7F)
         (cond
          [(and out-end (= j out-end))
           (values (- i in-start) (- j out-start) 'aborts)]

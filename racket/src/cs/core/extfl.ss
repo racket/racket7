@@ -8,7 +8,7 @@
     [(_ id ...)
      #'(begin
          (define (id v)
-           (error 'id "extflonums are unsupported"))
+           (raise-unsupported-error 'id))
          ...)]))
 
 (define-extfl-ids

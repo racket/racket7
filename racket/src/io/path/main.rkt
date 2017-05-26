@@ -11,7 +11,8 @@
          "simplify.rkt"
          "parameter.rkt"
          "directory-path.rkt"
-         "complete.rkt")
+         "api.rkt")
+
 (provide (rename-out [is-path? path?])
          path-for-some-system?
          
@@ -38,9 +39,10 @@
          absolute-path?
          relative-path?
          complete-path?
-         
+
          current-directory
-         
+         current-drive
+
          path->complete-path
          path->directory-path
          

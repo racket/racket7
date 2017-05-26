@@ -2,6 +2,13 @@
 (define-record impersonator (val next props))
 (define-record chaperone impersonator ())
 
+(define (impersonator-ephemeron i)
+  (if (impersonator? i)
+      (make-ephemeron (impersonator-val i) i)
+      ;; This is a useless ephemeron, but we create one for consistency
+      ;; with the case that we have an impersonator:
+      (make-ephemeron i i)))
+
 (define (strip-impersonator v)
   (if (impersonator? v)
       (impersonator-val v)
