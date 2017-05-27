@@ -7,7 +7,7 @@
 ;; with `break-enabled-key`, and it does not support using an
 ;; exception handler in an engine.
 
-(define (make-engine thunk init-break-enabled-cell)
+(define (make-engine thunk init-break-enabled-cell empty-config?)
   (define ready-s (make-semaphore))
   (define s (make-semaphore))
   (define prefix void)

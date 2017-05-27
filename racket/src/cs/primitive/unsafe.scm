@@ -119,4 +119,14 @@
    unsafe-end-atomic
    unsafe-start-breakable-atomic
    unsafe-end-breakable-atomic
-   unsafe-in-atomic?))
+   unsafe-in-atomic?
+   unsafe-set-on-atomic-timeout!
+
+   unsafe-thread-at-root
+   unsafe-make-custodian-at-root
+   unsafe-custodian-register
+   unsafe-custodian-unregister
+   unsafe-register-process-global
+
+   unsafe-abort-current-continuation/no-wind
+   unsafe-call-with-composable-continuation/no-wind))

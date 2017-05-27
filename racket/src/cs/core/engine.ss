@@ -10,10 +10,10 @@
 (define-record engine-state (mc complete expire thread-cell-values init-break-enabled-cell reset-handler))
 (define current-engine-state (chez:make-parameter #f))
 
-(define root-thread-cell-values (make-weak-eq-hashtable))
-
-(define (make-engine thunk init-break-enabled-cell)
-  (let ([paramz (current-parameterization)])
+(define (make-engine thunk init-break-enabled-cell empty-config?)
+  (let ([paramz (if empty-config?
+                    empty-parameterization
+                    (current-parameterization))])
     (create-engine empty-metacontinuation
                    (lambda (prefix)
                      (with-continuation-mark
@@ -21,7 +21,9 @@
                          (begin
                            (prefix)
                            (call-with-values thunk engine-return))))
-                   (new-engine-thread-cell-values)
+                   (if empty-config?
+                       (make-empty-thread-cell-values)
+                       (new-engine-thread-cell-values))
                    init-break-enabled-cell)))
 
 (define (create-engine to-saves proc thread-cell-values init-break-enabled-cell)
@@ -87,6 +89,11 @@
          (current-engine-state #f)
          (end-implicit-uninterrupted 'return)
          (apply (engine-state-complete es) remain-ticks args))))))
+
+(define (make-empty-thread-cell-values)
+  (make-weak-eq-hashtable))
+
+(define root-thread-cell-values (make-empty-thread-cell-values))
 
 (define (current-engine-thread-cell-values)
   (let ([es (current-engine-state)])

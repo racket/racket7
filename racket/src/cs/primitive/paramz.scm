@@ -5,7 +5,9 @@
    break-enabled-key
    parameterization-key
    cache-configuration
-   make-custodian-from-main
    exception-handler-key
    extend-parameterization
-   reparameterize))
+   reparameterize
+   security-guard-check-file
+   security-guard-check-file-link
+   security-guard-check-network))

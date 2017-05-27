@@ -90,7 +90,6 @@
 
          current-custodian
          make-custodian
-         make-custodian-from-main
          custodian?
          custodian-shutdown-all
          custodian-managed-list
@@ -110,6 +109,12 @@
          unsafe-start-breakable-atomic
          unsafe-end-breakable-atomic
          unsafe-in-atomic?
+         unsafe-set-on-atomic-timeout!
+
+         unsafe-thread-at-root
+         unsafe-make-custodian-at-root
+         unsafe-custodian-register
+         unsafe-custodian-unregister
 
          #%evt-instance)
 

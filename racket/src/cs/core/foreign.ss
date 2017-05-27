@@ -20,30 +20,30 @@
 
 (define-syntax define-ctype
   (syntax-rules ()
-    [(_ id s-exp)
-     (define id (create-ctype s-exp #f #f #f))]
-    [(_ id s-exp s->c)
-     (define id (create-ctype s-exp #f s->c #f))]
-    [(_ id s-exp s->c c->s)
-     (define id (create-ctype s-exp #f s->c c->s))]))
+    [(_ id s-exp basetype)
+     (define id (create-ctype s-exp basetype #f #f))]
+    [(_ id s-exp basetype s->c)
+     (define id (create-ctype s-exp basetype s->c #f))]
+    [(_ id s-exp basetype s->c c->s)
+     (define id (create-ctype s-exp basetype s->c c->s))]))
 
-(define-ctype _bool 'boolean)
-(define-ctype _bytes 'u8*)
-(define-ctype _double 'double)
-(define-ctype _fixnum 'fixnum)
-(define-ctype _float 'float)
-(define-ctype _int8 'integer-8)
-(define-ctype _int16 'integer-16)
-(define-ctype _int32 'integer-32)
-(define-ctype _int64 'integer-64)
-(define-ctype _uint8 'unsigned-8)
-(define-ctype _uint16 'unsigned-16)
-(define-ctype _uint32 'unsigned-32)
-(define-ctype _uint64 'unsigned-64)
-(define-ctype _scheme 'scheme-object)
-(define-ctype _string/ucs-4 (if (system-big-endian?) 'utf-32be 'utf-32le))
-(define-ctype _string/utf-16 (if (system-big-endian?) 'utf-16be 'utf-16le))
-(define-ctype _void 'void)
+(define-ctype _bool 'boolean 'bool)
+(define-ctype _bytes 'u8* 'bytes)
+(define-ctype _double 'double 'double)
+(define-ctype _fixnum 'fixnum 'fixnum)
+(define-ctype _float 'float 'float)
+(define-ctype _int8 'integer-8 'int8)
+(define-ctype _int16 'integer-16 'int16)
+(define-ctype _int32 'integer-32 'int32)
+(define-ctype _int64 'integer-64 'int64)
+(define-ctype _uint8 'unsigned-8 'uint8)
+(define-ctype _uint16 'unsigned-16 'uint16)
+(define-ctype _uint32 'unsigned-32 'uint32)
+(define-ctype _uint64 'unsigned-64 'uint64)
+(define-ctype _scheme 'scheme-object 'scheme)
+(define-ctype _string/ucs-4 (if (system-big-endian?) 'utf-32be 'utf-32le) 'string/ucs-4)
+(define-ctype _string/utf-16 (if (system-big-endian?) 'utf-16be 'utf-16le) 'string/utf-16)
+(define-ctype _void 'void 'void)
 
 (define (bad-ctype-value type-name v)
   (raise-arguments-error 'apply
@@ -51,36 +51,36 @@
                          "ctype" type-name
                          "value" v))
 
-(define-ctype _double* 'double
+(define-ctype _double* 'double 'double
   (lambda (x) (if (real? x)
                   (exact->inexact x)
                   (bad-ctype-value '_double* x))))
-(define-ctype _ufixnum 'fixnum
+(define-ctype _ufixnum 'fixnum 'fixnum
   (lambda (x) (if (and (fixnum? x) (fx> x 0))
                   x
                   (bad-ctype-value x '_ufixnum))))
-(define-ctype _fixint 'integer
+(define-ctype _fixint 'integer 'fixint
   (lambda (x) (if (fixnum? x)
                   x
                   (bad-ctype-value x '_fixint))))
-(define-ctype _ufixint 'unsigned
+(define-ctype _ufixint 'unsigned 'ufixint
   (lambda (x) (if (fixnum? x)
                   x
                   (bad-ctype-value x '_ufixint))))
 
-(define-ctype _symbol 'string
+(define-ctype _symbol 'string 'string
   (lambda (x) (if (symbol? x)
                   (symbol->string x)
                   (bad-ctype-value '_symbol x)))
   (lambda (s) (string->symbol s)))
 
 ;; FIXME:
-(define-ctype _path 'string)
+(define-ctype _path 'string 'path)
 
-(define-ctype _longdouble 'double
+(define-ctype _longdouble 'double 'double
   (lambda (x) (bad-ctype-value '_longdouble x)))
 
-(define-ctype _pointer 'void*
+(define-ctype _pointer 'void* 'pointer
   (lambda (v) (cond
                [(cpointer? v) (cpointer-addr v)]
                [(not v) 0]
@@ -91,9 +91,9 @@
                [else (make-cpointer x #f)])))
 
 ;; FIXME:
-(define-ctype _fpointer 'void*)
+(define-ctype _fpointer 'void* 'fpointer)
 
-(define-ctype _gcpointer 'void*
+(define-ctype _gcpointer 'void* 'gcpointer
   (lambda (v) (cond
                [(cpointer? v) (cpointer-addr v)]
                [(not v) 0]
@@ -103,7 +103,7 @@
                [else (make-cpointer x #f)])))
 
 ;; FIXME:
-(define-ctype _stdbool 'integer-8
+(define-ctype _stdbool 'integer-8 'stdbool
   (lambda (x) (and x 0))
   (lambda (v) (not (zero? v))))
 
@@ -296,3 +296,19 @@
   set-cpointer-tag!
   set-ptr-offset!
   vector->cpointer)
+
+;; ----------------------------------------
+
+(define process-global-table (make-hashtable equal-hash-code equal?))
+
+;; FIXME: make atomic
+(define (unsafe-register-process-global key val)
+  (cond
+   [(not val) (hashtable-ref process-global-table key #f)]
+   [else
+    (let ([old-val (hashtable-ref process-global-table key #f)])
+      (cond
+       [(not old-val)
+        (hashtable-set! process-global-table key val)
+        #f]
+       [else old-val]))]))

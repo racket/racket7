@@ -3,7 +3,6 @@
 
 (provide current-custodian
          make-custodian
-         make-custodian-from-main
          custodian?
          custodian-shutdown-all
          custodian-managed-list
@@ -12,7 +11,11 @@
          custodian-box-value
          custodian-memory-accounting-available?
          custodian-require-memory
-         custodian-limit-memory)
+         custodian-limit-memory
+
+         unsafe-make-custodian-at-root
+         unsafe-custodian-register
+         unsafe-custodian-unregister)
 
 (struct custodian ([parent])
   #:authentic)
@@ -31,7 +34,7 @@
   (check 'make-custodian custodian? parent)
   (custodian parent))
 
-(define (make-custodian-from-main)
+(define (unsafe-make-custodian-at-root)
   (make-custodian root-custodian))
 
 (define (custodian-shutdown-all c)
@@ -70,3 +73,11 @@
 (define (custodian-box-value cb)
   (check 'custodian-box-value custodian-box? cb)
   (custodian-box-v cb))
+
+;; ----------------------------------------
+
+(define (unsafe-custodian-register cust obj callback at-exit? init-weak?)
+  (void))
+
+(define (unsafe-custodian-unregister mref obj)
+  (void))

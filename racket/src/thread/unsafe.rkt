@@ -1,12 +1,14 @@
 #lang racket/base
 (require "atomic.rkt"
-         "thread.rkt")
+         "thread.rkt"
+         "schedule.rkt")
 
 (provide unsafe-start-atomic
          unsafe-end-atomic
          unsafe-start-breakable-atomic
          unsafe-end-breakable-atomic
-         unsafe-in-atomic?)
+         unsafe-in-atomic?
+         unsafe-set-on-atomic-timeout!)
 
 (define (unsafe-start-breakable-atomic)
   (start-atomic))
@@ -27,3 +29,6 @@
 
 (define (unsafe-in-atomic?)
   (positive? (current-atomic)))
+
+(define (unsafe-set-on-atomic-timeout! proc)
+  (set-atomic-timeout-callback! proc))

@@ -12,7 +12,8 @@
 ;; module handles the thread selection, thread swapping, and
 ;; process sleeping.
 
-(provide call-in-main-thread)
+(provide call-in-main-thread
+         set-atomic-timeout-callback!)
 
 (define TICKS 100000)
 
@@ -47,7 +48,9 @@
     (e
      TICKS
      (lambda ()
-       (check-for-break))
+       (check-for-break)
+       (when (positive? (current-atomic))
+         (atomic-timeout-callback)))
      (lambda args
        (current-thread #f)
        (unless (zero? (current-atomic))
@@ -57,12 +60,12 @@
        (select-thread!))
      (lambda (e)
        (cond
-        [(zero? (current-atomic))
-         (current-thread #f)
-         (set-thread-engine! t e)
-         (select-thread!)]
-        [else
-         (loop e)])))))
+         [(zero? (current-atomic))
+          (current-thread #f)
+          (set-thread-engine! t e)
+          (select-thread!)]
+         [else
+          (loop e)])))))
 
 (define (maybe-done)
   (cond
@@ -120,3 +123,10 @@
 (define (distant-future)
   (+ (current-inexact-milliseconds)
      (* 1000.0 60 60 24 365)))
+
+;; ----------------------------------------
+
+(define atomic-timeout-callback void)
+
+(define (set-atomic-timeout-callback! cb)
+  (set! atomic-timeout-callback (or cb void)))

@@ -3,7 +3,11 @@
 
 (provide make-security-guard
          security-guard?
-         current-security-guard)
+         current-security-guard
+
+         security-guard-check-file
+         security-guard-check-file-link
+         security-guard-check-network)
 
 (struct security-guard (parent
                         file-guard
@@ -40,3 +44,13 @@
          #:contract "(or/c #f (procedure-arity-includes/c 3))"
          link-guard)
   (security-guard parent file-guard network-guard link-guard))
+
+(define (security-guard-check-file who path guards)
+  (void))
+
+(define (security-guard-check-file-link who path dest)
+  (void))
+
+(define (security-guard-check-network who host port client?)
+  (void))
+

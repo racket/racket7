@@ -23,6 +23,8 @@
           impersonate-prompt-tag
           chaperone-prompt-tag
           (rename [break-enabled-key core:break-enabled-key])
+          unsafe-abort-current-continuation/no-wind
+          unsafe-call-with-composable-continuation/no-wind
           
           with-continuation-mark
           call-with-immediate-continuation-mark
@@ -478,6 +480,7 @@
           make-sized-byte-string make-stubborn-will-executor make-union-type malloc malloc-immobile-cell
           memcpy memmove memset offset-ptr? prop:cpointer ptr-add ptr-add! ptr-equal? ptr-offset ptr-ref
           ptr-set! saved-errno set-cpointer-tag! set-ptr-offset! vector->cpointer
+          unsafe-register-process-global
 
           unsafe-unbox
           unsafe-unbox*

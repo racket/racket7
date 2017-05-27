@@ -772,8 +772,8 @@ scheme_init_unsafe_fun (Scheme_Startup_Env *env)
 						      2, -1),
 			     env);
 
-  GLOBAL_PRIM_W_ARITY("unsafe-abort-current-continuation/no-wind", unsafe_abort_continuation_no_dws, 2, 2, env);
-  GLOBAL_PRIM_W_ARITY("unsafe-call-with-composable-continuation/no-wind", unsafe_call_with_control_no_dws, 2, 2, env);
+  ADD_PRIM_W_ARITY("unsafe-abort-current-continuation/no-wind", unsafe_abort_continuation_no_dws, 2, 2, env);
+  ADD_PRIM_W_ARITY("unsafe-call-with-composable-continuation/no-wind", unsafe_call_with_control_no_dws, 2, 2, env);
 }
 
 void

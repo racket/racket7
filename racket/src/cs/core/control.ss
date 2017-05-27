@@ -127,7 +127,7 @@
 
 ;; Messages to `resume-k[/no-wind]`:
 (define-record appending (resume))  ; composing the frame, so run "in" winders
-(define-record aborting (tag args)) ; aborting, so run "out" winders
+(define-record aborting (tag args wind?)) ; aborting, so run "out" winders --- unless not `wind?`
 (define-record applying (c args))   ; applying a non-composable continuation
 
 (define-record-type (continuation-prompt-tag create-continuation-prompt-tag authentic-continuation-prompt-tag?)
@@ -308,7 +308,8 @@
              ;; Aborting to an enclosing prompt, so keep going:
              (set! *metacontinuation* (cdr *metacontinuation*))
              (do-abort-current-continuation (aborting-tag r)
-                                            (aborting-args r))])]
+                                            (aborting-args r)
+                                            (aborting-wind? r))])]
           [(applying? r)
            ;; We're applying a non-composable continuation --- past
            ;; this prompt, or else we would have stopped.
@@ -353,17 +354,24 @@
   (start-uninterrupted 'abort)
   (let ([args (apply-impersonator-abort-wrapper tag args)]
         [tag (strip-impersonator tag)])
-    (do-abort-current-continuation tag args)))
+    (do-abort-current-continuation tag args #t)))
   
-(define (do-abort-current-continuation tag args)
+(define (unsafe-abort-current-continuation/no-wind tag arg)
+  (start-uninterrupted 'abort)
+  (let ([args (apply-impersonator-abort-wrapper tag (list arg))]
+        [tag (strip-impersonator tag)])
+    (do-abort-current-continuation tag args #f)))
+  
+(define (do-abort-current-continuation tag args wind?)
   (assert-in-uninterrupted)
   (cond
    [(null? *metacontinuation*)
     ;; A reset handler must end the uninterrupted region:
     ((reset-handler))]
    [else
+    (unless wind? (#%$current-winders '()))
     ((metacontinuation-frame-resume-k/no-wind (car *metacontinuation*))
-     (make-aborting tag args))]))
+     (make-aborting tag args wind?))]))
 
 ;; ----------------------------------------
 
@@ -385,6 +393,7 @@
 (define-record continuation ())
 (define-record full-continuation continuation (k mark-stack empty-k mc))
 (define-record composable-continuation full-continuation ())
+(define-record composable-continuation/no-wind composable-continuation ())
 (define-record non-composable-continuation full-continuation (tag))
 (define-record escape-continuation continuation (tag))
 
@@ -419,16 +428,24 @@
        (raise-argument-error 'call-with-composable-continuation "(procedure-arity-includes/c 1)" p))
      (unless (continuation-prompt-tag? tag)
        (raise-argument-error 'call-with-composable-continuation "continuation-prompt-tag?" tag))
-     (call-with-end-uninterrupted
-      (lambda ()
-        (call/cc
-         (lambda (k)
-           (p
-            (make-composable-continuation
-             k
-             *mark-stack*
-             *empty-k*
-             (extract-metacontinuation 'call-with-composable-continuation (strip-impersonator tag) #f)))))))]))
+     (call-with-composable-continuation* p tag #t)]))
+
+(define (call-with-composable-continuation* p tag wind?)
+  (call-with-end-uninterrupted
+   (lambda ()
+     ((if wind? call/cc call/cc-no-winders)
+      (lambda (k)
+        (p
+         ((if wind?
+              make-composable-continuation
+              make-composable-continuation/no-wind)
+          k
+          *mark-stack*
+          *empty-k*
+          (extract-metacontinuation 'call-with-composable-continuation (strip-impersonator tag) #f))))))))
+
+(define (unsafe-call-with-composable-continuation/no-wind p tag)
+  (call-with-composable-continuation* p tag #f))
 
 (define (call-with-escape-continuation p)
   (unless (and (procedure? p)
@@ -455,7 +472,9 @@
        ;; The current metacontinuation frame has an
        ;; empty continuation, so we can "replace" that
        ;; with the composable one:
-       (apply-immediate-continuation c args)))]
+       (if (composable-continuation/no-wind? c)
+           (apply-immediate-continuation/no-wind c args)
+           (apply-immediate-continuation c args))))]
    [(non-composable-continuation? c)
     (let* ([tag (non-composable-continuation-tag c)]
            [common-mc
@@ -484,7 +503,7 @@
       (unless (continuation-prompt-available? tag)
         (raise-arguments-error '|continuation application|
                                "attempt to jump into an escape continuation"))
-      (do-abort-current-continuation tag args))]))
+      (do-abort-current-continuation tag args #t))]))
 
 ;; Apply a continuation within the current metacontinuation frame:
 (define (apply-immediate-continuation c args)
@@ -494,6 +513,17 @@
      (set! *mark-stack* (full-continuation-mark-stack c))
      (set! *empty-k* (full-continuation-empty-k c))
      (apply (full-continuation-k c) args))))
+
+;; Like `apply-immediate-continuation`, but don't run metacontinuation
+;; winders; the `(full-continuation-k c)` part should be a non-winding
+;; variant, too:
+(define (apply-immediate-continuation/no-wind c args)
+  (set! *metacontinuation* (append
+                            (map metacontinuation-frame-clear-cache (full-continuation-mc c))
+                            *metacontinuation*))
+  (set! *mark-stack* (full-continuation-mark-stack c))
+  (set! *empty-k* (full-continuation-empty-k c))
+  (apply (full-continuation-k c) args))
 
 ;; Used as a "handler" for a prompt without a tag, which is used for
 ;; composable continuations
@@ -576,6 +606,7 @@
                                        (start-uninterrupted 'continue)
                                        (apply-continuation c args))))])
     (add (record-type-descriptor composable-continuation))
+    (add (record-type-descriptor composable-continuation/no-wind))
     (add (record-type-descriptor non-composable-continuation))
     (add (record-type-descriptor escape-continuation))))
 

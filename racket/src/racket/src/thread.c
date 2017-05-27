@@ -677,15 +677,15 @@ scheme_init_unsafe_thread (Scheme_Startup_Env *env)
 						      0, 0),
 			     env);
 
-  GLOBAL_PRIM_W_ARITY("unsafe-thread-at-root", unsafe_thread_at_root, 1, 1, env);
+  ADD_PRIM_W_ARITY("unsafe-thread-at-root", unsafe_thread_at_root, 1, 1, env);
  
-  GLOBAL_PRIM_W_ARITY("unsafe-make-custodian-at-root", unsafe_make_custodian_at_root, 0, 0, env);
-  GLOBAL_PRIM_W_ARITY("unsafe-custodian-register", unsafe_custodian_register, 5, 5, env);
-  GLOBAL_PRIM_W_ARITY("unsafe-custodian-unregister", unsafe_custodian_unregister, 2, 2, env);
+  ADD_PRIM_W_ARITY("unsafe-make-custodian-at-root", unsafe_make_custodian_at_root, 0, 0, env);
+  ADD_PRIM_W_ARITY("unsafe-custodian-register", unsafe_custodian_register, 5, 5, env);
+  ADD_PRIM_W_ARITY("unsafe-custodian-unregister", unsafe_custodian_unregister, 2, 2, env);
 
-  GLOBAL_PRIM_W_ARITY("unsafe-register-process-global", unsafe_register_process_global, 2, 2, env);
+  ADD_PRIM_W_ARITY("unsafe-register-process-global", unsafe_register_process_global, 2, 2, env);
 
-  GLOBAL_PRIM_W_ARITY("unsafe-set-on-atomic-timeout!", unsafe_set_on_atomic_timeout, 1, 1, env);
+  ADD_PRIM_W_ARITY("unsafe-set-on-atomic-timeout!", unsafe_set_on_atomic_timeout, 1, 1, env);
 }
 
 void scheme_init_thread_places(void) {
@@ -763,9 +763,9 @@ void scheme_init_paramz(Scheme_Startup_Env *env)
 
   ADD_PRIM_W_ARITY("cache-configuration"     , cache_configuration, 2,  2, env);
 
-  ADD_PRIM_W_ARITY("security-guard-check-file", security_guard_check_file, 3,  3, newenv);
-  ADD_PRIM_W_ARITY("security-guard-check-file-link", security_guard_check_file_link, 3,  3, newenv);
-  ADD_PRIM_W_ARITY("security-guard-check-network", security_guard_check_network, 4,  4, newenv);
+  ADD_PRIM_W_ARITY("security-guard-check-file", security_guard_check_file, 3,  3, env);
+  ADD_PRIM_W_ARITY("security-guard-check-file-link", security_guard_check_file_link, 3,  3, env);
+  ADD_PRIM_W_ARITY("security-guard-check-network", security_guard_check_network, 4,  4, env);
 
   scheme_restore_prim_instance(env);
 }

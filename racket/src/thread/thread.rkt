@@ -15,6 +15,7 @@
 
 (provide (rename-out [make-thread thread])
          thread/suspend-to-kill
+         unsafe-thread-at-root
          thread?
          current-thread
          
@@ -109,6 +110,7 @@
 
 (define (do-make-thread who
                         proc
+                        #:at-root? [at-root? #f]
                         #:initial? [initial? #f]
                         #:suspend-to-kill? [suspend-to-kill? #f])
   (check who
@@ -117,10 +119,14 @@
                 (procedure-arity-includes? proc 0)))
          #:contract "(procedure-arity-includes?/c 0)"
          proc)
-  (define p (current-thread-group))
-  (define e (make-engine proc (if initial?
-                                  break-enabled-default-cell
-                                  (current-break-enabled-cell))))
+  (define p (if at-root?
+                root-thread-group
+                (current-thread-group)))
+  (define e (make-engine proc
+                         (if (or initial? at-root?)
+                             break-enabled-default-cell
+                             (current-break-enabled-cell))
+                         at-root?))
   (define t (thread #f ; node prev
                     #f ; node next
                     
@@ -162,6 +168,9 @@
 
 (define (make-initial-thread thunk)
   (do-make-thread 'thread thunk #:initial? #t))
+
+(define (unsafe-thread-at-root proc)
+  (do-make-thread 'unsafe-thread-at-root proc #:at-root? #t))
 
 ;; ----------------------------------------
 ;; Thread status
