@@ -151,6 +151,9 @@ struct-demo: core.so
 control-demo: core.so
 	$(SCHEME) chezpart.so core.so demo/control.ss
 
+foreign-demo: core.so
+	$(SCHEME) chezpart.so core.so demo/foreign.ss
+
 CORE_SRCS = core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \

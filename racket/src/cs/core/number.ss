@@ -1,4 +1,6 @@
 
+(define (nonnegative-fixnum? n) (and (fixnum? n) (fx>= n 0)))
+
 (define (exact-integer? n) (and (integer? n) (exact? n)))
 (define (exact-nonnegative-integer? n) (and (exact-integer? n) (>= n 0)))
 (define (exact-positive-integer? n) (and (exact-integer? n) (> n 0)))

@@ -1,31 +1,261 @@
 
-(define-values (prop:cpointer has-cpointer-property? cpointer-property-ref)
-  (make-struct-type-property 'cpointer))
-
-(define-record-type (ctype create-ctype ctype?)
-  (fields s-exp basetype scheme->c c->scheme))
-(define-record-type (cpointer make-cpointer authentic-cpointer?)
-  (fields addr (mutable tag)))
-
 (define (cpointer? v)
   (or (authentic-cpointer? v)
       (not v)
       (bytes? v)
       (has-cpointer-property? v)))
 
+;; A cpointer's `addr` is either an address (i.e., a number),
+;; a vector, or a byte string. A vector is used for non-atomic memory.
+(define-record-type (cpointer make-cpointer authentic-cpointer?)
+  (fields addr (mutable tags)))
+(define-record-type cpointer+offset
+  (parent cpointer)
+  (fields (mutable offset)))
+
+(define-values (prop:cpointer has-cpointer-property? cpointer-property-ref)
+  (make-struct-type-property 'cpointer
+                             (lambda (v info)
+                               (cond
+                                [(exact-nonnegative-integer? v)
+                                 (unless (< v (list-ref info 1))
+                                   (raise-arguments-error 'prop:cpointer
+                                                          "index is out of range"
+                                                          "index" v))
+                                 (unless (chez:memv v (list-ref info 5))
+                                   (raise-arguments-error 'prop:cpointer
+                                                          "index does not refer to an immutable field"
+                                                          "index" v))
+                                 (+ v (let ([p (list-ref info 6)])
+                                        (if p
+                                            (struct-type-field-count p)
+                                            0)))]
+                                [(and (procedure? v)
+                                      (procedure-arity-includes? v 1))
+                                 v]
+                                [(cpointer? v) v]
+                                [else
+                                 (raise-argument-error 'prop:cpointer
+                                                       (string-append
+                                                        "(or/c exact-nonnegative-integer?\n"
+                                                        "      (procedure-arity-includes/c 1)\n"
+                                                        "      cpointer?)")
+                                                       v)]))))
+
+(define (extract-cpointer p)
+  (cond
+   [(authentic-cpointer? p) p]
+   [(not p) p]
+   [(bytes? p) p]
+   [else (let ([v (cpointer-property-ref p)])
+           (cond
+            [(exact-nonnegative-integer? v)
+             (let ([v (unsafe-struct-ref p v)])
+               (if (cpointer? v)
+                   (extract-cpointer v)
+                   #f))]
+            [(procedure? v)
+             (let ([p2 (v p)])
+               (unless (cpointer? p2)
+                 (raise-result-error 'prop:cpointer-accessor
+                                     "cpointer?"
+                                     p2))
+               (extract-cpointer p2))]
+            [else
+             (extract-cpointer v)]))]))
+
+(define (offset-ptr? p)
+  (unless (cpointer? p)
+    (raise-argument-error 'offset-ptr? "cpointer?" p))
+  (cpointer+offset? p))
+
+(define (set-cpointer-tag! p t)
+  (unless (authentic-cpointer? p)
+    (if (cpointer? p)
+        (raise-arguments-error 'set-cpointer-tag!
+                               "cannot set tag on given cpointer"
+                               "given" p
+                               "tag" t)
+        (raise-argument-error 'set-cpointer-tag! "cpointer?" p)))
+  (cpointer-tags-set! p t))
+
+(define (cpointer-tag p)
+  (unless (authentic-cpointer? p)
+    (if (cpointer? p)
+        (raise-arguments-error 'cpointer-tag
+                               "cannot get tag from given cpointer"
+                               "given" p)
+        (raise-argument-error 'cpointer-tag "cpointer?" p)))
+  (cpointer-tags p))
+
+;; ----------------------------------------
+
+;; Hack: use `s_fxmul` as an identity function
+;; to corece a bytevector's start to an address:
+(define bytevector->addr
+  (foreign-procedure "(cs)fxmul"
+    (u8* uptr)
+    uptr))
+(define object->addr
+  (foreign-procedure "(cs)fxmul"
+    (scheme-object uptr)
+    uptr))
+(define addr->object
+  (foreign-procedure "(cs)fxmul"
+    (uptr uptr)
+    scheme-object))
+
+(define vector-content-offset
+  ;; Hack: we rely on the implementation detail of bytevectors and vectors
+  ;; having the same offset from the address to the content.
+  (let ([s (make-bytevector 1)])
+    ;; Disable interrupts to avoid a GC:
+    (with-interrupts-disabled
+     (- (bytevector->addr s 1)
+        (object->addr s 1)))))
+
+(define addr-scratch (foreign-alloc (foreign-sizeof 'void*)))
+
+(define (cpointer-address p)
+  (cond
+   [(not p) 0]
+   [(bytes? p) (addr-address p)]
+   [(cpointer+offset? p)
+    (let ([addr (cpointer-addr p)])
+      (+ (addr-address addr) (cpointer+offset-offset p)))]
+   [(authentic-cpointer? p)
+    (addr-address (cpointer-addr p))]
+   [else
+    (let ([p (extract-cpointer p)])
+      (cpointer-address p))]))
+
+(define (addr-address addr)
+  (cond
+   [(integer? addr) addr]
+   [(bytes? addr) (bytevector->addr addr 1)]
+   [else
+    (+ (object->addr addr 1)
+       vector-content-offset)]))
+
+;; ----------------------------------------
+
+(define (ptr-equal? p1 p2)
+  (unless (cpointer? p1)
+    (raise-argument-error 'ptr-equal? "cpointer?" p1))
+  (unless (cpointer? p2)
+    (raise-argument-error 'ptr-equal? "cpointer?" p2))
+  (= (cpointer-address p1) (cpointer-address p2)))
+
+(define (ptr-offset p)
+  (unless (cpointer? p)
+    (raise-argument-error 'ptr-offset "cpointer?" p))
+  (if (cpointer+offset? p)
+      (cpointer+offset-offset p)
+      0))
+
+(define (set-ptr-offset! p n)
+  (unless (cpointer+offset? p)
+    (raise-argument-error 'ptr-offset "(and/c cpointer? ptr-offset?)" p))
+  (unless (exact-integer? n)
+    (raise-argument-error 'ptr-offset "exact-integer?" n))
+  (cpointer+offset-offset-set! p n))
+
+(define ptr-add
+  (case-lambda
+   [(p n type)
+    (unless (cpointer? p)
+      (raise-argument-error 'ptr-add "cpointer?" p))
+    (unless (exact-integer? n)
+      (raise-argument-error 'ptr-add "exact-integer?" n))
+    (unless (ctype? type)
+      (raise-argument-error 'ptr-add "ctype?" type))
+    (do-ptr-add p (* n (ctype-sizeof type)))]
+   [(p n)
+    (unless (cpointer? p)
+      (raise-argument-error 'ptr-add "cpointer?" p))
+    (unless (exact-integer? n)
+      (raise-argument-error 'ptr-add "exact-integer?" n))
+    (do-ptr-add p n)]))
+
+(define (do-ptr-add p n)
+  (cond
+   [(authentic-cpointer? p)
+    (make-cpointer+offset (cpointer-addr p) (cpointer-tag p) (+ n (if (cpointer+offset? p)
+                                                                      (cpointer+offset-offset p)
+                                                                      0)))]
+   [(has-cpointer-property? p)
+    (do-ptr-add (extract-cpointer p) n)]
+   [else
+    (make-cpointer+offset p #f n)]))
+
+(define ptr-add!
+  (case-lambda
+   [(p n type)
+    (unless (cpointer+offset? p)
+      (raise-argument-error 'ptr-add! "(and/c cpointer? offset-ptr?)" p))
+    (unless (exact-integer? n)
+      (raise-argument-error 'ptr-add! "exact-integer?" n))
+    (unless (ctype? type)
+      (raise-argument-error 'ptr-add! "ctype?" type))
+    (do-ptr-add! p (* n (ctype-sizeof type)))]
+   [(p n)
+    (unless (cpointer+offset? p)
+      (raise-argument-error 'ptr-add! "(and/c cpointer? offset-ptr?)" p))
+    (unless (exact-integer? n)
+      (raise-argument-error 'ptr-add! "exact-integer?" n))
+    (do-ptr-add! p n)]))
+
+(define (do-ptr-add! p n)
+  (unless (cpointer+offset? p)
+    (raise-arguments-error 'ptr-add!
+                           "given cpointer does not have an offset"
+                           "given" p))
+  (cpointer+offset-offset-set! p (+ n (cpointer+offset-offset p))))
+
+;; ----------------------------------------
+
+(define-record-type (ctype create-ctype ctype?)
+  (fields s-exp root-basetype basetype scheme->c c->scheme))
+
 (define (make-ctype type racket-to-c c-to-racket)
   (unless (ctype? type)
     (raise-argument-error 'make-ctype "ctype?" type))
-  (create-ctype (ctype-s-exp type) type racket-to-c c-to-racket))
+  (create-ctype (ctype-s-exp type)
+                (ctype-root-basetype type)
+                type
+                racket-to-c
+                c-to-racket))
+
+(define (s->c type v)
+  (let* ([racket-to-c (ctype-scheme->c type)]
+         [v (if racket-to-c
+                (racket-to-c v)
+                v)]
+         [next (ctype-basetype type)])
+    (if next
+        (s->c next v)
+        v)))
+
+(define (c->s type v)
+  (let* ([next (ctype-basetype type)]
+         [v (if next
+                (c->s next v)
+                v)]
+         [c-to-racket (ctype-c->scheme type)])
+    (if c-to-racket
+        (c-to-racket v)
+        v)))
+
+;; ----------------------------------------
 
 (define-syntax define-ctype
   (syntax-rules ()
     [(_ id s-exp basetype)
-     (define id (create-ctype s-exp basetype #f #f))]
+     (define id (create-ctype s-exp basetype #f #f #f))]
     [(_ id s-exp basetype s->c)
-     (define id (create-ctype s-exp basetype s->c #f))]
+     (define id (create-ctype s-exp basetype #f s->c #f))]
     [(_ id s-exp basetype s->c c->s)
-     (define id (create-ctype s-exp basetype s->c c->s))]))
+     (define id (create-ctype s-exp basetype #f s->c c->s))]))
 
 (define-ctype _bool 'boolean 'bool)
 (define-ctype _bytes 'u8* 'bytes)
@@ -81,11 +311,7 @@
   (lambda (x) (bad-ctype-value '_longdouble x)))
 
 (define-ctype _pointer 'void* 'pointer
-  (lambda (v) (cond
-               [(cpointer? v) (cpointer-addr v)]
-               [(not v) 0]
-               ;; FIXME:
-               [(bytes? v) v]))
+  (lambda (v) v) ; resolved to an address with the GC disabled
   (lambda (x) (cond
                [(zero? x) #f]
                [else (make-cpointer x #f)])))
@@ -113,6 +339,7 @@
    [(types abi) (make-cstruct-type types abi #f)]
    [(types abi alignment)
     (create-ctype 'struct
+                  'struct
                   types
                   (lambda (s) (raise-unsupported-error 'struct-s->c))
                   (lambda (c) (raise-unsupported-error 'struct-c->s)))]))
@@ -203,6 +430,12 @@
                                  "(or/c ctype-symbol? (listof ctype-symbol?))"
                                  sl)]))])))
 
+(define (ctype-malloc-mode c)
+  (let ([t (ctype-root-basetype c)])
+    (if (or (eq? t 'gcpointer) (eq? t 'scheme))
+        'nonatomic
+        'atomic)))
+
 (define (ctype-sizeof c)
   (unless (ctype? c)
     (raise-argument-error 'ctype-sizeof "ctype?" c))
@@ -215,16 +448,33 @@
     [(integer-16 unsigned-16) 2]
     [(integer-32 unsigned-32) 4]
     [(integer-64 unsigned-64) 8]
+    [(struct)
+     (let ([align (lambda (size algn)
+                    (let ([amt (modulo size algn)])
+                      (if (zero? amt)
+                          size
+                          (+ size (- algn amt)))))])
+       (let loop ([types (ctype-basetype c)] [size 0] [max-align 1])
+         (cond
+          [(null? types) (align size max-align)]
+          [else (let ([sz (ctype-sizeof (car types))]
+                      [algn (ctype-alignof (car types))])
+                  (loop (cdr types)
+                        (+ (align size algn)
+                           sz)
+                        (max algn max-align)))])))]
     [else
      ;; Everything else is pointer-sized:
-     ;; FIXME
-     8]))
+     (foreign-sizeof 'void*)]))
 
 (define (ctype-alignof c)
   (unless (ctype? c)
     (raise-argument-error 'ctype-alignof "ctype?" c))
-  ;; Until we get to structs, etc., alignof = sizeof
-  (ctype-sizeof c))
+  (cond
+   [(eq? 'struct (ctype-s-exp c))
+    (apply max (map ctype-alignof (ctype-basetype c)))]
+   [else
+    (ctype-sizeof c)]))
 
 (define (cpointer-gcable? p)
   (unless (cpointer? p)
@@ -251,9 +501,233 @@
 (define (ffi-obj? v)
   #f)
 
+;; ----------------------------------------
+
+(define ptr-ref
+  (case-lambda
+   [(p type)
+    (unless (cpointer? p)
+      (raise-argument-error 'ptr-ref "cpointer?" p))
+    (unless (ctype? type)
+      (raise-argument-error 'ptr-ref "ctype?" type))
+    (c->s type (foreign-ref* type p 0))]
+   [(p type offset)
+    (unless (cpointer? p)
+      (raise-argument-error 'ptr-ref "cpointer?" p))
+    (unless (ctype? type)
+      (raise-argument-error 'ptr-ref "ctype?" type))
+    (unless (exact-integer? offset)
+      (raise-argument-error 'ptr-ref "exact-integer?" offset))
+    (c->s type (foreign-ref* type
+                             p
+                             (* (ctype-sizeof type) offset)))]
+   [(p type abs-tag offset)
+    (unless (cpointer? p)
+      (raise-argument-error 'ptr-ref "cpointer?" p))
+    (unless (ctype? type)
+      (raise-argument-error 'ptr-ref "ctype?" type))
+    (unless (eq? abs-tag 'abs)
+      (raise-argument-error 'ptr-ref "'abs" abs-tag))
+    (unless (exact-integer? offset)
+      (raise-argument-error 'ptr-ref "exact-integer?" offset))
+    (c->s type (foreign-ref* type p offset))]))
+
+(define (foreign-ref* type p offset)
+  (let ([s-exp (ctype-s-exp type)]
+        [p (extract-cpointer p)])
+    ;; Disable interrupts to avoid a GC:
+    (with-interrupts-disabled
+     (let ([v (foreign-ref (if (eq? s-exp 'scheme-object)
+                               'uptr
+                               s-exp)
+                           (cpointer-address p)
+                           offset)])
+       (if (eq? s-exp 'scheme-object)
+           (addr->object v 1)
+           v)))))
+
+(define ptr-set!
+  (case-lambda
+   [(p type v)
+    (unless (cpointer? p)
+      (raise-argument-error 'ptr-set! "cpointer?" p))
+    (unless (ctype? type)
+      (raise-argument-error 'ptr-set! "ctype?" type))
+    (foreign-set!* type
+                   p
+                   0
+                   v)]
+   [(p type offset v)
+    (unless (cpointer? p)
+      (raise-argument-error 'ptr-set! "cpointer?" p))
+    (unless (ctype? type)
+      (raise-argument-error 'ptr-set! "ctype?" type))
+    (unless (exact-integer? offset)
+      (raise-argument-error 'ptr-set! "exact-integer?" offset))
+    (foreign-set!* type
+                   p
+                   (* (ctype-sizeof type) offset)
+                   v)]
+   [(p type abs-tag offset v)
+    (unless (cpointer? p)
+      (raise-argument-error 'ptr-set! "cpointer?" p))
+    (unless (ctype? type)
+      (raise-argument-error 'ptr-set! "ctype?" type))
+    (unless (eq? abs-tag 'abs)
+      (raise-argument-error 'ptr-set! "'abs" abs-tag))
+    (unless (exact-integer? offset)
+      (raise-argument-error 'ptr-set! "exact-integer?" offset))
+    (foreign-set!* type
+                   p
+                   offset
+                   v)]))
+
+(define (foreign-set!* type p offset v)
+  (let ([v (s->c type v)]
+        [s-exp (ctype-s-exp type)]
+        [p (extract-cpointer p)])
+    ;; Disable interrupts to avoid a GC:
+    (with-interrupts-disabled
+     (foreign-set! (if (eq? s-exp 'scheme-object)
+                       'uptr
+                       s-exp)
+                   (cpointer-address p)
+                   offset
+                   (cond
+                    [(eq? 'scheme-object s-exp) (object->addr v 1)]
+                    [(eq? 'pointer s-exp) (cpointer-address v)]
+                    [else v])))))
+
+;; ----------------------------------------
+
 ;; FIXME:
 (define (make-late-weak-hasheq)
   (make-weak-hasheq))
+
+(define malloc
+  ;; Recognize common ordering as fast cases, and dispatch to
+  ;; a general handler to arbtrary argument order
+  (case-lambda
+   [(arg1)
+    (cond
+     [(nonnegative-fixnum? arg1)
+      (normalized-malloc arg1 'atomic)]
+     [(ctype? arg1)
+      (normalized-malloc (ctype-sizeof arg1) (ctype-malloc-mode arg1))]
+     [else
+      (do-malloc (list arg1))])]
+   [(arg1 arg2)
+    (cond
+     [(and (nonnegative-fixnum? arg1)
+           (ctype? arg2))
+      (normalized-malloc (* arg1 (ctype-sizeof arg2)) (ctype-malloc-mode arg1))]
+     [(and (ctype? arg1)
+           (nonnegative-fixnum? arg2))
+      (normalized-malloc (* arg2 (ctype-sizeof arg1)) (ctype-malloc-mode arg2))]
+     [(and (nonnegative-fixnum? arg1)
+           (malloc-mode? arg2))
+      (normalized-malloc arg1 arg2)]
+     [else
+      (do-malloc (list arg1 arg2))])]
+   [(arg1 arg2 arg3) (do-malloc (list arg1 arg2 arg3))]
+   [(arg1 arg2 arg3 arg4) (do-malloc (list arg1 arg2 arg3 arg4))]
+   [(arg1 arg2 arg3 arg4 arg5) (do-malloc (list arg1 arg2 arg3 arg4 arg5))]))
+
+(define (do-malloc args)
+  (define (duplicate-argument what a1 a2)
+    (raise-arguments-error 'malloc
+                           (string-append "mulitple " what " arguments")
+                           "first" a1
+                           "second" a2))
+  (let loop ([args args] [count #f] [type #f] [copy-from #f] [mode #f] [fail-mode #f])
+    (cond
+     [(null? args)
+      (let* ([len (* (or count 1) (if type (ctype-sizeof type) 1))]
+             [p (normalized-malloc len
+                                   (or mode (if type (ctype-malloc-mode type) 'atomic)))])
+        (when copy-from
+          (memcpy p copy-from len))
+        p)]
+     [(nonnegative-fixnum? (car args))
+      (if count
+          (duplicate-argument "size" count (car args))
+          (loop (cdr args) (car args) type copy-from mode fail-mode))]
+     [(ctype? (car args))
+      (if type
+          (duplicate-argument "type" type (car args))
+          (loop (cdr args) count (car args) copy-from mode fail-mode))]
+     [(and (cpointer? (car args)) (car args))
+      (if copy-from
+          (duplicate-argument "source for copy" copy-from (car args))
+          (loop (cdr args) count type (car args) mode fail-mode))]
+     [(malloc-mode? (car args))
+      (if copy-from
+          (duplicate-argument "mode" mode (car args))
+          (loop (cdr args) count type copy-from (car args) fail-mode))]
+     [(eq? (car args) 'failok)
+      (if copy-from
+          (duplicate-argument "failure mode" fail-mode (car args))
+          (loop (cdr args) count type copy-from mode (car args)))]
+     [else
+      (raise-argument-error 'malloc
+                            (string-append "(or/c (and/c exact-nonnegative-integer? fixnum?)\n"
+                                           "      ctype? cpointer?\n"
+                                           "      (or/c 'raw 'atomic 'nonatomic 'tagged\n"
+                                           "            'atomic-interior 'interior\n"
+                                           "            'stubborn 'uncollectable 'eternal)\n"
+                                           "      'fail-ok)")
+                            (car args))])))
+
+(define (normalized-malloc size mode)
+  (cond
+   [(eq? mode 'raw)
+    (make-cpointer (foreign-alloc size) #f)]
+   [(eq? mode 'atomic)
+    (make-cpointer (make-bytevector size) #f)]
+   [(eq? mode 'atomic-interior)
+    (let* ([p (foreign-alloc size)]
+           [cp (make-cpointer p #f)])
+      (free-guard cp p)
+      cp)]
+   [(eq? mode 'nonatomic)
+    (make-cpointer (make-vector (quotient size 8)) #f)]
+   [else
+    (raise
+     (exn:fail:unsupported
+      (format "malloc: '~a mode is not supported" mode)
+      (current-continuation-marks)))]))
+
+(define (free p)
+  (foreign-free (cpointer-addr p)))
+
+(define (malloc-immobile-cell v)
+  (let ([vec (vector v)])
+    (lock-object vec)
+    (make-cpointer vec #f)))
+
+(define (free-immobile-cell b)
+  (unlock-object (cpointer-addr b)))
+
+(define (malloc-mode? v)
+  (chez:memq v '(raw atomic nonatomic tagged
+                     atomic-interior interior
+                     stubborn uncollectable eternal)))
+
+(define free-guard (make-guardian))
+
+(define (end-stubborn-change p)
+  (raise-unsupported-error 'end-stubborn-change))
+
+(define (extflvector->cpointer extfl-vector)
+  (raise-unsupported-error 'extflvector->cpointer))
+
+(define (vector->cpointer vec)
+  (make-cpointer vec #f))
+
+(define (flvector->cpointer flvec)
+  (make-cpointer (flvector-bstr flvec) #f))
+
+;; ----------------------------------------
 
 (define-syntax define-foreign-not-yet-available
   (syntax-rules ()
@@ -264,38 +738,21 @@
      (begin (define-foreign-not-yet-available id) ...)]))
 
 (define-foreign-not-yet-available
-  end-stubborn-change
-  extflvector->cpointer
   ffi-call
   ffi-callback
   ffi-callback?
   ffi-lib-name
   ffi-obj-lib
   ffi-obj-name
-  flvector->cpointer
-  free
-  free-immobile-cell
   lookup-errno
   make-array-type
   make-late-weak-box
   make-sized-byte-string
   make-union-type
-  malloc
-  malloc-immobile-cell
   memcpy
   memmove
   memset
-  offset-ptr?
-  ptr-add
-  ptr-add!
-  ptr-equal?
-  ptr-offset
-  ptr-ref
-  ptr-set!
-  saved-errno
-  set-cpointer-tag!
-  set-ptr-offset!
-  vector->cpointer)
+  saved-errno)
 
 ;; ----------------------------------------
 
