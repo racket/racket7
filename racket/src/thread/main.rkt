@@ -18,6 +18,7 @@
          "alarm.rkt"
          "nested-thread.rkt"
          "api.rkt"
+         "will-execute.rkt"
          "unsafe.rkt")
 
 (provide call-in-main-thread
@@ -99,6 +100,8 @@
          custodian-memory-accounting-available?
          custodian-require-memory
          custodian-limit-memory
+
+         will-execute
 
          break-enabled
          check-for-break

@@ -44,6 +44,7 @@
           make-engine
           engine-block
           engine-return
+          set-ctl-c-handler! ; not exported to Racket
 
           make-thread-cell
           thread-cell?

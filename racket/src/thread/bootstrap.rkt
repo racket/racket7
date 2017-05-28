@@ -59,7 +59,17 @@
       (thread (lambda ()
                 (sleep (/ ticks 1000000.0))
                 (thread-suspend t))))
-    (sync t t2 (thread-suspend-evt t))
+    ;; Limited break propagation while syncing:
+    (call-with-exception-handler
+     (lambda (exn)
+       (if (and (exn:break? exn)
+                ctl-c-handler)
+           (begin
+             (ctl-c-handler)
+             ((exn:break-continuation exn)))
+           exn))
+     (lambda ()
+       (sync t t2 (thread-suspend-evt t))))
     (cond
      [(thread-dead? t)
       (apply complete 0 results)]
@@ -69,6 +79,11 @@
 
 (define (engine-block)
   (thread-suspend (current-thread)))
+
+(define ctl-c-handler #f)
+
+(define (set-ctl-c-handler! proc)
+  (set! ctl-c-handler proc))
 
 (define the-root-continuation-prompt-tag (make-continuation-prompt-tag 'root))
 (define (root-continuation-prompt-tag) the-root-continuation-prompt-tag)
@@ -85,6 +100,8 @@
                   'engine-return
                   (lambda args
                     (error "engine-return: not ready"))
+                  'set-ctl-c-handler!
+                  set-ctl-c-handler!
                   'root-continuation-prompt-tag
                   root-continuation-prompt-tag
                   'break-enabled-key

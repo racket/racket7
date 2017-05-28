@@ -14,13 +14,10 @@
       (unsafe-struct-ref v 1)
       (|#%app| alt-proc v v1 v2)))
 
-(define (prop:chaperone-unsafe-undefined chaperone-unsafe-undefined? chaperone-unsafe-undefined-ref)
+(define-values (prop:chaperone-unsafe-undefined chaperone-unsafe-undefined? chaperone-unsafe-undefined-ref)
   (make-struct-type-property 'chaperone-unsafe-undefined))
 
 (define (chaperone-struct-unsafe-undefined v) v)
-
-(define (will-execute e)
-  (raise-arguments-error 'will-execute "not yet ready"))
 
 (define (chaperone-evt v . args) v)
 (define (chaperone-channel v . args) v)
@@ -94,7 +91,8 @@
 (define (environment-variables-ref e k)
   (let ([v (getenv (bytes->string/utf-8 k))])
     (and v (string->bytes/utf-8 v))))
-(define (current-environment-variables) #f)
+(define current-environment-variables
+  (make-parameter #f))
 (define (environment-variables-set! e k v)
   (error "environment-variables-set! not ready"))
 (define (environment-variables-copy e)

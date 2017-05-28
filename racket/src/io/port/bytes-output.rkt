@@ -19,7 +19,7 @@
   (check 'write-bytes byte? b)
   (check 'write-bytes output-port? out)
   (let ([out (->core-output-port out)])
-    (write-some-bytes 'write-byte out (bytes b) 0 1 #:buffer-ok? #t)))
+    (write-some-bytes 'write-byte out (bytes b) 0 1 #:buffer-ok? #t #:copy-bstr? #f)))
 
 (define (do-write-bytes who out bstr start end)
   (let loop ([i start])

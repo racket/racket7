@@ -10,6 +10,9 @@
 (define-record engine-state (mc complete expire thread-cell-values init-break-enabled-cell reset-handler))
 (define current-engine-state (chez:make-parameter #f))
 
+(define (set-ctl-c-handler! proc)
+  (keyboard-interrupt-handler proc))
+
 (define (make-engine thunk init-break-enabled-cell empty-config?)
   (let ([paramz (if empty-config?
                     empty-parameterization

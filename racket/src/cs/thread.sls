@@ -11,6 +11,7 @@
                   [make-engine core:make-engine]
                   [engine-block core:engine-block]
                   [engine-return core:engine-return]
+                  [set-ctl-c-handler! core:set-ctl-c-handler!]
                   [root-continuation-prompt-tag core:root-continuation-prompt-tag]))
 
   (define (sleep secs)
@@ -25,6 +26,7 @@
                      'make-engine core:make-engine
                      'engine-block core:engine-block
                      'engine-return core:engine-return
+                     'set-ctl-c-handler! core:set-ctl-c-handler!
                      'root-continuation-prompt-tag core:root-continuation-prompt-tag
                      'break-enabled-key break-enabled-key
                      'exn:break/non-engine exn:break)]

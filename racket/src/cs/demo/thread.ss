@@ -151,7 +151,7 @@
    (check #t dw-pre?)
    (check #f dw-body?)
    (check #t dw-post?)
-   
+
    ;; Measure thread quantum:
    #;
    (let ([t1 (thread (lambda () (let loop () (loop))))]

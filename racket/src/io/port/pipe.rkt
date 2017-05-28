@@ -140,7 +140,7 @@
      #:evt 'evt ;; FIXME
      
      #:write-out
-     (lambda (src-bstr src-start src-end nonblock? enable-break?)
+     (lambda (src-bstr src-start src-end nonblock? enable-break? copy?)
        (let try-again ()
          (define len (bytes-length bstr))
          (define top-pos (if (zero? start)

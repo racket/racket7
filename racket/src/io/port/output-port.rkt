@@ -39,7 +39,7 @@
 (struct core-output-port (name
                           data
                           evt
-                          write-out ; (bstr start end no-buffer? enable-break? -> ...)
+                          write-out ; (bstr start end no-buffer? enable-break? copy? -> ...)
                           close
                           write-out-special ; (any no-buffer? enable-break? -> ...)
                           get-write-evt

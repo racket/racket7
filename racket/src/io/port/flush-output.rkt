@@ -8,7 +8,7 @@
   (check 'flush-output output-port? p)
   (let ([p (->core-output-port p)])
     (let loop ()
-      (define r ((core-output-port-write-out p) #"" 0 0 #f #f))
+      (define r ((core-output-port-write-out p) #"" 0 0 #f #f #f))
       (cond
         [(eq? r 0) (void)]
         [(not r) (loop)]

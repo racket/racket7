@@ -5,6 +5,7 @@
 (provide write-some-bytes)
 
 (define (write-some-bytes who out bstr start end
+                          #:copy-bstr? [copy-bstr? #t]
                           #:buffer-ok? [buffer-ok? #f]
                           #:zero-ok? [zero-ok? #f]
                           #:enable-break? [enable-break? #f])
@@ -19,7 +20,7 @@
     [else
      (define write-out (core-output-port-write-out out))
      (let try-again ()
-       (define v (write-out bstr start end (not buffer-ok?) enable-break?))
+       (define v (write-out bstr start end (not buffer-ok?) enable-break? copy-bstr?))
        (cond
          [(or (not v)
               (eq? v 0)) ; zero is not supposed to happen, but treat it like #f

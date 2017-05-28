@@ -50,7 +50,7 @@
      #:data (lambda () max-length)
      #:evt o
      #:write-out
-     (lambda (src-bstr src-start src-end nonblock? enable-break?)
+     (lambda (src-bstr src-start src-end nonblock? enable-break? copy?)
        (define len (- src-end src-start))
        (unless (eq? max-length 'full)
          (define write-len (min len max-length))

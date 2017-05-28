@@ -1,4 +1,7 @@
 #lang racket/base
+(require "../common/check.rkt"
+         "output-port.rkt")
+
 (provide make-output-port)
 
 (define (make-output-port name
@@ -12,4 +15,20 @@
                           [count-lines! void]
                           [init-position 1]
                           [buffer-mode #f])
-  (error 'make-output-port "not yet implemented"))
+  (check 'make-output-port evt? evt)
+
+  (define (do-write-out bstr start end must-write? enable-break? copy?)
+    (if copy?
+        (write-out (subbytes bstr start end) 0 (- end start) must-write? enable-break?)
+        (write-out bstr start end must-write? enable-break?)))
+
+  (make-core-output-port
+   #:name name
+   #:evt evt
+   #:write-out do-write-out
+   #:close close
+   #:write-out-special write-out-special
+   #:get-write-evt get-write-evt
+   #:get-write-special-evt get-write-special-evt
+   #:get-location get-location
+   #:count-lines! count-lines!))

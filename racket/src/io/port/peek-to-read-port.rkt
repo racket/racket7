@@ -75,7 +75,7 @@
           [(zero? v) 0]
           [else
            (let loop ([wrote 0])
-             (define just-wrote ((core-output-port-write-out peek-pipe-o) buf wrote v #t #f))
+             (define just-wrote ((core-output-port-write-out peek-pipe-o) buf wrote v #t #f #f))
              (define next-wrote (+ wrote just-wrote))
              (unless (= v next-wrote)
                (loop next-wrote)))

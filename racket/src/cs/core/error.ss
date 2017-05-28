@@ -428,6 +428,11 @@
             (condition-message v)]
            [else (format "~s" v)])))
 
+(define (condition->exn v)
+  (if (condition? v)
+      (exn:fail (exn->string v) (current-continuation-marks))
+      v))
+
 (define uncaught-exception-handler
   (make-parameter default-uncaught-exception-handler
                   (lambda (v)
@@ -464,7 +469,8 @@
       [else
        (let ([hs (continuation-mark-set->list (current-continuation-marks the-root-continuation-prompt-tag)
                                               exception-handler-key
-                                              the-root-continuation-prompt-tag)])
+                                              the-root-continuation-prompt-tag)]
+             [v (condition->exn v)])
          (let loop ([hs hs])
            (cond
             [(null? hs)

@@ -105,6 +105,8 @@
         #:property prop:evt (lambda (t) (wrap-evt (get-thread-dead-evt t)
                                              (lambda (v) t))))
 
+(define root-thread #f)
+
 ;; ----------------------------------------
 ;; Thread creation
 
@@ -167,7 +169,9 @@
   (do-make-thread 'thread/suspend-to-kill proc #:suspend-to-kill? #t))
 
 (define (make-initial-thread thunk)
-  (do-make-thread 'thread thunk #:initial? #t))
+  (let ([t (do-make-thread 'thread thunk #:initial? #t)])
+    (set! root-thread t)
+    t))
 
 (define (unsafe-thread-at-root proc)
   (do-make-thread 'unsafe-thread-at-root proc #:at-root? #t))
@@ -520,12 +524,15 @@
 
 (define (break-thread t)
   (check 'break-thread thread? t)
+  (do-break-thread t (current-thread)))
+
+(define (do-break-thread t check-t)
   ((atomically
     (unless (thread-pending-break? t)
       (cond
         [(thread-forward-break-to t)
          => (lambda (other-t)
-              (lambda () (break-thread other-t)))]
+              (lambda () (do-break-thread other-t check-t)))]
         [else
          (set-thread-pending-break?! t #t)
          (unless (thread-suspended? t)
@@ -539,8 +546,13 @@
                    (interrupt-callback)
                    (thread-internal-resume! t))]))
          void]))))
-  (when (eq? t (current-thread))
+  (when (eq? t check-t)
     (check-for-break)))
+
+(void
+ (set-ctl-c-handler!
+  (lambda ()
+    (do-break-thread root-thread #f))))
 
 ;; in atomic mode:
 (define (thread-ignore-break-cell? t bc)
