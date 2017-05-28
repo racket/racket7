@@ -382,18 +382,21 @@
                        (condition-continuation v)))]
                [n (|#%app| error-print-context-length)])
       (unless (or (null? l) (zero? n))
-        (let ([p (car l)])
+        (let* ([p (car l)]
+               [s (cdr p)])
           (cond
-           [(car p) 
-            (eprintf "\n   ~a" (car p))]
-           [else
-            (let ([s (cdr p)])
-              (cond
-               [(and (srcloc-line s)
-                     (srcloc-column s))
-                (eprintf "\n   ~a:~a:~a" (srcloc-source s) (srcloc-line s) (srcloc-column s))]
-               [(srcloc-position s)
-                (eprintf "\n   ~a::~a" (srcloc-source s) (srcloc-position s))]))]))
+           [(and s
+                 (srcloc-line s)
+                 (srcloc-column s))
+            (eprintf "\n   ~a:~a:~a" (srcloc-source s) (srcloc-line s) (srcloc-column s))
+            (when (car p)
+              (eprintf ": ~a" (car p)))]
+           [(and s (srcloc-position s))
+            (eprintf "\n   ~a::~a" (srcloc-source s) (srcloc-position s))
+            (when (car p)
+              (eprintf ": ~a" (car p)))]
+           [(car p)
+            (eprintf "\n   ~a" (car p))]))
         (loop (cdr l) (sub1 n)))))
   (eprintf "\n"))
 
@@ -471,7 +474,3 @@
                    [hs (cdr hs)])
                (h v)
                (loop hs))])))]))))
-
-;;
-;; (when (serious-condition? v)
-;;  ((reset-handler))))))

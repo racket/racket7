@@ -68,7 +68,7 @@
  (define loads '())
  (define repl? #f)
  (define version? #f)
- (define stderr-logging #f)
+ (define stderr-logging-arg #f)
 
  (define (no-init! saw)
    (unless (saw? saw 'top)
@@ -164,7 +164,7 @@
            (loop rest-args))]
         [("-W" "--stderr")
          (let-values ([(spec rest-args) (next-arg "stderr level" arg within-arg args)])
-           (set! stderr-logging (parse-logging-spec spec (format "after ~a switch" (or within-arg arg)) #t))
+           (set! stderr-logging-arg (parse-logging-spec spec (format "after ~a switch" (or within-arg arg)) #t))
            (loop rest-args))]
         [("--")
          (cond
@@ -193,11 +193,12 @@
            ;; Non-flag argument
            (finish args saw)])]))))
 
- (unless stderr-logging
-   (let ([spec (getenv "PLTSTDERR")])
-     (if spec
-         (parse-logging-spec spec "in PLTSTDERR environment variable" #f)
-         '(error))))
+ (define stderr-logging
+   (or stderr-logging-arg
+       (let ([spec (getenv "PLTSTDERR")])
+         (if spec
+             (parse-logging-spec spec "in PLTSTDERR environment variable" #f)
+             '(error)))))
 
  (when version?
    (printf "Welcome to Racket v~a [cs]\n" (version)))

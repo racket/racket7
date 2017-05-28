@@ -62,10 +62,10 @@
                                          (and (record? v)
                                               (record-rtd v)))])
                            (if rtd
-                               (let ([v (struct-property-ref st rtd none)])
-                                 (if (eq? v none)
+                               (let ([pv (struct-property-ref st rtd none)])
+                                 (if (eq? pv none)
                                      (fail v)
-                                     v))
+                                     pv))
                                (fail v)))]))])
          (hashtable-set! property-accessors
                          acc
@@ -442,7 +442,11 @@
           (hashtable-set! rtd-mutables rtd mutables))
         ;; Copy parent properties for this type:
         (for-each (lambda (prop)
-                    (struct-property-set! prop rtd (struct-property-ref prop parent-rtd #f)))
+                    (let loop ([prop prop])
+                      (struct-property-set! prop rtd (struct-property-ref prop parent-rtd #f))
+                      (for-each (lambda (super)
+                                  (loop (car super)))
+                                (struct-type-prop-supers prop))))
                   parent-props)
         ;; Install new property values
         (for-each (lambda (prop+val)

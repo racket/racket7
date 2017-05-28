@@ -232,15 +232,15 @@
                 (racket-to-c v)
                 v)]
          [next (ctype-basetype type)])
-    (if next
-        (s->c next v)
-        v)))
+    (if (symbol? next)
+        v
+        (s->c next v))))
 
 (define (c->s type v)
   (let* ([next (ctype-basetype type)]
-         [v (if next
-                (c->s next v)
-                v)]
+         [v (if (symbol? next)
+                v
+                (c->s next v))]
          [c-to-racket (ctype-c->scheme type)])
     (if c-to-racket
         (c-to-racket v)
@@ -251,11 +251,11 @@
 (define-syntax define-ctype
   (syntax-rules ()
     [(_ id s-exp basetype)
-     (define id (create-ctype s-exp basetype #f #f #f))]
+     (define id (create-ctype s-exp basetype basetype #f #f))]
     [(_ id s-exp basetype s->c)
-     (define id (create-ctype s-exp basetype #f s->c #f))]
+     (define id (create-ctype s-exp basetype basetype s->c #f))]
     [(_ id s-exp basetype s->c c->s)
-     (define id (create-ctype s-exp basetype #f s->c c->s))]))
+     (define id (create-ctype s-exp basetype basetype s->c c->s))]))
 
 (define-ctype _bool 'boolean 'bool)
 (define-ctype _bytes 'u8* 'bytes)
@@ -449,20 +449,23 @@
     [(integer-32 unsigned-32) 4]
     [(integer-64 unsigned-64) 8]
     [(struct)
-     (let ([align (lambda (size algn)
-                    (let ([amt (modulo size algn)])
-                      (if (zero? amt)
-                          size
-                          (+ size (- algn amt)))))])
-       (let loop ([types (ctype-basetype c)] [size 0] [max-align 1])
-         (cond
-          [(null? types) (align size max-align)]
-          [else (let ([sz (ctype-sizeof (car types))]
-                      [algn (ctype-alignof (car types))])
-                  (loop (cdr types)
-                        (+ (align size algn)
-                           sz)
-                        (max algn max-align)))])))]
+     (let ([base (ctype-basetype c)])
+       (if (ctype? base)
+           (ctype-sizeof base)
+           (let ([align (lambda (size algn)
+                          (let ([amt (modulo size algn)])
+                            (if (zero? amt)
+                                size
+                                (+ size (- algn amt)))))])
+             (let loop ([types base] [size 0] [max-align 1])
+               (cond
+                [(null? types) (align size max-align)]
+                [else (let ([sz (ctype-sizeof (car types))]
+                            [algn (ctype-alignof (car types))])
+                        (loop (cdr types)
+                              (+ (align size algn)
+                                 sz)
+                              (max algn max-align)))])))))]
     [else
      ;; Everything else is pointer-sized:
      (foreign-sizeof 'void*)]))
@@ -472,7 +475,10 @@
     (raise-argument-error 'ctype-alignof "ctype?" c))
   (cond
    [(eq? 'struct (ctype-s-exp c))
-    (apply max (map ctype-alignof (ctype-basetype c)))]
+    (let ([next (ctype-basetype c)])
+      (if (ctype? next)
+          (ctype-alignof next)
+          (apply max (map ctype-alignof next))))]
    [else
     (ctype-sizeof c)]))
 
