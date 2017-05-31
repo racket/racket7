@@ -2,7 +2,7 @@ RACKET = ../../bin/racket
 SCHEME = scheme
 UNSAFE = # '(optimize-level 3)'
 
-COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort) (generate-wpo-files \#t)'
+COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort) (record-source-lines-and-columns \#t) (generate-wpo-files \#t)'
 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \

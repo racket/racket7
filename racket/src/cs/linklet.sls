@@ -712,23 +712,31 @@
   (define (transfer-srcloc v e stripped-e)
     (let ([src (correlated-source v)]
           [pos (correlated-position v)]
+          [line (correlated-line v)]
+          [column (correlated-column v)]
           [span (correlated-span v)])
       (if (and pos span (or (path? src) (string? src)))
-          (make-annotation e (make-source-object (source->sfd src) pos (+ pos span)) stripped-e)
+          (let ([pos (sub1 pos)]) ; Racket positions are 1-based; host Scheme positions are 0-based
+            (make-annotation e
+                             (make-source-object (source->sfd src)
+                                                 (if (and line column)
+                                                     ;; Racket columns are 0-based; host-Scheme columns are 1-based
+                                                     (make-file-position-object pos line (add1 column))
+                                                     pos)
+                                                 (+ pos span))
+                             stripped-e))
           e)))
 
   (define sfd-cache (make-weak-hash))
-  ;; FIXME: Using an empty port means that file positions will be
-  ;; reported instead of line and column numbers. Using actual file
-  ;; content at this point raises all sorts of issues, though.
-  (define empty-port (open-bytevector-input-port '#vu8()))
 
   (define (source->sfd src)
     (or (hash-ref sfd-cache src #f)
         (let ([str (if (path? src)
                        (path->string src)
                        src)])
-          (let ([sfd (make-source-file-descriptor str empty-port)])
+          ;; We'll use a file-position object in source objects, so
+          ;; the sfd checksum doesn't matter
+          (let ([sfd (source-file-descriptor str 0)])
             (hash-set! sfd-cache src sfd)
             sfd))))
 

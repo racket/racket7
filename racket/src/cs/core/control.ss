@@ -1042,7 +1042,7 @@
 (define (continuation-mark-set->context marks)
   (unless (continuation-mark-set? marks)
     (raise-argument-error 'continuation-mark-set->context "continuation-mark-set?" marks))
-  (continuation-mark-set-context marks))
+  (context->srcloc-context (continuation-mark-set-context marks)))
 
 (define current-continuation-marks
   (case-lambda

@@ -336,39 +336,68 @@
     (hashtable-set! link-instantiate-continuations k name)))
 
 ;; Convert a contination to a list of function-name and
-;; source information. Unfortuately, this traversal takes
-;; a while, so we limit it by `(error-print-context-length)`.
-;; (Even caching half-way up is not good enough; traversing
-;; a long continuation once takes a long time.)
+;; source information. Cache the result half-way up the
+;; traversal, so that it's amortized constant time.
+(define cached-contexts (make-weak-eq-hashtable))
 (define (continuation->context k)
   (let ([i (inspect/object k)])
-    (let loop ([i i] [n (|#%app| error-print-context-length)])
-      (cond
-       [(or (not (eq? (i 'type) 'continuation))
-            (zero? n))
-        '()]
-       [else
-        (let* ([name (or (let ([n (hashtable-ref link-instantiate-continuations
-                                                 (i 'value)
-                                                 #f)])
-                           (and n
-                                (string->symbol (format "body of ~a" n))))
-                         (let* ([c (i 'code)]
-                                [n (c 'name)])
-                           n))]
-               [desc
-                (call-with-values (lambda () (i 'source-path)) ; this is the slow part
-                  (case-lambda
-                   [()
-                    (and name (cons name #f))]
-                   [(path line col)
-                    (cons name (srcloc path line col #f #f))]
-                   [(path pos)
-                    (cons name (srcloc path #f #f pos #f))]))])
-          (let ([l (loop (i 'link) (sub1 n))])
-            (if desc
-                (cons desc l)
-                l)))]))))
+    (call-with-values
+     (lambda ()
+       (let loop ([i i] [slow-i i] [move? #f])
+         (cond
+          [(not (eq? (i 'type) 'continuation))
+           (values (slow-i 'value) '())]
+          [else
+           (let ([k (i 'value)])
+             (cond
+              [(hashtable-ref cached-contexts k #f)
+               => (lambda (l)
+                    (values slow-i l))]
+              [else
+               (let* ([name (or (let ([n (hashtable-ref link-instantiate-continuations
+                                                        k
+                                                        #f)])
+                                  (and n
+                                       (string->symbol (format "body of ~a" n))))
+                                (let* ([c (i 'code)]
+                                       [n (c 'name)])
+                                  n))]
+                      [desc
+                       (let* ([src (i 'source-object)]
+                              [src (and src
+                                        (file-position-object? (source-object-bfp src))
+                                        src)])
+                         (and (or name src)
+                              (cons name src)))])
+                 (call-with-values
+                     (lambda () (loop (i 'link) (if move? (slow-i 'link) slow-i) (not move?)))
+                   (lambda (slow-k l)
+                     (let ([l (if desc
+                                  (cons desc l)
+                                  l)])
+                       (when (eq? k slow-k)
+                         (hashtable-set! cached-contexts (i 'value) l))
+                       (values slow-k l)))))]))])))
+     (lambda (slow-k l)
+       l))))
+
+(define (context->srcloc-context l)
+  (let loop ([l l])
+    (cond
+     [(null? l) '()]
+     [else
+      (let* ([p (car l)]
+             [name (car p)]
+             [loc (and (cdr p)
+                       (call-with-values (lambda () (locate-source (source-object-sfd (cdr p))
+                                                                   (source-object-bfp (cdr p))))
+                         (case-lambda
+                          [() #f]
+                          [(path line col) (srcloc path line (sub1 col) #f #f)]
+                          [(path pos) (srcloc (add1 path) #f #f pos #f)])))])
+        (if (or name loc)
+            (cons (cons name loc) (loop (cdr l)))
+            (loop (cdr l))))])))
 
 (define (default-error-display-handler msg v)
   (eprintf "~a" msg)
@@ -376,10 +405,11 @@
             (and (exn? v)
                  (not (exn:fail:user? v))))
     (eprintf "\n  context...:")
-    (let loop ([l (if (exn? v)
-                      (continuation-mark-set-context (exn-continuation-marks v))
-                      (continuation->context
-                       (condition-continuation v)))]
+    (let loop ([l (context->srcloc-context
+                   (if (exn? v)
+                       (continuation-mark-set-context (exn-continuation-marks v))
+                       (continuation->context
+                        (condition-continuation v))))]
                [n (|#%app| error-print-context-length)])
       (unless (or (null? l) (zero? n))
         (let* ([p (car l)]

@@ -159,8 +159,14 @@
     (with-exn:fail:filesystem
      (rename-file old-pathname new-pathname)))
 
+  (define file-identities (make-hashtable equal-hash-code equal?))
   (define (file-or-directory-identity p as-link?)
-    (1/error 'file-or-directory-identity "not yet supported"))
+    (let ([key (1/path->string (1/simplify-path (1/path->complete-path p)))])
+      (let ([n (hashtable-ref file-identities key #f)])
+        (or n
+            (let ([n (hashtable-size file-identities)])
+              (hashtable-set! file-identities key n)
+              n)))))
 
   (define (file-size p)
     (1/error 'file-size "not yet supported"))
