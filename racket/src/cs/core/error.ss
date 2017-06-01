@@ -238,7 +238,7 @@
        string-append
        (symbol->string who)
        ": "
-       "range error...")
+       "range error....")
       (current-continuation-marks)))]
    [(who
      type-description

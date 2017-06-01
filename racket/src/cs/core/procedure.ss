@@ -469,7 +469,7 @@
 
 ;; ----------------------------------------
 
-(define/who (procedure-closure-contents-eq?	p1 p2)
+(define/who (procedure-closure-contents-eq? p1 p2)
   (check who procedure? p1)
   (check who procedure? p2)
   (when (and (#%procedure? p1)

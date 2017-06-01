@@ -45,7 +45,7 @@ rktl:
 PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm \
                     primitive/paramz.scm primitive/extfl.scm primitive/network.scm \
                     primitive/futures.scm primitive/foreign.scm primitive/place.scm \
-                    primitive/linklet.scm
+                    primitive/linklet.scm primitive/internal.scm
 
 expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS)
 	$(COMP) '(compile-file "expander.sls")' | $(SCHEME) -q $(EXPANDER_DEPS)

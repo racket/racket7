@@ -27,6 +27,7 @@
           unsafe-call-with-composable-continuation/no-wind
           
           with-continuation-mark
+          call/cm ; not exported to Racket
           call-with-immediate-continuation-mark
           continuation-mark-set-first
           continuation-mark-set->list
@@ -119,6 +120,7 @@
           procedure?
           procedure-specialize
           |#%app|
+          extract-procedure ; not exported to Racket
           procedure-arity-includes?
           procedure-arity
           procedure-result-arity
@@ -132,9 +134,9 @@
           chaperone?
           impersonator-of?
           chaperone-of?
-          impersonator-val
-          impersonate-ref
-          impersonate-set!
+          impersonator-val ; not exported to Racket
+          impersonate-ref ; not exported to Racket
+          impersonate-set! ; not exported to Racket
           impersonator-property?
           make-impersonator-property
           impersonator-property-accessor-procedure?

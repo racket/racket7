@@ -10,6 +10,6 @@
        (lambda (l apply?)
          expr ...
          (if apply?
-             (chez:apply values l)
+             (#%apply values l)
              l)))]))
 

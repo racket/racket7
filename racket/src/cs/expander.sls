@@ -32,6 +32,10 @@
           (io)
           (linklet))
 
+  ;; Set to `#t` to make compiled code compatible with changes to
+  ;; primitive libraries
+  (define compile-as-independent? #t)
+
   ;; The expander needs various tables to set up primitive modules, and
   ;; the `primitive-table` function is the bridge between worlds
 
@@ -75,6 +79,7 @@
   (include "primitive/place.scm")
   (include "primitive/foreign.scm")
   (include "primitive/linklet.scm")
+  (include "primitive/internal.scm")
 
   ;; ----------------------------------------
 
@@ -82,35 +87,74 @@
 
   ;; ----------------------------------------
 
-  ;; The environment is used to evaluate linklets, so all
-  ;; primitives need to be imported (prefered) or defined
-  ;; (less efficient to access) there
-  (eval `(import (rename (core)
-                         [correlated? syntax?]
-                         [correlated-source syntax-source]
-                         [correlated-line syntax-line]
-                         [correlated-column syntax-column]
-                         [correlated-position syntax-position]
-                         [correlated-span syntax-span]
-                         [correlated-e syntax-e]
-                         [correlated->datum syntax->datum]
-                         [datum->correlated datum->syntax]
-                         [correlated-property syntax-property]
-                         [correlated-property-symbol-keys syntax-property-symbol-keys])
-                 (thread)
-                 (io)
-                 (regexp)
-                 (linklet)))
-
+  ;; The environment is used to evaluate linklets, so all primitives
+  ;; need to be there imported (prefered) or defined (less efficient,
+  ;; but less tied to library implementations)
+  (unless compile-as-independent?
+    (eval `(import (rename (core)
+                           [correlated? syntax?]
+                           [correlated-source syntax-source]
+                           [correlated-line syntax-line]
+                           [correlated-column syntax-column]
+                           [correlated-position syntax-position]
+                           [correlated-span syntax-span]
+                           [correlated-e syntax-e]
+                           [correlated->datum syntax->datum]
+                           [datum->correlated datum->syntax]
+                           [correlated-property syntax-property]
+                           [correlated-property-symbol-keys syntax-property-symbol-keys])
+                   (thread)
+                   (io)
+                   (regexp)
+                   (linklet))))
+                         
   (eval `(define primitive-table ',primitive-table))
   
   (let ([install-table
          (lambda (table)
            (hash-for-each table
                           (lambda (k v)
-                            (eval `(define ,k ',v)))))])
-    (install-table compat-table))
-  
+                            ;; Avoid redefining some primitives that we
+                            ;; don't have to replace:
+                            (unless (memq k '(vector list cons car cdr eq?))
+                              (eval `(define ,k ',v))))))])
+    (install-table compat-table)
+    (when compile-as-independent?
+      (install-table kernel-table)
+      (install-table unsafe-table)
+      (install-table flfxnum-table)
+      (install-table paramz-table)
+      (install-table extfl-table)
+      (install-table network-table)
+      (install-table futures-table)
+      (install-table place-table)
+      (install-table foreign-table)
+      (install-table linklet-table)
+      (install-table internal-table)))
+
+  (when compile-as-independent?
+    (eval '(define-syntax with-continuation-mark
+             (syntax-rules ()
+               [(_ key val body)
+                (call/cm key val (lambda () body))])))
+    (eval '(define-syntax begin0
+             (syntax-rules ()
+               [(_ expr0 expr ...)
+                (call-with-values (lambda ()
+                                    (call-with-values (lambda () expr0)
+                                      (case-lambda
+                                       [(x) (values x #f)]
+                                       [args (values args #t)])))
+                  (lambda (l apply?)
+                    expr ...
+                    (if apply?
+                        (#%apply values l)
+                        l)))])))
+    (eval '(define-syntax |#%app|
+             (syntax-rules ()
+               [(_ rator rand ...)
+                ((extract-procedure rator) rand ...)]))))
+
   ;; ----------------------------------------
 
   ;; `install-reader!` is from the `io` library, where the
