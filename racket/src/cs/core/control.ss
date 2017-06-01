@@ -141,12 +141,11 @@
 ;; Detected to prevent some jumps:
 (define the-barrier-prompt-tag (create-continuation-prompt-tag 'barrier))
 
-(define make-continuation-prompt-tag
+(define/who make-continuation-prompt-tag
   (case-lambda
     [() (create-continuation-prompt-tag #f)]
     [(name)
-     (unless (symbol? name)
-       (raise-argument-error 'make-continuation-prompt-tag "symbol?" name))
+     (check who symbol? name)
      (create-continuation-prompt-tag name)]))
      
 (define (default-continuation-prompt-tag) the-default-continuation-prompt-tag)
@@ -158,9 +157,8 @@
 (define break-enabled-key (gensym 'break-enabled))
 
 ;; FIXME: add caching to avoid full traversal
-(define (continuation-prompt-available? tag)
-  (unless (continuation-prompt-tag? tag)
-    (raise-argument-error 'continuation-prompt-tag-available? "continuation-prompt-tag?" tag))
+(define/who (continuation-prompt-available? tag)
+  (check who continuation-prompt-tag? tag)
   (let ([tag (strip-impersonator tag)])
     (or (eq? tag the-default-continuation-prompt-tag)
         (eq? tag the-root-continuation-prompt-tag)
@@ -172,17 +170,14 @@
             #t]
            [else (loop (cdr mc))])))))
 
-(define call-with-continuation-prompt
+(define/who call-with-continuation-prompt
   (case-lambda
     [(proc) (call-with-continuation-prompt proc the-default-continuation-prompt-tag #f)]
     [(proc tag) (call-with-continuation-prompt proc tag #f)]
     [(proc tag handler . args)
-     (unless (procedure? proc)
-       (raise-argument-error 'call-with-continuation-prompt "procedure?" proc))
-     (unless (continuation-prompt-tag? tag)
-       (raise-argument-error 'call-with-continuation-prompt "continuation-prompt-tag?" tag))
-     (unless (or (not handler) (procedure? handler))
-       (raise-argument-error 'call-with-continuation-prompt "(or/c #f procedure?)" handler))
+     (check who procedure? proc)
+     (check who continuation-prompt-tag? tag)
+     (check who :or-false procedure? handler)
      (start-uninterrupted 'prompt)
      (call-in-empty-metacontinuation-frame
       (strip-impersonator tag)
@@ -198,9 +193,7 @@
 
 (define (make-default-abort-handler tag)
   (lambda (abort-thunk)
-    (unless (and (procedure? abort-thunk)
-                 (procedure-arity-includes? abort-thunk 0))
-      (raise-argument-error 'default-continuation-prompt-handler "(procedure-arity-includes/c 0)" abort-thunk))
+    (check 'default-continuation-prompt-handler (procedure-arity-includes/c 0) abort-thunk)
     (call-with-continuation-prompt abort-thunk tag #f)))
 
 (define (resume-metacontinuation results)
@@ -347,9 +340,8 @@
 
 ;; ----------------------------------------
 
-(define (abort-current-continuation tag . args)
-  (unless (continuation-prompt-tag? tag)
-    (raise-argument-error 'abort-current-continuation "continuation-prompt-tag?" tag))
+(define/who (abort-current-continuation tag . args)
+  (check who continuation-prompt-tag? tag)
   (check-prompt-tag-available 'abort-current-continuation (strip-impersonator tag))
   (start-uninterrupted 'abort)
   (let ([args (apply-impersonator-abort-wrapper tag args)]
@@ -375,10 +367,8 @@
 
 ;; ----------------------------------------
 
-(define (call-with-continuation-barrier p)
-  (unless (and (procedure? p)
-               (procedure-arity-includes? p 0))
-    (raise-argument-error 'call-with-continuation-barrier "(procedure-arity-includes/c 0)" p))
+(define/who (call-with-continuation-barrier p)
+  (check who (procedure-arity-includes/c 0) p)
   (start-uninterrupted 'barrier)
   (call-in-empty-metacontinuation-frame
    the-barrier-prompt-tag ; <- recognized as a barrier by continuation capture or call
@@ -397,16 +387,13 @@
 (define-record non-composable-continuation full-continuation (tag))
 (define-record escape-continuation continuation (tag))
 
-(define call-with-current-continuation
+(define/who call-with-current-continuation
   (case-lambda
     [(proc) (call-with-current-continuation proc
                                             the-default-continuation-prompt-tag)]
     [(proc tag)
-     (unless (and (procedure? proc)
-                  (procedure-arity-includes? proc 1))
-       (raise-argument-error 'call-with-current-continuation "(procedure-arity-includes/c 1)" proc))
-     (unless (continuation-prompt-tag? tag)
-       (raise-argument-error 'call-with-current-continuation "continuation-prompt-tag?" tag))
+     (check who (procedure-arity-includes/c 1) proc)
+     (check who continuation-prompt-tag? tag)
      (call-with-end-uninterrupted
       (lambda ()
         (call/cc
@@ -419,15 +406,12 @@
              (extract-metacontinuation 'call-with-current-continuation (strip-impersonator tag) #t)
              tag))))))]))
 
-(define call-with-composable-continuation
+(define/who call-with-composable-continuation
   (case-lambda
     [(p) (call-with-composable-continuation p the-default-continuation-prompt-tag)]
     [(p tag)
-     (unless (and (procedure? p)
-                  (procedure-arity-includes? p 1))
-       (raise-argument-error 'call-with-composable-continuation "(procedure-arity-includes/c 1)" p))
-     (unless (continuation-prompt-tag? tag)
-       (raise-argument-error 'call-with-composable-continuation "continuation-prompt-tag?" tag))
+     (check who (procedure-arity-includes/c 1) p)
+     (check who continuation-prompt-tag? tag)
      (call-with-composable-continuation* p tag #t)]))
 
 (define (call-with-composable-continuation* p tag wind?)
@@ -447,10 +431,8 @@
 (define (unsafe-call-with-composable-continuation/no-wind p tag)
   (call-with-composable-continuation* p tag #f))
 
-(define (call-with-escape-continuation p)
-  (unless (and (procedure? p)
-               (procedure-arity-includes? p 1))
-    (raise-argument-error 'call-with-escape-continuation "(procedure-arity-includes/c 1)" p))
+(define/who (call-with-escape-continuation p)
+  (check who (procedure-arity-includes/c 1) p)
   (let ([tag (make-continuation-prompt-tag)])
     (call-with-continuation-prompt
      (lambda ()
@@ -806,13 +788,11 @@
 (define-record elem+cache (elem cache))
 (define (elem+cache-strip t) (if (elem+cache? t) (elem+cache-elem t) t))
 
-(define call-with-immediate-continuation-mark
+(define/who call-with-immediate-continuation-mark
   (case-lambda
     [(key proc) (call-with-immediate-continuation-mark key proc #f)]
     [(key proc default-v)
-     (unless (and (procedure? proc)
-                  (procedure-arity-includes? proc 1))
-       (raise-argument-error 'call-with-immediate-continuation-mark "(procedure-arity-includes/c 1)" proc))
+     (check who (procedure-arity-includes/c 1) proc)
      (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'call-with-immediate-continuation-mark key)])
        (cond
         [(not *mark-stack*) (proc default-v)]
@@ -827,7 +807,7 @@
                                     (wrapper v))))
                         (proc default-v))))]))]))
 
-(define continuation-mark-set-first
+(define/who continuation-mark-set-first
   (case-lambda
     [(marks key) (continuation-mark-set-first marks key #f)]
     [(marks key none-v)
@@ -840,11 +820,8 @@
                                       the-root-continuation-prompt-tag
                                       the-default-continuation-prompt-tag))]
     [(marks key none-v prompt-tag)
-     (unless (or (not marks)
-                 (continuation-mark-set? marks))
-       (raise-argument-error 'continuation-mark-set-first "(or/c continuation-mark-set? #f)" marks))
-     (unless (continuation-prompt-tag? prompt-tag)
-       (raise-argument-error 'continuation-mark-set-first "continuation-prompt-tag?" prompt-tag))
+     (check who continuation-mark-set? :or-false marks)
+     (check who continuation-prompt-tag? prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
        (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set-first key)])
          (let ([v (marks-search (or (and marks
@@ -953,15 +930,12 @@
                                                key
                                                (combine-cache-result v old)))))))
 
-(define continuation-mark-set->list
+(define/who continuation-mark-set->list
   (case-lambda
     [(marks key) (continuation-mark-set->list marks key the-default-continuation-prompt-tag)]
     [(marks key prompt-tag)
-     (unless (or (not marks)
-                 (continuation-mark-set? marks))
-       (raise-argument-error 'continuation-mark-set->list "(or/c continuation-mark-set? #f)" marks))
-     (unless (continuation-prompt-tag? prompt-tag)
-       (raise-argument-error 'continuation-mark-set->list "continuation-prompt-tag?" prompt-tag))
+     (check who continuation-mark-set? :or-false marks)
+     (check who continuation-prompt-tag? prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
        (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list key)])
          (let chain-loop ([mark-chain (or (and marks
@@ -986,18 +960,14 @@
                            (loop (cdr marks))
                            (cons (wrapper v) (loop (cdr marks)))))]))]))]))))]))
 
-(define continuation-mark-set->list*
+(define/who continuation-mark-set->list*
   (case-lambda
     [(marks keys) (continuation-mark-set->list* marks keys the-default-continuation-prompt-tag #f)]
     [(marks keys prompt-tag) (continuation-mark-set->list* marks keys prompt-tag #f)]
     [(marks keys prompt-tag none-v)
-     (unless (or (not marks)
-                 (continuation-mark-set? marks))
-       (raise-argument-error 'continuation-mark-set->list "(or/c continuation-mark-set? #f)" marks))
-     (unless (list? keys)
-       (raise-argument-error 'continuation-mark-set->list "list?" keys))
-     (unless (continuation-prompt-tag? prompt-tag)
-       (raise-argument-error 'continuation-mark-set->list "continuation-prompt-tag?" prompt-tag))
+     (check who continuation-mark-set? :or-false marks)
+     (check who list? keys)
+     (check who continuation-prompt-tag? prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
        (let-values ([(keys wrappers) (map/2-values (lambda (k)
                                                      (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list* k))
@@ -1039,30 +1009,26 @@
                                  (vector-set! tmp i ((car wrappers) v))
                                  (key-loop (cdr keys) (cdr wrappers) (add1 i) #t)]))])))]))]))])))))]))
 
-(define (continuation-mark-set->context marks)
-  (unless (continuation-mark-set? marks)
-    (raise-argument-error 'continuation-mark-set->context "continuation-mark-set?" marks))
+(define/who (continuation-mark-set->context marks)
+  (check who continuation-mark-set? marks)
   (context->srcloc-context (continuation-mark-set-context marks)))
 
-(define current-continuation-marks
+(define/who current-continuation-marks
   (case-lambda
     [() (current-continuation-marks the-default-continuation-prompt-tag)]
     [(tag)
-     (unless (continuation-prompt-tag? tag)
-       (raise-argument-error 'current-continuation-marks "continuation-prompt-tag?" tag))
+     (check who continuation-prompt-tag? tag)
      (call/cc
       (lambda (k)
         (make-continuation-mark-set (prune-mark-chain-suffix (strip-impersonator tag) (current-mark-chain))
                                     (continuation->context k))))]))
 
-(define continuation-marks
+(define/who continuation-marks
   (case-lambda
     [(k) (continuation-marks k (default-continuation-prompt-tag))]
     [(k tag)
-     (unless (or (not k) (continuation? k))
-       (raise-argument-error 'continuation-marks "(or/c continuation? #f)" k))
-     (unless (continuation-prompt-tag? tag)
-       (raise-argument-error 'continuation-marks "continuation-prompt-tag?" tag))
+     (check who continuation? :or-false k)
+     (check who continuation-prompt-tag? tag)
      (let ([tag (strip-impersonator tag)])
        (cond
         [(full-continuation? k)
@@ -1185,14 +1151,9 @@
 (define (do-impersonate-continuation-mark-key who
                                               key get set props
                                               make-continuation-mark-key-impersonator)
-  (unless (continuation-mark-key? key)
-    (raise-argument-error who "continuation-mark-key?" key))
-  (unless (and (procedure? get)
-               (procedure-arity-includes? get 1))
-    (raise-argument-error who "(procedure-arity-includes/c 1)" get))
-  (unless (and (procedure? get)
-               (procedure-arity-includes? set 1))
-    (raise-argument-error who "(procedure-arity-includes/c 1)" set))
+  (check who continuation-mark-key? key)
+  (check who (procedure-arity-includes/c 1) get)
+  (check who (procedure-arity-includes/c 1) set)
   (make-continuation-mark-key-impersonator (strip-impersonator key)
                                            key
                                            (add-impersonator-properties who
@@ -1235,12 +1196,9 @@
 
 (define (do-impersonate-prompt-tag who tag handler abort args
                                    make-continuation-prompt-tag-impersonator)
-  (unless (continuation-prompt-tag? tag)
-    (raise-argument-error who "continuation-prompt-tag?" tag))
-  (unless (procedure? handler)
-    (raise-argument-error who "procedure?" handler))
-  (unless (procedure? abort)
-    (raise-argument-error who "procedure?" abort))
+  (check who continuation-prompt-tag? tag)
+  (check who procedure? handler)
+  (check who procedure? abort)
   (let* ([cc-guard (and (pair? args)
                         (procedure? (car args))
                         (car args))]
@@ -1250,8 +1208,7 @@
                                   (car args))]
          [args (if callcc-impersonate (cdr args) args)])
     (when callcc-impersonate
-      (unless (procedure-arity-includes? callcc-impersonate 1)
-        (raise-argument-error who "(procedure-arith-includes/c 1)" abort)))
+      (check who (procedure-arity-includes/c 1) abort))
     (make-continuation-prompt-tag-impersonator
      (strip-impersonator tag)
      tag

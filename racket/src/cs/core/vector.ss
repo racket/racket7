@@ -20,28 +20,20 @@
 (define-record vector-chaperone chaperone (ref set))
 (define-record vector-impersonator impersonator (ref set))
 
-(define (chaperone-vector vec ref set . props)
-  (unless (vector? vec)
-    (raise-argument-error 'chaperone-vector "vector?" vec))
+(define/who (chaperone-vector vec ref set . props)
+  (check who vector? vec)
   (do-impersonate-vector 'chaperone-vector make-vector-chaperone vec ref set
                          make-props-chaperone props))
 
-(define (impersonate-vector vec ref set . props)
-  (unless (mutable-vector? vec)
-    (raise-argument-error 'impersonate-vector "(and/c vector? (not/c immutable?))" vec))
+(define/who (impersonate-vector vec ref set . props)
+  (check who mutable-vector? :contract "(and/c vector? (not/c immutable?))" vec)
   (do-impersonate-vector 'impersonate-vector make-vector-impersonator vec ref set
                          make-props-impersonator props))
 
 (define (do-impersonate-vector who make-vector-impersonator vec ref set
                                make-props-impersonator props)
-  (unless (or (not ref)
-              (and (procedure? ref)
-                   (procedure-arity-includes? ref 3)))
-    (raise-argument-error who "(or/c (procedure-arity-includes/c 3) #f)" ref))
-  (unless (or (not set)
-              (and (procedure? set)
-                   (procedure-arity-includes? set 3)))
-    (raise-argument-error who "(or/c (procedure-arity-includes/c 3) #f)" set))
+  (check who (procedure-arity-includes/c 3) :or-false ref)
+  (check who (procedure-arity-includes/c 3) :or-false set)
   (let ([val (if (impersonator? vec)
                  (impersonator-val vec)
                  vec)]
@@ -67,28 +59,20 @@
 (define-record vector*-chaperone vector-chaperone ())
 (define-record vector*-impersonator vector-impersonator ())
 
-(define (chaperone-vector* vec ref set . props)
-  (unless (vector? vec)
-    (raise-argument-error 'chaperone-vector* "vector?" vec))
+(define/who (chaperone-vector* vec ref set . props)
+  (check who vector? vec)
   (do-impersonate-vector* 'chaperone-vector* make-vector*-chaperone vec ref set
                           make-props-chaperone props))
 
-(define (impersonate-vector* vec ref set . props)
-  (unless (mutable-vector? vec)
-    (raise-argument-error 'impersonate-vector* "(and/c vector? (not/c immutable?))" vec))
+(define/who (impersonate-vector* vec ref set . props)
+  (check who mutable-vector? vec)
   (do-impersonate-vector 'impersonate-vector* make-vector*-impersonator vec ref set
                          make-props-impersonator props))
 
 (define (do-impersonate-vector* who make-vector*-impersonator vec ref set
                                 make-props-impersonator props)
-  (unless (or (not ref)
-              (and (procedure? ref)
-                   (procedure-arity-includes? ref 4)))
-    (raise-argument-error who "(or/c (procedure-arity-includes/c 4) #f)" ref))
-  (unless (or (not set)
-              (and (procedure? set)
-                   (procedure-arity-includes? set 4)))
-    (raise-argument-error who "(or/c (procedure-arity-includes/c 4) #f)" set))
+  (check who (procedure-arity-includes/c 4) :or-false ref)
+  (check who (procedure-arity-includes/c 4) :or-false set)
   (let ([val (if (impersonator? vec)
                  (impersonator-val vec)
                  vec)]
@@ -217,7 +201,7 @@
     ;; Let primitive complain:
     (#2%vector-copy vec)]))
 
-(define vector-copy!
+(define/who vector-copy!
   (case-lambda
    [(dest dest-start src)
     (vector-copy! dest dest-start src 0
@@ -226,8 +210,7 @@
     (vector-copy! dest dest-start src src-start
                   (if (vector? src) (vector-length src) 0))]
    [(dest dest-start src src-start src-end)
-    (unless (mutable-vector? dest)
-      (raise-argument-error 'vector-copy! "(and/c vector? (not/c immutable?))" dest))
+    (check who mutable-vector? :contract "(and/c vector? (not/c immutable?))" dest)
     (let loop ([i (- src-end src-start)])
       (unless (zero? i)
         (let ([i (sub1 i)])
@@ -255,13 +238,12 @@
                     [else (cons (vector-ref vec start)
                                 (loop (fx1+ start)))])))]))
 
-(define (vector-fill! vec v)
+(define/who (vector-fill! vec v)
   (cond
    [(#%vector? vec)
     (#3%vector-fill! vec v)]
    [(vector? vec)
-    (unless (mutable-vector? v)
-      (raise-argument-error 'vector-fill! "(and/c vector? (not immutable?))" v))
+    (check who mutable-vector? :contract "(and/c vector? (not immutable?))" v)
     (let ([len (vector-length vec)])
       (let loop ([i 0])
         (unless (= i len)

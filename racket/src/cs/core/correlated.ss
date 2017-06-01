@@ -9,21 +9,21 @@
 
 (define-record correlated (e srcloc props))
 
-(define (datum->correlated ignored datum src)
-  (unless (or (not src) (correlated? src) (srcloc? src) (encoded-srcloc? src))
-    (raise-argument-error 'datum->correlated
-                          (string-append "(or #f syntax? srcloc?\n"
-                                         "    (list/c any/c\n"
-                                         "            (or/c exact-positive-integer? #f)\n"
-                                         "            (or/c exact-nonnegative-integer? #f)\n"
-                                         "            (or/c exact-positive-integer? #f)\n"
-                                         "            (or/c exact-nonnegative-integer? #f))\n"
-                                         "    (vector/c any/c\n"
-                                         "              (or/c exact-positive-integer? #f)\n"
-                                         "              (or/c exact-nonnegative-integer? #f)\n"
-                                         "              (or/c exact-positive-integer? #f)\n"
-                                         "              (or/c exact-nonnegative-integer? #f)))")
-                          src))
+(define/who (datum->correlated ignored datum src)
+  (check who
+         :test (or (not src) (correlated? src) (srcloc? src) (encoded-srcloc? src))
+         :contract (string-append "(or #f syntax? srcloc?\n"
+                                  "    (list/c any/c\n"
+                                  "            (or/c exact-positive-integer? #f)\n"
+                                  "            (or/c exact-nonnegative-integer? #f)\n"
+                                  "            (or/c exact-positive-integer? #f)\n"
+                                  "            (or/c exact-nonnegative-integer? #f))\n"
+                                  "    (vector/c any/c\n"
+                                  "              (or/c exact-positive-integer? #f)\n"
+                                  "              (or/c exact-nonnegative-integer? #f)\n"
+                                  "              (or/c exact-positive-integer? #f)\n"
+                                  "              (or/c exact-nonnegative-integer? #f)))")
+         src)
   (if (correlated? datum)
       datum
       (make-correlated datum (extract-srcloc src) empty-hasheq)))
@@ -39,27 +39,23 @@
                     (cons a d)))]
    [else e]))
 
-(define (correlated-property-symbol-keys v)
-  (unless (correlated? v)
-    (raise-argument-error 'correlated-property-symbol-keys "correlated?" v))
+(define/who (correlated-property-symbol-keys v)
+  (check who correlated? v)
   (hash-map (correlated-props v) (lambda (k v) k)))
 
-(define correlated-property
+(define/who correlated-property
   (case-lambda
    [(v k)
-    (unless (correlated? v)
-      (raise-argument-error 'correlated-property-symbol-keys "correlated?" v))
+    (check who correlated? v)
     (hash-ref (correlated-props v) k #f)]
    [(v k val)
-    (unless (correlated? v)
-      (raise-argument-error 'correlated-property-symbol-keys "correlated?" v))
+    (check who correlated? v)
     (make-correlated (correlated-e v)
                      (correlated-srcloc v)
                      (hash-set (correlated-props v) k val))]))
 
-(define (correlated-srcloc-field who v srcloc-x)
-  (unless (correlated? v)
-    (raise-argument-error who "correlated?" v))
+(define/who (correlated-srcloc-field who v srcloc-x)
+  (check who correlated? v)
   (let ([s (correlated-srcloc v)])
     (and s (srcloc-x s))))
 

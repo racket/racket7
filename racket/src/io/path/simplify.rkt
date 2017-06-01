@@ -11,8 +11,8 @@
 
 (provide simplify-path)
 
-(define (simplify-path p-in [use-filesystem? #t])
-  (check-path-argument 'simplify-path p-in)
+(define/who (simplify-path p-in [use-filesystem? #t])
+  (check-path-argument who p-in)
   (define p (->path p-in))
   (define convention (path-convention p))
   (cond

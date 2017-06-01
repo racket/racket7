@@ -17,9 +17,9 @@
                       string-copy! substring
                       read-char peek-char
                       as-char)
-  (define (read-line [in (current-input-port)] [mode 'linefeed])
-    (check 'read-line input-port? in)
-    (check 'read-line ok-mode? #:contract ok-mode-str mode)
+  (define/who (read-line [in (current-input-port)] [mode 'linefeed])
+    (check who input-port? in)
+    (check who ok-mode? #:contract ok-mode-str mode)
     (define cr? (memq mode '(return any any-one)))
     (define lf? (memq mode '(linefeed any any-one)))
     (define crlf? (memq mode '(return-linefeed any)))

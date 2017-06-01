@@ -36,14 +36,14 @@
 
 (struct semaphore-peek-select-waiter select-waiter ())
 
-(define (make-semaphore [init 0])
-  (check 'make-semaphore exact-nonnegative-integer? init)
+(define/who (make-semaphore [init 0])
+  (check who exact-nonnegative-integer? init)
   (semaphore init (make-queue)))
 
 ;; ----------------------------------------
 
-(define (semaphore-post s)
-  (check 'semaphore-post semaphore? s)
+(define/who (semaphore-post s)
+  (check who semaphore? s)
   (atomically
    (let loop ()
      (define w (queue-remove! (semaphore-queue s)))
@@ -69,8 +69,8 @@
 
 ;; ----------------------------------------
 
-(define (semaphore-try-wait? s)
-  (check 'semaphore-wait semaphore? s)
+(define/who (semaphore-try-wait? s)
+  (check who semaphore? s)
   (atomically
    (define c (semaphore-count s))
    (cond
@@ -79,8 +79,8 @@
       #t]
      [else #f])))
 
-(define (semaphore-wait s)
-  (check 'semaphore-wait semaphore? s)
+(define/who (semaphore-wait s)
+  (check who semaphore? s)
   ((atomically
     (define c (semaphore-count s))
     (cond

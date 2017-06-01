@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../error/abort.rkt"
+(require "../common/check.rkt"
+         "../error/abort.rkt"
          "path.rkt"
          "check-path.rkt"
          "sep.rkt"
@@ -9,12 +10,12 @@
 (provide split-path
          explode-path)
 
-(define (split-path p)
-  (check-path-argument 'split-path p)
+(define/who (split-path p)
+  (check-path-argument who p)
   (split (->path p)))
 
-(define (explode-path p)
-  (check-path-argument 'explode-path p)
+(define/who (explode-path p)
+  (check-path-argument who p)
   (reverse (split (->path p) #:explode? #t)))
 
 ;; ----------------------------------------

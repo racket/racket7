@@ -2,7 +2,7 @@
 (require (for-syntax racket/base)
          "../common/check.rkt")
 
-(provide check
+(provide (all-from-out "../common/check.rkt")
          check-convention
          check-path-string
          check-path-bytes)

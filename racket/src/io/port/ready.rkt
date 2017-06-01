@@ -7,8 +7,8 @@
 (provide byte-ready?
          char-ready?)
 
-(define (byte-ready? in)
-  (check 'byte-ready? input-port? in)
+(define/who (byte-ready? in)
+  (check who input-port? in)
   (let ([in (->core-input-port in)])
     (define peek-byte (core-input-port-peek-byte in))
     (define b (and peek-byte (peek-byte)))
@@ -18,8 +18,8 @@
        (eq? 1 (peek-bytes-avail!* (make-bytes 1) 0 #f in))]
       [else #f])))
 
-(define (char-ready? in)
-  (check 'char-ready? input-port? in)
+(define/who (char-ready? in)
+  (check who input-port? in)
   (let ([in (->core-input-port in)])
     (define peek-byte (core-input-port-peek-byte in))
     (define b (and peek-byte (peek-byte)))

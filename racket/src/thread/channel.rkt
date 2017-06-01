@@ -39,8 +39,8 @@
 
 ;; ----------------------------------------
 
-(define (channel-get ch)
-  (check 'channel-get channel? ch)
+(define/who (channel-get ch)
+  (check who channel? ch)
   (define b (box #f))
   (let receive () ; loop if a retry is needed
     ((atomically
@@ -99,8 +99,8 @@
 ;; ----------------------------------------
 
 
-(define (channel-put ch v)
-  (check 'channel-put channel? ch)
+(define/who (channel-put ch v)
+  (check who channel? ch)
   ((atomically
     (define gw+b (queue-remove! (channel-get-queue ch)))
     (define pw (current-thread))

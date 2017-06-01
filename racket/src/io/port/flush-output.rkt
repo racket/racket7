@@ -4,8 +4,8 @@
 
 (provide flush-output)
 
-(define (flush-output p)
-  (check 'flush-output output-port? p)
+(define/who (flush-output p)
+  (check who output-port? p)
   (let ([p (->core-output-port p)])
     (let loop ()
       (define r ((core-output-port-write-out p) #"" 0 0 #f #f #f))

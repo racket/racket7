@@ -18,8 +18,8 @@
                 root-level-timestamp-box ; box of integer
                 [level-sema #:mutable])) ; to report when a receiver is added
 
-(define (logger-name logger)
-  (check 'logger-name logger? logger)
+(define/who (logger-name logger)
+  (check who logger? logger)
   (logger-topic logger))
 
 (define (create-logger #:topic topic #:parent parent #:propagate-filters propagate-filters)

@@ -61,8 +61,8 @@
                                 (set! n (queue-add! (queue-log-receiver-waiters lr) b))
                                 (values #f #f)]))))]))))
 
-(define (make-log-receiver logger level . args)
-  (check 'make-log-receiver logger? logger)
+(define/who (make-log-receiver logger level . args)
+  (check who logger? logger)
   (define lr (queue-log-receiver (parse-filters 'make-log-receiver (cons level args) #:default-level 'none)
                                  (make-queue)
                                  (make-queue)))
@@ -80,8 +80,8 @@
     (host:write-bytes (string->bytes/utf-8 (vector-ref msg 1)) stderr)
     (host:write-bytes #"\n" stderr)))
 
-(define (add-stderr-log-receiver! logger . args)
-  (check 'add-strerr-log-receiver! logger? logger)
+(define/who (add-stderr-log-receiver! logger . args)
+  (check who logger? logger)
   (define lr (stderr-log-receiver (parse-filters 'make-stderr-log-receiver args #:default-level 'none)))
   (atomically
    (add-log-receiver! logger lr)

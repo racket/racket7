@@ -8,15 +8,15 @@
          open-output-string
          get-output-string)
 
-(define (open-input-string str [name 'string])
-  (check 'open-input-string string? str)
+(define/who (open-input-string str [name 'string])
+  (check who string? str)
   (open-input-bytes (string->bytes/utf-8 str) name))
 
 (define (open-output-string [name 'string])
   (open-output-bytes name))
 
-(define (get-output-string o)
-  (check 'get-output-string (lambda (v) (and (output-port? o) (string-port? o)))
+(define/who (get-output-string o)
+  (check who (lambda (v) (and (output-port? o) (string-port? o)))
          #:contract "(and/c output-port? string-port?)"
          o)
   (bytes->string/utf-8 (get-output-bytes o) #\?))

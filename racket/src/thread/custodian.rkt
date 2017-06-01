@@ -24,43 +24,43 @@
 
 (define root-custodian (custodian #f))
 
-(define current-custodian
+(define/who current-custodian
   (make-parameter root-custodian
                   (lambda (v)
-                    (check 'current-custodian custodian? v)
+                    (check who custodian? v)
                     v)))
 
-(define (make-custodian [parent (current-custodian)])
-  (check 'make-custodian custodian? parent)
+(define/who (make-custodian [parent (current-custodian)])
+  (check who custodian? parent)
   (custodian parent))
 
 (define (unsafe-make-custodian-at-root)
   (make-custodian root-custodian))
 
-(define (custodian-shutdown-all c)
-  (check 'custodian-shutdown-all custodian? c)
+(define/who (custodian-shutdown-all c)
+  (check who custodian? c)
   (void))
 
-(define (custodian-managed-list c super-c)
-  (check 'custodian-managed-list custodian? c)
-  (check 'custodian-managed-list custodian? super-c)
+(define/who (custodian-managed-list c super-c)
+  (check who custodian? c)
+  (check who custodian? super-c)
   '())
 
 (define (custodian-memory-accounting-available?)
   #f)
 
-(define (custodian-require-memory limit-cust need-amt stop-cust)
-  (check 'custodian-require-memory custodian? limit-cust)
-  (check 'custodian-require-memory exact-nonnegative-integer? need-amt)
-  (check 'custodian-require-memory custodian? stop-cust)
+(define/who (custodian-require-memory limit-cust need-amt stop-cust)
+  (check who custodian? limit-cust)
+  (check who exact-nonnegative-integer? need-amt)
+  (check who custodian? stop-cust)
   (raise (exn:fail:unsupported
           "custodian-require-memory: unsupported"
           (current-continuation-marks))))
 
-(define (custodian-limit-memory limit-cust need-amt [stop-cust limit-cust])
-  (check 'custodian-limit-memory custodian? limit-cust)
-  (check 'custodian-limit-memory exact-nonnegative-integer? need-amt)
-  (check 'custodian-limit-memory custodian? stop-cust)
+(define/who (custodian-limit-memory limit-cust need-amt [stop-cust limit-cust])
+  (check who custodian? limit-cust)
+  (check who exact-nonnegative-integer? need-amt)
+  (check who custodian? stop-cust)
   (raise (exn:fail:unsupported
           "custodian-limit-memory: unsupported"
           (current-continuation-marks))))
@@ -70,8 +70,8 @@
 (define (make-custodian-box v)
   (custodian-box v))
   
-(define (custodian-box-value cb)
-  (check 'custodian-box-value custodian-box? cb)
+(define/who (custodian-box-value cb)
+  (check who custodian-box? cb)
   (custodian-box-v cb))
 
 ;; ----------------------------------------

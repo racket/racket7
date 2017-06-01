@@ -18,7 +18,7 @@
 (define port-count-lines-enabled
   (make-parameter #f (lambda (v) (and v #t))))
 
-(define (port-count-lines! p)
+(define/who (port-count-lines! p)
   (cond
     [(input-port? p)
      (let ([p (->core-input-port p)])
@@ -37,22 +37,18 @@
          (define count-lines! (core-output-port-count-lines! p))
          (when count-lines! (count-lines!))))]
     [else
-     (check 'port-count-lines! (lambda (x) #f)
-            #:contract "port?"
-            p)]))
+     (check who #:test #f #:contract "port?" p)]))
 
-(define (port-counts-lines? p)
+(define/who (port-counts-lines? p)
   (cond
     [(input-port? p)
      (and (core-input-port-line (->core-input-port p)) #t)]
     [(output-port? p)
      (and (core-output-port-line (->core-output-port p)) #t)]
     [else
-     (check 'port-counts-lines? (lambda (x) #f)
-            #:contract "port?"
-            p)]))
+     (check who #:test #f #:contract "port?" p)]))
 
-(define (port-next-location p)
+(define/who (port-next-location p)
   (cond
     [(input-port? p)
      (let ([p (->core-input-port p)])
@@ -65,23 +61,15 @@
                (core-output-port-column p)
                (core-output-port-position p)))]
     [else
-     (check 'port-next-location (lambda (x) #f)
-            #:contract "port?"
-            p)]))
+     (check who #:test #f #:contract "port?" p)]))
 
-(define (set-port-next-location! p line col pos)
-  (check 'set-port-next-location! (lambda (p) (or (input-port? p) (output-port? p)))
+(define/who (set-port-next-location! p line col pos)
+  (check who (lambda (p) (or (input-port? p) (output-port? p)))
          #:contract "port?"
          p)
-  (check 'set-port-next-location! (lambda (v) (or (not v) (exact-positive-integer? v)))
-         #:contract "(or/c #f exact-positive-integer?)"
-         line)
-  (check 'set-port-next-location! (lambda (v) (or (not v) (exact-nonnegative-integer? v)))
-         #:contract "(or/c #f exact-nonnegative-integer?)"
-         col)
-  (check 'set-port-next-location! (lambda (v) (or (not v) (exact-positive-integer? v)))
-         #:contract "(or/c #f exact-positive-integer?)"
-         pos)
+  (check who #:or-false exact-positive-integer? line)
+  (check who #:or-false exact-nonnegative-integer? col)
+  (check who #:or-false exact-positive-integer? pos)
   (cond
     [(input-port? p)
      (let ([p (->core-input-port p)])

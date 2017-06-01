@@ -1,6 +1,5 @@
-(define (box-cas! b v1 v2)
-  (unless (mutable-box? b)
-    (raise-argument-error 'box-cas! "(and/c box? (not/c immutable?))" b))
+(define/who (box-cas! b v1 v2)
+  (check who mutable-box? :contract "(and/c box? (not/c immutable?))" b)
   (unsafe-box-cas! b v1 v2))
 
 (define (unsafe-box-cas! b v1 v2)
@@ -35,26 +34,20 @@
 (define (unsafe-set-box! b v)
   (set-box! b v))
 
-(define (chaperone-box b ref set . props)
-  (unless (box? b)
-    (raise-argument-error 'chaperone-box "box?" b))
+(define/who (chaperone-box b ref set . props)
+  (check who box? b)
   (do-impersonate-box 'chaperone-box make-box-chaperone b ref set
                          make-props-chaperone props))
 
-(define (impersonate-box b ref set . props)
-  (unless (box? b)
-    (raise-argument-error 'impersonate-box "box?" b))
+(define/who (impersonate-box b ref set . props)
+  (check who mutable-box? :contract "(and/c box? (not/c immutable?))" b)
   (do-impersonate-box 'impersonate-box make-box-impersonator b ref set
                       make-props-chaperone props))
 
 (define (do-impersonate-box who make-box-impersonator b ref set
                             make-props-impersonator props)
-  (unless (and (procedure? ref)
-               (procedure-arity-includes? ref 2))
-    (raise-argument-error who "(procedure-arity-includes/c 2)" ref))
-  (unless (and (procedure? set)
-               (procedure-arity-includes? set 2))
-    (raise-argument-error who "(procedure-arity-includes/c 2)" set))
+  (check who (procedure-arity-includes/c 2) ref)
+  (check who (procedure-arity-includes/c 2) set)
   (let ([val (if (impersonator? b)
                  (impersonator-val b)
                  b)]
@@ -129,9 +122,8 @@
 (define (make-weak-box v)
   (create-weak-box (weak-cons v #t)))
 
-(define (weak-box-value v)
-  (unless (weak-box? v)
-    (raise-argument-error 'weak-box-value "weak-box?" v))
+(define/who (weak-box-value v)
+  (check who weak-box? v)
   (let ([c (car (weak-box-p v))])
     (if (eq? c #!bwp)
         #f

@@ -17,6 +17,6 @@
                                                  msecs)
                   (values #f e))))))
 
-(define (create-alarm-evt msecs)
-  (check 'alarm-evt real? msecs)
+(define/who (create-alarm-evt msecs)
+  (check who real? msecs)
   (alarm-evt msecs))

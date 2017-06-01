@@ -11,13 +11,9 @@
 
 (provide call-in-nested-thread)
 
-(define (call-in-nested-thread thunk [cust (current-custodian)])
-  (check 'call-in-nested-thread (lambda (p)
-                                  (and (procedure? p)
-                                       (procedure-arity-includes? p 0)))
-         #:contract "(procedure-arith-includes/c 0)"
-         thunk)
-  (check 'call-in-nested-thread custodian? cust)
+(define/who (call-in-nested-thread thunk [cust (current-custodian)])
+  (check who (procedure-arity-includes/c 0) thunk)
+  (check who custodian? cust)
   (define init-break-cell (current-break-enabled-cell))
   (define result #f)
   (define result-kind #f)

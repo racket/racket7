@@ -30,10 +30,8 @@
    [else
     (raise-argument-error 'pipe-contact-length "(or/c pipe-input-port? pipe-output-port?)" p)]))
 
-(define (make-pipe [limit #f] [input-name 'pipe] [output-name 'pipe])
-  (check 'open-input-bytes (lambda (x) (or (not x) (exact-positive-integer? limit)))
-         #:contract "(or/c #f exact-nonnegative-integer?)"
-         limit)
+(define/who (make-pipe [limit #f] [input-name 'pipe] [output-name 'pipe])
+  (check who #:or-false exact-positive-integer? limit)
   (define bstr (make-bytes (min+1 limit 256)))
   (define start 0)
   (define end 0)

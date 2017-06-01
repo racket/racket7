@@ -33,9 +33,8 @@
    [() (create-mutable-hash (make-weak-eqv-hashtable))]
    [(alist) (fill-hash! 'make-weak-hasheqv (make-weak-hasheqv) alist)]))
 
-(define (fill-hash! who ht alist)
-  (unless (and (list? alist) (andmap pair? alist))
-    (raise-argument-error who "(listof pair?)" alist))
+(define/who (fill-hash! who ht alist)
+  (check who :test (and (list? alist) (andmap pair? alist)) :contract "(listof pair?)" alist)
   (for-each (lambda (p)
               (hash-set! ht (car p) (cdr p)))
             alist))
@@ -54,8 +53,10 @@
          (case-lambda
           [() (vararg-ctor)]
           [(alist)
-           (unless (and (list? alist) (andmap pair? alist))
-             (raise-argument-error 'list-ctor "(listof pair?)" alist))
+           (check 'list-ctor
+                  :test (and (list? alist) (andmap pair? alist))
+                  :contract "(listof pair?)"
+                  alist)
            (let loop ([h (vararg-ctor)] [alist alist])
              (if (null? alist)
                  h
@@ -252,12 +253,9 @@
              v))]
       [else (raise-argument-error 'hash-ref "hash?" ht)])]))
 
-(define (hash-for-each ht proc)
-  (unless (hash? ht)
-    (raise-argument-error 'hash-for-each "hash?" ht))
-  (unless (and (procedure? proc)
-               (procedure-arity-includes? proc 2))
-    (raise-argument-error 'hash-for-each "(procedure-arity-includes/c 2)" proc))
+(define/who (hash-for-each ht proc)
+  (check who hash? ht)
+  (check who (procedure-arity-includes/c 2) proc)
   (cond
    [(mutable-hash? ht)
     (let loop ([i (hash-iterate-first ht)])
@@ -275,14 +273,11 @@
           (proc key val)
           (loop (hash-iterate-next ht i)))))]))
 
-(define hash-map
+(define/who hash-map
   (case-lambda
    [(ht proc)
-    (unless (hash? ht)
-      (raise-argument-error 'hash-map "hash?" ht))
-    (unless (and (procedure? proc)
-                 (procedure-arity-includes? proc 2))
-      (raise-argument-error 'hash-map "(procedure-arity-includes/c 2)" proc))
+    (check who hash? ht)
+    (check who (procedure-arity-includes/c 2) proc)
     (cond
      [(mutable-hash? ht)
       (let loop ([i (hash-iterate-first ht)])
@@ -443,10 +438,7 @@
    [else (raise-argument-error 'hash-iterate-first "hash?" ht)]))
 
 (define (check-i who i)
-  (unless (and (integer? i)
-               (exact? i)
-               (>= i 0))
-    (raise-argument-error who "exact-nonnegative-integer?" i)))
+  (check who exact-nonnegative-integer? i))
 
 (define (hash-iterate-next ht i)
   (cond
@@ -834,44 +826,33 @@
 
 (define (do-impersonate-hash who ht ref set remove key args
                              make-hash-chaperone)
-  (unless (hash? ht)
-    (raise-argument-error who "hash?" ht))
-  (let ([check-arity-2
-         (lambda (p)
-           (unless (and (procedure? p)
-                        (procedure-arity-includes? p 2))
-             (raise-argument-error who "(procedure-arity-includes/c 2)" p)))]
-        [check-arity-3
-         (lambda (p)
-           (unless (and (procedure? p)
-                        (procedure-arity-includes? p 3))
-             (raise-argument-error who "(procedure-arity-includes/c 3)" p)))])
-    (check-arity-2 ref)
-    (check-arity-3 set)
-    (check-arity-2 remove)
-    (check-arity-2 key)
-    (let* ([clear-given? (and (pair? args)
-                              (or (not (car args))
-                                  (and (procedure? (car args))
-                                       (procedure-arity-includes? (car args) 1))))]
-           [clear (if clear-given? (car args) #f)]
-           [args (if clear-given? (cdr args) args)]
-           [equal-key-given? (and (pair? args)
-                                  (or (not (car args))
-                                      (and (procedure? (car args))
-                                           (procedure-arity-includes? (car args) 2))))]
-           [equal-key (if equal-key-given?
-                          (car args)
-                          (lambda (ht k) k))]
-           [args (if equal-key-given? (cdr args) #f)])
-      (make-hash-chaperone (strip-impersonator ht)
-                           ht
-                           (add-impersonator-properties who
-                                                        args
-                                                        (if (impersonator? ht)
-                                                            (impersonator-props ht)
-                                                            empty-hasheq))
-                           (make-hash-procs ref set remove key clear equal-key)))))
+  (check who hash? ht)
+  (check who (procedure-arity-includes/c 2) ref)
+  (check who (procedure-arity-includes/c 3) set)
+  (check who (procedure-arity-includes/c 2) remove)
+  (check who (procedure-arity-includes/c 2) key)
+  (let* ([clear-given? (and (pair? args)
+                            (or (not (car args))
+                                (and (procedure? (car args))
+                                     (procedure-arity-includes? (car args) 1))))]
+         [clear (if clear-given? (car args) #f)]
+         [args (if clear-given? (cdr args) args)]
+         [equal-key-given? (and (pair? args)
+                                (or (not (car args))
+                                    (and (procedure? (car args))
+                                         (procedure-arity-includes? (car args) 2))))]
+         [equal-key (if equal-key-given?
+                        (car args)
+                        (lambda (ht k) k))]
+         [args (if equal-key-given? (cdr args) #f)])
+    (make-hash-chaperone (strip-impersonator ht)
+                         ht
+                         (add-impersonator-properties who
+                                                      args
+                                                      (if (impersonator? ht)
+                                                          (impersonator-props ht)
+                                                          empty-hasheq))
+                         (make-hash-procs ref set remove key clear equal-key))))
 
 ;; ----------------------------------------
 

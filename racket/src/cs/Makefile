@@ -154,7 +154,8 @@ control-demo: core.so
 foreign-demo: core.so
 	$(SCHEME) chezpart.so core.so demo/foreign.ss
 
-CORE_SRCS = core/constant.ss \
+CORE_SRCS = core/check.ss \
+            core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \
             core/prefab.ss \

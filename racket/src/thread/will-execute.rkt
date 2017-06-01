@@ -8,8 +8,8 @@
 
 (provide will-execute)
 
-(define (will-execute we)
-  (check 'will-execute will-executor? we)
+(define/who (will-execute we)
+  (check who will-executor? we)
   ;; block on a polling event:
   (sync (will-execute-evt we)))
 

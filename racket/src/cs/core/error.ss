@@ -11,34 +11,27 @@
 
 ;; ----------------------------------------
 
-(define error-print-width
+(define/who error-print-width
   (make-parameter 256
                   (lambda (v)
-                    (unless (and (integer? v)
-                                 (exact? v)
-                                 (>= v 3))
-                      (raise-argument-error 'error-print-width
-                                            "(and/c exact-integer? (>=/c 3))"
-                                            v))
+                    (check who
+                           :test (and (integer? v)
+                                      (exact? v)
+                                      (>= v 3))
+                           :contract "(and/c exact-integer? (>=/c 3))"
+                           v)
                     v)))
 
-(define error-value->string-handler
+(define/who error-value->string-handler
   (make-parameter (lambda (v len) "[?error-value->string-handler not ready?]")
                   (lambda (v)
-                    (unless (and (procedure? v)
-                                 (procedure-arity-includes? v 2))
-                      (raise-argument-error 'error-value->string-handler
-                                            "(procedure-arity-includes?/c 2)"
-                                            v))
+                    (check who (procedure-arity-includes/c 2) v)
                     v)))
 
-(define error-print-context-length
+(define/who error-print-context-length
   (make-parameter 16
                   (lambda (v)
-                    (unless (exact-nonnegative-integer? v)
-                      (raise-argument-error 'error-print-context-length
-                                            "exact-nonnegative-integer?"
-                                            v))
+                    (check who exact-nonnegative-integer? v)
                     v)))
 
 ;; ----------------------------------------
@@ -463,28 +456,22 @@
       (exn:fail (exn->string v) (current-continuation-marks))
       v))
 
-(define uncaught-exception-handler
+(define/who uncaught-exception-handler
   (make-parameter default-uncaught-exception-handler
                   (lambda (v)
-                    (unless (and (procedure? v)
-                                 (procedure-arity-includes? v 1))
-                      (raise-argument-error 'uncaught-exception-handler "(procedure-arity-includes?/c 1)" v))
+                    (check who (procedure-arity-includes/c 1) v)
                     v)))
 
-(define error-display-handler
+(define/who error-display-handler
   (make-parameter default-error-display-handler
                   (lambda (v)
-                    (unless (and (procedure? v)
-                                 (procedure-arity-includes? v 2))
-                      (raise-argument-error 'error-display-handler "(procedure-arity-includes?/c 2)" v))
+                    (check who (procedure-arity-includes/c 2) v)
                     v)))
 
-(define error-escape-handler
+(define/who error-escape-handler
   (make-parameter default-error-escape-handler
                   (lambda (v)
-                    (unless (and (procedure? v)
-                                 (procedure-arity-includes? v 0))
-                      (raise-argument-error 'error-ecsape-handler "(procedure-arity-includes?/c 0)" v))
+                    (check who (procedure-arity-includes/c 0) v)
                     v)))
 
 (define (set-base-exception-handler!)

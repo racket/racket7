@@ -66,15 +66,10 @@
                                       v)))])))
        self)]))
 
-(define (make-derived-parameter p guard wrap)
-  (unless (parameter? p)
-    (raise-argument-error 'make-derived-parameter parameter? p))
-  (unless (and (procedure? guard)
-               (procedure-arity-includes? guard 1))
-    (raise-argument-error 'make-derived-parameter "(procedure-arity-includes/c 1)" guard))
-  (unless (and (procedure? wrap)
-               (procedure-arity-includes? wrap 1))
-    (raise-argument-error 'make-derived-parameter "(procedure-arity-includes/c 1)" wrap))
+(define/who (make-derived-parameter p guard wrap)
+  (check who parameter? p)
+  (check who (procedure-arity-includes/c 1) guard)
+  (check who (procedure-arity-includes/c 1) wrap)
   (create-derived-parameter (let ([self (parameter-proc p)])
                               (case-lambda
                                [(v) (self (guard v))]
@@ -82,21 +77,15 @@
                             p
                             guard))
 
-(define (parameter-procedure=? a b)
-  (unless (parameter? a)
-    (raise-argument-error parameter-procedure=? "parameter?" a))
-  (unless (parameter? b)
-    (raise-argument-error parameter-procedure=? "parameter?" b))
+(define/who (parameter-procedure=? a b)
+  (check who parameter? a)
+  (check who parameter? b)
   (eq? (strip-impersonator a) (strip-impersonator b)))
 
 ;; ----------------------------------------
 
-(define current-inspector
+(define/who current-inspector
   (make-parameter root-inspector
                   (lambda (v)
-                    (unless (inspector? v)
-                      (raise-argument-error 'current-inspector
-                                            "inspector?"
-                                            v))
+                    (check who inspector? v)
                     v)))
-

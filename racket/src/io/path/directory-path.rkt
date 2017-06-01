@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../error/abort.rkt"
+(require "../common/check.rkt"
+         "../error/abort.rkt"
          "path.rkt"
          "check-path.rkt"
          "sep.rkt")
@@ -7,8 +8,8 @@
 (provide directory-path?
          path->directory-path)
 
-(define (path->directory-path p-in)
-  (check-path-argument 'path->directory-path p-in)
+(define/who (path->directory-path p-in)
+  (check-path-argument who p-in)
   (define p (->path p-in))
   (cond
    [(directory-path? p) p]

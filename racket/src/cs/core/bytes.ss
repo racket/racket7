@@ -11,20 +11,18 @@
 (define bytes-set! bytevector-u8-set!)
 (define bytes->immutable-bytes bytevector->immutable-bytevector)
 
-(define bytes-copy!
+(define/who bytes-copy!
   (case-lambda
     [(dest d-start src)
      (bytes-copy! dest d-start src 0 (bytes-length src))]
     [(dest d-start src s-start)
      (bytes-copy! dest d-start src s-start (bytes-length src))]
     [(dest d-start src s-start s-end)
-     (unless (mutable-bytevector? dest)
-       (raise-argument-error 'bytes-set! "(and/c bytes? (not/c immutable?))" dest))
+     (check who mutable-bytevector? :contract "(and/c bytes? (not/c immutable?))" dest)
      (bytevector-copy! src s-start dest d-start (- s-end s-start))]))
 
-(define (bytes-fill! bstr b)
-  (unless (byte? b)
-    (raise-argument-error 'bytes-fill! "byte?" b))
+(define/who (bytes-fill! bstr b)
+  (check who byte? b)
   (bytevector-fill! bstr b))
 
 (define bytes-copy bytevector-copy)

@@ -20,14 +20,13 @@
 
 ;; ----------------------------------------
 
-(define (bytes->string/latin-1 bstr [err-char #f] [start 0] [end (and (bytes? bstr)
-                                                                      (bytes-length bstr))])
-  (check 'bytes->string/latin-1 bytes? bstr)
-  (check 'bytes->string/latin-1 (lambda (v) (or (not v) (char? v)))
-         #:contract "(or/c char? #f)" err-char)
-  (check 'bytes->string/latin-1 exact-nonnegative-integer? start)
-  (check 'bytes->string/latin-1 exact-nonnegative-integer? end)
-  (check-range 'bytes->string/latin-1 start end (bytes-length bstr) bstr)
+(define/who (bytes->string/latin-1 bstr [err-char #f] [start 0] [end (and (bytes? bstr)
+                                                                          (bytes-length bstr))])
+  (check who bytes? bstr)
+  (check who char? #:or-false err-char)
+  (check who exact-nonnegative-integer? start)
+  (check who exact-nonnegative-integer? end)
+  (check-range who start end (bytes-length bstr) bstr)
   (define len (- end start))
   (define s (make-string len))
   (let loop ([i len])
@@ -39,8 +38,7 @@
 
 (define (do-bytes->string/utf-8 who bstr err-char start end #:just-length? [just-length? #f])
   (check who bytes? bstr)
-  (check who (lambda (v) (or (not v) (char? v)))
-         #:contract "(or/c char? #f)" err-char)
+  (check who char? #:or-false err-char)
   (check who exact-nonnegative-integer? start)
   (check who exact-nonnegative-integer? end)
   (check-range who start end (bytes-length bstr) bstr)
@@ -62,18 +60,18 @@
                     #:abort-mode 'error)
      str]))
 
-(define (bytes->string/utf-8 bstr [err-char #f] [start 0] [end (and (bytes? bstr)
-                                                                    (bytes-length bstr))])
-  (do-bytes->string/utf-8 'bytes->string/utf-8 bstr err-char start end))
+(define/who (bytes->string/utf-8 bstr [err-char #f] [start 0] [end (and (bytes? bstr)
+                                                                        (bytes-length bstr))])
+  (do-bytes->string/utf-8 who bstr err-char start end))
 
-(define (bytes-utf-8-length bstr [err-char #f] [start 0] [end (and (bytes? bstr)
-                                                                   (bytes-length bstr))])
-  (do-bytes->string/utf-8 'bytes-utf-8-length bstr err-char start end #:just-length? #t))
+(define/who (bytes-utf-8-length bstr [err-char #f] [start 0] [end (and (bytes? bstr)
+                                                                       (bytes-length bstr))])
+  (do-bytes->string/utf-8 who bstr err-char start end #:just-length? #t))
 
 ;; For now, always use UTF-8 as locale encoding
-(define (bytes->string/locale bstr [err-char #f] [start 0] [end (and (bytes? bstr)
-                                                                    (bytes-length bstr))])
-  (do-bytes->string/utf-8 'bytes->string/locale bstr err-char start end))
+(define/who (bytes->string/locale bstr [err-char #f] [start 0] [end (and (bytes? bstr)
+                                                                         (bytes-length bstr))])
+  (do-bytes->string/utf-8 who bstr err-char start end))
 
 (define (raise-encoding-error who bstr start end)
   (raise-arguments-error who "byte string is not a well-formed UTF-8 encoding"
@@ -90,7 +88,7 @@
          err-char)
   (check who exact-nonnegative-integer? start)
   (check who exact-nonnegative-integer? end)
-  (check-range 'string->bytes/latin-1 start end (bytes-length bstr) bstr)
+  (check-range who start end (bytes-length bstr) bstr)
   ;; First, decode `skip` items:
   (define-values (initial-used-bytes initial-got-chars state)
     (utf-8-decode! bstr start end
@@ -119,24 +117,23 @@
        [else #f])]
     [else #f]))
 
-(define (bytes-utf-8-ref bstr [skip 0] [err-char #f] [start 0] [end (and (bytes? bstr)
-                                                                         (bytes-length bstr))])
-  (do-bytes-utf-8-ref 'bytes-utf-8-ref bstr skip err-char start end))
+(define/who (bytes-utf-8-ref bstr [skip 0] [err-char #f] [start 0] [end (and (bytes? bstr)
+                                                                             (bytes-length bstr))])
+  (do-bytes-utf-8-ref who bstr skip err-char start end))
 
-(define (bytes-utf-8-index bstr [skip 0] [err-char #f] [start 0] [end (and (bytes? bstr)
-                                                                         (bytes-length bstr))])
-  (do-bytes-utf-8-ref 'bytes-utf-8-index bstr skip err-char start end #:get-index? #t))
+(define/who (bytes-utf-8-index bstr [skip 0] [err-char #f] [start 0] [end (and (bytes? bstr)
+                                                                               (bytes-length bstr))])
+  (do-bytes-utf-8-ref who bstr skip err-char start end #:get-index? #t))
 
 ;; ----------------------------------------
 
-(define (string->bytes/latin-1 str [err-byte #f] [start 0] [end (and (string? str)
-                                                                     (string-length str))])
-  (check 'string->bytes/latin-1 string? str)
-  (check 'string->bytes/latin-1 (lambda (v) (or (not v) (byte? v)))
-         #:contract "(or/c byte? #f)" err-byte)
-  (check 'string->bytes/latin-1 exact-nonnegative-integer? start)
-  (check 'string->bytes/latin-1 exact-nonnegative-integer? end)
-  (check-range 'string->bytes/latin-1 start end (string-length str) str)
+(define/who (string->bytes/latin-1 str [err-byte #f] [start 0] [end (and (string? str)
+                                                                         (string-length str))])
+  (check who string? str)
+  (check who byte? #:or-false err-byte)
+  (check who exact-nonnegative-integer? start)
+  (check who exact-nonnegative-integer? end)
+  (check-range who start end (string-length str) str)
   (define len (- end start))
   (define bstr (make-bytes len))
   (let loop ([i len])
@@ -146,7 +143,7 @@
         (cond
          [(byte? b) (bytes-set! bstr i b)]
          [err-byte (bytes-set! bstr i err-byte)]
-         [else (raise-arguments-error 'string->bytes/latin-1
+         [else (raise-arguments-error who
                                       "string cannot be encoded in Latin-1"
                                       "string" str)])
         (loop i))))
@@ -154,7 +151,7 @@
 
 (define (do-string->bytes/utf-8 who str err-byte start end #:just-length? [just-length? #f])
   (check who string? str)
-  (check who (lambda (v) (or (not v) (byte? v))) #:contract "(or/c byte? #f)" err-byte)
+  (check who byte? #:or-false err-byte)
   (check who exact-nonnegative-integer? start)
   (check who exact-nonnegative-integer? end)
   (check-range who start end (string-length str) str)
@@ -171,18 +168,18 @@
                    bstr 0 #f)
     bstr]))
 
-(define (string->bytes/utf-8 str [err-byte #f] [start 0] [end (and (string? str)
-                                                                   (string-length str))])
-  (do-string->bytes/utf-8 'string->bytes/utf-8 str err-byte start end))
+(define/who (string->bytes/utf-8 str [err-byte #f] [start 0] [end (and (string? str)
+                                                                       (string-length str))])
+  (do-string->bytes/utf-8 who str err-byte start end))
 
-(define (string-utf-8-length str [start 0] [end (and (string? str)
-                                                     (string-length str))])
-  (do-string->bytes/utf-8 'string-utf-8-length str #f start end #:just-length? #t))
+(define/who (string-utf-8-length str [start 0] [end (and (string? str)
+                                                         (string-length str))])
+  (do-string->bytes/utf-8 who str #f start end #:just-length? #t))
 
 ;; For now, always use UTF-8 as locale encoding
-(define (string->bytes/locale str [err-byte #f] [start 0] [end (and (string? str)
-                                                                    (string-length str))])
-  (do-string->bytes/utf-8 'string->bytes/locale str err-byte start end))
+(define/who (string->bytes/locale str [err-byte #f] [start 0] [end (and (string? str)
+                                                                        (string-length str))])
+  (do-string->bytes/utf-8 who str err-byte start end))
 
 ;; ----------------------------------------
 

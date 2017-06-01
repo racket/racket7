@@ -8,8 +8,8 @@
          write-special-evt
          port-writes-special?)
 
-(define (port-writes-special? o)
-  (check 'port-writes-special? output-port? o)
+(define/who (port-writes-special? o)
+  (check who output-port? o)
   (let ([o (->core-output-port o)])
     (and (core-output-port-write-out-special o) #t)))
 
@@ -40,18 +40,18 @@
                 #t
                 (void))]))])))
 
-(define (write-special v [o (current-output-port)])
-  (do-write-special 'write-special #:retry? #t v o))
+(define/who (write-special v [o (current-output-port)])
+  (do-write-special who #:retry? #t v o))
 
-(define (write-special-avail* v [o (current-output-port)])
-  (do-write-special 'write-special-avail* #:retry? #f v o))
+(define/who (write-special-avail* v [o (current-output-port)])
+  (do-write-special who #:retry? #f v o))
 
-(define (write-special-evt v [o (current-output-port)])
-  (check 'write-special-evt output-port? o)
+(define/who (write-special-evt v [o (current-output-port)])
+  (check who output-port? o)
   (let ([o (->core-output-port o)])
     (define get-write-special-evt (core-output-port-get-write-special-evt o))
     (unless get-write-special-evt
-      (raise-arguments-error 'write-special-evt
+      (raise-arguments-error who
                              "port does not support special-value events"
                              "port" o))
     (get-write-special-evt v)))

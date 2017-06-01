@@ -9,10 +9,10 @@
 
 (struct bytes-converter ())
 
-(define (bytes-open-converter from-str to-str)
-  (check 'bytes-open-converter string? from-str)
-  (check 'bytes-open-converter string? to-str)
-  (error 'bytes-open-converter "not ready"))
+(define/who (bytes-open-converter from-str to-str)
+  (check who string? from-str)
+  (check who string? to-str)
+  (error who "not ready"))
 
 (define (bytes-close-converter converter)
   (void))

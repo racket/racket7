@@ -5,8 +5,8 @@
 
 (provide current-directory)
 
-(define current-directory
+(define/who current-directory
   (make-parameter (path #"/" (system-path-convention-type))
                   (lambda (v)
-                    (check 'current-directory path-string? v)
+                    (check who path-string? v)
                     (path->complete-path v (current-directory)))))

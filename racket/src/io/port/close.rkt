@@ -20,8 +20,8 @@
     [else
      (raise-argument-error 'close-input-port "port?" p)]))
 
-(define (close-input-port p)
-  (check 'close-input-port input-port? p)
+(define/who (close-input-port p)
+  (check who input-port? p)
   (let ([p (->core-input-port p)])
     (unless (core-input-port-closed? p)
       (set-core-input-port-closed?! p #t)
@@ -29,8 +29,8 @@
         (when s (semaphore-post s)))
       ((core-input-port-close p)))))
 
-(define (close-output-port p)
-  (check 'close-output-port output-port? p)
+(define/who (close-output-port p)
+  (check who output-port? p)
   (let ([p (->core-output-port p)])
     (unless (core-output-port-closed? p)
       (set-core-output-port-closed?! p #t)

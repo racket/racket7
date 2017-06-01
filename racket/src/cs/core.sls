@@ -524,6 +524,7 @@
   (define none (chez:gensym "none"))
   (define none2 (chez:gensym "none2"))
 
+  (include "core/check.ss")
   (include "core/constant.ss")
   (include "core/hash-code.ss")
   (include "core/symbol.ss")

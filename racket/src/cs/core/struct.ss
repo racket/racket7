@@ -9,21 +9,20 @@
 (define (struct-type-property? v)
   (struct-type-prop? v))
 
-(define make-struct-type-property
+(define/who make-struct-type-property
   (case-lambda
     [(name) (make-struct-type-property name #f '() #f)]
     [(name guard) (make-struct-type-property name guard '() #f)]
     [(name guard supers) (make-struct-type-property name guard supers #f)]
     [(name guard supers can-impersonate?)
-     (unless (symbol? name)
-       (raise-argument-error 'make-struct-type-property "symbol?" name))
+     (check who symbol? name)
      (unless (or (not guard)
                  (eq? guard 'can-impersonate)
                  (and (#%procedure? guard) ; avoid `procedure?` until it's defined
                       (bitwise-bit-set? (#%procedure-arity-mask guard) 2))
                  (and (procedure? guard)
                       (procedure-arity-includes? guard 2)))
-       (raise-argument-error 'make-struct-type-property "(or/c (procedure-arity-includes/c 2) #f 'can-impersonate)" guard))
+       (raise-argument-error who "(or/c (procedure-arity-includes/c 2) #f 'can-impersonate)" guard))
      (unless (and (or (null? supers) ; avoid `list?` until it's defined
                       (list? supers))
                   (andmap (lambda (p)
@@ -32,7 +31,7 @@
                                  (procedure? (cdr p))
                                  (procedure-arity-includes? (cdr p) 1)))
                           supers))
-       (raise-argument-error 'make-struct-type-property "(listof (cons/c struct-type-property? (procedure-arity-includes/c 1)))" supers))
+       (raise-argument-error who "(listof (cons/c struct-type-property? (procedure-arity-includes/c 1)))" supers))
      (let* ([can-impersonate? (and (or can-impersonate? (eq? guard 'can-impersonate)) #t)]
             [st (make-struct-type-prop name (and (not (eq? guard 'can-impersonate)) guard) supers)]
             [pred (lambda (v)
@@ -97,27 +96,23 @@
 
 (define root-inspector (new-inspector #f))
 
-(define make-inspector
+(define/who make-inspector
   (case-lambda
     [() (new-inspector (|#%app| current-inspector))]
     [(i)
-     (unless (inspector? i)
-       (raise-argument-error 'make-inspector "inspector?" i))
+     (check who inspector? i)
      (new-inspector i)]))
 
-(define make-sibling-inspector
+(define/who make-sibling-inspector
   (case-lambda
    [() (make-sibling-inspector (current-inspector))]
    [(i)
-    (unless (inspector? i)
-      (raise-argument-error 'make-sibling-inspector "inspector?" i))
+    (check who inspector? i)
     (make-inspector (inspector-parent i))]))
 
-(define (inspector-superior? sup-insp sub-insp)
-  (unless (inspector? sup-insp)
-    (raise-argument-error 'inspector-superior? "inspector?" sup-insp))
-  (unless (inspector? sub-insp)
-    (raise-argument-error 'inspector-superior? "inspector?" sub-insp))
+(define/who (inspector-superior? sup-insp sub-insp)
+  (check who inspector? sup-insp)
+  (check who inspector? sub-insp)
   (if (eq? sub-insp root-inspector)
       #f
       (let ([parent (inspector-parent sub-insp)])
@@ -134,36 +129,35 @@
 
 (define (check-make-struct-type-arguments who name parent-rtd fields-count auto-fields
                                           props insp proc-spec immutables guard constructor-name)
-  (unless (symbol? name)
-    (raise-argument-error who "symbol?" name))
-  (unless (or (not parent-rtd)
-              (struct-type? parent-rtd))
-    (raise-argument-error who "(or/c #f struct-type?)" parent-rtd))
-  (unless (exact-nonnegative-integer? fields-count)
-    (raise-argument-error who "exact-nonnegative-integer?" fields-count))
-  (unless (exact-nonnegative-integer? auto-fields)
-    (raise-argument-error who "exact-nonnegative-integer?" auto-fields))
-  (unless (or (not proc-spec)
-              (procedure? proc-spec)
-              (exact-nonnegative-integer? proc-spec))
-    (raise-argument-error who "(or/c procedure? exact-nonnegative-integer? #f)" proc-spec))
-  (unless (and (list props)
-               (andmap (lambda (i) (and (pair? i) (struct-type-property? (car i))))
-                       props))
-    (raise-argument-error who "(listof (cons/c struct-type-property? any/c))" props))
-  (unless (or (not insp)
-              (inspector? insp)
-              (eq? insp 'prefab))
-    (raise-argument-error who "(or/c inspector? #f 'prefab)" insp))
-  (unless (and (list? immutables)
-               (andmap exact-nonnegative-integer? immutables))
-    (raise-argument-error who "(listof exact-nonnegative-integer?)" immutables))
-  (unless (or (not guard)
-              (procedure? guard))
-    (raise-argument-error who "(or/c #f procedure?)" guard))
-  (unless (or (not constructor-name)
-              (symbol? constructor-name))
-    (raise-argument-error who "(or/c #f symbol?)" constructor-name))
+  (check who symbol? name)
+  (check who :or-false struct-type? parent-rtd)
+  (check who exact-nonnegative-integer? fields-count)
+  (check who exact-nonnegative-integer? auto-fields)
+  (check who
+         :test (or (not proc-spec)
+                   (procedure? proc-spec)
+                   (exact-nonnegative-integer? proc-spec))
+         :contract "(or/c procedure? exact-nonnegative-integer? #f)"
+         proc-spec)
+  (check who
+         :test (and (list props)
+                    (andmap (lambda (i) (and (pair? i) (struct-type-property? (car i))))
+                            props))
+         :contract "(listof (cons/c struct-type-property? any/c))"
+         props)
+  (check who
+         :test (or (not insp)
+                   (inspector? insp)
+                   (eq? insp 'prefab))
+         :contract "(or/c inspector? #f 'prefab)"
+         insp)
+  (check who
+         :test (and (list? immutables)
+                    (andmap exact-nonnegative-integer? immutables))
+         :contract "(listof exact-nonnegative-integer?)"
+         immutables)
+  (check who :or-false procedure? guard)
+  (check who :or-false symbol? constructor-name)
   
   (let ([props-ht
          ;; Check for duplicates and record property values for
@@ -589,9 +583,8 @@
 
 (define (struct-type? v) (record-type-descriptor? v))
 
-(define (procedure-struct-type? v)
-  (unless (struct-type? v)
-    (raise-argument-error 'procedure-struct-type? "struct-type?" v))
+(define/who (procedure-struct-type? v)
+  (check who struct-type? v)
   (procedure-struct? v))
 
 (define (struct? v)
@@ -614,9 +607,8 @@
             (loop parent-rtd #t)
             (values #f #t)))])))
 
-(define (struct-type-info rtd)
-  (unless (struct-type? rtd)
-    (raise-argument-error 'struct-type-info "struct-type?" rtd))
+(define/who (struct-type-info rtd)
+  (check who struct-type? rtd)
   (check-inspector-access 'struct-type-info rtd)
   (let* ([auto-fields (struct-type-auto-field-count rtd)]
          [fields-count (- (#%vector-length (record-type-field-names rtd))
@@ -644,10 +636,9 @@
                            "current inspector cannot extract info for structure type"
                            "structure type" rtd)))
 
-(define (struct-type-make-constructor rtd)
-  (unless (struct-type? rtd)
-    (raise-argument-error 'struct-type-make-constructor "struct-type?" rtd))
-  (check-inspector-access 'struct-type-make-constructor rtd)
+(define/who (struct-type-make-constructor rtd)
+  (check who struct-type? rtd)
+  (check-inspector-access who rtd)
   (let ([ctr (let ([c (record-constructor rtd)]
                    [auto-field-adder (struct-type-auto-field-adder rtd)])
                (if auto-field-adder
@@ -660,10 +651,9 @@
     (register-struct-constructor! ctr)
     ctr))
 
-(define (struct-type-make-predicate rtd)
-  (unless (struct-type? rtd)
-    (raise-argument-error 'struct-type-make-predicate "struct-type?" rtd))
-  (check-inspector-access 'struct-type-make-predicate rtd)
+(define/who (struct-type-make-predicate rtd)
+  (check who struct-type? rtd)
+  (check-inspector-access who rtd)
   (let ([pred (lambda (v)
                 (or (record? v rtd)
                     (and (impersonator? v)

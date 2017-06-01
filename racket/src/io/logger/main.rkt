@@ -38,27 +38,23 @@
                  #:parent parent
                  #:propagate-filters (parse-filters 'make-logger filters #:default-level 'debug)))
 
-(define (log-level? logger level [topic #f])
-  (check 'log-level? logger? logger)
-  (check-level 'log-level level)
-  (check 'log-level? (lambda (v) (or (not v) (symbol? v)))
-         #:contract "(or/c #f symbol?)"
-         topic)
+(define/who (log-level? logger level [topic #f])
+  (check who logger? logger)
+  (check-level who level)
+  (check who #:or-false symbol? topic)
   (level>=? (logger-wanted-level logger topic) level))
 
-(define (log-max-level logger [topic #f])
-  (check 'log-max-level logger? logger)
-  (check 'log-max-level (lambda (v) (or (not v) (symbol? v)))
-         #:contract "(or/c #f symbol?)"
-         topic)
+(define/who (log-max-level logger [topic #f])
+  (check who logger? logger)
+  (check who #:or-false symbol? topic)
   (logger-wanted-level logger topic))
 
-(define (log-all-levels logger)
-  (check 'log-all-levels logger? logger)
+(define/who (log-all-levels logger)
+  (check who logger? logger)
   (logger-all-levels logger))
 
-(define (log-level-evt logger)
-  (check 'log-level-evt logger? logger)
+(define/who (log-level-evt logger)
+  (check who logger? logger)
   (define s
     (atomically
      (cond
@@ -69,33 +65,31 @@
         (set-logger-level-sema! logger s)])))
   (semaphore-peek-evt s))
 
-(define log-message
+(define/who log-message
   ;; Complex dispatch based on number and whether third is a string:
   (case-lambda
     [(logger level message data)
      (define topic (and (logger? logger) (logger-name logger)))
-     (do-log-message logger level topic message data #t)]
+     (do-log-message who logger level topic message data #t)]
     [(logger level topic/message message/data data/prefix?)
      (cond
        [(string? topic/message)
         (define topic (and (logger? logger) (logger-name logger)))
-        (do-log-message logger level topic topic/message message/data data/prefix?)]
+        (do-log-message who logger level topic topic/message message/data data/prefix?)]
        [(symbol? topic/message)
-        (do-log-message logger level topic/message message/data data/prefix? #t)]
+        (do-log-message who logger level topic/message message/data data/prefix? #t)]
        [else
-        (check 'log-message logger? logger)
-        (check-level 'log-message level)
-        (raise-argument-error 'log-message "(or/c string? symbol?)" topic/message)])]
+        (check who logger? logger)
+        (check-level who level)
+        (raise-argument-error who "(or/c string? symbol?)" topic/message)])]
     [(logger level topic message data prefix?)
-     (do-log-message logger level topic message data prefix?)]))
+     (do-log-message who logger level topic message data prefix?)]))
 
-(define (do-log-message logger level topic message data prefix?)
-  (check 'log-message logger? logger)
-  (check-level 'log-message level)
-  (check 'log-message (lambda (v) (or (not v) (symbol? v)))
-         #:contract "(or/c #f symbol?)"
-         topic)
-  (check 'log-message string? message)
+(define (do-log-message who logger level topic message data prefix?)
+  (check who logger? logger)
+  (check-level who level)
+  (check who #:or-false symbol? topic)
+  (check who string? message)
   (define msg #f)
   (atomically
    (when ((logger-max-wanted-level logger) . level>=? . level)

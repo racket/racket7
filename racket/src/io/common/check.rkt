@@ -1,17 +1,10 @@
 #lang racket/base
-(require (for-syntax racket/base))
+(require "../../common/check.rkt"
+         (for-syntax racket/base))
 
-(provide check
+(provide (all-from-out "../../common/check.rkt")
          check-range
          check-immutable-field)
-
-(define-syntax (check stx)
-  (syntax-case stx ()
-    [(_ who pred #:contract ctc v)
-     #`(unless (pred v)
-         (raise-argument-error who ctc v))]
-    [(_ who pred v)
-     #`(check who pred #:contract #,(format "~a" (syntax->datum #'pred)) v)]))
 
 (define (check-range who start-pos end-pos max-end in-value)
   (when (start-pos . > . max-end)

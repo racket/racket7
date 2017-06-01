@@ -15,22 +15,28 @@
 (define (placeholder-get ph)
   (placeholder-val ph))
 
-(define (make-hash-placeholder alst)
-  (unless (and (list? alst)
-               (andmap pair? alst))
-    (raise-argument-error 'make-hash-placeholder "(listof pair?)" alst))
+(define/who (make-hash-placeholder alst)
+  (check who
+         :test (and (list? alst)
+                    (andmap pair? alst))
+         :contract "(listof pair?)"
+         alst)
   (create-hash-placeholder alst))
 
-(define (make-hasheq-placeholder alst)
-  (unless (and (list? alst)
-               (andmap pair? alst))
-    (raise-argument-error 'make-hasheq-placeholder "(listof pair?)" alst))
+(define/who (make-hasheq-placeholder alst)
+  (check who
+         :test (and (list? alst)
+                    (andmap pair? alst))
+         :contract "(listof pair?)"
+         alst)
   (create-hasheq-placeholder alst))
 
-(define (make-hasheqv-placeholder alst)
-  (unless (and (list? alst)
-               (andmap pair? alst))
-    (raise-argument-error 'make-hasheqv-placeholder "(listof pair?)" alst))
+(define/who (make-hasheqv-placeholder alst)
+  (check who
+         :test (and (list? alst)
+                    (andmap pair? alst))
+         :contract "(listof pair?)"
+         alst)
   (create-hasheqv-placeholder alst))
 
 (define (make-reader-graph v)

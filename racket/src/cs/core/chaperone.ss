@@ -104,9 +104,8 @@
                      raw:impersonator-property-accessor-procedure?)
   (fields proc name))
 
-(define (make-impersonator-property name)
-  (unless (symbol? name)
-    (raise-argument-error 'make-impersonator-property "symbol?" name))
+(define/who (make-impersonator-property name)
+  (check who symbol? name)
   (let ([p (create-impersonator-property name)]
         [predicate-name (string->symbol (format "~a?" name))]
         [accessor-name (string->symbol (format "~a-accessor" name))])

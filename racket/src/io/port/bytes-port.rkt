@@ -13,8 +13,8 @@
 
 (struct input-bytes-data ())
 
-(define (open-input-bytes bstr [name 'string])
-  (check 'open-input-bytes bytes? bstr)
+(define/who (open-input-bytes bstr [name 'string])
+  (check who bytes? bstr)
   (define i 0)
   (define len (bytes-length bstr))
   (define p
@@ -84,8 +84,8 @@
     (port-count-lines! p))
   p)
 
-(define (get-output-bytes o [reset? #f] [start-pos 0] [end-pos #f])
-  (check 'get-output-bytes (lambda (v) (and (output-port? o) (string-port? o)))
+(define/who (get-output-bytes o [reset? #f] [start-pos 0] [end-pos #f])
+  (check who (lambda (v) (and (output-port? o) (string-port? o)))
          #:contract "(and/c output-port? string-port?)"
          o)
   (let ([o (->core-output-port o)])

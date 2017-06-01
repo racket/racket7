@@ -17,32 +17,20 @@
 (define root-security-guard
   (security-guard #f void void void))
 
-(define current-security-guard
+(define/who current-security-guard
   (make-parameter root-security-guard
                   (lambda (v)
-                    (check 'guard-for-current-security-guard
-                           security-guard?
-                           v)
+                    (check who security-guard? v)
                     v)))
 
-(define (make-security-guard parent
-                             file-guard
-                             network-guard
-                             [link-guard #f])
-  (check 'make-security-guard security-guard? parent)
-  (check 'make-security-guard (lambda (p) (and (procedure? file-guard)
-                                               (procedure-arity-includes? file-guard 3)))
-         #:contract "(procedure-arity-includes/c 4)"
-         file-guard)
-  (check 'make-security-guard (lambda (p) (and (procedure? network-guard)
-                                               (procedure-arity-includes? network-guard 4)))
-         #:contract "(procedure-arity-includes/c 4)"
-         network-guard)
-  (check 'make-security-guard (lambda (p) (or (not p)
-                                              (and (procedure? link-guard)
-                                                   (procedure-arity-includes? link-guard 3))))
-         #:contract "(or/c #f (procedure-arity-includes/c 3))"
-         link-guard)
+(define/who (make-security-guard parent
+                                 file-guard
+                                 network-guard
+                                 [link-guard #f])
+  (check who security-guard? parent)
+  (check who (procedure-arity-includes/c 3) file-guard)
+  (check who (procedure-arity-includes/c 4) network-guard)
+  (check who #:or-false (procedure-arity-includes/c 3) link-guard)
   (security-guard parent file-guard network-guard link-guard))
 
 (define (security-guard-check-file who path guards)

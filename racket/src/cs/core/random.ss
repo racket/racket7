@@ -160,9 +160,8 @@
     (k (modulo (+ (arithmetic-shift y1 16) y2) Im))
     x))
 
-(define (pseudo-random-generator->vector s)
-  (unless (pseudo-random-generator? s)
-    (raise-argument-error 'pseudo-random-generator->vector "pseudo-random-generator?" s))
+(define/who (pseudo-random-generator->vector s)
+  (check who pseudo-random-generator? s)
   (vector (inexact->exact (pseudo-random-generator-x10 s))
           (inexact->exact (pseudo-random-generator-x11 s))
           (inexact->exact (pseudo-random-generator-x12 s))
@@ -188,12 +187,11 @@
        (or (nonzero? 0) (nonzero? 1) (nonzero? 2))
        (or (nonzero? 3) (nonzero? 4) (nonzero? 5))))
 
-(define (vector->pseudo-random-generator orig-v)
+(define/who (vector->pseudo-random-generator orig-v)
   (let ([iv (and (vector? orig-v)
                  (= 6 (vector-length orig-v))
                  (vector->immutable-vector orig-v))])
-    (unless (pseudo-random-generator-vector? iv)
-      (raise-argument-error 'vector->pseudo-random-generator "pseudo-random-generator-vector?" orig-v))
+    (check who pseudo-random-generator-vector? iv)
     (let ([r (lambda (i) (exact->inexact (vector-ref iv i)))])
       (new-pseudo-random-generator (r 0)
                                    (r 1)
@@ -202,11 +200,8 @@
                                    (r 4)
                                    (r 5)))))
 
-(define (vector->pseudo-random-generator! s orig-v)
-  (unless (pseudo-random-generator? s)
-    (raise-argument-error 'vector->pseudo-random-generator!
-                          "pseudo-random-generator?"
-                          s))
+(define/who (vector->pseudo-random-generator! s orig-v)
+  (check who pseudo-random-generator? s)
   (let ([iv (and (vector? orig-v)
                  (= 6 (vector-length orig-v))
                  (vector->immutable-vector orig-v))])
@@ -238,16 +233,13 @@
 
 ;; ----------------------------------------
 
-(define current-pseudo-random-generator
+(define/who current-pseudo-random-generator
   (make-parameter (make-pseudo-random-generator)
                   (lambda (v)
-                    (unless (pseudo-random-generator? v)
-                      (raise-argument-error 'current-pseudo-random-generator
-                                            "pseudo-random-generator?"
-                                            v))
+                    (check who pseudo-random-generator? v)
                     v)))
 
-(define random
+(define/who random
   (case-lambda
    [() (pseudo-random-generator-real! (|#%app| current-pseudo-random-generator))]
    [(n)
@@ -255,22 +247,27 @@
      [(pseudo-random-generator? n)
       (pseudo-random-generator-real! n)]
      [else
-      (unless (and (integer? n)
-                   (exact? n)
-                   (<= 1 n 4294967087))
-        (raise-argument-error 'random "(or/c (integer-in 1 4294967087) pseudo-random-generator?)" n))
+      (check who
+             :test (and (integer? n)
+                        (exact? n)
+                        (<= 1 n 4294967087))
+             :contract "(or/c (integer-in 1 4294967087) pseudo-random-generator?)"
+             n)
       (pseudo-random-generator-integer! (|#%app| current-pseudo-random-generator) n)])]
    [(n prg)
-    (unless (and (integer? n)
-                  (exact? n)
-                  (<= 1 n 4294967087))
-      (raise-argument-error 'random "(integer-in 1 4294967087)" n))
-    (unless (pseudo-random-generator? prg)
-      (raise-argument-error 'random "pseudo-random-generator?" prg))
+    (check who
+           :test (and (integer? n)
+                      (exact? n)
+                      (<= 1 n 4294967087))
+           :contract "(or/c (integer-in 1 4294967087) pseudo-random-generator?)"
+           n)
+    (check who pseudo-random-generator? prg)
     (pseudo-random-generator-integer! prg n)]))
 
-(define (random-seed k)
-  (unless (and (exact-positive-integer? k)
-               (<= k (sub1 (expt 2 31))))
-    (raise-argument-error 'random-seed "(integer-in 1 (sub1 (expt 2 31)))" k))
+(define/who (random-seed k)
+  (check who
+         :test (and (exact-positive-integer? k)
+                    (<= k (sub1 (expt 2 31))))
+         :contract "(integer-in 1 (sub1 (expt 2 31)))"
+         k)
   (pseudo-random-generator-seed! (|#%app| current-pseudo-random-generator) k))

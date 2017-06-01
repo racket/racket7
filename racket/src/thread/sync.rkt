@@ -368,8 +368,8 @@
 
 ;; ----------------------------------------
 
-(define current-evt-pseudo-random-generator
+(define/who current-evt-pseudo-random-generator
   (make-parameter (make-pseudo-random-generator)
                   (lambda (v)
-                    (check 'current-evt-pseudo-random-generator pseudo-random-generator? v)
+                    (check who pseudo-random-generator? v)
                     v)))

@@ -24,40 +24,31 @@
          call-with-semaphore
          call-with-semaphore/enable-break)
 
-(define (choice-evt . args)
+(define/who (choice-evt . args)
   (for ([arg (in-list args)])
-    (check 'choice-evt evt? arg))
+    (check who evt? arg))
   (raw:choice-evt args))
 
-(define (wrap-evt evt proc)
-  (check 'wrap-evt evt? evt)
-  (check 'wrap-evt procedure? proc)
+(define/who (wrap-evt evt proc)
+  (check who evt? evt)
+  (check who procedure? proc)
   (raw:wrap-evt evt proc))
 
-(define (handle-evt evt proc)
-  (check 'handle-evt evt? evt)
-  (check 'handle-evt procedure? proc)
+(define/who (handle-evt evt proc)
+  (check who evt? evt)
+  (check who procedure? proc)
   (raw:handle-evt evt proc))
 
-(define (guard-evt proc)
-  (check 'guard-evt
-         (lambda (v) (and (procedure? v) (procedure-arity-includes? v 0)))
-         #:contract "(procedure-arity-includes?/c 0)"
-         proc)
+(define/who (guard-evt proc)
+  (check who (procedure-arity-includes/c 0) proc)
   (raw:poll-guard-evt (lambda (poll?) (proc))))
 
-(define (poll-guard-evt proc)
-  (check 'poll-guard-evt
-         (lambda (v) (and (procedure? v) (procedure-arity-includes? v 1)))
-         #:contract "(procedure-arity-includes?/c 1)"
-         proc)
+(define/who (poll-guard-evt proc)
+  (check who(procedure-arity-includes/c 1) proc)
   (raw:poll-guard-evt proc))
 
-(define (nack-guard-evt proc)
-  (check 'nack-guard-evt
-         (lambda (v) (and (procedure? v) (procedure-arity-includes? v 1)))
-         #:contract "(procedure-arity-includes?/c 1)"
-         proc)
+(define/who (nack-guard-evt proc)
+  (check who (procedure-arity-includes/c 1) proc)
   (raw:poll-guard-evt
    (lambda (poll?)
      (define s (make-semaphore))
@@ -75,16 +66,16 @@
       (lambda () (semaphore-post s))
       void))))
 
-(define (channel-put-evt ch v)
-  (check 'channel-put-evt channel? ch)
+(define/who (channel-put-evt ch v)
+  (check who channel? ch)
   (raw:channel-put-evt ch v))
 
-(define (semaphore-peek-evt s)
-  (check 'semaphore-peek-evt semaphore? s)
+(define/who (semaphore-peek-evt s)
+  (check who semaphore? s)
   (raw:semaphore-peek-evt s))
 
-(define (semaphore-wait/enable-break s)
-  (check 'semaphore-wait/enable-break semaphore? s)
+(define/who (semaphore-wait/enable-break s)
+  (check who semaphore? s)
   (sync/enable-break s)
   (void))
 
@@ -93,11 +84,7 @@
 (define (do-call-with-semaphore who s proc try-fail args #:enable-break? [enable-break? #f])
   (check who semaphore? s)
   (check who procedure? proc)
-  (check who (lambda (p) (or (not try-fail)
-                             (and (procedure? try-fail)
-                                  (procedure-arity-includes? try-fail 0))))
-         #:contract "(or/c #f (procedure-arity-includes/c 0))"
-         try-fail)
+  (check who (procedure-arity-includes/c 0) #:or-false try-fail)
   (define breaks-on? (or enable-break?
                          (break-enabled)))
   (define results #t) ; transitions to list of results unless semaphore-try fails

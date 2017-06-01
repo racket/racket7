@@ -24,9 +24,8 @@
       (and (record? v)
            (not (eq? (struct-property-ref prop:procedure (record-rtd v) none) none)))))
 
-(define (procedure-specialize proc)
-  (unless (procedure? proc)
-    (raise-argument-error 'procedure-specialize "procedure?" proc))
+(define/who (procedure-specialize proc)
+  (check who procedure? proc)
   proc)
 
 (define apply
@@ -69,12 +68,11 @@
        [else #f]))]
    [else #f]))
 
-(define procedure-arity-includes?
+(define/who procedure-arity-includes?
   (case-lambda
    [(f n incomplete-ok?)
     (let ([mask (get-procedure-arity-mask 'procedure-arity-includes? f)])
-      (unless (exact-nonnegative-integer? n)
-        (raise-argument-error 'procedure-arity-includes? "exact-nonnegative-integer?" n))
+      (check who exact-nonnegative-integer? n)
       (and (bitwise-bit-set? mask n)
            (or incomplete-ok?
                (not (incomplete-arity? (strip-impersonator f))))))]
@@ -143,18 +141,16 @@
 (define (not-a-procedure f)
   (error 'apply (format "not a procedure: ~s" f)))
 
-(define (procedure-result-arity p)
-  (unless (procedure? p)
-    (raise-argument-error 'procedure-result-arity "procedure?" p))
+(define/who (procedure-result-arity p)
+  (check who procedure? p)
   #f)
 
 ;; ----------------------------------------
 
 (define-record reduced-arity-procedure (proc mask))
 
-(define (procedure-reduce-arity proc a)
-  (unless (procedure? proc)
-    (raise-argument-error 'procedure-reduce-arity "procedure?" proc))
+(define/who (procedure-reduce-arity proc a)
+  (check who procedure? proc)
   (let ([mask (arity->mask a)])
     (unless mask
       (raise-arguments-error 'procedure-reduce-arity "procedure-arity?" a))
@@ -188,11 +184,9 @@
 
 (define-record named-procedure (proc name))
 
-(define (procedure-rename proc name)
-  (unless (procedure? proc)
-    (raise-argument-error 'procedure-rename "procedure?" proc))
-  (unless (symbol? name)
-    (raise-argument-error 'procedure-rename "symbol?" name))
+(define/who (procedure-rename proc name)
+  (check who procedure? proc)
+  (check who symbol? name)
   (make-named-procedure proc name))
 
 ;; ----------------------------------------
@@ -226,14 +220,12 @@
                             make-props-procedure-chaperone props
                             (lambda (n) (bitwise-arithmetic-shift-right n 1)) " (adding an extra argument)"))
 
-(define (do-impersonate-procedure who make-procedure-impersonator  proc wrapper
+(define (do-impersonate-procedure who make-procedure-impersonator proc wrapper
                                   make-props-procedure-impersonator props
                                   arity-shift arity-shift-str)
-  (unless (procedure? proc)
-    (raise-argument-error who "procedure?" proc))
+  (check who procedure? proc)
   (when wrapper
-    (unless (procedure? wrapper)
-      (raise-argument-error who "procedure?" wrapper))
+    (check who procedure? wrapper)
     (let ([m (procedure-arity-mask proc)])
       (unless (= m (bitwise-and m (arity-shift (procedure-arity-mask wrapper))))
         (raise-arguments-error who
@@ -477,11 +469,9 @@
 
 ;; ----------------------------------------
 
-(define (procedure-closure-contents-eq?	p1 p2)
-  (unless (procedure? p1)
-    (raise-argument-error 'procedure-closure-contents-eq? "procedure?" p1))
-  (unless (procedure? p2)
-    (raise-argument-error 'procedure-closure-contents-eq? "procedure?" p2))
+(define/who (procedure-closure-contents-eq?	p1 p2)
+  (check who procedure? p1)
+  (check who procedure? p2)
   (when (and (#%procedure? p1)
              (#%procedure? p2))
     (let* ([i1 (inspect/object p1)]

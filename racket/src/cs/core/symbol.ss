@@ -10,35 +10,30 @@
                 "(or/c symbol? string?)"
                 s)])]))
 
-(define (symbol-interned? s)
-  (unless (symbol? s)
-    (raise-argument-error 'symbol-interned? "symbol?" s))
+(define/who (symbol-interned? s)
+  (check who symbol? s)
   (not (gensym? s)))
 
-(define (symbol-unreadable? s)
-  (unless (symbol? s)
-    (raise-argument-error 'symbol-unreadable? "symbol?" s))
+(define/who (symbol-unreadable? s)
+  (check who symbol? s)
   (and (getprop s 'racket-unreadable) #t))
 
-(define (symbol->string s)
-  (unless (symbol? s)
-    (raise-argument-error 'symbol->string "symbol?" s))
+(define/who (symbol->string s)
+  (check who symbol? s)
   (string-copy
    (or (and (gensym? s)
             (getprop s 'racket-string))
        (chez:symbol->string s))))
 
-(define (string->uninterned-symbol str)
-  (unless (string? str)
-    (raise-argument-error 'string->uninterned-symbol "string?" str))
+(define/who (string->uninterned-symbol str)
+  (check who string? str)
   (let* ([str (string->immutable-string str)]
          [sym (gensym str)])
     (putprop sym 'racket-string str)
     sym))
 
-(define (string->unreadable-symbol str)
-  (unless (string? str)
-    (raise-argument-error 'string->unreadable-symbol "string?" str))
+(define/who (string->unreadable-symbol str)
+  (check who string? str)
   (let ([str (string->immutable-string str)]
         [sym (string->symbol str)])
     (or (getprop sym 'racket-unreadable)
@@ -46,3 +41,9 @@
           (putprop u-sym 'racket-string str)
           (putprop sym 'racket-unreadable u-sym)
           u-sym))))
+
+(define/who (symbol<? a b)
+  (check who symbol? a)
+  (check who symbol? b)
+  (string<? (symbol->string a)
+            (symbol->string b)))

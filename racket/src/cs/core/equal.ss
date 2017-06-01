@@ -83,10 +83,8 @@
 (define (impersonator-of? a b) (do-equal? a b impersonator? #f))
 (define (chaperone-of? a b) (do-equal? a b chaperone? #f))
 
-(define (equal?/recur a b eql?)
-  (unless (and (procedure? eql?)
-               (procedure-arity-includes? eql? 2))
-    (raise-argument-error 'equal?/recur "(procedure-arity-includes/c 2)" eql?))
+(define/who (equal?/recur a b eql?)
+  (check who (procedure-arity-includes/c 2) eql?)
   (do-equal? a b (lambda (x) #f) eql?))
 
 ;; ----------------------------------------

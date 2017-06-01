@@ -8,4 +8,3 @@
   (check who (lambda (p) (or (path-string? p) (path-for-some-system? p)))
          #:contract "(or/c path-string? path-for-some-system?)"
          p))
-

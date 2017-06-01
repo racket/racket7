@@ -38,14 +38,14 @@
 
 (define num-threads-in-groups 0)
 
-(define current-thread-group
+(define/who current-thread-group
   (make-parameter root-thread-group
                   (lambda (v)
-                    (check 'current-thread-group thread-group? v)
+                    (check who thread-group? v)
                     v)))
 
-(define (make-thread-group [parent (current-thread-group)])
-  (check 'make-thread-group thread-group? parent)
+(define/who (make-thread-group [parent (current-thread-group)])
+  (check who thread-group? parent)
   (define tg (thread-group #f #f parent #f #f #f))
   (thread-group-add! parent tg)
   tg)

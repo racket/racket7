@@ -10,10 +10,10 @@
 (define-values (prop:file-position file-position? file-position-ref)
   (make-struct-type-property 'file-position))
 
-(define file-position
+(define/who file-position
   (case-lambda
     [(p)
-     (do-simple-file-position 'file-position p
+     (do-simple-file-position who p
                               (lambda ()
                                 (raise
                                  (exn:fail:filesystem
@@ -22,8 +22,8 @@
                                    ((error-value->string-handler) p (error-print-width)))))))]
     [(p pos)
      (unless (or (input-port? p) (output-port? p))
-       (raise-argument-error 'file-position "port?" p))
-     (check 'file-position exact-nonnegative-integer? pos)
+       (raise-argument-error who "port?" p))
+     (check who exact-nonnegative-integer? pos)
      (cond
        [(input-port? p)
         (let ([p (->core-input-port p)])
@@ -33,7 +33,7 @@
              ((core-input-port-on-file-position p))
              ((file-position-ref data) data pos)]
             [else
-             (raise-arguments-error 'file-position
+             (raise-arguments-error who
                                     "setting position allowed for file-stream and string ports only"
                                     "port" p
                                     "position" pos)]))]
@@ -44,13 +44,13 @@
             [(file-position? data)
              ((file-position-ref data) data pos)]
             [else
-             (raise-arguments-error 'file-position
+             (raise-arguments-error who
                                     "setting position allowed for file-stream and string ports only"
                                     "port" p
                                     "position" pos)]))])]))
 
-(define (file-position* p)
-  (do-simple-file-position 'file-position* p (lambda () #f)))
+(define/who (file-position* p)
+  (do-simple-file-position who p (lambda () #f)))
 
 (define (do-simple-file-position who p fail-k)
   (cond

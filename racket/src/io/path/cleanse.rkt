@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../error/abort.rkt"
+(require "../common/check.rkt"
+         "../error/abort.rkt"
          "path.rkt"
          "check-path.rkt"
          "sep.rkt")
@@ -7,8 +8,8 @@
 (provide cleanse-path
          clean-double-slashes)
 
-(define (cleanse-path p-in)
-  (check-path-argument 'cleanse-path p-in)
+(define/who (cleanse-path p-in)
+  (check-path-argument who p-in)
   (define p (->path p-in))
   (case (path-convention p)
     [(unix)

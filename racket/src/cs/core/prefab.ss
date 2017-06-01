@@ -198,8 +198,7 @@
               (cons name r))))]))
 
 (define (normalized-prefab-key/check who key field-count)
-  (unless (prefab-key? key)
-    (raise-argument-error who "prefab-key?" key))
+  (check who prefab-key? key)
   (unless (prefab-key-compatible-count? key field-count)
     (raise-arguments-error who
                            "mismatch between prefab key and field count"

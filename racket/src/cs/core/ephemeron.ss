@@ -6,9 +6,8 @@
 (define (make-ephemeron key val)
   (create-ephemeron (ephemeron-cons key val)))
 
-(define (ephemeron-value e)
-  (unless (ephemeron? e)
-    (raise-argument-error 'ephemeron-value "ephemeron?" e))
+(define/who (ephemeron-value e)
+  (check who ephemeron? e)
   (let ([v (cdr (ephemeron-p e))])
     (if (eq? v #!bwp)
         #f

@@ -10,9 +10,8 @@
 (define (double-flonum? x) (flonum? x))
 (define (single-flonum? x) #f)
 
-(define (real->double-flonum x)
-  (unless (real? x)
-    (raise-argument-error 'real->double-flonum "real?" x))
+(define/who (real->double-flonum x)
+  (check who real? x)
   (exact->inexact x))
 
 (define (real->single-flonum x)
@@ -20,16 +19,14 @@
 
 (define arithmetic-shift bitwise-arithmetic-shift)
 
-(define (integer-sqrt n)
-  (unless (integer? n)
-    (raise-argument-error 'integer-sqrt integer? n))
+(define/who (integer-sqrt n)
+  (check who integer? n)
   (cond
    [(negative? n) (* (integer-sqrt (- n)) 0+1i)]
    [(positive? n) (floor (sqrt n))]))
 
-(define (integer-sqrt/remainder n)
-  (unless (integer? n)
-    (raise-argument-error 'integer-sqrt integer? n))
+(define/who (integer-sqrt/remainder n)
+  (check who integer? n)
   (let ([m (integer-sqrt n)])
     (values m (- n (* m m)))))
 
@@ -174,9 +171,7 @@
      [(equal? s "+nan.f") +nan.0]
      [else (chez:string->number s radix)])]))
 
-(define (quotient/remainder n m)
-  (unless (integer? n)
-    (raise-argument-error 'quotient/remainder "integer?" n))
-  (unless (integer? m)
-    (raise-argument-error 'quotient/remainder "integer?" m))
+(define/who (quotient/remainder n m)
+  (check who integer? n)
+  (check who integer? m)
   (values (quotient n m) (remainder n m)))

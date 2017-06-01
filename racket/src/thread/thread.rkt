@@ -115,12 +115,7 @@
                         #:at-root? [at-root? #f]
                         #:initial? [initial? #f]
                         #:suspend-to-kill? [suspend-to-kill? #f])
-  (check who
-         (lambda (proc)
-           (and (procedure? proc)
-                (procedure-arity-includes? proc 0)))
-         #:contract "(procedure-arity-includes?/c 0)"
-         proc)
+  (check who (procedure-arity-includes/c 0) proc)
   (define p (if at-root?
                 root-thread-group
                 (current-thread-group)))
@@ -179,13 +174,13 @@
 ;; ----------------------------------------
 ;; Thread status
 
-(define (thread-running? t)
-  (check 'thread-running? thread? t)
+(define/who (thread-running? t)
+  (check who thread? t)
   (and (not (eq? 'done (thread-engine t)))
        (not (thread-suspended? t))))
 
-(define (thread-dead? t)
-  (check 'thread-dead? thread? t)
+(define/who (thread-dead? t)
+  (check who thread? t)
   (eq? 'done (thread-engine t)))
 
 ;; set to be done here........
@@ -217,8 +212,8 @@
   (define t (current-thread))
   (set-thread-kill-callbacks! t (cdr (thread-kill-callbacks t))))
 
-(define (kill-thread t)
-  (check 'kill-thread thread? t)
+(define/who (kill-thread t)
+  (check who thread? t)
   (atomically
    (unless (thread-dead? t)
      (thread-dead! t)))
@@ -233,8 +228,8 @@
 ;; ----------------------------------------
 ;; Thread status events
 
-(define (thread-wait t)
-  (check 'thread-wait thread? t)
+(define/who (thread-wait t)
+  (check who thread? t)
   (semaphore-wait (get-thread-dead-sema t)))
 
 (struct dead-evt (sema)
@@ -245,10 +240,10 @@
 (define (thread-dead-evt? v)
   (dead-evt? v))
 
-(define get-thread-dead-evt
+(define/who get-thread-dead-evt
   (let ([thread-dead-evt
          (lambda (t)
-           (check 'thread-dead-evt thread? t)
+           (check who thread? t)
            (atomically
             (unless (thread-dead-evt t)
               (set-thread-dead-evt! t (dead-evt (get-thread-dead-sema t)))))
@@ -350,8 +345,8 @@
   (remove-from-sleeping-threads! t)
   (thread-group-add! (thread-parent t) t))
 
-(define (thread-suspend t)
-  (check 'thread-suspend thread? t)
+(define/who (thread-suspend t)
+  (check who thread? t)
   ((atomically
     (unless (thread-suspended? t)
       (set-thread-suspended?! t #t)
@@ -371,9 +366,9 @@
      [else 
       void]))))
 
-(define (thread-resume t [benefactor #f])
-  (check 'thread-resume thread? t)
-  (check 'thread-resume (lambda (p) (or (not p) (thread? p) (custodian? p)))
+(define/who (thread-resume t [benefactor #f])
+  (check who thread? t)
+  (check who (lambda (p) (or (not p) (thread? p) (custodian? p)))
          #:contract "(or/c #f thread? custodian?)"
          benefactor)
   (atomically
@@ -398,8 +393,8 @@
                                              (lambda (s) re)))
   #:reflection-name 'thread-resume-evt)
 
-(define (thread-resume-evt t)
-  (check 'thread-resume-evt thread? t)
+(define/who (thread-resume-evt t)
+  (check who thread? t)
   (atomically
    (let ([s (or (thread-resumed-sema t)
                 (let ([s (make-semaphore)])
@@ -407,8 +402,8 @@
                   s))])
      (resume-evt s))))
 
-(define (thread-suspend-evt t)
-  (check 'thread-suspend-evt thread? t)
+(define/who (thread-suspend-evt t)
+  (check who thread? t)
   (atomically
    (let ([s (or (thread-suspended-sema t)
                 (let ([s (make-semaphore)])
@@ -433,8 +428,8 @@
   (engine-block))
 
 ;; Sleep for a while
-(define (sleep [secs 0])
-  (check 'sleep
+(define/who (sleep [secs 0])
+  (check who
          (lambda (c) (and (real? c) (c . >=  . 0)))
          #:contract "(>=/c 0)"
          secs)
@@ -522,8 +517,8 @@
                    k)))))]
      [else void]))))
 
-(define (break-thread t)
-  (check 'break-thread thread? t)
+(define/who (break-thread t)
+  (check who thread? t)
   (do-break-thread t (current-thread)))
 
 (define (do-break-thread t check-t)
@@ -607,17 +602,11 @@
 (define (push-mail! thd v)
   (queue-add-front! (thread-mailbox thd) v))
 
-(define (thread-send thd v [fail-thunk 
-                            (lambda ()
-                              (raise-arguments-error 'thread-send "target thread is not running"))])
-  (check 'thread-send thread? thd)
-  (check fail-thunk
-         (lambda (proc)
-           (or (not proc) ;; check if it is #f
-               (and (procedure? proc)
-                    (procedure-arity-includes? proc 0))))
-         #:contract "(or/c (procedure-arity-includes?/c 0) #f)"
-         fail-thunk)
+(define/who (thread-send thd v [fail-thunk 
+                                (lambda ()
+                                  (raise-arguments-error 'thread-send "target thread is not running"))])
+  (check who thread? thd)
+  (check who (procedure-arity-includes/c 0) #:or-false fail-thunk)
   ((atomically
     (cond
       [(not (thread-dead? thd))
@@ -660,8 +649,8 @@
        (dequeue-mail! t)
        #f)))
 
-(define (thread-rewind-receive lst)
-  (check 'thread-rewind-receive list? lst)
+(define/who (thread-rewind-receive lst)
+  (check who list? lst)
   (atomically
    (define t (current-thread))
    (for-each (lambda (msg)
