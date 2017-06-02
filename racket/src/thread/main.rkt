@@ -20,6 +20,7 @@
          "api.rkt"
          "will-execute.rkt"
          "exit.rkt"
+         "plumber.rkt"
          "unsafe.rkt")
 
 (provide call-in-main-thread
@@ -106,6 +107,14 @@
 
          exit
          exit-handler
+
+         current-plumber
+         make-plumber
+         plumber?
+         plumber-flush-all
+         plumber-add-flush!
+         plumber-flush-handle?
+         plumber-flush-handle-remove!
 
          break-enabled
          check-for-break

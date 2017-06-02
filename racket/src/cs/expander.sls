@@ -7,7 +7,6 @@
           current-command-line-arguments
           executable-yield-handler
           load-on-demand-enabled
-          flush
           call-in-main-thread
           set-exec-file!
           set-run-file!

@@ -56,6 +56,7 @@
     (let* ([v (struct-property-ref prop:procedure (record-rtd f) #f)])
       (cond
        [(procedure? v) (case-lambda
+                         [() (v f)]
                          [(a) (v f a)]
                          [(a b) (v f a b)]
                          [(a b c) (v f a b c)]

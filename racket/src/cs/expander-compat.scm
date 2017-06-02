@@ -272,20 +272,6 @@
 (define eval-jit-enabled
   (make-parameter #t))
 
-(define (plumber? p) (eq? p 'plumber))
-(define (make-plumber) 'plumber)
-(define (current-plumber) 'plumber)
-(define (plumber-add-flush! p v) (set! at-exit (cons v null)))
-(define (plumber-flush-all p) (void))
-(define (plumber-flush-handle-remove! h) (void))
-(define (plumber-flush-handle? p) #f)
-
-(define at-exit null)
-(define (flush)
-  (let ([l at-exit])
-    (set! at-exit null)
-    (for-each (lambda (p) (p #f)) l)))
-
 (define current-load-relative-directory
   (make-parameter #f))
 
@@ -562,14 +548,6 @@
    filesystem-change-evt?
    will-execute
    current-thread-initial-stack-size
-
-   make-plumber
-   current-plumber
-   plumber-add-flush!
-   plumber-flush-all
-   plumber-flush-handle-remove!
-   plumber-flush-handle?
-   plumber?
 
    current-directory-for-user
    srcloc->string

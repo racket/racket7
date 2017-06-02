@@ -270,7 +270,7 @@
                                     (+ (* (time-second t) 1000)
                                        (quotient (time-nanosecond t) 1000000))))
                      #f))
-      (orig v))))
+      (|#%app| orig v))))
 
  (define stderr-logging
    (or stderr-logging-arg
