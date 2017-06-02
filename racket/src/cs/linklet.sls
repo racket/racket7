@@ -5,7 +5,9 @@
           eval-linklet
           read-compiled-linklet
           instantiate-linklet
-              
+
+          read-on-demand-source
+
           linklet-import-variables
           linklet-export-variables
           
@@ -34,6 +36,7 @@
           (core)
           (only (io)
                 path?
+                complete-path?
                 path->string
                 string->bytes/utf-8
                 bytes->string/utf-8
@@ -60,14 +63,16 @@
   (define (compile-to-bytevector s)
     (let-values ([(o get) (open-bytevector-output-port)])
       (compile-to-port (list `(lambda () ,s)) o)
-      (get)))
+      (let ([bstr (get)])
+        (cons (bytevector-compress bstr) (bytevector-length bstr)))))
 
-  (define (eval-from-bytevector bv)
-    ;; HACK: This probably always works for the `lambda` or
-    ;; `let`+`lambda` forms that we compile as linklets, but we need a
-    ;; better function from the host Scheme:
-    (let ([v (fasl-read (open-bytevector-input-port bv))])
-      (((cdr (if (vector? v) (vector-ref v 1) v))))))
+  (define (eval-from-bytevector bv+orig-len)
+    (let ([bv (bytevector-uncompress (car bv+orig-len) (cdr bv+orig-len))])
+      ;; HACK: This probably always works for the `lambda` or
+      ;; `let`+`lambda` forms that we compile as linklets, but we need a
+      ;; better function from the host Scheme:
+      (let ([v (fasl-read (open-bytevector-input-port bv))])
+        (((cdr (if (vector? v) (vector-ref v 1) v)))))))
 
   ;; A linklet is implemented as a procedure that takes an argument
   ;; for each import plus an `variable` for each export, and calling
@@ -83,14 +88,23 @@
   ;; A linklet also has a table of information about its 
 
   (define-record-type linklet
-    (fields code           ; the procedure
-            faslable?      ; whether the procedure is in fasl-ready form
+    (fields (mutable code) ; the procedure
+            (mutable format) ; 'faslable, 'faslable-strict, 'callable, or 'lazy
             importss-abi   ; ABI for each import, in parallel to `importss`
             exports-info   ; hash(sym -> known) for info about each export; see "known.rkt"
             name           ; name of the linklet (for debugging purposes)
             importss       ; list of list of import symbols
             exports)       ; list of export symbols
     (nongenerative #{linklet cuquy0g9bh5vmeespyap4g-0}))
+
+  (define (set-linklet-code linklet code format)
+    (make-linklet code
+                  format
+                  (linklet-importss-abi linklet)
+                  (linklet-exports-info linklet)
+                  (linklet-name linklet)
+                  (linklet-importss linklet)
+                  (linklet-exports linklet)))
 
   (define compile-linklet
     (case-lambda
@@ -113,7 +127,7 @@
       ;; Create the linklet:
       (let ([lk (make-linklet ((if serializable? compile-to-bytevector compile)
                                (show "schemified" (remove-annotation-boundary impl-lam)))
-                              serializable?
+                              (if serializable? 'faslable 'callable)
                               importss-abi
                               exports-info
                               name
@@ -148,16 +162,14 @@
   ;; Intended to speed up reuse of a linklet in exchange for not being
   ;; able to serialize anymore
   (define (eval-linklet linklet)
-    (if (linklet-faslable? linklet)
-        (make-linklet (eval-from-bytevector (linklet-code linklet))
-                      #f
-                      (linklet-importss-abi linklet)
-                      (linklet-exports-info linklet)
-                      (linklet-name linklet)
-                      (linklet-importss linklet)
-                      (linklet-exports linklet))
-        linklet))
-
+    (case (linklet-format linklet)
+      [(faslable)
+       (set-linklet-code linklet (linklet-code linklet) 'lazy)]
+      [(faslable-strict)
+       (set-linklet-code linklet (eval-from-bytevector (linklet-code linklet)) 'callable)]
+      [else
+       linklet]))
+     
   (define instantiate-linklet
     (case-lambda
      [(linklet import-instances)
@@ -172,10 +184,18 @@
         (call/cc
          (lambda (k)
            (register-linklet-instantiate-continuation! k (instance-name target-instance))
+           (when (eq? 'lazy (linklet-format linklet))
+             ;; Trigger lazy conversion of code from bytevector
+             (let ([code (eval-from-bytevector (linklet-code linklet))])
+               (with-interrupts-disabled
+                (when (eq? 'lazy (linklet-format linklet))
+                  (linklet-code-set! linklet code)
+                  (linklet-format-set! linklet 'callable)))))
+           ;; Call the linklet:
            (apply
-            (if (linklet-faslable? linklet)
-                (eval-from-bytevector (linklet-code linklet))
-                (linklet-code linklet))
+            (if (eq? 'callable (linklet-format linklet))
+                (linklet-code linklet)
+                (eval-from-bytevector (linklet-code linklet)))
             (make-variable-reference target-instance #f)
             (append (apply append
                            (map extract-variables
@@ -546,9 +566,10 @@
             (let ([len (read-int in)])
               (let ([bstr (read-bytes len in)])
                 (let ([b (fasl-read (open-bytevector-input-port bstr))])
-                  (add-hash-code (if initial?
-                                     (strip-submodule-references b)
-                                     b)
+                  (add-hash-code (adjust-linklet-bundle-laziness
+                                  (if initial?
+                                      (strip-submodule-references b)
+                                      b))
                                  sha-1)))))]
          [(equal? tag (char->integer #\D))
           (unless initial?
@@ -669,6 +690,37 @@
     (if (bytevector=? sha-1 '#vu8(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
         b
         (make-linklet-bundle (hash-set (linklet-bundle-hash b) 'hash-code sha-1))))
+
+  (define read-on-demand-source
+    (make-parameter #f
+                    (lambda (v)
+                      (unless (or (eq? v #t) (eq? v #f) (and (path? v)
+                                                             (complete-path? v)))
+                        (raise-argument-error 'read-on-demand-source
+                                              "(or/c #f #t (and/c path? complete-path?))"
+                                              v))
+                      v)))
+
+  (define (adjust-linklet-bundle-laziness b)
+    (make-linklet-bundle
+     (let ([ht (linklet-bundle-hash b)])
+       (let loop ([i (hash-iterate-first ht)])
+         (cond
+          [(not i) (hasheq)]
+          [else
+           (let-values ([(key val) (hash-iterate-key+value ht i)])
+             (hash-set (loop (hash-iterate-next ht i))
+                       key
+                       (if (linklet? val)
+                           (adjust-linklet-laziness val)
+                           val)))])))))
+                  
+  (define (adjust-linklet-laziness linklet)
+    (set-linklet-code linklet
+                      (linklet-code linklet)
+                      (if (|#%app| read-on-demand-source)
+                          'faslable
+                          'faslable-strict)))
   
   ;; --------------------------------------------------
 

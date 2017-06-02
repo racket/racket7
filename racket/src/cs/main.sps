@@ -12,6 +12,7 @@
                current-library-collection-paths
                find-library-collection-paths
                executable-yield-handler
+               load-on-demand-enabled
                eval
                dynamic-require
                namespace-require
@@ -103,7 +104,7 @@
    (define (finish args saw)
      (cond
       [(and (pair? args)
-            (not (hash-ref saw 'non-config)))
+            (not (saw? saw 'non-config)))
        (loop (cons "-u" args))]
       [else
        (|#%app| current-command-line-arguments (list->vector args))
@@ -163,6 +164,9 @@
              (when init-library
                (set! init-library `(lib ,lib-name)))
              (loop rest-args))]
+          [("-d")
+           (|#%app| load-on-demand-enabled #f)
+           (loop (cdr args))]
           [("-W" "--stderr")
            (let-values ([(spec rest-args) (next-arg "stderr level" arg within-arg args)])
              (set! stderr-logging-arg (parse-logging-spec spec (format "after ~a switch" (or within-arg arg)) #t))

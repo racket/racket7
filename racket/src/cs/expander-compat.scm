@@ -154,8 +154,6 @@
 
 (define current-load/use-compiled
   (make-parameter #f))
-(define read-on-demand-source
-  (make-parameter #f))
 
 (define current-code-inspector
   (make-parameter (|#%app| current-inspector)))
@@ -187,7 +185,7 @@
 (define current-load
   (make-parameter 'current-load))
 (define load-on-demand-enabled
-  (make-parameter #f))
+  (make-parameter #t))
 
 (define compile-enforce-module-constants
   (make-parameter #t))
@@ -529,7 +527,6 @@
    current-write-relative-directory
 
    current-load/use-compiled
-   read-on-demand-source
 
    current-code-inspector
    current-print
