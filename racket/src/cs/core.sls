@@ -372,6 +372,7 @@
           phantom-bytes?
           make-phantom-bytes
           set-phantom-bytes!
+          set-garbage-collect-notify! ; not exported to Racket
 
           make-will-executor
           will-executor?
@@ -571,6 +572,7 @@
   (include "core/foreign.ss")
   
   (set-base-exception-handler!)
+  (set-collect-handler!)
   (set-primitive-applicables!)
   (set-continuation-applicables!)
   (set-impersonator-applicables!)

@@ -198,6 +198,80 @@
              ;; Non-flag argument
              (finish args saw)])]))))
 
+ ;; Set up GC logging
+ (define-values (struct:gc-info make-gc-info gc-info? gc-info-ref gc-info-set!)
+   (make-struct-type 'gc-info #f 10 0 #f null 'prefab #f '(0 1 2 3 4 5 6 7 8 9)))
+ (define (K plus n)
+   (let* ([s (number->string (quotient (abs n) 1000))]
+          [len (string-length s)]
+          [len2 (+ len
+                   (quotient len 3)
+                   (if (or (< n 0)
+                           (not (eq? "" plus)))
+                       1
+                       0)
+                   1)]
+          [s2 (make-string len2)])
+     (string-set! s2 (sub1 len2) #\K)
+     (let loop ([i len]
+                [j (sub1 len2)]
+                [digits 0])
+       (cond
+        [(zero? i)
+         (cond
+          [(< n 0) (string-set! s2 0 #\-)]
+          [(not (eq? plus "")) (string-set! s2 0 (string-ref plus 0))])
+         s2]
+        [(= 3 digits)
+         (let ([j (sub1 j)])
+           (string-set! s2 j #\,)
+           (loop i j 0))]
+        [else
+         (let ([i (sub1 i)]
+               [j (sub1 j)])
+           (string-set! s2 j (string-ref s i))
+           (loop i j (add1 digits)))]))))
+ (define minor-gcs 0)
+ (define major-gcs 0)
+ (define auto-gcs 0)
+ (set-garbage-collect-notify!
+  (let ([root-logger (|#%app| current-logger)])
+    (lambda (gen pre-allocated pre-allocated+overhead pre-time pre-cpu-time
+                 post-allocated post-allocated+overhead post-time post-cpu-time)
+      (let ([minor? (< gen (collect-maximum-generation))])
+        (if minor?
+            (set! minor-gcs (add1 minor-gcs))
+            (set! major-gcs (add1 major-gcs)))
+        (when (log-level? root-logger 'debug 'GC)
+          (let ([delta (- pre-allocated post-allocated)])
+            (log-message root-logger 'debug 'GC
+                         (chez:format "0:~a~a @ ~a(~a); free ~a(~a) ~ams @ ~a"
+                                      (if minor? "min" "MAJ") gen
+                                      (K "" pre-allocated) (K "+" (- pre-allocated+overhead pre-allocated))
+                                      (K "" delta) (K "+" (- (- pre-allocated+overhead post-allocated+overhead)
+                                                             delta))
+                                      (- post-cpu-time pre-cpu-time) pre-cpu-time)
+                         (make-gc-info (if minor? 'minor 'major) pre-allocated pre-allocated+overhead 0
+                                       post-allocated post-allocated+overhead
+                                       pre-cpu-time post-cpu-time
+                                       pre-time post-time))))))))
+ (|#%app| exit-handler
+  (let ([orig (|#%app| exit-handler)]
+        [root-logger (|#%app| current-logger)])
+    (lambda (v)
+      (when (log-level? root-logger 'debug 'GC)
+        (log-message root-logger 'debug 'GC
+                     (chez:format "0:atexit peak ~a; alloc ~a; major ~a; minor ~a; ~ams"
+                                  (K "" (maximum-memory-bytes))
+                                  (K "" (- (+ (bytes-deallocated) (bytes-allocated)) (initial-bytes-allocated)))
+                                  major-gcs
+                                  minor-gcs
+                                  (let ([t (sstats-gc-cpu (statistics))])
+                                    (+ (* (time-second t) 1000)
+                                       (quotient (time-nanosecond t) 1000000))))
+                     #f))
+      (orig v))))
+
  (define stderr-logging
    (or stderr-logging-arg
        (let ([spec (getenv "PLTSTDERR")])
