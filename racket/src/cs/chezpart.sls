@@ -44,6 +44,7 @@
                    [date-year chez:date-year]
                    [date-week-day chez:date-week-day]
                    [date-year-day chez:date-year-day]
+                   [date-dst? chez:date-dst?]
                    [string-copy! chez:string-copy!]
                    [apply chez:apply]
                    [procedure? chez:procedure?]
