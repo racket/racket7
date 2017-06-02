@@ -129,6 +129,12 @@ Status and thoughts on various Racket subsystems:
    integrate I/O, the scheduler needs access to the OS's
    select()/epoll()/kqueue()/WaitMultipleEvents().
 
+ * There's a large gap between Racket and Chez Scheme's native I/O.
+   Probably, part of Racket's C implementation should be pulled out
+   into a dynamic library (with only non-blocking operations as
+   relatively thin layers over the OS), which can then be loaded into
+   Chez Scheme and used via the FFI.
+
  * The Racket FFI looks a lot like the Chez Scheme FFI, so I expect
    that to mostly work, although there may be allocation issues.
 
@@ -140,17 +146,42 @@ Status and thoughts on various Racket subsystems:
    advantage of threads with thread-unsafe primitives wrapped to
    divert to a barrier when called in a future.
 
- * Ephemerons require support from Chez Scheme. (Pull request
-   submitted.)
-
  * GC-based memory accounting similarly seems to require new support,
    but that can wait a while.
 
  * Extflonums will probably exist only on the Racket VM for a long
    while.
 
- * Bytecode, as it currently exists, goes away. Platform-independent
-   ".zo" files might contain fully expanded source (possibly also run
-   through Chez Scheme's source-to-source optimizer), and maybe `raco
-   setup` will gain a new step in creating platform-specific compiled
-   code.
+ * For now, `make setup` builds platform-specific ".zo" files in a
+   subdirectory of "compiled" named by the Chez Scheme platform name
+   (e.g., "a6osx"). Longer term, although bytecode as it currently
+   exists goes away, platform-independent ".zo" files might contain
+   fully expanded source (possibly also run through Chez Scheme's
+   source-to-source optimizer) with `raco setup` gaining a new step in
+   creating platform-specific compiled code.
+
+
+Performance notes:
+
+The best-case scenario for performance is
+
+ * `UNSAFE` is enabled in "Makefile" --- not on by default, because
+   the core and base layers are not yet good enough.
+
+   Effectiveness: maybe only matters for "core.so", where it can means
+   a 10-20% improvement in loading `racket/base` from source.
+
+ * `compile-as-independent?` is #f in "linklet.sls" --- not set to #f
+   currently, because it causes compiled files for Racket modules to
+   be incompatible with any change or rebuilding of the core and base
+   layers.
+
+   Effectiveness: negligible, which is surprising enough to suggest that
+   somethign else is going wrong.
+
+ * `make strip` run --- strips away inspector information to make the
+   core and base layers load more quickly, but with the loss of
+   backtrace information.
+
+   Effectivess: cuts the load time for the core and base layers by
+   30-50%.

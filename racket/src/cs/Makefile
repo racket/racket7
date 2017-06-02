@@ -1,8 +1,8 @@
 RACKET = ../../bin/racket
 SCHEME = scheme
-UNSAFE = # '(optimize-level 3)'
 
-COMP = echo '(reset-handler abort) (keyboard-interrupt-handler abort) (record-source-lines-and-columns \#t) (generate-wpo-files \#t)'
+UNSAFE = # '(optimize-level 3)'
+COMP = echo $(UNSAFE) '(reset-handler abort) (keyboard-interrupt-handler abort) (record-source-lines-and-columns \#t) (generate-wpo-files \#t)'
 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
@@ -35,6 +35,9 @@ racket.so: main.so
 
 main.so: $(MAIN_DEPS) main.sps
 	$(COMP) '(compile-file "main.sps")' | $(SCHEME) -q $(MAIN_DEPS)
+
+strip:
+	${SCHEME} --script strip.ss ${MAIN_DEPS}
 
 rktl:
 	$(MAKE) thread-rktl
@@ -199,7 +202,7 @@ CORE_SRCS = core/check.ss \
             core/foreign.ss
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
-	$(COMP) $(UNSAFE) '(compile-file "core.sls")' | $(SCHEME) -q
+	$(COMP) '(compile-file "core.sls")' | $(SCHEME) -q
 
 chezpart.so: chezpart.sls
 	$(COMP) '(compile-file "chezpart.sls")' | $(SCHEME) -q
