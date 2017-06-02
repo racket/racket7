@@ -218,6 +218,7 @@
     [(orig-dir) (string->path (|#%app| current-directory))]
     [(run-file) (or run-file
                     (find-system-path 'exec-file))]
+    [(temp-dir) (string->path (or (getenv "TMPDIR") "/usr/tmp/"))]
     [else `(find-system-path-not-ready ,key)]))
 
 (define-values (prop:exn:srclocs exn:srclocs? exn:srclocs-accessor)

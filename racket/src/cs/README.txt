@@ -176,8 +176,10 @@ The best-case scenario for performance is
    be incompatible with any change or rebuilding of the core and base
    layers.
 
-   Effectiveness: negligible, which is surprising enough to suggest that
-   somethign else is going wrong.
+   Effectiveness: little effect on tasks like loading `racket/base`
+   from source, but substantial effects on programs where the Chez
+   Scheme optimizer needs to recognize uses of primitives (e.g.,
+   microbenchmarks).
 
  * `make strip` run --- strips away inspector information to make the
    core and base layers load more quickly, but with the loss of
