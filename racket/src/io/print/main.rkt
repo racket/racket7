@@ -11,6 +11,7 @@
          "bytes.rkt"
          "symbol.rkt"
          "char.rkt"
+         "hash.rkt"
          "parameter.rkt")
 
 (provide display
@@ -116,6 +117,8 @@
                [max-length (write-string/max " . " o max-length)]
                [max-length (p who (cdr v) mode o max-length)])
           (write-string/max ")" o max-length))]))]
+   [(hash? v)
+    (print-hash v o max-length p who mode)]
    [(custom-write? v)
     (let ([o (make-output-port/max o max-length)])
       ((custom-write-accessor v) v o mode)

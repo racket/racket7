@@ -19,6 +19,7 @@
          "nested-thread.rkt"
          "api.rkt"
          "will-execute.rkt"
+         "exit.rkt"
          "unsafe.rkt")
 
 (provide call-in-main-thread
@@ -102,6 +103,9 @@
          custodian-limit-memory
 
          will-execute
+
+         exit
+         exit-handler
 
          break-enabled
          check-for-break

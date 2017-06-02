@@ -123,6 +123,7 @@
                                        empty-k      ; deepest end of this frame
                                        mark-stack   ; mark stack to restore
                                        mark-chain   ; #f or a cached list of mark-chain-frame or elem+cache
+                                       traces       ; #f or a cached list of traces
                                        cc-guard))   ; cc-guard to restore
 
 ;; Messages to `resume-k[/no-wind]`:
@@ -266,6 +267,7 @@
                                                                                *empty-k*
                                                                                *mark-stack*
                                                                                #f
+                                                                               #f
                                                                                *cc-guard*)])
                                           (set! *empty-k* empty-k)
                                           (set! *mark-stack* #f)
@@ -335,6 +337,7 @@
                                (metacontinuation-frame-empty-k current-mf)
                                (mark-stack-append mark-stack
                                                   (metacontinuation-frame-mark-stack current-mf))
+                               #f
                                #f
                                (metacontinuation-frame-cc-guard current-mf)))
 
@@ -677,7 +680,7 @@
 ;; ----------------------------------------
 ;; Continuation marks
 
-(define-record continuation-mark-set (mark-chain context))
+(define-record continuation-mark-set (mark-chain traces))
 (define-record mark-stack-frame (prev   ; prev frame
                                  k      ; continuation for this frame
                                  table  ; hamt mapping keys to values
@@ -1011,7 +1014,7 @@
 
 (define/who (continuation-mark-set->context marks)
   (check who continuation-mark-set? marks)
-  (context->srcloc-context (continuation-mark-set-context marks)))
+  (traces->context (continuation-mark-set-traces marks)))
 
 (define/who current-continuation-marks
   (case-lambda
@@ -1021,7 +1024,8 @@
      (call/cc
       (lambda (k)
         (make-continuation-mark-set (prune-mark-chain-suffix (strip-impersonator tag) (current-mark-chain))
-                                    (continuation->context k))))]))
+                                    (cons (continuation->trace k)
+                                          (get-metacontinuation-traces *metacontinuation*)))))]))
 
 (define/who continuation-marks
   (case-lambda
@@ -1059,6 +1063,18 @@
                            (mark-stack-frame-k a)
                            (mark-stack-frame-table a)
                            #f)]))
+
+(define (get-metacontinuation-traces mc)
+  (cond
+   [(null? mc) '()]
+   [(metacontinuation-frame-traces (car mc))
+    => (lambda (traces) traces)]
+   [else
+    (let ([traces
+           (cons (continuation->trace (metacontinuation-frame-resume-k (car mc)))
+                 (get-metacontinuation-traces (cdr mc)))])
+      (set-metacontinuation-frame-traces! (car mc) traces)
+      traces)]))
 
 ;; ----------------------------------------
 ;; Continuation-mark keys: impersonators, and chaperones

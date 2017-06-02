@@ -14,6 +14,9 @@
                   [set-ctl-c-handler! core:set-ctl-c-handler!]
                   [root-continuation-prompt-tag core:root-continuation-prompt-tag]))
 
+  (define (exit n)
+    (chez:exit n))
+
   (define (sleep secs)
     (define isecs (inexact->exact (floor secs)))
     (chez:sleep (make-time 'time-duration

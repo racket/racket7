@@ -111,87 +111,88 @@
          (set! repl? #t)
          (set! version? #t))]))
    ;; Dispatch on first argument:
-   (unless (null? args)
-     (let* ([arg (car args)]
-            [within-arg (and (pair? arg) (cdr arg))]
-            [arg (if (pair? arg) (car arg) arg)])
-       (string-case
-        arg
-        [("-l" "--lib")
-         (let-values ([(lib-name rest-args) (next-arg "library name" arg within-arg args)])
-           (set! loads
-                 (cons
-                  (lambda ()
-                    (dynamic-require `(lib ,lib-name) #f))
-                  loads))
-           (no-init! saw)
-           (flags-loop rest-args (see saw 'non-config 'lib)))]
-        [("-t" "--require")
-         (let-values ([(file-name rest-args) (next-arg "file name" arg within-arg args)])
-           (set! loads
-                 (cons
-                  (lambda ()
-                    (dynamic-require `(file ,file-name) #f))
-                  loads))
-           (no-init! saw)
-           (flags-loop rest-args (see saw 'non-config 'lib)))]
-        [("-u" "--script")
-         (let-values ([(file-name rest-args) (next-arg "file name" arg within-arg args)])
-           (set! loads
-                 (cons
-                  (lambda ()
-                    (dynamic-require `(file ,file-name) #f))
-                  loads))
-           (no-init! saw)
-           (flags-loop rest-args (see saw 'non-config 'lib)))]
-        [("-i" "--repl") 
-         (set! repl? #t)
-         (set! version? #t)
-         (flags-loop (cddr args) (see saw 'non-config 'top))]
-        [("-n" "--no-lib")
-         (set! init-library #f)
-         (flags-loop (cdr args) (see saw 'non-config))]
-        [("-v" "--version") 
-         (set! version? #t)
-         (flags-loop (cddr args) (see saw 'non-config))]
-        [("-c" "--no-compiled")
-         (|#%app| use-compiled-file-paths '())
-         (loop (cdr args))]
-        [("-I")
-         (let-values ([(lib-name rest-args) (next-arg "library name" arg within-arg args)])
-           (when init-library
-             (set! init-library `(lib ,lib-name)))
-           (loop rest-args))]
-        [("-W" "--stderr")
-         (let-values ([(spec rest-args) (next-arg "stderr level" arg within-arg args)])
-           (set! stderr-logging-arg (parse-logging-spec spec (format "after ~a switch" (or within-arg arg)) #t))
-           (loop rest-args))]
-        [("--")
-         (cond
-          [(or (null? (cdr args)) (not (pair? (cadr args))))
-           (finish (cdr args) saw)]
-          [else
-           ;; Need to handle more switches from a combined flag
-           (loop (cons (cadr args) (cons (car args) (cddr args))))])]
-        [else
-         (cond
-          [(and (> (string-length arg) 2)
-                (eqv? (string-ref arg 0) #\-))
+   (if (null? args)
+       (finish args saw)
+       (let* ([arg (car args)]
+              [within-arg (and (pair? arg) (cdr arg))]
+              [arg (if (pair? arg) (car arg) arg)])
+         (string-case
+          arg
+          [("-l" "--lib")
+           (let-values ([(lib-name rest-args) (next-arg "library name" arg within-arg args)])
+             (set! loads
+                   (cons
+                    (lambda ()
+                      (dynamic-require `(lib ,lib-name) #f))
+                    loads))
+             (no-init! saw)
+             (flags-loop rest-args (see saw 'non-config 'lib)))]
+          [("-t" "--require")
+           (let-values ([(file-name rest-args) (next-arg "file name" arg within-arg args)])
+             (set! loads
+                   (cons
+                    (lambda ()
+                      (dynamic-require `(file ,file-name) #f))
+                    loads))
+             (no-init! saw)
+             (flags-loop rest-args (see saw 'non-config 'lib)))]
+          [("-u" "--script")
+           (let-values ([(file-name rest-args) (next-arg "file name" arg within-arg args)])
+             (set! loads
+                   (cons
+                    (lambda ()
+                      (dynamic-require `(file ,file-name) #f))
+                    loads))
+             (no-init! saw)
+             (flags-loop rest-args (see saw 'non-config 'lib)))]
+          [("-i" "--repl") 
+           (set! repl? #t)
+           (set! version? #t)
+           (flags-loop (cdr args) (see saw 'non-config 'top))]
+          [("-n" "--no-lib")
+           (set! init-library #f)
+           (flags-loop (cdr args) (see saw 'non-config))]
+          [("-v" "--version") 
+           (set! version? #t)
+           (flags-loop (cddr args) (see saw 'non-config))]
+          [("-c" "--no-compiled")
+           (|#%app| use-compiled-file-paths '())
+           (loop (cdr args))]
+          [("-I")
+           (let-values ([(lib-name rest-args) (next-arg "library name" arg within-arg args)])
+             (when init-library
+               (set! init-library `(lib ,lib-name)))
+             (loop rest-args))]
+          [("-W" "--stderr")
+           (let-values ([(spec rest-args) (next-arg "stderr level" arg within-arg args)])
+             (set! stderr-logging-arg (parse-logging-spec spec (format "after ~a switch" (or within-arg arg)) #t))
+             (loop rest-args))]
+          [("--")
            (cond
-            [(not (eqv? (string-ref arg 1) #\-))
-             ;; Split flags
-             (loop (append (map (lambda (c) (cons (string #\- c) arg))
-                                (cdr (string->list arg)))
-                           (cdr args)))]
+            [(or (null? (cdr args)) (not (pair? (cadr args))))
+             (finish (cdr args) saw)]
             [else
-             (raise-user-error 'racket "bad switch: ~a~a"
-                               arg
-                               (if within-arg
-                                   (format " within: ~a" within-arg)
-                                   ""))])]
+             ;; Need to handle more switches from a combined flag
+             (loop (cons (cadr args) (cons (car args) (cddr args))))])]
           [else
-           ;; Non-flag argument
-           (finish args saw)])]))))
+           (cond
+            [(and (> (string-length arg) 2)
+                  (eqv? (string-ref arg 0) #\-))
+             (cond
+              [(not (eqv? (string-ref arg 1) #\-))
+               ;; Split flags
+               (loop (append (map (lambda (c) (cons (string #\- c) arg))
+                                  (cdr (string->list arg)))
+                             (cdr args)))]
+              [else
+               (raise-user-error 'racket "bad switch: ~a~a"
+                                 arg
+                                 (if within-arg
+                                     (format " within: ~a" within-arg)
+                                     ""))])]
+            [else
+             ;; Non-flag argument
+             (finish args saw)])]))))
 
  (define stderr-logging
    (or stderr-logging-arg

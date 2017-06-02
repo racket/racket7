@@ -25,7 +25,7 @@ run: main.so
 	${SCHEME} --script main.so ../../bin/racket $(ARGS)
 
 setup:
-	$(MAKE) run ARGS="-W 'info@compiler/cm error' -l setup"
+	$(MAKE) run ARGS="-W 'info@compiler/cm error' -l- setup $(ARGS)"
 
 run-wpo: racket.so
 	${SCHEME} --script racket.so ../../bin/racket $(ARGS)

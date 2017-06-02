@@ -106,7 +106,8 @@
     (file-directory? p))
   
   (define (file-exists? p)
-    (chez:file-exists? p))
+    (and (chez:file-exists? p)
+         (not (file-directory? p))))
   
   (define (link-exists? p)
     (file-symbolic-link? p))

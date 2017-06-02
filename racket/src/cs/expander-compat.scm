@@ -107,19 +107,6 @@
 (define current-eval
   (make-parameter (lambda args (error "eval not ready"))))
 
-(define exit-handler
-  (make-parameter (lambda (v)
-                    (cond
-                     [(byte? v)
-                      (chez:exit v)]
-                     [else
-                      (chez:exit 0)]))))
-
-(define exit
-  (case-lambda
-   [() (|#%app| (|#%app| exit-handler) #t)]
-   [(v) (|#%app| (|#%app| exit-handler) v)]))
-
 (define executable-yield-handler
   (make-parameter void (lambda (p)
                          (unless (and (procedure? p)
@@ -523,9 +510,6 @@
    environment-variables-copy
    environment-variables-names
    environment-variables?
-
-   exit
-   exit-handler
 
    reparameterize
    current-eval

@@ -23,8 +23,8 @@
 
 (test "1\n0!\"hi\"" (format "1~%~  \n  ~o~c~s" 0 #\! "hi"))
 
-(test "*(1 2 3 apple\t\u0001 end <spot> file 1\"2\"3)*"
-      (format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file") #"1\"2\"3")))
+(test "*(1 2 3 apple\t\u0001 end <spot> file 1\"2\"3 #hash((a . 1) (b . 2)))*"
+      (format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file") #"1\"2\"3" #hash((b . 2) (a . 1)))))
 (test "*(1 2 3 \"apple\\t\\u0001\" end <spot> #\"1\\\"2\\\"3\t\\0010\")*"
       (format "*~.v*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) #"1\"2\"3\t\0010")))
 

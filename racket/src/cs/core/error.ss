@@ -29,7 +29,7 @@
                     v)))
 
 (define/who error-print-context-length
-  (make-parameter 16
+  (make-parameter 32
                   (lambda (v)
                     (check who exact-nonnegative-integer? v)
                     v)))
@@ -331,8 +331,8 @@
 ;; Convert a contination to a list of function-name and
 ;; source information. Cache the result half-way up the
 ;; traversal, so that it's amortized constant time.
-(define cached-contexts (make-weak-eq-hashtable))
-(define (continuation->context k)
+(define cached-traces (make-weak-eq-hashtable))
+(define (continuation->trace k)
   (let ([i (inspect/object k)])
     (call-with-values
      (lambda ()
@@ -343,7 +343,7 @@
           [else
            (let ([k (i 'value)])
              (cond
-              [(hashtable-ref cached-contexts k #f)
+              [(hashtable-ref cached-traces k #f)
                => (lambda (l)
                     (values slow-i l))]
               [else
@@ -356,10 +356,7 @@
                                        [n (c 'name)])
                                   n))]
                       [desc
-                       (let* ([src (i 'source-object)]
-                              [src (and src
-                                        (file-position-object? (source-object-bfp src))
-                                        src)])
+                       (let* ([src (i 'source-object)])
                          (and (or name src)
                               (cons name src)))])
                  (call-with-values
@@ -369,28 +366,36 @@
                                   (cons desc l)
                                   l)])
                        (when (eq? k slow-k)
-                         (hashtable-set! cached-contexts (i 'value) l))
+                         (hashtable-set! cached-traces (i 'value) l))
                        (values slow-k l)))))]))])))
      (lambda (slow-k l)
        l))))
 
-(define (context->srcloc-context l)
-  (let loop ([l l])
+(define (traces->context ls)
+  (let loop ([l '()] [ls ls])
     (cond
-     [(null? l) '()]
+     [(null? l)
+      (if (null? ls)
+          '()
+          (loop (car ls) (cdr ls)))]
      [else
       (let* ([p (car l)]
              [name (car p)]
              [loc (and (cdr p)
-                       (call-with-values (lambda () (locate-source (source-object-sfd (cdr p))
-                                                                   (source-object-bfp (cdr p))))
+                       (call-with-values (lambda ()
+                                           (let ([src (cdr p)])
+                                             (if (file-position-object? (source-object-bfp src))
+                                                 (locate-source (source-object-sfd (cdr p))
+                                                                (source-object-bfp (cdr p)))
+                                                 (values (source-file-descriptor-path (source-object-sfd src))
+                                                         (source-object-bfp src)))))
                          (case-lambda
                           [() #f]
                           [(path line col) (srcloc path line (sub1 col) #f #f)]
-                          [(path pos) (srcloc (add1 path) #f #f pos #f)])))])
+                          [(path pos) (srcloc path #f #f (add1 pos) #f)])))])
         (if (or name loc)
-            (cons (cons name loc) (loop (cdr l)))
-            (loop (cdr l))))])))
+            (cons (cons name loc) (loop (cdr l) ls))
+            (loop (cdr l) ls)))])))
 
 (define (default-error-display-handler msg v)
   (eprintf "~a" msg)
@@ -398,11 +403,10 @@
             (and (exn? v)
                  (not (exn:fail:user? v))))
     (eprintf "\n  context...:")
-    (let loop ([l (context->srcloc-context
+    (let loop ([l (traces->context
                    (if (exn? v)
-                       (continuation-mark-set-context (exn-continuation-marks v))
-                       (continuation->context
-                        (condition-continuation v))))]
+                       (continuation-mark-set-traces (exn-continuation-marks v))
+                       (list (continuation->trace (condition-continuation v)))))]
                [n (|#%app| error-print-context-length)])
       (unless (or (null? l) (zero? n))
         (let* ([p (car l)]

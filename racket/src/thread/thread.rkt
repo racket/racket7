@@ -11,7 +11,8 @@
          "thread-group.rkt"
          "atomic.rkt"
          "schedule-info.rkt"
-         "custodian.rkt")
+         "custodian.rkt"
+         "exit.rkt")
 
 (provide (rename-out [make-thread thread])
          thread/suspend-to-kill
@@ -197,7 +198,9 @@
    [else
     (thread-group-remove! (thread-parent t) t)])
   (remove-from-sleeping-threads! t)
-  (run-kill-callbacks! t))
+  (run-kill-callbacks! t)
+  (when (eq? t root-thread)
+    (exit)))
 
 ;; ----------------------------------------
 ;; Thread termination

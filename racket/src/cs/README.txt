@@ -3,13 +3,18 @@ Work-in-progress for running Racket on Chez Scheme.
 
 Requirements:
 
- * Chez Scheme --- the current development version from
+ * Chez Scheme --- for now, use a fork at
+
+      https://github.com/mflatt/ChezScheme
+
+   but we will eventually return to the current development version
+   from
 
       https://github.com/cisco/ChezScheme
 
-   If Chez Scheme is not installed so that plain `scheme` on the
-   command line runs your installation, you can use `make SCHEME=...`
-   to set the command for `scheme`.
+   If this build of Chez Scheme is not installed so that plain
+   `scheme` on the command line runs your installation, you can use
+   `make SCHEME=...` to set the command for `scheme`.
 
  * Racket --- a recent version
 
