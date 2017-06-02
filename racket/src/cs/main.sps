@@ -23,7 +23,7 @@
 
  (unless (pair? (command-line-arguments))
    (error 'racket "expected a `self` executable path to start"))
- (set-exec-file! (string->path (car (command-line-arguments))))
+ (set-exec-file! (path->complete-path (car (command-line-arguments))))
 
  (define (see saw . args)
    (let loop ([saw saw] [args args])
