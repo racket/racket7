@@ -10,7 +10,8 @@
          "mutated-state.rkt"
          "left-to-right.rkt"
          "serialize.rkt"
-         "let.rkt")
+         "let.rkt"
+         "equal.rkt")
 
 (provide schemify-linklet
          schemify-body
@@ -408,6 +409,19 @@
                 ,(if (hash-ref mutated (unwrap id) #f)
                      'mutable
                      'immutable)))]
+         [`(equal? ,exp1 ,exp2)
+          (let ([exp1 (schemify exp1)]
+                [exp2 (schemify exp2)])
+            (cond
+              [(or (equal-implies-eq? exp1) (equal-implies-eq? exp2))
+               `(eq? ,exp1 ,exp2)]
+              [(or (equal-implies-eqv? exp1) (equal-implies-eqv? exp2))
+               `(eqv? ,exp1 ,exp2)]
+              [else
+               (left-to-right/app 'equal?
+                                  (list exp1 exp2)
+                                  #t
+                                  unannotate prim-knowns knowns imports mutated)]))]
          [`(,rator ,exps ...)
           (let ([s-rator (schemify rator)]
                 [args (map schemify exps)]

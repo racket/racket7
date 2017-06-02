@@ -7,7 +7,7 @@ COMP = echo $(UNSAFE) '(reset-handler abort) (keyboard-interrupt-handler abort) 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
                     schemify/struct-type-info.rkt schemify/import.rkt schemify/mutated-state.rkt \
-                    schemify/simple.rkt schemify/serialize.rkt schemify/let.rkt
+                    schemify/simple.rkt schemify/serialize.rkt schemify/let.rkt schemify/equal.rkt
 CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS) known-primitive.rkt
 
 THREAD_DEPS = chezpart.so core.so
