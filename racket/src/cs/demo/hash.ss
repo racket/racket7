@@ -117,25 +117,31 @@
 (time
  (let loop ([j 1000])
    (unless (zero? j)
-     (let loop ([v #f] [i (hash-iterate-first numbers)])
+     (let loop ([v #f] [i (hash-iterate-first numbers)] [c (hash-count numbers)])
        (if i
            (loop (hash-iterate-value numbers i)
-                 (hash-iterate-next numbers i))
-           v))
+                 (hash-iterate-next numbers i)
+                 (fx1- c))
+           (if (zero? c)
+               v
+               (error 'safe-iterate "not enough"))))
      (loop (sub1 j)))))
 
 (printf "unsafe iterate\n")
 (time
  (let loop ([j 1000])
    (unless (zero? j)
-     (let loop ([v #f] [i (unsafe-immutable-hash-iterate-first numbers)])
+     (let loop ([v #f] [i (unsafe-immutable-hash-iterate-first numbers)] [c (hash-count numbers)])
        (if i
            (loop (unsafe-immutable-hash-iterate-value numbers i)
-                 (unsafe-immutable-hash-iterate-next numbers i))
-           v))
+                 (unsafe-immutable-hash-iterate-next numbers i)
+                 (fx1- c))
+           (if (zero? c)
+               v
+               (error 'unsafe-iterate "not enough"))))
      (loop (sub1 j)))))
 
-(printf "safe vs. unsafe on small table\n")
+(printf "unsafe vs. safe on small table\n")
 (let ([ht (let loop ([ht (hasheq)] [i 8])
             (if (zero? i)
                 ht

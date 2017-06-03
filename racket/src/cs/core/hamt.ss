@@ -207,30 +207,76 @@
   (let ([p (node-entry-at-position h pos)])
     (or p fail)))
 
-;; unsafe iteration
+;; unsafe iteration; position is a stack
+;; represented by a list of (cons node index)
 (define (unsafe-hamt-iterate-first h)
-  (node-foldk h
-              (lambda (key val _ k)
-                (make-hamt-position key val k))
-              #f
-              (lambda (x) x)))
+  (and (not (hamt-empty? h))
+       (unsafe-node-iterate-first h '())))
+
+(define (unsafe-node-iterate-first n stack)
+  (cond
+   [(bnode? n)
+    (let ([i (fx1- (#%vector-length (hnode-keys n)))]
+          [key-count (popcount (bnode-keymap n))])
+      (let ([stack (cons (cons n i) stack)])
+        (if (fx>= i key-count)
+            (unsafe-node-iterate-first (key-ref n i) stack)
+            stack)))]
+   [(cnode? n)
+    (let ([i (fx1- (#%vector-length (hnode-keys n)))])
+      (cons (cons n i) stack))]))
 
 (define (unsafe-hamt-iterate-next h pos)
-  ((hamt-position-k pos) #f))
+  (unsafe-node-iterate-next pos))
+
+(define (unsafe-node-iterate-next pos)
+  (cond
+   [(null? pos)
+    ;; Stack is empty, so we're done
+    #f]
+   [else
+    (let ([p (car pos)]
+          [stack (cdr pos)])
+      (let ([n (car p)]
+            [i (cdr p)])
+        (cond
+         [(fx= 0 i)
+          ;; Exhausted this node, so return to parent node
+          (unsafe-node-iterate-next stack)]
+         [else
+          ;; Move to next (lower) index in the current node
+          (let ([i (fx1- i)])
+            (cond
+             [(bnode? n)
+              (let ([key-count (popcount (bnode-keymap n))]
+                    [stack (cons (cons n i) stack)])
+                (if (fx>= i key-count)
+                    (unsafe-node-iterate-first (key-ref n i) stack)
+                    stack))]
+             [(cnode? n)
+              (cons (cons n i) stack)]))])))]))
 
 (define (unsafe-hamt-iterate-key h pos)
-  (hamt-position-key pos))
+  (let ([p (car pos)])
+    (key-ref (car p) (cdr p))))
 
 (define (unsafe-hamt-iterate-value h pos)
-  (hamt-position-val pos))
+  (let ([p (car pos)])
+    (val-ref (car p) (cdr p))))
 
 (define (unsafe-hamt-iterate-key+value h pos)
-  (values (hamt-position-key pos)
-          (hamt-position-val pos)))
+  (let ([p (car pos)])
+    (let ([n (car p)]
+          [i (cdr p)])
+      (values (key-ref n i)
+              (val-ref n i)))))
 
 (define (unsafe-hamt-iterate-pair h pos)
-  (cons (hamt-position-key pos)
-        (hamt-position-val pos)))
+  (let ([p (car pos)])
+    (let ([n (car p)]
+          [i (cdr p)])
+      (cons (key-ref n i)
+            (val-ref n i)))))
 
 ;; constants
 (define HASHCODE-BITS (fxbit-count (most-positive-fixnum)))
