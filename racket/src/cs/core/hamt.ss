@@ -134,7 +134,7 @@
   (node=? a b eql? 0))
 
 (define (hamt-hash-code a hash)
-  (node-hash-code a hash 0 0))
+  (node-hash-code a hash 0))
 
 (define ignored/hamt
   (begin
@@ -295,21 +295,22 @@
            (cond [(bnode? a) (bnode=? a b eql? shift)]
                  [else       (cnode=? a b eql?)]))))
 
-(define (node-hash-code n hash hc shift)
+(define (node-hash-code n hash hc)
   (cond
    [(bnode? n)
     (let* ([bm (fxior (bnode-keymap n) (bnode-childmap n))]
            [hc (hash-code-combine hc bm)]
-           [len (#%vector-length (hnode-keys n))])
+           [len (#%vector-length (hnode-keys n))]
+           [key-count (popcount (bnode-keymap n))])
       (let loop ([i 0] [hc hc])
         (cond
          [(fx= i len) hc]
          [else
           (let ([x (key-ref n i)])
             (cond
-             [(hnode? x)
+             [(fx>= i key-count)
               (loop (fx1+ i)
-                    (node-hash-code x hash hc (down shift)))]
+                    (node-hash-code x hash hc))]
              [else
               (loop (fx1+ i)
                     (hash-code-combine hc (hash (val-ref n i))))]))])))]
@@ -428,7 +429,8 @@
    (fx= (bnode-childmap a) (bnode-childmap b))
 
    (let* ([keys (hnode-keys a)]
-          [len (#%vector-length keys)])
+          [len (#%vector-length keys)]
+          [key-count (popcount (bnode-keymap a))])
      (let loop ([i 0])
        (cond
         [(fx= i len) #t]
@@ -437,7 +439,7 @@
                [bk (key-ref b i)])
            (and
             (cond
-             [(hnode? ak)
+             [(fx>= i key-count)
               (node=? ak bk eql? (down shift))]
              [else
               (and (key=? a ak bk)
@@ -490,7 +492,7 @@
            [len (#%vector-length akeys)])
       (and (fx= len 1)
            (let ([x (#%vector-ref akeys 0)])
-             (if (hnode? x)
+             (if (fx= 0 (bnode-keymap a))
                  (node-keys-subset? x b (down shift))
                  (not (not (cnode-index b x)))))))]))
 
