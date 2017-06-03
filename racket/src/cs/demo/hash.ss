@@ -124,17 +124,6 @@
            v))
      (loop (sub1 j)))))
 
-(printf "generic iterate\n")
-(time
- (let loop ([j 1000])
-   (unless (zero? j)
-     (let loop ([v #f] [i (hash-iterate-first numbers)])
-       (if i
-           (loop (hash-iterate-value numbers i)
-                 (hash-iterate-next numbers i))
-           v))
-     (loop (sub1 j)))))
-
 (printf "unsafe iterate\n")
 (time
  (let loop ([j 1000])

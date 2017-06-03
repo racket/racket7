@@ -232,13 +232,6 @@
   (cons (hamt-position-key pos)
         (hamt-position-val pos)))
 
-(define unsafe-immutable-hash-iterate-first unsafe-hamt-iterate-first)
-(define unsafe-immutable-hash-iterate-next unsafe-hamt-iterate-next)
-(define unsafe-immutable-hash-iterate-key unsafe-hamt-iterate-key)
-(define unsafe-immutable-hash-iterate-value unsafe-hamt-iterate-value)
-(define unsafe-immutable-hash-iterate-key+value unsafe-hamt-iterate-key+value)
-(define unsafe-immutable-hash-iterate-pair unsafe-hamt-iterate-pair)
-
 ;; constants
 (define HASHCODE-BITS (fxbit-count (most-positive-fixnum)))
 (define BNODE-BITS 4)

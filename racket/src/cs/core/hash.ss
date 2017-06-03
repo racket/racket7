@@ -548,6 +548,38 @@
                              weak-hash-iterate-pair
                              #t #t #t))
 
+(define (unsafe-immutable-hash-iterate-first ht)
+  (if (impersonator? ht)
+      (hash-iterate-first ht)
+      (unsafe-hamt-iterate-first ht)))
+
+(define (iterator-for-impersonator? i) (fixnum? i))
+
+(define (unsafe-immutable-hash-iterate-next ht i)
+  (if (iterator-for-impersonator? i)
+      (hash-iterate-next ht i)
+      (unsafe-hamt-iterate-next ht i)))
+
+(define (unsafe-immutable-hash-iterate-key ht i)
+  (if (iterator-for-impersonator? i)
+      (hash-iterate-key ht i)
+      (unsafe-hamt-iterate-key ht i)))
+
+(define (unsafe-immutable-hash-iterate-value ht i)
+  (if (iterator-for-impersonator? i)
+      (hash-iterate-value ht i)
+      (unsafe-hamt-iterate-value ht i)))
+
+(define (unsafe-immutable-hash-iterate-key+value ht i)
+  (if (iterator-for-impersonator? i)
+      (hash-iterate-key+value ht i)
+      (unsafe-hamt-iterate-key+value ht i)))
+
+(define (unsafe-immutable-hash-iterate-pair ht i)
+  (if (iterator-for-impersonator? i)
+      (hash-iterate-pair ht i)
+      (unsafe-hamt-iterate-pair ht i)))
+
 (define unsafe-mutable-hash-iterate-first hash-iterate-first)
 (define unsafe-mutable-hash-iterate-next hash-iterate-next)
 (define unsafe-mutable-hash-iterate-key hash-iterate-key)
@@ -751,26 +783,32 @@
 
 (define (weak-hash-iterate-value ht i)
   (define key (do-weak-hash-iterate-key 'weak-hash-iterate-value ht i))
-  (weak-hash-ref ht key (lambda ()
-                          (raise-arguments-error
-                           'weak-hash-iterate-value "no element at index"
-                           "index" i))))
+  (let ([val (weak-hash-ref ht key none)])
+    (if (eq? val none)
+        (raise-arguments-error
+         'weak-hash-iterate-value "no element at index"
+         "index" i)
+        val)))
 
 (define (weak-hash-iterate-key+value ht i)
   (define key (do-weak-hash-iterate-key 'weak-hash-iterate-key+value ht i))
   (values key
-          (weak-hash-ref ht key (lambda ()
-                                  (raise-arguments-error
-                                   'weak-hash-iterate-key+value "no element at index"
-                                   "index" i)))))
+          (let ([val (weak-hash-ref ht key none)])
+            (if (eq? val none)
+                (raise-arguments-error
+                 'weak-hash-iterate-key+value "no element at index"
+                 "index" i)
+                val))))
 
 (define (weak-hash-iterate-pair ht i)
   (define key (do-weak-hash-iterate-key 'weak-hash-iterate-pair ht i))
   (cons key
-        (weak-hash-ref ht key (lambda ()
-                                (raise-arguments-error
-                                 'weak-hash-iterate-paur "no element at index"
-                                 "index" i)))))
+        (let ([val (weak-hash-ref ht key none)])
+          (if (eq? val none)
+              (raise-arguments-error
+               'weak-hash-iterate-paur "no element at index"
+               "index" i)
+              val))))
 
 ;; Remove empty weak boxes from a table. Count the number
 ;; of remaining entries, and remember to prune again when
