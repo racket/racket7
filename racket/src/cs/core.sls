@@ -570,7 +570,7 @@
   (include "core/network.ss")
   (include "core/place.ss")
   (include "core/foreign.ss")
-  
+
   (set-base-exception-handler!)
   (set-collect-handler!)
   (set-primitive-applicables!)

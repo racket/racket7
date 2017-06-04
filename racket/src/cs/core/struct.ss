@@ -512,7 +512,7 @@
                           (if parent-prefab-key+count
                               (cdr parent-prefab-key+count)
                               0))]
-           [uid (gensym name)]
+           [uid (encode-prefab-key+count-as-symbol prefab-key+count)]
            [rtd (make-record-type-descriptor name
                                              parent-rtd
                                              uid #f #f

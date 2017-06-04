@@ -300,6 +300,9 @@
               '#()))
       '#()))
 
+(define (encode-prefab-key+count-as-symbol prefab-key+count)
+  (string->symbol (chez:format "~a" prefab-key+count)))
+
 (define (immutables->mutables immutables fields-count)
   (vector->immutable-vector
    (list->vector
