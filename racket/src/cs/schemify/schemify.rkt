@@ -14,8 +14,7 @@
          "equal.rkt")
 
 (provide schemify-linklet
-         schemify-body
-         (all-from-out "known.rkt"))
+         schemify-body)
 
 ;; Convert a linklet to a Scheme `lambda`, dealing with several
 ;; issues:

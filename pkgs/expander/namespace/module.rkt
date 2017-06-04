@@ -403,7 +403,7 @@
      (when (hash-ref seen mi #f)
        (error 'require "import cycle detected during module instantiation"))
      
-     ;; If we haven't shifted required mpi's already, do that
+     ;; If we haven't shifted required mpis already, do that
      (unless (module-instance-shifted-requires mi)
        (set-module-instance-shifted-requires!
         mi
@@ -413,7 +413,7 @@
                   (module-path-index-shift req-mpi
                                            (module-self m)
                                            mpi))))))
-     
+
      ;; Recur for required modules:
      (for ([phase+mpis (in-list (module-instance-shifted-requires mi))])
        (define req-phase (car phase+mpis))

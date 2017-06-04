@@ -48,7 +48,12 @@
           '(let
             letrec*
             define
+            or
+            and
+            pariah
             variable-set!
             variable-ref
             variable-ref/no-check
-            make-instance-variable-reference))
+            make-instance-variable-reference
+            annotation?
+            annotation-expression))

@@ -1,6 +1,6 @@
 (library (schemify)
   (export schemify-linklet
-          schemify-body
+          lift-in-schemified-linklet
           prim-knowns)
   (import (chezpart)
           (rename (core)
@@ -9,11 +9,18 @@
           (regexp)
           (io)
           (known-primitive))
-  
-  ;; Bridge for flattened "schemify/wrap.rkt":
-  (define (primitive-table kernel)
-    (hash 'syntax? core:correlated?
-          'syntax-e core:correlated-e))
+
+  ;; Bridge for flattened "schemify/wrap.rkt"
+  ;; and "schemify/wrap-annotation.rkt"
+  (define (primitive-table name)
+    (case name
+      [(|#%kernel|)
+       (hash 'syntax? core:correlated?
+             'syntax-e core:correlated-e)]
+      [(|#%annotation|)
+       (hash 'annotation? annotation?
+             'annotation-expression annotation-expression)]
+      [else #f]))
 
   (include "compiled/schemify.scm")
 

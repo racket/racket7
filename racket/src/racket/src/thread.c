@@ -9583,7 +9583,7 @@ static void log_peak_memory_use()
   Scheme_Logger *logger;
   if (max_gc_pre_used_bytes > 0) {
     logger = scheme_get_gc_logger();
-    if (logger && scheme_log_level_p(logger, SCHEME_LOG_DEBUG)) {
+    if (logger && scheme_log_level_p(logger, SCHEME_LOG_INFO)) {
       char buf[256], nums[128], *num, *numt, *num2;
       intptr_t buflen, allocated_bytes;
 #ifdef MZ_PRECISE_GC
@@ -9606,7 +9606,7 @@ static void log_peak_memory_use()
               num_minor_garbage_collections,
               num2);
       buflen = strlen(buf);
-      scheme_log_message(logger, SCHEME_LOG_DEBUG, buf, buflen, scheme_false);
+      scheme_log_message(logger, SCHEME_LOG_INFO, buf, buflen, scheme_false);
       /* Setting to a negative value ensures that we log the peak only once: */
       max_gc_pre_used_bytes = -1;
     }

@@ -124,9 +124,13 @@
                           ;; given import:
                           (lambda (index)
                             (lookup-linklet get-import import-keys index))))
+      (define impl-lam/lifts
+        (lift-in-schemified-linklet (remove-annotation-boundary impl-lam)
+                                    reannotate
+                                    unannotate))
       ;; Create the linklet:
       (let ([lk (make-linklet ((if serializable? compile-to-bytevector compile)
-                               (show "schemified" (remove-annotation-boundary impl-lam)))
+                               (show "schemified" impl-lam/lifts))
                               (if serializable? 'faslable 'callable)
                               importss-abi
                               exports-info
@@ -791,6 +795,26 @@
           (let ([sfd (source-file-descriptor str 0)])
             (hash-set! sfd-cache src sfd)
             sfd))))
+
+  ;; --------------------------------------------------
+  
+  (define (reannotate old-term new-term)
+    (if (annotation? old-term)
+        (make-annotation new-term
+                         (annotation-source old-term)
+                         (strip-nested-annotations new-term))
+        new-term))
+
+  (define (strip-nested-annotations s)
+    (cond
+     [(annotation? s) (annotation-stripped s)]
+     [(pair? s)
+      (let ([a (strip-nested-annotations (car s))]
+            [d (strip-nested-annotations (cdr s))])
+        (if (and (eq? a (car s)) (eq? d (cdr s)))
+            s
+            (cons a d)))]
+     [else s]))
 
   ;; --------------------------------------------------
 

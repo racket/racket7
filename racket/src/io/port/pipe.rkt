@@ -32,7 +32,7 @@
 
 (define/who (make-pipe [limit #f] [input-name 'pipe] [output-name 'pipe])
   (check who #:or-false exact-positive-integer? limit)
-  (define bstr (make-bytes (min+1 limit 256)))
+  (define bstr (make-bytes (min+1 limit 16)))
   (define start 0)
   (define end 0)
   (define output-closed? #f)

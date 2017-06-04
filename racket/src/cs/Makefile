@@ -7,8 +7,12 @@ COMP = echo $(UNSAFE) '(reset-handler abort) (keyboard-interrupt-handler abort) 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
                     schemify/struct-type-info.rkt schemify/import.rkt schemify/mutated-state.rkt \
-                    schemify/simple.rkt schemify/serialize.rkt schemify/let.rkt schemify/equal.rkt
+                    schemify/simple.rkt schemify/serialize.rkt schemify/let.rkt schemify/equal.rkt \
+                    schemify/lift.rkt schemify/wrap-annotation.rkt schemify/match-annotation.rkt \
+                    schemify/main.rkt
 CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS) known-primitive.rkt
+
+CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt
 
 THREAD_DEPS = chezpart.so core.so
 IO_DEPS = $(THREAD_DEPS) thread.so
@@ -54,7 +58,7 @@ expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES
 	$(COMP) '(compile-file "expander.sls")' | $(SCHEME) -q $(EXPANDER_DEPS)
 
 compiled/expander.scm: ../../../pkgs/expander/compiled/expander.rktl $(CONVERT_DEPS)
-	$(RACKET) convert.rkt ../../../pkgs/expander/compiled/expander.rktl compiled/expander.scm
+	$(CONVERT) ../../../pkgs/expander/compiled/expander.rktl compiled/expander.scm
 
 ../../../pkgs/expander/compiled/expander.rktl:
 	$(MAKE) expander-rktl
@@ -73,11 +77,11 @@ schemify.so: schemify.sls compiled/schemify.scm $(SCHEMIFY_DEPS)
 	$(COMP) '(compile-file "schemify.sls")' | $(SCHEME) -q $(SCHEMIFY_DEPS)
 
 compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
-	$(RACKET) convert.rkt --skip-export compiled/schemify.rktl compiled/schemify.scm
+	$(CONVERT) --skip-export compiled/schemify.rktl compiled/schemify.scm
 
 compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
 	$(RACKET) -N raco -l- raco make ../../../pkgs/expander/bootstrap-run.rkt
-	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t schemify/schemify.rkt -c compiled/cache-src -k ../.. ++knot read - -s -x -o compiled/schemify.rktl
+	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t schemify/main.rkt -c compiled/cache-src -k ../.. ++knot read - -s -x -o compiled/schemify.rktl
 
 
 known-primitive.so: known-primitive.sls
@@ -94,7 +98,7 @@ regexp.so: compiled/regexp.scm regexp.sls $(REGEXP_DEPS)
 	$(COMP) '(compile-file "regexp.sls")' | $(SCHEME) -q $(REGEXP_DEPS)
 
 compiled/regexp.scm: ../regexp/compiled/regexp.rktl $(CONVERT_DEPS)
-	$(RACKET) convert.rkt ../regexp/compiled/regexp.rktl compiled/regexp.scm
+	$(CONVERT) ../regexp/compiled/regexp.rktl compiled/regexp.scm
 
 ../regexp/compiled/regexp.rktl:
 	$(MAKE) regexp-rktl
@@ -110,7 +114,7 @@ io.so: compiled/io.scm io.sls $(IO_DEPS)
 	$(COMP) '(compile-file "io.sls")' | $(SCHEME) -q $(IO_DEPS)
 
 compiled/io.scm: ../io/compiled/io.rktl $(CONVERT_DEPS)
-	$(RACKET) convert.rkt ../io/compiled/io.rktl compiled/io.scm
+	$(CONVERT) ../io/compiled/io.rktl compiled/io.scm
 
 ../io/compiled/io.rktl:
 	$(MAKE) io-rktl
@@ -126,7 +130,7 @@ thread.so: compiled/thread.scm thread.sls $(THREAD_DEPS)
 	$(COMP) '(compile-file "thread.sls")' | $(SCHEME) -q $(THREAD_DEPS)
 
 compiled/thread.scm: ../thread/compiled/thread.rktl $(CONVERT_DEPS)
-	$(RACKET) convert.rkt ../thread/compiled/thread.rktl compiled/thread.scm
+	$(CONVERT) ../thread/compiled/thread.rktl compiled/thread.scm
 
 ../thread/compiled/thread.rktl:
 	$(MAKE) thread-rktl

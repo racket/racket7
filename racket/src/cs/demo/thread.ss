@@ -51,7 +51,7 @@
    (define cpt2 (thread (lambda () (channel-put ch 'd))))
    (printf "3 ~a\n" (channel-get ch))
    (printf "4 ~a\n" (channel-get ch))
-   
+
    (check s (sync/timeout 0 s))
    (check #f (sync/timeout 0 s))
 

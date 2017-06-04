@@ -5,6 +5,7 @@
          racket/file
          "schemify/schemify.rkt"
          "schemify/known.rkt"
+         "schemify/lift.rkt"
          "known-primitive.rkt")
 
 (define skip-export? #f)
@@ -101,7 +102,15 @@
 
 ;; Convert:
 (define schemified-body
-  (schemify-body l (lambda (old-v new-v) new-v) values prim-knowns #hasheq() #hasheq()))
+  (let ()
+    (printf "Schemify...\n")
+    (define body
+      (time
+       (schemify-body l (lambda (old-v new-v) new-v) values prim-knowns #hasheq() #hasheq())))
+    (printf "Lift...\n")
+    ;; Lift functions to aviod closure creation:
+    (time
+     (lift-in-schemified-body body (lambda (old new) new) values))))
 
 ;; ----------------------------------------
 

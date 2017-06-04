@@ -259,8 +259,8 @@
   (let ([orig (|#%app| exit-handler)]
         [root-logger (|#%app| current-logger)])
     (lambda (v)
-      (when (log-level? root-logger 'debug 'GC)
-        (log-message root-logger 'debug 'GC
+      (when (log-level? root-logger 'info 'GC)
+        (log-message root-logger 'info 'GC
                      (chez:format "0:atexit peak ~a; alloc ~a; major ~a; minor ~a; ~ams"
                                   (K "" (maximum-memory-bytes))
                                   (K "" (- (+ (bytes-deallocated) (bytes-allocated)) (initial-bytes-allocated)))
