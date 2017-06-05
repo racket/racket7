@@ -109,13 +109,22 @@
 
 ;; ----------------------------------------
 
-(define *metacontinuation* '())
-(define *empty-k* #f)
+;;(define *metacontinuation* '())
+(define *metacontinuation* (if (threaded?)
+			       (chez:make-thread-parameter '())
+			       (chez:make-parameter '())))
+;;(define *empty-k* #f)
+(define *empty-k* (if (threaded?)
+		      (chez:make-thread-parameter #f)
+		      (chez:make-parameter #f)))
 
 ;; A *cc-guard* callback can is installed by the
 ;; application of a non-composable continuation
 ;; with an impersonated prompt tag.
-(define *cc-guard* values)
+;;(define *cc-guard* values)
+(define *cc-guard* (if (threaded?)
+		       (chez:make-thread-parameter values)
+		       (chez:make-parameter values)))
 
 (define-record metacontinuation-frame (tag          ; continuation prompt tag or #f
                                        resume-k     ; delivers values to the prompt
@@ -163,7 +172,7 @@
   (let ([tag (strip-impersonator tag)])
     (or (eq? tag the-default-continuation-prompt-tag)
         (eq? tag the-root-continuation-prompt-tag)
-        (let loop ([mc *metacontinuation*])
+        (let loop ([mc (*metacontinuation*)])
           (cond
            [(null? mc)
             #f]
@@ -190,7 +199,7 @@
         (compose-cc-guard-for-impersonator! tag)
         (call-with-values (lambda () (apply proc args))
           (lambda results
-            (apply *cc-guard* results)))))]))
+            (apply (*cc-guard*) results)))))]))
 
 (define (make-default-abort-handler tag)
   (lambda (abort-thunk)
@@ -200,19 +209,19 @@
 (define (resume-metacontinuation results)
   ;; pop a metacontinuation frame
   (cond
-   [(null? *metacontinuation*) (chez:exit)]
+   [(null? (*metacontinuation*)) (chez:exit)]
    [else
     (start-uninterrupted 'resume-mc)
-    (let ([mf (car *metacontinuation*)])
+    (let ([mf (car (*metacontinuation*))])
       (pop-metacontinuation-frame)
       ;; resume
       ((metacontinuation-frame-resume-k/no-wind mf) results))]))
 
 (define (pop-metacontinuation-frame)
-  (let ([mf (car *metacontinuation*)])
-    (set! *metacontinuation* (cdr *metacontinuation*))
-    (set! *mark-stack* (metacontinuation-frame-mark-stack mf))
-    (set! *empty-k* (metacontinuation-frame-empty-k mf))))
+  (let ([mf (car (*metacontinuation*))])
+    (*metacontinuation* (cdr (*metacontinuation*)))
+    (*mark-stack* (metacontinuation-frame-mark-stack mf))
+    (*empty-k* (metacontinuation-frame-empty-k mf))))
 
 (define (call-in-empty-metacontinuation-frame tag handler proc)
   ;; Call `proc` in an empty metacontinuation frame, reifying the
@@ -224,10 +233,10 @@
    (lambda (k)
      (cond
       [(and (not tag)
-            (pair? *metacontinuation*)
-            (let ([current-mf (car *metacontinuation*)])
+            (pair? (*metacontinuation*))
+            (let ([current-mf (car (*metacontinuation*))])
               (and (eq? tag (metacontinuation-frame-tag current-mf))
-                   (eq? k *empty-k*)
+                   (eq? k (*empty-k*))
                    current-mf)))
        =>
        (lambda (current-mf)
@@ -236,11 +245,11 @@
          ;; current one if metadata hasn't changed; we assume that
          ;; there are no new winders and the handler is the same,
          ;; otherwise the continuation would be bigger
-         (when *mark-stack*
+         (when (*mark-stack*)
            ;; update metacontinuation for new mark-stack elements:
-           (set! *metacontinuation*
-                 (cons (metacontinuation-frame-merge current-mf *mark-stack*)
-                       (cdr *metacontinuation*))))
+           (*metacontinuation*
+                 (cons (metacontinuation-frame-merge current-mf (*mark-stack*))
+                       (cdr (*metacontinuation*)))))
          (proc))]
       [else
        (let ([r ; a list of results, or a non-list for special handling
@@ -264,16 +273,15 @@
                                         (let ([mf (make-metacontinuation-frame tag
                                                                                k
                                                                                k/no-wind
-                                                                               *empty-k*
-                                                                               *mark-stack*
+                                                                               (*empty-k*)
+                                                                               (*mark-stack*)
                                                                                #f
-                                                                               #f
-                                                                               *cc-guard*)])
-                                          (set! *empty-k* empty-k)
-                                          (set! *mark-stack* #f)
-                                          (set! *cc-guard* values)
+                                                                               (*cc-guard*))])
+                                          (*empty-k* empty-k)
+                                          (*mark-stack* #f)
+                                          (*cc-guard* values)
                                           ;; push the metacontinuation:
-                                          (set! *metacontinuation* (cons mf *metacontinuation*))
+                                          (*metacontinuation* (cons mf (*metacontinuation*)))
                                           ;; ready:
                                           (proc))))])
                          ;; continue normally; the metacontinuation could be different
@@ -301,7 +309,7 @@
                     (aborting-args r))]
             [else
              ;; Aborting to an enclosing prompt, so keep going:
-             (set! *metacontinuation* (cdr *metacontinuation*))
+             (*metacontinuation* (cdr (*metacontinuation*)))
              (do-abort-current-continuation (aborting-tag r)
                                             (aborting-args r)
                                             (aborting-wind? r))])]
@@ -309,7 +317,7 @@
            ;; We're applying a non-composable continuation --- past
            ;; this prompt, or else we would have stopped.
            ;; Continue escaping to an encloding prompt:
-           (set! *metacontinuation* (cdr *metacontinuation*))
+           (*metacontinuation* (cdr (*metacontinuation*)))
            (apply-continuation (applying-c r)
                                (applying-args r))]))]))))
 
@@ -360,12 +368,12 @@
 (define (do-abort-current-continuation tag args wind?)
   (assert-in-uninterrupted)
   (cond
-   [(null? *metacontinuation*)
+   [(null? (*metacontinuation*))
     ;; A reset handler must end the uninterrupted region:
     ((reset-handler))]
    [else
     (unless wind? (#%$current-winders '()))
-    ((metacontinuation-frame-resume-k/no-wind (car *metacontinuation*))
+    ((metacontinuation-frame-resume-k/no-wind (car (*metacontinuation*)))
      (make-aborting tag args wind?))]))
 
 ;; ----------------------------------------
@@ -404,8 +412,8 @@
            (proc
             (make-non-composable-continuation
              k
-             *mark-stack*
-             *empty-k*
+             (*mark-stack*)
+             (*empty-k*)
              (extract-metacontinuation 'call-with-current-continuation (strip-impersonator tag) #t)
              tag))))))]))
 
@@ -427,8 +435,8 @@
               make-composable-continuation
               make-composable-continuation/no-wind)
           k
-          *mark-stack*
-          *empty-k*
+          (*mark-stack*)
+          (*empty-k*)
           (extract-metacontinuation 'call-with-composable-continuation (strip-impersonator tag) #f))))))))
 
 (define (unsafe-call-with-composable-continuation/no-wind p tag)
@@ -466,10 +474,10 @@
             ;; We check every time, just in case control operations
             ;; change the current continuation out from under us.
             (find-common-metacontinuation (full-continuation-mc c)
-                                          *metacontinuation*
+                                          (*metacontinuation*)
                                           (strip-impersonator tag))])
       (cond
-       [(eq? common-mc *metacontinuation*)
+       [(eq? common-mc (*metacontinuation*))
         ;; Add a cc guard if `tag` is impersonated:
         (wrap-cc-guard-for-impersonator! tag)
         ;; Replace the current metacontinuation frame's continuation
@@ -479,7 +487,7 @@
        [else
         ;; Jump back to the nearest prompt, then continue jumping
         ;; as needed from there:
-        ((metacontinuation-frame-resume-k/no-wind (car *metacontinuation*))
+        ((metacontinuation-frame-resume-k/no-wind (car (*metacontinuation*)))
          ;; An `applying` record tells the metacontinuation's continuation
          ;; to continue jumping:
          (make-applying c args))]))]
@@ -495,19 +503,19 @@
   (call-with-appended-metacontinuation
    (full-continuation-mc c)
    (lambda ()
-     (set! *mark-stack* (full-continuation-mark-stack c))
-     (set! *empty-k* (full-continuation-empty-k c))
+     (*mark-stack* (full-continuation-mark-stack c))
+     (*empty-k* (full-continuation-empty-k c))
      (apply (full-continuation-k c) args))))
 
 ;; Like `apply-immediate-continuation`, but don't run metacontinuation
 ;; winders; the `(full-continuation-k c)` part should be a non-winding
 ;; variant, too:
 (define (apply-immediate-continuation/no-wind c args)
-  (set! *metacontinuation* (append
+  (*metacontinuation* (append
                             (map metacontinuation-frame-clear-cache (full-continuation-mc c))
-                            *metacontinuation*))
-  (set! *mark-stack* (full-continuation-mark-stack c))
-  (set! *empty-k* (full-continuation-empty-k c))
+                            (*metacontinuation*)))
+  (*mark-stack* (full-continuation-mark-stack c))
+  (*empty-k* (full-continuation-empty-k c))
   (apply (full-continuation-k c) args))
 
 ;; Used as a "handler" for a prompt without a tag, which is used for
@@ -603,7 +611,7 @@
   (define (check-barrier-ok saw-barrier?)
     (when (and saw-barrier? (not barrier-ok?))
       (raise-arguments-error who "cannot capture past continuation barrier")))
-  (let loop ([mc *metacontinuation*] [saw-barrier? #f])
+  (let loop ([mc (*metacontinuation*)] [saw-barrier? #f])
     (cond
      [(null? mc)
       (unless (or (eq? tag the-root-continuation-prompt-tag)
@@ -646,7 +654,7 @@
          [(eq? (metacontinuation-frame-resume-k mf)
                (metacontinuation-frame-resume-k/no-wind mf))
           ;; No winders in this metacontinuation frame, so take a shortcut
-          (set! *metacontinuation* (cons mf *metacontinuation*))
+          (*metacontinuation* (cons mf (*metacontinuation*)))
           (loop rmc)]
          [else
           ((metacontinuation-frame-resume-k mf)
@@ -655,7 +663,7 @@
                              ;; them in the metacontinuation, instead:
                              (#%$current-winders '())
                              ;; addend frame:
-                             (set! *metacontinuation* (cons mf *metacontinuation*))
+                             (*metacontinuation* (cons mf (*metacontinuation*)))
                              ;; next...
                              (loop rmc))))]))])))
 
@@ -687,8 +695,12 @@
                                  flat)) ; #f or cached list that contains only tables and elem+caches
 
 ;; A mark stack is made of marks-stack frames:
-(define *mark-stack* #f)
-(define ($current-mark-stack) *mark-stack*)
+;;(define *mark-stack* #f)
+(define *mark-stack* (if (threaded?)
+			 (chez:make-thread-parameter #f)
+			 (chez:make-parameter #f)))
+
+(define ($current-mark-stack) (*mark-stack*))
 
 (define-syntax with-continuation-mark
   (syntax-rules ()
@@ -702,45 +714,45 @@
 (define (call/cm key val proc)
   (call/cc
    (lambda (k)
-     (if (and *mark-stack*
-              (eq? k (mark-stack-frame-k *mark-stack*)))
+     (if (and (*mark-stack*)
+              (eq? k (mark-stack-frame-k (*mark-stack*))))
          (begin
            (unless (eq? key none)
-             (set-mark-stack-frame-table! *mark-stack*
-                                          (intmap-set/cm-key (mark-stack-frame-table *mark-stack*)
+             (set-mark-stack-frame-table! (*mark-stack*)
+                                          (intmap-set/cm-key (mark-stack-frame-table (*mark-stack*))
                                                              key
                                                              val))
-             (set-mark-stack-frame-flat! *mark-stack* #f))
+             (set-mark-stack-frame-flat! (*mark-stack*) #f))
            (proc))
          (begin0
           (call/cc
            (lambda (k)
-             (set! *mark-stack*
-                   (make-mark-stack-frame *mark-stack*
+             (*mark-stack*
+                   (make-mark-stack-frame (*mark-stack*)
                                           k
                                           (if (eq? key none)
                                               empty-hasheq
                                               (intmap-set/cm-key empty-hasheq key val))
                                           #f))
              (proc)))
-          (set! *mark-stack* (mark-stack-frame-prev *mark-stack*))
+          (*mark-stack* (mark-stack-frame-prev (*mark-stack*)))
           ;; To support existing a uninterrupted region on resumption of
           ;; a continuation (see `call-with-end-uninterrupted`):
-          (when in-uninterrupted?
+          (when (in-uninterrupted?)
             (pariah (end-uninterrupted 'cm))))))))
 
 ;; For internal use, such as `dynamic-wind` pre thunks:
 (define (call/cm/nontail key val proc)
-  (set! *mark-stack*
-        (make-mark-stack-frame *mark-stack*
+  (*mark-stack*
+        (make-mark-stack-frame (*mark-stack*)
                                #f
                                (hasheq key val)
                                #f))
   (proc)
-  (set! *mark-stack* (mark-stack-frame-prev *mark-stack*)))
+  (*mark-stack* (mark-stack-frame-prev (*mark-stack*))))
 
 (define (current-mark-chain)
-  (get-current-mark-chain *mark-stack* *metacontinuation*))
+  (get-current-mark-chain (*mark-stack*) (*metacontinuation*)))
 
 (define (mark-stack-to-marks mark-stack)
   (let loop ([mark-stack mark-stack])
@@ -798,11 +810,11 @@
      (check who (procedure-arity-includes/c 1) proc)
      (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'call-with-immediate-continuation-mark key)])
        (cond
-        [(not *mark-stack*) (proc default-v)]
+        [(not (*mark-stack*)) (proc default-v)]
         [else
          (call/cc (lambda (k)
-                    (if (eq? k (mark-stack-frame-k *mark-stack*))
-                        (proc (let ([v (intmap-ref (mark-stack-frame-table *mark-stack*)
+                    (if (eq? k (mark-stack-frame-k (*mark-stack*)))
+                        (proc (let ([v (intmap-ref (mark-stack-frame-table (*mark-stack*))
                                                    key
                                                    none)])
                                 (if (eq? v none)
@@ -1291,8 +1303,8 @@
             [chaperone? (continuation-prompt-tag-chaperone? tag)])
         (loop! (impersonator-next tag))
         (when cc-guard
-          (let ([old-cc-guard *cc-guard*])
-            (set! *cc-guard*
+          (let ([old-cc-guard (*cc-guard*)])
+            (*cc-guard*
                   (lambda args
                     (apply old-cc-guard
                            (apply-prompt-tag-interposition 'call-with-continuation-prompt
@@ -1311,11 +1323,11 @@
                              (continuation-prompt-tag-impersonator-or-chaperone-procs tag))]
             [chaperone? (continuation-prompt-tag-chaperone? tag)])
         (loop! (impersonator-next tag))
-        (let ([new-cc-guard (cc-impersonate *cc-guard*)])
+        (let ([new-cc-guard (cc-impersonate (*cc-guard*))])
           (when chaperone?
-            (unless (chaperone-of? new-cc-guard *cc-guard*)
+            (unless (chaperone-of? new-cc-guard (*cc-guard*))
               (raise-chaperone-error 'call-with-current-continuation "continuation-result guard" *cc-guard* new-cc-guard)))
-          (set! *cc-guard* new-cc-guard)))]
+          (*cc-guard* new-cc-guard)))]
      [(impersonator? tag)
       (loop! (impersonator-next tag))]
      [else (void)])))
@@ -1339,19 +1351,19 @@
 ;;    parameterizations.
 
 (define (dynamic-wind pre thunk post)
-  (let ([saved-mark-stack *mark-stack*])
+  (let ([saved-mark-stack (*mark-stack*)])
     (define-syntax with-saved-mark-stack/non-break
       (syntax-rules ()
         [(_ who e ...)
-         (let ([dest-mark-stack *mark-stack*])
-           (set! *mark-stack* saved-mark-stack)
+         (let ([dest-mark-stack (*mark-stack*)])
+           (*mark-stack* saved-mark-stack)
            (call/cm/nontail
             break-enabled-key (make-thread-cell #f #t)
             (lambda ()
               (end-uninterrupted who)
               e ...
               (start-uninterrupted who)))
-           (set! *mark-stack* dest-mark-stack))]))
+           (*mark-stack* dest-mark-stack))]))
     (start-uninterrupted 'dw)
     (begin0
      (#%dynamic-wind
@@ -1385,8 +1397,8 @@
    fail-abort-to-delimit-continuation
    (lambda ()
      (let ([now-saved (make-saved-metacontinuation
-                       *metacontinuation*
+                       (*metacontinuation*)
                        (current-exception-state))])
-       (set! *metacontinuation* (saved-metacontinuation-mc saved))
+       (*metacontinuation* (saved-metacontinuation-mc saved))
        (current-exception-state (saved-metacontinuation-exn-state saved))
        (proc now-saved)))))

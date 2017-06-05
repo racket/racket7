@@ -8,7 +8,12 @@
 ;; over the timer.
 
 (define-record engine-state (mc complete expire thread-cell-values init-break-enabled-cell reset-handler))
-(define current-engine-state (chez:make-parameter #f))
+
+(define current-engine-state (if (threaded?)
+				 (begin (fprintf (current-error-port) "threaded\n")
+					(chez:make-thread-parameter #f))
+				 (begin (fprintf (current-error-port) "not threaded\n")
+					(chez:make-parameter #f))))
 
 (define (set-ctl-c-handler! proc)
   (keyboard-interrupt-handler proc))
@@ -49,8 +54,8 @@
 
 (define (engine-block-via-timer)
   (cond
-   [in-uninterrupted?
-    (set! pending-interrupt-callback engine-block)]
+   [(in-uninterrupted?)
+    (pending-interrupt-callback engine-block)]
    [else
     (engine-block)]))
     
@@ -77,7 +82,7 @@
           (engine-state-init-break-enabled-cell es))))))))
 
 (define (engine-return . args)
-  (when in-uninterrupted? (chez:fprintf (current-error-port) "HERE ~s\n" args))
+  (when (in-uninterrupted?) (chez:fprintf (current-error-port) "HERE ~s\n" args))
   (assert-not-in-uninterrupted)
   (timer-interrupt-handler void)
   (let ([es (current-engine-state)])
