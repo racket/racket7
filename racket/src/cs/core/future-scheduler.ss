@@ -6,34 +6,48 @@
   (fields (mutable workers) lock))
 
 (define global-scheduler #f)
-(define THREAD-COUNT 2)
+(define THREAD-COUNT 3)
 
 (define (start-scheduler)
   (cond
    [global-scheduler
-    (void)] ;; assume its aready been started
+    (void)]
    [else
-    (set! global-scheduler (make-scheduler #f (make-mutex)))
-    (let ([workers (init-workers)])
-      (scheduler-workers-set! global-scheduler workers))]))
+    (set! global-scheduler (make-scheduler #f (make-lock)))
+    (let ([workers (create-workers)])
+      (scheduler-workers-set! global-scheduler workers)
+      (start-workers workers))]))
+
+(define (scheduler-running?)
+  (not (not global-scheduler)))
 
 (define (kill-scheduler)
   (for-each (lambda (worker)
-	      (with-mutex (worker-lock worker)
-			  (worker-die?-set! worker #t)))
+	      (lock-acquire (worker-lock worker))
+	      (worker-die?-set! worker #t)
+	      (lock-release (worker-lock worker)))
 	    (scheduler-workers global-scheduler)))
 
-(define (init-workers)
+(define (create-workers)
   (map (lambda (id-1)
-	 (let ([worker (make-worker (+ 1 id-1) #f (make-queue) #t (make-mutex) #f)])
-	   (worker-real-thread-set! worker (fork-thread (worker-scheduler-func worker)))
-	   worker))
+	 (make-worker (+ 1 id-1) #f (make-queue) #t (make-lock) #f))
        (iota THREAD-COUNT)))
 
+(define (start-workers workers)
+  (for-each 
+   (lambda (worker)
+     (worker-real-thread-set! worker (fork-thread (worker-scheduler-func worker))))
+	    workers))
+
 (define (schedule-future f)
-  (define worker (pick-worker))
-  (with-mutex (worker-lock worker)
-	      (queue-add! (worker-work-queue worker) f)))
+  (cond
+   [(not global-scheduler)
+    (error 'schedule-future "scheduler not running\n")]
+   [else
+    (let ([worker (pick-worker)])
+      (lock-acquire (worker-lock worker))
+      (queue-add! (worker-work-queue worker) f)
+      (lock-release (worker-lock worker)))]))
 
 (define (pick-worker)
   (define workers (scheduler-workers global-scheduler))
@@ -54,16 +68,16 @@
   (lambda ()
     
     (define (loop)
-      (mutex-acquire (worker-lock worker)) ;; block
+      (lock-acquire (worker-lock worker)) ;; block
       (cond
        [(worker-die? worker) ;; worker was killed
-	(mutex-release (worker-lock worker))]
+	(lock-release (worker-lock worker))]
        [(queue-empty? (worker-work-queue worker)) ;; have lock. no work
-	(mutex-release (worker-lock worker))
+	(lock-release (worker-lock worker))
 	(if (steal-work worker) ;; holding worker lock if this call returns #t
 	    (do-work)
 	    (begin 
-	      (chez:sleep (make-time 'time-duration 0 0))  ;; not sure what sleeping for 0 time does
+	      (chez:sleep (make-time 'time-duration 1000 0))
 	      (loop)))]
        [else ;; have lock. have work
 	(do-work)]))
@@ -73,15 +87,18 @@
  
     (define (expire future worker)
       (lambda (new-eng)
-	(with-mutex (worker-lock worker)
-		    (future*-engine-set! future new-eng)
-		    (queue-add! (worker-work-queue worker) future))))
+	(lock-acquire (worker-lock worker))
+	(future*-engine-set! future new-eng)
+	(queue-add! (worker-work-queue worker) future)
+	(lock-release (worker-lock worker))))
 
     ;; need to have lock here.
     (define (do-work)
       (let ([work (queue-remove! (worker-work-queue worker))])
-	(mutex-release (worker-lock worker)) ;; release lock
+	(current-future work)
+	(lock-release (worker-lock worker)) ;; release lock
 	((future*-engine work) 100 void complete (expire work worker)) ;; call engine.
+	(current-future #f)
 	(loop)))
     
     (loop)))
@@ -95,45 +112,31 @@
    [else
     worker2]))
 
+;; Acquire lock of peer with smallest id # first.
 ;; worker is attempting to steal work from peers
 (define (steal-work worker)
   (let loop ([q (scheduler-workers global-scheduler)])
     (cond
-     [(null? q)
-      #f] ;; failure.
+     [(null? q) #f] ;; failed to steal work.
      [(not (eq? (worker-id worker) (worker-id (car q)))) ;; not ourselves
       (let* ([peer (car q)]
 	     [first (worker-w-min-id worker peer)] ;; create an odering on peers
 	     [sec (if (eq? (worker-id first) (worker-id worker)) 
 		      peer
 		      worker)])
-	(mutex-acquire (worker-lock first))
-	(mutex-acquire (worker-lock sec))
-	;; have both locks.
+	(lock-acquire (worker-lock first))
+	(lock-acquire (worker-lock sec))
 	(cond
 	 [(> (queue-length (worker-work-queue peer)) 1) ;; going to steal
 	  (do ([i (floor (/ (queue-length (worker-work-queue peer)) 2)) (- i 1)])
 	      ((zero? i) (void))
 	    (let ([w (queue-remove-end! (worker-work-queue peer))])
 	      (queue-add! (worker-work-queue worker) w)))
-	  (mutex-release (worker-lock peer))
-	  #t]
+	  (lock-release (worker-lock peer))
+	  #t] ;; stole work
 	 [else ;; try a different peer
-	  (mutex-release (worker-lock worker))
-	  (mutex-release (worker-lock peer))
+	  (lock-release (worker-lock worker))
+	  (lock-release (worker-lock peer))
 	  (loop (cdr q))]))]
-     [else 
-      (loop (cdr q))])))
+     [else (loop (cdr q))])))
 
-
-#| Try a new locking scheme.  Acquire lock of peer with smallest id # first.
-
-   Scenario:   Worker 1 wants to check if it can steal work from Worker 3
-               Worker 3 wants to try and steal work from Worker 2
-     
-
-               Worker 1 BLOCKS to acquire its own lock.  Then Worker 1 BLOCKS to acquire 3's lock
-               Worker 3 BLOCKS to acquire 1's lock.   Then Worker 3 BLOCKS to acquire its own lock.
-
-               No deadlock because locks are acquired in same order.
-|#

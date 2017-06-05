@@ -372,6 +372,25 @@
       (maybe-set! 3 #f) ; continuation size in bytes
       (void)])]))
 
+
+(define-record-type (fsemaphore create-fsemaphore fsemaphore?)
+  (fields sema))
+
+(define (make-fsemaphore init)
+  (create-fsemaphore (make-semaphore init)))
+
+(define (fsemaphore-post fsema)
+  (semaphore-post (fsemaphore-sema fsema)))
+
+(define (fsemaphore-wait fsema)
+  (semaphore-wait (fsemaphore-sema fsema)))
+
+(define (fsemaphore-try-wait? fsema)
+  (semaphore-try-wait? (fsemaphore-sema fsema)))
+
+(define (fsemaphore-count fsema)
+  (void))
+
 ;; ----------------------------------------
 
 ;; Table of things temporarily defined here; since these are not put
@@ -540,4 +559,11 @@
    reset-future-logs-for-tracing!
    mark-future-trace-end!
 
-   vector-set-performance-stats!))
+   vector-set-performance-stats!
+
+   make-fsemaphore
+   fsemaphore-post
+   fsemaphore-wait
+   fsemaphore-try-wait?
+   fsemaphore-count
+))
