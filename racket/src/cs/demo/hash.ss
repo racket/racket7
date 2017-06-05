@@ -3,9 +3,11 @@
 (define-syntax time
   (syntax-rules ()
     [(_ expr1 expr ...)
-     (let-values ([(v cpu user gc) (time-apply (lambda () expr1 expr ...) null)])
-       (printf "cpu time: ~s real time: ~s gc time: ~s\n" cpu user gc)
-       (apply values v))]))
+     (let ([pre-mem (current-memory-use 'cumulative)])
+       (let-values ([(v cpu user gc) (time-apply (lambda () expr1 expr ...) null)])
+         (printf "cpu time: ~s real time: ~s gc time: ~s   MB: ~s\n" cpu user gc
+                 (quotient (- (current-memory-use 'cumulative) pre-mem) (* 1024 1024)))
+         (apply values v)))]))
 
 (define-values (struct:top top top? top-ref top-set!)
   (make-struct-type 'top #f 2 0 #f
@@ -141,7 +143,7 @@
                (error 'unsafe-iterate "not enough"))))
      (loop (sub1 j)))))
 
-(printf "unsafe vs. safe on small table\n")
+(printf "safe vs. unsafe on small table\n")
 (let ([ht (let loop ([ht (hasheq)] [i 8])
             (if (zero? i)
                 ht
@@ -150,19 +152,19 @@
   (time
    (let loop ([j N])
      (unless (zero? j)
-       (let loop ([v #f] [i (unsafe-immutable-hash-iterate-first ht)])
+       (let loop ([v #f] [i (hash-iterate-first ht)])
          (if i
-             (loop (unsafe-immutable-hash-iterate-value ht i)
-                   (unsafe-immutable-hash-iterate-next ht i))
+             (loop (hash-iterate-value ht i)
+                   (hash-iterate-next ht i))
              v))
        (loop (sub1 j)))))
   (time
    (let loop ([j N])
      (unless (zero? j)
-       (let loop ([v #f] [i (hash-iterate-first ht)])
+       (let loop ([v #f] [i (unsafe-immutable-hash-iterate-first ht)])
          (if i
-             (loop (hash-iterate-value ht i)
-                   (hash-iterate-next ht i))
+             (loop (unsafe-immutable-hash-iterate-value ht i)
+                   (unsafe-immutable-hash-iterate-next ht i))
              v))
        (loop (sub1 j))))))
 

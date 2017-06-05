@@ -111,12 +111,19 @@
         [else       (cnode-has-key? n key)]))
 
 (define (hamt-ref h key default)
-  (let ([res (bnode-ref h key (hash-code h key) 0)])
-    (if (eq? res NOTHING)
-        (if (procedure? default)
-            (default)
-            default)
-        res)))
+  (cond
+   [(hamt-empty? h)
+    ;; Access on an empty HAMT is common, so don't even hash in that case
+    (if (procedure? default)
+        (default)
+        default)]
+   [else
+    (let ([res (bnode-ref h key (hash-code h key) 0)])
+      (if (eq? res NOTHING)
+          (if (procedure? default)
+              (default)
+              default)
+          res))]))
 
 (define (hamt-set h key val)
   (bnode-set h key val (hash-code h key) 0))
@@ -287,16 +294,16 @@
 (define (vector-insert v i x)
   (let* ([len (#%vector-length v)]
          [new (make-vector (fx1+ len))])
-    (vector-copy! new 0 v 0 i)
+    (vector*-copy! new 0 v 0 i)
     (#%vector-set! new i x)
-    (vector-copy! new (fx1+ i) v i len)
+    (vector*-copy! new (fx1+ i) v i len)
     new))
 
 (define (vector-remove v i)
   (let* ([len (#%vector-length v)]
          [new (make-vector (fx1- len))])
-    (vector-copy! new 0 v 0 i)
-    (vector-copy! new i v (fx1+ i) len)
+    (vector*-copy! new 0 v 0 i)
+    (vector*-copy! new i v (fx1+ i) len)
     new))
 
 ;; hnode operations
@@ -636,10 +643,10 @@
          [new-keys (make-vector len)]
          [ci (fx- len 1 (bnode-child-index node bit))])
 
-    (vector-copy! new-keys 0 keys 0 ki)
-    (vector-copy! new-keys ki keys (fx1+ ki) (fx1+ ci))
+    (vector*-copy! new-keys 0 keys 0 ki)
+    (vector*-copy! new-keys ki keys (fx1+ ki) (fx1+ ci))
     (#%vector-set! new-keys ci child)
-    (vector-copy! new-keys (fx1+ ci) keys (fx1+ ci) len)
+    (vector*-copy! new-keys (fx1+ ci) keys (fx1+ ci) len)
 
     (make-bnode (hnode-eqtype node)
                 (fx1+ (hnode-count node))
@@ -661,10 +668,10 @@
 
          [new-keys
           (let ([cpy (make-vector len)])
-            (vector-copy! cpy 0 keys 0 ki)
+            (vector*-copy! cpy 0 keys 0 ki)
             (#%vector-set! cpy ki k)
-            (vector-copy! cpy (fx1+ ki) keys ki ci)
-            (vector-copy! cpy (fx1+ ci) keys (fx1+ ci) len)
+            (vector*-copy! cpy (fx1+ ki) keys ki ci)
+            (vector*-copy! cpy (fx1+ ci) keys (fx1+ ci) len)
             cpy)]
 
          [new-vals

@@ -211,10 +211,26 @@
                   (if (vector? src) (vector-length src) 0))]
    [(dest dest-start src src-start src-end)
     (check who mutable-vector? :contract "(and/c vector? (not/c immutable?))" dest)
-    (let loop ([i (- src-end src-start)])
-      (unless (zero? i)
-        (let ([i (sub1 i)])
-          (vector-set! dest (+ dest-start i) (vector-ref src (+ src-start i)))
+    (let loop ([i (fx- src-end src-start)])
+      (unless (fx= 0 i)
+        (let ([i (fx1- i)])
+          (vector-set! dest (fx+ dest-start i) (vector-ref src (fx+ src-start i)))
+          (loop i))))]))
+
+;; Like `vector-copy!`, but doesn't work on impersonators, and doesn't
+;; add its own tests on the vector or range (so unsafe if the core is
+;; compiled as unsafe)
+(define/who vector*-copy!
+  (case-lambda
+   [(dest dest-start src)
+    (vector*-copy! dest dest-start src 0 (#%vector-length src))]
+   [(src src-start dest dest-start)
+    (vector*-copy! dest dest-start src src-start (#%vector-length src))]
+   [(dest dest-start src src-start src-end)
+    (let loop ([i (fx- src-end src-start)])
+      (unless (fx= 0 i)
+        (let ([i (fx1- i)])
+          (#%vector-set! dest (fx+ dest-start i) (vector-ref src (fx+ src-start i)))
           (loop i))))]))
 
 (define vector->values
