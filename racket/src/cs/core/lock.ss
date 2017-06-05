@@ -54,9 +54,15 @@
         (make-mutex)))
 
   (define (lock-acquire lock)
-    (if (mutex? lock)
-        (mutex-acquire lock)
-        (scheduler-lock-acquire lock)))
+    (case-lambda
+     [(lock)
+      (if (mutex? lock)
+	  (mutex-acquire lock)
+	  (scheduler-lock-acquire lock))]
+     [(lock block?)
+      (if (mutex? lock)
+	  (mutex-acquire lock block?)
+	  (scheduler-lock-acquire lock))]))
 
   (define (lock-release lock)
     (if (mutex? lock)

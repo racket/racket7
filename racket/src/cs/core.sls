@@ -517,19 +517,16 @@
 
           unsafe-string-length
 
-	  ;; queue stuff
-	  make-queue queue-empty? queue-remove! queue-fremove! 
-          queue-remove-all! queue-add! queue-add-front! queue-length
-	  queue-remove-end!
-
 	  ;; future scheduler functions
-	  start-scheduler
-	  schedule-future
-	  kill-scheduler
 
 	  future
 	  touch
-	  future?)	  
+	  future?
+	  futures-enabled?
+	  current-future
+	  would-be-future
+	  processor-count
+	  )	  
   (import (chezpart)
 	  (rename (only (chezscheme) sleep)
 		  (sleep chez:sleep))

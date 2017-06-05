@@ -170,8 +170,11 @@ foreign-demo: core.so
 future-demo: core.so
 	$(SCHEME) chezpart.so core.so demo/future.ss
 
-future-one-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/future-one.ss
+future2-demo: core.so
+	$(SCHEME) chezpart.so core.so demo/future2.ss
+
+engine-test: core.so
+	$(SCHEME) chezpart.so core.so demo/engine-test.ss
 
 CORE_SRCS = core/check.ss \
 	    core/syntax-rule.ss \

@@ -10,10 +10,8 @@
 (define-record engine-state (mc complete expire thread-cell-values init-break-enabled-cell reset-handler))
 
 (define current-engine-state (if (threaded?)
-				 (begin (fprintf (current-error-port) "threaded\n")
-					(chez:make-thread-parameter #f))
-				 (begin (fprintf (current-error-port) "not threaded\n")
-					(chez:make-parameter #f))))
+				 (chez:make-thread-parameter #f)
+				 (chez:make-parameter #f)))
 
 (define (set-ctl-c-handler! proc)
   (keyboard-interrupt-handler proc))
