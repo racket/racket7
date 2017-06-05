@@ -4,8 +4,14 @@
 ;; as disabling and enabling interrupts at the Chez
 ;; level, but cheaper and more limited.
 
-(define in-uninterrupted? #f)
-(define pending-interrupt-callback #f)
+;;(define in-uninterrupted? #f)
+(define in-uninterrupted? (if (threaded?)
+			      (chez:make-thread-parameter #f)
+			      (chez:make-parameter #f)))
+;;(define pending-interrupt-callback #f)
+(define pending-interrupt-callback (if (threaded?)
+				       (chez:make-thread-parameter #f)
+				       (chez:make-parameter #f)))
 
 (define-syntax CHECK-uninterrupted
   (syntax-rules ()
@@ -13,29 +19,29 @@
 
 (define (start-uninterrupted who)
   (CHECK-uninterrupted
-   (when in-uninterrupted?
+   (when (in-uninterrupted?)
      (internal-error 'start-uninterrupted (format "~a: already started" who))))
-  (set! in-uninterrupted? #t))
+  (in-uninterrupted? #t))
 
 (define (end-uninterrupted who)
   (CHECK-uninterrupted
-   (unless in-uninterrupted?
+   (unless (in-uninterrupted?)
      (internal-error 'end-uninterrupted (format "~a: not started" who))))
-  (set! in-uninterrupted? #f)
-  (when pending-interrupt-callback
+  (in-uninterrupted? #f)
+  (when (pending-interrupt-callback)
     (pariah
-     (let ([callback pending-interrupt-callback])
-       (set! pending-interrupt-callback #f)
+     (let ([callback (pending-interrupt-callback)])
+       (pending-interrupt-callback #f)
        (callback)))))
 
 (define (assert-in-uninterrupted)
   (CHECK-uninterrupted
-   (unless in-uninterrupted?
+   (unless (in-uninterrupted?)
      (internal-error 'assert-in-uninterrupted "assertion failed"))))
 
 (define (assert-not-in-uninterrupted)
   (CHECK-uninterrupted
-   (when in-uninterrupted?
+   (when (in-uninterrupted?)
      (internal-error 'assert-not-in-uninterrupted "assertion failed"))))
 
 ;; An implicit context is when a relevant interrupt can't happen, but
@@ -43,15 +49,15 @@
 
 (define (start-implicit-uninterrupted who)
   (CHECK-uninterrupted
-   (when in-uninterrupted?
+   (when (in-uninterrupted?)
      (internal-error 'start-implicit-uninterrupted "already started"))
-   (set! in-uninterrupted? #t)))
+   (in-uninterrupted? #t)))
 
 (define (end-implicit-uninterrupted who)
   (CHECK-uninterrupted
-   (unless in-uninterrupted?
+   (unless (in-uninterrupted?)
      (internal-error 'end-implicit-uninterrupted "not started"))
-   (set! in-uninterrupted? #f)))
+   (in-uninterrupted? #f)))
 
 (define (internal-error who s)
   (CHECK-uninterrupted
