@@ -1,7 +1,9 @@
 (library (schemify)
   (export schemify-linklet
           lift-in-schemified-linklet
-          prim-knowns)
+          prim-knowns
+          a-known-procedure
+          a-known-constant)
   (import (chezpart)
           (rename (core)
                   [correlated? core:correlated?]

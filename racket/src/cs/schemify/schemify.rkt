@@ -72,7 +72,7 @@
      (define imports
        (for/fold ([imports (hasheq)]) ([im-ids (in-list im-idss)]
                                        [index (in-naturals)])
-         (define grp (import-group (lambda () (get-import-knowns index))))
+         (define grp (import-group (lambda () (get-import-knowns index)) #f))
          (for/fold ([imports imports]) ([im-id (in-list im-ids)])
            (define id (im-int-id im-id))
            (define ext-id (im-ext-id im-id))
@@ -103,14 +103,12 @@
           ,@new-body))
       ;; Import ABI: request values for constants, `variable`s otherwise
       (for/list ([im-ids (in-list im-idss)])
-        (define im-knowns (and (pair? (unwrap im-ids))
-                               (let ([k/t (import-group-knowns/thunk
-                                           (import-grp
-                                            (hash-ref imports (im-int-id (wrap-car im-ids)))))])
-                                 (if (procedure? k/t) #f k/t))))
+        (define grp (and (pair? (unwrap im-ids))
+                         (import-grp (hash-ref imports (im-int-id (wrap-car im-ids))))))
+        (define im-ready? (and grp (import-group-lookup-ready? grp)))
         (for/list ([im-id (in-list im-ids)])
-          (and im-knowns
-               (known-constant? (hash-ref im-knowns (im-ext-id im-id) #f)))))
+          (and im-ready?
+               (known-constant? (import-group-lookup grp (im-ext-id im-id))))))
       ;; Convert internal to external identifiers
       (for/fold ([knowns (hasheq)]) ([ex-id (in-list ex-ids)])
         (define id (ex-int-id ex-id))
@@ -150,7 +148,7 @@
         (define set-vars
           (for/list ([id (in-list accum-ids)]
                      #:when (hash-ref exports id #f))
-            (make-set-variable id exports)))
+            (make-set-variable id exports knowns mutated)))
         (cond
          [(null? set-vars)
           (cond
@@ -177,7 +175,7 @@
                  (cond
                   [(hash-ref exports id #f)
                    (id-loop (wrap-cdr ids)
-                            (cons (make-set-variable id exports)
+                            (cons (make-set-variable id exports knowns mutated)
                                   accum-exprs)
                             accum-ids)]
                   [else
@@ -190,13 +188,23 @@
   ;; the later is used for cross-linklet optimization
   (values schemified knowns mutated))
 
-(define (make-set-variable id exports)
-  (define ex-var (hash-ref exports (unwrap id)))
-  `(variable-set! ,ex-var ,id))
+(define (make-set-variable id exports knowns mutated)
+  (define int-id (unwrap id))
+  (define ex-var (hash-ref exports int-id))
+  `(variable-set! ,ex-var ,id ',(variable-constance int-id knowns mutated)))
 
 (define (make-expr-defns accum-exprs)
   (for/list ([expr (in-list (reverse accum-exprs))])
     `(define ,(gensym) (begin ,expr (void)))))
+
+(define (variable-constance id knowns mutated)
+  (cond
+    [(set!ed-mutated-state? (hash-ref mutated id #f))
+     #f]
+    [(known-constant? (hash-ref knowns id #f))
+     'consistent]
+    [else
+     'constant]))
 
 ;; ----------------------------------------
 
@@ -385,10 +393,11 @@
          [`(begin0 ,exps ...)
           `(begin0 . ,(map schemify exps))]
          [`(set! ,id ,rhs)
-          (let ([ex-id (hash-ref exports (unwrap id) #f)])
-            (if ex-id
-                `(variable-set! ,ex-id ,(schemify rhs))
-                `(set! ,id ,(schemify rhs))))]
+          (define int-id (unwrap id))
+          (define ex-id (hash-ref exports int-id #f))
+          (if ex-id
+              `(variable-set! ,ex-id ,(schemify rhs) ',(variable-constance int-id knowns mutated))
+              `(set! ,id ,(schemify rhs)))]
          [`(variable-reference-constant? (#%variable-reference ,id))
           (let ([id (unwrap id)])
             (and (not (hash-ref mutated id #f))

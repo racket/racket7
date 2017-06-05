@@ -123,7 +123,7 @@
                           ;; Callback to get a specific linklet for a
                           ;; given import:
                           (lambda (index)
-                            (lookup-linklet get-import import-keys index))))
+                            (lookup-linklet-or-instance get-import import-keys index))))
       (define impl-lam/lifts
         (lift-in-schemified-linklet (remove-annotation-boundary impl-lam)
                                     reannotate
@@ -150,16 +150,25 @@
             (values lk import-keys)
             lk))]))
 
-  (define (lookup-linklet get-import import-keys index)
+  (define (lookup-linklet-or-instance get-import import-keys index)
     ;; Use the provided callback to get an linklet for the
     ;; import at `index`
-    (and get-import
-         import-keys
-         (let ([key (vector-ref import-keys index)])
-           (and key
-                (let-values ([(lnk/inst more-import-keys) (get-import key)])
-                  (and (linklet? lnk/inst)
-                       (linklet-exports-info lnk/inst)))))))
+    (cond
+     [(and get-import
+           import-keys
+           (vector-ref import-keys index))
+      => (lambda (key)
+           (let-values ([(lnk/inst more-import-keys) (get-import key)])
+             (cond
+              [(linklet? lnk/inst)
+               (values (linklet-exports-info lnk/inst)
+                       ;; No conversion needed:
+                       #f)]
+              [(instance? lnk/inst)
+               (values (instance-hash lnk/inst)
+                       variable->known)]
+              [else (values #f #f)])))]
+     [else (values #f #f)]))
 
   (define (recompile-linklet lnk . args) lnk)
 
@@ -227,12 +236,23 @@
   ;; a check for undefined, since going through a `variable`
   ;; sacrifices the undefined check of the host Scheme
     
-  (define-record variable (val name))
+  (define-record variable (val
+                           name
+                           constance)) ; #f (mutable), 'constant, or 'consistent (always the same shape)
 
-  (define (variable-set! var val)
-    ;; More is needed here to make sure that a constant is not
-    ;; redefined
-    (set-variable-val! var val))
+  (define (variable-set! var val constance)
+    (cond
+     [(variable-constance var)
+      (raise
+       (exn:fail:contract:variable
+        (string-append (symbol->string (variable-name var))
+                       ": cannot modify constant")
+        (current-continuation-marks)
+        (variable-name var)))]
+     [else
+      (set-variable-val! var val)
+      (when constance
+        (set-variable-constance! var constance))]))
 
   (define (variable-ref var)
     (define v (variable-val var))
@@ -269,16 +289,27 @@
     (define ht (instance-hash inst))
     (map (lambda (sym)
            (or (hash-ref ht sym #f)
-               (let ([var (make-variable unsafe-undefined sym)])
+               (let ([var (make-variable unsafe-undefined sym #f)])
                  (hash-set! ht sym var)
                  var)))
          syms))
+
+  (define (variable->known var)
+    (let ([constance (variable-constance var)])
+      (cond
+       [(not constance) #f]
+       [(and (eq? constance 'consistent)
+             (#%procedure? (variable-val var)))
+        a-known-procedure]
+       [else a-known-constant])))
 
   ;; ----------------------------------------
 
   ;; An instance represents the instantiation of a linklet
   (define-record-type (instance new-instance instance?)
-    (fields name data hash))
+    (fields name
+            data
+            hash)) ; symbol -> variable
 
   (define make-instance
     (case-lambda
@@ -291,7 +322,7 @@
            [(null? (cdr content))
             (raise-arguments-error 'make-instance "odd number of arguments")]
            [else
-            (hash-set! ht (car content) (make-variable (cadr content) (car content))) 
+            (hash-set! ht (car content) (make-variable (cadr content) (car content) #f))
             (loop (cddr content))]))
         (new-instance name data ht))]))
 
@@ -322,10 +353,10 @@
      [(i k v) (instance-set-variable-value! i k v #f)]
      [(i k v mode)
       (let ([var (or (hash-ref (instance-hash i) k #f)
-                     (let ([var (make-variable unsafe-undefined k)])
+                     (let ([var (make-variable unsafe-undefined k #f)])
                        (hash-set! (instance-hash i) k var)
                        var))])
-        (set-variable-val! var v))]))
+        (variable-set! var v mode))]))
 
   (define (instance-unset-variable! i k)
     (let ([var (hash-ref (instance-hash i) k #f)])
