@@ -253,16 +253,7 @@
                (srcloc-line s)
                (srcloc-column s))))
 
-(define (procedure-arity? v)
-  #t)
-
-(define (procedure-reduce-arity p a)
-  p)
-
 (define (procedure->method p)
-  p)
-
-(define (procedure-rename p name)
   p)
 
 (define (list-pair? v) #f)
@@ -566,10 +557,7 @@
 
    make-known-char-range-list
    
-   procedure-arity?
-   procedure-reduce-arity
    procedure->method
-   procedure-rename
 
    list-pair?
    interned-char?

@@ -537,9 +537,7 @@
          rtd])))]))
 
 (define (check-accessor-or-mutator-index who rtd pos)
-  (let* ([auto-fields (struct-type-auto-field-count rtd)]
-         [fields-count (- (#%vector-length (record-type-field-names rtd))
-                          auto-fields)])
+  (let* ([fields-count (#%vector-length (record-type-field-names rtd))])
     (unless (< pos fields-count)
       (if (zero? fields-count)
           (raise-arguments-error who
@@ -639,7 +637,7 @@
   (check who struct-type? rtd)
   (check-inspector-access 'struct-type-info rtd)
   (let* ([auto-fields (struct-type-auto-field-count rtd)]
-         [fields-count (- (#%vector-length (record-type-field-names rtd))
+         [fields-count (- (struct-type-field-count rtd)
                           auto-fields)]
          [parent-rtd (record-type-parent rtd)]
          [parent-count (if parent-rtd
@@ -673,7 +671,7 @@
                    (procedure-reduce-arity
                     (lambda args
                       (apply c (auto-field-adder args)))
-                    (- (#%vector-length (record-type-field-names rtd))
+                    (- (struct-type-field-count rtd)
                        (struct-type-auto-field-count rtd)))
                    c))])
     (register-struct-constructor! ctr)
@@ -700,7 +698,7 @@
        (if p-rtd
            (struct-type-field-count p-rtd)
            0))
-     (vector-length (record-type-field-names rtd))))
+     (#%vector-length (record-type-field-names rtd))))
 
 (define (struct-type-parent-field-count rtd)
   (let ([p-rtd (record-type-parent rtd)])
@@ -804,7 +802,7 @@
                         (cond
                          [(not rtd) (values vec-len rec-len)]
                          [else
-                          (let ([len (vector-length (record-type-field-names rtd))])
+                          (let ([len (#%vector-length (record-type-field-names rtd))])
                             (cond
                              [(struct-type-immediate-transparent? rtd)
                               ;; A transparent region
@@ -820,7 +818,7 @@
             (vector-set! vec 0 (string->symbol (format "struct:~a" (record-type-name rtd))))
             (let loop ([vec-pos vec-len] [rec-pos rec-len] [rtd rtd] [dots-already? #f])
               (when rtd
-                (let* ([len (vector-length (record-type-field-names rtd))]
+                (let* ([len (#%vector-length (record-type-field-names rtd))]
                        [rec-pos (- rec-pos len)])
                   (cond
                    [(struct-type-immediate-transparent? rtd)

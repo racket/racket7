@@ -20,7 +20,7 @@
   (make-struct-type-property 'incomplete-arity))
 
 ;; Integer value is a field to use; boxed value is a field taht provides a mask
-(define-values (prop:procedure-arity procedure-arity? procedure-arity-ref)
+(define-values (prop:procedure-arity procedure-arity-prop? procedure-arity-ref)
   (make-struct-type-property 'procedure-arity))
 
 (define (procedure? v)
@@ -188,6 +188,9 @@
             (loop (bitwise-ior mask (arity->mask a)) (cdr l))]
            [else #f]))]))]
    [else #f]))
+
+(define (procedure-arity? a)
+  (and (arity->mask a) #t))
 
 ;; ----------------------------------------
 

@@ -126,6 +126,9 @@
           procedure-result-arity
           procedure-extract-target
           procedure-closure-contents-eq?
+          procedure-reduce-arity
+          procedure-rename
+          procedure-arity?
 
           equal?
           equal?/recur
