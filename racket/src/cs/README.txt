@@ -168,15 +168,21 @@ The best-case scenario for performance is
  * `UNSAFE` is enabled in "Makefile" --- not on by default, because
    the core and base layers are not yet good enough.
 
-   Effectiveness: maybe only matters for "core.so", where it can means
-   a 10-20% improvement in loading `racket/base` from source.
+   Effectiveness: Maybe only matters for "core.so", which has its own
+   setting.
+
+ * `CORE_UNSAFE` is enabled in "Makefile" --- applies to "core.so"
+   even if `UNSAFE` is disabled.
+
+   Effectiveness: Can mean a 10-20% improvement in loading
+   `racket/base` from source.
 
  * `compile-as-independent?` is #f in "linklet.sls" --- not set to #f
    currently, because it causes compiled files for Racket modules to
    be incompatible with any change or rebuilding of the core and base
    layers.
 
-   Effectiveness: little effect on tasks like loading `racket/base`
+   Effectiveness: Little effect on tasks like loading `racket/base`
    from source, but substantial effects on programs where the Chez
    Scheme optimizer needs to recognize uses of primitives (e.g.,
    microbenchmarks).
@@ -185,5 +191,5 @@ The best-case scenario for performance is
    core and base layers load more quickly, but with the loss of
    backtrace information.
 
-   Effectivess: cuts the load time for the core and base layers by
+   Effectivess: Cuts the load time for the core and base layers by
    30-50%.

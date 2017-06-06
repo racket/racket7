@@ -1,7 +1,12 @@
 RACKET = ../../bin/racket
 SCHEME = scheme
 
+# Controls whether base layers are built as unsafe:
 UNSAFE = # '(optimize-level 3)'
+
+# Controls whether core is built as unsafe:
+CORE_UNSAFE = '(optimize-level 3)'
+
 COMP = echo $(UNSAFE) '(reset-handler abort) (keyboard-interrupt-handler abort) (record-source-lines-and-columns \#t) (generate-wpo-files \#t)'
 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
@@ -206,7 +211,7 @@ CORE_SRCS = core/check.ss \
             core/foreign.ss
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
-	$(COMP) '(compile-file "core.sls")' | $(SCHEME) -q
+	$(COMP) $(CORE_UNSAFE) '(compile-file "core.sls")' | $(SCHEME) -q
 
 chezpart.so: chezpart.sls
 	$(COMP) '(compile-file "chezpart.sls")' | $(SCHEME) -q
