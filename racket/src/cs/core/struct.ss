@@ -375,13 +375,15 @@
                                         #t)
        (when auto-field-adder
          (putprop (record-type-uid rtd) 'auto-field (cons total-auto-field-count auto-field-adder)))
-       (let ([ctr (let ([c (record-constructor rtd)])
-                    (if (zero? total-auto-field-count)
-                        c
-                        (procedure-reduce-arity
-                         (lambda args
-                           (apply c (auto-field-adder args)))
-                         (- total-field-count total-auto-field-count))))]
+       (let ([ctr (struct-type-constructor-add-guards
+                   (let ([c (record-constructor rtd)])
+                     (if (zero? total-auto-field-count)
+                         c
+                         (procedure-reduce-arity
+                          (lambda args
+                            (apply c (auto-field-adder args)))
+                          (- total-field-count total-auto-field-count))))
+                   rtd)]
              [pred (lambda (v)
                      (or (record? v rtd)
                          (and (impersonator? v)
@@ -474,7 +476,23 @@
                       (cons (cons prop:procedure proc-spec) props)
                       props))
         ;; Record inspector
-        (inspector-set! rtd insp)))]))
+        (inspector-set! rtd insp)
+        ;; Register guard
+        (let ([parent-guards (if parent-rtd
+                                 (struct-type-guards parent-rtd)
+                                 '())])
+          (when (or guard (pair? parent-guards))
+            (let* ([parent-count (if parent-rtd
+                                     (struct-type-field-count parent-rtd)
+                                     0)]
+                   [parent-auto-field-count (if parent-rtd
+                                                (struct-type-auto-field-count parent-rtd)
+                                                0)]
+                   [parent-fields-count (- parent-count parent-auto-field-count)])
+              (putprop (record-type-uid rtd) 'guards (if guard
+                                                         (cons (cons guard (+ parent-fields-count fields))
+                                                               parent-guards)
+                                                         parent-guards)))))))]))
 
 ;; Used by a `schemify` transformation:
 (define (structure-type-lookup-prefab-uid name parent-rtd fields-count auto-fields auto-val immutables)
@@ -665,17 +683,48 @@
 (define/who (struct-type-make-constructor rtd)
   (check who struct-type? rtd)
   (check-inspector-access who rtd)
-  (let ([ctr (let ([c (record-constructor rtd)]
-                   [auto-field-adder (struct-type-auto-field-adder rtd)])
-               (if auto-field-adder
-                   (procedure-reduce-arity
-                    (lambda args
-                      (apply c (auto-field-adder args)))
-                    (- (struct-type-field-count rtd)
-                       (struct-type-auto-field-count rtd)))
-                   c))])
+  (let ([ctr (struct-type-constructor-add-guards
+              (let ([c (record-constructor rtd)]
+                    [auto-field-adder (struct-type-auto-field-adder rtd)])
+                (cond
+                 [auto-field-adder
+                  (procedure-reduce-arity
+                   (lambda args
+                     (apply c (auto-field-adder args)))
+                   (- (struct-type-field-count rtd)
+                      (struct-type-auto-field-count rtd)))]
+                 [else c]))
+              rtd)])
     (register-struct-constructor! ctr)
     ctr))
+
+;; Called directly from a schemified declaration that has a guard:
+(define (struct-type-constructor-add-guards ctr rtd)
+  (let ([guards (struct-type-guards rtd)])
+    (if (null? guards)
+        ctr
+        (procedure-reduce-arity
+         (let ([name (record-type-name rtd)])
+           (lambda args
+             (let loop ([guards guards] [args args])
+               (cond
+                [(null? guards)
+                 (apply ctr args)]
+                [else
+                 (let ([guard (caar guards)]
+                       [fields-count (cdar guards)])
+                   (call-with-values
+                    (lambda ()
+                      (apply guard (append-n args fields-count (list name))))
+                    (lambda results
+                      (unless (= (length results) fields-count)
+                        (raise-result-arity-error "calling guard procedure" fields-count results))
+                      (loop (cdr guards)
+                            (if (= fields-count (length args))
+                                results
+                                (append results (list-tail args fields-count)))))))]))))
+         (- (struct-type-field-count rtd)
+            (struct-type-auto-field-count rtd))))))
 
 (define/who (struct-type-make-predicate rtd)
   (check who struct-type? rtd)
@@ -715,6 +764,10 @@
         (let ([j (fx1- j)])
           (or (eqv? pos (#%vector-ref mutables j))
               (loop j)))]))))
+
+;; Returns a list of (cons guard-proc field-count)
+(define (struct-type-guards rtd)
+  (getprop (record-type-uid rtd) 'guards '()))
 
 (define (unsafe-struct-ref s i)
   (#3%vector-ref s i))

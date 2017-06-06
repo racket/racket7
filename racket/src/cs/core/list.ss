@@ -29,3 +29,9 @@
             (loop (cdr fast) (if slow-step? (cdr slow) slow) (not slow-step?) (fx1+ depth))]
            [else
             (return is-list?)]))]))]))
+
+(define (append-n l n l2)
+  (cond
+   [(fx= 0 n) l2]
+   [else (cons (car l) (append-n (cdr l) (fx1- n) l2))]))
+  

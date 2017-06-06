@@ -268,8 +268,11 @@
                                                          0
                                                          ,(schemify (struct-type-info-parent sti))
                                                          ,@(map schemify (struct-type-info-rest sti))))))
-              (define ,make-s (record-constructor
-                               (make-record-constructor-descriptor ,struct:s #f #f)))
+              (define ,make-s ,(let ([ctr `(record-constructor
+                                            (make-record-constructor-descriptor ,struct:s #f #f))])
+                                 (if (struct-type-info-pure-constructor? sti)
+                                     ctr
+                                     `(struct-type-constructor-add-guards ,ctr ,struct:s))))
               (define ,raw-s? (record-predicate ,struct:s))
               ,@(if can-impersonate?
                     `((define ,s? (lambda (v) (or (,raw-s? v) (pariah (and (impersonator? v) (,raw-s? (impersonator-val v))))))))

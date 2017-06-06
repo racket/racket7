@@ -47,18 +47,20 @@
                      [`(,_ 'prefab ,_ ',immutables . ,_) immutables]
                      [`(,_ 'prefab ,_) '()]
                      [`(,_ 'prefab) '()]
-                     [`,_ #f])])
+                     [`,_ #f])]
+                  [parent-sti (and u-parent (hash-ref-either knowns imports u-parent))])
               (and prefab-imms
                    (struct-type-info name
                                      parent
                                      fields
-                                     (+ fields (if parent
-                                                   (known-struct-type-field-count
-                                                    (hash-ref-either knowns imports u-parent))
+                                     (+ fields (if u-parent
+                                                   (known-struct-type-field-count parent-sti)
                                                    0))
                                      ;; no guard => pure constructor
-                                     (or ((length rest) . < . 4)
-                                         (not (list-ref rest 3)))
+                                     (and (or (not u-parent)
+                                              (known-struct-type-pure-constructor? parent-sti))
+                                          (or ((length rest) . < . 5)
+                                              (not (unwrap (list-ref rest 4)))))
                                      ;; look for `prop:authentic`
                                      (and (pair? rest)
                                           (match (car rest)

@@ -171,6 +171,7 @@
           structure-type-lookup-prefab-uid ; not exported to Racket
           make-struct-field-accessor
           make-struct-field-mutator
+          struct-type-constructor-add-guards ; not exported to Racket
           register-struct-constructor! ; not exported to Racket
           register-struct-predicate! ; not exported to Racket
           register-struct-field-accessor! ; not exported to Racket

@@ -187,6 +187,28 @@
   (void))
 
 ;; ----------------------------------------
+;; Guards
+
+(define checked-names '())
+
+(define-values (struct:ga make-ga ga? ga-ref ga-set!)
+  (make-struct-type 'ga #f 2 0 #f null (|#%app| current-inspector) #f '(0 1)
+                    (lambda (a b name)
+                      (set! checked-names (cons name checked-names))
+                      (values a (box b)))))
+
+(check (|#%app| ga-ref (|#%app| make-ga 1 2) 1) (box 2))
+(check checked-names '(ga))
+
+(define-values (struct:gb make-gb gb? gb-ref gb-set!)
+  (make-struct-type 'gb struct:ga 1 0 #f null (|#%app| current-inspector) #f '(0)
+                    (lambda (a b c name)
+                      (values a (list b) c))))
+
+(check (|#%app| ga-ref (|#%app| make-gb 1 2 3) 1) (box (list 2)))
+(check checked-names '(gb ga))
+
+;; ----------------------------------------
 ;; Graphs
 
 (let* ([p (make-placeholder #f)]
@@ -251,4 +273,3 @@
        (if (zero? i)
            v
            (loop (sub1 i) (+ v (r-a-x an-a))))))))
-

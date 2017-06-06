@@ -39,7 +39,7 @@
                                 (unwrap make-s)
                                 (if (struct-type-info-pure-constructor? info)
                                     (known-constructor type (struct-type-info-field-count info))
-                                    a-known-procedure))]
+                                    a-known-constant))]
               [knowns (hash-set knowns
                                 (unwrap s?)
                                 (known-predicate type))]
@@ -51,7 +51,9 @@
                    (hash-set knowns (unwrap id) (known-accessor type))]
                   [else
                    (hash-set knowns (unwrap id) (known-mutator type))]))])
-         (values (hash-set knowns (unwrap struct:s) (known-struct-type type (struct-type-info-field-count info)))
+         (values (hash-set knowns (unwrap struct:s) (known-struct-type type
+                                                                       (struct-type-info-field-count info)
+                                                                       (struct-type-info-pure-constructor? info)))
                  info))]
       [else (values knowns #f)])]
     [`(define-values (,struct:s ,make-s ,s? ,s-ref ,s-set!) ,rhs) ; direct use of `make-struct-type`
@@ -64,12 +66,14 @@
                                  (unwrap make-s)
                                  (if (struct-type-info-pure-constructor? info)
                                      (known-constructor type (struct-type-info-field-count info))
-                                     a-known-procedure))]
+                                     a-known-constant))]
                [knowns (hash-set knowns
                                  (unwrap s?)
                                  (known-predicate type))])
           ;; For now, we don't try to track the position-consuming accessor or mutator
-          (hash-set knowns (unwrap struct:s) (known-struct-type type (struct-type-info-field-count info))))
+          (hash-set knowns (unwrap struct:s) (known-struct-type type
+                                                                (struct-type-info-field-count info)
+                                                                (struct-type-info-pure-constructor? info))))
         info)]
       [else (values knowns #f)])]
     [`(define-values (,prop:s ,s? ,s-ref)

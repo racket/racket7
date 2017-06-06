@@ -168,7 +168,15 @@
                              "arity of procedure does not include requested arity"
                              "procedure" proc
                              "requested arity" a))
-    (make-reduced-arity-procedure proc mask)))
+    (make-reduced-arity-procedure
+     (lambda args
+       (unless (bitwise-bit-set? mask (length args))
+         (apply raise-arity-error
+                (or (object-name proc) 'procedure)
+                (mask->arity mask)
+                args))
+       (apply proc args))
+     mask)))
 
 (define (arity->mask a)
   (cond

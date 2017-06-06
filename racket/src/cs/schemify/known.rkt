@@ -6,7 +6,8 @@
 (provide known-constant known-constant?
          known-unknown known-unknown?
          known-procedure known-procedure?
-         known-struct-type known-struct-type? known-struct-type-type known-struct-type-field-count
+         known-struct-type known-struct-type? known-struct-type-type
+         known-struct-type-field-count known-struct-type-pure-constructor?
          known-constructor known-constructor? known-constructor-type known-constructor-field-count
          known-predicate known-predicate? known-predicate-type
          known-accessor known-accessor? known-accessor-type
@@ -21,7 +22,7 @@
 (struct known-constant () #:prefab #:omit-define-syntaxes)
 (struct known-unknown () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
 (struct known-procedure () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
-(struct known-struct-type (type field-count) #:prefab #:omit-define-syntaxes)
+(struct known-struct-type (type field-count pure-constructor?) #:prefab #:omit-define-syntaxes)
 (struct known-constructor (type field-count) ; field count can be 'any
         #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
 (struct known-predicate (type) #:prefab #:omit-define-syntaxes #:super struct:known-procedure)

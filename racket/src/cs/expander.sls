@@ -116,7 +116,10 @@
                           (lambda (k v)
                             ;; Avoid redefining some primitives that we
                             ;; don't have to replace:
-                            (unless (memq k '(vector list cons car cdr eq?))
+                            (unless (memq k '(vector
+                                              list cons car cdr
+                                              eq?
+                                              values call-with-values))
                               (eval `(define ,k ',v))))))])
     (install-table compat-table)
     (when compile-as-independent?

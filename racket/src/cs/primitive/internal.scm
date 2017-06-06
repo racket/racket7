@@ -13,6 +13,7 @@
    impersonate-set!
    struct-type-install-properties!
    structure-type-lookup-prefab-uid
+   struct-type-constructor-add-guards
    register-struct-constructor!
    register-struct-predicate!
    register-struct-field-accessor!
