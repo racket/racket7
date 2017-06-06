@@ -1,7 +1,7 @@
 ;; To support iteration and locking, we wrap Chez's mutable hash
 ;; tables in a `mutable-hash` record:
 (define-record mutable-hash (ht keys keys-stale? lock))
-(define (create-mutable-hash ht) (make-mutable-hash ht '#() #t (make-lock)))
+(define (create-mutable-hash ht kind) (make-mutable-hash ht '#() #t (make-lock kind)))
 
 (define (authentic-hash? v) (or (hamt? v) (mutable-hash? v) (weak-equal-hash? v)))
 (define (hash? v) (or (authentic-hash? v)
@@ -10,27 +10,27 @@
 
 (define make-hash
   (case-lambda
-   [() (create-mutable-hash (make-hashtable equal-hash-code equal?))]
+   [() (create-mutable-hash (make-hashtable equal-hash-code equal?) 'equal?)]
    [(alist) (fill-hash! 'make-hash (make-hash) alist)]))
 
 (define make-hasheq
   (case-lambda
-   [() (create-mutable-hash (make-eq-hashtable))]
+   [() (create-mutable-hash (make-eq-hashtable) 'eq?)]
    [(alist) (fill-hash! 'make-hasheq (make-hasheq) alist)]))
 
 (define make-weak-hasheq
   (case-lambda
-   [() (create-mutable-hash (make-weak-eq-hashtable))]
+   [() (create-mutable-hash (make-weak-eq-hashtable) 'eq?)]
    [(alist) (fill-hash! 'make-weak-hasheq (make-weak-hasheq) alist)]))
 
 (define make-hasheqv
   (case-lambda
-   [() (create-mutable-hash (make-eqv-hashtable))]
+   [() (create-mutable-hash (make-eqv-hashtable) 'eqv?)]
    [(alist) (fill-hash! 'make-hasheqv (make-hasheqv) alist)]))
 
 (define make-weak-hasheqv
   (case-lambda
-   [() (create-mutable-hash (make-weak-eqv-hashtable))]
+   [() (create-mutable-hash (make-weak-eqv-hashtable) 'eqv?)]
    [(alist) (fill-hash! 'make-weak-hasheqv (make-weak-hasheqv) alist)]))
 
 (define/who (fill-hash! who ht alist)
@@ -123,7 +123,11 @@
   (cond
    [(mutable-hash? ht)
     (lock-acquire (mutable-hash-lock ht))
-    (let ([new-ht (create-mutable-hash (hashtable-copy (mutable-hash-ht ht) #t))])
+    (let ([new-ht (create-mutable-hash (hashtable-copy (mutable-hash-ht ht) #t)
+                                       (cond
+                                        [(hash-eq? ht) 'eq?]
+                                        [(hash-eqv? ht) 'eqv?]
+                                        [else 'equal?]))])
       (lock-release (mutable-hash-lock ht))
       new-ht)]
    [(weak-equal-hash? ht) (weak-hash-copy ht)]
@@ -235,12 +239,14 @@
     [(ht k fail)
      (cond
       [(mutable-hash? ht)
-       (if (procedure? fail)
-           (let ([v (hashtable-ref (mutable-hash-ht ht) k none)])
-             (if (eq? v none)
+       (lock-acquire (mutable-hash-lock ht))
+       (let ([v (hashtable-ref (mutable-hash-ht ht) k none)])
+         (lock-release (mutable-hash-lock ht))
+         (if (eq? v none)
+             (if (procedure? fail)
                  (fail)
-                 v))
-           (hashtable-ref (mutable-hash-ht ht) k fail))]
+                 fail)
+             v))]
       [(hamt? ht) (hamt-ref ht k fail)]
       [(weak-equal-hash? ht) (weak-hash-ref ht k fail)]
       [(and (impersonator? ht)
@@ -407,8 +413,10 @@
 ;; gathering of the keys of a mutable hash table. That's
 ;; unfortunate, but there appears to be no way around it.
 (define (prepare-iterate! ht i)
+  (lock-acquire (mutable-hash-lock ht))
   (let ([vec (mutable-hash-keys ht)])
     (or (and (or i (not (mutable-hash-keys-stale? ht)))
+             (lock-release (mutable-hash-lock ht))
              vec)
         (let ([vec (hashtable-keys (mutable-hash-ht ht))])
           ;; Keep a weak reference to each key, in case
@@ -419,7 +427,6 @@
                      [key (vector-ref vec i)])
                 (vector-set! vec i (weak-cons key #f))
                 (loop i))))
-	  (lock-acquire (mutable-hash-lock ht))
           (set-mutable-hash-keys! ht vec)
           (set-mutable-hash-keys-stale?! ht #f)
 	  (lock-release (mutable-hash-lock ht))
@@ -476,7 +483,11 @@
               (loop (add1 i))]
              [else
               (if (or (not (mutable-hash-keys-stale? ht))
-                      (hashtable-contains? (mutable-hash-ht ht) key))
+                      (begin
+                        (lock-acquire (mutable-hash-lock ht))
+                        (let ([contains? (hashtable-contains? (mutable-hash-ht ht) key)])
+                          (lock-release (mutable-hash-lock ht))
+                          contains?)))
                   i
                   ;; Skip, due to a hash table change
                   (loop (add1 i)))]))])))))
@@ -505,7 +516,11 @@
            [key (car p)]
            [v (if (bwp-object? key)
                   none
-                  (hashtable-ref (mutable-hash-ht ht) key none))])
+                  (begin
+                    (lock-acquire (mutable-hash-lock ht))
+                    (let ([v (hashtable-ref (mutable-hash-ht ht) key none)])
+                      (lock-release (mutable-hash-lock ht))
+                      v)))])
       (if (eq? v none)
           (raise-arguments-error who "no element at index"
                                  "index" i)
@@ -596,7 +611,7 @@
 
 ;;  ----------------------------------------
 
-;; Chez doesn't provide weak hash table with `equal?` comparisons,
+;; Chez Scheme doesn't provide weak hash table with `equal?` comparisons,
 ;; so build our own
 
 (define-record weak-equal-hash (ht         ; integer[hash code] -> list of weak pairs

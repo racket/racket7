@@ -39,4 +39,8 @@
   (define (check-for-break) (1/check-for-break))
   (define (break-enabled) (1/break-enabled))
 
-  (include "compiled/thread.scm"))
+  (include "compiled/thread.scm")
+
+  (set-scheduler-lock-callbacks! (lambda () (1/make-semaphore 1))
+                                 1/semaphore-wait
+                                 1/semaphore-post))

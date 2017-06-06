@@ -6,6 +6,8 @@
     [(_ id ...)
      (begin (define id #f) ...)]))
 
+(define done? #f)
+
 (call-in-main-thread
  (lambda ()
    (define-syntax check
@@ -152,6 +154,38 @@
    (check #f dw-body?)
    (check #t dw-post?)
 
+   ;; Make sure `equal?`-based hash tables are thread-safe
+   (let* ([ht (make-hash)]
+          [s (make-semaphore)]
+          [compare-ok (semaphore-peek-evt s)]
+          [trying 0]
+          [result #f])
+     (define-values (struct:posn make-posn posn? posn-ref posn-set!)
+       (make-struct-type 'posn #f 2 0 #f (list (cons prop:equal+hash
+                                                     (list
+                                                      (lambda (a b eql?)
+                                                        (set! trying (add1 trying))
+                                                        (sync compare-ok)
+                                                        #t)
+                                                      (lambda (a hc) 0)
+                                                      (lambda (a hc) 0))))))
+     (hash-set! ht (make-posn 1 2) 11)
+     (thread (lambda ()
+               (set! result (hash-ref ht (make-posn 1 2) #f))))
+     (sync (system-idle-evt))
+     (check #f result)
+     (check 1 trying)
+     (thread (lambda ()
+               ;; Should get stuck before calling the `posn` equality function:
+               (set! result (hash-ref ht (make-posn 1 2) #f))))
+     (check #f result)
+     (check 1 trying) ; since the second thread is waiting for the table
+     (semaphore-post s)
+     (sync (system-idle-evt))
+     (check 11 result)
+     (sync (system-idle-evt))
+     (check 2 trying)) ; second thread should have completed
+
    ;; Measure thread quantum:
    #;
    (let ([t1 (thread (lambda () (let loop () (loop))))]
@@ -181,4 +215,7 @@
           (thread-wait t1)
           (thread-wait t2)))))
    
-   (void)))
+   (set! done? #t)))
+
+(unless done?
+  (error 'thread-demo "something went wrong; deadlock?"))
