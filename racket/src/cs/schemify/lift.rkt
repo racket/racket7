@@ -215,7 +215,7 @@
       [`(let-values . ,_) (lift-in-let v)]
       [`(letrec-values . ,_) (lift-in-let v)]
       [`(begin ,vs)
-       (reannotate v `(begin ,@(for ([v (in-wrap-list vs)])
+       (reannotate v `(begin ,@(for/list ([v (in-wrap-list vs)])
                                  (lift-in-expr v))))]
       [`(if ,tst ,thn ,els)
        (reannotate v `(if ,(lift-in-expr tst)
