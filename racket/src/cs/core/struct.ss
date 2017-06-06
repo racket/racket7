@@ -536,37 +536,65 @@
          (inspector-set! rtd 'prefab)
          rtd])))]))
 
-(define make-struct-field-accessor
-  (case-lambda
-    [(pba pos)
-     (let* ([rtd (position-based-accessor-rtd pba)]
-            [p (record-field-accessor rtd
-                                      (+ pos (position-based-accessor-offset pba)))]
-           [wrap-p
-            (lambda (v)
-              (if (impersonator? v)
-                  (impersonate-ref p rtd pos v)
-                  (p v)))])
-       (register-struct-field-accessor! wrap-p rtd pos)
-       wrap-p)]
-    [(pba pos name)
-     (make-struct-field-accessor pba pos)]))
+(define (check-accessor-or-mutator-index who rtd pos)
+  (let* ([auto-fields (struct-type-auto-field-count rtd)]
+         [fields-count (- (#%vector-length (record-type-field-names rtd))
+                          auto-fields)])
+    (unless (< pos fields-count)
+      (if (zero? fields-count)
+          (raise-arguments-error who
+                                 "index too large; no fields accessible"
+                                 "index" pos
+                                 "structure type" rtd)
+          (raise-arguments-error who
+                                 "index too large"
+                                 "index" pos
+                                 "maximum allowed index" (sub1 fields-count)
+                                 "structure type" rtd)))))
 
-(define make-struct-field-mutator
+(define/who make-struct-field-accessor
   (case-lambda
-   [(pbm pos)
-    (let* ([rtd (position-based-mutator-rtd pbm)]
-           [p (record-field-mutator rtd
-                                    (+ pos (position-based-mutator-offset pbm)))]
-           [wrap-p
-            (lambda (v a)
-              (if (impersonator? v)
-                  (impersonate-set! p rtd pos v a)
-                  (p v a)))])
-      (register-struct-field-mutator! wrap-p rtd pos)
-      wrap-p)]
+   [(pba pos name)
+    (check who position-based-accessor?
+           :contract "(and/c struct-accessor-procedure? (procedure-arity-includes/c 2))"
+           pba)
+    (check who exact-nonnegative-integer? pos)
+    (check who symbol? :or-false name)
+    (let ([rtd (position-based-accessor-rtd pba)])
+      (check-accessor-or-mutator-index who rtd pos)
+      (let* ([p (record-field-accessor rtd
+                                       (+ pos (position-based-accessor-offset pba)))]
+             [wrap-p
+              (lambda (v)
+                (if (impersonator? v)
+                    (impersonate-ref p rtd pos v)
+                    (p v)))])
+        (register-struct-field-accessor! wrap-p rtd pos)
+        wrap-p))]
+   [(pba pos)
+    (make-struct-field-accessor pba pos #f)]))
+
+(define/who make-struct-field-mutator
+  (case-lambda
    [(pbm pos name)
-    (make-struct-field-mutator pbm pos)]))
+    (check who position-based-mutator?
+           :contract "(and/c struct-mutator-procedure? (procedure-arity-includes/c 3))"
+           pbm)
+    (check who exact-nonnegative-integer? pos)
+    (check who symbol? :or-false name)
+    (let ([rtd (position-based-mutator-rtd pbm)])
+      (check-accessor-or-mutator-index who rtd pos)
+      (let* ([p (record-field-mutator rtd
+                                      (+ pos (position-based-mutator-offset pbm)))]
+             [wrap-p
+              (lambda (v a)
+                (if (impersonator? v)
+                    (impersonate-set! p rtd pos v a)
+                    (p v a)))])
+        (register-struct-field-mutator! wrap-p rtd pos)
+        wrap-p))]
+   [(pbm pos)
+    (make-struct-field-mutator pbm pos #f)]))
 
 (define (args-insert args fields-count auto-fields auto-val pfa)
   (let loop ([fields-count fields-count] [args args])
@@ -698,6 +726,18 @@
 (define-values (prop:equal+hash equal+hash? equal+hash-ref)
   (make-struct-type-property 'equal+hash
                              (lambda (val info)
+                               (check 'guard-for-prop:equal+hash
+                                      :test (and (list? val)
+                                                 (= 3 (length val))
+                                                 (andmap procedure? val)
+                                                 (procedure-arity-includes? (car val) 3)
+                                                 (procedure-arity-includes? (cadr val) 2)
+                                                 (procedure-arity-includes? (caddr val) 2))
+                                      :contract (string-append
+                                                 "(list/c (procedure-arity-includes/c 3)\n"
+                                                 "        (procedure-arity-includes/c 2)\n"
+                                                 "        (procedure-arity-includes/c 2))")
+                                      val)
                                (cons (gensym) val))))
 
 (define-values (prop:authentic authentic? authentic-ref)

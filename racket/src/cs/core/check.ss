@@ -42,3 +42,16 @@
      #'(lambda (p)
          (and (procedure? p)
               (procedure-arity-includes? p n)))]))
+
+(define (check-space who what d-start d-len s-len)
+  (unless (fx<= (fx+ d-start s-len) d-len)
+    (raise-arguments-error who (string-append "not enough room in target " what)
+                           "target length" d-len
+                           "needed length" s-len)))
+
+(define (check-range who what in-value start end len)
+  (unless (<= start len)
+    (raise-range-error who what "starting " start in-value 0 len))
+  (when end
+    (unless (<= start end len)
+      (raise-range-error who what "ending " end in-value start len 0))))

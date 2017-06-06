@@ -53,7 +53,16 @@
      (bytes-copy! dest d-start src s-start (bytes-length src))]
     [(dest d-start src s-start s-end)
      (check who mutable-bytevector? :contract "(and/c bytes? (not/c immutable?))" dest)
-     (bytevector-copy! src s-start dest d-start (- s-end s-start))]))
+     (check who exact-nonnegative-integer? d-start)
+     (check who bytes? src)
+     (check who exact-nonnegative-integer? s-start)
+     (check who exact-nonnegative-integer? s-end)
+     (let ([d-len (bytevector-length dest)])
+       (check-range who "byte string" dest d-start #f d-len)
+       (check-range who "byte string" src s-start s-end (bytevector-length src))
+       (let ([s-len (fx- s-end s-start)])
+         (check-space who "byte string" d-start d-len s-len)
+         (bytevector-copy! src s-start dest d-start s-len)))]))
 
 (define/who (bytes-fill! bstr b)
   (check who bytes? bstr)
@@ -152,14 +161,10 @@
     (check who bytes? bstr)
     (check who exact-nonnegative-integer? start)
     (check who exact-nonnegative-integer? end)
-    (let ([len (bytes-length bstr)])
-      (unless (<= start len)
-        (raise-range-error who "byte string" "" start bstr 0 len #f))
-      (unless (<= start end len)
-        (raise-range-error who "byte string" "" end bstr 0 len start))
-      (let* ([len (- end start)]
-             [c (make-bytevector len)])
-        (bytevector-copy! bstr start c 0 len)
-        c))]
+    (check-range who "byte string" bstr start end (bytevector-length bstr))
+    (let* ([len (- end start)]
+           [c (make-bytevector len)])
+      (bytevector-copy! bstr start c 0 len)
+      c)]
    [(bstr start)
     (subbytes bstr start (bytes-length bstr))]))

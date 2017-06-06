@@ -16,4 +16,10 @@
     [(machine) "localhost info..."]
     [(so-suffix) (string->utf8 ".dylib")]
     [(so-mode) 'local]
-    [(fs-change) '#(#f #f #f #f)]))
+    [(fs-change) '#(#f #f #f #f)]
+    [(cross) 'infer]
+    [else (raise-argument-error 'system-type
+                                (string-append
+                                 "(or/c 'os 'word 'vm 'gc 'link 'machine\n"
+                                 "      'so-suffix 'so-mode 'fs-change 'cross)")
+                                mode)]))

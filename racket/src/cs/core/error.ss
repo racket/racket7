@@ -210,15 +210,13 @@
        (cond
         [(null? more) '()]
         [else
-         (cons ((|#%app| error-value->string-handler)
-                (car more)
-                (|#%app| error-print-width))
+         (cons (error-value->string (car more))
                (loop (cdr more)))])))
     (current-continuation-marks))))
 
-(define raise-range-error
+(define/who raise-range-error
   (case-lambda
-   [(who
+   [(in-who
      type-description
      index-prefix
      index
@@ -226,19 +224,38 @@
      lower-bound
      upper-bound
      alt-lower-bound)
-    (unless (symbol? who)
-      (raise-argument-error 'raise-range-error "symbol?" who))
-    (unless (string? type-description)
-      (raise-argument-error 'raise-range-error "string?" type-description))
-    (unless (string? index-prefix)
-      (raise-argument-error 'raise-range-error "string?" index-prefix))
+    (check who symbol? in-who)
+    (check who string? type-description)
+    (check who string? index-prefix)
+    (check who exact-integer? index)
+    (check who exact-integer? lower-bound)
+    (check who exact-integer? upper-bound)
+    (check who :or-false exact-integer? alt-lower-bound)
     (raise
      (exn:fail:contract
-      (apply
-       string-append
-       (symbol->string who)
-       ": "
-       "range error....")
+      (string-append (symbol->string in-who)
+                     ": "
+                     index-prefix "index is "
+                     (cond
+                      [(< upper-bound lower-bound)
+                       (string-append "out of range for empty " type-description "\n"
+                                      "  index: " (number->string index))]
+                      [else
+                       (string-append
+                        (cond
+                         [(and alt-lower-bound
+                               (>= index alt-lower-bound)
+                               (< index upper-bound))
+                          (string-append "smaller than starting index\n"
+                                         "  " index-prefix "index: " (number->string index) "\n"
+                                         "  starting index: "  (number->string lower-bound) "\n")]
+                         [else
+                          (string-append "out of range\n"
+                                         "  " index-prefix "index: " (number->string index) "\n")])
+                        "  valid range: ["
+                        (number->string (or alt-lower-bound lower-bound)) ", "
+                        (number->string upper-bound) "]" "\n"
+                        "  " type-description ": " (error-value->string in-value))]))
       (current-continuation-marks)))]
    [(who
      type-description

@@ -8,7 +8,7 @@
 (define make-thread-cell
   (case-lambda
     [(v) (make-thread-cell v #f)]
-    [(v preserved?) (create-thread-cell v preserved?)]))
+    [(v preserved?) (create-thread-cell v (and preserved? #t))]))
 
 (define/who (thread-cell-ref c)
   (check who thread-cell? c)

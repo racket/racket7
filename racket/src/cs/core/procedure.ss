@@ -5,6 +5,10 @@
 
 (define-values (prop:procedure procedure-struct? procedure-struct-ref)
   (make-struct-type-property 'procedure (lambda (v info)
+                                          ;; We don't have to check whether `v` is valid here,
+                                          ;; because `make-struct-type` handles `prop:procedure`
+                                          ;; directly; we just convert a relative position to
+                                          ;; an absolute one
                                           (if (exact-integer? v)
                                               (+ v (let ([p (list-ref info 6)])
                                                      (if p
@@ -72,7 +76,7 @@
 (define/who procedure-arity-includes?
   (case-lambda
    [(f n incomplete-ok?)
-    (let ([mask (get-procedure-arity-mask 'procedure-arity-includes? f)])
+    (let ([mask (get-procedure-arity-mask who f)])
       (check who exact-nonnegative-integer? n)
       (and (bitwise-bit-set? mask n)
            (or incomplete-ok?
@@ -82,8 +86,8 @@
 (define (procedure-arity orig-f)
   (mask->arity (get-procedure-arity-mask 'procedure-arity orig-f)))
 
-(define (procedure-arity-mask orig-f)
-  (get-procedure-arity-mask procedure-arity-mask orig-f))
+(define/who (procedure-arity-mask orig-f)
+  (get-procedure-arity-mask who orig-f))
 
 (define (get-procedure-arity-mask who orig-f)
   (cond
@@ -127,7 +131,7 @@
       (loop (bitwise-arithmetic-shift-right mask 1) (add1 pos))])))
 
 ;; Public, limited variant:
-(define (procedure-extract-target f)
+(define/who (procedure-extract-target f)
   (cond
    [(record? f)
     (let* ([rtd (record-rtd f)]
@@ -136,8 +140,12 @@
        [(fixnum? v)
         (let ([v (unsafe-struct-ref f v)])
           (and (chez:procedure? v) v))]
-       [else #f]))]
-   [else #f]))
+       [else
+        (check who procedure? f)
+        #f]))]
+   [else
+    (check who procedure? f)
+    #f]))
 
 (define (not-a-procedure f)
   (error 'apply (format "not a procedure: ~s" f)))
@@ -154,9 +162,9 @@
   (check who procedure? proc)
   (let ([mask (arity->mask a)])
     (unless mask
-      (raise-arguments-error 'procedure-reduce-arity "procedure-arity?" a))
+      (raise-arguments-error who "procedure-arity?" a))
     (unless (= mask (bitwise-and mask (procedure-arity-mask proc)))
-      (raise-arguments-error 'procedure-reduce-arity
+      (raise-arguments-error who
                              "arity of procedure does not include requested arity"
                              "procedure" proc
                              "requested arity" a))
@@ -201,23 +209,23 @@
 (define-values (impersonator-prop:application-mark application-mark? application-mark-ref)
   (make-impersonator-property 'application-mark))
 
-(define (impersonate-procedure proc wrapper . props)
-  (do-impersonate-procedure 'impersonate-procedure make-procedure-impersonator proc wrapper
+(define/who (impersonate-procedure proc wrapper . props)
+  (do-impersonate-procedure who make-procedure-impersonator proc wrapper
                             make-props-procedure-impersonator props
                             values ""))
 
-(define (chaperone-procedure proc wrapper . props)
-  (do-impersonate-procedure 'chaperone-procedure make-procedure-chaperone proc wrapper
+(define/who (chaperone-procedure proc wrapper . props)
+  (do-impersonate-procedure who make-procedure-chaperone proc wrapper
                             make-props-procedure-chaperone props
                             values ""))
 
-(define (impersonate-procedure* proc wrapper . props)
-  (do-impersonate-procedure 'impersonate-procedure* make-procedure*-impersonator proc wrapper
+(define/who (impersonate-procedure* proc wrapper . props)
+  (do-impersonate-procedure who make-procedure*-impersonator proc wrapper
                             make-props-procedure-impersonator props
                             (lambda (n) (bitwise-arithmetic-shift-right n 1)) " (adding an extra argument)"))
 
-(define (chaperone-procedure* proc wrapper . props)
-  (do-impersonate-procedure 'chaperone-procedure* make-procedure*-chaperone proc wrapper
+(define/who (chaperone-procedure* proc wrapper . props)
+  (do-impersonate-procedure who make-procedure*-chaperone proc wrapper
                             make-props-procedure-chaperone props
                             (lambda (n) (bitwise-arithmetic-shift-right n 1)) " (adding an extra argument)"))
 
@@ -443,12 +451,12 @@
 (define-record unsafe-procedure-impersonator impersonator (replace-proc))
 (define-record unsafe-procedure-chaperone chaperone (replace-proc))
 
-(define (unsafe-impersonate-procedure proc replace-proc . props)
-  (do-unsafe-impersonate-procedure 'unsafe-impersonate-procedure make-unsafe-procedure-impersonator
+(define/who (unsafe-impersonate-procedure proc replace-proc . props)
+  (do-unsafe-impersonate-procedure who make-unsafe-procedure-impersonator
                                    proc replace-proc props))
 
-(define (unsafe-chaperone-procedure proc replace-proc . props)
-  (do-unsafe-impersonate-procedure 'unsafe-chaperone-procedure make-unsafe-procedure-chaperone
+(define/who (unsafe-chaperone-procedure proc replace-proc . props)
+  (do-unsafe-impersonate-procedure who make-unsafe-procedure-chaperone
                                    proc replace-proc props))
 
 (define (do-unsafe-impersonate-procedure who make-unsafe-procedure-impersonator proc replace-proc props)
@@ -563,6 +571,4 @@
            (struct-property-set! prop:procedure rtd 3)
            (struct-property-set! prop:procedure-arity rtd 0))])
     (register-unsafe-procedure-impersonator-struct-type! (record-type-descriptor unsafe-procedure-impersonator))
-    (register-unsafe-procedure-impersonator-struct-type! (record-type-descriptor unsafe-procedure-chaperone)))
-
-  )
+    (register-unsafe-procedure-impersonator-struct-type! (record-type-descriptor unsafe-procedure-chaperone))))

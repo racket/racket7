@@ -22,12 +22,12 @@
 
 (define/who (chaperone-vector vec ref set . props)
   (check who vector? vec)
-  (do-impersonate-vector 'chaperone-vector make-vector-chaperone vec ref set
+  (do-impersonate-vector who make-vector-chaperone vec ref set
                          make-props-chaperone props))
 
 (define/who (impersonate-vector vec ref set . props)
   (check who mutable-vector? :contract "(and/c vector? (not/c immutable?))" vec)
-  (do-impersonate-vector 'impersonate-vector make-vector-impersonator vec ref set
+  (do-impersonate-vector who make-vector-impersonator vec ref set
                          make-props-impersonator props))
 
 (define (do-impersonate-vector who make-vector-impersonator vec ref set
@@ -61,12 +61,12 @@
 
 (define/who (chaperone-vector* vec ref set . props)
   (check who vector? vec)
-  (do-impersonate-vector* 'chaperone-vector* make-vector*-chaperone vec ref set
+  (do-impersonate-vector* who make-vector*-chaperone vec ref set
                           make-props-chaperone props))
 
 (define/who (impersonate-vector* vec ref set . props)
   (check who mutable-vector? vec)
-  (do-impersonate-vector 'impersonate-vector* make-vector*-impersonator vec ref set
+  (do-impersonate-vector who make-vector*-impersonator vec ref set
                          make-props-impersonator props))
 
 (define (do-impersonate-vector* who make-vector*-impersonator vec ref set
@@ -188,7 +188,7 @@
 
 ;; ----------------------------------------
 
-(define (vector-copy vec)
+(define/who (vector-copy vec)
   (cond
    [(#%vector? vec)
     (#3%vector-copy vec)]
@@ -198,24 +198,32 @@
       (vector-copy! vec2 0 vec)
       vec2)]
    [else
-    ;; Let primitive complain:
-    (#2%vector-copy vec)]))
+    (raise-argument-error who "vector?" vec)]))
 
 (define/who vector-copy!
   (case-lambda
-   [(dest dest-start src)
-    (vector-copy! dest dest-start src 0
-                  (if (vector? src) (vector-length src) 0))]
-   [(src src-start dest dest-start)
-    (vector-copy! dest dest-start src src-start
-                  (if (vector? src) (vector-length src) 0))]
-   [(dest dest-start src src-start src-end)
+   [(dest d-start src)
+    (vector-copy! dest d-start src 0 (and (vector? src) (vector-length src)))]
+   [(src s-start dest d-start)
+    (vector-copy! dest d-start src s-start (and (vector? src) (vector-length src)))]
+   [(dest d-start src s-start s-end)
     (check who mutable-vector? :contract "(and/c vector? (not/c immutable?))" dest)
-    (let loop ([i (fx- src-end src-start)])
-      (unless (fx= 0 i)
-        (let ([i (fx1- i)])
-          (vector-set! dest (fx+ dest-start i) (vector-ref src (fx+ src-start i)))
-          (loop i))))]))
+    (check who exact-nonnegative-integer? d-start)
+    (check who vector? src)
+    (check who exact-nonnegative-integer? s-start)
+    (check who exact-nonnegative-integer? s-end)
+    (let ([d-len (vector-length dest)])
+      (check-range who "vector" dest d-start #f d-len)
+      (check-range who "vector" src s-start s-end (vector-length src))
+      (let ([len (fx- s-end s-start)])
+        (check-space who "vector" d-start d-len len)
+        (if (and (#%vector? src) (#%vector? dest))
+            (vector*-copy! dest d-start src s-start s-end)
+            (let loop ([i len])
+              (unless (fx= 0 i)
+                (let ([i (fx1- i)])
+                  (vector-set! dest (fx+ d-start i) (vector-ref src (fx+ s-start i)))
+                  (loop i)))))))]))
 
 ;; Like `vector-copy!`, but doesn't work on impersonators, and doesn't
 ;; add its own tests on the vector or range (so unsafe if the core is
@@ -233,9 +241,10 @@
           (#%vector-set! dest (fx+ dest-start i) (vector-ref src (fx+ src-start i)))
           (loop i))))]))
 
-(define vector->values
+(define/who vector->values
   (case-lambda
-    [(vec)
+   [(vec)
+    (check who vector? vec)
      (let ([len (vector-length vec)])
        (cond
         [(fx= len 0) (values)]
@@ -243,16 +252,19 @@
         [(fx= len 2) (values (vector-ref vec 0) (vector-ref vec 1))]
         [(fx= len 3) (values (vector-ref vec 0) (vector-ref vec 1) (vector-ref vec 2))]
         [else (chez:apply values (vector->list vec))]))]
-    [(vec start)
-     (vector->values vec start (vector-length vec))]
-    [(vec start end)
-     ;; FIXME: check range
-     (chez:apply values
-                 (let loop ([start start])
-                   (cond
-                    [(fx= start end) null]
-                    [else (cons (vector-ref vec start)
-                                (loop (fx1+ start)))])))]))
+   [(vec start)
+    (vector->values vec start (and (vector? vec) (vector-length vec)))]
+   [(vec start end)
+    (check who vector? vec)
+    (check who exact-nonnegative-integer? start)
+    (check who exact-nonnegative-integer? end)
+    (check-range who "vector" vec start end (vector-length vec))
+    (chez:apply values
+                (let loop ([start start])
+                  (cond
+                   [(fx= start end) null]
+                   [else (cons (vector-ref vec start)
+                               (loop (fx1+ start)))])))]))
 
 (define/who (vector-fill! vec v)
   (cond
@@ -266,10 +278,9 @@
           (vector-set! vec i v)
           (loop (fx1+ i)))))]
    [else
-    ;; Let primitive complain:
-    (#2%vector-fill! vec v)]))
+    (raise-argument-error who "vector?" vec)]))
 
-(define (vector->immutable-vector v)
+(define/who (vector->immutable-vector v)
   (cond
    [(#%vector? v)
     (#3%vector->immutable-vector v)]
@@ -279,4 +290,4 @@
          (vector-copy v))
         v)]
    [else
-    (#2%vector->immutable-vector v)]))
+    (raise-argument-error who "vector?" v)]))

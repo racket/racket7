@@ -49,7 +49,8 @@
   (let ((t (current-time 'time-utc)))
     (time-second t)))
 
-(define (seconds->date s)
+(define/who (seconds->date s)
+  (check who real? s)
   (let* ([s (inexact->exact s)]
          [tm (make-time 'time-utc
                         (floor (* (- s (floor s)) 1000000000))

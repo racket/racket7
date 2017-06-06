@@ -6,9 +6,8 @@
 
 (define empty-parameterization (make-parameterization empty-hasheq))
 
-(define (extend-parameterization p . args)
-  (unless (parameterization? p)
-    (raise-argument-error 'extend-parameterization "parameterization?" p))
+(define/who (extend-parameterization p . args)
+  (check who parameterization? p)
   (let loop ([ht (parameterization-ht p)] [args args])
     (cond
      [(null? args) (make-parameterization ht)]
@@ -46,10 +45,11 @@
   (parent parameter)
   (fields next guard))
 
-(define make-parameter
+(define/who make-parameter
   (case-lambda
     [(v) (make-parameter v #f)]
     [(v guard)
+     (check who (procedure-arity-includes/c 1) :or-false guard)
      (let ([default-c (make-thread-cell v #t)])
        (define self
          (create-parameter
