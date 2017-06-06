@@ -379,11 +379,14 @@
                    (let ([c (record-constructor rtd)])
                      (if (zero? total-auto-field-count)
                          c
-                         (procedure-reduce-arity
-                          (lambda args
-                            (apply c (auto-field-adder args)))
-                          (- total-field-count total-auto-field-count))))
-                   rtd)]
+                         (procedure-rename
+                          (procedure-reduce-arity
+                           (lambda args
+                             (apply c (auto-field-adder args)))
+                           (- total-field-count total-auto-field-count))
+                          (or constructor-name name))))
+                   rtd
+                   (or constructor-name name))]
              [pred (lambda (v)
                      (or (record? v rtd)
                          (and (impersonator? v)
@@ -674,47 +677,52 @@
                     [auto-field-adder (struct-type-auto-field-adder rtd)])
                 (cond
                  [auto-field-adder
-                  (procedure-reduce-arity
-                   (lambda args
-                     (apply c (auto-field-adder args)))
-                   (- (struct-type-field-count rtd)
-                      (struct-type-auto-field-count rtd)))]
+                  (procedure-maybe-rename
+                   (procedure-reduce-arity
+                    (lambda args
+                      (apply c (auto-field-adder args)))
+                    (- (struct-type-field-count rtd)
+                       (struct-type-auto-field-count rtd)))
+                   (object-name c))]
                  [else c]))
-              rtd)])
+              rtd
+              #f)])
     (register-struct-constructor! ctr)
     ctr))
 
 ;; Called directly from a schemified declaration that has a guard:
-(define (struct-type-constructor-add-guards ctr rtd)
+(define (struct-type-constructor-add-guards ctr rtd name)
   (let ([guards (struct-type-guards rtd)])
     (if (null? guards)
         ctr
-        (procedure-reduce-arity
-         (let ([name (record-type-name rtd)])
-           (lambda args
-             (let loop ([guards guards] [args args])
-               (cond
-                [(null? guards)
-                 (apply ctr args)]
-                [else
-                 (let ([guard (caar guards)]
-                       [fields-count (cdar guards)])
-                   (call-with-values
-                    (lambda ()
-                      (apply guard (append-n args fields-count (list name))))
-                    (lambda results
-                      (unless (= (length results) fields-count)
-                        (raise-result-arity-error "calling guard procedure" fields-count results))
-                      (loop (cdr guards)
-                            (if (= fields-count (length args))
-                                results
-                                (append results (list-tail args fields-count)))))))]))))
-         (- (struct-type-field-count rtd)
-            (struct-type-auto-field-count rtd))))))
+        (procedure-maybe-rename
+         (procedure-reduce-arity
+          (let ([name (record-type-name rtd)])
+            (lambda args
+              (let loop ([guards guards] [args args])
+                (cond
+                 [(null? guards)
+                  (apply ctr args)]
+                 [else
+                  (let ([guard (caar guards)]
+                        [fields-count (cdar guards)])
+                    (call-with-values
+                     (lambda ()
+                       (apply guard (append-n args fields-count (list name))))
+                     (lambda results
+                       (unless (= (length results) fields-count)
+                         (raise-result-arity-error "calling guard procedure" fields-count results))
+                       (loop (cdr guards)
+                             (if (= fields-count (length args))
+                                 results
+                                 (append results (list-tail args fields-count)))))))]))))
+          (- (struct-type-field-count rtd)
+             (struct-type-auto-field-count rtd)))
+         (or name (object-name ctr))))))
 
-(define (struct-type-constructor-add-guards* ctr rtd guard)
+(define (struct-type-constructor-add-guards* ctr rtd guard name)
   (register-guards! rtd guard 'at-end)
-  (struct-type-constructor-add-guards ctr rtd))
+  (struct-type-constructor-add-guards ctr rtd name))
 
 (define/who (struct-type-make-predicate rtd)
   (check who struct-type? rtd)
@@ -949,7 +957,7 @@
                                           #f)])
            (with-syntax ([ctr-expr (with-syntax ([mk #'(record-constructor (make-record-constructor-descriptor struct:name #f #f))])
                                      (if (or (syntax->datum #'parent) (syntax->datum #'guard-expr))
-                                         #'(struct-type-constructor-add-guards* mk struct:name guard-expr)
+                                         #'(struct-type-constructor-add-guards* mk struct:name guard-expr 'name)
                                          #'mk))])
              #'(begin
                  (define struct:name (make-record-type-descriptor 'name struct:parent #f #f #f '#((immutable field) ...)))

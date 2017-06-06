@@ -30,4 +30,12 @@
         (unsafe-struct-ref v n)]
        [else
         (n v)]))]
+   [(#%procedure? v)
+    (let ([name (((inspect/object v) 'code) 'name)])
+      (and name
+           (string->symbol name)))]
+   [(impersonator? v)
+    (object-name (impersonator-val v))]
+   [(procedure? v)
+    (object-name (extract-procedure v))]
    [else #f]))

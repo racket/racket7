@@ -542,6 +542,7 @@
   (include "core/number.ss")
   (include "core/procedure.ss")
   (include "core/object-name.ss")
+  (include "core/arity.ss")
   (include "core/hamt.ss")
   (include "core/hash.ss")
   (include "core/lock.ss")

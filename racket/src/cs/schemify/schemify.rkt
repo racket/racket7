@@ -272,7 +272,7 @@
                                             (make-record-constructor-descriptor ,struct:s #f #f))])
                                  (if (struct-type-info-pure-constructor? sti)
                                      ctr
-                                     `(struct-type-constructor-add-guards ,ctr ,struct:s))))
+                                     `(struct-type-constructor-add-guards ,ctr ,struct:s ',(struct-type-info-name sti)))))
               (define ,raw-s? (record-predicate ,struct:s))
               ,@(if can-impersonate?
                     `((define ,s? (lambda (v) (or (,raw-s? v) (pariah (and (impersonator? v) (,raw-s? (impersonator-val v))))))))

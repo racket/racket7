@@ -5,7 +5,7 @@ SCHEME = scheme
 UNSAFE = # '(optimize-level 3)'
 
 # Controls whether core is built as unsafe:
-CORE_UNSAFE = # '(optimize-level 3)'
+CORE_UNSAFE = '(optimize-level 3)'
 
 COMP = echo $(UNSAFE) '(reset-handler abort) (keyboard-interrupt-handler abort) (record-source-lines-and-columns \#t) (generate-wpo-files \#t)'
 
@@ -175,6 +175,7 @@ CORE_SRCS = core/check.ss \
             core/chaperone.ss \
             core/equal.ss \
             core/object-name.ss \
+            core/arity.ss \
             core/hamt.ss \
             core/hash.ss \
 	    core/lock.ss \

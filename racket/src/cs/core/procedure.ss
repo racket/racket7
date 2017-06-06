@@ -154,7 +154,7 @@
 
 ;; ----------------------------------------
 
-(define-record reduced-arity-procedure (proc mask))
+(define-record reduced-arity-procedure (proc mask name))
 
 (define/who (procedure-reduce-arity proc a)
   (check who procedure? proc)
@@ -174,43 +174,32 @@
                 (mask->arity mask)
                 args))
        (apply proc args))
-     mask)))
-
-(define (arity->mask a)
-  (cond
-   [(exact-nonnegative-integer? a)
-    (bitwise-arithmetic-shift-left 1 a)]
-   [(arity-at-least? a)
-    (- -1 (bitwise-arithmetic-shift-left 1 (arity-at-least-value a)))]
-   [(list? a)
-    (let loop ([mask 0] [l a])
-      (cond
-       [(null? l) mask]
-       [else
-        (let ([a (car l)])
-          (cond
-           [(or (exact-nonnegative-integer? a)
-                (arity-at-least? a))
-            (loop (bitwise-ior mask (arity->mask a)) (cdr l))]
-           [else #f]))]))]
-   [else #f]))
-
-(define (procedure-arity? a)
-  (and (arity->mask a) #t))
-
-(define-struct arity-at-least (value)
-  :guard (lambda (value who)
-           (check who exact-nonnegative-integer? value)
-           value))
+     mask
+     (object-name proc))))
 
 ;; ----------------------------------------
 
 (define-record named-procedure (proc name))
 
 (define/who (procedure-rename proc name)
-  (check who procedure? proc)
-  (check who symbol? name)
-  (make-named-procedure proc name))
+  (cond
+   [(reduced-arity-procedure? proc)
+    ;; Avoid an extra wrapper layer, and also work before
+    ;; `procedure?` is fully filled in
+    (check who symbol? name)
+    (make-reduced-arity-procedure
+     (reduced-arity-procedure-proc proc)
+     (reduced-arity-procedure-mask proc)
+     name)]
+   [else
+    (check who procedure? proc)
+    (check who symbol? name)
+    (make-named-procedure proc name)]))
+
+(define (procedure-maybe-rename proc name)
+  (if name
+      (procedure-rename proc name)
+      proc))
 
 ;; ----------------------------------------
 
@@ -570,6 +559,9 @@
   (struct-property-set! prop:procedure-arity
                         (record-type-descriptor reduced-arity-procedure)
                         (box 1))
+  (struct-property-set! prop:object-name
+                        (record-type-descriptor reduced-arity-procedure)
+                        2)
 
   (let ([register-procedure-impersonator-struct-type!
          (lambda (rtd)
