@@ -106,7 +106,7 @@
 
 (define (vector-ref vec idx)
   (if (#%vector? vec)
-      (#%vector-ref vec idx)
+      (#2%vector-ref vec idx)
       (pariah (impersonate-vector-ref vec idx))))
 
 (define (unsafe-vector-ref vec idx)
@@ -144,7 +144,7 @@
 
 (define (vector-set! vec idx val)
   (if (#%vector? vec)
-      (#%vector-set! vec idx val)
+      (#2%vector-set! vec idx val)
       (pariah (impersonate-vector-set! vec idx val))))
 
 (define (unsafe-vector-set! vec idx val)
