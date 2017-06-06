@@ -36,8 +36,14 @@
 
 ;; ----------------------------------------
 
-(struct exn (message continuation-marks))
-(struct exn:break exn (continuation))
+(struct exn (message continuation-marks) :guard (lambda (msg cm who)
+                                                  (check who string? msg)
+                                                  (check who continuation-mark-set? cm)
+                                                  (values (string->immutable-string msg)
+                                                          cm)))
+(struct exn:break exn (continuation) :guard (lambda (msg cm k who)
+                                              (check who escape-continuation? k)
+                                              (values msg cm k)))
 (struct exn:break:hang-up exn:break ())
 (struct exn:break:terminate exn:break ())
 (struct exn:fail exn ())
@@ -46,16 +52,28 @@
 (struct exn:fail:contract:divide-by-zero exn:fail:contract ())
 (struct exn:fail:contract:non-fixnum-result exn:fail:contract ())
 (struct exn:fail:contract:continuation exn:fail:contract ())
-(struct exn:fail:contract:variable exn:fail:contract (id))
-(struct exn:fail:read exn:fail (srclocs))
+(struct exn:fail:contract:variable exn:fail:contract (id) :guard (lambda (msg cm id who)
+                                                                   (check who symbol? id)
+                                                                   (values msg cm id)))
+(struct exn:fail:read exn:fail (srclocs) :guard (lambda (msg cm srclocs who)
+                                                  (check who
+                                                         :test (and (list srclocs)
+                                                                    (andmap srcloc? srclocs))
+                                                         :contract "(listof srcloc?)"
+                                                         srclocs)
+                                                  (values msg cm srclocs)))
 (struct exn:fail:read:non-char exn:fail:read ())
 (struct exn:fail:read:eof exn:fail:read ())
 (struct exn:fail:filesystem exn:fail ())
 (struct exn:fail:filesystem:exists exn:fail:filesystem ())
 (struct exn:fail:filesystem:version exn:fail:filesystem ())
-(struct exn:fail:filesystem:errno exn:fail:filesystem (errno))
+(struct exn:fail:filesystem:errno exn:fail:filesystem (errno) :guard (lambda (msg cm errno who)
+                                                                       (check-errno who errno)
+                                                                       (values msg cm errno)))
 (struct exn:fail:network exn:fail ())
-(struct exn:fail:network:errno exn:fail:network (errno))
+(struct exn:fail:network:errno exn:fail:network (errno) :guard (lambda (msg cm errno who)
+                                                                 (check-errno who errno)
+                                                                 (values msg cm errno)))
 (struct exn:fail:out-of-memory exn:fail ())
 (struct exn:fail:unsupported exn:fail ())
 (struct exn:fail:user exn:fail ())
@@ -68,7 +86,8 @@
   (unless (string? what)
     (raise-argument-error 'raise-arguments-error "string?" what))
   (raise
-   (exn:fail:contract
+   (|#%app|
+    exn:fail:contract
     (apply
      string-append
      (symbol->string who)
@@ -104,7 +123,8 @@
                  (not (negative? pos)))
       (raise-argument-error e-who "exact-nonnegative-integer?" pos)))
   (raise
-   (exn:fail:contract
+   (|#%app|
+    exn:fail:contract
     (string-append (symbol->string who)
                    ": contract violation\n  expected: "
                    (reindent what (string-length "  expected: "))
@@ -168,7 +188,8 @@
                  (not (negative? pos)))
       (raise-argument-error e-who "exact-nonnegative-integer?" pos)))
   (raise
-   (exn:fail:contract
+   (|#%app|
+    exn:fail:contract
     (string-append (symbol->string who)
                    ": expected argument ot type <" what ">"
                    "; given: "
@@ -200,7 +221,8 @@
   (unless (string? what)
     (raise-argument-error 'raise-mismatch-error "string?" what))
   (raise
-   (exn:fail:contract
+   (|#%app|
+    exn:fail:contract
     (apply
      string-append
      (symbol->string who)
@@ -232,7 +254,8 @@
     (check who exact-integer? upper-bound)
     (check who :or-false exact-integer? alt-lower-bound)
     (raise
-     (exn:fail:contract
+     (|#%app|
+      exn:fail:contract
       (string-append (symbol->string in-who)
                      ": "
                      index-prefix "index is "
@@ -275,7 +298,8 @@
 
 (define (raise-arity-error name arity . args)
   (raise
-   (exn:fail:contract:arity
+   (|#%app|
+    exn:fail:contract:arity
     (string-append
      "arity mismatch;\n"
      " the expected number of arguments does not match the given number\n"
@@ -294,7 +318,8 @@
 
 (define (raise-result-arity-error where num-expected-args args)
   (raise
-   (exn:fail:contract:arity
+   (|#%app|
+    exn:fail:contract:arity
     (string-append
      "result arity mismatch;\n"
      " expected number of values not received\n"
@@ -308,7 +333,8 @@
 
 (define (raise-unsupported-error id)
   (raise
-   (exn:fail:unsupported
+   (|#%app|
+    exn:fail:unsupported
     (string-append (symbol->string id) ": unsupported")
     (current-continuation-marks))))
 
@@ -408,8 +434,8 @@
                                                          (source-object-bfp src)))))
                          (case-lambda
                           [() #f]
-                          [(path line col) (srcloc path line (sub1 col) #f #f)]
-                          [(path pos) (srcloc path #f #f (add1 pos) #f)])))])
+                          [(path line col) (|#%app| srcloc path line (sub1 col) #f #f)]
+                          [(path pos) (|#%app| srcloc path #f #f (add1 pos) #f)])))])
         (if (or name loc)
             (cons (cons name loc) (loop (cdr l) ls))
             (loop (cdr l) ls)))])))
@@ -474,7 +500,7 @@
 
 (define (condition->exn v)
   (if (condition? v)
-      (exn:fail (exn->string v) (current-continuation-marks))
+      (|#%app| exn:fail (exn->string v) (current-continuation-marks))
       v))
 
 (define/who uncaught-exception-handler
@@ -512,9 +538,9 @@
          (let loop ([hs hs])
            (cond
             [(null? hs)
-             ((|#%app| uncaught-exception-handler) v)]
+             (|#%app| (|#%app| uncaught-exception-handler) v)]
             [else
              (let ([h (car hs)]
                    [hs (cdr hs)])
-               (h v)
+               (|#%app| h v)
                (loop hs))])))]))))

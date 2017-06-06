@@ -55,3 +55,17 @@
   (when end
     (unless (<= start end len)
       (raise-range-error who what "ending " end in-value start len 0))))
+
+(define (check-errno who errno)
+  (check who
+         :test (and (pair? errno)
+                    (exact-integer? (car errno))
+                    (chez:memq (cdr errno) '(posic windows gai)))
+         :contract "(cons/c exact-integer? (or/c 'posix 'windows 'gai))"
+         errno))
+
+(define (check-integer who lo hi v)
+  (unless (and (integer? v)
+               (exact? v)
+               (<= lo v hi))
+    (raise-argument-error who v (format "(integer-in ~a ~a)" lo hi))))

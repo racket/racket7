@@ -56,7 +56,8 @@
 
   (define (convert-exception-to-exn:fail:filesystem v)
     (raise
-     ((if (i/o-file-already-exists-error? v)
+     (|#%app|
+      (if (i/o-file-already-exists-error? v)
           exn:fail:filesystem:exists
           exn:fail:filesystem)
       (string-append

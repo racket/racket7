@@ -552,6 +552,7 @@
   (include "core/parameter.ss")
   (include "core/engine.ss")
   (include "core/error.ss")
+  (include "core/srcloc.ss")
   (include "core/bytes.ss")
   (include "core/string.ss")
   (include "core/list.ss")

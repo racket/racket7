@@ -500,7 +500,8 @@
 
 (define (ffi-obj sym lib)
   (raise
-   (exn:fail:filesystem
+   (|#%app|
+    exn:fail:filesystem
     (format "ffi-obj: counld't get ~a" sym)
     (current-continuation-marks))))
 
@@ -699,7 +700,8 @@
     (make-cpointer (make-vector (quotient size 8)) #f)]
    [else
     (raise
-     (exn:fail:unsupported
+     (|#%app|
+      exn:fail:unsupported
       (format "malloc: '~a mode is not supported" mode)
       (current-continuation-marks)))]))
 

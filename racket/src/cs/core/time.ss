@@ -7,9 +7,67 @@
                      week-day
                      year-day
                      dst?
-                     time-zone-offset))
+                     time-zone-offset)
+  :guard (lambda (second
+                  minute
+                  hour
+                  day
+                  month
+                  year
+                  week-day
+                  year-day
+                  dst?
+                  time-zone-offset
+                  who)
+           (check-integer who 0 60 second)
+           (check-integer who 0 59 minute)
+           (check-integer who 0 23 hour)
+           (check-integer who 1 31 day)
+           (check-integer who 1 12 month)
+           (check who exact-integer? year)
+           (check-integer who 0 6 week-day)
+           (check-integer who 0 365 year-day)
+           (check who boolean? dst?)
+           (check who exact-integer? time-zone-offset)
+           (values second
+                   minute
+                   hour
+                   day
+                   month
+                   year
+                   week-day
+                   year-day
+                   dst?
+                   time-zone-offset)))
 
-(define-struct date* date (nanosecond time-zone-name))
+(define-struct date* date (nanosecond time-zone-name)
+  :guard (lambda (second
+                  minute
+                  hour
+                  day
+                  month
+                  year
+                  week-day
+                  year-day
+                  dst?
+                  time-zone-offset
+                  nanosecond
+                  time-zone-name
+                  who)
+           (check-integer who 0 999999999 nanosecond)
+           (check who string? time-zone-name)
+           (values second
+                   minute
+                   hour
+                   day
+                   month
+                   year
+                   week-day
+                   year-day
+                   dst?
+                   time-zone-offset
+                   nanosecond
+                   (string->immutable-string time-zone-name))))
 
 (define (time->ms t)
   (+ (* 1000. (time-second t))

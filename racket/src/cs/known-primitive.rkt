@@ -33,7 +33,9 @@
         (let ([v (eval s ns)])
           (cond
             [(and (procedure? v)
-                  (not (parameter? v)))
+                  (not (parameter? v))
+                  ;; could have a guard:
+                  (not (struct-constructor-procedure? v)))
              (values (cons s known-procedures) known-constants)]
             [(or (memq s known-struct-type-property/immediate-guards)
                  (assq s known-constructors))

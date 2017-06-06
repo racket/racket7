@@ -478,21 +478,7 @@
         ;; Record inspector
         (inspector-set! rtd insp)
         ;; Register guard
-        (let ([parent-guards (if parent-rtd
-                                 (struct-type-guards parent-rtd)
-                                 '())])
-          (when (or guard (pair? parent-guards))
-            (let* ([parent-count (if parent-rtd
-                                     (struct-type-field-count parent-rtd)
-                                     0)]
-                   [parent-auto-field-count (if parent-rtd
-                                                (struct-type-auto-field-count parent-rtd)
-                                                0)]
-                   [parent-fields-count (- parent-count parent-auto-field-count)])
-              (putprop (record-type-uid rtd) 'guards (if guard
-                                                         (cons (cons guard (+ parent-fields-count fields))
-                                                               parent-guards)
-                                                         parent-guards)))))))]))
+        (register-guards! rtd guard 'at-start)))]))
 
 ;; Used by a `schemify` transformation:
 (define (structure-type-lookup-prefab-uid name parent-rtd fields-count auto-fields auto-val immutables)
@@ -726,6 +712,10 @@
          (- (struct-type-field-count rtd)
             (struct-type-auto-field-count rtd))))))
 
+(define (struct-type-constructor-add-guards* ctr rtd guard)
+  (register-guards! rtd guard 'at-end)
+  (struct-type-constructor-add-guards ctr rtd))
+
 (define/who (struct-type-make-predicate rtd)
   (check who struct-type? rtd)
   (check-inspector-access who rtd)
@@ -768,6 +758,31 @@
 ;; Returns a list of (cons guard-proc field-count)
 (define (struct-type-guards rtd)
   (getprop (record-type-uid rtd) 'guards '()))
+
+(define (register-guards! rtd guard which-end)
+  (let* ([parent-rtd (record-type-parent rtd)]
+         [parent-guards (if parent-rtd
+                            (struct-type-guards parent-rtd)
+                            '())])
+    (when (or guard (pair? parent-guards))
+      (let* ([fields (#%vector-length (record-type-field-names rtd))]
+             [parent-count (if parent-rtd
+                               (struct-type-field-count parent-rtd)
+                               0)]
+             [parent-auto-field-count (if parent-rtd
+                                          (struct-type-auto-field-count parent-rtd)
+                                          0)]
+             [parent-fields-count (- parent-count parent-auto-field-count)])
+        (putprop (record-type-uid rtd) 'guards (if guard
+                                                   (if (eq? which-end 'at-start)
+                                                       ;; Normal:
+                                                       (cons (cons guard (+ parent-fields-count fields))
+                                                             parent-guards)
+                                                       ;; Internal, makes primitiev guards have a natural
+                                                       ;; error order:
+                                                       (append parent-guards
+                                                               (list (cons guard (+ parent-fields-count fields)))))
+                                                   parent-guards))))))
 
 (define (unsafe-struct-ref s i)
   (#3%vector-ref s i))
@@ -909,10 +924,14 @@
 
 (define-syntax struct
   (lambda (stx)
-    (syntax-case stx  ()
+    (syntax-case stx  (:guard)
       [(_ name (field ...))
        #'(struct name #f (field ...))]
+      [(_ name (field ...) :guard guard-expr)
+       #'(struct name #f (field ...) :guard guard-expr)]
       [(_ name parent (field ...))
+       #'(struct name parent (field ...) :guard #f)]
+      [(_ name parent (field ...) :guard guard-expr)
        (let ([make-id (lambda (id fmt . args)
                         (datum->syntax id
                                        (string->symbol (chez:apply format fmt args))))])
@@ -928,17 +947,23 @@
                        [struct:parent (if (syntax->datum #'parent)
                                           (make-id #'parent "struct:~a" (syntax->datum #'parent))
                                           #f)])
-           #'(begin
-               (define struct:name (make-record-type-descriptor 'name struct:parent #f #f #f '#((immutable field) ...)))
-               (define name? (record-predicate struct:name))
-               (define name (record-constructor (make-record-constructor-descriptor struct:name #f #f)))
-               (define name-field (record-accessor struct:name field-index))
-               ...
-               (define dummy
-                 (begin
-                   (record-type-equal-procedure struct:name default-struct-equal?)
-                   (record-type-hash-procedure struct:name default-struct-hash)
-                   (inspector-set! struct:name #f))))))])))
+           (with-syntax ([ctr-expr (with-syntax ([mk #'(record-constructor (make-record-constructor-descriptor struct:name #f #f))])
+                                     (if (or (syntax->datum #'parent) (syntax->datum #'guard-expr))
+                                         #'(struct-type-constructor-add-guards* mk struct:name guard-expr)
+                                         #'mk))])
+             #'(begin
+                 (define struct:name (make-record-type-descriptor 'name struct:parent #f #f #f '#((immutable field) ...)))
+                 (define name ctr-expr)
+                 (define name? (record-predicate struct:name))
+                 (define name-field (record-accessor struct:name field-index))
+                 ...
+                 (define dummy
+                   (begin
+                     (register-struct-constructor! name)
+                     (register-struct-field-accessor! name-field struct:name field-index) ...
+                     (record-type-equal-procedure struct:name default-struct-equal?)
+                     (record-type-hash-procedure struct:name default-struct-hash)
+                     (inspector-set! struct:name #f)))))))])))
 
 (define-syntax define-struct
   (lambda (stx)
@@ -950,7 +975,3 @@
          #'(begin
              (struct name . rest)
              (define make-name name)))])))
-
-;; ----------------------------------------
-
-(define-struct srcloc (source line column position span))

@@ -92,11 +92,11 @@
   (cond
    [(not src) #f]
    [(correlated? src) (correlated-srcloc src)]
-   [(vector? src) (srcloc (vector-ref src 0)
-                          (vector-ref src 1)
-                          (vector-ref src 2)
-                          (vector-ref src 3)
-                          (vector-ref src 4))]
+   [(vector? src) (|#%app|
+                   srcloc
+                   (vector-ref src 0)
+                   (vector-ref src 1)
+                   (vector-ref src 2)
+                   (vector-ref src 3)
+                   (vector-ref src 4))]
    [else (apply srcloc src)]))
-
-

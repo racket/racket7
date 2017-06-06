@@ -1,5 +1,3 @@
-(define-struct arity-at-least (value))
-
 (define-values (prop:method-arity-error method-arity-error? method-arity-error-ref)
   (make-struct-type-property 'method-arity-error))
 
@@ -60,10 +58,10 @@
     (let* ([v (struct-property-ref prop:procedure (record-rtd f) #f)])
       (cond
        [(procedure? v) (case-lambda
-                         [() (v f)]
-                         [(a) (v f a)]
-                         [(a b) (v f a b)]
-                         [(a b c) (v f a b c)]
+                         [() (|#%app| v f)]
+                         [(a) (|#%app| v f a)]
+                         [(a b) (|#%app| v f a b)]
+                         [(a b c) (|#%app| v f a b c)]
                          [args (apply v f args)])]
        [(fixnum? v)
         (let ([v (unsafe-struct-ref f v)])
@@ -120,7 +118,7 @@
   (let loop ([mask mask] [pos 0])
     (cond
      [(= mask 0) null]
-     [(= mask -1) (arity-at-least pos)]
+     [(= mask -1) (|#%app| arity-at-least pos)]
      [(bitwise-bit-set? mask 0)
       (let ([rest (loop (bitwise-arithmetic-shift-right mask 1) (add1 pos))])
         (cond
@@ -199,6 +197,11 @@
 
 (define (procedure-arity? a)
   (and (arity->mask a) #t))
+
+(define-struct arity-at-least (value)
+  :guard (lambda (value who)
+           (check who exact-nonnegative-integer? value)
+           value))
 
 ;; ----------------------------------------
 
@@ -363,7 +366,7 @@
                            (unless (= (length results) (length new-results))
                              (raise-result-wrapper-result-arity-error))
                            (check '|procedure-result chaperone| results new-results)
-                           (apply values new-results))))]
+                           (#%apply values new-results))))]
                     [else
                      (continue new-args)])]
                   [(and (fx> nn n)
@@ -409,7 +412,8 @@
 
 (define (raise-result-wrapper-result-arity-error)
   (raise
-   (exn:fail:contract:arity
+   (|#%app|
+    exn:fail:contract:arity
     (string-append "procedure-result chaperone: result arity mismatch;\n"
                    " expected number of values not received from wrapper on the original procedure's result")
     (current-continuation-marks))))
@@ -441,7 +445,8 @@
 
 (define (raise-wrapper-result-arity-error chaperone? proc wrapper expected-n got-n)
   (raise
-   (exn:fail:contract:arity
+   (|#%app|
+    exn:fail:contract:arity
     (string-append
      (if chaperone?
          "procedure chaperone"

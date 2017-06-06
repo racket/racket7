@@ -48,7 +48,7 @@
 
 (check (procedure-arity (make-p add1 'x)) 1)
 (check (procedure-arity (make-p (case-lambda [(x) 1] [(x y z . w) 2]) 'x))
-       (list 1 (arity-at-least 3)))
+       (list 1 (|#%app| arity-at-least 3)))
 (check (procedure-arity-includes? (make-p (case-lambda [(x) 1] [(x y z . w) 2]) 'x) 0)
        #f)
 (check (procedure-arity-includes? (make-p (case-lambda [(x) 1] [(x y z . w) 2]) 'x) 1)
