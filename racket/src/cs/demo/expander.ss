@@ -30,7 +30,8 @@
        (show (eval (read (open-input-string s)))))
      ;; (run "'x")
      (void))
-   
+
+   (|#%app| use-compiled-file-paths '()) ; => expand from source
    (|#%app| current-library-collection-links
     (find-library-collection-links))
    (|#%app| current-library-collection-paths
