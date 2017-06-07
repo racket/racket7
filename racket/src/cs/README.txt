@@ -165,14 +165,15 @@ Performance notes:
 
 The best-case scenario for performance is
 
- * `UNSAFE` is enabled in "Makefile" --- not on by default, because
+ * `UNSAFE_COMP` is enabled in "Makefile" --- not on by default, because
    the core and base layers are not yet good enough.
 
-   Effectiveness: Maybe only matters for "core.so", which has its own
-   setting.
+   Effectiveness: Matters the most for "core.so", which has its own
+   setting, but otherwise affects a from-source `racket/base` expansion
+   by about 5%.
 
- * `CORE_UNSAFE` is enabled in "Makefile" --- applies to "core.so"
-   even if `UNSAFE` is disabled.
+ * `CORE_UNSAFE_COMP` is enabled in "Makefile" --- applies to "core.so"
+   even if `UNSAFE_COMP` is disabled.
 
    Effectiveness: Can mean a 10-20% improvement in loading
    `racket/base` from source.

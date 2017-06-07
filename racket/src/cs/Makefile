@@ -2,12 +2,13 @@ RACKET = ../../bin/racket
 SCHEME = scheme
 
 # Controls whether base layers are built as unsafe:
-UNSAFE = # '(optimize-level 3)'
+UNSAFE_COMP = # '(optimize-level 3)'
 
 # Controls whether core is built as unsafe:
-CORE_UNSAFE = '(optimize-level 3)'
+CORE_UNSAFE_COMP = '(optimize-level 3)'
 
-COMP = echo $(UNSAFE) '(reset-handler abort) (keyboard-interrupt-handler abort) (record-source-lines-and-columns \#t) (generate-wpo-files \#t)'
+BASE_COMP = '(reset-handler abort) (keyboard-interrupt-handler abort) (record-source-lines-and-columns \#t) (generate-wpo-files \#t)'
+COMP = echo $(UNSAFE_COMP) $(BASE_COMP)
 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
@@ -40,13 +41,13 @@ run-wpo: racket.so
 	${SCHEME} --script racket.so ../../bin/racket $(ARGS)
 
 racket.so: main.so
-	echo '(compile-whole-program "main.wpo" "racket.so" #t)' | $(SCHEME) -q
+	$(COMP) '(compile-whole-program "main.wpo" "racket.so" #t)' | $(SCHEME) -q
 
 main.so: $(MAIN_DEPS) main.sps
 	$(COMP) '(compile-file "main.sps")' | $(SCHEME) -q $(MAIN_DEPS)
 
 strip:
-	${SCHEME} --script strip.ss ${MAIN_DEPS}
+	${SCHEME} --script strip.ss $(MAIN_DEPS) racket.so
 
 rktl:
 	$(MAKE) thread-rktl
@@ -213,7 +214,7 @@ CORE_SRCS = core/check.ss \
             core/foreign.ss
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
-	$(COMP) $(CORE_UNSAFE) '(compile-file "core.sls")' | $(SCHEME) -q
+	$(COMP) $(CORE_UNSAFE_COMP) '(compile-file "core.sls")' | $(SCHEME) -q
 
 chezpart.so: chezpart.sls
 	$(COMP) '(compile-file "chezpart.sls")' | $(SCHEME) -q
