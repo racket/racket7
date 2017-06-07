@@ -78,9 +78,13 @@
   (define main-links-files (for/hash ([p (in-list (get-links-search-files))])
                              (values (simple-form-path p) #t)))
   (define mode-dir
-    (if (compile-mode)
-      (build-path "compiled" (compile-mode))
-      (build-path "compiled")))
+    (let ([compiled-dir (let ([l (use-compiled-file-paths)])
+                          (if (pair? l)
+                              (car l)
+                              "compiled"))])
+      (if (compile-mode)
+          (build-path compiled-dir (compile-mode))
+          (build-path compiled-dir))))
 
   (unless (make-user)
     (current-library-collection-paths
