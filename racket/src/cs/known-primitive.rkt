@@ -13,7 +13,8 @@
   '(prop:procedure
     prop:equal+hash
     prop:custom-write
-    prop:evt))
+    prop:evt
+    prop:authentic))
 
 ;; Constructors with arities:
 (define known-constructors
