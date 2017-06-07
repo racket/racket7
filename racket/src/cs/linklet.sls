@@ -57,7 +57,11 @@
   (define (show what v)
     (when show-on?
       (printf ";; ~a ---------------------\n" what)
-      (pretty-print v))
+      (parameterize ([print-gensym #f]
+                     [print-extended-identifiers #t])
+        (pretty-print (strip-nested-annotations
+                       (remove-annotation-boundary
+                        (convert-to-annotation #f v))))))
     v)
 
   (define (compile-to-bytevector s)
