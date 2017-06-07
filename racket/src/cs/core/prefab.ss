@@ -6,14 +6,14 @@
        (let ([p (getprop (record-type-uid (record-rtd v)) 'prefab-key+count #f)])
          (and p (car p)))))
 
-(define (prefab-key->struct-type key field-count)
+(define/who (prefab-key->struct-type key field-count)
   (prefab-key+count->rtd
-   (cons (normalized-prefab-key/check 'prefab-key->struct-type key field-count)
+   (cons (normalized-prefab-key/check who key field-count)
          field-count)))
 
-(define (make-prefab-struct key . args)
+(define/who (make-prefab-struct key . args)
   (let* ([field-count (length args)]
-         [norm-key (normalized-prefab-key/check 'make-prefab-struct key field-count)])
+         [norm-key (normalized-prefab-key/check who key field-count)])
     (let ([rtd (prefab-key->struct-type key field-count)])
       (apply (record-constructor rtd) args))))
 

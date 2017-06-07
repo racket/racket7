@@ -89,12 +89,7 @@
     (let ([len (bitwise-arithmetic-shift-right (bytevector-length (flvector-bstr flvec)) 3)])
       (check who exact-nonnegative-integer? start)
       (check who exact-nonnegative-integer? end)
-      (unless (and (>= start 0)
-                   (< start len))
-        (raise-range-error who "flvector" "" start flvec 0 len))
-      (unless (and (>= end start)
-                   (< end len))
-        (raise-range-error who "flvector" "" end flvec 0 len start))
+      (check-range who "flvector" flvec start end len)
       (let* ([new-len (bitwise-arithmetic-shift-left (- end start) 3)]
              [bstr (make-bytevector new-len)])
         (bytes-copy! bstr 0 (flvector-bstr flvec) (bitwise-arithmetic-shift-left start 3) new-len)
