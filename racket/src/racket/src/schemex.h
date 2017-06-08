@@ -123,6 +123,7 @@ int (*scheme_flush_managed)(Scheme_Plumber *p, int catch_errors);
 Scheme_Object *(*scheme_add_flush)(Scheme_Plumber *p, Scheme_Object *proc_or_port, int weak_flush);
 void (*scheme_remove_flush)(Scheme_Object *h);
 void (*scheme_add_atexit_closer)(Scheme_Exit_Closer_Func f);
+int (*scheme_atexit)(void (*func)());
 void (*scheme_add_evt)(Scheme_Type type,
 				   Scheme_Ready_Fun ready,
 				   Scheme_Needs_Wakeup_Fun wakeup,
@@ -147,7 +148,7 @@ void (*scheme_push_break_enable)(Scheme_Cont_Frame_Data *cframe, int on, int pre
 void (*scheme_pop_break_enable)(Scheme_Cont_Frame_Data *cframe, int post_check);
 Scheme_Object *(*scheme_abort_continuation_no_dws)(Scheme_Object *pt, Scheme_Object *v);
 Scheme_Object *(*scheme_call_with_composable_no_dws)(Scheme_Object *proc, Scheme_Object *pt);
-Scheme_On_Atomic_Timeout_Proc (*scheme_set_on_atomic_timeout)(Scheme_On_Atomic_Timeout_Proc p);
+Scheme_On_Atomic_Timeout_Proc (*scheme_set_on_atomic_timeout)(Scheme_On_Atomic_Timeout_Proc p, void *data);
 /*========================================================================*/
 /*                              error handling                            */
 /*========================================================================*/
