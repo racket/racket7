@@ -54,10 +54,11 @@
   (define (compiled-position->primitive pos) #f)
 
   (define show-on? (getenv "PLT_LINKLET_SHOW"))
+  (define gensym-on? (getenv "PLT_LINKLET_SHOW_GENSYM"))
   (define (show what v)
     (when show-on?
       (printf ";; ~a ---------------------\n" what)
-      (parameterize ([print-gensym #f]
+      (parameterize ([print-gensym gensym-on?]
                      [print-extended-identifiers #t])
         (pretty-print (strip-nested-annotations
                        (remove-annotation-boundary
