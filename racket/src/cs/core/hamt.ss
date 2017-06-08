@@ -62,13 +62,6 @@
   [nongenerative #{cnode pfwh0bwrq2nqlke97ikru0ds2-0}]
   [sealed #t])
 
-(define-record-type hamt-position
-  [fields (immutable key)
-          (immutable val)
-          (immutable k)]
-  [nongenerative #{hamt-position pfwi3jj8eb89nypikstfpicno-0}]
-  [sealed #t])
-
 (define (make-empty-bnode eqtype)
   (make-bnode eqtype
               0
