@@ -25,7 +25,7 @@
           (rename [break-enabled-key core:break-enabled-key])
           unsafe-abort-current-continuation/no-wind
           unsafe-call-with-composable-continuation/no-wind
-          
+
           with-continuation-mark
           call/cm ; not exported to Racket
           call-with-immediate-continuation-mark
@@ -154,7 +154,7 @@
           impersonator-prop:application-mark
           unsafe-impersonate-procedure
           unsafe-chaperone-procedure
-          
+
           raise-argument-error
           raise-arguments-error
           raise-result-error
@@ -340,7 +340,7 @@
           unsafe-flvector-length
           unsafe-flvector-set!
           unsafe-flvector-ref
-          
+
           correlated?
           correlated-source
           correlated-line
@@ -502,7 +502,7 @@
           unsafe-vector*-set!
           unsafe-vector-length
           unsafe-vector*-length
-          
+
           unsafe-fxvector-length
           unsafe-fxvector-ref
           unsafe-fxvector-set!
@@ -544,7 +544,8 @@
   (include "core/procedure.ss")
   (include "core/object-name.ss")
   (include "core/arity.ss")
-  (include "core/hamt.ss")
+;;  (include "core/hamt.ss")
+  (include "core/patricia.ss")
   (include "core/hash.ss")
   (include "core/lock.ss")
   (include "core/thread-cell.ss")
