@@ -13,7 +13,7 @@
    [global-scheduler
     (void)]
    [else
-    (set! global-scheduler (make-scheduler #f (make-lock)))
+    (set! global-scheduler (make-scheduler #f (make-lock #f)))
     (let ([workers (create-workers)])
       (scheduler-workers-set! global-scheduler workers)
       (start-workers workers))]))
@@ -30,7 +30,7 @@
 
 (define (create-workers)
   (map (lambda (id-1)
-	 (make-worker (+ 1 id-1) #f (make-queue) #t (make-lock) #f))
+	 (make-worker (+ 1 id-1) #f (make-queue) #t (make-lock #f) #f))
        (iota THREAD-COUNT)))
 
 (define (start-workers workers)
