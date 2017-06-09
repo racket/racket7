@@ -1,7 +1,5 @@
 (import (core))
 
-(start-scheduler)
-
 (define f1 (future (lambda ()
 		     (fprintf (current-error-port) "Starting fold-right\n")
 		     (fold-right + 0 (iota 100)))))
@@ -18,5 +16,4 @@
 (touch f2)
 (printf "Got result of f2: won't print too long\n")
 
-(kill-scheduler)
 (exit)
