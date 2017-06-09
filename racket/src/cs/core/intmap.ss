@@ -42,9 +42,11 @@
 
 (define *nothing* (gensym))
 
-(define empty-intmap (make-intmap 'equal #f))
-(define empty-intmapeqv (make-intmap 'eqv #f))
-(define empty-intmapeq (make-intmap 'eq #f))
+(define immutable-hash? intmap?)
+
+(define empty-hash (make-intmap 'equal #f))
+(define empty-hasheqv (make-intmap 'eqv #f))
+(define empty-hasheq (make-intmap 'eq #f))
 
 (define (make-intmap-shell et)
   (make-intmap et #f))
@@ -462,47 +464,3 @@
 
    [else
     #t]))
-
-;; hamt api compat
-(define immutable-hash? intmap?)
-(define hamt? intmap?)
-
-(define empty-hash empty-intmap)
-(define empty-hasheq empty-intmapeq)
-(define empty-hasheqv empty-intmapeqv)
-
-(define hamt-equal? intmap-equal?)
-(define hamt-eqv? intmap-eqv?)
-(define hamt-eq? intmap-eq?)
-
-(define hamt-ref intmap-ref)
-(define hamt-set intmap-set)
-(define hamt-remove intmap-remove)
-
-(define hamt-count intmap-count)
-(define hamt-empty? intmap-empty?)
-
-(define hamt-keys-subset? intmap-keys-subset?)
-
-(define hamt-iterate-first intmap-iterate-first)
-(define hamt-iterate-next intmap-iterate-next)
-(define hamt-iterate-key intmap-iterate-key)
-(define hamt-iterate-value intmap-iterate-value)
-(define hamt-iterate-pair intmap-iterate-pair)
-(define hamt-iterate-key+value intmap-iterate-key+value)
-
-(define unsafe-hamt-iterate-first unsafe-intmap-iterate-first)
-(define unsafe-hamt-iterate-next unsafe-intmap-iterate-next)
-(define unsafe-hamt-iterate-key unsafe-intmap-iterate-key)
-(define unsafe-hamt-iterate-value unsafe-intmap-iterate-value)
-(define unsafe-hamt-iterate-pair unsafe-intmap-iterate-pair)
-(define unsafe-hamt-iterate-key+value unsafe-intmap-iterate-key+value)
-
-(define hamt-for-each intmap-for-each)
-(define hamt-map intmap-map)
-
-(define hamt=? intmap=?)
-(define hamt-hash-code intmap-hash-code)
-
-(define make-hamt-shell make-intmap-shell)
-(define hamt-shell-sync! intmap-shell-sync!)

@@ -105,9 +105,9 @@
                               [(hash-eqv? v) (make-hasheqv)]
                               [else (make-hasheq)]))
                          (cond
-                          [(hash-eq? v) (make-hamt-shell 'eq)]
-                          [(hash-eqv? v) (make-hamt-shell 'eqv)]
-                          [else (make-hamt-shell 'equal)]))])
+                          [(hash-eq? v) (make-intmap-shell 'eq)]
+                          [(hash-eqv? v) (make-intmap-shell 'eqv)]
+                          [else (make-intmap-shell 'equal)]))])
         (hashtable-set! ht v orig-p)
         (let hloop ([p orig-p] [i (hash-iterate-first v)] [diff? #f])
           (cond
@@ -117,7 +117,7 @@
               (cond
                [mutable? orig-p]
                [else
-                (hamt-shell-sync! orig-p p)
+                (intmap-shell-sync! orig-p p)
                 orig-p])]
              [else
               (hashtable-set! ht v v)
@@ -133,14 +133,14 @@
                        (or diff? (not (and (eq? key new-key) (val new-val)))))))])))]
      [(hash-placeholder? v)
       (let* ([orig-p (cond
-                      [(hasheq-placeholder? v) (make-hamt-shell 'eq)]
-                      [(hasheqv-placeholder? v) (make-hamt-shell 'eqv)]
-                      [else (make-hamt-shell 'equal)])])
+                      [(hasheq-placeholder? v) (make-intmap-shell 'eq)]
+                      [(hasheqv-placeholder? v) (make-intmap-shell 'eqv)]
+                      [else (make-intmap-shell 'equal)])])
         (hashtable-set! ht v orig-p)
         (let hloop ([p orig-p] [alst (hash-placeholder-alist v)])
           (cond
            [(null? alst)
-            (hamt-shell-sync! orig-p p)
+            (intmap-shell-sync! orig-p p)
             orig-p]
            [else
             (hloop (hash-set p (loop (caar alst)) (loop (cdar alst)))

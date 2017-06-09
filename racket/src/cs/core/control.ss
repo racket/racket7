@@ -148,7 +148,7 @@
     [(name)
      (check who symbol? name)
      (create-continuation-prompt-tag name)]))
-     
+
 (define (default-continuation-prompt-tag) the-default-continuation-prompt-tag)
 (define (root-continuation-prompt-tag) the-root-continuation-prompt-tag)
 
@@ -217,7 +217,7 @@
 (define (call-in-empty-metacontinuation-frame tag handler proc)
   ;; Call `proc` in an empty metacontinuation frame, reifying the
   ;; current metacontinuation as needed (i.e., if non-empty) as a new
-  ;; frame on `*metacontinuations*`; if the tag is #f and the 
+  ;; frame on `*metacontinuations*`; if the tag is #f and the
   ;; current metacontinuation frame is already empty, don't push more
   (assert-in-uninterrupted)
   (call/cc
@@ -328,7 +328,7 @@
 (define (call-as-non-tail proc)
   (proc)
   '(error 'call-as-non-tail "shouldn't get to frame that was meant to be discarded"))
-  
+
 ;; Make a frame like `current-mf`, but with more of a mark stack appended
 (define (metacontinuation-frame-merge current-mf mark-stack)
   (make-metacontinuation-frame (metacontinuation-frame-tag current-mf)
@@ -350,13 +350,13 @@
   (let ([args (apply-impersonator-abort-wrapper tag args)]
         [tag (strip-impersonator tag)])
     (do-abort-current-continuation tag args #t)))
-  
+
 (define (unsafe-abort-current-continuation/no-wind tag arg)
   (start-uninterrupted 'abort)
   (let ([args (apply-impersonator-abort-wrapper tag (list arg))]
         [tag (strip-impersonator tag)])
     (do-abort-current-continuation tag args #f)))
-  
+
 (define (do-abort-current-continuation tag args wind?)
   (assert-in-uninterrupted)
   (cond
@@ -683,7 +683,7 @@
 (define-record continuation-mark-set (mark-chain traces))
 (define-record mark-stack-frame (prev   ; prev frame
                                  k      ; continuation for this frame
-                                 table  ; hamt mapping keys to values
+                                 table  ; intmap mapping keys to values
                                  flat)) ; #f or cached list that contains only tables and elem+caches
 
 ;; A mark stack is made of marks-stack frames:
@@ -707,9 +707,9 @@
          (begin
            (unless (eq? key none)
              (set-mark-stack-frame-table! *mark-stack*
-                                          (hamt-set/cm-key (mark-stack-frame-table *mark-stack*)
-                                                           key
-                                                           val))
+                                          (intmap-set/cm-key (mark-stack-frame-table *mark-stack*)
+                                                             key
+                                                             val))
              (set-mark-stack-frame-flat! *mark-stack* #f))
            (proc))
          (begin0
@@ -720,7 +720,7 @@
                                           k
                                           (if (eq? key none)
                                               empty-hasheq
-                                              (hamt-set/cm-key empty-hasheq key val))
+                                              (intmap-set/cm-key empty-hasheq key val))
                                           #f))
              (proc)))
           (set! *mark-stack* (mark-stack-frame-prev *mark-stack*))
@@ -754,7 +754,7 @@
         l)])))
 
 (define-record mark-chain-frame (tag marks))
-  
+
 (define (get-current-mark-chain mark-stack mc)
   (cons (make-mark-chain-frame
          #f ; no tag
@@ -802,9 +802,9 @@
         [else
          (call/cc (lambda (k)
                     (if (eq? k (mark-stack-frame-k *mark-stack*))
-                        (proc (let ([v (hamt-ref (mark-stack-frame-table *mark-stack*)
-                                                 key
-                                                 none)])
+                        (proc (let ([v (intmap-ref (mark-stack-frame-table *mark-stack*)
+                                                   key
+                                                   none)])
                                 (if (eq? v none)
                                     default-v
                                     (wrapper v))))
@@ -843,7 +843,7 @@
                                                   ;; elem-stop?:
                                                   (lambda (t) #f)
                                                   ;; elem-ref:
-                                                  hamt-ref
+                                                  intmap-ref
                                                   ;; fail-k:
                                                   (lambda () none)
                                                   ;; strip & combine:
@@ -855,7 +855,7 @@
                                 ;; level should depend on the prompt tag, so make the cache
                                 ;; value another table level mapping the prompt tag to the value:
                                 (lambda (v) (hash-ref v prompt-tag none2))
-                                (lambda (v old) (hamt-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
+                                (lambda (v old) (intmap-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
            (cond
             [(eq? v none)
              ;; More special treatment of built-in keys
@@ -895,7 +895,7 @@
               v])))
         (cond
          [(elem+cache? t)
-          (let ([v (hamt-ref (elem+cache-cache t) key none2)])
+          (let ([v (intmap-ref (elem+cache-cache t) key none2)])
             (cond
              [(eq? v none2)
               ;; No mapping in cache, so try the element and continue:
@@ -928,8 +928,8 @@
                       (make-elem+cache t empty-hasheq))])
       (unless (eq? t new-t)
         (set-car! marks/cache-pos new-t))
-      (let ([old (hamt-ref (elem+cache-cache new-t) key none2)])
-        (set-elem+cache-cache! new-t (hamt-set (elem+cache-cache new-t)
+      (let ([old (intmap-ref (elem+cache-cache new-t) key none2)])
+        (set-elem+cache-cache! new-t (intmap-set (elem+cache-cache new-t)
                                                key
                                                (combine-cache-result v old)))))))
 
@@ -958,7 +958,7 @@
                     [(null? marks)
                      (chain-loop (cdr mark-chain))]
                     [else
-                     (let* ([v (hamt-ref (elem+cache-strip (car marks)) key none)])
+                     (let* ([v (intmap-ref (elem+cache-strip (car marks)) key none)])
                        (if (eq? v none)
                            (loop (cdr marks))
                            (cons (wrapper v) (loop (cdr marks)))))]))]))]))))]))
@@ -1003,7 +1003,7 @@
                                    (cons vec (loop (cdr marks))))
                                  (loop (cdr marks)))]
                             [else
-                             (let ([v (hamt-ref t (car keys) none)])
+                             (let ([v (intmap-ref t (car keys) none)])
                                (cond
                                 [(eq? v none)
                                  (vector-set! tmp i none-v)
@@ -1095,8 +1095,8 @@
       (and (impersonator? v)
            (authentic-continuation-mark-key? (impersonator-val v)))))
 
-;; Like `hamt-set`, but handles continuation-mark-key impersonators
-(define (hamt-set/cm-key ht k v)
+;; Like `intmap-set`, but handles continuation-mark-key impersonators
+(define (intmap-set/cm-key ht k v)
   (cond
    [(and (impersonator? k)
          (authentic-continuation-mark-key? (impersonator-val k)))
@@ -1115,8 +1115,8 @@
        [(impersonator? k)
         (loop (impersonator-next k) v)]
        [else
-        (hamt-set ht k v)]))]
-   [else (hamt-set ht k v)]))
+        (intmap-set ht k v)]))]
+   [else (intmap-set ht k v)]))
 
 ;; Extracts the key and converts the wrapper functions into
 ;; a single function:

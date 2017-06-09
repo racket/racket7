@@ -545,7 +545,7 @@
   (include "core/object-name.ss")
   (include "core/arity.ss")
 ;;  (include "core/hamt.ss")
-  (include "core/patricia.ss")
+  (include "core/intmap.ss")
   (include "core/hash.ss")
   (include "core/lock.ss")
   (include "core/thread-cell.ss")

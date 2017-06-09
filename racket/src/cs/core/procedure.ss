@@ -265,7 +265,7 @@
            (procedure-impersonator*? (impersonator-next v)))))
 
 (define (call-with-application-mark props k)
-  (let ([mark (hamt-ref props impersonator-prop:application-mark #f)])
+  (let ([mark (intmap-ref props impersonator-prop:application-mark #f)])
     (cond
      [(pair? mark)
       (call-with-immediate-continuation-mark
@@ -277,7 +277,7 @@
        none)]
      [else
       (k #f #f #f)])))
-               
+
 (define (impersonate-apply proc . args)
   (let ([n (length args)])
     (cond
@@ -450,7 +450,7 @@
      "  expected: " (number->string expected-n) " or more\n"
      "  received: " (number->string got-n))
     (current-continuation-marks))))
-  
+
 ;; ----------------------------------------
 
 (define-record unsafe-procedure-impersonator impersonator (replace-proc))
