@@ -3,9 +3,12 @@
   (fields id would-be? (mutable thunk) (mutable engine) (mutable result) (mutable done?) cond lock))
 
 (define ID 1) ;; this actually needs a lock.
+(define id-lock (make-lock #f))
 (define (get-next-id)
+  (lock-acquire id-lock)
   (let ([id ID])
     (set! ID (+ 1 id))
+    (lock-release id-lock)
     id))
 
 (define (thunk-wrapper f thunk)
@@ -21,7 +24,7 @@
   (unless (scheduler-running?)
 	  (start-scheduler))
 
-  (let* ([f (make-future (get-next-id) #f (void) (void) (void) #f (make-condition) (make-lock))]
+  (let* ([f (make-future (get-next-id) #f (void) (void) (void) #f (make-condition) (make-lock #f))]
 	 [th (thunk-wrapper f thunk)])
     (future*-engine-set! f (make-engine th #f #t))
     (fprintf (current-error-port) "About to schedule a future\n")
@@ -30,7 +33,7 @@
     f))
 
 (define (would-be-future thunk)
-  (let* ([f (make-future (get-next-id) #t (void) (void) (void) #f (make-condition) (make-lock))]
+  (let* ([f (make-future (get-next-id) #t (void) (void) (void) #f (make-condition) (make-lock #f))]
 	 [th (thunk-wrapper f thunk)])
     (future*-thunk-set! f th)
     f))

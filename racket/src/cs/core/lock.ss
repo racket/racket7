@@ -22,11 +22,18 @@
     (and (eq? for-kind 'equal?)
          (make-scheduler-lock)))
 
-  (define (lock-acquire lock)
-    (when lock
-      ;; Thread layer sets this callback to wait
-      ;; on a semaphore:
-      (scheduler-lock-acquire lock)))
+  (define lock-acquire 
+    (case-lambda ;; so it matches the one below
+     [(lock)
+      (when lock
+	    ;; Thread layer sets this callback to wait
+	    ;; on a semaphore:
+	    (scheduler-lock-acquire lock))]
+     [(lock _)
+      (when lock
+	    ;; Thread layer sets this callback to wait
+	    ;; on a semaphore:
+	    (scheduler-lock-acquire lock))]))
 
   (define (lock-release lock)
     (when lock
@@ -53,7 +60,7 @@
         (make-scheduler-lock)
         (make-mutex)))
 
-  (define (lock-acquire lock)
+  (define lock-acquire
     (case-lambda
      [(lock)
       (if (mutex? lock)
@@ -63,7 +70,7 @@
       (if (mutex? lock)
 	  (mutex-acquire lock block?)
 	  (scheduler-lock-acquire lock))]))
-
+  
   (define (lock-release lock)
     (if (mutex? lock)
         (mutex-release lock)
