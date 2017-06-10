@@ -532,6 +532,7 @@
   (define none (chez:gensym "none"))
   (define none2 (chez:gensym "none2"))
 
+  (include "core/syntax-rule.ss")
   (include "core/check.ss")
   (include "core/constant.ss")
   (include "core/hash-code.ss")
@@ -544,7 +545,6 @@
   (include "core/procedure.ss")
   (include "core/object-name.ss")
   (include "core/arity.ss")
-;;  (include "core/hamt.ss")
   (include "core/intmap.ss")
   (include "core/hash.ss")
   (include "core/lock.ss")

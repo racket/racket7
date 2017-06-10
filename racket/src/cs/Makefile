@@ -168,6 +168,7 @@ foreign-demo: core.so
 	$(SCHEME) chezpart.so core.so demo/foreign.ss
 
 CORE_SRCS = core/check.ss \
+	    core/syntax-rule.ss \
             core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \
@@ -177,7 +178,7 @@ CORE_SRCS = core/check.ss \
             core/equal.ss \
             core/object-name.ss \
             core/arity.ss \
-            core/hamt.ss \
+            core/intmap.ss \
             core/hash.ss \
 	    core/lock.ss \
             core/thread-cell.ss \

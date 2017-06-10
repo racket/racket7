@@ -33,13 +33,6 @@
   [nongenerative #{Co pfwguidjcvqbvofiirp097jco-3}]
   [sealed #t])
 
-(define-syntax define-syntax-rule
-  (syntax-rules ()
-    [(_ (name arg ...) e ...)
-     (define-syntax name
-       (syntax-rules ()
-         [(_ arg ...) e ...]))]))
-
 (define *nothing* (gensym))
 
 (define immutable-hash? intmap?)
