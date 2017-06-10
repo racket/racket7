@@ -16,7 +16,7 @@
       (let dloop ([p (car args)] [v (cadr args)])
         (if (derived-parameter? p)
             (dloop (derived-parameter-next p) ((derived-parameter-guard p) v))
-            (loop (hamt-set ht p (make-thread-cell v #t))
+            (loop (intmap-set ht p (make-thread-cell v #t))
                   (cddr args))))]
      [(parameter? (car args))
       (raise-arguments-error 'extend-parameterization
@@ -24,7 +24,7 @@
                              "parameter" (car args))]
      [else
       (raise-argument-error 'extend-parameterization "parameter?" (car args))])))
-     
+
 (define (current-parameterization)
   (continuation-mark-set-first
    #f
@@ -33,10 +33,10 @@
    the-root-continuation-prompt-tag))
 
 (define (parameter-cell key)
-  (hamt-ref (parameterization-ht
-             (current-parameterization))
-            key
-            #f))
+  (intmap-ref (parameterization-ht
+               (current-parameterization))
+              key
+              #f))
 
 (define-record-type (parameter create-parameter parameter?)
   (fields proc))
@@ -54,7 +54,7 @@
        (define self
          (create-parameter
           (case-lambda
-           [() 
+           [()
             (let ([c (or (parameter-cell self)
                          default-c)])
               (thread-cell-ref c))]
