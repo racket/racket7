@@ -110,21 +110,16 @@
 ;; ----------------------------------------
 
 ;;(define *metacontinuation* '())
-(define *metacontinuation* (if (threaded?)
-			       (chez:make-thread-parameter '())
-			       (chez:make-parameter '())))
+(define *metacontinuation* (internal-make-thread-parameter '()))
+
 ;;(define *empty-k* #f)
-(define *empty-k* (if (threaded?)
-		      (chez:make-thread-parameter #f)
-		      (chez:make-parameter #f)))
+(define *empty-k* (internal-make-thread-parameter #f))
 
 ;; A *cc-guard* callback can is installed by the
 ;; application of a non-composable continuation
 ;; with an impersonated prompt tag.
 ;;(define *cc-guard* values)
-(define *cc-guard* (if (threaded?)
-		       (chez:make-thread-parameter values)
-		       (chez:make-parameter values)))
+(define *cc-guard* (internal-make-thread-parameter values))
 
 (define-record metacontinuation-frame (tag          ; continuation prompt tag or #f
                                        resume-k     ; delivers values to the prompt
@@ -697,9 +692,7 @@
 
 ;; A mark stack is made of marks-stack frames:
 ;;(define *mark-stack* #f)
-(define *mark-stack* (if (threaded?)
-			 (chez:make-thread-parameter #f)
-			 (chez:make-parameter #f)))
+(define *mark-stack* (internal-make-thread-parameter #f))
 
 (define ($current-mark-stack) (*mark-stack*))
 
