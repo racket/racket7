@@ -9,9 +9,7 @@
 
 (define-record engine-state (mc complete expire thread-cell-values init-break-enabled-cell reset-handler))
 
-(define current-engine-state (if (threaded?)
-				 (chez:make-thread-parameter #f)
-				 (chez:make-parameter #f)))
+(define current-engine-state (internal-make-thread-parameter #f))
 
 (define (set-ctl-c-handler! proc)
   (keyboard-interrupt-handler proc))

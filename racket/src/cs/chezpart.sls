@@ -35,7 +35,7 @@
                            random random-seed
                            box? unbox set-box!)
                    [make-parameter chez:make-parameter]
-		   [make-thread-parameter chez:make-thread-parameter]
+
                    [void chez:void]
                    [date-second chez:date-second]
                    [date-minute chez:date-minute]

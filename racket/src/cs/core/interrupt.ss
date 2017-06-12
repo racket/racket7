@@ -5,13 +5,10 @@
 ;; level, but cheaper and more limited.
 
 ;;(define in-uninterrupted? #f)
-(define in-uninterrupted? (if (threaded?)
-			      (chez:make-thread-parameter #f)
-			      (chez:make-parameter #f)))
+(define in-uninterrupted? (internal-make-thread-parameter #f))
+
 ;;(define pending-interrupt-callback #f)
-(define pending-interrupt-callback (if (threaded?)
-				       (chez:make-thread-parameter #f)
-				       (chez:make-parameter #f)))
+(define pending-interrupt-callback (internal-make-thread-parameter #f))
 
 (define-syntax CHECK-uninterrupted
   (syntax-rules ()
