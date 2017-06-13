@@ -14,7 +14,6 @@
 (define-record-type (future* make-future future?)
     (fields id would-be? (mutable thunk) (mutable engine) 
 	    (mutable result) (mutable done?) cond lock))
-
 ;; future? defined by record.
 
 (define (futures-enabled?)
@@ -62,6 +61,8 @@ racket currently does in C.
      [(future*-would-be? f)
       ((future*-thunk f))
       (future*-result f)]
+     [(future? (current-future)) ;; are we running in a future?
+      (touch-in-future f)]
      [(future*-done? f)
       (future*-result f)]
      [(lock-acquire (future*-lock f) #f)
@@ -71,6 +72,13 @@ racket currently does in C.
 	result)] ;; acquired 
      [else
       (touch f)])) ;; not acquired. might be writing result now.
+
+  (define (touch-in-future f)
+    (cond
+     [(future*-done? f)
+      (future*-result f)]
+     [else
+      (touch-in-future f)]))
   ]
  [else
   ;; not threaded
