@@ -4,8 +4,7 @@
 ;; as disabling and enabling interrupts at the Chez
 ;; level, but cheaper and more limited.
 
-;;(define in-uninterrupted? #f)
-(define in-uninterrupted? (internal-make-thread-parameter #f))
+(define current-in-uninterrupted (internal-make-thread-parameter #f))
 
 ;;(define pending-interrupt-callback #f)
 (define pending-interrupt-callback (internal-make-thread-parameter #f))
@@ -16,15 +15,15 @@
 
 (define (start-uninterrupted who)
   (CHECK-uninterrupted
-   (when (in-uninterrupted?)
+   (when (current-in-uninterrupted)
      (internal-error 'start-uninterrupted (format "~a: already started" who))))
-  (in-uninterrupted? #t))
+  (current-in-uninterrupted #t))
 
 (define (end-uninterrupted who)
   (CHECK-uninterrupted
-   (unless (in-uninterrupted?)
+   (unless (current-in-uninterrupted)
      (internal-error 'end-uninterrupted (format "~a: not started" who))))
-  (in-uninterrupted? #f)
+  (current-in-uninterrupted #f)
   (when (pending-interrupt-callback)
     (pariah
      (let ([callback (pending-interrupt-callback)])
@@ -33,12 +32,12 @@
 
 (define (assert-in-uninterrupted)
   (CHECK-uninterrupted
-   (unless (in-uninterrupted?)
+   (unless (current-in-uninterrupted)
      (internal-error 'assert-in-uninterrupted "assertion failed"))))
 
 (define (assert-not-in-uninterrupted)
   (CHECK-uninterrupted
-   (when (in-uninterrupted?)
+   (when (current-in-uninterrupted)
      (internal-error 'assert-not-in-uninterrupted "assertion failed"))))
 
 ;; An implicit context is when a relevant interrupt can't happen, but
@@ -46,15 +45,15 @@
 
 (define (start-implicit-uninterrupted who)
   (CHECK-uninterrupted
-   (when (in-uninterrupted?)
+   (when (current-in-uninterrupted)
      (internal-error 'start-implicit-uninterrupted "already started"))
-   (in-uninterrupted? #t)))
+   (current-in-uninterrupted #t)))
 
 (define (end-implicit-uninterrupted who)
   (CHECK-uninterrupted
-   (unless (in-uninterrupted?)
+   (unless (current-in-uninterrupted)
      (internal-error 'end-implicit-uninterrupted "not started"))
-   (in-uninterrupted? #f)))
+   (current-in-uninterrupted #f)))
 
 (define (internal-error who s)
   (CHECK-uninterrupted

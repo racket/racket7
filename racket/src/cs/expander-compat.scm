@@ -565,5 +565,4 @@
    fsemaphore-post
    fsemaphore-wait
    fsemaphore-try-wait?
-   fsemaphore-count
-))
+   fsemaphore-count))

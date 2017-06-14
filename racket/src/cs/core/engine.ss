@@ -50,7 +50,7 @@
 
 (define (engine-block-via-timer)
   (cond
-   [(in-uninterrupted?)
+   [(current-in-uninterrupted)
     (pending-interrupt-callback engine-block)]
    [else
     (engine-block)]))
@@ -78,7 +78,6 @@
           (engine-state-init-break-enabled-cell es))))))))
 
 (define (engine-return . args)
-  (when (in-uninterrupted?) (chez:fprintf (current-error-port) "HERE ~s\n" args))
   (assert-not-in-uninterrupted)
   (timer-interrupt-handler void)
   (let ([es (current-engine-state)])

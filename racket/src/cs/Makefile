@@ -222,10 +222,10 @@ CORE_SRCS = core/check.ss \
             core/network.ss \
             core/place.ss \
             core/foreign.ss \
-	    core/future.ss \
-	    core/fsemaphore.ss \
-	    core/queue.ss \
-	    core/future-scheduler.ss
+            core/future.ss \
+            core/fsemaphore.ss \
+            core/queue.ss \
+            core/future-scheduler.ss
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
 	$(COMP) $(CORE_UNSAFE_COMP) '(compile-file "core.sls")' | $(SCHEME) -q
