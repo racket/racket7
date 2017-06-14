@@ -178,6 +178,7 @@ engine-test: core.so
 
 CORE_SRCS = core/check.ss \
 	    core/syntax-rule.ss \
+	    core/thread-parameter.ss \
             core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \

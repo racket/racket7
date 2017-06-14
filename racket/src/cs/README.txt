@@ -136,6 +136,12 @@ Dumping linklets and schemified linklets:
  passed on to Chez Scheme.
 
 
+Development mode:
+
+ If you make changes to file in "core", you should turn off
+ `[CORE_]UNSAFE_COMP` in the makefile.
+
+
 Status and thoughts on various Racket subsystems:
 
  * Applicable structs work by adding an indirection to each function

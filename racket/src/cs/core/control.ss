@@ -1027,7 +1027,7 @@
       (lambda (k)
         (make-continuation-mark-set (prune-mark-chain-suffix (strip-impersonator tag) (current-mark-chain))
                                     (cons (continuation->trace k)
-                                          (get-metacontinuation-traces current-metacontinuation)))))]))
+                                          (get-metacontinuation-traces (current-metacontinuation))))))]))
 
 (define/who continuation-marks
   (case-lambda

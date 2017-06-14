@@ -546,6 +546,7 @@
   (define none2 (chez:gensym "none2"))
 
   (include "core/syntax-rule.ss")
+  (include "core/thread-parameter.ss")
   (include "core/check.ss")
   (include "core/constant.ss")
   (include "core/hash-code.ss")

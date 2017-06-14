@@ -24,7 +24,7 @@ Can call out to C in chez, so maybe can just duplicate what
 racket currently does in C.
 |#
 (define (processor-count)
-  0)
+  1)
 
 (define current-future (internal-make-thread-parameter #f))
 
