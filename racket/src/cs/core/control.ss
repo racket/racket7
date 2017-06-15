@@ -107,8 +107,6 @@
 ;; `end-uninterrupted` functions bracket such regions dynamically. See
 ;; also "core-engine.ss" and "core-interrupt.ss"
 
-;; ----------------------------------------
-
 (define current-metacontinuation (internal-make-thread-parameter '()))
 
 (define current-empty-k (internal-make-thread-parameter #f))
@@ -172,6 +170,27 @@
             #t]
            [else (loop (cdr mc))])))))
 
+(define/who (maybe-future-barricade tag)
+  (when (future? (current-future)) ;; running in a future
+	(check who continuation-prompt-tag? tag)
+	(let ([fp (strip-impersonator (current-future-prompt))]
+	      [tag (strip-impersonator tag)])
+	  (cond
+	   [(eq? tag the-root-continuation-prompt-tag)
+	    (block)]
+	   [else
+	    (let loop ([mc (current-metacontinuation)])
+	      (cond
+	       [(null? mc) ;; I don't think this should ever happen.
+		(block)] ;; not sure
+	       [(eq? tag (metacontinuation-frame-tag (car mc))) ;; found tag
+		(void)]
+	       [(eq? (metacontinuation-frame-tag (car mc)) fp) ;; tag must be above future prompt.
+		(block)]
+	       [else
+		(loop (cdr mc))]))]))))
+
+;; Should this need to ever block? Does it use the "current-continuation"? doesnt seem to.
 (define/who call-with-continuation-prompt
   (case-lambda
     [(proc) (call-with-continuation-prompt proc the-default-continuation-prompt-tag #f)]
@@ -346,6 +365,7 @@
 
 (define/who (abort-current-continuation tag . args)
   (check who continuation-prompt-tag? tag)
+  (maybe-future-barricade tag)
   (check-prompt-tag-available 'abort-current-continuation (strip-impersonator tag))
   (start-uninterrupted 'abort)
   (let ([args (apply-impersonator-abort-wrapper tag args)]
@@ -401,6 +421,7 @@
     [(proc tag)
      (check who (procedure-arity-includes/c 1) proc)
      (check who continuation-prompt-tag? tag)
+     (maybe-future-barricade tag)
      (call-with-end-uninterrupted
       (lambda ()
         (call/cc
@@ -420,6 +441,7 @@
     [(p tag)
      (check who (procedure-arity-includes/c 1) p)
      (check who continuation-prompt-tag? tag)
+     (maybe-future-barricade tag)
      (call-with-composable-continuation* p tag #t)]))
 
 (define (call-with-composable-continuation* p tag wind?)
@@ -827,61 +849,62 @@
 
 (define/who continuation-mark-set-first
   (case-lambda
-    [(marks key) (continuation-mark-set-first marks key #f)]
-    [(marks key none-v)
-     (continuation-mark-set-first marks key none-v
-                                  ;; Treat `break-enabled-key` and `parameterization-key`, specially
-                                  ;; so that things like `current-break-parameterization` work without
-                                  ;; referencing the root continuation prompt tag
-                                  (if (or (eq? key break-enabled-key)
-                                          (eq? key parameterization-key))
-                                      the-root-continuation-prompt-tag
+   [(marks key) (continuation-mark-set-first marks key #f)]
+   [(marks key none-v)
+    (continuation-mark-set-first marks key none-v
+				 ;; Treat `break-enabled-key` and `parameterization-key`, specially
+				 ;; so that things like `current-break-parameterization` work without
+				 ;; referencing the root continuation prompt tag
+				 (if (or (eq? key break-enabled-key)
+					 (eq? key parameterization-key))
+				     the-root-continuation-prompt-tag
                                       the-default-continuation-prompt-tag))]
-    [(marks key none-v prompt-tag)
-     (check who continuation-mark-set? :or-false marks)
-     (check who continuation-prompt-tag? prompt-tag)
-     (let ([prompt-tag (strip-impersonator prompt-tag)])
-       (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set-first key)])
-         (let ([v (marks-search (or (and marks
-                                         (continuation-mark-set-mark-chain marks))
-                                    (current-mark-chain))
-                                key
-                                ;; elem-stop?:
-                                (lambda (mcf)
-                                  (eq? (mark-chain-frame-tag mcf) prompt-tag))
-                                ;; elem-ref:
-                                (lambda (mcf key none)
-                                  ;; Search within a metacontinuation frame
-                                  (let ([marks (mark-chain-frame-marks mcf)])
-                                    (marks-search marks
-                                                  key
-                                                  ;; elem-stop?:
-                                                  (lambda (t) #f)
-                                                  ;; elem-ref:
-                                                  intmap-ref
-                                                  ;; fail-k:
-                                                  (lambda () none)
-                                                  ;; strip & combine:
-                                                  (lambda (v) v)
-                                                  (lambda (v old) v))))
-                                ;; fail-k:
-                                (lambda () none)
-                                ;; strip & combine --- cache results at the metafunction
-                                ;; level should depend on the prompt tag, so make the cache
-                                ;; value another table level mapping the prompt tag to the value:
-                                (lambda (v) (hash-ref v prompt-tag none2))
-                                (lambda (v old) (intmap-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
-           (cond
-            [(eq? v none)
-             ;; More special treatment of built-in keys
-             (cond
-              [(eq? key parameterization-key)
-               empty-parameterization]
-              [(eq? key break-enabled-key)
-               (current-engine-init-break-enabled-cell none-v)]
-              [else
-               none-v])]
-            [else (wrapper v)]))))]))
+   [(marks key none-v prompt-tag)
+    (check who continuation-mark-set? :or-false marks)
+    (check who continuation-prompt-tag? prompt-tag)
+    (maybe-future-barricade prompt-tag)
+    (let ([prompt-tag (strip-impersonator prompt-tag)])
+      (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set-first key)])
+	(let ([v (marks-search (or (and marks
+					(continuation-mark-set-mark-chain marks))
+				   (current-mark-chain)) ;; because of this.
+			       key
+			       ;; elem-stop?:
+			       (lambda (mcf)
+				 (eq? (mark-chain-frame-tag mcf) prompt-tag))
+			       ;; elem-ref:
+			       (lambda (mcf key none)
+				 ;; Search within a metacontinuation frame
+				 (let ([marks (mark-chain-frame-marks mcf)])
+				   (marks-search marks
+						 key
+						 ;; elem-stop?:
+						 (lambda (t) #f)
+						 ;; elem-ref:
+						 intmap-ref
+						 ;; fail-k:
+						 (lambda () none)
+						 ;; strip & combine:
+						 (lambda (v) v)
+						 (lambda (v old) v))))
+			       ;; fail-k:
+			       (lambda () none)
+			       ;; strip & combine --- cache results at the metafunction
+			       ;; level should depend on the prompt tag, so make the cache
+			       ;; value another table level mapping the prompt tag to the value:
+			       (lambda (v) (hash-ref v prompt-tag none2))
+			       (lambda (v old) (intmap-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
+	  (cond
+	   [(eq? v none)
+	    ;; More special treatment of built-in keys
+	    (cond
+	     [(eq? key parameterization-key)
+	      empty-parameterization]
+	     [(eq? key break-enabled-key)
+	      (current-engine-init-break-enabled-cell none-v)]
+	     [else
+	      none-v])]
+	   [else (wrapper v)]))))]))
 
 ;; To make `continuation-mark-set-first` constant-time, if we traverse
 ;; N elements to get an answer, then cache the answer at N/2 elements.
@@ -954,6 +977,7 @@
     [(marks key prompt-tag)
      (check who continuation-mark-set? :or-false marks)
      (check who continuation-prompt-tag? prompt-tag)
+     (maybe-future-barricade prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
        (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list key)])
          (let chain-loop ([mark-chain (or (and marks
@@ -986,6 +1010,7 @@
      (check who continuation-mark-set? :or-false marks)
      (check who list? keys)
      (check who continuation-prompt-tag? prompt-tag)
+     (maybe-future-barricade prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
        (let-values ([(keys wrappers) (map/2-values (lambda (k)
                                                      (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list* k))
@@ -1036,6 +1061,7 @@
     [() (current-continuation-marks the-default-continuation-prompt-tag)]
     [(tag)
      (check who continuation-prompt-tag? tag)
+     (maybe-future-barricade tag)
      (call/cc
       (lambda (k)
         (make-continuation-mark-set (prune-mark-chain-suffix (strip-impersonator tag) (current-mark-chain))
@@ -1048,6 +1074,7 @@
     [(k tag)
      (check who continuation? :or-false k)
      (check who continuation-prompt-tag? tag)
+     (maybe-future-barricade tag)
      (let ([tag (strip-impersonator tag)])
        (cond
         [(full-continuation? k)

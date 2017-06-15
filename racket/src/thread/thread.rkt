@@ -57,7 +57,10 @@
          thread-receive
          thread-try-receive
          thread-rewind-receive
-         thread-receive-evt)
+         thread-receive-evt
+
+         thread-condition-awaken
+         thread-condition-wait)
 
 ;; Exports needed by "schedule.rkt":
 (module* scheduling #f
@@ -110,7 +113,9 @@
                      [mailbox #:mutable] ; a queue of messages from `thread-send`
                      [mailbox-wakeup #:mutable] ; callback to trigger (in atomic mode) on `thread-send`
 
-                     [cpu-time #:mutable]) ; accumulates CPU time in milliseconds
+                     [cpu-time #:mutable] ; accumulates CPU time in milliseconds
+                     
+                     [condition-wakeup #:mutable])
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t i-cb r-cb) (thread-deschedule! t #f i-cb r-cb))
@@ -171,7 +176,10 @@
                     (make-queue) ; mailbox
                     void ; mailbox-wakeup
 
-                    0)) ; cpu-time
+                    0 ; cpu-time
+
+                    void ; condition-wakeup
+                    )) 
   ((atomically
     (define cref (unsafe-custodian-register c t remove-thread-custodian #f #t))
     (cond
@@ -836,6 +844,33 @@
        fail-thunk]
       [else
        (lambda () #f)]))))
+
+(define/who (thread-condition-awaken thd)
+  (check who thread? thd)
+  ((atomically
+    (cond
+      [(not (thread-dead? thd))
+       (define wakeup (thread-condition-wakeup thd))
+       (set-thread-condition-wakeup! thd void)
+       wakeup] ;; should be called outside of atomic mode?
+      [else
+       (lambda () #f)]))))
+
+(define (thread-condition-wait lock-release)
+  ((atomically
+    (define t (current-thread))
+    (set-thread-condition-wakeup! t (sandman-condition-wait t))
+    (lock-release)
+    (define do-yield
+      (thread-deschedule! t
+                          #f
+                          void
+                          (lambda ()
+                            ;; try again?
+                            (do-yield))
+                          ))
+    (lambda ()
+      (do-yield)))))
 
 (define (thread-receive)
   ((atomically

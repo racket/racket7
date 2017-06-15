@@ -46,6 +46,7 @@
           make-engine
           engine-block
           engine-return
+	  current-engine-state
           set-ctl-c-handler! ; not exported to Racket
           get-ctl-c-handler  ; not exported to Racket
           set-scheduler-lock-callbacks! ; not exported to Racket
@@ -566,20 +567,27 @@
           unsafe-f80vector-set!
           unsafe-f80vector-ref
 
-	  ;; future scheduler functions
-
-	  future
-	  touch
-	  future?
-	  futures-enabled?
-	  current-future
-	  would-be-future
-	  processor-count
-	  )	  
+	  ;; pthread things. not exported to racket
+	  internal-make-thread-parameter
+	  fork-pthread
+	  pthread?
+	  get-thread-id
+	  make-condition
+	  condition-wait
+	  condition-signal
+	  condition-broadcast
+	  make-mutex
+	  mutex-acquire
+	  mutex-release
+	  threaded?
+	  set-future-callbacks!)	  
   (import (chezpart)
 	  (rename (only (chezscheme) sleep)
 		  (sleep chez:sleep))
 	  (only (chezscheme)
+	  	thread?
+		threaded?
+		get-thread-id
                 format
                 fprintf
                 current-error-port
@@ -595,7 +603,6 @@
   (define none2 (chez:gensym "none2"))
 
   (include "core/syntax-rule.ss")
-  (include "core/thread-parameter.ss")
   (include "core/check.ss")
   (include "core/constant.ss")
   (include "core/hash-code.ss")
@@ -610,9 +617,9 @@
   (include "core/arity.ss")
   (include "core/intmap.ss")
   (include "core/hash.ss")
-  (include "core/lock.ss")
   (include "core/thread-cell.ss")
   (include "core/begin0.ss")
+  (include "core/pthread.ss")
   (include "core/control.ss")
   (include "core/interrupt.ss")
   (include "core/parameter.ss")
@@ -641,11 +648,12 @@
   (include "core/extfl.ss")
   (include "core/place.ss")
   (include "core/foreign.ss")
-  (include "core/future.ss")	
-  (include "core/queue.ss")
-  (include "core/future-scheduler.ss")
+  (include "core/lock.ss")
+  (include "core/future.ss")
   
   (set-no-locate-source!)
+  ;; with this below line enabled, errors may be triggered again
+  ;; by the exception handler which then causes an infinite loop
   (set-base-exception-handler!)
   (set-collect-handler!)
   (set-primitive-applicables!)
@@ -657,4 +665,7 @@
   (set-impersonator-hash!)
   (set-procedure-impersonator-hash!)
   (set-vector-impersonator-hash!)
-  (set-box-impersonator-hash!))
+  (set-box-impersonator-hash!))		
+
+
+  

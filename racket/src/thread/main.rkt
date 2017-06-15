@@ -21,7 +21,8 @@
          "plumber.rkt"
          "unsafe.rkt"
          "instance.rkt"
-         "time.rkt")
+         "time.rkt"
+         "future.rkt")
 
 (provide call-in-main-thread
          
@@ -135,6 +136,17 @@
          unsafe-make-custodian-at-root
          unsafe-custodian-register
          unsafe-custodian-unregister
+
+         ;;futures
+         futures-enabled?
+         processor-count
+         future
+         future?
+         touch
+         would-be-future
+         current-future
+         future-block
+         current-future-prompt
 
          #%thread-instance)
 

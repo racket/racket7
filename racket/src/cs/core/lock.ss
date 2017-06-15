@@ -54,24 +54,35 @@
 
   (define (create-mcs-spinlock) (make-mcs-spinlock #f #f))
   |#
+  
+  ;; create own atomic region. TODO
 
   (define (make-lock for-kind)
-    (if (eq? for-kind 'equal?)
-        (make-scheduler-lock)
-        (make-mutex)))
+    (cond
+     [(eq? for-kind 'equal?)
+        (make-scheduler-lock)]
+     [else
+      (make-mutex)]))
 
   (define lock-acquire
     (case-lambda
      [(lock)
-      (if (mutex? lock)
-	  (mutex-acquire lock)
-	  (scheduler-lock-acquire lock))]
+      (cond
+       [(mutex? lock)
+	(mutex-acquire lock)]
+       [else
+	(scheduler-lock-acquire lock)])]
      [(lock block?)
-      (if (mutex? lock)
-	  (mutex-acquire lock block?)
-	  (scheduler-lock-acquire lock))]))
+      (cond
+       [(mutex? lock)
+	(mutex-acquire lock block?)]
+       [else
+	(scheduler-lock-acquire lock)])]))
   
   (define (lock-release lock)
-    (if (mutex? lock)
-        (mutex-release lock)
-        (scheduler-lock-release lock)))])
+    (cond
+     [(mutex? lock)
+      (mutex-release lock)]
+     [else
+      (scheduler-lock-release lock)]))
+])

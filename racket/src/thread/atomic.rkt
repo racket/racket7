@@ -1,5 +1,8 @@
 #lang racket/base
 
+(require "engine.rkt"
+         "internal-error.rkt")
+
 (provide atomically
          current-atomic
 
@@ -8,11 +11,7 @@
 
          set-end-atomic-callback!)
 
-(define atomic 0)
-(define current-atomic
-  (case-lambda
-    [() atomic]
-    [(v) (set! atomic v)]))
+(define current-atomic (internal-make-thread-parameter 0))
 
 (define-syntax-rule (atomically expr ...)
   (begin

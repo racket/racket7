@@ -40,7 +40,8 @@
   (case-lambda
    [() (collect-garbage 'major)]
    [(request)
-    (case request
+    (void)
+    #;(case request
       [(incremental) (void)]
       [(minor)
        (collect/report 0)]

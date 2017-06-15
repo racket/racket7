@@ -6,6 +6,7 @@
   (import (chezscheme))
   (export (import
            (rename (except (chezscheme)
+	   	   	   remove
                            sort
                            force delay identifier?
                            output-port-buffer-mode
@@ -32,9 +33,10 @@
                            vector? mutable-vector? vector-length vector-ref vector-set!
                            vector-copy vector-fill! vector->immutable-vector vector->list
                            random random-seed
-                           box? unbox set-box!)
+                           box? unbox set-box!
+			   get-thread-id
+			   threaded?)
                    [make-parameter chez:make-parameter]
-
                    [void chez:void]
                    [date-second chez:date-second]
                    [date-minute chez:date-minute]

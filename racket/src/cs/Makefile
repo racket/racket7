@@ -197,7 +197,6 @@ engine-test: core.so
 
 CORE_SRCS = core/check.ss \
 	    core/syntax-rule.ss \
-	    core/thread-parameter.ss \
             core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \
@@ -213,6 +212,7 @@ CORE_SRCS = core/check.ss \
             core/thread-cell.ss \
             core/parameter.ss \
             core/begin0.ss \
+	    core/pthread.ss \
             core/control.ss \
             core/interrupt.ss \
             core/engine.ss \
@@ -242,10 +242,7 @@ CORE_SRCS = core/check.ss \
             core/extfl.ss \
             core/place.ss \
             core/foreign.ss \
-            core/future.ss \
-            core/fsemaphore.ss \
-            core/queue.ss \
-            core/future-scheduler.ss
+            core/future.ss
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
 	$(COMP) $(CORE_UNSAFE_COMP) '(compile-file "core.sls")' | $(SCHEME) -q

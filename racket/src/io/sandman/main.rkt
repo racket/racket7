@@ -31,9 +31,25 @@
                                 (sandman-add-poll-set-adder
                                  (schedule-info-current-exts sched-info)
                                  adder))))
+
+(define (make-lock)
+  (box 0))
+
+(define (lock-acquire box)
+  (let loop ()
+    (unless (and (= 0 (unbox box)) (box-cas! box 0 1))
+      (loop))))
+
+(define (lock-release box)
+  (unless (box-cas! box 1 0)
+    (internal-error "Failed to release lock\n")))
+
 (void
  (current-sandman
-  (let ([timeout-sandman (current-sandman)])
+  (let ([timeout-sandman (current-sandman)]
+        [lock (make-lock)]
+        [waiting-threads '()]
+        [awoken-threads '()])
     (sandman
      ;; sleep
      (lambda (exts)
@@ -117,4 +133,37 @@
      
      ;; extract-timeout
      (lambda (exts)
-       (exts-timeout-at exts))))))
+       (exts-timeout-at exts))
+
+     ;; condition-wait
+     (lambda (t)
+       (lock-acquire lock)
+       (set! waiting-threads (cons t waiting-threads))
+       (lock-release lock)
+       ;; awoken callback. for when thread is awoken
+       (lambda ()
+         (lock-acquire lock)
+         (if (memq t waiting-threads)
+             (begin
+               (set! waiting-threads (remove t waiting-threads eq?))
+               (set! awoken-threads (cons t awoken-threads))
+               (rktio_signal_received_at (rktio_get_signal_handle rktio))) ;; wakeup main thread if sleeping
+             (internal-error "thread is not a member of waiting-threads\n"))
+         (lock-release lock)))
+
+     ;; condition-poll
+     (lambda (mode wakeup)
+       (lock-acquire lock)
+       (define at awoken-threads)
+       (set! awoken-threads '())
+       (lock-release lock)
+       (for-each (lambda (t)
+                   (wakeup t)) at))
+
+     ;; any-waiters?
+     (lambda ()
+       (or (not (null? waiting-threads)) (not (null? awoken-threads))))
+            
+
+     ;; lock
+     lock))))
