@@ -12,19 +12,18 @@
     id))
 
 (define-record-type (future* make-future future?)
-    (fields id would-be? (mutable thunk) (mutable engine) 
+    (fields id would-be? (mutable thunk) (mutable engine)
 	    (mutable result) (mutable done?) cond lock))
 ;; future? defined by record.
 
 (define (futures-enabled?)
   (threaded?))
 
-#| Chez doesn't seem to have a built in function that does this.
-Can call out to C in chez, so maybe can just duplicate what
-racket currently does in C.
-|#
-(define (processor-count)
-  1)
+(define processor-count
+  (let ([count #f])
+    (lambda ()
+      (unless count (set! count (find-processor-count)))
+      count)))
 
 (define current-future (internal-make-thread-parameter #f))
 
@@ -43,7 +42,7 @@ racket currently does in C.
   (define (future thunk)
     (unless (scheduler-running?)
 	    (start-scheduler))
-    
+
     (let* ([f (make-future (get-next-id) #f (void) (void) (void) #f (make-condition) (make-lock #f))]
 	   [th (thunk-wrapper f thunk)])
       (future*-engine-set! f (make-engine th #f #t))
@@ -55,7 +54,7 @@ racket currently does in C.
 	   [th (thunk-wrapper f thunk)])
       (future*-thunk-set! f th)
       f))
-  
+
   (define (touch f)
     (cond
      [(future*-would-be? f)
@@ -69,7 +68,7 @@ racket currently does in C.
       (condition-wait (future*-cond f) (future*-lock f)) ;; when this returns we will have result
       (let ([result (future*-result f)])
 	(lock-release (future*-lock f))
-	result)] ;; acquired 
+	result)] ;; acquired
      [else
       (touch f)])) ;; not acquired. might be writing result now.
 
@@ -82,7 +81,7 @@ racket currently does in C.
   ]
  [else
   ;; not threaded
-  
+
   (define (thunk-wrapper f thunk)
     (lambda ()
       (let ([result (thunk)])
@@ -101,5 +100,5 @@ racket currently does in C.
   (define (touch f)
     ((future*-thunk f))
     (future*-result f))
-  
+
   ])
