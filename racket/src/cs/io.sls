@@ -3,23 +3,21 @@
   (import (chezpart)
           (rename (only (chezscheme)
                         read-char peek-char
-                        standard-input-port standard-output-port standard-error-port
-                        close-input-port close-output-port
                         current-directory
                         format
                         error
                         input-port? output-port?
                         file-position flush-output-port
                         file-symbolic-link?)
-                  [standard-input-port current-input-port]
-                  [standard-output-port current-output-port]
-                  [standard-error-port current-error-port]
                   [input-port? chez:input-port?]
                   [output-port? chez:output-port?]
                   [flush-output-port flush-output])
           (core)
           (thread))
+
+  ;; ----------------------------------------
   ;; Tie knots:
+
   (define (path? v) (is-path? v))
   (define (path->string v) (1/path->string v))
   (define path->complete-path
@@ -29,24 +27,107 @@
   (define (absolute-path? v) (1/absolute-path? v))
   (define (relative-path? v) (1/relative-path? v))
 
+  ;; ----------------------------------------
+
+  (define-syntax (who stx)
+    (syntax-error stx "not bound"))
+
+  (define-syntax (define/who stx)
+    (syntax-case stx ()
+      [(define/who (id . args) body ...)
+       #'(define id
+           (fluid-let-syntax ([who (lambda (stx)
+                                     #''id)])
+             (lambda args body ...)))]
+      [(define/who id rhs)
+       #'(define id
+           (fluid-let-syntax ([who (lambda (stx)
+                                     #''id)])
+             rhs))]))
+
+  (meta define (convert-type t)
+        (syntax-case t (ref * rktio_bool_t)
+          [(ref . _) #'uptr]
+          [(* ._) #'u8*]
+          [rktio_bool_t #'boolean]
+          [else t]))
+
+  (define-ftype intptr_t iptr)
+  (define-ftype uintptr_t uptr)
+  (define-ftype rktio_int64_t integer-64)
+  (define _uintptr _uint64)
+  
+  (define-syntax (define-type stx)
+    (syntax-case stx ()
+      [(_ type old-type)
+       (with-syntax ([old-type (convert-type #'old-type)])
+         #'(define-ftype type old-type))]))
+
+  (define-syntax (define-struct-type stx)
+    (syntax-case stx ()
+      [(_ type ([old-type field] ...))
+       (with-syntax ([(old-type ...) (map convert-type #'(old-type ...))])
+         #'(define-ftype type (struct [field old-type] ...)))]))
+
+  (meta define (convert-function stx)
+        (syntax-case stx ()
+          [(_ ret-type name ([arg-type arg-name] ...))
+           (with-syntax ([ret-type (convert-type #'ret-type)]
+                         [(arg-type ...) (map convert-type #'(arg-type ...))])
+             #'(foreign-procedure (rktio-lookup 'name)
+                                  (arg-type ...)
+                                  ret-type))]))
+
+  (define-syntax (define-function stx)
+    (syntax-case stx ()
+      [(_ _ name . _)
+       (with-syntax ([rhs (convert-function stx)])
+         #'(define name rhs))]))
+
+  (define-syntax (define-function/errno stx)
+    (syntax-case stx ()
+      [(_ ret-type name ([_ arg] ...))
+       (with-syntax ([rhs (convert-function stx)])
+         #'(define name
+             (let ([proc rhs])
+               (lambda (who ok-result? arg ...)
+                 (let ([v (proc arg ...)])
+                   (if (ok-result? v)
+                       v
+                       (error who "failed")))))))]))
+
+  (define-syntax (define-function/errno+step stx)
+    (syntax-case stx ()
+      [(_ _ name . _)
+       (with-syntax ([rhs (convert-function stx)])
+         #'(define name rhs))]))
+  
+  (define (rktio-lookup name)
+    (load-shared-object "../../lib/librktio.dylib")
+    (foreign-entry (symbol->string name)))
+
+  (define (<< a b) (bitwise-arithmetic-shift-left a b))
+
+  (include "../build/so-rktio/rktio.rktl")
+
+  (define (ok-pointer? v) (not (zero? v)))
+  (define (ok? v) v)
+  (define (ok-not? bad) (lambda (v) (not (eqv? bad v))))
+
+  (define (cast v from to)
+    (let ([p (malloc from)])
+      (ptr-set! p from v)
+      (ptr-ref p to)))
+
+  (define rktio (rktio_init 'init ok-pointer?))
+  
+  ;; ----------------------------------------
+
   (define string-locale-downcase string-downcase)
 
   (define (char-blank? v) (char-whitespace? v))
   (define (char-graphic? v) #t)
   
-  (define (read-byte in) (get-u8 in))
-  (define (read-bytes-avail!* bstr in start-pos end-pos)
-    (if (input-port-ready? in)
-        (get-bytevector-some! in bstr start-pos (- end-pos start-pos))
-        0))
-  (define (write-bytes-avail* bstr out start-pos end-pos)
-    (define len (- end-pos start-pos))
-    (put-bytevector out bstr start-pos len)
-    (flush-output-port out)
-    len)
-  (define (write-bytes bstr out)
-    (put-bytevector out bstr 0 (bytevector-length bstr)))
-
   (define-syntax with-exn:fail:filesystem
     (syntax-rules ()
       [(_ expr)
@@ -95,55 +176,65 @@
                                                 (make-bytevector 0))))]))
   (define peek-byte lookahead-u8)
 
-  ;; Host's notion of path is just a string:
+  ;; Host's notion of path is a byte string, but
+  ;; we have to add a nul terminator
   (define (bytes->path bstr)
-    (1/bytes->string/utf-8 bstr))
+    (bytes-append bstr '#vu8(0)))
   (define (path->bytes p)
-    (1/string->bytes/utf-8 p))
+    p)
 
   (define (system-path-convention-type) 'unix)
 
   (define (directory-exists? p)
-    (file-directory? p))
+    (rktio_directory_exists rktio p))
   
   (define (file-exists? p)
-    (and (chez:file-exists? p)
-         (not (file-directory? p))))
+    (rktio_file_exists rktio p))
   
   (define (link-exists? p)
-    (file-symbolic-link? p))
-  
-  (define (directory-list p)
-    (chez:directory-list p))
+    (rktio_link_exists rktio p))
 
-  (define (make-directory p)
-    (with-exn:fail:filesystem
-     (mkdir p)))
+  (define/who (directory-list p)
+    (let ([dl (rktio_directory_list_start who ok-pointer? rktio p)])
+      (let loop ()
+        (let ([n (rktio_directory_list_step who ok-pointer? rktio dl)])
+          (if (zero? (foreign-ref 'unsigned-8 n 0))
+              null
+              (cons
+               (let ([bstr (cast n _uintptr _bytes)])
+                 (rktio_free n)
+                 bstr)
+               (loop)))))))
 
-  (define (delete-file p)
-    (with-exn:fail:filesystem
-     (chez:delete-file p)))
+  (define/who (make-directory p)
+    (rktio_make_directory who ok? rktio p))
+
+  (define/who (delete-file p)
+    (rktio_delete_file who ok? rktio p 0))
   
-  (define (delete-directory p)
-    (with-exn:fail:filesystem
-     (chez:delete-directory p)))
+  (define/who (delete-directory p)
+    (rktio_delete_directory who ok? rktio p p 0))
   
-  (define file-or-directory-modify-seconds
+  (define/who file-or-directory-modify-seconds
     (case-lambda
      [(p)
-      (time-second (with-exn:fail:filesystem
-                    (file-modification-time p)))]
+      (let* ([p (rktio_get_file_modify_seconds who ok-pointer? rktio p)]
+             [v (foreign-ref 'iptr p 0)])
+        (rktio_free p)
+        v)]
      [(p secs)
       (if secs
-          (error 'file-or-directory-modify-seconds "cannot set modify seconds")
-          (with-exn:fail:filesystem
-           (file-or-directory-modify-seconds p)))]
+          (rktio_set_file_modify_seconds who ok? rktio p secs)
+          (file-or-directory-modify-seconds p))]
      [(p secs fail)
       (if secs
           (file-or-directory-modify-seconds p secs)
-          (guard
-           (exn [else (fail)])
-           (time-second (file-modification-time p))))]))
+          (let* ([p (rktio_get_file_modify_seconds who (lambda (x) x) rktio p)])
+            (if (zero? p)
+                (fail)
+                (let ([v (foreign-ref 'iptr p 0)])
+                  (rktio_free p)
+                  v))))]))
 
   (define (file-or-directory-permissions path mode)
     (cond
@@ -183,33 +274,84 @@
     (1/error 'filesystem-root-list "not yet supported"))
   
   (define (resolve-path p) p)
+
+  (define/who (current-input-port)
+    (rktio_std_fd who ok-pointer? rktio RKTIO_STDIN))
+  (define/who (current-output-port)
+    (rktio_std_fd who ok-pointer? rktio RKTIO_STDOUT))
+  (define/who (current-error-port)
+    (rktio_std_fd who ok-pointer? rktio RKTIO_STDERR))
   
-  (define open-input-file
+  (define/who open-input-file
     (case-lambda
      [(path mode mode2)
-      (open-input-file path)]
+      (rktio_open who ok-pointer? rktio path RKTIO_OPEN_READ)]
      [(path mode)
-      (open-input-file path)]
+      (open-input-file path mode #f)]
      [(path)
-      (with-exn:fail:filesystem
-       (open-file-input-port path))]))
+      (open-input-file path #f #f)]))
 
-  (define open-output-file
+  (define/who open-output-file
     (case-lambda
      [(path) (open-output-file path #f #f)]
      [(path mode) (open-output-file path mode #f)]
      [(path mode mode2)
       (let ([mode? (lambda (s) (or (eq? mode s) (eq? mode2 s)))])
-        (with-exn:fail:filesystem
-         (open-file-output-port path (cond
-                                      [(mode? 'truncate) (file-options no-fail)]
-                                      [(mode? 'must-truncate) (file-options no-create)]
-                                      [(mode? 'update) (file-options no-create no-truncate)]
-                                      [(mode? 'can-update) (file-options no-fail no-truncate)]
-                                      [(mode? 'replace) (file-options no-fail)]
-                                      [(mode? 'truncate/replace) (file-options no-fail)]
-                                      [(mode? 'append) (chez:error 'open-output-file "'append mode not supported")]
-                                      [else (file-options)]))))]))
+        (rktio_open who ok-pointer? rktio path
+                    (+ RKTIO_OPEN_WRITE
+                       (cond
+                        [(mode? 'truncate) (+ RKTIO_OPEN_TRUNCATE RKTIO_OPEN_CAN_EXIST)]
+                        [(mode? 'must-truncate) (+ RKTIO_OPEN_TRUNCATE RKTIO_OPEN_MUST_EXIST)]
+                        [(mode? 'update) RKTIO_OPEN_MUST_EXIST]
+                        [(mode? 'can-update) RKTIO_OPEN_CAN_EXIST]
+                        [(mode? 'replace) (+ RKTIO_OPEN_TRUNCATE RKTIO_OPEN_CAN_EXIST)]
+                        [(mode? 'truncate/replace) (+ RKTIO_OPEN_TRUNCATE RKTIO_OPEN_CAN_EXIST)]
+                        [(mode? 'append) RKTIO_OPEN_APPEND]
+                        [else 0]))))]))
+
+  (define/who (close-input-port in)
+    (rktio_close who ok? rktio in))
+
+  (define/who (close-output-port out)
+    (rktio_close who ok? rktio out))
+
+  (define/who (read-byte in)
+    (let ([bstr (make-bytes 1)])
+      (let ([v (rktio_read who (ok-not? RKTIO_READ_ERROR) rktio in bstr 1)])
+        (cond
+         [(eqv? v RKTIO_READ_EOF) eof]
+         [(eqv? v 0) (error 'read-byte "we'd have to spin")]
+         [else (bytes-ref bstr 0)]))))
+  
+  (define/who (read-bytes-avail!* bstr in start-pos end-pos)
+    (let ([to-bstr (if (zero? start-pos)
+                       bstr
+                       (make-bytes (- end-pos start-pos)))])
+      (let ([v (rktio_read who (ok-not? RKTIO_READ_ERROR) rktio in to-bstr (- end-pos start-pos))])
+        (cond
+         [(eqv? v RKTIO_READ_EOF) eof]
+         [(eq? bstr to-bstr) v]
+         [else
+          (bytes-copy! bstr start-pos to-bstr 0 v)
+          v]))))
+  
+  (define/who (write-bytes-avail* bstr out start-pos end-pos)
+    (let ([from-bstr (if (zero? start-pos)
+                         bstr
+                         (let ([new-bstr (make-bytes (- end-pos start-pos))])
+                           (bytes-copy! new-bstr 0 bstr start-pos (- end-pos start-pos))
+                           new-bstr))])
+      (let ([v (rktio_write who (ok-not? RKTIO_WRITE_ERROR) rktio out from-bstr (- end-pos start-pos))])
+        v)))
+  
+  (define (write-bytes bstr out)
+    (let ([len (bytes-length bstr)])
+      (let loop ([i 0])
+        (let ([v (write-bytes-avail* bstr out i (- len i))])
+          (let ([i (+ i v)])
+            (if (fx= i len)
+                len
+                (loop i)))))))
 
   (define file-truncate truncate-file)
 

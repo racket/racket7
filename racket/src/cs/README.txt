@@ -71,6 +71,9 @@ refer to "regexp" or "expander" functionality, and so on. Each layer
 can use `racket/base` functionality, but beware that code from
 `racket/base` will be duplicated in each layer.
 
+The "io" layer relies on a shared library, rktio, to provide a uniform
+interface to OS resources. The rktio source is in a "rktio" sibling
+directory.
 
 Files in this directory:
 
@@ -79,7 +82,7 @@ Files in this directory:
          "core.sls" library is implemented directly in Chez Scheme.
          For most other cases, a corresponding "compiled/*.scm" file
          contains the implementation extracted from from expanded and
-         flattened Racket code.
+         flattened Racket code. Each "*.sls" file is built to "*.so".
 
  core/*.ss - Part of "core.sls" (via `include`) to implement core data
          structures, immutable hash tables, structs, etc.
@@ -102,6 +105,15 @@ Files in this directory:
          CAUTION: The makefile here doesn't track dependencies for
          "*.rktl" files, so run `make rktl` if you change any of those
          implementations.
+
+ ../build/so-rktio/rktio.rktl (generated) and
+ ../../lib/librktio.{so,dylib,dll} (generated) - Created when building
+         the "io" layer, the "rktio.rktl" file contains FFI descriptions
+         that are `included` by "io.sls" and "librktio.{so,dylib,dll}"
+         is the shared library that implements rktio.
+
+         CAUTION: The makefile here doesn't track dependencies for
+         rktio, so use `make rktio` if you change its implementation.
 
  primitive/*.scm - for "expander.sls", tables of bindings for
          primitive linklet instances.

@@ -1,6 +1,23 @@
 (import (io)
         (thread))
 
+(define-syntax test
+  (syntax-rules ()
+    [(_ expect rhs)
+     (let ([e expect]
+           [v rhs])
+       (unless (equal? e v)
+         (error 'failed "~s: ~e" 'rhs v)))]))
+
+;; ----------------------------------------
+
+(test #t (directory-exists? "demo"))
+(test #f (directory-exists? "no-such-demo"))
+
+(write (directory-list "demo")) (newline)
+
+;; ----------------------------------------
+
 (time
  (let loop ([j 10])
    (unless (zero? j)
@@ -32,15 +49,8 @@
        (loop (sub1 i)
              (bytes->string/utf-8 (string->bytes/utf-8 "ap\x3BB;ple"))))))
 
-;; ----------------------------------------
 
-(define-syntax test
-  (syntax-rules ()
-    [(_ expect rhs)
-     (let ([e expect]
-           [v rhs])
-       (unless (equal? e v)
-         (error 'failed "~s: ~e" 'rhs v)))]))
+;; ----------------------------------------
 
 (call-in-main-thread
  (lambda ()

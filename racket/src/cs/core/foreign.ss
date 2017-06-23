@@ -258,7 +258,6 @@
      (define id (create-ctype s-exp basetype basetype s->c c->s))]))
 
 (define-ctype _bool 'boolean 'bool)
-(define-ctype _bytes 'u8* 'bytes)
 (define-ctype _double 'double 'double)
 (define-ctype _fixnum 'fixnum 'fixnum)
 (define-ctype _float 'float 'float)
@@ -280,6 +279,19 @@
                          "bad value for conversion"
                          "ctype" type-name
                          "value" v))
+
+(define-ctype _bytes 'void* 'bytes
+  (lambda (x) x)
+  (lambda (x) (let loop ([i 0])
+                (if (fx= 0 (foreign-ref 'unsigned-8 x i))
+                    (let ([bstr (make-bytes i)])
+                      (let loop ([j 0])
+                        (cond
+                         [(= j i) bstr]
+                         [else
+                          (bytes-set! bstr j (foreign-ref 'unsigned-8 x j))
+                          (loop (add1 j))])))
+                    (loop (add1 i))))))
 
 (define-ctype _double* 'double 'double
   (lambda (x) (if (real? x)
