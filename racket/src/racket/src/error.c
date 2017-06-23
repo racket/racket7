@@ -24,6 +24,7 @@
 */
 
 #include "schpriv.h"
+#include "schrktio.h"
 #include <ctype.h>
 #ifdef DOS_FILE_SYSTEM
 # include <windows.h>
@@ -32,10 +33,6 @@
 # define errno -1
 #else
 # include <errno.h>
-#endif
-#ifdef USE_C_SYSLOG
-# include <syslog.h>
-# include <stdarg.h>
 #endif
 
 #define mzVA_ARG(x, y) HIDE_FROM_XFORM(va_arg(x, y))
@@ -274,6 +271,7 @@ Scheme_Config *scheme_init_error_escape_proc(Scheme_Config *config)
   %- = skip int
 
   %L = line number as intptr_t, -1 means no line
+  %R = get error numebr and string from rktio
   %e = error number for strerror()
   %E = error number for platform-specific error string
   %Z = potential platform-specific error number; additional char*
@@ -287,7 +285,7 @@ Scheme_Config *scheme_init_error_escape_proc(Scheme_Config *config)
 */
 
 static intptr_t sch_vsprintf(char *s, intptr_t maxlen, const char *msg, va_list args, char **_s,
-                             Scheme_Object **_errno_val)
+                             Scheme_Object **_errno_val, int *_unsupported)
 /* NULL for s means allocate the buffer here (and return in (_s), but this function 
    doesn't allocate before extracting arguments from the stack. */
 {
@@ -473,6 +471,62 @@ static intptr_t sch_vsprintf(char *s, intptr_t maxlen, const char *msg, va_list 
 	    }
 	  }
 	  break;
+        case 'R':
+          {
+            intptr_t errid;
+            intptr_t errkind;
+            const char *es, *errkind_str;
+            intptr_t elen;
+            errkind = rktio_get_last_error_kind(scheme_rktio);
+            errid = rktio_get_last_error(scheme_rktio);
+            switch (errkind) {
+            case RKTIO_ERROR_KIND_WINDOWS:
+              errkind_str = "errid";
+              break;
+            case RKTIO_ERROR_KIND_POSIX:
+              errkind_str = "errno";
+              break;
+            case RKTIO_ERROR_KIND_GAI:
+              errkind_str = "gai_err";
+              break;
+            default:
+              errkind_str = "rktio_err";
+              break;
+            }
+            es = rktio_get_error_string(scheme_rktio, errkind, errid);
+            sprintf(buf, "; %s=%" PRIdPTR "", errkind_str, errid);
+            if (es) elen = strlen(es); else elen = 0;
+            tlen = strlen(buf);
+            t = (const char *)scheme_malloc_atomic(tlen+elen+1);
+            memcpy((char *)t, es, elen);
+            memcpy((char *)t+elen, buf, tlen+1);
+            tlen += elen;
+            if (_errno_val) {
+              Scheme_Object *err_kind;
+              switch (errkind) {
+              case RKTIO_ERROR_KIND_WINDOWS:
+                err_kind = windows_symbol;
+                break;
+              case RKTIO_ERROR_KIND_POSIX:
+                err_kind = posix_symbol;
+                break;
+              case RKTIO_ERROR_KIND_GAI:
+                err_kind = gai_symbol;
+                break;
+              default:
+                err_kind = NULL;
+              }
+              if (err_kind) {
+                err_kind = scheme_make_pair(scheme_make_integer_value(errid), err_kind);
+                *_errno_val = err_kind;
+              }
+            }
+	    if (_unsupported
+		&& (errid == RKTIO_ERROR_UNSUPPORTED)
+		&& (errkind == RKTIO_ERROR_KIND_RACKET))
+	      *_unsupported = 1;
+          }
+          break;
 	case 'e':
         case 'm':
 	case 'E':
@@ -482,6 +536,7 @@ static intptr_t sch_vsprintf(char *s, intptr_t maxlen, const char *msg, va_list 
 	  {
 	    int en, he, none = 0;
 	    char *es;
+            const char *errkind_str;
             Scheme_Object *err_kind = NULL;
             
 	    if (type == 'm') {
@@ -508,6 +563,7 @@ static intptr_t sch_vsprintf(char *s, intptr_t maxlen, const char *msg, va_list 
 	    if (he) {
 	      es = (char *)scheme_hostname_error(en);
               err_kind = gai_symbol;
+              errkind_str = "gai_err";
             }
 
 	    if ((en || es) && !none) {
@@ -538,17 +594,19 @@ static intptr_t sch_vsprintf(char *s, intptr_t maxlen, const char *msg, va_list 
 		      break;
 		  }
                   err_kind = windows_symbol;
+                  errkind_str = "win_err";
 		}
 	      }
 # endif
 	      if (!es) {
 		es = strerror(en);
                 err_kind = posix_symbol;
+                errkind_str = "errno";
               }
 #endif
 	      tlen = strlen(es) + 24;
 	      t = (const char *)scheme_malloc_atomic(tlen);
-	      sprintf((char *)t, "%s; errno=%d", es, en);
+	      sprintf((char *)t, "%s; %s=%d", es, errkind_str, en);
 	      tlen = strlen(t);
               if (_errno_val) {
                 err_kind = scheme_make_pair(scheme_make_integer_value(en), err_kind);
@@ -661,6 +719,7 @@ static intptr_t sch_vsprintf(char *s, intptr_t maxlen, const char *msg, va_list 
 	  }
 	}
 
+
 	while (tlen && i < maxlen) {
 	  s[i++] = *t;
 	  t = t XFORM_OK_PLUS 1;
@@ -692,10 +751,16 @@ intptr_t scheme_sprintf(char *s, intptr_t maxlen, const char *msg, ...)
   GC_CAN_IGNORE va_list args;
 
   HIDE_FROM_XFORM(va_start(args, msg));
-  len = sch_vsprintf(s, maxlen, msg, args, NULL, NULL);
+  len = sch_vsprintf(s, maxlen, msg, args, NULL, NULL, NULL);
   HIDE_FROM_XFORM(va_end(args));
 
   return len;
+}
+
+int scheme_last_error_is_racket(int errid)
+{
+  return ((rktio_get_last_error_kind(scheme_rktio) == RKTIO_ERROR_KIND_RACKET)
+          && (rktio_get_last_error(scheme_rktio) == errid));
 }
 
 #define ESCAPING_NONCM_PRIM(name, func, a1, a2, env) \
@@ -1001,7 +1066,7 @@ scheme_signal_error (const char *msg, ...)
   intptr_t len;
 
   HIDE_FROM_XFORM(va_start(args, msg));
-  len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL);
+  len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL, NULL);
   HIDE_FROM_XFORM(va_end(args));
 
   buffer[len] = 0;
@@ -1027,7 +1092,7 @@ void scheme_warning(char *msg, ...)
   intptr_t len;
 
   HIDE_FROM_XFORM(va_start(args, msg));
-  len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL);
+  len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL, NULL);
   HIDE_FROM_XFORM(va_end(args));
 
   buffer[len++] = '\n';
@@ -1051,7 +1116,7 @@ void scheme_log(Scheme_Logger *logger, int level, int flags,
   }
 
   HIDE_FROM_XFORM(va_start(args, msg));
-  len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL);
+  len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL, NULL);
   HIDE_FROM_XFORM(va_end(args));
 
   buffer[len] = 0;
@@ -1074,7 +1139,7 @@ void scheme_log_w_data(Scheme_Logger *logger, int level, int flags,
   }
 
   HIDE_FROM_XFORM(va_start(args, msg));
-  len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL);
+  len = sch_vsprintf(NULL, 0, msg, args, &buffer, NULL, NULL);
   HIDE_FROM_XFORM(va_end(args));
 
   buffer[len] = 0;
@@ -2037,6 +2102,14 @@ void scheme_system_error(const char *name, const char *what, int errid)
                    name, what, errid);
 }
 
+void scheme_rktio_error(const char *name, const char *what)
+{
+  scheme_raise_exn(MZEXN_FAIL, 
+                   "%s: %s failed\n"
+                   "  system error: %R", 
+                   name, what);
+}
+
 #define MZERR_MAX_SRC_LEN 100
 
 static char *make_srcloc_string(Scheme_Object *src, intptr_t line, intptr_t col, intptr_t pos, intptr_t *len)
@@ -2136,7 +2209,7 @@ void scheme_read_err(Scheme_Object *port,
   intptr_t slen;
 
   HIDE_FROM_XFORM(va_start(args, detail));
-  slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL);
+  slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL, NULL);
   HIDE_FROM_XFORM(va_end(args));
 
   if (port) {
@@ -2162,7 +2235,7 @@ Scheme_Object *scheme_numr_err(Scheme_Object *complain, const char *detail, ...)
   intptr_t slen;
 
   HIDE_FROM_XFORM(va_start(args, detail));
-  slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL);
+  slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL, NULL);
   HIDE_FROM_XFORM(va_end(args));
 
   if (SCHEME_FALSEP(complain))
@@ -2317,7 +2390,7 @@ void scheme_wrong_syntax(const char *where,
     GC_CAN_IGNORE va_list args;
 
     HIDE_FROM_XFORM(va_start(args, detail));
-    slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL);
+    slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL, NULL);
     HIDE_FROM_XFORM(va_end(args));
   }
 
@@ -2362,7 +2435,7 @@ void scheme_wrong_return_arity(const char *where,
     GC_CAN_IGNORE va_list args;
 
     HIDE_FROM_XFORM(va_start(args, detail));
-    slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL);
+    slen = sch_vsprintf(NULL, 0, detail, args, &s, NULL, NULL);
     HIDE_FROM_XFORM(va_end(args));
   }
 
@@ -2421,7 +2494,7 @@ void scheme_raise_out_of_memory(const char *where, const char *msg, ...)
     GC_CAN_IGNORE va_list args;
 
     HIDE_FROM_XFORM(va_start(args, msg));
-    slen = sch_vsprintf(NULL, 0, msg, args, &s, NULL);
+    slen = sch_vsprintf(NULL, 0, msg, args, &s, NULL, NULL);
     HIDE_FROM_XFORM(va_end(args));
   }
 
@@ -3520,16 +3593,6 @@ Scheme_Object *extract_all_levels(Scheme_Logger *logger)
   return result;
 }
 
-#ifdef USE_WINDOWS_EVENT_LOG
-static int event_procs_ready;
-typedef HANDLE (WINAPI *mzRegisterEventSourceProc)(LPCTSTR lpUNCServerName, LPCTSTR lpSourceName);
-typedef BOOL (WINAPI *mzReportEventProc)(HANDLE hEventLog, WORD wType, WORD wCategory, DWORD dwEventID,
-						                 PSID lpUserSid, WORD wNumStrings, DWORD dwDataSize, LPCTSTR* lpStrings,
-							             LPVOID lpRawData);
-static mzRegisterEventSourceProc mzRegisterEventSource;
-static mzReportEventProc mzReportEvent;
-#endif
-
 static Scheme_Object *make_log_message(int level, Scheme_Object *name, int prefix_msg,
                                        char *buffer, intptr_t len, Scheme_Object *data) {
   Scheme_Object *msg;
@@ -3592,97 +3655,32 @@ void scheme_log_name_pfx_message(Scheme_Logger *logger, int level, Scheme_Object
 
   while (logger) {
     if (extract_spec_level(logger->syslog_level, name) >= level) {
-#ifdef USE_C_SYSLOG
       int pri;
+      Scheme_Object *cmd;
       switch (level) {
       case SCHEME_LOG_FATAL:
-        pri = LOG_CRIT;
+        pri = RKTIO_LOG_FATAL;
         break;
       case SCHEME_LOG_ERROR:
-        pri = LOG_ERR;
+        pri = RKTIO_LOG_ERROR;
         break;
       case SCHEME_LOG_WARNING:
-        pri = LOG_WARNING;
+        pri = RKTIO_LOG_WARNING;
         break;
       case SCHEME_LOG_INFO:
-        pri = LOG_INFO;
+        pri = RKTIO_LOG_INFO;
         break;
       case SCHEME_LOG_DEBUG:
       default:
-        pri = LOG_DEBUG;
+        pri = RKTIO_LOG_DEBUG;
         break;
       }
-      if (name)
-        syslog(pri, "%s: %s", SCHEME_SYM_VAL(name), buffer);
-      else
-        syslog(pri, "%s", buffer);
-#endif
-#ifdef USE_WINDOWS_EVENT_LOG
-      if (!event_procs_ready) {
-        HMODULE hm;
-        hm = LoadLibrary("advapi32.dll");
-        if (hm) {
-          mzRegisterEventSource = (mzRegisterEventSourceProc)GetProcAddress(hm, "RegisterEventSourceA");
-          mzReportEvent = (mzReportEventProc)GetProcAddress(hm, "ReportEventA");
-        }
-        event_procs_ready = 1;
-      }
-      if (mzRegisterEventSource) {
-        static HANDLE hEventLog;
-        WORD ty;
-        unsigned long sev;
-        LPCTSTR a[1];
-
-        if (!hEventLog) {
-          Scheme_Object *cmd;
-          cmd = scheme_get_run_cmd();
-          hEventLog = mzRegisterEventSource(NULL, SCHEME_PATH_VAL(cmd));
-        }
-
-        switch (level) {
-        case SCHEME_LOG_FATAL:
-          ty = EVENTLOG_ERROR_TYPE;
-          sev = 3;
-          break;
-        case SCHEME_LOG_ERROR:
-          ty = EVENTLOG_ERROR_TYPE;
-          sev = 3;
-          break;
-        case SCHEME_LOG_WARNING:
-          ty = EVENTLOG_WARNING_TYPE;
-          sev = 2;
-          break;
-        case SCHEME_LOG_INFO:
-          ty = EVENTLOG_INFORMATION_TYPE;
-          sev = 1;
-          break;
-        case SCHEME_LOG_DEBUG:
-        default:
-          ty = EVENTLOG_AUDIT_SUCCESS;
-          sev = 0;
-          break;
-        }
-        if (name) {
-          char *naya;
-          intptr_t slen;
-          slen = SCHEME_SYM_LEN(name);
-          naya = (char *)scheme_malloc_atomic(slen + 2 + len + 1);
-          memcpy(naya, SCHEME_SYM_VAL(name), slen);
-          memcpy(naya + slen, ": ", 2);
-          memcpy(naya + slen + 2, buffer, len);
-          naya[slen + 2 + len] = 0;
-          buffer = naya;
-          len += slen + 2;
-        }
-        a[0] = buffer;
-        mzReportEvent(hEventLog, ty, 1 /* category */,
-                      (sev << 30) | 2 /* message */,
-                      NULL, 
-                      1, 0,
-                      a, NULL);
-      }
-#endif
+      cmd = scheme_get_run_cmd();
+      rktio_syslog(scheme_rktio, pri,
+                   (name ? SCHEME_SYM_VAL(name) : NULL),
+                   buffer, SCHEME_PATH_VAL(cmd));
     }
+
     if (extract_spec_level(logger->stderr_level, name) >= level) {
       if (name) {
         intptr_t slen;
@@ -4232,9 +4230,11 @@ scheme_raise_exn(int id, ...)
   GC_CAN_IGNORE va_list args;
   intptr_t alen;
   char *msg;
-  int i, c;
+  int i, c, unsupported = 0;
   Scheme_Object *eargs[MZEXN_MAXARGS], *errno_val = NULL;
   char *buffer;
+
+  rktio_remap_last_error(scheme_rktio);
 
   /* Precise GC: Don't allocate before getting hidden args off stack */
   HIDE_FROM_XFORM(va_start(args, id));
@@ -4250,7 +4250,7 @@ scheme_raise_exn(int id, ...)
 
   msg = mzVA_ARG(args, char*);
 
-  alen = sch_vsprintf(NULL, 0, msg, args, &buffer, &errno_val);
+  alen = sch_vsprintf(NULL, 0, msg, args, &buffer, &errno_val, &unsupported);
   HIDE_FROM_XFORM(va_end(args));
 
 #ifndef NO_SCHEME_EXNS
@@ -4266,6 +4266,9 @@ scheme_raise_exn(int id, ...)
       eargs[2] = errno_val;
       c++;
     }
+  } else if (unsupported) {
+    if (id == MZEXN_FAIL)
+      id = MZEXN_FAIL_UNSUPPORTED;
   }
 
   do_raise(scheme_make_struct_instance(exn_table[id].type,

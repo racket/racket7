@@ -31,6 +31,7 @@
 #include "schpriv.h"
 #include <string.h>
 #include "schgc.h"
+#include "schrktio.h"
 
 #ifdef DOS_FAR_POINTERS
 # include <alloc.h>
@@ -53,6 +54,8 @@
 #ifdef MZ_JIT_USE_WINDOWS_VIRTUAL_ALLOC
 # include <windows.h>
 #endif
+
+THREAD_LOCAL_DECL(rktio_t *scheme_rktio);
 
 THREAD_LOCAL_DECL(uintptr_t scheme_os_thread_id);
 
@@ -113,12 +116,6 @@ extern MZGC_DLLIMPORT void GC_init();
 
 void scheme_set_stack_base(void *base, int no_auto_statics) XFORM_SKIP_PROC
 {
-#if defined(MZ_PLACES_WAITPID)
-  /* Early, to maximize the chance that no threads have been
-     created that might later receive SIGCHLD */
-  scheme_places_block_child_signal();
-#endif
-
 #ifdef MZ_PRECISE_GC
   GC_init_type_tags(_scheme_last_type_, 
                     scheme_pair_type, scheme_mutable_pair_type, scheme_weak_box_type, 
@@ -321,6 +318,7 @@ int scheme_main_stack_setup(int no_auto_statics, Scheme_Nested_Main _main, void 
 {
   scheme_setup_thread_local_key_if_needed();
   scheme_init_os_thread();
+  scheme_rktio = rktio_init();
 #ifdef MZ_USE_MZRT
   scheme_init_glib_log_queue();
 #endif
@@ -542,7 +540,7 @@ scheme_calloc (size_t num, size_t size)
   memset(space, 0, (num*size));
 #endif
 
-  return (space);
+  return space;
 }
 
 char *
@@ -553,7 +551,7 @@ scheme_strdup(const char *str)
 
   len = strlen(str) + 1;
   naya = (char *)scheme_malloc_atomic (len * sizeof (char));
-  memcpy (naya, str, len);
+  memcpy(naya, str, len);
 
   return naya;
 }
@@ -566,7 +564,22 @@ scheme_strdup_eternal(const char *str)
 
   len = strlen(str) + 1;
   naya = (char *)scheme_malloc_eternal(len * sizeof (char));
-  memcpy (naya, str, len);
+  memcpy(naya, str, len);
+
+  return naya;
+}
+
+char *
+scheme_strdup_and_free(const char *str)
+{
+  char *naya;
+  intptr_t len;
+
+  len = strlen(str) + 1;
+  naya = (char *)scheme_malloc_atomic (len * sizeof (char));
+  memcpy(naya, str, len);
+
+  free((void *)str);
 
   return naya;
 }

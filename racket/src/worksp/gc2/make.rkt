@@ -189,7 +189,11 @@
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define mz-inc "/I ../../racket/include /I .. ")
+(define mz-inc
+  (string-append "/I../../racket/include "
+		 "/I../../rktio "
+		 "/I../librktio "
+		 "/I.. "))
 
 (try "precomp.c" (list* "../../racket/src/schvers.h"
 			common-deps)
@@ -324,7 +328,8 @@
    "xsrc/mzsj86.obj"
    "xsrc/foreign.obj"
    (find-build-file "libracket" "gmp.obj")
-   (find-build-file "racket" "libffi.lib")
+   (find-build-file "libffi" "libffi.lib")
+   (find-build-file "librktio" "librktio.lib")
    (append
     (let ([f (and win64?
 		  (find-build-file "libracket" "mzsj86w64.obj"))])

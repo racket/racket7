@@ -144,6 +144,7 @@ typedef struct Thread_Local_Variables {
   uintptr_t force_gc_for_place_accounting_;
   uintptr_t scheme_os_thread_id_;
   int scheme_starting_up_;
+  struct rktio_t *scheme_rktio_;
   void *bignum_cache_[BIGNUM_CACHE_SIZE];
   int cache_count_;
   struct Scheme_Hash_Table *toplevels_ht_;
@@ -187,21 +188,9 @@ typedef struct Thread_Local_Variables {
   struct Scheme_Object *scheme_orig_stdout_port_;
   struct Scheme_Object *scheme_orig_stderr_port_;
   struct Scheme_Object *scheme_orig_stdin_port_;
-  struct mz_fd_set *scheme_fd_set_;
-  struct mz_fd_set *scheme_semaphore_fd_set_;
-  struct Scheme_Hash_Table *scheme_semaphore_fd_mapping_;
-  int scheme_semaphore_fd_kqueue_;
-#ifdef USE_FCNTL_AND_FORK_FOR_FILE_LOCKS
-  struct Scheme_Hash_Table *locked_fd_process_map_;
-#endif
+  struct rktio_ltps_t *scheme_semaphore_fd_set_;
+  struct Scheme_Object *fs_change_props_;
   struct Scheme_Custodian *new_port_cust_;
-#if (defined(__WIN32__) || defined(WIN32) || defined(_WIN32))
-  void *scheme_break_semaphore_;
-  void *process_job_object_;
-#else
-  int external_event_fd_;
-  int put_external_event_fd_;
-#endif
   char *read_string_byte_buffer_;
   struct ITimer_Data *itimerdata_;
   char *quick_buffer_;
@@ -301,7 +290,7 @@ typedef struct Thread_Local_Variables {
   int special_is_ok_;
   int scheme_force_port_closed_;
   int fd_reserved_;
-  int the_fd_;
+  struct rktio_fd_t *the_fd_;
   int scheme_num_read_syntax_objects_;
   struct Scheme_Load_Delay *clear_bytes_chain_;
   const char *failure_msg_for_read_;
@@ -364,7 +353,6 @@ typedef struct Thread_Local_Variables {
   void *on_atomic_timeout_data_;
   int atomic_timeout_auto_suspend_;
   int atomic_timeout_atomic_level_;
-  void *scheme_inotify_server_;
   struct Scheme_Object *configuration_callback_cache_[2];
   struct FFI_Orig_Place_Call *cached_orig_place_todo_;
   struct Scheme_Hash_Table *ffi_lock_ht_;
@@ -527,6 +515,7 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define force_gc_for_place_accounting XOA (scheme_get_thread_local_variables()->force_gc_for_place_accounting_)
 #define scheme_os_thread_id XOA (scheme_get_thread_local_variables()->scheme_os_thread_id_)
 #define scheme_starting_up XOA (scheme_get_thread_local_variables()->scheme_starting_up_)
+#define scheme_rktio XOA (scheme_get_thread_local_variables()->scheme_rktio_)
 #define bignum_cache XOA (scheme_get_thread_local_variables()->bignum_cache_)
 #define cache_count XOA (scheme_get_thread_local_variables()->cache_count_)
 #define toplevels_ht XOA (scheme_get_thread_local_variables()->toplevels_ht_)
@@ -571,16 +560,9 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define scheme_orig_stdout_port XOA (scheme_get_thread_local_variables()->scheme_orig_stdout_port_)
 #define scheme_orig_stderr_port XOA (scheme_get_thread_local_variables()->scheme_orig_stderr_port_)
 #define scheme_orig_stdin_port XOA (scheme_get_thread_local_variables()->scheme_orig_stdin_port_)
-#define scheme_fd_set XOA (scheme_get_thread_local_variables()->scheme_fd_set_)
 #define scheme_semaphore_fd_set XOA (scheme_get_thread_local_variables()->scheme_semaphore_fd_set_)
-#define scheme_semaphore_fd_mapping XOA (scheme_get_thread_local_variables()->scheme_semaphore_fd_mapping_)
-#define scheme_semaphore_fd_kqueue XOA (scheme_get_thread_local_variables()->scheme_semaphore_fd_kqueue_)
-#define locked_fd_process_map XOA (scheme_get_thread_local_variables()->locked_fd_process_map_)
+#define fs_change_props XOA (scheme_get_thread_local_variables()->fs_change_props_)
 #define new_port_cust XOA (scheme_get_thread_local_variables()->new_port_cust_)
-#define scheme_break_semaphore XOA (scheme_get_thread_local_variables()->scheme_break_semaphore_)
-#define process_job_object XOA (scheme_get_thread_local_variables()->process_job_object_)
-#define external_event_fd XOA (scheme_get_thread_local_variables()->external_event_fd_)
-#define put_external_event_fd XOA (scheme_get_thread_local_variables()->put_external_event_fd_)
 #define read_string_byte_buffer XOA (scheme_get_thread_local_variables()->read_string_byte_buffer_)
 #define itimerdata XOA (scheme_get_thread_local_variables()->itimerdata_)
 #define quick_buffer XOA (scheme_get_thread_local_variables()->quick_buffer_)
@@ -744,7 +726,6 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define on_atomic_timeout_data XOA (scheme_get_thread_local_variables()->on_atomic_timeout_data_)
 #define atomic_timeout_auto_suspend XOA (scheme_get_thread_local_variables()->atomic_timeout_auto_suspend_)
 #define atomic_timeout_atomic_level XOA (scheme_get_thread_local_variables()->atomic_timeout_atomic_level_)
-#define scheme_inotify_server XOA (scheme_get_thread_local_variables()->scheme_inotify_server_)
 #define configuration_callback_cache XOA (scheme_get_thread_local_variables()->configuration_callback_cache_)
 #define cached_orig_place_todo XOA (scheme_get_thread_local_variables()->cached_orig_place_todo_)
 #define ffi_lock_ht XOA (scheme_get_thread_local_variables()->ffi_lock_ht_)

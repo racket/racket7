@@ -49,14 +49,12 @@
 #ifdef MZ_PRECISE_GC
 # define MUST_REGISTER_GLOBALS
 # define MZTAG_REQUIRED
-# undef UNIX_IMAGE_DUMPS
 /* In case SGC is used to build PRECISE_GC: */
 # undef USE_SENORA_GC
 #endif
 
 #ifdef USE_SENORA_GC
 # define MUST_REGISTER_GLOBALS
-# undef UNIX_IMAGE_DUMPS
 #endif
 
 #ifdef USE_SINGLE_FLOATS
@@ -212,12 +210,6 @@ typedef jmpbuf jmp_buf[1];
 #endif
 
 #define GC_MIGHT_USE_REGISTERED_STATICS
-
-#ifdef MACINTOSH_EVENTS
-/* We avoid #including the Carbon headers because we only
-   need a few abstract struct types: */
-typedef struct FSSpec mzFSSpec;
-#endif
 
 #ifndef MZ_DONT_USE_JIT
 # if defined(MZ_USE_JIT_PPC) || defined(MZ_USE_JIT_I386) || defined(MZ_USE_JIT_X86_64) || defined(MZ_USE_JIT_ARM)
@@ -1923,9 +1915,6 @@ MZ_EXTERN void (*scheme_suspend_main_thread)(void);
 int scheme_set_in_main_thread(void);
 void scheme_restore_nonmain_thread(void);
 #endif
-#ifdef MAC_FILE_SYSTEM
-extern long scheme_creator_id;
-#endif
 
 typedef Scheme_Object *(*Scheme_Stdio_Maker_Proc)(void);
 MZ_EXTERN Scheme_Object *(*scheme_make_stdin)(void);
@@ -2108,34 +2097,11 @@ extern Scheme_Extension_Table *scheme_extension_table;
 /*                           file descriptors                             */
 /*========================================================================*/
 
-#if defined(DETECT_WIN32_CONSOLE_STDIN) || defined(WINDOWS_PROCESSES)
-# ifndef NO_STDIO_THREADS
-#  define USE_FAR_MZ_FDCALLS
-# endif
-#endif
-#ifdef USE_DYNAMIC_FDSET_SIZE
-# define USE_FAR_MZ_FDCALLS
-#endif
-#ifdef USE_BEOS_PORT_THREADS
-# define USE_FAR_MZ_FDCALLS
-#endif
-#ifdef HAVE_POLL_SYSCALL
-# define USE_FAR_MZ_FDCALLS
-#endif
-
-#ifdef USE_FAR_MZ_FDCALLS
 # define MZ_GET_FDSET(p, n) scheme_get_fdset(p, n)
 # define MZ_FD_ZERO(p) scheme_fdzero(p)
 # define MZ_FD_SET(n, p) scheme_fdset(p, n)
 # define MZ_FD_CLR(n, p) scheme_fdclr(p, n)
 # define MZ_FD_ISSET(n, p) scheme_fdisset(p, n)
-#else
-# define MZ_GET_FDSET(p, n) ((void *)(((fd_set *)p) XFORM_OK_PLUS n))
-# define MZ_FD_ZERO(p) XFORM_HIDE_EXPR(FD_ZERO((fd_set *)(p)))
-# define MZ_FD_SET(n, p) FD_SET(n, (fd_set *)(p))
-# define MZ_FD_CLR(n, p) FD_CLR(n, (fd_set *)(p))
-# define MZ_FD_ISSET(n, p) FD_ISSET(n, (fd_set *)(p))
-#endif
 
 /* For scheme_fd_to_semaphore(): */
 #define MZFD_CREATE_READ  1
@@ -2143,9 +2109,6 @@ extern Scheme_Extension_Table *scheme_extension_table;
 #define MZFD_CHECK_READ   3
 #define MZFD_CHECK_WRITE  4
 #define MZFD_REMOVE       5
-#define MZFD_CREATE_VNODE 6
-#define MZFD_CHECK_VNODE  7
-#define MZFD_REMOVE_VNODE 8
 
 /*========================================================================*/
 

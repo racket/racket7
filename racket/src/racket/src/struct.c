@@ -1070,9 +1070,8 @@ static Scheme_Object *do_chaperone_prop_accessor(const char *who, Scheme_Object 
           return v;
       }
 
-      if (!SCHEME_VECTORP(px->redirects)
-          || (SCHEME_VEC_SIZE(px->redirects) & 1)
-          || SCHEME_FALSEP(SCHEME_VEC_ELS(px->redirects)[0]))
+      if (!SCHEME_REDIRECTS_STRUCTP(px->redirects)
+	  || SCHEME_FALSEP(SCHEME_VEC_ELS(px->redirects)[0]))
         arg = px->prev;
       else {
         ht = (Scheme_Hash_Tree *)SCHEME_VEC_ELS(px->redirects)[0];
@@ -1938,8 +1937,7 @@ static Scheme_Object *chaperone_struct_ref(const char *who, Scheme_Object *prim,
       Scheme_Chaperone *px = (Scheme_Chaperone *)o;
       Scheme_Object *a[2], *red, *orig;
 
-      if (SCHEME_VECTORP(px->redirects)
-          && !(SCHEME_VEC_SIZE(px->redirects) & 1)
+      if (SCHEME_REDIRECTS_STRUCTP(px->redirects)
           && SAME_OBJ(SCHEME_VEC_ELS(px->redirects)[1], scheme_undefined)) {
         /* chaperone on every field: check that result is not undefined */
         o = px->prev;
@@ -1954,8 +1952,7 @@ static Scheme_Object *chaperone_struct_ref(const char *who, Scheme_Object *prim,
         }
 
         return orig;
-      } else if (!SCHEME_VECTORP(px->redirects)
-          || (SCHEME_VEC_SIZE(px->redirects) & 1)
+      } else if (!SCHEME_REDIRECTS_STRUCTP(px->redirects)
           || SCHEME_FALSEP(SCHEME_VEC_ELS(px->redirects)[PRE_REDIRECTS + i])) {
         o = px->prev;
       } else {
@@ -2070,8 +2067,7 @@ static void chaperone_struct_set(const char *who, Scheme_Object *prim,
       int half;
 
       o = px->prev;
-      if (SCHEME_VECTORP(px->redirects)
-          && !(SCHEME_VEC_SIZE(px->redirects) & 1)
+      if (SCHEME_REDIRECTS_STRUCTP(px->redirects)
           && !SAME_OBJ(SCHEME_VEC_ELS(px->redirects)[1], scheme_undefined)) {
         half = (SCHEME_VEC_SIZE(px->redirects) - PRE_REDIRECTS) >> 1;
         red = SCHEME_VEC_ELS(px->redirects)[PRE_REDIRECTS + half + i];
@@ -2110,8 +2106,7 @@ static void chaperone_struct_set(const char *who, Scheme_Object *prim,
             return;
           }
         } 
-      } else if (SCHEME_VECTORP(px->redirects)
-                 && !(SCHEME_VEC_SIZE(px->redirects) & 1)
+      } else if (SCHEME_REDIRECTS_STRUCTP(px->redirects)
                  && SAME_OBJ(SCHEME_VEC_ELS(px->redirects)[1], scheme_undefined)) {
         /* chaperone on every field: check that current value is not undefined
            --- unless check is disabled by a mark (bit it's faster to check
@@ -2681,8 +2676,7 @@ static Scheme_Object *struct_info_chaperone(Scheme_Object *o, Scheme_Object *si,
 
   while (SCHEME_CHAPERONEP(o)) {
     px = (Scheme_Chaperone *)o;
-    if (SCHEME_VECTORP(px->redirects)
-        && !(SCHEME_VEC_SIZE(px->redirects) & 1)) {
+    if (SCHEME_REDIRECTS_STRUCTP(px->redirects)) {
       proc = SCHEME_VEC_ELS(px->redirects)[1];
       if (SCHEME_TRUEP(proc) && !SAME_OBJ(proc, scheme_undefined)) {
         if (SCHEME_CHAPERONE_FLAGS(px) & SCHEME_CHAPERONE_IS_IMPERSONATOR)
@@ -5321,19 +5315,20 @@ static Scheme_Object *make_prefab_key(Scheme_Struct_Type *type)
   return key;
 }
 
-static char *mutability_data_to_immutability_data(int icnt, Scheme_Object *mutables, int *_min_cnt)
+static char *mutability_data_to_immutability_data(int icnt, int ucnt, Scheme_Object *mutables, int *_min_cnt)
 /* If `_min_cnt` is not NULL, then mutability positions can determine a minimum
    argument count that is bigger than `icnt`. */
 {
   char *immutable_array = NULL, *a2;
 
   if (_min_cnt)
-    *_min_cnt = icnt;
+    *_min_cnt = icnt + ucnt;
   
   if ((icnt > 0) || _min_cnt) {
-    int sz = (icnt ? icnt : 1);
-    immutable_array = (char *)scheme_malloc_atomic(icnt);
+    int sz = icnt + ucnt + 1;
+    immutable_array = (char *)scheme_malloc_atomic(icnt + ucnt);
     memset(immutable_array, 1, icnt);
+    memset(immutable_array XFORM_OK_PLUS icnt, 0, ucnt);
 
     if (mutables) {
       int i;
@@ -5352,8 +5347,8 @@ static char *mutability_data_to_immutability_data(int icnt, Scheme_Object *mutab
                 && !_min_cnt))
           return NULL;
         a_val = SCHEME_INT_VAL(a);
-        if (_min_cnt && (a_val >= *_min_cnt)) {
-          *_min_cnt = a_val+1;
+        if (_min_cnt && ((a_val+ucnt) >= *_min_cnt)) {
+          *_min_cnt = a_val+ucnt+1;
         }
         if (a_val >= sz) {
           a2 = (char *)scheme_malloc_atomic(a_val * 2);
@@ -5457,9 +5452,10 @@ Scheme_Struct_Type *scheme_lookup_prefab_type(Scheme_Object *key, int min_field_
       return NULL;
     name = a;
 
-    if ((icnt + ucnt) || (mutables && SCHEME_VEC_SIZE(mutables))) {
+    if (icnt || (mutables && SCHEME_VEC_SIZE(mutables))) {
       int min_cnt;
-      immutable_array = mutability_data_to_immutability_data(icnt + ucnt,
+      immutable_array = mutability_data_to_immutability_data(icnt,
+                                                             ucnt,
                                                              mutables,
                                                              inferred_size ? &min_cnt : NULL);
       if (!immutable_array)

@@ -163,11 +163,27 @@ The @exec{raco test} command accepts several flags:
        successes and failures, the table reports test and failure
        counts based on the log.}
 
+ @item{@DPFlag{arg} @nonterm{argument}
+       --- Adds @nonterm{argument} to the list of arguments to the invoked test module,
+       so that the invoked module sees @nonterm{argument} in its
+       @racket[current-command-line-arguments]. These arguments are
+       combined with any arguments specified in @filepath{info.rkt}
+       by @racket[test-command-line-arguments].}
+
+ @item{@DPFlag{args} @nonterm{arguments}
+        --- The same as @DPFlag{arg}, but @nonterm{arguments} is treated
+        as a whitespace-delimited list of arguments to add. To specify
+        multiple arguments using this flag within a typical shell,
+        @nonterm{arguments} must be
+        enclosed in quotation marks.
+ }
 ]
 
 @history[#:changed "1.1" @elem{Added @DFlag{heartbeat}.}
          #:changed "1.4" @elem{Changed recognition of module suffixes to use @racket[get-module-suffixes],
-                               which implies recognizing @filepath{.ss} and @filepath{.rkt}.}]
+                               which implies recognizing @filepath{.ss} and @filepath{.rkt}.}
+         #:changed "1.5" @elem{Added @DPFlag{ignore-stderr}.}
+         #:changed "1.6" @elem{Added @DPFlag{arg} and @DPFlag{args}.}]
 
 @section[#:tag "test-config"]{Test Configuration by Submodule}
 
