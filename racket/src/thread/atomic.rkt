@@ -4,7 +4,9 @@
          current-atomic
 
          start-atomic
-         end-atomic)
+         end-atomic
+
+         set-end-atomic-callback!)
 
 (define atomic 0)
 (define current-atomic
@@ -23,4 +25,20 @@
   (current-atomic (add1 (current-atomic))))
 
 (define (end-atomic)
-  (current-atomic (sub1 (current-atomic))))
+  (define n (sub1 (current-atomic)))
+  (cond
+    [(and end-atomic-callback
+          (zero? n))
+     (define cb end-atomic-callback)
+     (set! end-atomic-callback #f)
+     (current-atomic n)
+     (cb)]
+    [else
+     (current-atomic n)]))
+
+;; ----------------------------------------
+
+(define end-atomic-callback #f)
+
+(define (set-end-atomic-callback! cb)
+  (set! end-atomic-callback cb))

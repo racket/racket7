@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "parameter.rkt"
          "output-port.rkt"
          "../string/convert.rkt"
          (submod "bytes-output.rkt" internal))

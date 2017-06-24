@@ -25,7 +25,8 @@
   (make-parameter (open-output-host (check-rktio-error
                                      (rktio_std_fd rktio RKTIO_STDOUT)
                                      "error initializing stdout")
-                                    'stdout)
+                                    'stdout
+                                    #:buffer-mode 'infer)
                   (lambda (v)
                     (unless (output-port? v)
                       (raise-argument-error 'current-output-port
@@ -37,7 +38,8 @@
   (make-parameter (open-output-host (check-rktio-error
                                      (rktio_std_fd rktio RKTIO_STDERR)
                                      "error initializing stderr")
-                                    'stderr)
+                                    'stderr
+                                    #:buffer-mode 'none)
                   (lambda (v)
                     (unless (output-port? v)
                       (raise-argument-error 'current-error-port

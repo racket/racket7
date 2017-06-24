@@ -99,6 +99,7 @@ OBJS =  salloc.@LTO@ \
 	sema.@LTO@ \
 	setjmpup.@LTO@ \
 	sfs.@LTO@ \
+	sort.@LTO@ \
 	startup.@LTO@ \
 	string.@LTO@ \
 	struct.@LTO@ \
@@ -158,6 +159,7 @@ XSRCS = $(XSRCDIR)/salloc.c \
 	$(XSRCDIR)/sema.c \
 	$(XSRCDIR)/setjmpup.c \
 	$(XSRCDIR)/sfs.c \
+	$(XSRCDIR)/sort.c \
 	$(XSRCDIR)/startup.c \
 	$(XSRCDIR)/string.c \
 	$(XSRCDIR)/struct.c \
@@ -292,6 +294,8 @@ $(XSRCDIR)/setjmpup.c: $(XFORMDEP)
 	$(XFORM) $(XSRCDIR)/setjmpup.c $(SRCDIR)/setjmpup.c
 $(XSRCDIR)/sfs.c: $(XFORMDEP)
 	$(XFORM) $(XSRCDIR)/sfs.c $(SRCDIR)/sfs.c
+$(XSRCDIR)/sort.c: $(XFORMDEP)
+	$(XFORM) $(XSRCDIR)/sort.c $(SRCDIR)/sort.c
 $(XSRCDIR)/startup.c: $(XFORMDEP) ../cstartup.inc
 	$(XFORM_SETUP) --cpp "$(CPP) -I.. -I$(SRCDIR)/../src $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o $(XSRCDIR)/startup.c $(SRCDIR)/startup.c
 $(XSRCDIR)/string.c: $(XFORMDEP)  $(SRCDIR)/systype.inc
@@ -413,6 +417,8 @@ setjmpup.@LTO@: $(XSRCDIR)/setjmpup.c
 	$(CC) $(ALL_CFLAGS) -c $(XSRCDIR)/setjmpup.c -o setjmpup.@LTO@
 sfs.@LTO@: $(XSRCDIR)/sfs.c
 	$(CC) $(ALL_CFLAGS) -c $(XSRCDIR)/sfs.c -o sfs.@LTO@
+sort.@LTO@: $(XSRCDIR)/sort.c
+	$(CC) $(ALL_CFLAGS) -c $(XSRCDIR)/sort.c -o sort.@LTO@
 startup.@LTO@: $(XSRCDIR)/startup.c
 	$(CC) $(ALL_CFLAGS) -c $(XSRCDIR)/startup.c -o startup.@LTO@
 string.@LTO@: $(XSRCDIR)/string.c

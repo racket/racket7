@@ -38,9 +38,9 @@
 
 (struct core-input-port (name
                          data
-                         read-byte ; #f or (-> (or/c byte? eof-object?))
+                         read-byte ; #f or (-> (or/c byte? eof-object?)), must block
                          read-in ; port or (bytes start-k end-k copy? -> (or/c integer? ...))
-                         peek-byte ; #f or (-> (or/c byte? eof-object?))
+                         peek-byte ; #f or (-> (or/c byte? eof-object?)), must block
                          peek-in ; port or (bytes start-k end-k skip-k copy? -> (or/c integer? ...))
                          close
                          get-progress-evt

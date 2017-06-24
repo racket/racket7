@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "parameter.rkt"
          "read-and-peek.rkt"
          "input-port.rkt"
          "count.rkt"
@@ -63,7 +64,7 @@
        (define bstr (make-bytes 1))
        (define v (read-some-bytes! 'read-byte in bstr 0 1 #:copy-bstr? #f))
        (if (eq? v 1)
-           (bytes-ref bstr 1)
+           (bytes-ref bstr 0)
            v)])))
 
 (define/who (read-bytes amt [in (current-input-port)])

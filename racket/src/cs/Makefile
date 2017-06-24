@@ -116,7 +116,7 @@ regexp-rktl:
 io-demo: io.so
 	$(SCHEME) $(IO_DEPS) io.so demo/io.ss
 
-io.so: compiled/io.scm io.sls $(IO_DEPS) ../build/so-rktio/rktio.rktl
+io.so: compiled/io.scm io.sls $(IO_DEPS) ../io/compiled/rktio.rktl
 	$(COMP) '(compile-file "io.sls")' | $(SCHEME) -q $(IO_DEPS)
 
 compiled/io.scm: ../io/compiled/io.rktl $(CONVERT_DEPS)
@@ -125,21 +125,12 @@ compiled/io.scm: ../io/compiled/io.rktl $(CONVERT_DEPS)
 ../io/compiled/io.rktl:
 	$(MAKE) io-rktl
 
+../io/compiled/rktio.rktl:
+	$(MAKE) io-rktl
+
 io-rktl:
 	$(MAKE) bounce BOUNCE_DIR=../io BOUNCE_TARGET=io-src
 
-
-../build/so-rktio/rktio.rktl:
-	$(MAKE) rktio
-
-rktio:
-	$(MAKE) build-rktio RACKET="`$(RACKET) absify.rkt --exec $(RACKET)`" PREFIX="`$(RACKET) absify.rkt ../..`"
-
-build-rktio:
-	mkdir -p ../build/so-rktio
-	cd ../build/so-rktio; ../../rktio/configure --enable-standalone --prefix=$(PREFIX)
-	cd ../build/so-rktio; make install-shared-object
-	cd ../build/so-rktio; make rktio.rktl RACKET="$(RACKET)"
 
 thread-demo: thread.so
 	$(SCHEME) $(THREAD_DEPS) thread.so demo/thread.ss

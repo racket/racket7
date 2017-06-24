@@ -14,8 +14,6 @@
 (test #t (directory-exists? "demo"))
 (test #f (directory-exists? "no-such-demo"))
 
-(write (directory-list "demo")) (newline)
-
 ;; ----------------------------------------
 
 (time

@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "parameter.rkt"
          "input-port.rkt")
 
 (provide (rename-out [progress-evt?* progress-evt?])

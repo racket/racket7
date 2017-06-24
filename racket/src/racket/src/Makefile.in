@@ -61,6 +61,7 @@ OBJS =  salloc.@LTO@ \
 	sema.@LTO@ \
 	setjmpup.@LTO@ \
 	sfs.@LTO@ \
+	sort.@LTO@ \
 	startup.@LTO@ \
 	string.@LTO@ \
 	struct.@LTO@ \
@@ -274,6 +275,8 @@ setjmpup.@LTO@: $(srcdir)/setjmpup.c
 	$(CC) $(ALL_CFLAGS) -c $(srcdir)/setjmpup.c -o setjmpup.@LTO@
 sfs.@LTO@: $(srcdir)/sfs.c
 	$(CC) $(ALL_CFLAGS) -c $(srcdir)/sfs.c -o sfs.@LTO@
+sort.@LTO@: $(srcdir)/sort.c
+	$(CC) $(ALL_CFLAGS) -c $(srcdir)/sort.c -o sort.@LTO@
 startup.@LTO@: $(srcdir)/startup.c
 	$(CC) $(ALL_CFLAGS) -c $(srcdir)/startup.c -I.. -I$(srcdir) -o startup.@LTO@
 string.@LTO@: $(srcdir)/string.c
@@ -418,6 +421,10 @@ setjmpup.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h   $(srcdir)/schmach.h
 sfs.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h $(srcdir)/mzmark_sfs.inc
+sort.@LTO@: $(COMMON_HEADERS) \
+         $(srcdir)/stypes.h
+startup.@LTO@: $(COMMON_HEADERS) $(srcdir)/schvers.h \
+         $(srcdir)/stypes.h  $(srcdir)/schminc.h $(srcdir)/startup.inc ../cstartup.inc
 string.@LTO@: $(COMMON_HEADERS) $(RKTIO_HEADERS) \
          $(srcdir)/stypes.h    $(srcdir)/schvers.h $(srcdir)/mzmark_string.inc $(srcdir)/strops.inc \
          $(srcdir)/schustr.inc $(srcdir)/systype.inc

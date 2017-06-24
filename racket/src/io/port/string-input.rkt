@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "parameter.rkt"
          "read-and-peek.rkt"
          "input-port.rkt"
          (submod "bytes-input.rkt" internal)
@@ -214,7 +215,7 @@
        (define str (make-string 1))
        (define v (read-some-chars! 'read-char in str 0 1))
        (if (eq? v 1)
-           (string-ref str 1)
+           (string-ref str 0)
            v)]
       [else
        ;; Byte-level shortcut is available, so try it as a char shortcut

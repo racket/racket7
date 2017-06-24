@@ -6,6 +6,9 @@
                   [open-input-file host:open-input-file]
                   [close-input-port host:close-input-port]
                   [read-line host:read-line]
+                  [read-byte host:read-byte]
+                  [file-stream-buffer-mode host:file-stream-buffer-mode]
+                  [port-count-lines! host:port-count-lines!]
                   [current-directory host:current-directory]
                   [path->string host:path->string]))
 
@@ -166,11 +169,29 @@
        (close-input-port p)
        (loop (sub1 j))))))
 
+(define read-byte-buffer-mode 'block)
+
+'read-byte/host
+(time
+ (let loop ([j 10])
+   (unless (zero? j)
+     (let ()
+       (define p (host:open-input-file "compiled/io.rktl"))
+       (host:file-stream-buffer-mode p read-byte-buffer-mode)
+       (host:port-count-lines! p)
+       (let loop ()
+         (unless (eof-object? (host:read-byte p))
+           (loop)))
+       (host:close-input-port p)
+       (loop (sub1 j))))))
+
+'read-byte
 (time
  (let loop ([j 10])
    (unless (zero? j)
      (let ()
        (define p (open-input-file "compiled/io.rktl"))
+       (file-stream-buffer-mode p read-byte-buffer-mode)
        (port-count-lines! p)
        (let loop ()
          (unless (eof-object? (read-byte p))
@@ -178,7 +199,7 @@
        (close-input-port p)
        (loop (sub1 j))))))
 
-'read-line
+'read-line/host
 (time
  (let loop ([j 10])
    (unless (zero? j)
@@ -190,6 +211,7 @@
        (host:close-input-port p)
        (loop (sub1 j))))))
 
+'read-line
 (time
  (let loop ([j 10])
    (unless (zero? j)

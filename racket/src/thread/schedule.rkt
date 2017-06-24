@@ -1,5 +1,6 @@
 #lang racket/base
 (require "atomic.rkt"
+         "engine.rkt"
          "internal-error.rkt"
          "tree.rkt"
          "parameter.rkt"
@@ -65,6 +66,8 @@
           (set-thread-engine! t e)
           (select-thread!)]
          [else
+          ;; Swap out when the atomic region ends:
+          (set-end-atomic-callback! engine-block)
           (loop e)])))))
 
 (define (maybe-done)

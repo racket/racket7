@@ -31,7 +31,7 @@
                  [(eqv? kind RKTIO_ERROR_KIND_POSIX) 'posix]
                  [(eqv? kind RKTIO_ERROR_KIND_WINDOWS) 'windows]
                  [(eqv? kind RKTIO_ERROR_KIND_GAI) 'gai]
-                 [else (error "confused about rktio error")]))))]
+                 [else (error 'raise-filesystem-error "confused about rktio error")]))))]
      [else
       (exn:fail:filesystem
        msg
@@ -50,7 +50,7 @@
         "cannot open destination file"]
        [(eqv? step RKTIO_COPY_STEP_READ_SRC_DATA)
         "error reading source file"]
-       [(eqv? RKTIO_COPY_STEP_WRITE_DEST_DATA)
+       [(eqv? step RKTIO_COPY_STEP_WRITE_DEST_DATA)
         "error writing destination file"]
        [(eqv? step RKTIO_COPY_STEP_READ_SRC_METADATA)
         "error reading source-file metadata"]

@@ -11,10 +11,9 @@
          racket-error?)
 ;; Move `provide`s added by macros
 
-(define rktio-table (primitive-table '#%rktio))
-
-(unless rktio-table
-  (error '#%rktio "rktio not supported by host"))
+(define rktio-table
+  (or (primitive-table '#%rktio)
+      (error '#%rktio "rktio not supported by host")))
 
 (define (lookup n)
   (hash-ref rktio-table n))

@@ -261,6 +261,9 @@
     [`(,def ,ret ,name ,args)
      `(,def ,(update-type ret) ,name
         ,(map (lambda (a) (update-bind a #:as-argument? #t)) args))]
+    [`(,def ,err-val ,ret ,name ,args)
+     `(,def ,err-val ,(update-type ret) ,name
+        ,(map (lambda (a) (update-bind a #:as-argument? #t)) args))]
     [else e]))
 
 (define (update-type-types e)

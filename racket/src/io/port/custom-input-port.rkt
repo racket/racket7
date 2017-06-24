@@ -1,6 +1,6 @@
 #lang racket/base
 (require "input-port.rkt"
-         "peek-to-read-port.rkt")
+         "peek-via-read-port.rkt")
 
 (provide make-input-port)
 
@@ -36,14 +36,6 @@
   (define (read-in dest-bstr dest-start dest-end copy?)
     (protect-in dest-bstr dest-start dest-end copy? user-read-in))
   
-  (define (read-byte)
-    (define bstr (make-bytes 1))
-    (define n (user-read-in bstr))
-    (cond
-     [(eof-object? n) n]
-     [(= n 1) (bytes-ref bstr 0)]
-     [else (read-byte)]))
-  
   ;; Used only if `user-peek-in` is a function:
   (define (peek-in dest-bstr dest-start dest-end skip-k copy?)
     (protect-in dest-bstr dest-start dest-end copy?
@@ -63,8 +55,7 @@
          peek-in)
      #:close user-close)]
    [else
-    (open-input-peek-to-read
+    (open-input-peek-via-read
      #:name name
-     #:read-byte read-byte
      #:read-in read-in
      #:close user-close)]))

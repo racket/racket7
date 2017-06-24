@@ -1,11 +1,9 @@
 #lang racket/base
-(require (only-in racket/base
-                  [write-bytes host:write-bytes]
-                  [current-error-port host:current-error-port])
-         "../common/atomic.rkt"
+(require "../common/atomic.rkt"
          "../common/check.rkt"
          "../../common/queue.rkt"
          "../host/evt.rkt"
+         "../host/rktio.rkt"
          "../string/convert.rkt"
          "level.rkt"
          "logger.rkt")
@@ -48,7 +46,7 @@
                (define b (box (poll-ctx-select-proc ctx)))
                (define n (queue-add! (queue-log-receiver-waiters lr) b))
                (values #f (control-state-evt
-                           (wrap-evt (async-evt) (lambda (e) (unbox b)))
+                           (wrap-evt async-evt (lambda (e) (unbox b)))
                            (lambda () (queue-remove-node! (queue-log-receiver-waiters lr) n))
                            void
                            (lambda ()
@@ -76,9 +74,16 @@
   prop:receiver-send
   (lambda (lr msg)
     ;; called in atomic mode
-    (define stderr (host:current-error-port))
-    (host:write-bytes (string->bytes/utf-8 (vector-ref msg 1)) stderr)
-    (host:write-bytes #"\n" stderr)))
+    (define fd (rktio_std_fd rktio RKTIO_STDERR))
+    (define bstr (bytes-append (string->bytes/utf-8 (vector-ref msg 1)) #"\n"))
+    (define len (bytes-length bstr))
+    (let loop ([i 0])
+      (define v (rktio_write_in rktio fd bstr i len))
+      (unless (rktio-error? v)
+        (let ([i (+ i v)])
+          (unless (= i len)
+            (loop i)))))
+    (rktio_forget rktio fd)))
 
 (define/who (add-stderr-log-receiver! logger . args)
   (check who logger? logger)
