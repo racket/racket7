@@ -7,6 +7,26 @@
          (prefix-in : parser-tools/lex-sre)
          parser-tools/yacc)
 
+;; Parse "rktio.h" to produce a seqeuence
+;;  (define-constant <id> <const>) ...
+;;  <type-def> ...
+;;  <func-def> ...
+;;
+;; where
+;;  <type-def> = (define-type <id> <id>)
+;;             | (define-struct-type <id> ([<type> <name>] ...))
+;;
+;;  <func-def> = (define-function <type> <id> ([<type> <arg-name>] ...))
+;;                 => never fails
+;;             | (define-function/errno <err-v> <type> <id> ([<type> <arg-name>] ...))
+;;                 => fails when result equals <err-v>
+;;             | (define-function/errno+step <err-v> <type> <id> ([<type> <arg-name>] ...))
+;;                 => fails when result equals <err-v>, keep step
+;;
+;;  <type> = <prim-type>
+;;         | (ref <type>)  ; opaque, needs to be deallocated somehow
+;;         | (*ref <type>) ; transparent argument, can be represented by a byte string
+
 (define output-file #f)
 
 (define input-file
@@ -24,7 +44,7 @@
 (define-empty-tokens delim-tokens
   (EOF WHITESPACE
        OPEN CLOSE COPEN CCLOSE SEMI COMMA STAR LSHIFT EQUAL
-       __RKTIO_H__ EXTERN EXTERN/NOERR EXTERN/STEP
+       __RKTIO_H__ EXTERN EXTERN/NOERR EXTERN/STEP EXTERN/ERR
        DEFINE TYPEDEF ENUM STRUCT VOID UNSIGNED SHORT INT CONST))
 
 (define lex
@@ -52,6 +72,7 @@
    ["RKTIO_EXTERN" 'EXTERN]
    ["RKTIO_EXTERN_NOERR" 'EXTERN/NOERR]
    ["RKTIO_EXTERN_STEP" 'EXTERN/STEP]
+   ["RKTIO_EXTERN_ERR" 'EXTERN/ERR]
    [(:seq (:or #\_ (:/ #\A #\Z #\a #\z))
           (:* (:or #\_ (:/ #\A #\Z #\a #\z #\0 #\9))))
     (token-ID (string->symbol lexeme))]
@@ -79,11 +100,12 @@
    (grammar
     (<prog> [() null]
             [(<decl> <prog>) (cons $1 $2)])
-    (<decl> [(DEFINE ID <expr>) `(define ,$2 ,$3)]
+    (<decl> [(DEFINE ID <expr>) `(define-constant ,$2 ,$3)]
             [(DEFINE __RKTIO_H__ <expr>) #f]
             [(DEFINE EXTERN ID) #f]
             [(DEFINE EXTERN/NOERR EXTERN) #f]
             [(DEFINE EXTERN/STEP EXTERN) #f]
+            [(DEFINE EXTERN/ERR OPEN ID CLOSE EXTERN) #f]
             [(STRUCT ID SEMI) #f]
             [(TYPEDEF <type> <id> SEMI)
              (if (eq? $2 $3)
@@ -94,12 +116,14 @@
                  `(define-struct-type ,$2 ,$4)
                  (error 'parse "typedef struct names don't match at ~s" $5))]
             [(<extern> <return-type> <id> OPEN <params> SEMI)
-             (let ([r-type (shift-stars $3 $2)])
-               `(,(adjust-errno $1 r-type) ,r-type ,(unstar $3) ,$5))]
+             (let ([r-type (shift-stars $3 $2)]
+                   [id (unstar $3)])
+               `(,@(adjust-errno $1 r-type id) ,r-type ,id ,$5))]
             [(ENUM COPEN <enumeration> SEMI) `(begin . ,(enum-definitions $3))])
     (<extern> [(EXTERN) 'define-function/errno]
               [(EXTERN/STEP) 'define-function/errno+step]
-              [(EXTERN/NOERR) 'define-function])
+              [(EXTERN/NOERR) 'define-function]
+              [(EXTERN/ERR OPEN ID CLOSE) `(define-function/errno ,$3)])
     (<params> [(VOID CLOSE) null]
               [(<paramlist>) $1])
     (<paramlist> [(<type> <id> CLOSE) `((,(shift-stars $2 $1) ,(unstar $2)))]
@@ -114,7 +138,7 @@
                (append (map (lambda (id) `(,(shift-stars id $1) ,(unstar id))) $2)
                        $3)])
     (<id> [(ID) $1]
-          [(STAR <id>) `(* ,$2)])
+          [(STAR <id>) `(*ref ,$2)])
     (<ids> [(<id> SEMI) (list $1)]
            [(<id> COMMA <ids>) (cons $1 $3)])
     (<expr> [(ID) $1]
@@ -132,21 +156,25 @@
             [(STRUCT ID) $2])
     (<return-type> [(<type>) $1]))))
 
-(define (adjust-errno def-kind r)
+(define (adjust-errno def-kind r id)
   (cond
-    [(eq? r 'rktio_bool_t) 'define-function]
-    [(eq? r 'void) 'define-function]
-    [else def-kind]))
+    [(eq? id 'rktio_init) '(define-function)] ; init is special, because we can't get an error
+    [(eq? r 'rktio_bool_t) '(define-function)]
+    [(eq? r 'void) '(define-function)]
+    [(pair? def-kind) def-kind]
+    [(pair? r) '(define-function/errno NULL)]
+    [(eq? r 'rktio_ok_t) '(define-function/errno #f)]
+    [else (list def-kind)]))
 
 (define (shift-stars from to)
   (if (and (pair? from)
-           (eq? '* (car from)))
-      `(* ,(shift-stars (cadr from) to))
+           (eq? '*ref (car from)))
+      `(*ref ,(shift-stars (cadr from) to))
       to))
 
 (define (unstar from)
   (if (and (pair? from)
-           (eq? '* (car from)))
+           (eq? '*ref (car from)))
       (unstar (cadr from))
       from))
 
@@ -157,11 +185,11 @@
       [(pair? (car l))
        (let ([i (cadar l)])
          (cons
-          `(define ,(caar l) ,i)
+          `(define-constant ,(caar l) ,i)
           (loop (cdr l) (add1 i))))]
       [else
        (cons
-        `(define ,(car l) ,i)
+        `(define-constant ,(car l) ,i)
         (loop (cdr l) (add1 i)))])))
 
 ;; ----------------------------------------
@@ -187,7 +215,7 @@
 
 (define (constant-defn? e)
   (and (pair? e)
-       (eq? (car e) 'define)))
+       (eq? (car e) 'define-constant)))
 
 (define (type-defn? e)
   (and (pair? e)
@@ -216,12 +244,12 @@
 ;; explicitly freed.
 (define (update-type t #:as-argument? [as-argument? #f])
   (cond
-    [(and (pair? t) (eq? (car t) '*))
+    [(and (pair? t) (eq? (car t) '*ref))
      (let ([s (update-type (cadr t))])
        (if (and as-argument?
                 (or (pair? s)
                     (hash-ref defined-types s #f)))
-           `(* ,s)
+           `(*ref ,s)
            `(ref ,s)))]
     [else t]))
 
@@ -250,9 +278,11 @@
                 unsorted-content))))
 
 (define (show-content)
+  (printf "(begin\n")
   (for ([e (in-list content)]
         #:when e)
-    (pretty-write e)))
+    (pretty-write e))
+  (printf ")\n"))
 
 (if output-file
     (with-output-to-file output-file

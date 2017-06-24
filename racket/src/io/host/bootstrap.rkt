@@ -1,11 +1,16 @@
 #lang racket/base
-(require (only-in '#%linklet primitive-table))
+(require racket/include
+         "../common/check.rkt"
+         (only-in '#%linklet primitive-table)
+         ffi/unsafe
+         ffi/unsafe/atomic
+         (for-syntax racket/base))
 
 ;; Approximate scheduler cooperation where `async-evt` can be used
 ;; within the dynamic extent of a `poller` callback to mean that the
 ;; poller is selected. Since `nack` propagation is based on a thread,
 ;; this approximation won't work right if an event is actually
-;; contented.
+;; contended.
 
 (struct poller (proc)
   #:property prop:procedure
@@ -34,10 +39,164 @@
 (define (async-evt)
   (or (current-async-semaphore)
       (error 'async-evt "not in a `poller` callback")))
+
+(define current-kill-callbacks (make-parameter '()))
+
+(define (thread-push-kill-callback! p)
+  (current-kill-callbacks (cons p (current-kill-callbacks))))
+
+(define (thread-pop-kill-callback!)
+  (current-kill-callbacks (cdr (current-kill-callbacks))))
   
 (primitive-table '#%evt
                  (hasheq 'poller poller
                          'poll-ctx-poll? poll-ctx-poll?
                          'poll-ctx-select-proc poll-ctx-select-proc
                          'control-state-evt control-state-evt
-                         'async-evt async-evt))
+                         'async-evt async-evt
+                         'start-atomic start-atomic
+                         'end-atomic end-atomic
+                         'thread-push-kill-callback! thread-push-kill-callback!
+                         'thread-pop-kill-callback! thread-pop-kill-callback!))
+
+;; ----------------------------------------
+
+(define librktio (ffi-lib "librktio"))
+
+(define << arithmetic-shift)
+
+(define void _void)
+(define char _byte)
+(define int _int)
+(define unsigned-short _ushort)
+(define intptr_t _intptr)
+(define uintptr_t _uintptr)
+(define rktio_int64_t _int64)
+(define float _float)
+(define double _double)
+(define NULL #f)
+
+(define-syntax-rule (define-constant n v) (define n v))
+
+(define-syntax (define-type stx)
+  (syntax-case stx (rktio_bool_t rktio_ok_t)
+    [(_ rktio_bool_t _)
+     (with-syntax ([(_ rktio_bool_t _) stx])
+       #'(define rktio_bool_t _bool))]
+    [(_ rktio_ok_t _)
+     (with-syntax ([(_ rktio_ok_t _) stx])
+       #'(define rktio_ok_t _bool))]
+    [(_ n t) #'(define n t)]))
+
+(define-syntax (define-struct-type stx)
+  (syntax-case stx ()
+    [(_ n ([type name] ...))
+     (with-syntax ([_n (datum->syntax #'n
+                                      (string->symbol (format "_R~a" (syntax-e #'n))))]
+                   [_n-pointer (datum->syntax #'n
+                                              (string->symbol (format "_R~a-pointer" (syntax-e #'n))))])
+       #'(begin
+           (define-cstruct _n ([name type] ...))
+           (define n _n-pointer)))]))
+
+(define-syntax-rule (ref t) _pointer)
+(define-syntax-rule (*ref t) _pointer)
+
+(define-syntax-rule (define-function ret-type name ([arg-type arg-name] ...))
+  (define name
+    (get-ffi-obj 'name librktio (_fun arg-type ... -> ret-type))))
+
+(define-syntax-rule (define-function/errno* err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
+                      err-expr)
+  (begin
+    (define proc
+      (get-ffi-obj 'name librktio (_fun rktio-type arg-type ... -> ret-type)))
+    (define (name rktio-name arg-name ...)
+      (begin
+        (start-atomic)
+        (begin0
+          (let ([v (proc rktio-name arg-name ...)])
+            (if (eqv? v err-v)
+                err-expr
+                v))
+          (end-atomic))))))
+
+(define-syntax-rule (define-function/errno err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...))
+  (define-function/errno* err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
+    (vector (rktio_get_last_error_kind rktio-name)
+            (rktio_get_last_error rktio-name))))
+
+(define-syntax-rule (define-function/errno+step err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...))
+  (define-function/errno* err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
+    (vector (rktio_get_last_error_kind rktio-name)
+            (rktio_get_last_error rktio-name)
+            (rktio_get_last_error_step rktio-name))))
+
+(include "../compiled/rktio.rktl")
+
+(define (rktio_filesize_ref fs)
+  (ptr-ref fs rktio_filesize_t))
+(define (rktio_timestamp_ref fs)
+  (ptr-ref fs rktio_timestamp_t))
+(define (rktio_is_timestamp v)
+  (let ([radix (arithmetic-shift 1 (sub1 (* 8 (ctype-sizeof rktio_timestamp_t))))])
+    (<= (- radix) v (sub1 radix))))
+
+(define (rktio_identity_to_vector p)
+  (let ([p (cast p _pointer _Rrktio_identity_t-pointer)])
+    (vector
+     (Rrktio_identity_t-a p)
+     (Rrktio_identity_t-b p)
+     (Rrktio_identity_t-c p)
+     (Rrktio_identity_t-a_bits p)
+     (Rrktio_identity_t-b_bits p)
+     (Rrktio_identity_t-c_bits p))))
+
+(define (rktio_to_bytes fs)
+  (bytes-copy (cast fs _pointer _bytes)))
+
+;; Unlike `rktio_to_bytes`, frees the array and strings
+(define (rktio_to_bytes_list lls)
+  (begin0
+    (let loop ([i 0])
+      (define bs (ptr-ref lls _bytes i))
+      (if bs
+          (cons (begin0
+                  (bytes-copy bs)
+                  (rktio_free bs))
+                (loop (add1 i)))
+          null))
+    (rktio_free lls)))
+
+(primitive-table '#%rktio
+                 (let ()
+                   (define-syntax extract-functions
+                     (syntax-rules (define-constant
+                                     define-type
+                                     define-struct-type
+                                     define-function
+                                     define-function/errno
+                                     define-function/errno+step)
+                       [(_ accum) (hasheq . accum)]
+                       [(_ accum (define-constant . _) . rest)
+                        (extract-functions accum . rest)]
+                       [(_ accum (define-type . _) . rest)
+                        (extract-functions accum . rest)]
+                       [(_ accum (define-struct-type . _) . rest)
+                        (extract-functions accum . rest)]
+                       [(_ accum (define-function _ id . _) . rest)
+                        (extract-functions ('id id . accum) . rest)]
+                       [(_ accum (define-function/errno _ _ id . _) . rest)
+                        (extract-functions ('id id . accum) . rest)]
+                       [(_ accum (define-function/errno+step _ _ id . _) . rest)
+                        (extract-functions ('id id . accum) . rest)]))
+                   (define-syntax-rule (begin form ...)
+                     (extract-functions [#;(begin)
+                                         'rktio_filesize_ref rktio_filesize_ref
+                                         'rktio_timestamp_ref rktio_timestamp_ref
+                                         'rktio_is_timestamp rktio_is_timestamp
+                                         'rktio_identity_to_vector rktio_identity_to_vector
+                                         'rktio_to_bytes rktio_to_bytes
+                                         'rktio_to_bytes_list rktio_to_bytes_list]
+                                        form ...))
+                   (include "../compiled/rktio.rktl")))

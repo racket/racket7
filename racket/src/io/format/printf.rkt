@@ -15,7 +15,7 @@
   (let loop ([i 0] [expected-count 0] [args all-args] [error-thunk #f])
     (cond
      [(= i len)
-      (check-conclusions who expected-count args error-thunk fmt args)]
+      (check-conclusions who expected-count args error-thunk fmt all-args)]
      [else
       (case (string-ref fmt i)
         [(#\~)

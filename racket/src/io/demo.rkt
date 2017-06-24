@@ -17,9 +17,67 @@
     (unless (equal? e v)
       (error 'failed "~s: ~e" 'rhs v))))
 
+(test #t (file-exists? "demo.rkt"))
+(test #f (file-exists? "compiled"))
+(test #f (file-exists? "compiled/demo-file"))
+
+(test #t (directory-exists? "compiled"))
+(test #f (directory-exists? "compiled/demo-dir"))
+
+(test #f (link-exists? "compiled"))
+(test #f (link-exists? "compiled/demo-dir"))
+
+(call-with-output-file "compiled/demo-file" void)
+(call-with-output-file "compiled/demo-file" void 'replace)
+(let ([now (current-seconds)]
+      [f-now (file-or-directory-modify-seconds "compiled/demo-file")])
+  (test #t (<= (- now 10) f-now now))
+  (file-or-directory-modify-seconds "compiled/demo-file" (- now 5))
+  (test (- now 5) (file-or-directory-modify-seconds "compiled/demo-file")))
+(rename-file-or-directory "compiled/demo-file" "compiled/demo-file2")
+(delete-file "compiled/demo-file2")
+
+(test 88 (file-or-directory-modify-seconds "compiled/bad" #f (lambda () 88)))
+(test 89 (file-or-directory-modify-seconds "compiled/bad" (current-seconds) (lambda () 89)))
+
+(test #t (and (memq 'read (file-or-directory-permissions "demo.rkt")) #t))
+(test #t (and (memq 'read (file-or-directory-permissions "compiled")) #t))
+
+(printf "~s\n" (filesystem-root-list))
+(printf "~s\n" (directory-list))
+(make-directory "compiled/demo-dir")
+(delete-directory "compiled/demo-dir")
+
+(printf "demo.rkt = ~s\n" (file-or-directory-identity "demo.rkt"))
+(test (file-or-directory-identity "demo.rkt") (file-or-directory-identity "demo.rkt"))
+(test #f (= (file-or-directory-identity "compiled") (file-or-directory-identity "demo.rkt")))
+
+(test (call-with-input-file "demo.rkt"
+        (lambda (i)
+          (let loop ([n 0])
+            (if (eof-object? (read-byte i))
+                n
+                (loop (add1 n))))))
+      (file-size "demo.rkt"))
+
+(copy-file "demo.rkt" "compiled/demo-copy" #t)
+(test (file-size "demo.rkt")
+      (file-size "compiled/demo-copy"))
+(test (file-or-directory-permissions "demo.rkt" 'bits)
+      (file-or-directory-permissions "compiled/demo-copy" 'bits))
+(delete-file "compiled/demo-copy")
+
+(make-file-or-directory-link "../demo.rkt" "compiled/also-demo.rkt")
+(test #t (link-exists? "compiled/also-demo.rkt"))
+(test (string->path "../demo.rkt") (resolve-path "compiled/also-demo.rkt"))
+(delete-file "compiled/also-demo.rkt")
+(test #f (link-exists? "compiled/also-demo.rkt"))
+
+(printf "~s\n" (expand-user-path "~/at-home"))
+
 (struct animal (name weight)
-        #:property prop:custom-write (lambda (v o mode)
-                                       (fprintf o "<~a>" (animal-name v))))
+  #:property prop:custom-write (lambda (v o mode)
+                                 (fprintf o "<~a>" (animal-name v))))
 
 (test "1\n0!\"hi\"" (format "1~%~  \n  ~o~c~s" 0 #\! "hi"))
 
@@ -35,9 +93,12 @@
       (with-handlers ([exn:fail? exn-message])
         (error 'no "hi ~s" 10)))
 
-(test "error: format string requires 1 arguments, given 2"
+(test "error: format string requires 1 arguments, given 3"
       (with-handlers ([exn:fail? exn-message])
         (error 'no "hi ~s" 1 2 3)))
+(test "error: format string requires 2 arguments, given 1"
+      (with-handlers ([exn:fail? exn-message])
+        (error 'no "hi ~s ~s" 8)))
 
 (define infinite-ones 
   (make-input-port 'ones

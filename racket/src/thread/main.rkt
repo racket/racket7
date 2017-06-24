@@ -5,8 +5,7 @@
                   evt? prop:evt
                   always-evt
                   never-evt
-                  handle-evt?
-                  #%evt-instance)
+                  handle-evt?)
          (except-in "semaphore.rkt"
                     semaphore-peek-evt)
          (except-in "channel.rkt"
@@ -21,7 +20,8 @@
          "will-execute.rkt"
          "exit.rkt"
          "plumber.rkt"
-         "unsafe.rkt")
+         "unsafe.rkt"
+         "instance.rkt")
 
 (provide call-in-main-thread
          

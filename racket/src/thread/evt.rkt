@@ -18,9 +18,7 @@
          (struct-out choice-evt)
 
          (struct-out poller)
-         (struct-out poll-ctx)
-
-         #%evt-instance)
+         (struct-out poll-ctx))
 
 (define-values (prop:evt evt? evt-ref)
   (make-struct-type-property 'evt))
@@ -101,15 +99,3 @@
      [(evt? v) (values #f v)]
      [(poller? v) ((poller-proc v) evt poll-ctx)]
      [else (values #f never-evt)])))
-
-;; ----------------------------------------
-
-;; Unsafe scheduler-cooperation functions are made available to
-;; clients through a `#%evt` primitive linklet instance:
-
-(define #%evt-instance
-  (hasheq 'poller poller
-          'poll-ctx-poll? poll-ctx-poll?
-          'poll-ctx-select-proc poll-ctx-select-proc
-          'control-state-evt control-state-evt
-          'async-evt async-evt))

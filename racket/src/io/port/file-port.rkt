@@ -4,7 +4,11 @@
                   [open-output-file host:open-output-file])
          "../common/check.rkt"
          "../path/path.rkt"
+         "../file/parameter.rkt"
          "../file/host.rkt"
+         "../file/error.rkt"
+         "../host/rktio.rkt"
+         "../format/main.rkt"
          "host-port.rkt"
          "close.rkt"
          "parameter.rkt"
@@ -21,41 +25,91 @@
 
 (define/who (open-input-file path [mode1 none] [mode2 none])
   (check who path-string? path)
-  (define p
-    (open-input-host (let ([path (->host path)])
-                       (cond
-                         [(and (eq? mode1 none) (eq? mode2 none))
-                          (host:open-input-file path)]
-                         [(eq? mode1 none)
-                          (host:open-input-file path mode2)]
-                         [(eq? mode2 none)
-                          (host:open-input-file path mode1)]
-                         [else
-                          (host:open-input-file path mode1 mode2)]))
-                     path))
+  (define (mode->flags mode)
+    (case mode
+      [(text) RKTIO_OPEN_TEXT]
+      [else 0]))
+  (define host-path (->host path))
+  (define fd (rktio_open rktio
+                         (->rktio host-path)
+                         (+ RKTIO_OPEN_READ
+                            (mode->flags mode1)
+                            (mode->flags mode2))))
+  (when (rktio-error? fd)
+    (raise-filesystem-error who
+                            fd
+                            (format (string-append
+                                     "cannot open input file\n"
+                                     "  path: ~a")
+                                    (host-> host-path))))
+  (define p (open-input-host fd (host-> host-path)))
   (when (port-count-lines-enabled)
     (port-count-lines! p))
   p)
 
 (define/who (open-output-file path [mode1 none] [mode2 none])
   (check who path-string? path)
-  (define p
-    (open-output-host (let ([path (->host path)])
-                        (cond
-                          [(and (eq? mode1 none) (eq? mode2 none))
-                           (host:open-output-file path)]
-                          [(eq? mode1 none)
-                           (host:open-output-file path mode2)]
-                          [(eq? mode2 none)
-                           (host:open-output-file path mode1)]
-                          [else
-                           (host:open-output-file path mode1 mode2)]))
-                      path))
+  (define (mode->flags mode)
+    (case mode
+      [(test) RKTIO_OPEN_TEXT]
+      [(truncate/replace) (+ RKTIO_OPEN_TRUNCATE
+                             RKTIO_OPEN_CAN_EXIST)]
+      [(must-truncate) (+ RKTIO_OPEN_TRUNCATE
+                          RKTIO_OPEN_MUST_EXIST)]
+      [(update) RKTIO_OPEN_CAN_EXIST]
+      [(must-update) RKTIO_OPEN_MUST_EXIST]
+      [else 0]))
+  (define (mode? v)
+    (or (eq? mode1 v) (eq? mode2 v)))
+  (define host-path (->host path))
+  (define fd0
+    (rktio_open rktio
+                (->rktio host-path)
+                (+ RKTIO_OPEN_WRITE
+                   (mode->flags mode1)
+                   (mode->flags mode2))))
+  (define fd
+    (cond
+      [(not (rktio-error? fd0)) fd0]
+      [(and (or (racket-error? fd0 RKTIO_ERROR_EXISTS)
+                (racket-error? fd0 RKTIO_ERROR_ACCESS_DENIED))
+            (or (mode? 'replace) (mode? 'truncate/replace)))
+       (define r (rktio_delete_file rktio
+                                    (->rktio host-path)
+                                    (current-force-delete-permissions)))
+       (when (rktio-error? r)
+         (raise-filesystem-error who
+                                 r
+                                 (format (string-append
+                                          "error deleting file\n"
+                                          "  path: ~a")
+                                         (host-> host-path))))
+       (rktio_open rktio
+                   (->rktio host-path)
+                   (+ RKTIO_OPEN_WRITE
+                      (mode->flags mode1)
+                      (mode->flags mode2)))]
+      [else fd0]))
+  (when (rktio-error? fd)
+    (raise-filesystem-error who
+                            fd
+                            (format (string-append
+                                     "~a\n"
+                                     "  path: ~a")
+                                    (cond
+                                      [(racket-error? fd0 RKTIO_ERROR_EXISTS)
+                                       "file exists"]
+                                      [(racket-error? fd0 RKTIO_ERROR_IS_A_DIRECTORY)
+                                       "path is a directory"]
+                                      [else "error opening file"])
+                                    (host-> host-path))))
+  
+  (define p (open-output-host fd (host-> host-path)))
   (when (port-count-lines-enabled)
     (port-count-lines! p))
   p)
 
-(define/who (call-with-input-file path proc mode)
+(define/who (call-with-input-file path proc [mode none])
   (check who path-string? path)
   (check who (procedure-arity-includes/c 1) proc)
   (define i (open-input-file path mode))

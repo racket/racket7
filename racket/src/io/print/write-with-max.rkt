@@ -54,7 +54,7 @@
        (define len (- src-end src-start))
        (unless (eq? max-length 'full)
          (define write-len (min len max-length))
-         (define wrote-len (write-bytes-avail* src-bstr o src-start (+ src-start write-len)))
+         (define wrote-len (write-bytes src-bstr o src-start (+ src-start write-len)))
          (if (= max-length wrote-len)
              (set! max-length 'full)
              (set! max-length (- max-length wrote-len))))

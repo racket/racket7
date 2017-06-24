@@ -1,8 +1,6 @@
 #lang racket/base
-(require (only-in racket/base
-                  [current-input-port host:current-input-port]
-                  [current-output-port host:current-output-port]
-                  [current-error-port host:current-error-port])
+(require "../host/rktio.rkt"
+         "../host/error.rkt"
          "output-port.rkt"
          "input-port.rkt"
          "host-port.rkt")
@@ -12,7 +10,10 @@
          current-error-port)
 
 (define current-input-port
-  (make-parameter (open-input-host (host:current-input-port) 'stdin)
+  (make-parameter (open-input-host (check-rktio-error
+                                    (rktio_std_fd rktio RKTIO_STDIN)
+                                    "error initializing stdin")
+                                   'stdin)
                   (lambda (v)
                     (unless (input-port? v)
                       (raise-argument-error 'current-input-port
@@ -21,7 +22,10 @@
                     v)))
                   
 (define current-output-port
-  (make-parameter (open-output-host (host:current-output-port) 'stdout)
+  (make-parameter (open-output-host (check-rktio-error
+                                     (rktio_std_fd rktio RKTIO_STDOUT)
+                                     "error initializing stdout")
+                                    'stdout)
                   (lambda (v)
                     (unless (output-port? v)
                       (raise-argument-error 'current-output-port
@@ -30,7 +34,10 @@
                     v)))
                   
 (define current-error-port
-  (make-parameter (open-output-host (host:current-error-port) 'stderr)
+  (make-parameter (open-output-host (check-rktio-error
+                                     (rktio_std_fd rktio RKTIO_STDERR)
+                                     "error initializing stderr")
+                                    'stderr)
                   (lambda (v)
                     (unless (output-port? v)
                       (raise-argument-error 'current-error-port

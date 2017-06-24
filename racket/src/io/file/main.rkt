@@ -1,11 +1,16 @@
 #lang racket/base
 (require "../common/check.rkt"
          "../path/path.rkt"
+         "../path/parameter.rkt"
+         "../path/directory-path.rkt"
+         "../host/rktio.rkt"
+         "../host/evt.rkt"
+         "../host/error.rkt"
+         "../format/main.rkt"
+         "parameter.rkt"
          "host.rkt"
+         "error.rkt"
          (only-in racket/base
-                  [directory-exists? host:directory-exists?]
-                  [file-exists? host:file-exists?]
-                  [link-exists? host:link-exists?]
                   [make-directory host:make-directory]
                   [delete-file host:delete-file]
                   [delete-directory host:delete-directory]
@@ -42,55 +47,173 @@
 
 (define/who (directory-exists? p)
   (check who path-string? p)
-  (host:directory-exists? (->host p)))
+  (rktio_directory_exists rktio (->rktio (->host p))))
 
 (define/who (file-exists? p)
   (check who path-string? p)
-  (host:file-exists? (->host p)))
+  (rktio_file_exists rktio (->rktio (->host p))))
 
 (define/who (link-exists? p)
   (check who path-string? p)
-  (host:link-exists? (->host p)))
+  (rktio_link_exists rktio (->rktio (->host p))))
 
 (define/who (make-directory p)
   (check who path-string? p)
-  (host:make-directory (->host p)))
+  (define host-path (->host p))
+  (define r (rktio_make_directory rktio (->rktio host-path)))
+  (when (rktio-error? r)
+    (raise-filesystem-error who
+                            r
+                            (format (string-append
+                                     "cannot make directory~a\n"
+                                     "  path: ~a")
+                                    (if (racket-error? r RKTIO_ERROR_EXISTS)
+                                        ";\n the path already exists"
+                                        "")
+                                    (host-> host-path)))))
 
-(define/who (directory-list p)
+(define/who (directory-list [p (current-directory)])
   (check who path-string? p)
-  (for/list ([p (in-list (host:directory-list (->host p)))])
-    (host-> p)))
-
-(define current-force-delete-permissions
-  (make-parameter #t (lambda (v) (and v #t))))
+  (define host-path (->host p))
+  (start-atomic)
+  (let ([dl (rktio_directory_list_start rktio (->rktio host-path))])
+    (cond
+      [(rktio-error? dl)
+       (end-atomic)
+       (raise-filesystem-error who
+                               dl
+                               (format (string-append
+                                        "could not open directory\n"
+                                        "  path: ~a")
+                                       (host-> host-path)))]
+      [else
+       (thread-push-kill-callback!
+        (lambda () (when dl (rktio_directory_list_stop rktio dl))))
+       (dynamic-wind
+        void
+        (lambda ()
+          (end-atomic)
+          (let loop ()
+            (start-atomic)
+            (define fnp (rktio_directory_list_step rktio dl))
+            (define fn (if (rktio-error? fnp)
+                           fnp
+                           (rktio_to_bytes fnp)))
+            
+            (cond
+              [(rktio-error? fn)
+               (end-atomic)
+               (check-rktio-error fn "error reading directory")]
+              [(equal? fn #"")
+               (set! dl #f)
+               (end-atomic)
+               null]
+              [else
+               (rktio_free fnp)
+               (end-atomic)
+               (cons (host-> fn)
+                     (loop))])))
+        (lambda ()
+          (start-atomic)
+          (thread-pop-kill-callback!)
+          (end-atomic)))])))
 
 (define/who (delete-file p)
   (check who path-string? p)
-  (host:delete-file (->host p)))
+  (define host-path (->host p))
+  (define r (rktio_delete_file rktio
+                               (->rktio host-path)
+                               (current-force-delete-permissions)))
+  (when (rktio-error? r)
+    (raise-filesystem-error who
+                            r
+                            (format (string-append
+                                     "cannot delete file\n"
+                                     "  path: ~a")
+                                    (host-> host-path)))))
 
 (define/who (delete-directory p)
   (check who path-string? p)
-  (host:delete-directory (->host p)))
+  (define host-path (->host p))
+  (define r (rktio_delete_directory rktio
+                                    (->rktio host-path)
+                                    (->rktio (->host (current-directory)))
+                                    (current-force-delete-permissions)))
+  (when (rktio-error? r)
+    (raise-filesystem-error who
+                            r
+                            (format (string-append
+                                     "cannot delete directory\n"
+                                     "  path: ~a")
+                                    (host-> host-path)))))
 
 (define/who (rename-file-or-directory old new [exists-ok? #f])
   (check who path-string? old)
   (check who path-string? new)
-  (host:rename-file-or-directory (->host old) (->host new) exists-ok?))
+  (define host-old (->host old))
+  (define host-new (->host new))
+  (define r (rktio_rename_file rktio
+                               (->rktio host-new)
+                               (->rktio host-old)
+                               exists-ok?))
+  (when (rktio-error? r)
+    (raise-filesystem-error who
+                            r
+                            (format (string-append
+                                     "cannot rename file or directory~a\n"
+                                     "  source path: ~a\n"
+                                     "  dest path: ~a")
+                                    (if (racket-error? r RKTIO_ERROR_EXISTS)
+                                        ";\n the destination path already exists"
+                                        "")
+                                    (host-> host-old)
+                                    (host-> host-new)))))
 
 (define/who file-or-directory-modify-seconds
   (case-lambda
     [(p)
      (check who path-string? p)
-     (host:file-or-directory-modify-seconds (->host p))]
+     (do-file-or-directory-modify-seconds who p #f #f)]
     [(p secs)
      (check who path-string? p)
      (check who exact-integer? secs)
-     (host:file-or-directory-modify-seconds (->host p) secs)]
+     (do-file-or-directory-modify-seconds who p secs #f)]
     [(p secs fail)
      (check who path-string? p)
      (check who #:or-false exact-integer? secs)
      (check who (procedure-arity-includes/c 0) fail)
-     (host:file-or-directory-modify-seconds (->host p) secs fail)]))
+     (do-file-or-directory-modify-seconds who p secs fail)]))
+
+(define (do-file-or-directory-modify-seconds who p secs fail)
+  (when secs
+    (unless (rktio_is_timestamp secs)
+      (raise-arguments-error who
+                             "integer value is out-of-range"
+                             "value" secs)))
+  (define host-path (->host p))
+  (start-atomic)
+  (define r0 (if secs
+                 (rktio_set_file_modify_seconds rktio
+                                                (->rktio host-path)
+                                                secs)
+                 (rktio_get_file_modify_seconds rktio
+                                                (->rktio host-path))))
+  (define r (if (and (not secs) (not (rktio-error? r0)))
+                (rktio_timestamp_ref r0)
+                r0))
+  (end-atomic)
+  (cond
+    [(rktio-error? r)
+     (if fail
+         (fail)
+         (raise-filesystem-error who
+                                 r
+                                 (format (string-append
+                                          "error ~a file/directory time\n"
+                                          "  path: ~a")
+                                         (if secs "setting" "getting")
+                                         (host-> host-path))))]
+    [else r]))
 
 (define/who (file-or-directory-permissions p [mode #f])
   (check who path-string? p)
@@ -101,32 +224,203 @@
                         (<= 0 m 65535))))
          #:contract "(or/c #f 'bits (integer-in 0 65535))"
          mode)
-  (host:file-or-directory-permissions (->host p) mode))
+  (define host-path (->host p))
+  (define r
+    (if (integer? mode)
+        (rktio_set_file_or_directory_permissions rktio
+                                                 (->rktio host-path)
+                                                 mode)
+        (rktio_get_file_or_directory_permissions rktio
+                                                 (->rktio host-path)
+                                                 (eq? mode 'bits))))
+  (when (rktio-error? r)
+    (raise-filesystem-error who
+                            r
+                            (format (string-append
+                                     "~a failed~a\n"
+                                     "  path: ~a~a")
+                                    (if (integer? mode) "update" "access")
+                                    (if (racket-error? r RKTIO_ERROR_EXISTS)
+                                        ";\n unsupported bit combination"
+                                        "")
+                                    (host-> host-path)
+                                    (if (racket-error? r RKTIO_ERROR_EXISTS)
+                                        (format "\n  permission value: ~a" mode)
+                                        ""))))
+  (cond
+    [(integer? mode) (void)]
+    [(eq? 'bits mode) r]
+    [else
+     (define (set? n) (eqv? n (bitwise-and r n)))
+     (let* ([l '()]
+            [l (if (set? RKTIO_PERMISSION_READ)
+                   (cons 'read l)
+                   l)]
+            [l (if (set? RKTIO_PERMISSION_WRITE)
+                   (cons 'write l)
+                   l)]
+            [l (if (set? RKTIO_PERMISSION_EXEC)
+                   (cons 'execute l)
+                   l)])
+       l)]))
 
 (define/who (file-or-directory-identity p [as-link? #f])
   (check who path-string? p)
-  (host:file-or-directory-identity p as-link?))
+  (define host-path (->host p))
+  (start-atomic)
+  (define r0 (rktio_path_identity rktio (->rktio host-path) (not as-link?)))
+  (define r (if (rktio-error? r0)
+                r0
+                (begin0
+                  (rktio_identity_to_vector r0)
+                  (rktio_free r0))))
+  (end-atomic)
+  (when (rktio-error? r0)
+    (raise-filesystem-error who
+                            r
+                            (format (string-append
+                                     "error obtaining identity for path\n"
+                                     "  path: ~a")
+                                    (host-> host-path))))
+  (+ (vector-ref r 0)
+     (arithmetic-shift (vector-ref r 1)
+                       (vector-ref r 3))
+     (arithmetic-shift (vector-ref r 2)
+                       (+ (vector-ref r 3) (vector-ref r 4)))))
 
 (define/who (file-size p)
   (check who path-string? p)
-  (host:file-size p))
+  (define host-path (->host p))
+  (start-atomic)
+  (define r0 (rktio_file_size rktio (->rktio host-path)))
+  (define r (if (rktio-error? r0)
+                r0
+                (begin0
+                  (rktio_filesize_ref r0)
+                  (rktio_free r0))))
+  (end-atomic)
+  (cond
+    [(rktio-error? r)
+     (raise-filesystem-error who
+                             r
+                             (format (string-append
+                                      "cannot get size\n"
+                                      "  path: ~a")
+                                     (host-> host-path)))]
+    [else r]))
 
 (define/who (copy-file src dest [exists-ok? #f])
   (check who path-string? src)
-  (check who path-string? src)
-  (host:copy-file (->host src) (->host dest) exists-ok?))
+  (check who path-string? dest)
+  (define src-host (->host src))
+  (define dest-host (->host dest))
+  (define (report-error r)
+    (raise-filesystem-error who
+                            r
+                            (format (string-append
+                                     "~a\n"
+                                     "  source path: ~a\n"
+                                     "  destination path: ~a")
+                                    (copy-file-step-string r)
+                                    (host-> src-host)
+                                    (host-> dest-host))))
+  (start-atomic)
+  (let ([cp (rktio_copy_file_start rktio dest-host src-host exists-ok?)])
+    (cond
+      [(rktio-error? cp)
+       (end-atomic)
+       (report-error cp)]
+      [else
+       (thread-push-kill-callback!
+        (lambda () (rktio_copy_file_stop rktio cp)))
+       (dynamic-wind
+        void
+        (lambda ()
+          (end-atomic)
+          (let loop ()
+            (cond
+              [(rktio_copy_file_is_done rktio cp)
+               (define r (rktio_copy_file_finish_permissions rktio cp))
+               (when (rktio-error? r) (report-error r))]
+              [else
+               (define r (rktio_copy_file_step rktio cp))
+               (when (rktio-error? r) (report-error r))
+               (loop)])))
+        (lambda ()
+          (start-atomic)
+          (rktio_copy_file_stop rktio cp)
+          (thread-pop-kill-callback!)
+          (end-atomic)))])))
 
 (define/who (make-file-or-directory-link to path)
   (check who path-string? to)
   (check who path-string? path)
-  (host:make-file-or-directory-link (->host/as-is to) (->host path)))
+  (define to-path (->path to))
+  (define to-host (->host/as-is to-path))
+  (define path-host (->host path))
+  (define r (rktio_make_link rktio path-host to-host (directory-path? to-path)))
+  (when (rktio-error? r)
+    (raise-filesystem-error who
+                            r
+                            (format (string-append
+                                     "cannot make link~a\n"
+                                     "  path: ~a")
+                                    (if (racket-error? r RKTIO_ERROR_EXISTS)
+                                        ";\n the path already exists"
+                                        "")
+                                    (host-> path-host)))))
 
 (define/who (resolve-path p)
   (check who path-string? p)
-  (host-> (host:resolve-path (->host p))))
+  (define host-path (->host (path->path-without-trailing-separator (->path p))))
+  (start-atomic)
+  (define r0 (rktio_readlink rktio host-path))
+  (define r (if (rktio-error? r0)
+                r0
+                (begin0
+                  (rktio_to_bytes r0)
+                  (rktio_free r0))))
+  (end-atomic)
+  (cond
+    [(rktio-error? r)
+     ;; Errors are not reported, but are treated like non-links
+     (host-> host-path)]
+    [else (host-> r)]))
 
-(define (expand-user-path p) p)
+(define/who (expand-user-path p)
+  (check who path-string? p)
+  (define path (->path p))
+  (define bstr (path-bytes path))
+  (cond
+    [(and (positive? (bytes-length bstr))
+          (eqv? (bytes-ref bstr 0) (char->integer #\~)))
+     (define host-path (->host/as-is path))
+     (start-atomic)
+     (define r0 (rktio_expand_user_tilde rktio (->rktio host-path)))
+     (define r (if (rktio-error? r0)
+                   r0
+                   (begin0
+                     (rktio_to_bytes r0)
+                     (rktio_free r0))))
+     (end-atomic)
+     (when (rktio-error? r)
+       (raise-filesystem-error who
+                               r
+                               (format (string-append
+                                        "bad username in path\n"
+                                        "  path: ~a")
+                                       (host-> host-path))))
+     (host-> r)]
+    [else path]))
 
-(define (filesystem-root-list)
-  (for/list ([p (in-list (host:filesystem-root-list))])
+(define/who (filesystem-root-list)
+  (start-atomic)
+  (define r0 (rktio_filesystem_roots rktio))
+  (define r (if (rktio-error? r0)
+                r0
+                (rktio_to_bytes_list r0)))
+  (end-atomic)
+  (when (rktio-error? r)
+    (raise-filesystem-error who r "cannot get roots"))
+  (for/list ([p (in-list r)])
     (host-> p)))

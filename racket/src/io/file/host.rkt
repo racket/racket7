@@ -3,21 +3,23 @@
          "../path/complete.rkt"
          "../path/parameter.rkt"
          "../path/cleanse.rkt"
-         (only-in racket/base
-                  [bytes->path host:bytes->path]
-                  [path->bytes host:path->bytes]))
+         "../host/rktio.rkt")
 
 (provide ->host
          ->host/as-is
          host->)
 
+;; Note: `(host-> (->host x))` is not the same as `x`, since it
+;; normalizes `x`. That's why `(host-> (->host x))` is generally used
+;; in error reporting.
+
 (define (->host p)
-  (host:bytes->path (path-bytes (cleanse-path (path->complete-path p (current-directory))))))
+  (path-bytes (cleanse-path (path->complete-path p (current-directory)))))
 
 (define (->host/as-is p)
   (let ([p (if (string? p) (string->path p) p)])
-    (host:bytes->path (path-bytes p))))
+    (path-bytes p)))
 
 (define (host-> s)
-  (path (bytes->immutable-bytes (host:path->bytes s))
+  (path (bytes->immutable-bytes s)
         (system-path-convention-type)))

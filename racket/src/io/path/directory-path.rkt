@@ -6,7 +6,8 @@
          "sep.rkt")
 
 (provide directory-path?
-         path->directory-path)
+         path->directory-path
+         path->path-without-trailing-separator)
 
 (define/who (path->directory-path p-in)
   (check-path-argument who p-in)
@@ -39,3 +40,20 @@
      ;; FIXME
      (abort "dir-path? for Windows")]))
 
+(define (path->path-without-trailing-separator p)
+  (define bstr (path-bytes p))
+  (define orig-len (bytes-length bstr))
+  (define len
+    (let loop ([len orig-len])
+      (cond
+        [(zero? len) 0]
+        [else
+         (define c (bytes-ref bstr (sub1 len)))
+         (if (is-sep? c (path-convention p))
+             (loop (sub1 len))
+             len)])))
+  (cond
+    [(< len orig-len) (path (subbytes bstr 0 len) (path-convention p))]
+    [else p]))
+
+    
