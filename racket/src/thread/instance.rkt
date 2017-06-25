@@ -1,7 +1,8 @@
 #lang racket/base
 (require "evt.rkt"
          "atomic.rkt"
-         "thread.rkt")
+         "thread.rkt"
+         "sandman.rkt")
 
 ;; Unsafe scheduler-cooperation functions are made available to
 ;; clients through a `#%evt` primitive linklet instance:
@@ -14,6 +15,8 @@
           'poll-ctx-select-proc poll-ctx-select-proc
           'control-state-evt control-state-evt
           'async-evt async-evt
+
+          'set-the-sandman! set-the-sandman!
           
           'start-atomic start-atomic
           'end-atomic end-atomic

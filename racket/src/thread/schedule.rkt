@@ -2,7 +2,7 @@
 (require "atomic.rkt"
          "engine.rkt"
          "internal-error.rkt"
-         "tree.rkt"
+         "sandman.rkt"
          "parameter.rkt"
          "thread-group.rkt"
          "schedule-info.rkt"
@@ -27,7 +27,7 @@
 
 (define (select-thread!)
   (let loop ([g root-thread-group] [none-k maybe-done])
-    (check-timeouts)
+    (check-external-events)
     (when (and (all-threads-poll-done?)
                (maybe-future-work?))
       (or (post-idle)
@@ -72,7 +72,7 @@
 
 (define (maybe-done)
   (cond
-   [(and (tree-empty? sleeping-threads)
+   [(and (not (sandman-any-sleepers?))
          (not (any-idle-waiters?)))
     ;; all threads done
     (void)]
@@ -80,15 +80,12 @@
     ;; try again, which should lead to `process-sleep`
     (select-thread!)]))
 
-;; Check for threads that have been suspended until a particular time
-(define (check-timeouts)
-  (unless (tree-empty? sleeping-threads)
-    (define-values (timeout-at threads) (tree-min sleeping-threads))
-    (when (timeout-at . <= . (current-inexact-milliseconds))
-      (unless (null? threads)
-        (for ([t (in-hash-keys threads)])
-          (thread-internal-resume! t))
-        (thread-did-work!)))))
+;; Check for threads that have been suspended until a particular time,
+;; etc., as registered with the sandman
+(define (check-external-events)
+  (sandman-poll (lambda (t)
+                  (thread-internal-resume! t)
+                  (thread-did-work!))))
 
 ;; ----------------------------------------
 
@@ -100,32 +97,21 @@
 
 (define (maybe-future-work?)
   (or (positive? num-threads-in-groups)
-      (not (tree-empty? sleeping-threads))
+      (sandman-any-sleepers?)
       (any-idle-waiters?)))
 
 ;; Stop using the CPU for a while
 (define (process-sleep)
   (define ts (thread-group-all-threads root-thread-group null))
-  (define sleep-timeout (if (tree-empty? sleeping-threads)
-                            (distant-future)
-                            (let-values ([(timeout-at threads) (tree-min sleeping-threads)])
-                              timeout-at)))
-  (define timeout-at
-    (for/fold ([timeout-at sleep-timeout]) ([t (in-list ts)])
+  (define exts
+    (for/fold ([exts #f]) ([t (in-list ts)])
       (define sched-info (thread-sched-info t))
-      (define t-timeout-at (and sched-info
-                                (schedule-info-timeout-at sched-info)))
-      (cond
-       [(not t-timeout-at) timeout-at]
-       [else (min timeout-at t-timeout-at)])))
-  (sleep (/ (- timeout-at (current-inexact-milliseconds)) 1000.0))
+      (define t-exts (and sched-info
+                          (schedule-info-exts sched-info)))
+      (sandman-merge-exts exts t-exts)))
+  (sandman-sleep exts)
   ;; Maybe some thread can proceed:
   (thread-did-work!))
-
-;; Compute an approximation to infinity:
-(define (distant-future)
-  (+ (current-inexact-milliseconds)
-     (* 1000.0 60 60 24 365)))
 
 ;; ----------------------------------------
 

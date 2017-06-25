@@ -3,7 +3,7 @@
          "check.rkt"
          "internal-error.rkt"
          "engine.rkt"
-         "tree.rkt"
+         "sandman.rkt"
          "parameter.rkt"
          "evt.rkt"
          "waiter.rkt"
@@ -66,7 +66,6 @@
            
            thread-internal-resume!
 
-           sleeping-threads
            poll-done-threads
 
            current-break-enabled-cell
@@ -77,7 +76,7 @@
 (struct thread node (name
                      [engine #:mutable]
                      parent
-                     [sleep-until #:mutable] ; non-#f => in `sleeping-threads`
+                     [sleeping #:mutable] ; #f or sandman sleeper handle
                      [sched-info #:mutable]
 
                      suspend-to-kill?
@@ -131,7 +130,7 @@
                     (gensym)
                     e
                     p
-                    #f ; sleep-until
+                    #f ; sleeping
                     #f ; sched-info
                     
                     suspend-to-kill?
@@ -264,34 +263,17 @@
 ;; ----------------------------------------
 ;; Thread suspend and resume
 
-;; A tree mapping times (in milliseconds) to a hash table of threads
-;; to wake up at that time
-(define sleeping-threads empty-tree)
-
 ;; in atomic mode
 (define (remove-from-sleeping-threads! t)
-  (define sleep-until (thread-sleep-until t))
-  (when sleep-until
-    (set-thread-sleep-until! t #f)
-    (define threads (tree-ref sleeping-threads sleep-until <))
-    (unless threads (internal-error "thread not found among sleeping threads"))
-    (define new-threads (hash-remove threads t))
-    (set! sleeping-threads
-          (if (zero? (hash-count new-threads))
-              (tree-remove sleeping-threads sleep-until <)
-              (tree-set sleeping-threads sleep-until new-threads <)))))
+  (define sleeping (thread-sleeping t))
+  (when sleeping
+    (set-thread-sleeping! t #f)
+    (sandman-remove-sleeping-thread! t sleeping)))
 
 ;; in atomic mode
-(define (add-to-sleeping-threads! t timeout-at)
-  (set-thread-sleep-until! t timeout-at)
-  (set! sleeping-threads
-        (tree-set sleeping-threads
-                  timeout-at
-                  (hash-set (or (tree-ref sleeping-threads timeout-at <)
-                                #hasheq())
-                            t
-                            #t)
-                  <)))
+(define (add-to-sleeping-threads! t ext-events)
+  (define sleeping (sandman-add-sleeping-thread! t ext-events))
+  (set-thread-sleeping! t sleeping))
 
 ;; Removes a thread from its thread group, so it won't be scheduled;
 ;; returns a thunk to be called in out of atomic mode to swap out the
