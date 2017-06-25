@@ -92,6 +92,11 @@
   (define buffer (make-bytes 4096))
   (define buffer-start 0)
   (define buffer-end 0)
+  (define flush-handle
+    (plumber-add-flush! (current-plumber)
+                        (lambda (h)
+                          (flush-buffer-fully)
+                          (plumber-flush-handle-remove! h))))
   
   (when (eq? buffer-mode 'infer)
     (if (rktio_fd_is_terminal rktio host-out)
@@ -124,7 +129,15 @@
     (let loop ()
       (unless (flush-buffer)
         (loop))))
-  
+
+  (define (flush-buffer-fully-if-newline src-bstr src-start src-end)
+    (for ([b (in-bytes src-bstr src-start src-end)])
+      (define newline? (or (eqv? b (char->integer #\newline))
+                           (eqv? b (char->integer #\return))))
+      (when newline? (flush-buffer-fully))
+      #:break newline?
+      (void)))
+
   (make-core-output-port
    #:name name
    #:data (host-data host-out
@@ -150,6 +163,9 @@
         (define amt (min (- src-end src-start) (- (bytes-length buffer) buffer-end)))
         (bytes-copy! buffer buffer-end src-bstr src-start (+ src-start amt))
         (set! buffer-end (+ buffer-end amt))
+        (unless nonbuffer/nonblock?
+          (when (eq? buffer-mode 'line)
+            (flush-buffer-fully-if-newline src-bstr src-start src-end)))
         amt]
        [(not (flush-buffer))
         #f]
@@ -162,6 +178,7 @@
 
    #:close (lambda ()
              (flush-buffer-fully)
+             (plumber-flush-handle-remove! flush-handle)
              (host-close host-out))))
 
 ;; ----------------------------------------
