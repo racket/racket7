@@ -178,12 +178,14 @@
         (define-syntax begin
           (syntax-rules ()
             [(begin form ...)
-             (extract-functions ['rktio_filesize_ref rktio_filesize_ref
-                                                     'rktio_timestamp_ref rktio_timestamp_ref
-                                                     'rktio_is_timestamp rktio_is_timestamp
-                                                     'rktio_identity_to_vector rktio_identity_to_vector
-                                                     'rktio_to_bytes rktio_to_bytes
-                                                     'rktio_to_bytes_list rktio_to_bytes_list]
+             (extract-functions ['rktio_NULL
+                                 NULL
+                                 'rktio_filesize_ref rktio_filesize_ref
+                                 'rktio_timestamp_ref rktio_timestamp_ref
+                                 'rktio_is_timestamp rktio_is_timestamp
+                                 'rktio_identity_to_vector rktio_identity_to_vector
+                                 'rktio_to_bytes rktio_to_bytes
+                                 'rktio_to_bytes_list rktio_to_bytes_list]
                                 form ...)]))
         (include "../io/compiled/rktio.rktl"))))
   

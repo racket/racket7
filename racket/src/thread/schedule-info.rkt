@@ -6,6 +6,7 @@
          schedule-info-did-work?
          schedule-info-exts
 
+         schedule-info-current-exts
          schedule-info-add-timeout-at!
          schedule-info-did-work!)
 
@@ -19,6 +20,11 @@
 (define (make-schedule-info #:did-work? [did-work? #t])
   (schedule-info did-work?
                  #f))
+
+(define schedule-info-current-exts
+  (case-lambda
+    [(sched-info) (schedule-info-exts sched-info)]
+    [(sched-info exts) (set-schedule-info-exts! sched-info exts)]))
 
 (define (schedule-info-add-timeout-at! sched-info timeout-at)
   (define exts (schedule-info-exts sched-info))

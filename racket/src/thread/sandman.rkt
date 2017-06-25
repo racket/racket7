@@ -1,7 +1,8 @@
 #lang racket/base
 (require "check.rkt"
          "tree.rkt"
-         "internal-error.rkt")
+         "internal-error.rkt"
+         "sandman-struct.rkt")
 
 ;; A "sandman" manages the set of all sleeping threads that may need
 ;; to be awoken in response to an external event, and it implements
@@ -25,6 +26,8 @@
 
 ;; All sandman functions are called in atomic mode.
 
+;; See also "sandman-struct.rkt".
+
 (provide sandman-merge-timeout
          sandman-merge-exts
          sandman-add-sleeping-thread!
@@ -32,28 +35,9 @@
          sandman-poll
          sandman-sleep
          sandman-any-sleepers?
+         sandman-sleepers-external-events
 
-         set-the-sandman!)
-
-;; A `sandman` implements several methods, and the sandman implementation
-;; gets to pick the reprsentation of <ext-evnt-set> and <handle>, except
-;; that #f is the "empty" external event set and #f cannot be a <handle>.
-(struct sandman (do-sleep           ; <ext-event-set> -> (void), based on <ext-event-set> plus registered threads
-                 do-poll            ; (thread -> any) -> (void), calls function any any thread to wake up
-
-                 do-any-sleepers?   ; -> boolean
-
-                 do-add-thread!     ; <thread> <ext-event-set> -> <handle>
-                 do-remove-thread!  ; <thread> <handle> -> (void)
-
-                 do-merge-external-event-sets ; <ext-event-set> <ext-event-set> -> <ext-event-set>
-
-                 do-merge-timeout   ; <ext-event-set> <wake-up-date-as-msecs> -> <ext-event-set>
-                 do-extract-timeout ; <ext-event-set> -> <wake-up-date-as-msecs>
-
-                 #;...) ; sandman implementations can add more methods
-                 
-  #:prefab)
+         current-sandman)
 
 ;; in atomic mode
 (define (sandman-merge-timeout exts timeout)
@@ -72,8 +56,8 @@
   ((sandman-do-remove-thread! the-sandman) th h))
 
 ;; in atomic mode
-(define (sandman-poll thread-wakeup)
-  ((sandman-do-poll the-sandman) thread-wakeup))
+(define (sandman-poll mode thread-wakeup)
+  ((sandman-do-poll the-sandman) mode thread-wakeup))
 
 ;; in atomic mode
 (define (sandman-sleep exts)
@@ -83,11 +67,20 @@
 (define (sandman-any-sleepers?)
   ((sandman-do-any-sleepers? the-sandman)))
 
-(define/who (set-the-sandman! sm)
-  (check who sandman? sm)
-  (set! the-sandman sm))
+;; in atomic mode
+(define (sandman-sleepers-external-events)
+  ((sandman-do-sleepers-external-events the-sandman)))
+
+;; in atomic mode
+(define/who current-sandman
+  (case-lambda
+    [() the-sandman]
+    [(sm)
+     (check who sandman? sm)
+     (set! the-sandman sm)]))
 
 ;; ----------------------------------------
+;; Default sandman implementation
 
 ;; A tree mapping times (in milliseconds) to a hash table of threads
 ;; to wake up at that time
@@ -101,18 +94,12 @@
 (define the-sandman
   (sandman
    ;; sleep
-   (lambda (non-sleeping-timeout-at)
-     (define timeout-at
-       (min*
-        non-sleeping-timeout-at
-        (if (tree-empty? sleeping-threads)
-            (distant-future)
-            (let-values ([(timeout-at threads) (tree-min sleeping-threads)])
-              timeout-at))))
-     (sleep (/ (- timeout-at (current-inexact-milliseconds)) 1000.0)))
-  
+   (lambda (timeout-at)
+     (sleep (/ (- (or timeout-at (distant-future)) (current-inexact-milliseconds)) 1000.0)))
+
    ;; poll
-   (lambda (wakeup)
+   (lambda (mode wakeup)
+     ;; This check is fast, so do it in all modes
      (unless (tree-empty? sleeping-threads)
        (define-values (timeout-at threads) (tree-min sleeping-threads))
        (when (timeout-at . <= . (current-inexact-milliseconds))
@@ -124,6 +111,12 @@
    (lambda ()
      (not (tree-empty? sleeping-threads)))
 
+   ;; sleepers-external-events
+   (lambda ()
+     (and (not (tree-empty? sleeping-threads))
+          (let-values ([(timeout-at threads) (tree-min sleeping-threads)])
+            timeout-at)))
+     
    ;; add-thread!
    (lambda (t sleep-until)
      (set! sleeping-threads

@@ -18,6 +18,10 @@ demo: compiled/rktio.rktl
 	$(RACO) make demo.rkt
 	$(RACKET) demo.rkt
 
+demo-thread: compiled/rktio.rktl
+	$(RACO) make demo-thread.rkt
+	$(RACKET) demo-thread.rkt
+
 compiled/rktio.rktl: ../rktio/parse.rkt ../rktio/rktio.h
 	$(MAKE) build-rktio RACKET="`$(RACKET) ../cs/absify.rkt --exec $(RACKET)`" PREFIX="`$(RACKET) ../cs/absify.rkt ../..`"
 	mkdir -p compiled

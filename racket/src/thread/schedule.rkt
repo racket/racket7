@@ -27,10 +27,11 @@
 
 (define (select-thread!)
   (let loop ([g root-thread-group] [none-k maybe-done])
-    (check-external-events)
+    (check-external-events 'fast)
     (when (and (all-threads-poll-done?)
                (maybe-future-work?))
-      (or (post-idle)
+      (or (check-external-events 'slow)
+          (post-idle)
           (process-sleep)))
     (define child (thread-group-next! g))
     (cond
@@ -82,10 +83,15 @@
 
 ;; Check for threads that have been suspended until a particular time,
 ;; etc., as registered with the sandman
-(define (check-external-events)
-  (sandman-poll (lambda (t)
+(define (check-external-events mode)
+  (define did? #f)
+  (sandman-poll mode
+                (lambda (t)
                   (thread-internal-resume! t)
-                  (thread-did-work!))))
+                  (set! did? #t)))
+  (when did?
+    (thread-did-work!))
+  did?)
 
 ;; ----------------------------------------
 
@@ -103,8 +109,10 @@
 ;; Stop using the CPU for a while
 (define (process-sleep)
   (define ts (thread-group-all-threads root-thread-group null))
+  (define sleeping-exts
+    (sandman-sleepers-external-events))
   (define exts
-    (for/fold ([exts #f]) ([t (in-list ts)])
+    (for/fold ([exts sleeping-exts]) ([t (in-list ts)])
       (define sched-info (thread-sched-info t))
       (define t-exts (and sched-info
                           (schedule-info-exts sched-info)))

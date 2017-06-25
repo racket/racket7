@@ -1,5 +1,6 @@
 #lang racket/base
-(require "input-port.rkt"
+(require "../host/evt.rkt"
+         "input-port.rkt"
          "output-port.rkt"
          "pipe.rkt")
 
@@ -23,7 +24,8 @@
       [(eof-object? v)
        (set! peeked-eof? #t)
        eof]
-      [(zero? v) 0]
+      [(evt? v) v]
+      [(eqv? v 0) 0]
       [else
        (let loop ([wrote 0])
          (define just-wrote ((core-output-port-write-out peek-pipe-o) buf wrote v #t #f #f))
@@ -36,8 +38,12 @@
     (define v (pull-some-bytes (if (eq? 'block (get-buffer-mode))
                                    (bytes-length buf)
                                    1)))
-    (when (eqv? v 0)
-      (get-more-bytes/block)))
+    (cond
+      [(eqv? v 0)
+       (get-more-bytes/block)]
+      [(evt? v)
+       (sync v)
+       (get-more-bytes/block)]))
 
   (define (do-read-in dest-bstr start end copy?)
     (let try-again ()
@@ -53,8 +59,9 @@
            [(and (< (- end start) (bytes-length buf))
                  (eq? 'block (get-buffer-mode)))
             (define v (pull-some-bytes))
+            (log-error ">> ~s" v)
             (cond
-              [(eqv? v 0) 0]
+              [(or (eqv? v 0) (evt? v)) v]
               [else (try-again)])]
            [else
             (read-in dest-bstr start end copy?)])])))
@@ -84,7 +91,7 @@
         [else
          (define v (pull-some-bytes))
          (cond
-           [(or (eof-object? v) (zero? v))
+           [(or (eof-object? v) (eqv? v 0) (evt? v))
             v]
            [else (try-again)])])))
 

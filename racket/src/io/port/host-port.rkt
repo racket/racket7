@@ -2,6 +2,7 @@
 (require "../host/rktio.rkt"
          "../host/error.rkt"
          "../host/evt.rkt"
+         "../sandman/main.rkt"
          "../file/error.rkt"
          "input-port.rkt"
          "output-port.rkt"
@@ -81,6 +82,7 @@
                    [(rktio-error? n)
                     (raise-filesystem-error #f n "error reading from stream port")]
                    [(eqv? n RKTIO_READ_EOF) eof]
+                   [(eqv? n 0) (fd-evt host-in RKTIO_POLL_READ)]
                    [else n]))
      #:get-buffer-mode (lambda () buffer-mode)
      #:close (lambda () (host-close host-in))))
@@ -194,3 +196,46 @@
        (raise-argument-error 'terminal-port? "port?" p)]))
   (and (host-data? p)
        (rktio_fd_is_terminal (host-data-host-port p))))
+
+;; ----------------------------------------
+
+(struct fd-evt (fd mode)
+  #:property
+  prop:evt
+  (poller
+   ;; This function is called by the scheduler for `sync` to check
+   ;; whether the file descriptor has data available:
+   (lambda (fde ctx)
+     (define mode (fd-evt-mode fde))
+     (start-atomic)
+     (define ready?
+       (or
+        (and (eqv? RKTIO_POLL_READ (bitwise-and mode RKTIO_POLL_READ))
+             (eqv? (rktio_poll_read_ready rktio (fd-evt-fd fde))
+                   RKTIO_POLL_READY))
+        (and (eqv? RKTIO_POLL_WRITE (bitwise-and mode RKTIO_POLL_WRITE))
+             (eqv? (rktio_poll_write_ready rktio (fd-evt-fd fde))
+                   RKTIO_POLL_READY))))
+     (cond
+       [ready?
+        (end-atomic)
+        (values (list fde) #f)]
+       [else
+        ;; If `sched-info` is not #f, then we can register this file
+        ;; descriptor so that if no thread is able to make progress,
+        ;; the Racket process will sleep, but it will wake up when
+        ;; input is available. The implementation of external events
+        ;; is from the current sandman, which will in turn be the
+        ;; one (or build on the one) in "../sandman".
+        (define sched-info (poll-ctx-sched-info ctx))
+        (when sched-info
+          (schedule-info-current-exts sched-info
+                                      (sandman-add-poll-set-adder
+                                       (schedule-info-current-exts sched-info)
+                                       ;; Cooperate with the sandman by registering
+                                       ;; a funciton that takes a poll set and
+                                       ;; adds to it:
+                                       (lambda (ps)
+                                         (rktio_poll_add rktio (fd-evt-fd fde) ps mode)))))
+        (end-atomic)
+        (values #f fde)]))))
