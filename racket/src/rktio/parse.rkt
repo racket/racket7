@@ -162,8 +162,9 @@
     [(eq? r 'rktio_bool_t) '(define-function)]
     [(eq? r 'void) '(define-function)]
     [(pair? def-kind) def-kind]
-    [(pair? r) '(define-function/errno NULL)]
-    [(eq? r 'rktio_ok_t) '(define-function/errno #f)]
+    [(eq? def-kind 'define-function) (list def-kind)]
+    [(pair? r) `(,def-kind NULL)]
+    [(eq? r 'rktio_ok_t) `(,def-kind #f)]
     [else (list def-kind)]))
 
 (define (shift-stars from to)

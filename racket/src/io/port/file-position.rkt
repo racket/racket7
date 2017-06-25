@@ -23,7 +23,10 @@
     [(p pos)
      (unless (or (input-port? p) (output-port? p))
        (raise-argument-error who "port?" p))
-     (check who exact-nonnegative-integer? pos)
+     (check who
+            (lambda (p) (or (exact-nonnegative-integer? p) (eof-object? p)))
+            #:contract "(or/c exact-nonnegative-integer? eof-object?)"
+            pos)
      (cond
        [(input-port? p)
         (let ([p (->core-input-port p)])

@@ -52,8 +52,8 @@
   (define (mode->flags mode)
     (case mode
       [(test) RKTIO_OPEN_TEXT]
-      [(truncate/replace) (+ RKTIO_OPEN_TRUNCATE
-                             RKTIO_OPEN_CAN_EXIST)]
+      [(truncate truncate/replace) (+ RKTIO_OPEN_TRUNCATE
+                                      RKTIO_OPEN_CAN_EXIST)]
       [(must-truncate) (+ RKTIO_OPEN_TRUNCATE
                           RKTIO_OPEN_MUST_EXIST)]
       [(update) RKTIO_OPEN_CAN_EXIST]

@@ -55,7 +55,9 @@
          peek-in)
      #:close user-close)]
    [else
-    (open-input-peek-via-read
-     #:name name
-     #:read-in read-in
-     #:close user-close)]))
+    (define-values (port buffer-flusher)
+      (open-input-peek-via-read
+       #:name name
+       #:read-in read-in
+       #:close user-close))
+    port]))

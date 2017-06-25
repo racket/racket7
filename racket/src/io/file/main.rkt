@@ -325,7 +325,7 @@
                                     (host-> src-host)
                                     (host-> dest-host))))
   (start-atomic)
-  (let ([cp (rktio_copy_file_start rktio dest-host src-host exists-ok?)])
+  (let ([cp (rktio_copy_file_start rktio (->rktio dest-host) (->rktio src-host) exists-ok?)])
     (cond
       [(rktio-error? cp)
        (end-atomic)

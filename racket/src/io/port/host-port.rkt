@@ -15,7 +15,9 @@
          open-output-host
          terminal-port?)
 
-(struct host-data (host-port buffer-mode)
+(struct host-data (host-port       ; host-system file descriptor
+                   buffer-mode     ; gets/sets buffer mode
+                   buffer-control) ; flushes on 0 arguments; adjusts position as given argument
   #:property prop:file-stream #t
   #:property prop:file-position (case-lambda
                                   [(hd)
@@ -27,15 +29,21 @@
                                       (end-atomic)
                                       (check-rktio-error* ppos "error getting stream position")]
                                      [else
-                                      (define pos (rktio_filesize_ref pos))
+                                      (define pos (rktio_filesize_ref ppos))
                                       (rktio_free ppos)
                                       (end-atomic)
-                                      pos])]
+                                      ((host-data-buffer-control hd) pos)])]
                                   [(hd pos)
+                                   ((host-data-buffer-control hd))
                                    (check-rktio-error*
                                     (rktio_set_file_position rktio
                                                              (host-data-host-port hd)
-                                                             pos)
+                                                             (if (eof-object? pos)
+                                                                 0
+                                                                 pos)
+                                                             (if (eof-object? pos)
+                                                                 RKTIO_POSITION_FROM_END
+                                                                 RKTIO_POSITION_FROM_START))
                                     "error setting stream position")])
   #:property prop:file-truncate (case-lambda
                                   [(hd pos)
@@ -57,20 +65,26 @@
 
 (define (open-input-host host-in name)
   (define buffer-mode 'block)
-  (open-input-peek-via-read
-   #:name name
-   #:data (host-data host-in (case-lambda
-                               [() buffer-mode]
-                               [(mode) (set! buffer-mode mode)]))
-   #:read-in (lambda (dest-bstr start end copy?)
-               (define n (rktio_read_in rktio host-in dest-bstr start end))
-               (cond
-                 [(rktio-error? n)
-                  (raise-filesystem-error #f n "error reading from stream port")]
-                 [(eqv? n RKTIO_READ_EOF) eof]
-                 [else n]))
-   #:get-buffer-mode (lambda () buffer-mode)
-   #:close (lambda () (host-close host-in))))
+  (define-values (port buffer-control)
+    (open-input-peek-via-read
+     #:name name
+     #:data (host-data host-in
+                       (case-lambda
+                         [() buffer-mode]
+                         [(mode) (set! buffer-mode mode)])
+                       (case-lambda
+                         [() (buffer-control)]
+                         [(pos) (buffer-control pos)]))
+     #:read-in (lambda (dest-bstr start end copy?)
+                 (define n (rktio_read_in rktio host-in dest-bstr start end))
+                 (cond
+                   [(rktio-error? n)
+                    (raise-filesystem-error #f n "error reading from stream port")]
+                   [(eqv? n RKTIO_READ_EOF) eof]
+                   [else n]))
+     #:get-buffer-mode (lambda () buffer-mode)
+     #:close (lambda () (host-close host-in))))
+  port)
 
 ;; ----------------------------------------
 
@@ -83,12 +97,45 @@
     (if (rktio_fd_is_terminal rktio host-out)
         (set! buffer-mode 'line)
         (set! buffer-mode 'block)))
+
+  ;; Returns `#t` if the buffer is already or successfully flushed
+  (define (flush-buffer)
+    (cond
+      [(not (= buffer-start buffer-end))
+       (define n (rktio_write_in rktio host-out buffer buffer-start buffer-end))
+       (cond
+         [(rktio-error? n)
+          (raise-filesystem-error #f n "error writing to stream port")]
+         [(zero? n)
+          #f]
+         [else
+          (define new-buffer-start (+ buffer-start n))
+          (cond
+            [(= new-buffer-start buffer-end)
+             (set! buffer-start 0)
+             (set! buffer-end 0)
+             #t]
+            [else
+             (set! buffer-start new-buffer-start)
+             #f])])]
+      [else #t]))
+
+  (define (flush-buffer-fully)
+    (let loop ()
+      (unless (flush-buffer)
+        (loop))))
   
   (make-core-output-port
    #:name name
-   #:data (host-data host-out (case-lambda
-                                [() buffer-mode]
-                                [(mode) (set! buffer-mode mode)]))
+   #:data (host-data host-out
+                     (case-lambda
+                       [() buffer-mode]
+                       [(mode) (set! buffer-mode mode)])
+                     (case-lambda
+                       [()
+                        (flush-buffer-fully)]
+                       [(pos)
+                        (+ pos (- buffer-end buffer-start))]))
 
    #:evt 'evt
    
@@ -97,29 +144,15 @@
      (cond
        [(= src-start src-end)
         ;; Flush request
-        0]
+        (and (flush-buffer) 0)]
        [(and (not nonbuffer/nonblock?)
              (< buffer-end (bytes-length buffer)))
         (define amt (min (- src-end src-start) (- (bytes-length buffer) buffer-end)))
-        (bytes-copy! buffer 0 src-bstr src-start (+ src-start amt))
+        (bytes-copy! buffer buffer-end src-bstr src-start (+ src-start amt))
         (set! buffer-end (+ buffer-end amt))
         amt]
-       [(not (= buffer-start buffer-end))
-        (define n (rktio_write_in rktio host-out buffer buffer-start buffer-end))
-        (cond
-          [(rktio-error? n)
-           (raise-filesystem-error #f n "error writing to stream port")]
-          [(zero? n)
-           #f]
-          [else
-           (define new-buffer-start (+ buffer-start n))
-           (cond
-             [(= new-buffer-start buffer-end)
-              (set! buffer-start 0)
-              (set! buffer-end 0)]
-             [else
-              (set! buffer-start new-buffer-start)])
-           #f])]
+       [(not (flush-buffer))
+        #f]
        [else
         (define n (rktio_write_in rktio host-out src-bstr src-start src-end))
         (cond
@@ -127,7 +160,9 @@
            (raise-filesystem-error #f n "error writing to stream port")]
           [else n])]))
 
-   #:close (lambda () (host-close host-out))))
+   #:close (lambda ()
+             (flush-buffer-fully)
+             (host-close host-out))))
 
 ;; ----------------------------------------
 

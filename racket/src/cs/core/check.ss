@@ -61,7 +61,7 @@
   (check who
          :test (and (pair? errno)
                     (exact-integer? (car errno))
-                    (chez:memq (cdr errno) '(posic windows gai)))
+                    (chez:memq (cdr errno) '(posix windows gai)))
          :contract "(cons/c exact-integer? (or/c 'posix 'windows 'gai))"
          errno))
 

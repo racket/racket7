@@ -156,6 +156,29 @@
         (error))
       (loop (add1 x) (cdr content) (list* bstr bstr accum))])))
 
+
+(let ()
+  (define path (build-path "compiled" "demo-out"))
+  (define o (open-output-file path 'truncate))
+  ;; We expect this to be buffered:
+  (test 12 (write-bytes #"abcdefghijkl" o))
+  (test 12 (file-position o))
+  (test (void) (file-position o 6))
+  (test 3 (write-bytes #"xyz" o))
+  (test (void) (file-position o eof))
+  (test 1 (write-bytes #"!" o))
+  (close-output-port o)
+
+  (test 13 (file-size path))
+
+  (define i (open-input-file path))
+  (test #"abcdefxyzjkl!" (read-bytes 20 i))
+  (test (void) (file-position i 0))
+  (test #"abcdef" (read-bytes 6 i))
+  (test (void) (file-position i 9))
+  (test #"jkl!" (read-bytes 6 i))
+  (close-input-port i))
+
 (time
  (let loop ([j 10])
    (unless (zero? j)

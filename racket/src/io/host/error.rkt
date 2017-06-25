@@ -13,7 +13,6 @@
                                     (rktio-errkind err)
                                     (rktio-errno err)))
   (define system-msg (rktio_to_bytes p))
-  (rktio_free p)
   (end-atomic)
   (format "~a~a~a\n  system error: ~a; ~a=~a"
           (or who "")

@@ -97,24 +97,35 @@
       [else
        (get-more-bytes/block)
        (peek-byte)]))
-  
-  (make-core-input-port
-   #:name name
-   #:data data
-   
-   #:read-byte read-byte
-   #:read-in do-read-in
-   #:peek-byte peek-byte
-   #:peek-in do-peek-in
 
-   #:on-file-position
-   (lambda ()
-     (set! peek-pipe-i #f)
-     (set! peek-pipe-o #f)
-     (set! peeked-eof? #f))
+  (define (purge-buffer)
+    (set! peek-pipe-i #f)
+    (set! peek-pipe-o #f)
+    (set! peeked-eof? #f))
 
-   #:close
-   (lambda ()
-     (close)
-     (set! peek-pipe-i #f)
-     (set! peek-pipe-o #f))))
+  (values (make-core-input-port
+           #:name name
+           #:data data
+           
+           #:read-byte read-byte
+           #:read-in do-read-in
+           #:peek-byte peek-byte
+           #:peek-in do-peek-in
+
+           #:on-file-position
+           (lambda ()
+             (set! peek-pipe-i #f)
+             (set! peek-pipe-o #f)
+             (set! peeked-eof? #f))
+
+           #:close
+           (lambda ()
+             (close)
+             (set! peek-pipe-i #f)
+             (set! peek-pipe-o #f)))
+
+          (case-lambda
+            [() (purge-buffer)]
+            [(pos) (if peek-pipe-i
+                       (- pos (pipe-content-length peek-pipe-i))
+                       pos)])))
