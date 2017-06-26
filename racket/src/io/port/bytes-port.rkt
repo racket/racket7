@@ -1,5 +1,7 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../common/atomic.rkt"
+         "../host/evt.rkt"
          "input-port.rkt"
          "output-port.rkt"
          "pipe.rkt"
@@ -17,6 +19,13 @@
   (check who bytes? bstr)
   (define i 0)
   (define len (bytes-length bstr))
+
+  (define progress-sema #f)
+  (define (progress!)
+    (when progress-sema
+      (semaphore-post progress-sema)
+      (set! progress-sema #f)))
+
   (define p
     (make-core-input-port
      #:name name
@@ -24,42 +33,69 @@
      
      #:read-byte
      (lambda ()
-       (let ([pos i])
-         (if (pos . < . len)
-             (begin
-               (set! i (add1 pos))
-               (bytes-ref bstr pos))
-             eof)))
+       (atomically
+        (let ([pos i])
+          (if (pos . < . len)
+              (begin
+                (set! i (add1 pos))
+                (bytes-ref bstr pos))
+              eof))))
      
      #:read-in
      (lambda (dest-bstr start end copy?)
-       (define pos i)
-       (cond
-         [(pos . < . len)
-          (define amt (min (- end start) (- len pos)))
-          (set! i (+ pos amt))
-          (bytes-copy! dest-bstr start bstr pos (+ pos amt))
-          amt]
-         [else eof]))
+       (atomically
+        (define pos i)
+        (cond
+          [(pos . < . len)
+           (define amt (min (- end start) (- len pos)))
+           (set! i (+ pos amt))
+           (bytes-copy! dest-bstr start bstr pos (+ pos amt))
+           (progress!)
+           amt]
+          [else eof])))
      
      #:peek-byte
      (lambda ()
-       (let ([pos i])
-         (if (pos . < . len)
-             (bytes-ref bstr pos)
-             eof)))
+       (atomically
+        (let ([pos i])
+          (if (pos . < . len)
+              (bytes-ref bstr pos)
+              eof))))
      
      #:peek-in
      (lambda (dest-bstr start end skip copy?)
-       (define pos (+ i skip))
-       (cond
-         [(pos . < . len)
-          (define amt (min (- end start) (- len pos)))
-          (bytes-copy! dest-bstr start bstr pos (+ pos amt))
-          amt]
-         [else eof]))
+       (atomically
+        (define pos (+ i skip))
+        (cond
+          [(pos . < . len)
+           (define amt (min (- end start) (- len pos)))
+           (bytes-copy! dest-bstr start bstr pos (+ pos amt))
+           amt]
+          [else eof])))
 
-     #:close void))
+     #:close
+     (lambda ()
+       (atomically
+        (progress!)))
+
+     #:get-progress-evt
+     (lambda ()
+       (atomically
+        (unless progress-sema
+          (set! progress-sema (make-semaphore)))
+        (semaphore-peek-evt progress-sema)))
+
+     #:commit
+     (lambda (amt progress-evt ext-evt)
+       ;; Very similar to the pipe implementation:
+       (atomically
+        (and (not (sync/timeout 0 progress-evt))
+             (sync/timeout 0 ext-evt)
+             (let ([amt (min amt (- len i))])
+               (set! i (+ i amt))
+               (progress!)
+               #t))))))
+
   (when (port-count-lines-enabled)
     (port-count-lines! p))
   p)

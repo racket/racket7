@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../common/atomic.rkt"
          "../host/evt.rkt"
          "input-port.rkt"
          "output-port.rkt"
@@ -194,32 +195,30 @@
             (end-atomic))]))
      
      #:close
-     void
+     (lambda ()
+       (atomically
+        (progress!)))
 
      #:get-progress-evt
      (lambda ()
-       (start-atomic)
-       (unless progress-sema
-         (set! progress-sema (make-semaphore)))
-       (define sema progress-sema)
-       (end-atomic)
-       (semaphore-peek-evt progress-sema))
+       (atomically
+        (unless progress-sema
+          (set! progress-sema (make-semaphore)))
+        (semaphore-peek-evt progress-sema)))
 
      #:commit
      (lambda (amt progress-evt ext-evt)
        ;; `progress-evt` is a `semepahore-peek-evt`, and `ext-evt`
        ;; is constrained; both can work with `sync/timeout` in
        ;; atomic mode.
-       (start-atomic)
-       (begin0
-         (and (not (sync/timeout 0 progress-evt))
-              (sync/timeout 0 ext-evt)
-              (let ([amt (min amt (content-length))])
-                (set! start (modulo (+ start amt) (bytes-length bstr)))
-                (progress!)
-                (check-input-blocking)
-                #t))
-         (end-atomic)))))
+       (atomically
+        (and (not (sync/timeout 0 progress-evt))
+             (sync/timeout 0 ext-evt)
+             (let ([amt (min amt (content-length))])
+               (set! start (modulo (+ start amt) (bytes-length bstr)))
+               (progress!)
+               (check-input-blocking)
+               #t))))))
     
   ;; out ----------------------------------------
   (define op
@@ -297,12 +296,11 @@
      
      #:close
      (lambda ()
-       (start-atomic)
-       (unless output-closed?
-         (set! output-closed? #t)
-         (semaphore-post write-ready-sema)
-         (semaphore-post read-ready-sema))
-       (end-atomic))))
+       (atomically
+        (unless output-closed?
+          (set! output-closed? #t)
+          (semaphore-post write-ready-sema)
+          (semaphore-post read-ready-sema))))))
 
   ;; Results ----------------------------------------
   (when (port-count-lines-enabled)
