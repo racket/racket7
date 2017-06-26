@@ -124,7 +124,13 @@
   (define gq (channel-get-queue ch))
   (define gw+b (queue-fremove! gq not-matching-select-waiter))
   (cond
-   [(not gw+b)
+   [gw+b
+    (set-box! (cdr gw+b) v)
+    (waiter-resume! (car gw+b) v)
+    (values (list result) #f)]
+   [(poll-ctx-poll? poll-ctx)
+    (values #f async-evt)]
+   [else
     (define pq (channel-put-queue ch))
     (define pw (channel-select-waiter (poll-ctx-select-proc poll-ctx)
                                       (current-thread)))
@@ -145,13 +151,7 @@
                                    [else
                                     (set! n (queue-add! pq (cons pw v)))
                                     (values #f #f)])))
-             (lambda (v) result)))]
-   [(poll-ctx-poll? poll-ctx)
-    (values #f async-evt)]
-   [else
-    (set-box! (cdr gw+b) v)
-    (waiter-resume! (car gw+b) v)
-    (values (list result) #f)]))
+             (lambda (v) result)))]))
 
 ;; ----------------------------------------
 

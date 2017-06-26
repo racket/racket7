@@ -36,22 +36,50 @@
     [else
      empty-input-port]))
 
-(struct core-input-port (name
-                         data
-                         read-byte ; #f or (-> (or/c byte? eof-object?)), must block
-                         read-in ; port or (bytes start-k end-k copy? -> (or/c integer? ...));
-                         ;         never blocks, `(- end-k start-k)` is non-zero
-                         peek-byte ; #f or (-> (or/c byte? eof-object?)), must block
-                         peek-in ; port or (bytes start-k end-k skip-k copy? -> (or/c integer? ...))
-                         ;         never blocks, `(- end-k start-k)` is non-zero
-                         close
-                         get-progress-evt
-                         commit
+(struct core-input-port (name      ; anything, reported as `object-name` for the port
+                         data      ; anything, effectively a subtype indicator
+
+                         ;; No locks are held during the call of any of the following functions.
+
+                         read-byte ; #f or (-> (or/c byte? eof-object?))
+                         ;;          Block as needed to read one byte as a shortcut to
+                         ;;          using `read-in`.  The shortcut is optional.
+
+                         read-in   ; port or (bytes start-k end-k copy? -> (or/c integer? ...))
+                         ;;          A port values redirects to the port. Otherwise, the function
+                         ;;          never blocks, and can assume `(- end-k start-k)` is non-zero.
+                         ;;          The `copy?` flag indicates that the given byte string should
+                         ;;          not be exposed to untrusted code, and instead of should be
+                         ;;          copied if necessary. The return values are the same as
+                         ;;          documented for `make-input-port`.
+
+                         peek-byte ; #f or (-> (or/c byte? eof-object?))
+                         ;;          Blocks as needed to peek one byte as a shortcut to
+                         ;;          using `peek-in`. The shortcut is optional.
+
+                         peek-in   ; port or (bytes start-k end-k skip-k copy? -> (or/c integer? ...))
+
+                         ;;          A port values redirects to the port. Otherwise, the function
+                         ;;          never blocks, and it can assume that `(- end-k start-k)` is non-zero.
+                         ;;          The `copy?` flag is the same as for `read-in`.  The return values
+                         ;;          are the same as documented for `make-input-port`.
+
+                         close     ; -> (void)
+
+                         get-progress-evt ; #f or (-> evt?)
+                         ;;           Optional support for progress events.
+
+                         commit    ; (amt-k progress-evt? evt?) -> (void)
+                         ;;          Goes with `get-progress-evt`. The final `evt?`
+                         ;;          argument is constrained to a few kinds of events;
+                         ;;          see docs for `port-commit-peeked` for more information.
+
                          get-location
                          count-lines!
                          on-file-position
+
                          [closed? #:mutable]
-                         [closed-sema #:mutable] ; #f or a semaphore posed on close
+                         [closed-sema #:mutable] ; #f or a semaphore to be posed on close
                          [offset #:mutable] ; count plain bytes
                          [state #:mutable] ; state of UTF-8 decoding
                          [cr-state #:mutable] ; state of CRLF counting as a single LF

@@ -20,7 +20,9 @@
         semaphore-peek-evt
         wrap-evt
         sync
+        sync/timeout
         evt?
+        sync-atomic-poll-evt?
         prop:evt
         poller
         poll-ctx-poll?

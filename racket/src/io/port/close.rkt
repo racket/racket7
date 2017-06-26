@@ -24,19 +24,23 @@
   (check who input-port? p)
   (let ([p (->core-input-port p)])
     (unless (core-input-port-closed? p)
-      (set-core-input-port-closed?! p #t)
-      (let ([s (core-input-port-closed-sema p)])
-        (when s (semaphore-post s)))
-      ((core-input-port-close p)))))
+      ((core-input-port-close p))
+      (atomically
+       (unless (core-input-port-closed? p)
+         (set-core-input-port-closed?! p #t)
+         (let ([s (core-input-port-closed-sema p)])
+           (when s (semaphore-post s))))))))
 
 (define/who (close-output-port p)
   (check who output-port? p)
   (let ([p (->core-output-port p)])
     (unless (core-output-port-closed? p)
-      (set-core-output-port-closed?! p #t)
-      (let ([s (core-output-port-closed-sema p)])
-        (when s (semaphore-post s)))
-      ((core-output-port-close p)))))
+      ((core-output-port-close p))
+      (atomically
+       (unless (core-output-port-closed? p)
+         (set-core-output-port-closed?! p #t)
+         (let ([s (core-output-port-closed-sema p)])
+           (when s (semaphore-post s))))))))
 
 (define (port-closed-evt p)
   (define sema

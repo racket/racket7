@@ -49,7 +49,12 @@
   (define more-read-ready-sema #f) ; for lookahead peeks
   (define read-ready-evt (semaphore-peek-evt read-ready-sema))
   (define write-ready-evt (and limit (semaphore-peek-evt write-ready-sema)))
+  (define progress-sema #f)
 
+  (define (content-length)
+    (if (start . <= . end)
+        (- end start)
+        (+ end (- (bytes-length bstr) start))))
   (define (input-empty?) (= start end))
   (define (output-full?) (and limit
                               (let ([len (bytes-length bstr)])
@@ -69,6 +74,11 @@
     (when (and (input-empty?) (not output-closed?)) (semaphore-post read-ready-sema)))
   (define (check-output-blocking)
     (when (output-full?) (semaphore-wait write-ready-sema)))
+
+  (define (progress!)
+    (when progress-sema
+      (semaphore-post progress-sema)
+      (set! progress-sema #f)))
 
   ;; input ----------------------------------------
   (define ip
@@ -94,6 +104,7 @@
             (check-output-unblocking)
             (set! start (modulo (add1 pos) (bytes-length bstr)))
             (check-input-blocking)
+            (progress!)
             (begin0
               (bytes-ref bstr pos)
               (end-atomic))])))
@@ -126,6 +137,7 @@
                (set! start (modulo (+ start amt) len))
                amt])
             (check-input-blocking)
+            (progress!)
             (end-atomic))]))
 
      #:peek-byte
@@ -149,10 +161,7 @@
      #:peek-in
      (lambda (dest-bstr dest-start dest-end skip copy?)
        (start-atomic)
-       (define content-amt
-         (if (start . <= . end)
-             (- end start)
-             (+ end (- (bytes-length bstr) start))))
+       (define content-amt (content-length))
        (cond
          [(content-amt . <= . skip)
           (cond
@@ -185,7 +194,32 @@
             (end-atomic))]))
      
      #:close
-     void))
+     void
+
+     #:get-progress-evt
+     (lambda ()
+       (start-atomic)
+       (unless progress-sema
+         (set! progress-sema (make-semaphore)))
+       (define sema progress-sema)
+       (end-atomic)
+       (semaphore-peek-evt progress-sema))
+
+     #:commit
+     (lambda (amt progress-evt ext-evt)
+       ;; `progress-evt` is a `semepahore-peek-evt`, and `ext-evt`
+       ;; is constrained; both can work with `sync/timeout` in
+       ;; atomic mode.
+       (start-atomic)
+       (begin0
+         (and (not (sync/timeout 0 progress-evt))
+              (sync/timeout 0 ext-evt)
+              (let ([amt (min amt (content-length))])
+                (set! start (modulo (+ start amt) (bytes-length bstr)))
+                (progress!)
+                (check-input-blocking)
+                #t))
+         (end-atomic)))))
     
   ;; out ----------------------------------------
   (define op

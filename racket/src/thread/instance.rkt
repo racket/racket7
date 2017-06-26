@@ -19,7 +19,9 @@
           'semaphore-peek-evt semaphore-peek-evt
           'wrap-evt wrap-evt
           'sync sync
+          'sync/timeout sync/timeout
           'evt? evt?
+          'sync-atomic-poll-evt? sync-atomic-poll-evt?
           'prop:evt prop:evt
           'poller poller
           'poll-ctx-poll? poll-ctx-poll?

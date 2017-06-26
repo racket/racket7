@@ -4,6 +4,7 @@
          "evt.rkt"
          "atomic.rkt"
          "semaphore.rkt"
+         "channel.rkt"
          "thread.rkt"
          "schedule-info.rkt")
 
@@ -11,6 +12,7 @@
          sync/timeout
          sync/enable-break
          sync/timeout/enable-break
+         sync-atomic-poll-evt?
          current-evt-pseudo-random-generator)
 
 (struct syncing (selected ; #f or a syncer that has been selected
@@ -33,6 +35,17 @@
   (syncer evt null #f wraps null null #f #f))
 
 (define none-syncer (make-syncer #f null))
+
+;; To support `port-commit-peeked`, the `sync/timeout` function should
+;; work for polling in atomic mode for a set of constrained event
+;; types:
+(define (sync-atomic-poll-evt? evt)
+  (or (channel-put-evt? evt)
+      (channel? evt)
+      (semaphore? evt)
+      (semaphore-peek-evt? evt)
+      (eq? always-evt evt)
+      (eq? never-evt evt)))
 
 (define (do-sync who timeout args
                   #:enable-break? [enable-break? #f])

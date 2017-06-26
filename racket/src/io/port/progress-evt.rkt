@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/evt.rkt"
          "parameter.rkt"
          "input-port.rkt")
 
@@ -11,7 +12,9 @@
          check-progress-evt)
 
 (struct progress-evt (port evt)
-  #:property prop:evt 1)
+  #:property prop:evt (lambda (pe)
+                        (wrap-evt (progress-evt-evt pe)
+                                  (lambda args pe))))
 
 (define progress-evt?*
   (let ([progress-evt?
@@ -19,7 +22,7 @@
            [(v) (progress-evt? v)]
            [(v port)
             (and (progress-evt? v)
-                 (eq? port (progress-evt-port port)))])])
+                 (eq? port (progress-evt-port v)))])])
     progress-evt?))
 
 ;; ----------------------------------------
@@ -42,13 +45,7 @@
 (define/who (port-commit-peeked amt progress-evt evt [in (current-input-port)])
   (check who exact-nonnegative-integer? amt)
   (check who progress-evt? progress-evt)
-  (check who (lambda (p)
-               (or (channel-put-evt? evt)
-                   (channel? evt)
-                   (semaphore? evt)
-                   (semaphore-peek-evt? evt)
-                   (eq? always-evt evt)
-                   (eq? never-evt evt)))
+  (check who sync-atomic-poll-evt?
          #:contract "(or/c channel-put-evt? channel? semaphore? semaphore-peek-evt? always-evt never-evt)"
          evt)
   (check who input-port? in)

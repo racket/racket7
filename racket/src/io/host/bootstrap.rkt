@@ -53,6 +53,14 @@
     [() #f]
     [(v) (void)]))
 
+(define (sync-atomic-poll-evt? evt)
+  (or (channel-put-evt? evt)
+      (channel? evt)
+      (semaphore? evt)
+      (semaphore-peek-evt? evt)
+      (eq? always-evt evt)
+      (eq? never-evt evt)))
+
 (primitive-table '#%evt
                  (hasheq 'make-semaphore make-semaphore
                          'semaphore-post semaphore-post
@@ -60,6 +68,8 @@
                          'semaphore-peek-evt semaphore-peek-evt
                          'wrap-evt wrap-evt
                          'sync sync
+                         'sync/timeout sync/timeout
+                         'sync-atomic-poll-evt? sync-atomic-poll-evt?
                          'evt? evt?
                          'prop:evt prop:evt
                          'poller poller
