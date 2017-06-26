@@ -73,7 +73,8 @@
      ;; merge-exts
      (lambda (a-exts b-exts)
        (if (and a-exts b-exts)
-           (exts (sandman-do-merge-external-event-sets
+           (exts ((sandman-do-merge-external-event-sets
+                   timeout-sandman)
                   (exts-timeout-at a-exts)
                   (exts-timeout-at b-exts))
                  (if (and (exts-fd-adders a-exts)
