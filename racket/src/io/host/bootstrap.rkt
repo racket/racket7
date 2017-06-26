@@ -54,7 +54,12 @@
     [(v) (void)]))
 
 (primitive-table '#%evt
-                 (hasheq 'sync sync
+                 (hasheq 'make-semaphore make-semaphore
+                         'semaphore-post semaphore-post
+                         'semaphore-wait semaphore-wait
+                         'semaphore-peek-evt semaphore-peek-evt
+                         'wrap-evt wrap-evt
+                         'sync sync
                          'evt? evt?
                          'prop:evt prop:evt
                          'poller poller

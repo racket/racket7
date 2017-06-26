@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/evt.rkt"
          "input-port.rkt"
          "output-port.rkt"
          "count.rkt")
@@ -43,6 +44,32 @@
            (- end start)
            (+ end (- (bytes-length bstr) start))))))
 
+  (define read-ready-sema (make-semaphore))
+  (define write-ready-sema (and limit (make-semaphore 1)))
+  (define more-read-ready-sema #f) ; for lookahead peeks
+  (define read-ready-evt (semaphore-peek-evt read-ready-sema))
+  (define write-ready-evt (and limit (semaphore-peek-evt write-ready-sema)))
+
+  (define (input-empty?) (= start end))
+  (define (output-full?) (and limit
+                              (let ([len (bytes-length bstr)])
+                                (and (limit . < . len)
+                                     (or (and (zero? start)
+                                              (= end (sub1 len)))
+                                         (= end (sub1 start)))))))
+
+  ;; Used before/after read:
+  (define (check-output-unblocking)
+    (when (output-full?) (semaphore-post write-ready-sema)))
+  (define (check-input-blocking)
+    (when (input-empty?) (semaphore-wait read-ready-sema)))
+
+  ;; Used before/after write:
+  (define (check-input-unblocking)
+    (when (and (input-empty?) (not output-closed?)) (semaphore-post read-ready-sema)))
+  (define (check-output-blocking)
+    (when (output-full?) (semaphore-wait write-ready-sema)))
+
   ;; input ----------------------------------------
   (define ip
     (make-core-input-port
@@ -52,79 +79,110 @@
      #:read-byte
      (lambda ()
        (let try-again ()
+         (start-atomic)
          (cond
-           [(= start end)
-            (if output-closed?
+           [(input-empty?)
+            (define done? output-closed?)
+            (end-atomic)
+            (if done?
                 eof
                 (begin
-                  '(wait) ;; FIXME
+                  (sync read-ready-evt)
                   (try-again)))]
            [else
             (define pos start)
+            (check-output-unblocking)
             (set! start (modulo (add1 pos) (bytes-length bstr)))
-            (bytes-ref bstr pos)])))
+            (check-input-blocking)
+            (begin0
+              (bytes-ref bstr pos)
+              (end-atomic))])))
 
      #:read-in
      (lambda (dest-bstr dest-start dest-end copy?)
+       (start-atomic)
        (cond
-         [(= start end)
-          (if output-closed?
+         [(input-empty?)
+          (define done? output-closed?)
+          (end-atomic)
+          (if done?
               eof
-              0)]
+              read-ready-evt)]
          [else
-          (define len (bytes-length bstr))
-          (cond
-            [(start . < . end)
-             (define amt (min (- dest-end dest-start)
-                              (- end start)))
-             (bytes-copy! dest-bstr dest-start bstr start (+ start amt))
-             (set! start (+ start amt))
-             amt]
-            [else
-             (define amt (min (- dest-end dest-start)
-                              (- len start)))
-             (bytes-copy! dest-bstr dest-start bstr start (+ start amt))
-             (set! start (modulo (+ start amt) len))
-             amt])]))
-     
+          (check-output-unblocking)
+          (begin0
+            (cond
+              [(start . < . end)
+               (define amt (min (- dest-end dest-start)
+                                (- end start)))
+               (bytes-copy! dest-bstr dest-start bstr start (+ start amt))
+               (set! start (+ start amt))
+               amt]
+              [else
+               (define len (bytes-length bstr))
+               (define amt (min (- dest-end dest-start)
+                                (- len start)))
+               (bytes-copy! dest-bstr dest-start bstr start (+ start amt))
+               (set! start (modulo (+ start amt) len))
+               amt])
+            (check-input-blocking)
+            (end-atomic))]))
+
      #:peek-byte
      (lambda ()
        (let try-again ()
+         (start-atomic)
          (cond
-           [(= start end)
-            (if output-closed?
+           [(input-empty?)
+            (define done? output-closed?)
+            (end-atomic)
+            (if done?
                 eof
                 (begin
-                  '(wait) ; FIXME
+                  (sync read-ready-evt)
                   (try-again)))]
            [else
-            (bytes-ref bstr start)])))
+            (begin0
+              (bytes-ref bstr start)
+              (end-atomic))])))
      
      #:peek-in
      (lambda (dest-bstr dest-start dest-end skip copy?)
+       (start-atomic)
        (define content-amt
-         (if (start . < . end)
+         (if (start . <= . end)
              (- end start)
              (+ end (- (bytes-length bstr) start))))
        (cond
          [(content-amt . <= . skip)
-          (if output-closed?
-              eof
-              0)]
+          (cond
+            [output-closed?
+             (end-atomic)
+             eof]
+            [else
+             (unless (or (zero? skip) more-read-ready-sema)
+               (set! more-read-ready-sema (make-semaphore)))
+             (define evt (if (zero? skip)
+                             read-ready-evt
+                             (semaphore-peek-evt more-read-ready-sema)))
+             (end-atomic)
+             evt])]
          [else
           (define len (bytes-length bstr))
           (define peek-start (modulo (+ start skip) len))
-          (cond
-            [(peek-start . < . end)
-             (define amt (min (- dest-end dest-start)
-                              (- end peek-start)))
-             (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
-             amt]
-            [else
-             (define amt (min (- dest-end dest-start)
-                              (- len peek-start)))
-             (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
-             amt])]))
+          (begin0
+            (cond
+              [(peek-start . < . end)
+               (define amt (min (- dest-end dest-start)
+                                (- end peek-start)))
+               (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
+               amt]
+              [else
+               (define amt (min (- dest-end dest-start)
+                                (- len peek-start)))
+               (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
+               amt])
+            (end-atomic))]))
      
      #:close
      void))
@@ -135,11 +193,12 @@
      #:name output-name
      #:data data
 
-     #:evt 'evt ;; FIXME
+     #:evt write-ready-evt
      
      #:write-out
      (lambda (src-bstr src-start src-end nonblock? enable-break? copy?)
        (let try-again ()
+         (start-atomic)
          (define len (bytes-length bstr))
          (define top-pos (if (zero? start)
                              (sub1 len)
@@ -159,41 +218,57 @@
                  (set! start 0)
                  (set! end (sub1 len))])
               (set! bstr new-bstr)
+              (end-atomic)
               (try-again)]
              [else
               ;; pipe is full
-              0]))
+              (end-atomic)
+              write-ready-evt]))
          (cond
            [(and (end . >= . start)
                  (end . < . top-pos))
             (define amt (min (- top-pos end)
                              (- src-end src-start)))
+            (check-input-unblocking)
             (bytes-copy! bstr end src-bstr src-start (+ src-start amt))
             (let ([new-end (+ end amt)])
               (set! end (if (= new-end len) 0 new-end)))
+            (check-output-blocking)
+            (end-atomic)
             amt]
            [(= end top-pos)
             (cond
               [(zero? start)
                (maybe-grow)]
               [else
+               (check-input-unblocking)
                (define amt (min (sub1 start)
                                 (- src-end src-start)))
                (bytes-copy! bstr 0 src-bstr src-start (+ src-start amt))
                (set! end amt)
+               (check-output-blocking)
+               (end-atomic)
                amt])]
            [(end . < . (sub1 start))
+            (check-input-unblocking)
             (define amt (min (- (sub1 start) end)
                              (- src-end src-start)))
             (bytes-copy! bstr end src-bstr src-start (+ src-start amt))
             (set! end (+ end amt))
+            (check-output-blocking)
+            (end-atomic)
             amt]
            [else
             (maybe-grow)])))
      
      #:close
      (lambda ()
-       (set! output-closed? #t))))
+       (start-atomic)
+       (unless output-closed?
+         (set! output-closed? #t)
+         (semaphore-post write-ready-sema)
+         (semaphore-post read-ready-sema))
+       (end-atomic))))
 
   ;; Results ----------------------------------------
   (when (port-count-lines-enabled)

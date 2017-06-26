@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../common/check.rkt")
+(require "../common/check.rkt"
+         "../host/evt.rkt")
 
 (provide prop:output-port
          output-port?
@@ -56,7 +57,9 @@
                           [write-handler #:mutable]
                           [print-handler #:mutable]
                           [display-handler #:mutable])
-  #:property prop:object-name (struct-field-index name))
+  #:property prop:object-name (struct-field-index name)
+  #:property prop:evt (lambda (o) (wrap-evt (core-output-port-evt o)
+                                            (lambda (v) o))))
 
 (define (make-core-output-port #:name name
                                #:data [data #f]

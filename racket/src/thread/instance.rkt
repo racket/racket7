@@ -1,6 +1,7 @@
 #lang racket/base
 (require "evt.rkt"
          "sync.rkt"
+         "semaphore.rkt"
          "schedule-info.rkt"
          "sandman.rkt"
          "atomic.rkt"
@@ -12,7 +13,12 @@
 (provide #%evt-instance)
 
 (define #%evt-instance
-  (hasheq 'sync sync
+  (hasheq 'make-semaphore make-semaphore
+          'semaphore-post semaphore-post
+          'semaphore-wait semaphore-wait
+          'semaphore-peek-evt semaphore-peek-evt
+          'wrap-evt wrap-evt
+          'sync sync
           'evt? evt?
           'prop:evt prop:evt
           'poller poller

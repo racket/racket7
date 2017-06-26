@@ -23,76 +23,76 @@
   (exts (and old-exts (exts-timeout-at old-exts))
         (cons adder (and old-exts (exts-fd-adders old-exts)))))
 
-(current-sandman
- (let ([timeout-sandman (current-sandman)])
-   (sandman
-    ;; sleep
-    (lambda (exts)
-      (define timeout-at (exts-timeout-at exts))
-      (define fd-adders (exts-fd-adders exts))
-      (define ps (rktio_make_poll_set rktio))
-      (let loop ([fd-adders fd-adders])
-        (cond
-          [(not fd-adders) (void)]
-          [(pair? fd-adders)
-           (loop (car fd-adders))
-           (loop (cdr fd-adders))]
-          [else
-           (fd-adders ps)]))
-      (rktio_sleep rktio
-                   (if timeout-at
-                       (/ (- timeout-at (current-inexact-milliseconds)) 1000.0)
-                       0.0)
-                   ps
-                   rktio_NULL)
-      (rktio_poll_set_forget rktio ps))
-  
-    ;; poll
-    (lambda (mode wakeup)
-      ((sandman-do-poll timeout-sandman) mode wakeup))
+(void
+ (current-sandman
+  (let ([timeout-sandman (current-sandman)])
+    (sandman
+     ;; sleep
+     (lambda (exts)
+       (define timeout-at (exts-timeout-at exts))
+       (define fd-adders (exts-fd-adders exts))
+       (define ps (rktio_make_poll_set rktio))
+       (let loop ([fd-adders fd-adders])
+         (cond
+           [(not fd-adders) (void)]
+           [(pair? fd-adders)
+            (loop (car fd-adders))
+            (loop (cdr fd-adders))]
+           [else
+            (fd-adders ps)]))
+       (rktio_sleep rktio
+                    (if timeout-at
+                        (/ (- timeout-at (current-inexact-milliseconds)) 1000.0)
+                        0.0)
+                    ps
+                    rktio_NULL)
+       (rktio_poll_set_forget rktio ps))
+     
+     ;; poll
+     (lambda (mode wakeup)
+       ((sandman-do-poll timeout-sandman) mode wakeup))
 
-    ;; any-sleepers?
-    (lambda ()
-      ((sandman-do-any-sleepers? timeout-sandman)))
+     ;; any-sleepers?
+     (lambda ()
+       ((sandman-do-any-sleepers? timeout-sandman)))
 
-    ;; sleepers-external-events
-    (lambda ()
-      ((sandman-do-sleepers-external-events timeout-sandman)))
+     ;; sleepers-external-events
+     (lambda ()
+       ((sandman-do-sleepers-external-events timeout-sandman)))
 
-    ;; add-thread!
-    (lambda (t exts)
-      (unless (null? (exts-fd-adders exts))
-        (internal-error "cannot sleep on fds"))
-      ((sandman-do-add-thread! timeout-sandman) t (exts-timeout-at exts)))
-    
-    ;; remove-thread!
-    (lambda (t timeout-handle)
-      ((sandman-do-remove-thread! timeout-sandman) t timeout-handle))
+     ;; add-thread!
+     (lambda (t exts)
+       (unless (null? (exts-fd-adders exts))
+         (internal-error "cannot sleep on fds"))
+       ((sandman-do-add-thread! timeout-sandman) t (exts-timeout-at exts)))
+     
+     ;; remove-thread!
+     (lambda (t timeout-handle)
+       ((sandman-do-remove-thread! timeout-sandman) t timeout-handle))
 
-    ;; merge-exts
-    (lambda (a-exts b-exts)
-      (if (and a-exts b-exts)
-          (exts (sandman-do-merge-external-event-sets
-                 (exts-timeout-at a-exts)
-                 (exts-timeout-at b-exts))
-                (if (and (exts-fd-adders a-exts)
-                         (exts-fd-adders b-exts))
-                    (cons (exts-fd-adders a-exts)
+     ;; merge-exts
+     (lambda (a-exts b-exts)
+       (if (and a-exts b-exts)
+           (exts (sandman-do-merge-external-event-sets
+                  (exts-timeout-at a-exts)
+                  (exts-timeout-at b-exts))
+                 (if (and (exts-fd-adders a-exts)
                           (exts-fd-adders b-exts))
-                    (or (exts-fd-adders a-exts)
-                        (exts-fd-adders b-exts))))
-          (or a-exts b-exts)))
-   
-    ;; merge-timeout
-    (lambda (old-exts timeout-at)
-      (exts ((sandman-do-merge-timeout timeout-sandman)
+                     (cons (exts-fd-adders a-exts)
+                           (exts-fd-adders b-exts))
+                     (or (exts-fd-adders a-exts)
+                         (exts-fd-adders b-exts))))
+           (or a-exts b-exts)))
+     
+     ;; merge-timeout
+     (lambda (old-exts timeout-at)
+       (exts ((sandman-do-merge-timeout timeout-sandman)
+              (and old-exts
+                   (exts-timeout-at old-exts))
+              timeout-at)
              (and old-exts
-                  (exts-timeout-at old-exts))
-             timeout-at)
-            (and old-exts
-                 (exts-fd-adders old-exts))))
-    
-    ;; extract-timeout
-    (lambda (exts)
-      (exts-timeout-at exts)))))
-    
+                  (exts-fd-adders old-exts))))
+     
+     ;; extract-timeout
+     (lambda (exts)
+       (exts-timeout-at exts))))))

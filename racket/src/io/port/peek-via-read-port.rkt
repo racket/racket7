@@ -59,7 +59,6 @@
            [(and (< (- end start) (bytes-length buf))
                  (eq? 'block (get-buffer-mode)))
             (define v (pull-some-bytes))
-            (log-error ">> ~s" v)
             (cond
               [(or (eqv? v 0) (evt? v)) v]
               [else (try-again)])]

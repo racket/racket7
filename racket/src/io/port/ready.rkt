@@ -10,13 +10,7 @@
 (define/who (byte-ready? in)
   (check who input-port? in)
   (let ([in (->core-input-port in)])
-    (define peek-byte (core-input-port-peek-byte in))
-    (define b (and peek-byte (peek-byte)))
-    (cond
-      [b #t]
-      [(not peek-byte)
-       (eq? 1 (peek-bytes-avail!* (make-bytes 1) 0 #f in))]
-      [else #f])))
+    (not (eqv? 0 (peek-bytes-avail!* (make-bytes 1) 0 #f in)))))
 
 (define/who (char-ready? in)
   (check who input-port? in)

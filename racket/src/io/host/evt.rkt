@@ -14,7 +14,12 @@
     [(_ id ...)
      (begin (bounce id) ...)]))
 
-(bounce sync
+(bounce make-semaphore
+        semaphore-post
+        semaphore-wait
+        semaphore-peek-evt
+        wrap-evt
+        sync
         evt?
         prop:evt
         poller

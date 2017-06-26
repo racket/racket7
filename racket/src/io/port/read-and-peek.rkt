@@ -1,5 +1,6 @@
 #lang racket/base
-(require "input-port.rkt"
+(require "../host/evt.rkt"
+         "input-port.rkt"
          "count.rkt")
 
 (provide read-some-bytes!
@@ -25,6 +26,7 @@
                           #:keep-eof? [keep-eof? #f])
   (let loop ([in orig-in])
     (cond
+     [(= start end) 0]
      [(core-input-port-closed? in)
       (raise-arguments-error who
                              "input port is closed"
@@ -56,6 +58,12 @@
                                    "result" v
                                    "byte-string length" (- end start))])]
          [(eof-object? v) eof]
+         [(evt? v)
+          (cond
+            [zero-ok? 0]
+            [else
+             (sync v)
+             (loop in)])]
          [else
           (raise-result-error who
                               "(or/c exact-nonnegative-integer? eof-object? evt? pipe-input-port? #f procedure?)"
@@ -69,6 +77,7 @@
                           #:copy-bstr? [copy-bstr? #t])
   (let loop ([in orig-in])
     (cond
+     [(= start end) 0]
      [(core-input-port-closed? in)
       (raise-arguments-error who
                              "input port is closed"
@@ -96,6 +105,12 @@
                                    "result" v
                                    "byte-string length" (- end start))])]
          [(eof-object? v) eof]
+         [(evt? v)
+          (cond
+            [zero-ok? 0]
+            [else
+             (sync v)
+             (loop in)])]
          [else
           (raise-result-error who
                               "(or/c exact-nonnegative-integer? eof-object? evt? pipe-input-port? #f procedure?)"

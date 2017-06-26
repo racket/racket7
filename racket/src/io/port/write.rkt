@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../error/abort.rkt"
+         "../host/evt.rkt"
          "output-port.rkt")
 
 (provide write-some-bytes)
@@ -14,18 +15,23 @@
      (raise-arguments-error who
                             "output port is closed"
                             "output port" out)]
-    [(= start end)
-     ;; Avoid an accidental flush request
-     0]
+    [(= start end) 0]
     [else
      (define write-out (core-output-port-write-out out))
      (let try-again ()
        (define v (write-out bstr start end (not buffer-ok?) enable-break? copy-bstr?))
        (cond
-         [(or (not v)
-              (eq? v 0)) ; zero is not supposed to happen, but treat it like #f
+         [(not v)
           (if zero-ok?
               0
               (try-again))]
-         [(exact-integer? v) v]
-         [else (abort "write-some-bytes: weird result")]))]))
+         [(evt? v)
+          (if zero-ok?
+              0
+              (begin
+                (sync v)
+                (try-again)))]
+         [(and (exact-integer? v)
+               (v . > . 0))
+          v]
+         [else (abort (format "write-some-bytes: weird result ~s" v))]))]))
