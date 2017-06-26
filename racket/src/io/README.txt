@@ -10,7 +10,7 @@ layer should provide a `error-value->string-handler` paramemeter, but
 this layer sets that parameter (so the primitive error function slike
 `raise-argument-error` won't work right until this layer is loaded).
 
-Thread and event support is similarly provided as a more pritimive
+Thread and event support is similarly provided as a more primitive
 layer. Running `make demo` doesn't rely on that, while running `make
 demo-thread` uses the thread implementation in "../thread" to
 demonstrate cooperation between the layers.
