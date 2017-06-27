@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "port.rkt"
          "input-port.rkt"
          "output-port.rkt")
 
@@ -27,49 +28,30 @@
             (lambda (p) (or (exact-nonnegative-integer? p) (eof-object? p)))
             #:contract "(or/c exact-nonnegative-integer? eof-object?)"
             pos)
-     (cond
-       [(input-port? p)
-        (let ([p (->core-input-port p)])
-          (define data (core-input-port-data p))
-          (cond
-            [(file-position? data)
-             ((core-input-port-on-file-position p))
-             ((file-position-ref data) data pos)]
-            [else
-             (raise-arguments-error who
-                                    "setting position allowed for file-stream and string ports only"
-                                    "port" p
-                                    "position" pos)]))]
-       [else
-        (let ([p (->core-output-port p)])
-          (define data (core-output-port-data p))
-          (cond
-            [(file-position? data)
-             ((file-position-ref data) data pos)]
-            [else
-             (raise-arguments-error who
-                                    "setting position allowed for file-stream and string ports only"
-                                    "port" p
-                                    "position" pos)]))])]))
+     (let ([cp (cond
+                 [(input-port? p) (->core-input-port p)]
+                 [else (->core-output-port p)])])
+       (define data (core-port-data cp))
+       (cond
+         [(file-position? data)
+          ((core-port-on-file-position p))
+          ((file-position-ref data) data pos)]
+         [else
+          (raise-arguments-error who
+                                 "setting position allowed for file-stream and string ports only"
+                                 "port" p
+                                 "position" pos)]))]))
 
 (define/who (file-position* p)
   (do-simple-file-position who p (lambda () #f)))
 
 (define (do-simple-file-position who p fail-k)
-  (cond
-    [(input-port? p)
-     (let ([p (->core-input-port p)])
-       (define data (core-input-port-data p))
-       (if (file-position? data)
-           ((file-position-ref data) data)
-           (or (core-input-port-offset p)
-               (fail-k))))]
-    [(output-port? p)
-     (let ([p (->core-output-port p)])
-       (define data (core-output-port-data p))
-       (if (file-position? data)
-           ((file-position-ref data) data)
-           (or (core-output-port-offset p)
-               (fail-k))))]
-    [else
-     (raise-argument-error who "port?" p)]))
+  (let ([p (cond
+             [(input-port? p) (->core-input-port p)]
+             [(output-port? p) (->core-output-port p)]
+             [else (raise-argument-error who "port?" p)])])
+    (define data (core-port-data p))
+    (if (file-position? data)
+        ((file-position-ref data) data)
+        (or (core-port-offset p)
+            (fail-k)))))

@@ -70,7 +70,7 @@
             (sync b)
             (loop)]
            [else
-            (input-port-count-byte! in b)
+            (port-count-byte! in b)
             (end-atomic)
             b]))]
       [else

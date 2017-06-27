@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../error/abort.rkt"
          "../host/evt.rkt"
+         "port.rkt"
          "output-port.rkt")
 
 (provide write-some-bytes)
@@ -11,7 +12,7 @@
                           #:zero-ok? [zero-ok? #f]
                           #:enable-break? [enable-break? #f])
   (cond
-    [(core-output-port-closed? out)
+    [(core-port-closed? out)
      (raise-arguments-error who
                             "output port is closed"
                             "output port" out)]

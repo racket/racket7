@@ -1,4 +1,5 @@
-(import (io)
+(import (core)
+        (io)
         (thread))
 
 (define-syntax test

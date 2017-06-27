@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/evt.rkt"
          "output-port.rkt")
 
 (provide make-output-port)
@@ -26,7 +27,10 @@
    #:name name
    #:evt evt
    #:write-out do-write-out
-   #:close close
+   #:close (lambda ()
+             (end-atomic)
+             (close)
+             (start-atomic))
    #:write-out-special write-out-special
    #:get-write-evt get-write-evt
    #:get-write-special-evt get-write-special-evt

@@ -58,7 +58,7 @@
      (define bstr (commit amt (progress-evt-evt progress-evt) evt))
      (cond
        [bstr
-        (input-port-count! in (bytes-length bstr) bstr 0)
+        (port-count! in (bytes-length bstr) bstr 0)
         #t]
        [else #f]))))
 

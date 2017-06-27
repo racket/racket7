@@ -1,5 +1,6 @@
 #lang racket/base
-(require "input-port.rkt"
+(require "port.rkt"
+         "input-port.rkt"
          "output-port.rkt")
 
 (provide prop:file-stream
@@ -9,14 +10,12 @@
   (make-struct-type-property 'file-stream))
 
 (define (file-stream-port? p)
-  (cond
-    [(input-port? p)
-     (let ([p (->core-input-port p)])
-       (file-stream? (core-input-port-data p)))]
-    [(output-port? p)
-     (let ([p (->core-output-port p)])
-       (file-stream? (core-output-port-data p)))]
-    [else
-     (raise-argument-error 'file-stream-port?
-                           "port?"
-                           p)]))
+  (file-stream?
+   (core-port-data
+    (cond
+      [(input-port? p) (->core-input-port p)]
+      [(output-port? p) (->core-output-port p)]
+      [else
+       (raise-argument-error 'file-stream-port?
+                             "port?"
+                             p)]))))

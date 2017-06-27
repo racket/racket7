@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "input-port.rkt"
+         "port.rkt"
          "output-port.rkt"
          "file-stream.rkt")
 
@@ -16,5 +16,5 @@
     (raise-argument-error 'file-truncate "(and/c output-port? file-stream-port?)" p))
   (check 'file-truncate exact-nonnegative-integer? pos)
   (let ([p (->core-output-port p)])
-    (define data (core-output-port-data p))
+    (define data (core-port-data p))
     ((file-truncate-ref data) data pos)))

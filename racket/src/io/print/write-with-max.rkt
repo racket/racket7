@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../port/string-output.rkt"
          "../port/bytes-output.rkt"
+         "../port/port.rkt"
          "../port/output-port.rkt")
 
 (provide write-string/max
@@ -64,4 +65,4 @@
 
 (define (output-port/max-max-length o max-length)
   (and max-length
-       ((core-output-port-data o))))
+       ((core-port-data o))))

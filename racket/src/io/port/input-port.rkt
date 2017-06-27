@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../common/check.rkt")
+(require "../common/check.rkt"
+         "port.rkt")
 
 (provide prop:input-port
          input-port?
@@ -36,72 +37,55 @@
     [else
      empty-input-port]))
 
-(struct core-input-port (name      ; anything, reported as `object-name` for the port
-                         data      ; anything, effectively a subtype indicator
+(struct core-input-port core-port
+  (
+   ;; Various functions below are called in atomic mode. The
+   ;; intent of atomic mode is to ensure that the completion and
+   ;; return of the function is atomic with respect to some further
+   ;; activity, such as position and line counting. Any of the
+   ;; functions is free to exit and re-enter atomic mode. Leave
+   ;; atomic mode explicitly before raising an exception.
 
-                         ;; Various functions below are called in atomic mode. The
-                         ;; intent of atomic mode is to ensure that the completion and
-                         ;; return of the function is atomic with respect to some further
-                         ;; activity, such as position and line counting. Any of the
-                         ;; functions is free to exit and re-enter atomic mode. Leave
-                         ;; atomic mode explicitly before raising an exception.
+   read-byte ; #f or (-> (or/c byte? eof-object? evt?))
+   ;;          Called in atomic mode.
+   ;;          Non-blocking byte read, where an event must be
+   ;;          returned if no byte is available. This shortcut is optional.
 
-                         read-byte ; #f or (-> (or/c byte? eof-object? evt?))
-                         ;;          Called in atomic mode.
-                         ;;          Non-blocking byte read, where an event must be
-                         ;;          returned if no byte is available. This shortcut is optional.
+   read-in   ; port or (bytes start-k end-k copy? -> (or/c integer? ...))
+   ;;          Called in atomic mode.
+   ;;          A port values redirects to the port. Otherwise, the function
+   ;;          never blocks, and can assume `(- end-k start-k)` is non-zero.
+   ;;          The `copy?` flag indicates that the given byte string should
+   ;;          not be exposed to untrusted code, and instead of should be
+   ;;          copied if necessary. The return values are the same as
+   ;;          documented for `make-input-port`.
 
-                         read-in   ; port or (bytes start-k end-k copy? -> (or/c integer? ...))
-                         ;;          Called in atomic mode.
-                         ;;          A port values redirects to the port. Otherwise, the function
-                         ;;          never blocks, and can assume `(- end-k start-k)` is non-zero.
-                         ;;          The `copy?` flag indicates that the given byte string should
-                         ;;          not be exposed to untrusted code, and instead of should be
-                         ;;          copied if necessary. The return values are the same as
-                         ;;          documented for `make-input-port`.
+   peek-byte ; #f or (-> (or/c byte? eof-object? evt?))
+   ;;          Called in atomic mode.
+   ;;          Non-blocking byte read, where an event must be
+   ;;          returned if no byte is available. This shortcut is optional.
 
-                         peek-byte ; #f or (-> (or/c byte? eof-object? evt?))
-                         ;;          Called in atomic mode.
-                         ;;          Non-blocking byte read, where an event must be
-                         ;;          returned if no byte is available. This shortcut is optional.
+   peek-in   ; port or (bytes start-k end-k skip-k copy? -> (or/c integer? ...))
+   ;;          Called in atomic mode.
+   ;;          A port values redirects to the port. Otherwise, the function
+   ;;          never blocks, and it can assume that `(- end-k start-k)` is non-zero.
+   ;;          The `copy?` flag is the same as for `read-in`.  The return values
+   ;;          are the same as documented for `make-input-port`.
 
-                         peek-in   ; port or (bytes start-k end-k skip-k copy? -> (or/c integer? ...))
-                         ;;          Called in atomic mode.
-                         ;;          A port values redirects to the port. Otherwise, the function
-                         ;;          never blocks, and it can assume that `(- end-k start-k)` is non-zero.
-                         ;;          The `copy?` flag is the same as for `read-in`.  The return values
-                         ;;          are the same as documented for `make-input-port`.
+   get-progress-evt ; #f or (-> evt?)
+   ;;           *Not) called in atomic mode.
+   ;;           Optional support for progress events.
 
-                         close     ; -> (void)
-                         ;;          *Not* called in atomic mode.
+   commit    ; (amt-k progress-evt? evt?) -> (or/c bytes? #f)
+   ;;          Called in atomic mode.
+   ;;          Goes with `get-progress-evt`. The final `evt?`
+   ;;          argument is constrained to a few kinds of events;
+   ;;          see docs for `port-commit-peeked` for more information.
+   ;;          The result is the committed bytes on success, #f on
+   ;;          failure.
 
-                         get-progress-evt ; #f or (-> evt?)
-                         ;;           Not called in atomic mode.
-                         ;;           Optional support for progress events.
-
-                         commit    ; (amt-k progress-evt? evt?) -> (or/c bytes? #f)
-                         ;;           Called in atomic mode.
-                         ;;           Goes with `get-progress-evt`. The final `evt?`
-                         ;;           argument is constrained to a few kinds of events;
-                         ;;           see docs for `port-commit-peeked` for more information.
-                         ;;           The result is the committed bytes on success, #f on
-                         ;;           failure.
-
-                         get-location
-                         count-lines!
-                         on-file-position
-
-                         [closed? #:mutable]
-                         [closed-sema #:mutable] ; #f or a semaphore to be posed on close
-                         [offset #:mutable] ; count plain bytes
-                         [state #:mutable] ; state of UTF-8 decoding
-                         [cr-state #:mutable] ; state of CRLF counting as a single LF
-                         [line #:mutable]   ; count newlines
-                         [column #:mutable] ; count UTF-8 characters in line
-                         [position #:mutable]    ; count UTF-8 characters
-                         [pending-eof? #:mutable]
-                         [read-handler #:mutable])
-  #:property prop:object-name (struct-field-index name))
+   [pending-eof? #:mutable]
+   [read-handler #:mutable]))
 
 (define (make-core-input-port #:name name
                               #:data [data #f]
@@ -117,16 +101,12 @@
                               #:on-file-position [on-file-position void])
   (core-input-port name
                    data
-                   read-byte
-                   read-in
-                   peek-byte
-                   peek-in
+
                    close
-                   get-progress-evt
-                   commit
-                   get-location
                    count-lines!
+                   get-location
                    on-file-position
+                   
                    #f   ; closed?
                    #f   ; closed-sema
                    0    ; offset
@@ -135,6 +115,13 @@
                    #f   ; line
                    #f   ; column
                    #f   ; position
+                   
+                   read-byte
+                   read-in
+                   peek-byte
+                   peek-in
+                   get-progress-evt
+                   commit
                    #f   ; pending-eof?
                    #f)) ; read-handler
 

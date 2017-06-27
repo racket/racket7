@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../common/atomic.rkt"
          "../host/evt.rkt"
+         "port.rkt"
          "input-port.rkt"
          "count.rkt")
 
@@ -28,7 +29,7 @@
   (let loop ([in orig-in])
     (cond
      [(= start end) 0]
-     [(core-input-port-closed? in)
+     [(core-port-closed? in)
       (raise-arguments-error who
                              "input port is closed"
                              "input port" orig-in)]
@@ -45,7 +46,7 @@
          (start-atomic)
          (define v (read-in bstr start end copy-bstr?))
          (when (and (integer? v) (not (eq? v 0)))
-           (input-port-count! orig-in v bstr start))
+           (port-count! orig-in v bstr start))
          (end-atomic)
          (cond
            [(exact-nonnegative-integer? v)
@@ -81,7 +82,7 @@
   (let loop ([in orig-in])
     (cond
      [(= start end) 0]
-     [(core-input-port-closed? in)
+     [(core-port-closed? in)
       (raise-arguments-error who
                              "input port is closed"
                              "input port" orig-in)]

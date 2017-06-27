@@ -1,6 +1,7 @@
 (library (io)
   (export)
-  (import (chezpart)
+  (import (except (chezpart)
+                  close-port)
           (rename (only (chezscheme)
                         read-char peek-char
                         current-directory

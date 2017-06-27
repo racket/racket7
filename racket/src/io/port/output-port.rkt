@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../host/evt.rkt")
+         "../host/evt.rkt"
+         "port.rkt")
 
 (provide prop:output-port
          output-port?
@@ -37,27 +38,15 @@
     [else
      empty-output-port]))
 
-(struct core-output-port (name
-                          data
-                          evt
-                          write-out ; (bstr start end no-buffer? enable-break? copy? -> ...)
-                          close
-                          write-out-special ; (any no-buffer? enable-break? -> ...)
-                          get-write-evt
-                          get-write-special-evt
-                          get-location
-                          count-lines!
-                          buffer-mode
-                          [closed? #:mutable]
-                          [closed-sema #:mutable] ; #f or a semaphore posed on close
-                          [offset #:mutable] ; count plain bytes
-                          [line #:mutable]   ; count newlines
-                          [column #:mutable] ; count UTF-8 characters in line
-                          [position #:mutable]  ; count UTF-8 characters
-                          [write-handler #:mutable]
-                          [print-handler #:mutable]
-                          [display-handler #:mutable])
-  #:property prop:object-name (struct-field-index name)
+(struct core-output-port core-port
+  (evt
+   write-out ; (bstr start end no-buffer? enable-break? copy? -> ...)
+   write-out-special ; (any no-buffer? enable-break? -> ...)
+   get-write-evt
+   get-write-special-evt
+   [write-handler #:mutable]
+   [print-handler #:mutable]
+   [display-handler #:mutable])
   #:property prop:evt (lambda (o) (wrap-evt (core-output-port-evt o)
                                             (lambda (v) o))))
 
@@ -73,21 +62,27 @@
                                #:count-lines! [count-lines! #f])
   (core-output-port name
                     data
-                    evt
-                    write-out
+
                     close
-                    write-out-special
-                    get-write-evt
-                    get-write-special-evt
-                    get-location
                     count-lines!
-                    'block ; buffer-mode
+                    get-location
+                    void ; on-file-position
+                    
                     #f   ; closed?
                     #f   ; closed-sema
                     0    ; offset
+                    #f   ; state
+                    #f   ; cr-state
                     #f   ; line
                     #f   ; column
                     #f   ; position
+                    
+                    evt
+                    write-out
+                    write-out-special
+                    get-write-evt
+                    get-write-special-evt
+
                     #f   ; write-handler
                     #f   ; display-handler
                     #f)) ; print-handler

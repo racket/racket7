@@ -2,6 +2,7 @@
 (require "../common/check.rkt"
          "../common/atomic.rkt"
          "../host/evt.rkt"
+         "port.rkt"
          "input-port.rkt"
          "output-port.rkt"
          "count.rkt")
@@ -17,24 +18,25 @@
 
 (define (pipe-input-port? p)
   (and (input-port? p)
-       (pipe-data? (core-input-port-data (->core-input-port p)))))
+       (pipe-data? (core-port-data (->core-input-port p)))))
 
 (define (pipe-output-port? p)
   (and (output-port? p)
-       (pipe-data? (core-output-port-data (->core-output-port p)))))
+       (pipe-data? (core-port-data (->core-output-port p)))))
 
 (define (pipe-content-length p)
-  (cond
-   [(pipe-input-port? p)
-    ((pipe-data-get-content-length (core-input-port-data (->core-input-port p))))]
-   [(pipe-output-port? p)
-    ((pipe-data-get-content-length (core-output-port-data (->core-input-port p))))]
-   [else
-    (raise-argument-error 'pipe-contact-length "(or/c pipe-input-port? pipe-output-port?)" p)]))
+  ((pipe-data-get-content-length
+    (core-port-data 
+     (cond
+       [(pipe-input-port? p) (->core-input-port p)]
+       [(pipe-output-port? p) (->core-output-port p)]
+       [else
+        (raise-argument-error 'pipe-contact-length "(or/c pipe-input-port? pipe-output-port?)" p)])))))
 
 (define/who (make-pipe [limit #f] [input-name 'pipe] [output-name 'pipe])
   (check who #:or-false exact-positive-integer? limit)
   (define bstr (make-bytes (min+1 limit 16)))
+  (define len (bytes-length bstr))
   (define start 0)
   (define end 0)
   (define output-closed? #f)
@@ -43,7 +45,7 @@
      (lambda ()
        (if (start . <= . end)
            (- end start)
-           (+ end (- (bytes-length bstr) start))))))
+           (+ end (- len start))))))
 
   (define read-ready-sema (make-semaphore))
   (define write-ready-sema (and limit (make-semaphore 1)))
@@ -55,14 +57,13 @@
   (define (content-length)
     (if (start . <= . end)
         (- end start)
-        (+ end (- (bytes-length bstr) start))))
+        (+ end (- len start))))
   (define (input-empty?) (= start end))
   (define (output-full?) (and limit
-                              (let ([len (bytes-length bstr)])
-                                (and (limit . < . len)
-                                     (or (and (zero? start)
-                                              (= end (sub1 len)))
-                                         (= end (sub1 start)))))))
+                              (and (limit . < . len)
+                                   (or (and (zero? start)
+                                            (= end (sub1 len)))
+                                       (= end (sub1 start))))))
 
   ;; Used before/after read:
   (define (check-output-unblocking)
@@ -97,7 +98,9 @@
          [else
           (define pos start)
           (check-output-unblocking)
-          (set! start (modulo (add1 pos) (bytes-length bstr)))
+          (set! start (add1 pos))
+          (when (= start len)
+            (set! start 0))
           (check-input-blocking)
           (progress!)
           (bytes-ref bstr pos)]))
@@ -120,7 +123,6 @@
                (set! start (+ start amt))
                amt]
               [else
-               (define len (bytes-length bstr))
                (define amt (min (- dest-end dest-start)
                                 (- len start)))
                (bytes-copy! dest-bstr dest-start bstr start (+ start amt))
@@ -154,7 +156,6 @@
                              (semaphore-peek-evt more-read-ready-sema)))
              evt])]
          [else
-          (define len (bytes-length bstr))
           (define peek-start (modulo (+ start skip) len))
           (cond
             [(peek-start . < . end)
@@ -191,12 +192,11 @@
                 [(start . < . end)
                  (bytes-copy! dest-bstr 0 bstr start (+ start amt))]
                 [else
-                 (define len (bytes-length bstr))
                  (define amt1 (min (- len start) amt))
                  (bytes-copy! dest-bstr 0 bstr start (+ start amt1))
                  (when (amt1 . < . amt)
                    (bytes-copy! dest-bstr amt1 bstr 0 (- amt amt1)))])
-              (set! start (modulo (+ start amt) (bytes-length bstr)))
+              (set! start (modulo (+ start amt) len))
               (progress!)
               (check-input-blocking)
               dest-bstr)))))
@@ -213,7 +213,6 @@
      (lambda (src-bstr src-start src-end nonblock? enable-break? copy?)
        (let try-again ()
          (start-atomic)
-         (define len (bytes-length bstr))
          (define top-pos (if (zero? start)
                              (sub1 len)
                              len))
@@ -232,6 +231,7 @@
                  (set! start 0)
                  (set! end (sub1 len))])
               (set! bstr new-bstr)
+              (set! len (bytes-length new-bstr))
               (end-atomic)
               (try-again)]
              [else

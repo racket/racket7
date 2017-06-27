@@ -168,7 +168,7 @@
          (loop)]
         [else
          (unless (eof-object? b)
-           (input-port-count-byte! in b))
+           (port-count-byte! in b))
          (end-atomic)
          b])))
   (cond

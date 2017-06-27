@@ -55,11 +55,13 @@
               [else (try-again)])]
            [else
             (read-in dest-bstr start end copy?)])])))
-  
+
+  ;; in atomic mode
   (define (read-byte)
+    (define b ((core-input-port-read-byte peek-pipe-i)))
     (cond
-      [(positive? (pipe-content-length peek-pipe-i))
-       ((core-input-port-read-byte peek-pipe-i))]
+      [(not (evt? b))
+       b]
       [peeked-eof?
        (set! peeked-eof? #f)
        eof]
@@ -69,6 +71,7 @@
            (read-byte)
            v)]))
 
+  ;; in atomic mode
   (define (do-peek-in dest-bstr start end skip copy?)
     (let try-again ()
       (define peeked-amt (if peek-pipe-i
@@ -86,6 +89,7 @@
              (try-again)
              v)])))
 
+  ;; in atomic mode
   (define (peek-byte)
     (cond
       [(positive? (pipe-content-length peek-pipe-i))

@@ -4,6 +4,7 @@
          "../host/evt.rkt"
          "../sandman/main.rkt"
          "../file/error.rkt"
+         "port.rkt"
          "input-port.rkt"
          "output-port.rkt"
          "peek-via-read-port.rkt"
@@ -189,13 +190,12 @@
 
 (define (terminal-port? p)
   (define data
-    (cond
-      [(input-port? p)
-       (core-input-port-data (->core-input-port p))]
-      [(output-port? p)
-       (core-output-port-data (->core-output-port p))]
-      [else
-       (raise-argument-error 'terminal-port? "port?" p)]))
+    (core-port-data
+     (cond
+       [(input-port? p) (->core-input-port p)]
+       [(output-port? p) (->core-output-port p)]
+       [else
+        (raise-argument-error 'terminal-port? "port?" p)])))
   (and (host-data? p)
        (rktio_fd_is_terminal (host-data-host-port p))))
 

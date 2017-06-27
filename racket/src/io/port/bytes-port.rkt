@@ -2,6 +2,7 @@
 (require "../common/check.rkt"
          "../common/atomic.rkt"
          "../host/evt.rkt"
+         "port.rkt"
          "input-port.rkt"
          "output-port.rkt"
          "pipe.rkt"
@@ -109,10 +110,10 @@
      #:data (output-bytes-data i)
      #:evt o
      #:write-out (core-output-port-write-out o)
-     #:close (core-output-port-close o)
+     #:close (core-port-close o)
      #:get-write-evt (core-output-port-get-write-evt o)
-     #:get-location (core-output-port-get-location o)
-     #:count-lines! (core-output-port-count-lines! o)))
+     #:get-location (core-port-get-location o)
+     #:count-lines! (core-port-count-lines! o)))
   (when (port-count-lines-enabled)
     (port-count-lines! p))
   p)
@@ -122,7 +123,7 @@
          #:contract "(and/c output-port? string-port?)"
          o)
   (let ([o (->core-output-port o)])
-    (define i (output-bytes-data-i (core-output-port-data o)))
+    (define i (output-bytes-data-i (core-port-data o)))
     (define len (pipe-content-length i))
     (define amt (- (min len (or end-pos len)) start-pos))
     (define bstr (make-bytes amt))
@@ -135,9 +136,9 @@
   (cond
     [(input-port? p)
      (let ([p (->core-input-port p)])
-       (input-bytes-data? (core-input-port-data p)))]
+       (input-bytes-data? (core-port-data p)))]
     [(output-port? p)
      (let ([p (->core-output-port p)])
-       (output-bytes-data? (core-output-port-data p)))]
+       (output-bytes-data? (core-port-data p)))]
     [else
      (raise-argument-error 'string-port? "port?" p)]))
