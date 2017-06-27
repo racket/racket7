@@ -1,8 +1,10 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../common/atomic.rkt"
          "../host/evt.rkt"
          "parameter.rkt"
-         "input-port.rkt")
+         "input-port.rkt"
+         "count.rkt")
 
 (provide (rename-out [progress-evt?* progress-evt?])
          port-provides-progress-evts?
@@ -52,7 +54,13 @@
   (check-progress-evt who progress-evt in)
   (let ([in (->core-input-port in)])
     (define commit (core-input-port-commit in))
-    (commit amt (progress-evt-evt progress-evt) evt)))
+    (atomically
+     (define bstr (commit amt (progress-evt-evt progress-evt) evt))
+     (cond
+       [bstr
+        (input-port-count! in (bytes-length bstr) bstr 0)
+        #t]
+       [else #f]))))
 
 (define (check-progress-evt who progress-evt in)
   (unless (progress-evt?* progress-evt in)

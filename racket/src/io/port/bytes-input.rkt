@@ -1,5 +1,7 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../common/atomic.rkt"
+         "../host/evt.rkt"
          "parameter.rkt"
          "read-and-peek.rkt"
          "input-port.rkt"
@@ -56,9 +58,21 @@
     (cond
       [read-byte
        ;; Shortcut is available
-       (define b (read-byte))
-       (unless (eof-object? b) (input-port-count-byte! in b))
-       b]
+       (let loop ()
+         (start-atomic)
+         (define b (read-byte))
+         (cond
+           [(eof-object? b)
+            (end-atomic)
+            b]
+           [(evt? b)
+            (end-atomic)
+            (sync b)
+            (loop)]
+           [else
+            (input-port-count-byte! in b)
+            (end-atomic)
+            b]))]
       [else
        ;; Use the general path
        (define bstr (make-bytes 1))
@@ -142,7 +156,13 @@
   (cond
    [peek-byte
     ;; Shortcut is available
-    (peek-byte)]
+    (let loop ()
+      (define b (atomically (peek-byte)))
+      (cond
+        [(evt? b)
+         (sync b)
+         (loop)]
+        [else b]))]
    [else
     ;; Use the general path
     (define bstr (make-bytes 1))
@@ -207,4 +227,3 @@
                                                                         (bytes-length bstr))])
   (do-peek-bytes-avail! who bstr skip-k progress-evt in start-pos end-pos
                         #:enable-break? #t))
-

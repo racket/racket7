@@ -89,35 +89,24 @@
      
      #:read-byte
      (lambda ()
-       (let try-again ()
-         (start-atomic)
-         (cond
-           [(input-empty?)
-            (define done? output-closed?)
-            (end-atomic)
-            (if done?
-                eof
-                (begin
-                  (sync read-ready-evt)
-                  (try-again)))]
-           [else
-            (define pos start)
-            (check-output-unblocking)
-            (set! start (modulo (add1 pos) (bytes-length bstr)))
-            (check-input-blocking)
-            (progress!)
-            (begin0
-              (bytes-ref bstr pos)
-              (end-atomic))])))
+       (cond
+         [(input-empty?)
+          (if output-closed?
+              eof
+              read-ready-evt)]
+         [else
+          (define pos start)
+          (check-output-unblocking)
+          (set! start (modulo (add1 pos) (bytes-length bstr)))
+          (check-input-blocking)
+          (progress!)
+          (bytes-ref bstr pos)]))
 
      #:read-in
      (lambda (dest-bstr dest-start dest-end copy?)
-       (start-atomic)
        (cond
          [(input-empty?)
-          (define done? output-closed?)
-          (end-atomic)
-          (if done?
+          (if output-closed?
               eof
               read-ready-evt)]
          [else
@@ -138,87 +127,79 @@
                (set! start (modulo (+ start amt) len))
                amt])
             (check-input-blocking)
-            (progress!)
-            (end-atomic))]))
+            (progress!))]))
 
      #:peek-byte
      (lambda ()
-       (let try-again ()
-         (start-atomic)
-         (cond
-           [(input-empty?)
-            (define done? output-closed?)
-            (end-atomic)
-            (if done?
-                eof
-                (begin
-                  (sync read-ready-evt)
-                  (try-again)))]
-           [else
-            (begin0
-              (bytes-ref bstr start)
-              (end-atomic))])))
+       (cond
+         [(input-empty?)
+          (if output-closed?
+              eof
+              read-ready-evt)]
+         [else
+          (bytes-ref bstr start)]))
      
      #:peek-in
      (lambda (dest-bstr dest-start dest-end skip copy?)
-       (start-atomic)
        (define content-amt (content-length))
        (cond
          [(content-amt . <= . skip)
           (cond
-            [output-closed?
-             (end-atomic)
-             eof]
+            [output-closed? eof]
             [else
              (unless (or (zero? skip) more-read-ready-sema)
                (set! more-read-ready-sema (make-semaphore)))
              (define evt (if (zero? skip)
                              read-ready-evt
                              (semaphore-peek-evt more-read-ready-sema)))
-             (end-atomic)
              evt])]
          [else
           (define len (bytes-length bstr))
           (define peek-start (modulo (+ start skip) len))
-          (begin0
-            (cond
-              [(peek-start . < . end)
-               (define amt (min (- dest-end dest-start)
-                                (- end peek-start)))
-               (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
-               amt]
-              [else
-               (define amt (min (- dest-end dest-start)
-                                (- len peek-start)))
-               (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
-               amt])
-            (end-atomic))]))
+          (cond
+            [(peek-start . < . end)
+             (define amt (min (- dest-end dest-start)
+                              (- end peek-start)))
+             (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
+             amt]
+            [else
+             (define amt (min (- dest-end dest-start)
+                              (- len peek-start)))
+             (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
+             amt])]))
      
      #:close
      (lambda ()
-       (atomically
-        (progress!)))
+       (progress!))
 
      #:get-progress-evt
      (lambda ()
-       (atomically
-        (unless progress-sema
-          (set! progress-sema (make-semaphore)))
-        (semaphore-peek-evt progress-sema)))
+       (unless progress-sema
+         (set! progress-sema (make-semaphore)))
+       (semaphore-peek-evt progress-sema))
 
      #:commit
      (lambda (amt progress-evt ext-evt)
        ;; `progress-evt` is a `semepahore-peek-evt`, and `ext-evt`
        ;; is constrained; both can work with `sync/timeout` in
        ;; atomic mode.
-       (atomically
-        (and (not (sync/timeout 0 progress-evt))
-             (sync/timeout 0 ext-evt)
-             (let ([amt (min amt (content-length))])
-               (set! start (modulo (+ start amt) (bytes-length bstr)))
-               (progress!)
-               (check-input-blocking)
-               #t))))))
+       (and (not (sync/timeout 0 progress-evt))
+            (sync/timeout 0 ext-evt)
+            (let ([amt (min amt (content-length))])
+              (define dest-bstr (make-bytes amt))
+              (cond
+                [(start . < . end)
+                 (bytes-copy! dest-bstr 0 bstr start (+ start amt))]
+                [else
+                 (define len (bytes-length bstr))
+                 (define amt1 (min (- len start) amt))
+                 (bytes-copy! dest-bstr 0 bstr start (+ start amt1))
+                 (when (amt1 . < . amt)
+                   (bytes-copy! dest-bstr amt1 bstr 0 (- amt amt1)))])
+              (set! start (modulo (+ start amt) (bytes-length bstr)))
+              (progress!)
+              (check-input-blocking)
+              dest-bstr)))))
     
   ;; out ----------------------------------------
   (define op
@@ -296,11 +277,10 @@
      
      #:close
      (lambda ()
-       (atomically
-        (unless output-closed?
-          (set! output-closed? #t)
-          (semaphore-post write-ready-sema)
-          (semaphore-post read-ready-sema))))))
+       (unless output-closed?
+         (set! output-closed? #t)
+         (semaphore-post write-ready-sema)
+         (semaphore-post read-ready-sema)))))
 
   ;; Results ----------------------------------------
   (when (port-count-lines-enabled)

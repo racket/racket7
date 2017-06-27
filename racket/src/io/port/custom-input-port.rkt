@@ -1,5 +1,6 @@
 #lang racket/base
-(require "input-port.rkt"
+(require "../host/evt.rkt"
+         "input-port.rkt"
          "peek-via-read-port.rkt")
 
 (provide make-input-port)
@@ -32,15 +33,27 @@
       (unless (eq? user-bstr dest-bstr)
         (bytes-copy! dest-bstr dest-start user-bstr 0 len)))
     n)
-  
+
+  ;; in atomic mode
   (define (read-in dest-bstr dest-start dest-end copy?)
-    (protect-in dest-bstr dest-start dest-end copy? user-read-in))
+    (end-atomic)
+    (begin0
+      (protect-in dest-bstr dest-start dest-end copy? user-read-in)
+      (start-atomic)))
   
   ;; Used only if `user-peek-in` is a function:
   (define (peek-in dest-bstr dest-start dest-end skip-k copy?)
-    (protect-in dest-bstr dest-start dest-end copy?
-                (lambda (user-bstr) (user-peek-in user-bstr skip-k #f))))
-  
+    (end-atomic)
+    (begin0
+      (protect-in dest-bstr dest-start dest-end copy?
+                  (lambda (user-bstr) (user-peek-in user-bstr skip-k #f)))
+      (start-atomic)))
+
+  (define (close)
+    (end-atomic)
+    (user-close)
+    (start-atomic))
+     
   (cond
    [user-peek-in
     (make-core-input-port
@@ -53,11 +66,11 @@
      (if (input-port? user-peek-in)
          user-peek-in
          peek-in)
-     #:close user-close)]
+     #:close close)]
    [else
     (define-values (port buffer-flusher)
       (open-input-peek-via-read
        #:name name
        #:read-in read-in
-       #:close user-close))
+       #:close close))
     port]))

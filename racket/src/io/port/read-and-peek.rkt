@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../host/evt.rkt"
+(require "../common/atomic.rkt"
+         "../host/evt.rkt"
          "input-port.rkt"
          "count.rkt")
 
@@ -40,35 +41,37 @@
       ;; normal mode...
       (define read-in (core-input-port-read-in in))
       (cond
-       [(procedure? read-in)
-        (define v (read-in bstr start end copy-bstr?))
-        (cond
-         [(exact-nonnegative-integer? v)
-          (cond
-           [(zero? v)
-            (if zero-ok?
-                0
-                (loop in))]
-           [(v . <= . (- end start))
-            (input-port-count! orig-in v bstr start)
-            v]
+        [(procedure? read-in)
+         (start-atomic)
+         (define v (read-in bstr start end copy-bstr?))
+         (when (and (integer? v) (not (eq? v 0)))
+           (input-port-count! orig-in v bstr start))
+         (end-atomic)
+         (cond
+           [(exact-nonnegative-integer? v)
+            (cond
+              [(zero? v)
+               (if zero-ok?
+                   0
+                   (loop in))]
+              [(v . <= . (- end start)) v]
+              [else
+               (raise-arguments-error who
+                                      "result integer is larger than the supplied byte string"
+                                      "result" v
+                                      "byte-string length" (- end start))])]
+           [(eof-object? v) eof]
+           [(evt? v)
+            (cond
+              [zero-ok? 0]
+              [else
+               (sync v)
+               (loop in)])]
            [else
-            (raise-arguments-error who
-                                   "result integer is larger than the supplied byte string"
-                                   "result" v
-                                   "byte-string length" (- end start))])]
-         [(eof-object? v) eof]
-         [(evt? v)
-          (cond
-            [zero-ok? 0]
-            [else
-             (sync v)
-             (loop in)])]
-         [else
-          (raise-result-error who
-                              "(or/c exact-nonnegative-integer? eof-object? evt? pipe-input-port? #f procedure?)"
-                              v)])]
-       [else (loop read-in)])])))
+            (raise-result-error who
+                                "(or/c exact-nonnegative-integer? eof-object? evt? pipe-input-port? #f procedure?)"
+                                v)])]
+        [else (loop read-in)])])))
 
 ;; Like `read-some-bytes!`, but merely peeks
 (define (peek-some-bytes! who orig-in bstr start end skip
@@ -90,7 +93,7 @@
       (define peek-in (core-input-port-peek-in in))
       (cond
        [(procedure? peek-in)
-        (define v (peek-in bstr start end skip copy-bstr?))
+        (define v (atomically (peek-in bstr start end skip copy-bstr?)))
         (cond
          [(exact-nonnegative-integer? v)
           (cond

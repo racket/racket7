@@ -24,8 +24,8 @@
   (check who input-port? p)
   (let ([p (->core-input-port p)])
     (unless (core-input-port-closed? p)
-      ((core-input-port-close p))
       (atomically
+       ((core-input-port-close p))
        (unless (core-input-port-closed? p)
          (set-core-input-port-closed?! p #t)
          (let ([s (core-input-port-closed-sema p)])
@@ -35,8 +35,8 @@
   (check who output-port? p)
   (let ([p (->core-output-port p)])
     (unless (core-output-port-closed? p)
-      ((core-output-port-close p))
       (atomically
+       ((core-output-port-close p))
        (unless (core-output-port-closed? p)
          (set-core-output-port-closed?! p #t)
          (let ([s (core-output-port-closed-sema p)])

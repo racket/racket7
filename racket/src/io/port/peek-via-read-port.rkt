@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../host/evt.rkt"
+(require "../common/atomic.rkt"
+         "../host/evt.rkt"
          "input-port.rkt"
          "output-port.rkt"
          "pipe.rkt")
@@ -11,14 +12,12 @@
                                   #:get-buffer-mode [get-buffer-mode (lambda () 'block)]
                                   #:read-in read-in
                                   #:close close)
-  (define peek-pipe-i #f)
-  (define peek-pipe-o #f)
+  (define-values (peek-pipe-i peek-pipe-o) (make-pipe))
   (define peeked-eof? #f)
   (define buf (make-bytes 4096))
 
+  ;; in atomic mode
   (define (pull-some-bytes [amt (bytes-length buf)])
-    (when (not peek-pipe-i)
-      (set!-values (peek-pipe-i peek-pipe-o) (make-pipe)))
     (define v (read-in buf 0 amt #f))
     (cond
       [(eof-object? v)
@@ -34,22 +33,14 @@
            (loop next-wrote)))
        v]))
 
-  (define (get-more-bytes/block)
-    (define v (pull-some-bytes (if (eq? 'block (get-buffer-mode))
-                                   (bytes-length buf)
-                                   1)))
-    (cond
-      [(eqv? v 0)
-       (get-more-bytes/block)]
-      [(evt? v)
-       (sync v)
-       (get-more-bytes/block)]))
+  (define (retry-pull? v)
+    (and (integer? v) (not (eqv? v 0))))
 
+  ;; in atomic mode
   (define (do-read-in dest-bstr start end copy?)
     (let try-again ()
       (cond
-        [(and peek-pipe-i
-              (positive? (pipe-content-length peek-pipe-i)))
+        [(positive? (pipe-content-length peek-pipe-i))
          ((core-input-port-read-in peek-pipe-i) dest-bstr start end copy?)]
         [peeked-eof?
          (set! peeked-eof? #f)
@@ -64,18 +55,19 @@
               [else (try-again)])]
            [else
             (read-in dest-bstr start end copy?)])])))
-
+  
   (define (read-byte)
     (cond
-      [(and peek-pipe-i
-            (positive? (pipe-content-length peek-pipe-i)))
+      [(positive? (pipe-content-length peek-pipe-i))
        ((core-input-port-read-byte peek-pipe-i))]
       [peeked-eof?
        (set! peeked-eof? #f)
        eof]
       [else
-       (get-more-bytes/block)
-       (read-byte)]))
+       (define v (pull-some-bytes))
+       (if (retry-pull? v)
+           (read-byte)
+           v)]))
 
   (define (do-peek-in dest-bstr start end skip copy?)
     (let try-again ()
@@ -86,28 +78,30 @@
         [(and peek-pipe-i
               (peeked-amt . > . skip))
          ((core-input-port-peek-in peek-pipe-i) dest-bstr start end skip copy?)]
-        [peeked-eof? eof]
+        [peeked-eof?
+         eof]
         [else
          (define v (pull-some-bytes))
-         (cond
-           [(or (eof-object? v) (eqv? v 0) (evt? v))
-            v]
-           [else (try-again)])])))
+         (if (retry-pull? v)
+             (try-again)
+             v)])))
 
   (define (peek-byte)
     (cond
-      [(and peek-pipe-i
-            (positive? (pipe-content-length peek-pipe-i)))
+      [(positive? (pipe-content-length peek-pipe-i))
        ((core-input-port-peek-byte peek-pipe-i))]
-      [peeked-eof? eof]
+      [peeked-eof?
+       eof]
       [else
-       (get-more-bytes/block)
-       (peek-byte)]))
+       (define v (pull-some-bytes))
+       (if (retry-pull? v)
+           (peek-byte)
+           v)]))
 
   (define (purge-buffer)
-    (set! peek-pipe-i #f)
-    (set! peek-pipe-o #f)
-    (set! peeked-eof? #f))
+    (atomically
+     (set!-values (peek-pipe-i peek-pipe-o) (make-pipe))
+     (set! peeked-eof? #f)))
 
   (values (make-core-input-port
            #:name name
@@ -120,18 +114,13 @@
 
            #:on-file-position
            (lambda ()
-             (set! peek-pipe-i #f)
-             (set! peek-pipe-o #f)
-             (set! peeked-eof? #f))
+             (purge-buffer))
 
            #:close
            (lambda ()
              (close)
-             (set! peek-pipe-i #f)
-             (set! peek-pipe-o #f)))
-
+             (purge-buffer)))
+          
           (case-lambda
             [() (purge-buffer)]
-            [(pos) (if peek-pipe-i
-                       (- pos (pipe-content-length peek-pipe-i))
-                       pos)])))
+            [(pos) (- pos (pipe-content-length peek-pipe-i))])))

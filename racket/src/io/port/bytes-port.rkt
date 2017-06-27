@@ -33,50 +33,45 @@
      
      #:read-byte
      (lambda ()
-       (atomically
-        (let ([pos i])
-          (if (pos . < . len)
-              (begin
-                (set! i (add1 pos))
-                (bytes-ref bstr pos))
-              eof))))
+       (let ([pos i])
+         (if (pos . < . len)
+             (begin
+               (set! i (add1 pos))
+               (bytes-ref bstr pos))
+             eof)))
      
      #:read-in
      (lambda (dest-bstr start end copy?)
-       (atomically
-        (define pos i)
-        (cond
-          [(pos . < . len)
-           (define amt (min (- end start) (- len pos)))
-           (set! i (+ pos amt))
-           (bytes-copy! dest-bstr start bstr pos (+ pos amt))
-           (progress!)
-           amt]
-          [else eof])))
+       (define pos i)
+       (cond
+         [(pos . < . len)
+          (define amt (min (- end start) (- len pos)))
+          (set! i (+ pos amt))
+          (bytes-copy! dest-bstr start bstr pos (+ pos amt))
+          (progress!)
+          amt]
+         [else eof]))
      
      #:peek-byte
      (lambda ()
-       (atomically
-        (let ([pos i])
-          (if (pos . < . len)
-              (bytes-ref bstr pos)
-              eof))))
+       (let ([pos i])
+         (if (pos . < . len)
+             (bytes-ref bstr pos)
+             eof)))
      
      #:peek-in
      (lambda (dest-bstr start end skip copy?)
-       (atomically
-        (define pos (+ i skip))
-        (cond
-          [(pos . < . len)
-           (define amt (min (- end start) (- len pos)))
-           (bytes-copy! dest-bstr start bstr pos (+ pos amt))
-           amt]
-          [else eof])))
+       (define pos (+ i skip))
+       (cond
+         [(pos . < . len)
+          (define amt (min (- end start) (- len pos)))
+          (bytes-copy! dest-bstr start bstr pos (+ pos amt))
+          amt]
+         [else eof]))
 
      #:close
      (lambda ()
-       (atomically
-        (progress!)))
+       (progress!))
 
      #:get-progress-evt
      (lambda ()
@@ -92,9 +87,11 @@
         (and (not (sync/timeout 0 progress-evt))
              (sync/timeout 0 ext-evt)
              (let ([amt (min amt (- len i))])
+               (define dest-bstr (make-bytes amt))
+               (bytes-copy! dest-bstr 0 bstr i (+ i amt))
                (set! i (+ i amt))
                (progress!)
-               #t))))))
+               dest-bstr))))))
 
   (when (port-count-lines-enabled)
     (port-count-lines! p))

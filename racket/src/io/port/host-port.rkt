@@ -179,7 +179,9 @@
           [else n])]))
 
    #:close (lambda ()
+             (end-atomic)
              (flush-buffer-fully)
+             (start-atomic)
              (plumber-flush-handle-remove! flush-handle)
              (host-close host-out))))
 

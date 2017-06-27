@@ -39,13 +39,20 @@
 (struct core-input-port (name      ; anything, reported as `object-name` for the port
                          data      ; anything, effectively a subtype indicator
 
-                         ;; No locks are held during the call of any of the following functions.
+                         ;; Various functions below are called in atomic mode. The
+                         ;; intent of atomic mode is to ensure that the completion and
+                         ;; return of the function is atomic with respect to some further
+                         ;; activity, such as position and line counting. Any of the
+                         ;; functions is free to exit and re-enter atomic mode. Leave
+                         ;; atomic mode explicitly before raising an exception.
 
-                         read-byte ; #f or (-> (or/c byte? eof-object?))
-                         ;;          Block as needed to read one byte as a shortcut to
-                         ;;          using `read-in`.  The shortcut is optional.
+                         read-byte ; #f or (-> (or/c byte? eof-object? evt?))
+                         ;;          Called in atomic mode.
+                         ;;          Non-blocking byte read, where an event must be
+                         ;;          returned if no byte is available. This shortcut is optional.
 
                          read-in   ; port or (bytes start-k end-k copy? -> (or/c integer? ...))
+                         ;;          Called in atomic mode.
                          ;;          A port values redirects to the port. Otherwise, the function
                          ;;          never blocks, and can assume `(- end-k start-k)` is non-zero.
                          ;;          The `copy?` flag indicates that the given byte string should
@@ -53,26 +60,32 @@
                          ;;          copied if necessary. The return values are the same as
                          ;;          documented for `make-input-port`.
 
-                         peek-byte ; #f or (-> (or/c byte? eof-object?))
-                         ;;          Blocks as needed to peek one byte as a shortcut to
-                         ;;          using `peek-in`. The shortcut is optional.
+                         peek-byte ; #f or (-> (or/c byte? eof-object? evt?))
+                         ;;          Called in atomic mode.
+                         ;;          Non-blocking byte read, where an event must be
+                         ;;          returned if no byte is available. This shortcut is optional.
 
                          peek-in   ; port or (bytes start-k end-k skip-k copy? -> (or/c integer? ...))
-
+                         ;;          Called in atomic mode.
                          ;;          A port values redirects to the port. Otherwise, the function
                          ;;          never blocks, and it can assume that `(- end-k start-k)` is non-zero.
                          ;;          The `copy?` flag is the same as for `read-in`.  The return values
                          ;;          are the same as documented for `make-input-port`.
 
                          close     ; -> (void)
+                         ;;          *Not* called in atomic mode.
 
                          get-progress-evt ; #f or (-> evt?)
+                         ;;           Not called in atomic mode.
                          ;;           Optional support for progress events.
 
-                         commit    ; (amt-k progress-evt? evt?) -> (void)
-                         ;;          Goes with `get-progress-evt`. The final `evt?`
-                         ;;          argument is constrained to a few kinds of events;
-                         ;;          see docs for `port-commit-peeked` for more information.
+                         commit    ; (amt-k progress-evt? evt?) -> (or/c bytes? #f)
+                         ;;           Called in atomic mode.
+                         ;;           Goes with `get-progress-evt`. The final `evt?`
+                         ;;           argument is constrained to a few kinds of events;
+                         ;;           see docs for `port-commit-peeked` for more information.
+                         ;;           The result is the committed bytes on success, #f on
+                         ;;           failure.
 
                          get-location
                          count-lines!

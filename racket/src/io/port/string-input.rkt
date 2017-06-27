@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/evt.rkt"
          "parameter.rkt"
          "read-and-peek.rkt"
          "input-port.rkt"
@@ -156,11 +157,23 @@
 ;; A shortcut to implement `read-char` in terms of a port-specific
 ;; `read-byte`:
 (define (read-char-via-read-byte who in read-byte)
-  (define b (read-byte))
+  (define b
+    (let loop ()
+      (start-atomic)
+      (define b (read-byte))
+      (cond
+        [(evt? b)
+         (end-atomic)
+         (sync b)
+         (loop)]
+        [else
+         (unless (eof-object? b)
+           (input-port-count-byte! in b))
+         (end-atomic)
+         b])))
   (cond
    [(eof-object? b) b]
    [else
-    (input-port-count-byte! in b)
     (cond
      [(b . < . 128) (integer->char b)]
      [else
