@@ -1,7 +1,12 @@
 #lang racket/base
-(require "bootstrap-thread-main.rkt")
+(require "bootstrap-thread-main.rkt"
+         (only-in racket/base
+                  [current-directory host:current-directory]
+                  [path->string host:path->string]))
 
 ;; Don't use exceptions here; see "../thread/demo.rkt"
+
+(current-directory (host:path->string (host:current-directory)))
 
 (define done? #f)
 
@@ -58,7 +63,7 @@
        (unless (= count P)
          (error "contended-pipe test failed"))))
 
-   ;; Check progress events on pipes and byte strings
+   ;; Check progress events
    (define (check-progress-on-port make-in)
      (define (check-progress dest-evt fail-dest-evt)
        (define in (make-in)) ; content = #"hello"
@@ -76,7 +81,8 @@
        (test #t (port-commit-peeked 3 progress1 dest-evt in))
        (test #"lo" (peek-bytes 2 0 in))
        (test progress1 (sync/timeout #f progress1))
-       (test #f (port-commit-peeked 1 progress1 always-evt in)))
+       (test #f (port-commit-peeked 1 progress1 always-evt in))
+       (close-input-port in))
      (check-progress always-evt never-evt)
      (check-progress (make-semaphore 1) (make-semaphore 0))
      (check-progress (semaphore-peek-evt (make-semaphore 1)) (semaphore-peek-evt (make-semaphore 0)))
@@ -96,6 +102,12 @@
    (check-progress-on-port
     (lambda ()
       (open-input-bytes #"hello")))
+   (call-with-output-file "compiled/hello.txt"
+     (lambda (o) (write-bytes #"hello" o))
+     'truncate)
+   (check-progress-on-port
+    (lambda ()
+      (open-input-file "compiled/hello.txt")))
 
    (printf "Enter to continue after confirming process sleeps...\n")
    (read-line)

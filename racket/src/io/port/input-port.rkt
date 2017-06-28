@@ -53,7 +53,7 @@
 
    read-in   ; port or (bytes start-k end-k copy? -> (or/c integer? ...))
    ;;          Called in atomic mode.
-   ;;          A port values redirects to the port. Otherwise, the function
+   ;;          A port value redirects to the port. Otherwise, the function
    ;;          never blocks, and can assume `(- end-k start-k)` is non-zero.
    ;;          The `copy?` flag indicates that the given byte string should
    ;;          not be exposed to untrusted code, and instead of should be
@@ -67,13 +67,13 @@
 
    peek-in   ; port or (bytes start-k end-k skip-k copy? -> (or/c integer? ...))
    ;;          Called in atomic mode.
-   ;;          A port values redirects to the port. Otherwise, the function
+   ;;          A port value redirects to the port. Otherwise, the function
    ;;          never blocks, and it can assume that `(- end-k start-k)` is non-zero.
    ;;          The `copy?` flag is the same as for `read-in`.  The return values
    ;;          are the same as documented for `make-input-port`.
 
    get-progress-evt ; #f or (-> evt?)
-   ;;           *Not) called in atomic mode.
+   ;;           *Not* called in atomic mode.
    ;;           Optional support for progress events.
 
    commit    ; (amt-k progress-evt? evt?) -> (or/c bytes? #f)

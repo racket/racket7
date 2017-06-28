@@ -11,16 +11,21 @@
                           #:buffer-ok? [buffer-ok? #f]
                           #:zero-ok? [zero-ok? #f]
                           #:enable-break? [enable-break? #f])
-  (cond
-    [(core-port-closed? out)
-     (raise-arguments-error who
-                            "output port is closed"
-                            "output port" out)]
-    [(= start end) 0]
-    [else
-     (define write-out (core-output-port-write-out out))
-     (let try-again ()
+  (define write-out (core-output-port-write-out out))
+  (let try-again ()
+    (start-atomic)
+    (cond
+      [(core-port-closed? out)
+       (end-atomic)
+       (raise-arguments-error who
+                              "output port is closed"
+                              "output port" out)]
+      [(= start end)
+       (end-atomic)
+       0]
+      [else
        (define v (write-out bstr start end (not buffer-ok?) enable-break? copy-bstr?))
+       (end-atomic)
        (cond
          [(not v)
           (if zero-ok?
@@ -30,9 +35,12 @@
           (if zero-ok?
               0
               (begin
-                (sync v)
+                (if enable-break?
+                    (sync/enable-break v)
+                    (sync v))
                 (try-again)))]
          [(and (exact-integer? v)
                (v . > . 0))
           v]
-         [else (abort (format "write-some-bytes: weird result ~s" v))]))]))
+         [else
+          (abort (format "write-some-bytes: weird result ~s" v))])])))

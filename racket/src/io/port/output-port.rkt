@@ -39,8 +39,22 @@
      empty-output-port]))
 
 (struct core-output-port core-port
-  (evt
-   write-out ; (bstr start end no-buffer? enable-break? copy? -> ...)
+  (
+   ;; Various functions below are called in atomic mode; see
+   ;; `core-input-port` for more information on atomicity.
+
+   evt ; An evt that is ready when writing a byte won't block
+   
+   write-out ; (bstr start end no-block/buffer? enable-break? copy? -> ...)
+   ;;          Called in atomic mode.
+   ;;          Doesn't block if `no-block/buffer?` is true.
+   ;;          Does enable breaks while blocking if `enable-break?` is true.
+   ;;          The `copy?` flag indicates that the given byte string should
+   ;;          not be exposed to untrusted code, and instead of should be
+   ;;          copied if necessary. The return values are the same as
+   ;;          documented for `make-output-port`.
+
+   
    write-out-special ; (any no-buffer? enable-break? -> ...)
    get-write-evt
    get-write-special-evt

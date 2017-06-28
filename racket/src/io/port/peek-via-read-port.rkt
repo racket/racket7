@@ -9,8 +9,9 @@
 
 (define (open-input-peek-via-read #:name name
                                   #:data [data #f]
-                                  #:get-buffer-mode [get-buffer-mode (lambda () 'block)]
                                   #:read-in read-in
+                                  #:read-is-atomic? [read-is-atomic? #f] ; => can implement progress evts
+                                  #:get-buffer-mode [get-buffer-mode (lambda () 'block)]
                                   #:close close)
   (define-values (peek-pipe-i peek-pipe-o) (make-pipe))
   (define peeked-eof? #f)
@@ -44,6 +45,7 @@
          ((core-input-port-read-in peek-pipe-i) dest-bstr start end copy?)]
         [peeked-eof?
          (set! peeked-eof? #f)
+         (progress!)
          eof]
         [else
          (cond
@@ -54,7 +56,10 @@
               [(or (eqv? v 0) (evt? v)) v]
               [else (try-again)])]
            [else
-            (read-in dest-bstr start end copy?)])])))
+            (define v (read-in dest-bstr start end copy?))
+            (unless (eq? v 0)
+              (progress!))
+            v])])))
 
   ;; in atomic mode
   (define (read-byte)
@@ -64,12 +69,15 @@
        b]
       [peeked-eof?
        (set! peeked-eof? #f)
+       (progress!)
        eof]
       [else
        (define v (pull-some-bytes))
-       (if (retry-pull? v)
-           (read-byte)
-           v)]))
+       (cond
+         [(retry-pull? v) (read-byte)]
+         [else
+          (progress!)
+          v])]))
 
   ;; in atomic mode
   (define (do-peek-in dest-bstr start end skip copy?)
@@ -107,6 +115,17 @@
      (set!-values (peek-pipe-i peek-pipe-o) (make-pipe))
      (set! peeked-eof? #f)))
 
+  (define (get-progress-evt)
+    ((core-input-port-get-progress-evt peek-pipe-i)))
+
+  ;; in atomic mode
+  (define (progress!)
+    ;; Relies on support for `0 #f #f` arguments in pipe implementation:
+    ((core-input-port-commit peek-pipe-i) 0 #f #f))
+
+  (define (commit amt evt ext-evt)
+    ((core-input-port-commit peek-pipe-i) amt evt ext-evt))
+
   (values (make-core-input-port
            #:name name
            #:data data
@@ -115,6 +134,10 @@
            #:read-in do-read-in
            #:peek-byte peek-byte
            #:peek-in do-peek-in
+
+           #:get-progress-evt (and read-is-atomic?
+                                   get-progress-evt)
+           #:commit commit
 
            #:on-file-position
            (lambda ()

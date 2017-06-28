@@ -180,27 +180,32 @@
        (semaphore-peek-evt progress-sema))
 
      #:commit
+     ;; Allows `amt` to be zero and #f for other arguments,
+     ;; which is helpful for `open-input-peek-via-read`.
      (lambda (amt progress-evt ext-evt)
        ;; `progress-evt` is a `semepahore-peek-evt`, and `ext-evt`
        ;; is constrained; both can work with `sync/timeout` in
        ;; atomic mode.
-       (and (not (sync/timeout 0 progress-evt))
-            (sync/timeout 0 ext-evt)
-            (let ([amt (min amt (content-length))])
-              (define dest-bstr (make-bytes amt))
-              (cond
-                [(start . < . end)
-                 (bytes-copy! dest-bstr 0 bstr start (+ start amt))]
-                [else
-                 (define amt1 (min (- len start) amt))
-                 (bytes-copy! dest-bstr 0 bstr start (+ start amt1))
-                 (when (amt1 . < . amt)
-                   (bytes-copy! dest-bstr amt1 bstr 0 (- amt amt1)))])
-              (set! start (modulo (+ start amt) len))
-              (progress!)
-              (check-input-blocking)
-              dest-bstr)))))
-    
+       (cond
+         [(zero? amt) (progress!)]
+         [else
+          (and (not (sync/timeout 0 progress-evt))
+               (sync/timeout 0 ext-evt)
+               (let ([amt (min amt (content-length))])
+                 (define dest-bstr (make-bytes amt))
+                 (cond
+                   [(start . < . end)
+                    (bytes-copy! dest-bstr 0 bstr start (+ start amt))]
+                   [else
+                    (define amt1 (min (- len start) amt))
+                    (bytes-copy! dest-bstr 0 bstr start (+ start amt1))
+                    (when (amt1 . < . amt)
+                      (bytes-copy! dest-bstr amt1 bstr 0 (- amt amt1)))])
+                 (set! start (modulo (+ start amt) len))
+                 (progress!)
+                 (check-input-blocking)
+                 dest-bstr))]))))
+
   ;; out ----------------------------------------
   (define op
     (make-core-output-port
@@ -210,9 +215,9 @@
      #:evt write-ready-evt
      
      #:write-out
+     ;; in atomic mode
      (lambda (src-bstr src-start src-end nonblock? enable-break? copy?)
        (let try-again ()
-         (start-atomic)
          (define top-pos (if (zero? start)
                              (sub1 len)
                              len))
@@ -232,11 +237,9 @@
                  (set! end (sub1 len))])
               (set! bstr new-bstr)
               (set! len (bytes-length new-bstr))
-              (end-atomic)
               (try-again)]
              [else
               ;; pipe is full
-              (end-atomic)
               write-ready-evt]))
          (cond
            [(and (end . >= . start)
@@ -248,7 +251,6 @@
             (let ([new-end (+ end amt)])
               (set! end (if (= new-end len) 0 new-end)))
             (check-output-blocking)
-            (end-atomic)
             amt]
            [(= end top-pos)
             (cond
@@ -261,7 +263,6 @@
                (bytes-copy! bstr 0 src-bstr src-start (+ src-start amt))
                (set! end amt)
                (check-output-blocking)
-               (end-atomic)
                amt])]
            [(end . < . (sub1 start))
             (check-input-unblocking)
@@ -270,7 +271,6 @@
             (bytes-copy! bstr end src-bstr src-start (+ src-start amt))
             (set! end (+ end amt))
             (check-output-blocking)
-            (end-atomic)
             amt]
            [else
             (maybe-grow)])))
