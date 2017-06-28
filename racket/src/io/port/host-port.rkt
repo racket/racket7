@@ -197,6 +197,8 @@
            (raise-filesystem-error #f n "error writing to stream port")]
           [else n])]))
 
+   #:get-write-evt-via-write-out? #t
+
    #:close
    ;; in atomic mode
    (lambda ()

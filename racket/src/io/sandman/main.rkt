@@ -40,12 +40,13 @@
             (loop (cdr fd-adders))]
            [else
             (fd-adders ps)]))
-       (rktio_sleep rktio
-                    (if timeout-at
-                        (/ (- timeout-at (current-inexact-milliseconds)) 1000.0)
-                        0.0)
-                    ps
-                    rktio_NULL)
+       (define sleep-secs (and timeout-at
+                               (/ (- timeout-at (current-inexact-milliseconds)) 1000.0)))
+       (unless (and sleep-secs (sleep-secs . <= . 0.0))
+         (rktio_sleep rktio
+                      (or sleep-secs 0.0)
+                      ps
+                      rktio_NULL))
        (rktio_poll_set_forget rktio ps))
      
      ;; poll

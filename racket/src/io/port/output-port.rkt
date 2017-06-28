@@ -56,13 +56,22 @@
 
    
    write-out-special ; (any no-buffer? enable-break? -> ...)
-   get-write-evt
+
+   get-write-evt ; (bstr start end -> evt)
+   ;;            *Not* called in atomic mode.
+   ;;            The given bstr should not be exposed to untrusted code.
+
    get-write-special-evt
    [write-handler #:mutable]
    [print-handler #:mutable]
    [display-handler #:mutable])
   #:property prop:evt (lambda (o) (wrap-evt (core-output-port-evt o)
                                             (lambda (v) o))))
+
+(struct write-evt (proc)
+  #:property prop:evt (poller
+                       (lambda (self sched-info)
+                         ((write-evt-proc self) self))))
 
 (define (make-core-output-port #:name name
                                #:data [data #f]
@@ -71,6 +80,7 @@
                                #:close close
                                #:write-out-special [write-out-special #f]
                                #:get-write-evt [get-write-evt #f]
+                               #:get-write-evt-via-write-out? [get-write-evt-via-write-out? #f]
                                #:get-write-special-evt [get-write-special-evt #f]
                                #:get-location [get-location #f]
                                #:count-lines! [count-lines! #f])
@@ -94,7 +104,19 @@
                     evt
                     write-out
                     write-out-special
-                    get-write-evt
+                    (or get-write-evt
+                        (and get-write-evt-via-write-out?
+                             ;; If `write-out` is always atomic (in no-block, no-buffer mode),
+                             ;; then an event can poll `write-out`:
+                             (lambda (src-bstr src-start src-end)
+                               (write-evt
+                                ;; in atomic mode:
+                                (lambda (self)
+                                  (define v (write-out src-bstr src-start src-end #f #f #t))
+                                  (if (evt? v)
+                                      ;; FIXME: should be `(replace-evt v self)`
+                                      (values #f self)
+                                      (values (list v) #f)))))))
                     get-write-special-evt
 
                     #f   ; write-handler

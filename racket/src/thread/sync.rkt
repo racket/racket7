@@ -95,7 +95,7 @@
            (let loop ([did-work? #t])
              (cond
                [(and timeout
-                     (timeout . >= . (current-inexact-milliseconds)))
+                     (timeout-at . >= . (current-inexact-milliseconds)))
                 (syncing-done! s none-syncer)
                 #f]
                [(and (all-asynchronous? s)

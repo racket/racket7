@@ -23,7 +23,8 @@
 (define-values (prop:evt evt? evt-ref)
   (make-struct-type-property 'evt))
 
-;; A poller as a `prop:evt` value wraps a procedure
+;; A poller as a `prop:evt` value wraps a procedure that is called
+;; in atomic mode
 ;;   evt poll-ctx -> (values results-or-#f replacing-evt-or-#f)
 ;; where either a list of results is returned, indicating
 ;; that the event is selected, or a replacement event
@@ -85,7 +86,8 @@
 (struct choice-evt (evts)
         #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
-;; Check whether an event is ready; returns the same results
+;; Called in atomic mode
+;; Checks whether an event is ready; returns the same results
 ;; as a poller
 (define (evt-poll evt poll-ctx)
   (let* ([v (evt-ref evt)]

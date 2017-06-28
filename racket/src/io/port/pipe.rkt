@@ -274,12 +274,16 @@
             amt]
            [else
             (maybe-grow)])))
-     
+
+     #:get-write-evt-via-write-out? #t
+
      #:close
+     ;; in atomic mode
      (lambda ()
        (unless output-closed?
          (set! output-closed? #t)
-         (semaphore-post write-ready-sema)
+         (when write-ready-sema
+           (semaphore-post write-ready-sema))
          (semaphore-post read-ready-sema)))))
 
   ;; Results ----------------------------------------
