@@ -119,7 +119,8 @@
           (cond
            [(or state (not (zero? span))) (end-utf-8)]
            [cr-state
-            (loop (add1 i) 0 line column (add1 position) #f #f)]
+            ;; "\r\n" combination counts as a single position
+            (loop (add1 i) 0 line column position #f #f)]
            [else
             (loop (add1 i) 0 (add1 line) 0 (add1 position) #f #f)])]
          [(eq? b (char->integer #\return))

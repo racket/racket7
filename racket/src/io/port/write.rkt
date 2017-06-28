@@ -2,7 +2,8 @@
 (require "../error/abort.rkt"
          "../host/evt.rkt"
          "port.rkt"
-         "output-port.rkt")
+         "output-port.rkt"
+         "count.rkt")
 
 (provide write-some-bytes)
 
@@ -25,13 +26,14 @@
        0]
       [else
        (define v (write-out bstr start end (not buffer-ok?) enable-break? copy-bstr?))
-       (end-atomic)
        (cond
          [(not v)
+          (end-atomic)
           (if zero-ok?
               0
               (try-again))]
          [(evt? v)
+          (end-atomic)
           (if zero-ok?
               0
               (begin
@@ -39,8 +41,10 @@
                     (sync/enable-break v)
                     (sync v))
                 (try-again)))]
-         [(and (exact-integer? v)
-               (v . > . 0))
+         [(exact-positive-integer? v)
+          (port-count! out v bstr start)
+          (end-atomic)
           v]
          [else
+          (end-atomic)
           (abort (format "write-some-bytes: weird result ~s" v))])])))

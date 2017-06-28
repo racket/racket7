@@ -179,6 +179,38 @@
   (test #"jkl!" (read-bytes 6 i))
   (close-input-port i))
 
+(let ()
+  (define-values (i o) (make-pipe))
+  (port-count-lines! i)
+  (port-count-lines! o)
+  (define (next-location p)
+    (define-values (line col pos) (port-next-location p))
+    (list line col pos))
+  (test '(1 0 1) (next-location i))
+  (test '(1 0 1) (next-location o))
+
+  (write-bytes #"a\n b" o)
+  (test '(2 2 5) (next-location o))
+
+  (test #"a" (read-bytes 1 i))
+  (test '(1 1 2) (next-location i))
+  (test #"\n" (read-bytes 1 i))
+  (test '(2 0 3) (next-location i))
+  (test #" b" (read-bytes 2 i))
+  (test '(2 2 5) (next-location i))
+
+  (write-bytes #"x\r" o)
+  (test '(3 0 7) (next-location o))
+  (write-bytes #"\n" o)
+  (test '(3 0 7) (next-location o))
+  (write-bytes #"!" o)
+  (test '(3 1 8) (next-location o))
+
+  (test #"x\r" (read-bytes 2 i))
+  (test '(3 0 7) (next-location i))
+  (test #"\n!" (read-bytes 2 i))
+  (test '(3 1 8) (next-location i)))
+
 (time
  (let loop ([j 10])
    (unless (zero? j)
