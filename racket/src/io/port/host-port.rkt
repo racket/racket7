@@ -44,7 +44,8 @@
                    [(rktio-error? n)
                     (raise-filesystem-error #f n "error reading from stream port")]
                    [(eqv? n RKTIO_READ_EOF) eof]
-                   [(eqv? n 0) (fd-evt host-fd RKTIO_POLL_READ)]
+                   [(eqv? n 0) (wrap-evt (fd-evt host-fd RKTIO_POLL_READ)
+                                         (lambda (v) 0))]
                    [else n]))
      #:read-is-atomic? #t
      #:close (lambda () (host-close host-fd))

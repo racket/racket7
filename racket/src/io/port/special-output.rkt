@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/evt.rkt"
          "output-port.rkt"
          "parameter.rkt")
 
@@ -13,32 +14,30 @@
   (let ([o (->core-output-port o)])
     (and (core-output-port-write-out-special o) #t)))
 
-(define (do-write-special who v o #:retry? retry?)
-  (check who output-port? o)
-  (let ([o (->core-output-port o)])
-    (define write-out-special (core-output-port-write-out-special o))
-    (unless write-out-special
-      (raise-arguments-error who
-                             "port does not support special values"
-                             "port" o))
-    (cond
-      [(output-port? write-out-special)
-       (do-write-special who v write-out-special #:retry? retry?)]
-      [else
-       (let loop ()
-         (define r (write-out-special v #f #f))
-         (cond
-           [(not r) (if retry?
-                        (loop)
-                        #f)]
-           [(evt? r)
-            (if retry?
-                (void (sync r))
-                #f)]
-           [else
-            (if retry?
-                #t
-                (void))]))])))
+(define (do-write-special who v orig-o #:retry? retry?)
+  (check who output-port? orig-o)
+  (let port-loop ([o orig-o])
+    (let ([o (->core-output-port orig-o)])
+      (define write-out-special (core-output-port-write-out-special o))
+      (unless write-out-special
+        (raise-arguments-error who
+                               "port does not support special values"
+                               "port" orig-o))
+      (cond
+        [(output-port? write-out-special)
+         (port-loop write-out-special)]
+        [else
+         (let loop ()
+           (define r (write-out-special v #f #f))
+           (let result-loop ([r r])
+             (cond
+               [(not r) (if retry?
+                            (loop)
+                            #f)]
+               [(evt? r)
+                (and retry?
+                     (result-loop (sync r)))]
+               [else #t])))]))))
 
 (define/who (write-special v [o (current-output-port)])
   (do-write-special who #:retry? #t v o))

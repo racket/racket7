@@ -145,6 +145,64 @@
 (test 'block (file-stream-buffer-mode fancy-infinite-ones))
 (test (void) (file-stream-buffer-mode fancy-infinite-ones 'none))
 
+(define accum-list '())
+(define accum-sema (make-semaphore 1))
+(define (accum-ready?) (and (sync/timeout 0 (semaphore-peek-evt accum-sema)) #t))
+(define (maybe-accum-evt)
+  (if (zero? (random 2))
+      (wrap-evt (semaphore-peek-evt accum-sema) (lambda (v) #f))
+      #f))
+(define accum-o
+  (make-output-port 'accum
+                    (semaphore-peek-evt accum-sema)
+                    (lambda (bstr start end no-buffer/block? enable-break?)
+                      (cond
+                        [(accum-ready?)
+                         (set! accum-list (cons (subbytes bstr start end) accum-list))
+                         (- end start)]
+                        [else
+                         (maybe-accum-evt)]))
+                    void
+                    (lambda (v no-buffer/block? enable-break?)
+                      (cond
+                        [(accum-ready?)
+                         (set! accum-list (cons v accum-list))
+                         #t]
+                        [else
+                         (maybe-accum-evt)]))
+                    (lambda (bstr start end)
+                      (wrap-evt (semaphore-peek-evt accum-sema)
+                                (lambda (a)
+                                  (set! accum-list (cons (subbytes bstr start end) accum-list))
+                                  (- end start))))
+                    (lambda (v)
+                      (wrap-evt (semaphore-peek-evt accum-sema)
+                                (lambda (a)
+                                  (set! accum-list (cons v accum-list))
+                                  #t)))))
+
+(test 5 (write-bytes #"hello" accum-o))
+(test '(#"hello") accum-list)
+(test 0 (write-bytes #"" accum-o))
+(test '(#"hello") accum-list)
+(test (void) (flush-output accum-o))
+(test '(#"" #"hello") accum-list)
+(test 4 (sync (write-bytes-avail-evt #"hola!!" accum-o 0 4)))
+(test '(#"hola" #"" #"hello") accum-list)
+(test #t (port-writes-special? accum-o))
+(test #t (write-special 'howdy accum-o))
+(test '(howdy #"hola" #"" #"hello") accum-list)
+
+(set! accum-list '())
+(semaphore-wait accum-sema)
+(test #f (sync/timeout 0 accum-o))
+(test 0 (write-bytes-avail* #"hello" accum-o))
+(test accum-list '())
+(semaphore-post accum-sema)
+(test accum-o (sync/timeout 0 accum-o))
+(test 5 (write-bytes-avail* #"hello" accum-o))
+(test accum-list '(#"hello"))
+
 (test "apλple" (bytes->string/utf-8 (string->bytes/utf-8 "!!ap\u3BBple__" #f 2) #f 0 7))
 (test "ap?ple" (bytes->string/latin-1 (string->bytes/latin-1 "ap\u3BBple" (char->integer #\?))))
 (test "apλp\uF7F8\U00101234le" (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBp\uF7F8\U101234le")))

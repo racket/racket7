@@ -109,6 +109,7 @@
          [(input-empty?)
           (if output-closed?
               eof
+              ;; event's synchronization value is ignored:
               read-ready-evt)]
          [else
           (define pos start)
@@ -126,7 +127,9 @@
          [(input-empty?)
           (if output-closed?
               eof
-              read-ready-evt)]
+              (wrap-evt read-ready-evt
+                        ;; 0 result means "ask again"
+                        (lambda (v) 0)))]
          [else
           (check-output-unblocking)
           (begin0
@@ -258,7 +261,7 @@
               (try-again)]
              [else
               ;; pipe is full
-              write-ready-evt]))
+              (wrap-evt write-ready-evt (lambda (v) #f))]))
          (cond
            [write-pos ; set by `file-position` on a bytes port
             (define amt (min (- end write-pos)

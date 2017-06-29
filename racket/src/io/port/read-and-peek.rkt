@@ -34,7 +34,7 @@
                              "input port is closed"
                              "input port" orig-in)]
      ;; previously detected EOF?
-     [(core-input-port-pending-eof? in) ;; FIXME: sync
+     [(core-input-port-pending-eof? in)
       (unless keep-eof?
         (set-core-input-port-pending-eof?! in #f))
       eof]
@@ -45,33 +45,35 @@
         [(procedure? read-in)
          (start-atomic)
          (define v (read-in bstr start end copy-bstr?))
-         (when (and (integer? v) (not (eq? v 0)))
-           (port-count! orig-in v bstr start))
-         (end-atomic)
-         (cond
-           [(exact-nonnegative-integer? v)
-            (cond
-              [(zero? v)
-               (if zero-ok?
-                   0
-                   (loop in))]
-              [(v . <= . (- end start)) v]
-              [else
-               (raise-arguments-error who
-                                      "result integer is larger than the supplied byte string"
-                                      "result" v
-                                      "byte-string length" (- end start))])]
-           [(eof-object? v) eof]
-           [(evt? v)
-            (cond
-              [zero-ok? 0]
-              [else
-               (sync v)
-               (loop in)])]
-           [else
-            (raise-result-error who
-                                "(or/c exact-nonnegative-integer? eof-object? evt? pipe-input-port? #f procedure?)"
-                                v)])]
+         (let result-loop ([v v])
+           (when (and (integer? v) (not (eq? v 0)))
+             (port-count! orig-in v bstr start))
+           (end-atomic)
+           (cond
+             [(exact-nonnegative-integer? v)
+              (cond
+                [(zero? v)
+                 (if zero-ok?
+                     0
+                     (loop in))]
+                [(v . <= . (- end start)) v]
+                [else
+                 (raise-arguments-error who
+                                        "result integer is larger than the supplied byte string"
+                                        "result" v
+                                        "byte-string length" (- end start))])]
+             [(eof-object? v) eof]
+             [(evt? v)
+              (cond
+                [zero-ok? 0]
+                [else
+                 (define next-v (sync v))
+                 (start-atomic)
+                 (result-loop next-v)])]
+             [else
+              (raise-result-error who
+                                  "(or/c exact-nonnegative-integer? eof-object? evt? pipe-input-port? #f procedure?)"
+                                  v)]))]
         [else (loop read-in)])])))
 
 ;; Like `read-some-bytes!`, but merely peeks

@@ -1,8 +1,10 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../common/atomic.rkt"
          "../host/evt.rkt"
          "input-port.rkt"
          "output-port.rkt"
+         "custom-port.rkt"
          "pipe.rkt"
          "peek-via-read-port.rkt"
          "buffer-mode.rkt")
@@ -32,20 +34,8 @@
   (check who (procedure-arity-includes/c 3) #:or-false user-commit)
   (check who (procedure-arity-includes/c 0) #:or-false user-get-location)
   (check who (procedure-arity-includes/c 0) #:or-false user-count-lines!)
-  (check who (lambda (p) (or (exact-positive-integer? p)
-                             (input-port? p)
-                             (output-port? p)
-                             (not p)
-                             (and (procedure? p) (procedure-arity-includes? p 0))))
-         #:contract "(or/c exact-positive-integer? port? #f (procedure-arity-includes/c 0))"
-         user-init-position)
-  (check who (lambda (p) (or (not p)
-                             (and (procedure? p)
-                                  (procedure-arity-includes? p 0)
-                                  (procedure-arity-includes? p 1))))
-         #:contract (string-append "(or/c #f (and/c (procedure-arity-includes/c 0)\n"
-                                   "                (procedure-arity-includes/c 1)))")
-         user-buffer-mode)
+  (check-init-position who user-init-position)
+  (check-buffer-mode who user-buffer-mode)
 
   (when (not (eqv? (input-port? user-read-in) (input-port? user-peek-in)))
     (raise-arguments-error who (if (input-port? user-read-in)
@@ -123,6 +113,18 @@
                             ")")
                            r)]))
 
+  ;; possibly in atomic mode
+  (define (wrap-check-read-evt-result who evt dest-start dest-end peek? ok-false?)
+    (wrap-evt evt (lambda (r)
+                    (start-atomic)
+                    (check-read-result who r dest-start dest-end #:peek? peek? #:ok-false? ok-false?)
+                    (end-atomic)
+                    (cond
+                      [(pipe-input-port? r) 0]
+                      [(evt? r)
+                       (wrap-check-read-evt-result who r dest-start dest-end peek? ok-false?)]
+                      [else r]))))
+
   ;; in atomic mode
   (define (read-in dest-bstr dest-start dest-end copy?)
     (cond
@@ -134,16 +136,17 @@
          [else
           ((core-input-port-read-in input-pipe) dest-bstr dest-start dest-end copy?)])]
       [else
-       (end-atomic)
-       (define r (protect-in dest-bstr dest-start dest-end copy? user-read-in))
+       (define r
+         (parameterize-break #f
+           (non-atomically
+            (protect-in dest-bstr dest-start dest-end copy? user-read-in))))
        (check-read-result '|user port read| r dest-start dest-end)
        (cond
-         [input-pipe
-          (start-atomic)
+         [(pipe-input-port? r)
           (read-in dest-bstr dest-start dest-end copy?)]
-         [else
-          (start-atomic)
-           r])]))
+         [(evt? r)
+          (wrap-check-read-evt-result '|user port read| r dest-start dest-end #f #f)]
+         [else r])]))
 
   ;; Used only if `user-peek-in` is a function:
   (define (peek-in dest-bstr dest-start dest-end skip-k progress-evt copy?)
@@ -152,21 +155,22 @@
        (cond
          [((pipe-content-length input-pipe) . < . skip-k)
           (set! input-pipe #f)
-          (peek-in dest-bstr dest-start dest-end skip-k copy?)]
+          (peek-in dest-bstr dest-start dest-end skip-k progress-evt copy?)]
          [else
-          ((core-input-port-peek-in input-pipe) dest-bstr dest-start dest-end skip-k copy?)])]
+          ((core-input-port-peek-in input-pipe) dest-bstr dest-start dest-end skip-k progress-evt copy?)])]
       [else
-       (end-atomic)
-       (define r (protect-in dest-bstr dest-start dest-end copy?
-                             (lambda (user-bstr) (user-peek-in user-bstr skip-k progress-evt))))
+       (define r
+         (parameterize-break #f
+           (non-atomically
+            (protect-in dest-bstr dest-start dest-end copy?
+                        (lambda (user-bstr) (user-peek-in user-bstr skip-k progress-evt))))))
        (check-read-result '|user port peek| r dest-start dest-end #:peek? #t #:ok-false? progress-evt)
        (cond
-         [input-pipe
-          (start-atomic)
-          (peek-in dest-bstr dest-start dest-end skip-k copy?)]
-         [else
-          (start-atomic)
-          r])]))
+         [(pipe-input-port? r)
+          (peek-in dest-bstr dest-start dest-end skip-k progress-evt copy?)]
+         [(evt? r)
+          (wrap-check-read-evt-result '|user port peek| r dest-start dest-end #t progress-evt)]
+         [else r])]))
 
   ;; in atomic mode
   (define (close)
@@ -182,62 +186,30 @@
 
   ;; in atomic mode
   (define (commit amt evt ext-evt)
-    (end-atomic)
-    (define r (user-commit amt evt ext-evt))
-    (start-atomic)
+    (define r
+      (parameterize-break #f
+        (non-atomically
+         (user-commit amt evt ext-evt))))
     (cond
       [(not r) #f]
       [(bytes? r) r]
       [else (make-bytes amt #\x)]))
 
-  (define (get-location)
-    (call-with-values
-     (lambda () (user-get-location))
-     (case-lambda
-       [(line col pos) 
-        (unless (or (not line) (exact-positive-integer? line))
-          (raise-result-error '|user port get-location| "(or/c #f exact-positive-integer?)" line))
-        (unless (or (not line) (exact-nonnegative-integer? col))
-          (raise-result-error '|user port get-location| "(or/c #f exact-nonnegative-integer?)" col))
-        (unless (or (not line) (exact-positive-integer? pos))
-          (raise-result-error '|user port get-location| "(or/c #f exact-positive-integer?)" pos))
-        (values line col pos)]
-       [args
-        (apply raise-arity-error '|user port get-location return| 3 args)])))
+  (define get-location
+    (and user-get-location
+         (make-get-location user-get-location)))
 
-  (define init-offset
-    (if (or (procedure? user-init-position)
-            (input-port? user-init-position))
-        #f
-        (sub1 user-init-position)))
-
-  (define file-position
-    (cond
-      [(input-port? user-init-position) user-init-position]
-      [(output-port? user-init-position) user-init-position]
-      [(procedure? user-init-position)
-       (lambda ()
-         (define pos (user-init-position))
-         (unless (or (not pos) (exact-positive-integer? pos))
-           (raise-result-error '|user port init-position| "(or/c exact-positive-integer? #f)" pos))
-         (and pos (sub1 pos)))]
-      [else #f]))
+  (define-values (init-offset file-position)
+    (make-init-offset+file-position user-init-position))
 
   (define buffer-mode
-    (case-lambda
-      [()
-       (define m (user-buffer-mode))
-       (if (or (not m) (eq? m 'block) (eq? m 'none))
-           m
-           (raise-result-error '|user port buffer-mode| "(or/c #f 'block 'none)" m))]
-      [(m)
-       (user-buffer-mode m)]))
+    (make-buffer-mode user-buffer-mode))
 
   (cond
    [user-peek-in
     (make-core-input-port
      #:name name
-     #:read-in 
+     #:read-in
      (if (input-port? user-read-in)
          user-read-in
          read-in)
@@ -248,7 +220,7 @@
      #:close close
      #:get-progress-evt (and user-get-progress-evt get-progress-evt)
      #:commit (and user-commit commit)
-     #:get-location (and user-get-location get-location)
+     #:get-location get-location
      #:count-lines! user-count-lines!
      #:init-offset init-offset
      #:file-position file-position
@@ -259,7 +231,7 @@
        #:name name
        #:read-in read-in
        #:close close
-       #:get-location (and user-get-location get-location)
+       #:get-location get-location
        #:count-lines! user-count-lines!
        #:init-offset init-offset
        #:file-position file-position
