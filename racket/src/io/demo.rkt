@@ -203,6 +203,21 @@
 (test 5 (write-bytes-avail* #"hello" accum-o))
 (test accum-list '(#"hello"))
 
+(define specialist
+  (let ([special
+          (lambda (source line col pos)
+            (list 'special source line col pos))])
+    (make-input-port 'ones
+                     (lambda (s) special)
+                     (lambda (bstr skip-k p-evt) special)
+                     void)))
+(port-count-lines! specialist)
+
+(test '(special #f 1 0 1) (read-byte-or-special specialist))
+(test '#&(special src 1 1 2) (read-byte-or-special specialist box 'src))
+(test '(special #f 1 2 3) (peek-byte-or-special specialist))
+(test '#&(special src 1 2 3) (peek-byte-or-special specialist 0 #f box 'src))
+
 (test "apλple" (bytes->string/utf-8 (string->bytes/utf-8 "!!ap\u3BBple__" #f 2) #f 0 7))
 (test "ap?ple" (bytes->string/latin-1 (string->bytes/latin-1 "ap\u3BBple" (char->integer #\?))))
 (test "apλp\uF7F8\U00101234le" (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBp\uF7F8\U101234le")))

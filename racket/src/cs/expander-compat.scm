@@ -266,32 +266,6 @@
 (define current-load-relative-directory
   (make-parameter #f))
 
-(define read-char-or-special
-  (case-lambda
-   [() (read-char)]
-   [(in) (read-char in)]
-   [(in special src) (read-char in)]))
-
-(define peek-char-or-special
-  (case-lambda
-   [() (peek-char)]
-   [(in) (peek-char in)]
-   [(in skip) (peek-char in skip)]
-   [(in skip special src) (peek-char in skip)]))
-
-(define read-byte-or-special
-  (case-lambda
-   [() (read-byte)]
-   [(in) (read-byte in)]
-   [(in special src) (read-byte in)]))
-
-(define peek-byte-or-special
-  (case-lambda
-   [() (peek-byte)]
-   [(in) (peek-byte in)]
-   [(in skip) (peek-byte in skip)]
-   [(in skip special src) (peek-byte in skip)]))
-
 (define datums (make-weak-hash))
 
 (define (datum-intern-literal v)
@@ -545,10 +519,6 @@
    current-memory-use
 
    current-load-relative-directory
-   read-char-or-special
-   peek-char-or-special
-   read-byte-or-special
-   peek-byte-or-special
    datum-intern-literal
    current-load-extension
    string->number

@@ -39,7 +39,7 @@
        [(= v amt) v]
        [else
         (let loop ([got v])
-          (define v (read-some-bytes! who in bstr got amt #:keep-eof? #t))
+          (define v (read-some-bytes! who in bstr got amt #:keep-eof? #t #:special-ok? #f))
           (cond
             [(eof-object? v)
              got]
@@ -56,30 +56,8 @@
   (let ([in (->core-input-port in)])
     (define read-byte (core-input-port-read-byte in))
     (cond
-      [read-byte
-       ;; Shortcut is available
-       (let loop ()
-         (start-atomic)
-         (define b (read-byte))
-         (cond
-           [(eof-object? b)
-            (end-atomic)
-            b]
-           [(evt? b)
-            (end-atomic)
-            (sync b)
-            (loop)]
-           [else
-            (port-count-byte! in b)
-            (end-atomic)
-            b]))]
-      [else
-       ;; Use the general path
-       (define bstr (make-bytes 1))
-       (define v (read-some-bytes! 'read-byte in bstr 0 1 #:copy-bstr? #f))
-       (if (eq? v 1)
-           (bytes-ref bstr 0)
-           v)])))
+      [read-byte (do-read-byte read-byte in)]
+      [else (read-byte-via-bytes in #:special-ok? #f)])))
 
 (define/who (read-bytes amt [in (current-input-port)])
   (check who exact-nonnegative-integer? amt)
@@ -137,7 +115,7 @@
        [(= v amt) v]
        [else
         (let loop ([got v])
-          (define v (peek-some-bytes! who in bstr got amt (+ got skip) #:copy-bstr? #f))
+          (define v (peek-some-bytes! who in bstr got amt (+ got skip) #:copy-bstr? #f #:special-ok? #f))
           (cond
            [(eof-object? v)
             got]
@@ -154,22 +132,8 @@
   (define peek-byte (and (zero? skip-k)
                          (core-input-port-peek-byte in)))
   (cond
-   [peek-byte
-    ;; Shortcut is available
-    (let loop ()
-      (define b (atomically (peek-byte)))
-      (cond
-        [(evt? b)
-         (sync b)
-         (loop)]
-        [else b]))]
-   [else
-    ;; Use the general path
-    (define bstr (make-bytes 1))
-    (define v (peek-some-bytes! 'peek-byte in bstr 0 1 skip-k #:copy-bstr? #f))
-    (if (eq? v 1)
-        (bytes-ref bstr 0)
-        v)]))
+   [peek-byte (do-peek-byte peek-byte in)]
+   [else (peek-byte-via-bytes in skip-k #:special-ok? #f)]))
 
 (define/who (peek-bytes amt skip-k [in (current-input-port)])
   (check who exact-nonnegative-integer? amt)

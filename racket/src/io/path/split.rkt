@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../error/abort.rkt"
+         "../common/internal-error.rkt"
          "path.rkt"
          "check-path.rkt"
          "sep.rkt"
@@ -219,6 +219,6 @@
 
 ;; ----------------------------------------
 
-(define (parse-//?-drive bstr) (abort "finish me"))
-(define (parse-//-drive bstr) (abort "finish-me"))
-(define (split-reld bstr drive-end) (abort "finish-me"))
+(define (parse-//?-drive bstr) (internal-error "finish me"))
+(define (parse-//-drive bstr) (internal-error "finish-me"))
+(define (split-reld bstr drive-end) (internal-error "finish-me"))

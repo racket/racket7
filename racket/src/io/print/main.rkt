@@ -1,6 +1,5 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../error/abort.rkt"
          "../port/output-port.rkt"
          "../port/string-output.rkt"
          "../port/bytes-output.rkt"

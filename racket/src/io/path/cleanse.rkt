@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../error/abort.rkt"
+         "../common/internal-error.rkt"
          "path.rkt"
          "check-path.rkt"
          "sep.rkt")
@@ -19,7 +19,7 @@
          (path bstr 'unix))]
     [(windows)
      ;; FIXME
-     (abort "Windows path cleanse")]))
+     (internal-error "Windows path cleanse")]))
 
 ;; ----------------------------------------
 

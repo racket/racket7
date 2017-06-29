@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../error/abort.rkt"
+         "../common/internal-error.rkt"
          "path.rkt"
          "check-path.rkt"
          "sep.rkt")
@@ -19,7 +19,7 @@
       [(unix)
        (path (bytes-append (path-bytes p) #"/") 'unix)]
       [else
-       (abort "path->dir-path for Windows")])]))
+       (internal-error "path->dir-path for Windows")])]))
 
 (define (directory-path? p)
   (define bstr (path-bytes p))
@@ -38,7 +38,7 @@
                   (is-sep? (bytes-ref bstr (- len 2)) 'unix))))]
     [else
      ;; FIXME
-     (abort "dir-path? for Windows")]))
+     (internal-error "dir-path? for Windows")]))
 
 (define (path->path-without-trailing-separator p)
   (define bstr (path-bytes p))

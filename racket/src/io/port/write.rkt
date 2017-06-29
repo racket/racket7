@@ -1,5 +1,5 @@
 #lang racket/base
-(require "../error/abort.rkt"
+(require "../common/internal-error.rkt"
          "../host/evt.rkt"
          "port.rkt"
          "output-port.rkt"
@@ -49,4 +49,4 @@
             v]
            [else
             (end-atomic)
-            (abort (format "write-some-bytes: weird result ~s for ~s ~s ~s" v bstr start end))]))])))
+            (internal-error (format "write-some-bytes: weird result ~s for ~s ~s ~s" v bstr start end))]))])))

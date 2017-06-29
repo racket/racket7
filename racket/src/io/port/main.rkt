@@ -7,6 +7,7 @@
                   prop:output-port)
          "bytes-input.rkt"
          "string-input.rkt"
+         "special-input.rkt"
          "progress-evt.rkt"
          "bytes-output.rkt"
          "string-output.rkt"
@@ -44,6 +45,11 @@
          peek-bytes-avail!
          peek-bytes-avail!*
          peek-bytes-avail!/enable-break
+
+         read-byte-or-special
+         peek-byte-or-special
+         read-char-or-special
+         peek-char-or-special
 
          port-provides-progress-evts?
          progress-evt?

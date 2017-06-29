@@ -149,6 +149,8 @@
           (loop (add1 i) (add1 span) line column position state #f)])]))))
 
 ;; in atomic mode
+;; If `b` is not a byte, it is treated like
+;; a non-whitespace byte.
 (define (port-count-byte! in b)
   (increment-offset! in 1)
   (when (core-port-line in)

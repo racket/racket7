@@ -1,5 +1,5 @@
 #lang racket/base
-(require "../error/abort.rkt"
+(require "../common/internal-error.rkt"
          "path.rkt"
          "check.rkt"
          "check-path.rkt"
@@ -32,7 +32,7 @@
     (build-path wrt p)]
    [else
     ;; FIXME
-    (abort "non-complete absolute path on Windows")]))
+    (internal-error "non-complete absolute path on Windows")]))
 
 (define (convention-of-path p)
   (if (path? p)

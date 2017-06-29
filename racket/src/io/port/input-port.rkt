@@ -48,8 +48,10 @@
 
    read-byte ; #f or (-> (or/c byte? eof-object? evt?))
    ;;          Called in atomic mode.
+   ;;          This shortcut is optional.
    ;;          Non-blocking byte read, where an event must be
-   ;;          returned if no byte is available. This shortcut is optional.
+   ;;          returned if no byte is available. The event's result
+   ;;          is ignored, so it should not consume a byte.
 
    read-in   ; port or (bytes start-k end-k copy? -> (or/c integer? ...))
    ;;          Called in atomic mode.
@@ -63,8 +65,10 @@
 
    peek-byte ; #f or (-> (or/c byte? eof-object? evt?))
    ;;          Called in atomic mode.
+   ;;          This shortcut is optional.
    ;;          Non-blocking byte read, where an event must be
-   ;;          returned if no byte is available. This shortcut is optional.
+   ;;          returned if no byte is available. The event's result
+   ;;          is ignored.
 
    peek-in   ; port or (bytes start-k end-k skip-k progress-evt copy? -> (or/c integer? ...))
    ;;          Called in atomic mode.
