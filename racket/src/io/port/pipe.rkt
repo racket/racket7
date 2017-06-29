@@ -266,7 +266,7 @@
             (check-input-unblocking)
             (bytes-copy! bstr write-pos src-bstr src-start (+ src-start amt))
             (let ([new-write-pos (+ write-pos amt)])
-              (if (= write-pos end)
+              (if (= new-write-pos end)
                   (set! write-pos #f) ; back to normal mode
                   (set! write-pos new-write-pos)))
             (check-output-blocking)

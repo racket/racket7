@@ -47,4 +47,4 @@
           v]
          [else
           (end-atomic)
-          (abort (format "write-some-bytes: weird result ~s" v))])])))
+          (abort (format "write-some-bytes: weird result ~s for ~s ~s ~s" v bstr start end))])])))

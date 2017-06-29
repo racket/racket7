@@ -133,8 +133,9 @@
            (pipe-write-position o len)]
           [(new-pos . > . len)
            (pipe-write-position o len)
-           (define amt (- len new-pos))
-           ((core-output-port-write-out o) (make-bytes amt 0) 0 amt #f #f #f)]
+           (define amt (- new-pos len))
+           ((core-output-port-write-out o) (make-bytes amt 0) 0 amt #f #f #f)
+           (void)]
           [else
            (pipe-write-position o new-pos)])])))
   (when (port-count-lines-enabled)
