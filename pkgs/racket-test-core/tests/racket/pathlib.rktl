@@ -87,6 +87,10 @@
 (test (bytes->path #"../.." 'unix) 'find-relative-path (find-relative-path (bytes->path #"/r/c" 'unix) (bytes->path #"/" 'unix) 
                                                                            #:more-than-root? #t))
 
+(when (eq? 'unix (system-path-convention-type))
+  (test "/" 'find-relative-path (find-relative-path "/" "/" #:more-than-root? #t))
+  (test "/b" 'find-relative-path (find-relative-path "/a" "/b" #:more-than-root? #t)))
+
 (test (bytes->path #"..\\b\\a" 'windows) find-relative-path (bytes->path #"C:/r/c" 'windows) (bytes->path #"c:/R/b/a" 'windows))
 (test (bytes->path #"..\\b\\a" 'windows) find-relative-path (bytes->path #"C:/r/c" 'windows) (bytes->path #"c:/r/b/a" 'windows))
 (test (bytes->path #"c:/R/b/a" 'windows) find-relative-path (bytes->path #"D:/r/c" 'windows) (bytes->path #"c:/R/b/a" 'windows))

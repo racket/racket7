@@ -6,6 +6,9 @@
 # include <fcntl.h>
 # include <errno.h>
 # include <math.h>
+# ifdef USE_ULIMIT
+#  include <ulimit.h>
+# endif
 #endif
 #ifdef HAVE_POLL_SYSCALL
 # include <poll.h>
@@ -822,7 +825,8 @@ void rktio_merge_fd_sets(rktio_poll_set_t *fds, rktio_poll_set_t *src_fds)
     p = (unsigned char *)rktio_get_fdset(fds, j);
     sp = (unsigned char *)rktio_get_fdset(src_fds, j);
 # ifdef STORED_ACTUAL_FDSET_LIMIT
-    if (FDSET_LIMIT(sp) > FDSET_LIMIT(p)) {
+    i = FDSET_LIMIT(p);
+    if (FDSET_LIMIT(sp) > i) {
       i = FDSET_LIMIT(sp);
       FDSET_LIMIT(p) = i;
     }

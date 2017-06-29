@@ -54,6 +54,8 @@ AC_CHECK_LIB(dl, dlopen)
 
 case "$host_os" in
   solaris2*)
+    # Need these libs so that `getaddrinfo` is found:
+    LIBS="$LIBS -lsocket -lnsl -lintl"
     try_poll_syscall="no" # poll() has performance problems on Solaris?
     use_flag_pthread="no"
     use_flag_posix_pthread="yes"
@@ -180,7 +182,7 @@ if test "${skip_iconv_check}" = "no" ; then
  AC_MSG_RESULT($iconv_usage_result)
 fi
 if test "${enable_iconv}" = "no" ; then
-  AC_DEFINE(RKTIO_NO_ICON,1,[Do not use iconv])
+  AC_DEFINE(RKTIO_NO_ICONV,1,[Do not use iconv])
 fi
 
 if test "${enable_iconv}" = "yes" ; then
@@ -403,6 +405,8 @@ AC_SUBST(LTA)
 
 AC_SUBST(HIDE_NOT_STANDALONE)
 AC_SUBST(HIDE_STANDALONE)
+
+AC_SUBST(RKTIO_NO_ICONV)
 
 makefiles="Makefile"
 
