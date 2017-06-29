@@ -76,6 +76,7 @@
 
 ;; Like `read-some-bytes!`, but merely peeks
 (define (peek-some-bytes! who orig-in bstr start end skip
+                          #:progress-evt [progress-evt #f]
                           #:zero-ok? [zero-ok? #f]
                           #:enable-break? [enable-break? #f]
                           #:copy-bstr? [copy-bstr? #t])
@@ -94,7 +95,7 @@
       (define peek-in (core-input-port-peek-in in))
       (cond
        [(procedure? peek-in)
-        (define v (atomically (peek-in bstr start end skip copy-bstr?)))
+        (define v (atomically (peek-in bstr start end skip progress-evt copy-bstr?)))
         (cond
          [(exact-nonnegative-integer? v)
           (cond

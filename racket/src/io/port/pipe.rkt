@@ -10,11 +10,13 @@
 (provide make-pipe
          pipe-input-port?
          pipe-output-port?
-         pipe-content-length)
+         pipe-content-length
+         pipe-write-position)
 
 (define (min+1 a b) (if a (min (add1 a) b) b))
 
-(struct pipe-data (get-content-length))
+(struct pipe-data (get-content-length
+                   write-position))
 
 (define (pipe-input-port? p)
   (and (input-port? p)
@@ -33,19 +35,32 @@
        [else
         (raise-argument-error 'pipe-contact-length "(or/c pipe-input-port? pipe-output-port?)" p)])))))
 
+(define pipe-write-position
+  (case-lambda
+    [(p) ((pipe-data-write-position (core-port-data p)))]
+    [(p pos) ((pipe-data-write-position (core-port-data p)) pos)]))
+
 (define/who (make-pipe [limit #f] [input-name 'pipe] [output-name 'pipe])
   (check who #:or-false exact-positive-integer? limit)
   (define bstr (make-bytes (min+1 limit 16)))
   (define len (bytes-length bstr))
   (define start 0)
   (define end 0)
+  (define write-pos #f) ; to adjust the write position via `file-position` on a string port
   (define output-closed? #f)
   (define data
     (pipe-data
      (lambda ()
        (if (start . <= . end)
            (- end start)
-           (+ end (- len start))))))
+           (+ end (- len start))))
+     (case-lambda
+       [() (or write-pos end)]
+       [(pos)
+        ;; `pos` must be between `start` and `end`
+        (if (= pos end)
+            (set! write-pos #f)
+            (set! write-pos pos))])))
 
   (define read-ready-sema (make-semaphore))
   (define write-ready-sema (and limit (make-semaphore 1)))
@@ -142,9 +157,12 @@
           (bytes-ref bstr start)]))
      
      #:peek-in
-     (lambda (dest-bstr dest-start dest-end skip copy?)
+     (lambda (dest-bstr dest-start dest-end skip progress-evt copy?)
        (define content-amt (content-length))
        (cond
+         [(and progress-evt
+               (sync/timeout 0 progress-evt))
+          #f]
          [(content-amt . <= . skip)
           (cond
             [output-closed? eof]
@@ -242,6 +260,17 @@
               ;; pipe is full
               write-ready-evt]))
          (cond
+           [write-pos ; set by `file-position` on a bytes port
+            (define amt (min (- end write-pos)
+                             (- src-end src-start)))
+            (check-input-unblocking)
+            (bytes-copy! bstr write-pos src-bstr src-start (+ src-start amt))
+            (let ([new-write-pos (+ write-pos amt)])
+              (if (= write-pos end)
+                  (set! write-pos #f) ; back to normal mode
+                  (set! write-pos new-write-pos)))
+            (check-output-blocking)
+            amt]
            [(and (end . >= . start)
                  (end . < . top-pos))
             (define amt (min (- top-pos end)

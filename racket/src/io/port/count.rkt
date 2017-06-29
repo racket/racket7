@@ -29,7 +29,7 @@
      (unless (core-port-line p)
        (set-core-port-line! p 1)
        (set-core-port-column! p 0)
-       (set-core-port-position! p 1)
+       (set-core-port-position! p (add1 (or (core-port-offset p) 0)))
        (define count-lines! (core-port-count-lines! p))
        (when count-lines!
          (end-atomic)
@@ -51,9 +51,19 @@
              [(output-port? p) (->core-output-port p)]
              [else
               (check who #:test #f #:contract "port?" p)])])
-    (values (core-port-line p)
-            (core-port-column p)
-            (core-port-position p))))
+    (cond
+      [(core-port-line p)
+       (define get-location (core-port-get-location p))
+       (cond
+         [get-location
+          (get-location)]
+         [else
+          (values (core-port-line p)
+                  (core-port-column p)
+                  (core-port-position p))])]
+      [else
+       (define offset (core-port-offset p))
+       (values #f #f (and offset (add1 offset)))])))
 
 (define/who (set-port-next-location! p line col pos)
   (check who (lambda (p) (or (input-port? p) (output-port? p)))
@@ -76,7 +86,7 @@
 ;; When line counting is enabled, increment line, column, etc. counts,
 ;; which involves UTF-8 decoding
 (define (port-count! in amt bstr start)
-  (set-core-port-offset! in (+ amt (core-port-offset in)))
+  (increment-offset! in amt)
   (when (core-port-line in)
     (define end (+ start amt))
     (let loop ([i start]
@@ -140,7 +150,7 @@
 
 ;; in atomic mode
 (define (port-count-byte! in b)
-  (set-core-port-offset! in (add1 (core-port-offset in)))
+  (increment-offset! in 1)
   (when (core-port-line in)
     (cond
      [(or (core-port-state in)
@@ -152,3 +162,9 @@
      [else
       (set-core-port-position! in (add1 (core-port-position in)))
       (set-core-port-column! in (add1 (core-port-column in)))])))
+
+;; in atomic mode
+(define (increment-offset! in amt)
+  (define old-offset (core-port-offset in))
+  (when old-offset
+    (set-core-port-offset! in (+ amt old-offset))))

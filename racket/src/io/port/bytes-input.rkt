@@ -209,7 +209,10 @@
     (check-progress-evt who progress-evt in))
   (check-range who start-pos end-pos (bytes-length bstr) bstr)
   (let ([in (->core-input-port in)])
-    (peek-some-bytes! who in bstr start-pos end-pos skip-k #:zero-ok? zero-ok? #:enable-break? enable-break?)))
+    (peek-some-bytes! who in bstr start-pos end-pos skip-k
+                      #:progress-evt progress-evt                      
+                      #:zero-ok? zero-ok?
+                      #:enable-break? enable-break?)))
 
 (define/who (peek-bytes-avail! bstr skip-k [progress-evt #f] [in (current-input-port)]
                                [start-pos 0] [end-pos (and (bytes? bstr)

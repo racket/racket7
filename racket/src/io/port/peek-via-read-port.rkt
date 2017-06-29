@@ -11,11 +11,16 @@
                                   #:data [data #f]
                                   #:read-in read-in
                                   #:read-is-atomic? [read-is-atomic? #f] ; => can implement progress evts
-                                  #:get-buffer-mode [get-buffer-mode (lambda () 'block)]
-                                  #:close close)
+                                  #:close close
+                                  #:get-location [get-location #f]
+                                  #:count-lines! [count-lines! #f]
+                                  #:init-offset [init-offset 0]
+                                  #:file-position [file-position #f]
+                                  #:alt-buffer-mode [alt-buffer-mode #f])
   (define-values (peek-pipe-i peek-pipe-o) (make-pipe))
   (define peeked-eof? #f)
   (define buf (make-bytes 4096))
+  (define buffer-mode 'block)
 
   ;; in atomic mode
   (define (pull-some-bytes [amt (bytes-length buf)])
@@ -50,7 +55,7 @@
         [else
          (cond
            [(and (< (- end start) (bytes-length buf))
-                 (eq? 'block (get-buffer-mode)))
+                 (eq? 'block buffer-mode))
             (define v (pull-some-bytes))
             (cond
               [(or (eqv? v 0) (evt? v)) v]
@@ -80,15 +85,18 @@
           v])]))
 
   ;; in atomic mode
-  (define (do-peek-in dest-bstr start end skip copy?)
+  (define (do-peek-in dest-bstr start end skip progress-evt copy?)
     (let try-again ()
       (define peeked-amt (if peek-pipe-i
                              (pipe-content-length peek-pipe-i)
                              0))
       (cond
+        [(and progress-evt
+              (sync/timeout 0 progress-evt))
+         #f]
         [(and peek-pipe-i
               (peeked-amt . > . skip))
-         ((core-input-port-peek-in peek-pipe-i) dest-bstr start end skip copy?)]
+         ((core-input-port-peek-in peek-pipe-i) dest-bstr start end skip progress-evt copy?)]
         [peeked-eof?
          eof]
         [else
@@ -126,6 +134,11 @@
   (define (commit amt evt ext-evt)
     ((core-input-port-commit peek-pipe-i) amt evt ext-evt))
 
+  (define do-buffer-mode
+    (case-lambda
+      [() buffer-mode]
+      [(mode) (set! buffer-mode mode)]))
+
   (values (make-core-input-port
            #:name name
            #:data data
@@ -139,15 +152,16 @@
                                    get-progress-evt)
            #:commit commit
 
-           #:on-file-position
-           (lambda ()
-             (purge-buffer))
+           #:close (lambda ()
+                     (close)
+                     (purge-buffer))
 
-           #:close
-           (lambda ()
-             (close)
-             (purge-buffer)))
-          
+           #:get-location get-location
+           #:count-lines! count-lines!
+           #:init-offset init-offset
+           #:file-position file-position
+           #:buffer-mode (or alt-buffer-mode do-buffer-mode))
+
           (case-lambda
             [() (purge-buffer)]
             [(pos) (- pos (pipe-content-length peek-pipe-i))])))

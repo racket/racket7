@@ -4,12 +4,8 @@
          "input-port.rkt"
          "output-port.rkt")
 
-(provide prop:file-position
-         file-position
+(provide file-position
          file-position*)
-
-(define-values (prop:file-position file-position? file-position-ref)
-  (make-struct-type-property 'file-position))
 
 (define/who file-position
   (case-lambda
@@ -31,11 +27,10 @@
      (let ([cp (cond
                  [(input-port? p) (->core-input-port p)]
                  [else (->core-output-port p)])])
-       (define data (core-port-data cp))
+       (define file-position (core-port-file-position cp))
        (cond
-         [(file-position? data)
-          ((core-port-on-file-position p))
-          ((file-position-ref data) data pos)]
+         [(and (procedure? file-position) (procedure-arity-includes? file-position 1))
+          (file-position pos)]
          [else
           (raise-arguments-error who
                                  "setting position allowed for file-stream and string ports only"
@@ -50,8 +45,13 @@
              [(input-port? p) (->core-input-port p)]
              [(output-port? p) (->core-output-port p)]
              [else (raise-argument-error who "port?" p)])])
-    (define data (core-port-data p))
-    (if (file-position? data)
-        ((file-position-ref data) data)
-        (or (core-port-offset p)
-            (fail-k)))))
+    (define file-position (core-port-file-position p))
+    (cond
+      [(or (input-port? file-position)
+           (output-port? file-position))
+       (do-simple-file-position who file-position fail-k)]
+      [else
+       (or (if file-position
+               (file-position)
+               (core-port-offset p))
+           (fail-k))])))

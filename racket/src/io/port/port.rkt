@@ -8,9 +8,10 @@
                    close     ; -> (void)
                    ;;          Called in atomic mode.
 
-                   count-lines!
-                   get-location
-                   on-file-position
+                   count-lines!  ; #f or procedure
+                   get-location  ; #f or procedure
+                   file-position ; #f, port, or procedure
+                   buffer-mode   ; #f or procedure
 
                    [closed? #:mutable]
                    [closed-sema #:mutable] ; #f or a semaphore posed on close

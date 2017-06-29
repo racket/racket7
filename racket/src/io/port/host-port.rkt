@@ -9,7 +9,6 @@
          "output-port.rkt"
          "peek-via-read-port.rkt"
          "file-stream.rkt"
-         "file-position.rkt"
          "file-truncate.rkt"
          "buffer-mode.rkt")
 
@@ -17,46 +16,15 @@
          open-output-host
          terminal-port?)
 
-(struct host-data (host-fd         ; host-system file descriptor
-                   buffer-mode     ; gets/sets buffer mode
-                   buffer-control) ; flushes on 0 arguments; adjusts position as given argument
+(struct host-data (host-fd) ; host-system file descriptor
   #:property prop:file-stream #t
-  #:property prop:file-position (case-lambda
-                                  [(hd)
-                                   (start-atomic)
-                                   (define ppos (rktio_get_file_position rktio
-                                                                         (host-data-host-fd hd)))
-                                   (cond
-                                     [(rktio-error? ppos)
-                                      (end-atomic)
-                                      (check-rktio-error* ppos "error getting stream position")]
-                                     [else
-                                      (define pos (rktio_filesize_ref ppos))
-                                      (rktio_free ppos)
-                                      (end-atomic)
-                                      ((host-data-buffer-control hd) pos)])]
-                                  [(hd pos)
-                                   ((host-data-buffer-control hd))
-                                   (check-rktio-error*
-                                    (rktio_set_file_position rktio
-                                                             (host-data-host-fd hd)
-                                                             (if (eof-object? pos)
-                                                                 0
-                                                                 pos)
-                                                             (if (eof-object? pos)
-                                                                 RKTIO_POSITION_FROM_END
-                                                                 RKTIO_POSITION_FROM_START))
-                                    "error setting stream position")])
   #:property prop:file-truncate (case-lambda
                                   [(hd pos)
                                    (check-rktio-error*
                                     (rktio_set_file_size rktio
                                                          (host-data-host-fd hd)
                                                          pos)
-                                    "error setting file size")])
-  #:property prop:buffer-mode (case-lambda
-                                [(hd) ((host-data-buffer-mode hd))]
-                                [(hd mode) ((host-data-buffer-mode hd) mode)]))
+                                    "error setting file size")]))
 
 (define (host-close host-fd)
   (check-rktio-error*
@@ -66,17 +34,10 @@
 ;; ----------------------------------------
 
 (define (open-input-host host-fd name)
-  (define buffer-mode 'block)
   (define-values (port buffer-control)
     (open-input-peek-via-read
      #:name name
-     #:data (host-data host-fd
-                       (case-lambda
-                         [() buffer-mode]
-                         [(mode) (set! buffer-mode mode)])
-                       (case-lambda
-                         [() (buffer-control)]
-                         [(pos) (buffer-control pos)]))
+     #:data (host-data host-fd)
      #:read-in (lambda (dest-bstr start end copy?)
                  (define n (rktio_read_in rktio host-fd dest-bstr start end))
                  (cond
@@ -86,8 +47,12 @@
                    [(eqv? n 0) (fd-evt host-fd RKTIO_POLL_READ)]
                    [else n]))
      #:read-is-atomic? #t
-     #:get-buffer-mode (lambda () buffer-mode)
-     #:close (lambda () (host-close host-fd))))
+     #:close (lambda () (host-close host-fd))
+     #:file-position (make-file-position
+                      host-fd
+                      (case-lambda
+                        [() (buffer-control)]
+                        [(pos) (buffer-control pos)]))))
   port)
 
 ;; ----------------------------------------
@@ -156,17 +121,7 @@
 
   (make-core-output-port
    #:name name
-   #:data (host-data host-fd
-                     (case-lambda
-                       [() buffer-mode]
-                       [(mode) (set! buffer-mode mode)])
-                     (case-lambda
-                       [()
-                        (start-atomic)
-                        (flush-buffer-fully #f)
-                        (end-atomic)]
-                       [(pos)
-                        (+ pos (- buffer-end buffer-start))]))
+   #:data (host-data host-fd)
 
    #:evt evt
    
@@ -206,7 +161,20 @@
      (when buffer ; <- in case a concurrent close succeeded
        (plumber-flush-handle-remove! flush-handle)
        (set! buffer #f)
-       (host-close host-fd)))))
+       (host-close host-fd)))
+
+   #:file-position (make-file-position
+                    host-fd
+                    (case-lambda
+                      [()
+                       (start-atomic)
+                       (flush-buffer-fully #f)
+                       (end-atomic)]
+                      [(pos)
+                       (+ pos (- buffer-end buffer-start))]))
+   #:buffer-mode (case-lambda
+                   [() buffer-mode]
+                   [(mode) (set! buffer-mode mode)])))
 
 ;; ----------------------------------------
 
@@ -220,6 +188,35 @@
         (raise-argument-error 'terminal-port? "port?" p)])))
   (and (host-data? p)
        (rktio_fd_is_terminal (host-data-host-fd p))))
+
+;; ----------------------------------------
+
+(define (make-file-position host-fd buffer-control)
+  (case-lambda
+    [()
+     (start-atomic)
+     (define ppos (rktio_get_file_position rktio host-fd))
+     (cond
+       [(rktio-error? ppos)
+        (end-atomic)
+        (check-rktio-error* ppos "error getting stream position")]
+       [else
+        (define pos (rktio_filesize_ref ppos))
+        (rktio_free ppos)
+        (end-atomic)
+        (buffer-control pos)])]
+    [(pos)
+     (buffer-control)
+     (check-rktio-error*
+      (rktio_set_file_position rktio
+                               host-fd
+                               (if (eof-object? pos)
+                                   0
+                                   pos)
+                               (if (eof-object? pos)
+                                   RKTIO_POSITION_FROM_END
+                                   RKTIO_POSITION_FROM_START))
+      "error setting stream position")]))
 
 ;; ----------------------------------------
 

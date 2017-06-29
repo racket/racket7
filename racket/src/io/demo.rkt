@@ -118,6 +118,33 @@
 (test #"11111" (read-bytes 5 infinite-ones))
 (test "11111" (read-string 5 infinite-ones))
 
+(define fancy-infinite-ones
+  (make-input-port 'fancy-ones
+                   (lambda (s)
+                     (bytes-set! s 0 (char->integer #\1))
+                     1)
+                   (lambda (s skip progress-evt)
+                     (bytes-set! s 0 (char->integer #\1))
+                     1)
+                   (lambda () (void))
+                   (lambda () (make-semaphore))
+                   (lambda (amt evt ext-evt) (make-bytes amt (char->integer #\1)))
+                   (lambda () (values 7 42 1024))
+                   (lambda () (void))
+                   (lambda () 99)
+                   (case-lambda
+                     [() 'block]
+                     [(m) (void)])))
+(test #"11111" (read-bytes 5 fancy-infinite-ones))
+(test #t (evt? (port-progress-evt fancy-infinite-ones)))
+(test #t (port-commit-peeked 5 (port-progress-evt fancy-infinite-ones) always-evt fancy-infinite-ones))
+(test '(#f #f #f) (call-with-values (lambda () (port-next-location fancy-infinite-ones)) list))
+(port-count-lines! fancy-infinite-ones)
+(test '(7 42 1024) (call-with-values (lambda () (port-next-location fancy-infinite-ones)) list))
+(test 98 (file-position fancy-infinite-ones))
+(test 'block (file-stream-buffer-mode fancy-infinite-ones))
+(test (void) (file-stream-buffer-mode fancy-infinite-ones 'none))
+
 (test "apλple" (bytes->string/utf-8 (string->bytes/utf-8 "!!ap\u3BBple__" #f 2) #f 0 7))
 (test "ap?ple" (bytes->string/latin-1 (string->bytes/latin-1 "ap\u3BBple" (char->integer #\?))))
 (test "apλp\uF7F8\U00101234le" (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBp\uF7F8\U101234le")))

@@ -58,14 +58,15 @@
    ;;          The `copy?` flag indicates that the given byte string should
    ;;          not be exposed to untrusted code, and instead of should be
    ;;          copied if necessary. The return values are the same as
-   ;;          documented for `make-input-port`.
+   ;;          documented for `make-input-port`, except that a pipe result
+   ;;          is not allowed (or, more precisely, it's treated as an event).
 
    peek-byte ; #f or (-> (or/c byte? eof-object? evt?))
    ;;          Called in atomic mode.
    ;;          Non-blocking byte read, where an event must be
    ;;          returned if no byte is available. This shortcut is optional.
 
-   peek-in   ; port or (bytes start-k end-k skip-k copy? -> (or/c integer? ...))
+   peek-in   ; port or (bytes start-k end-k skip-k progress-evt copy? -> (or/c integer? ...))
    ;;          Called in atomic mode.
    ;;          A port value redirects to the port. Otherwise, the function
    ;;          never blocks, and it can assume that `(- end-k start-k)` is non-zero.
@@ -98,18 +99,21 @@
                               #:commit [commit #f]
                               #:get-location [get-location #f]
                               #:count-lines! [count-lines! #f]
-                              #:on-file-position [on-file-position void])
+                              #:init-offset [init-offset 0]
+                              #:file-position [file-position #f]
+                              #:buffer-mode [buffer-mode #f])
   (core-input-port name
                    data
 
                    close
                    count-lines!
                    get-location
-                   on-file-position
+                   file-position
+                   buffer-mode
                    
                    #f   ; closed?
                    #f   ; closed-sema
-                   0    ; offset
+                   init-offset ; offset
                    #f   ; state
                    #f   ; cr-state
                    #f   ; line

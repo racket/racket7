@@ -45,7 +45,7 @@
 
    evt ; An evt that is ready when writing a byte won't block
    
-   write-out ; (bstr start end no-block/buffer? enable-break? copy? -> ...)
+   write-out ; (bstr start-k end-k no-block/buffer? enable-break? copy? -> ...)
    ;;          Called in atomic mode.
    ;;          Doesn't block if `no-block/buffer?` is true.
    ;;          Does enable breaks while blocking if `enable-break?` is true.
@@ -54,14 +54,17 @@
    ;;          copied if necessary. The return values are the same as
    ;;          documented for `make-output-port`.
 
-   
-   write-out-special ; (any no-buffer? enable-break? -> ...)
+   write-out-special ; (any no-block/buffer? enable-break? -> ...)
+   ;;          *Not* called in atomic mode (since only custom ports
+   ;;          implement it).
 
-   get-write-evt ; (bstr start end -> evt)
+   get-write-evt ; (bstr start-k end-k -> evt?)
    ;;            *Not* called in atomic mode.
    ;;            The given bstr should not be exposed to untrusted code.
 
-   get-write-special-evt
+   get-write-special-evt ; (-> evt?)
+   ;;            *Not* called in atomic mode.
+   
    [write-handler #:mutable]
    [print-handler #:mutable]
    [display-handler #:mutable])
@@ -83,18 +86,22 @@
                                #:get-write-evt-via-write-out? [get-write-evt-via-write-out? #f]
                                #:get-write-special-evt [get-write-special-evt #f]
                                #:get-location [get-location #f]
-                               #:count-lines! [count-lines! #f])
+                               #:count-lines! [count-lines! #f]
+                               #:file-position [file-position #f]
+                               #:init-offset [init-offset 0]
+                               #:buffer-mode [buffer-mode #f])
   (core-output-port name
                     data
 
                     close
                     count-lines!
                     get-location
-                    void ; on-file-position
+                    file-position
+                    buffer-mode
                     
                     #f   ; closed?
                     #f   ; closed-sema
-                    0    ; offset
+                    init-offset ; offset
                     #f   ; state
                     #f   ; cr-state
                     #f   ; line

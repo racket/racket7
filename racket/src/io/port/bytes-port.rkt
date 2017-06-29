@@ -61,9 +61,11 @@
              eof)))
      
      #:peek-in
-     (lambda (dest-bstr start end skip copy?)
+     (lambda (dest-bstr start end skip progress-evt copy?)
        (define pos (+ i skip))
        (cond
+         [(and progress-evt (sync/timeout 0 progress-evt))
+          #f]
          [(pos . < . len)
           (define amt (min (- end start) (- len pos)))
           (bytes-copy! dest-bstr start bstr pos (+ pos amt))
@@ -92,7 +94,14 @@
                (bytes-copy! dest-bstr 0 bstr i (+ i amt))
                (set! i (+ i amt))
                (progress!)
-               dest-bstr))))))
+               dest-bstr))))
+
+     #:file-position
+     (case-lambda
+       [() i]
+       [(new-pos) (set! i (if (eof-object? new-pos)
+                              len
+                              (min len new-pos)))])))
 
   (when (port-count-lines-enabled)
     (port-count-lines! p))
@@ -113,7 +122,21 @@
      #:close (core-port-close o)
      #:get-write-evt (core-output-port-get-write-evt o)
      #:get-location (core-port-get-location o)
-     #:count-lines! (core-port-count-lines! o)))
+     #:count-lines! (core-port-count-lines! o)
+     #:file-position
+     (case-lambda
+       [() (pipe-write-position o)]
+       [(new-pos)
+        (define len (pipe-content-length i))
+        (cond
+          [(eof-object? new-pos)
+           (pipe-write-position o len)]
+          [(new-pos . > . len)
+           (pipe-write-position o len)
+           (define amt (- len new-pos))
+           ((core-output-port-write-out o) (make-bytes amt 0) 0 amt #f #f #f)]
+          [else
+           (pipe-write-position o new-pos)])])))
   (when (port-count-lines-enabled)
     (port-count-lines! p))
   p)
