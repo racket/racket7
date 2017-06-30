@@ -1,5 +1,8 @@
 #lang racket/base
 (require (only-in '#%linklet primitive-table)
+         (only-in '#%unsafe
+                  unsafe-custodian-register
+                  unsafe-custodian-unregister)
          "../../thread/sandman.rkt"
          ffi/unsafe/atomic
          "bootstrap-rktio.rkt")
@@ -61,7 +64,7 @@
       (eq? always-evt evt)
       (eq? never-evt evt)))
 
-(primitive-table '#%evt
+(primitive-table '#%thread
                  (hasheq 'make-semaphore make-semaphore
                          'semaphore-post semaphore-post
                          'semaphore-wait semaphore-wait
@@ -82,5 +85,14 @@
                          'current-sandman current-sandman
                          'start-atomic start-atomic
                          'end-atomic end-atomic
+                         'current-custodian current-custodian
+                         'custodian-shut-down? (lambda (c)
+                                                 (define v (box 1))
+                                                 (define ref (unsafe-custodian-register c v void #f #f))
+                                                 (cond
+                                                   [ref (unsafe-custodian-unregister v ref) #f]
+                                                   [else #t]))
+                         'unsafe-custodian-register unsafe-custodian-register
+                         'unsafe-custodian-unregister unsafe-custodian-unregister
                          'thread-push-kill-callback! thread-push-kill-callback!
                          'thread-pop-kill-callback! thread-pop-kill-callback!))

@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../common/atomic.rkt"
+         "../host/thread.rkt"
          "port.rkt"
          "input-port.rkt"
          "output-port.rkt")
@@ -8,7 +8,9 @@
 (provide port-closed?
          close-input-port
          close-output-port
-         port-closed-evt)
+         port-closed-evt
+
+         close-port)
 
 (define (port-closed? p)
   (let ([p (cond
@@ -18,6 +20,7 @@
               (raise-argument-error 'close-input-port "port?" p)])])
     (core-port-closed? p)))
 
+;; maybe in atomic mode via custodian shutdown:
 (define (close-port p)
   (unless (core-port-closed? p)
     (atomically

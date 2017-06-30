@@ -6,4 +6,4 @@
 ;; Use the "thread" layer implementation in combination with
 ;; with the rktio bootstrap bindings.
 
-(primitive-table '#%evt #%evt-instance)
+(primitive-table '#%thread #%thread-instance)

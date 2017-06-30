@@ -79,6 +79,8 @@
                      [sleeping #:mutable] ; #f or sandman sleeper handle
                      [sched-info #:mutable]
 
+                     [custodian-reference #:mutable]
+
                      suspend-to-kill?
                      [kill-callbacks #:mutable] ; list of callbacks
                      
@@ -132,6 +134,8 @@
                     p
                     #f ; sleeping
                     #f ; sched-info
+
+                    #f ; custodian-reference
                     
                     suspend-to-kill?
                     null
@@ -152,7 +156,15 @@
 
                     #f ; waiting for mail?
                     (make-queue))) ; mailbox
-  (thread-group-add! p t)
+  (define c (current-custodian))
+  ((atomically
+    (define cref (unsafe-custodian-register c t kill-thread #f #t))
+    (cond
+      [cref
+       (set-thread-custodian-reference! t cref)
+       (thread-group-add! p t)
+       void]
+      [else (lambda () (raise-custodian-is-shut-down who c))])))
   t)
 
 (define make-thread
@@ -198,6 +210,7 @@
     (thread-group-remove! (thread-parent t) t)])
   (remove-from-sleeping-threads! t)
   (run-kill-callbacks! t)
+  (unsafe-custodian-unregister t (thread-custodian-reference t))
   (when (eq? t root-thread)
     (exit)))
 

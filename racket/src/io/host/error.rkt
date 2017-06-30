@@ -1,6 +1,7 @@
 #lang racket/base
-(require "rktio.rkt"
-         "evt.rkt")
+(require "../string/convert.rkt"
+         "rktio.rkt"
+         "thread.rkt")
 
 (provide format-rktio-message
          raise-rktio-error
@@ -18,7 +19,7 @@
           (or who "")
           (if who ": " "")
           base-msg
-          system-msg
+          (bytes->string/utf-8 system-msg #\?)
           (let ([kind (rktio-errkind err)])
             (cond
               [(eqv? kind RKTIO_ERROR_KIND_POSIX) "errno"]

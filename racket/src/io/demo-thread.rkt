@@ -136,6 +136,14 @@
    (check-out-evt (lambda ()
                     (open-output-file "compiled/hello.txt" 'truncate)))
 
+   ;; Custodian shutdown closes port => don't run out of file descriptors
+   (for ([i 512])
+     (define c (make-custodian))
+     (parameterize ([current-custodian c])
+       (for ([j 10])
+         (open-input-file "compiled/hello.txt")))
+     (custodian-shutdown-all c))
+
    (printf "Enter to continue after confirming process sleeps...\n")
    (read-line)
    

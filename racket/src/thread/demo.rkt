@@ -327,7 +327,32 @@
    (check 10 (call-in-nested-thread (lambda () 10)))
    (check '(1 2) (call-with-values (lambda ()
                                      (call-in-nested-thread (lambda () (values 1 2))))
-                   list))
+                                   list))
+
+   ;; Custodians
+   (define c (make-custodian))
+   (define cb (make-custodian-box c'running))
+   (check 'running (custodian-box-value cb))
+   (custodian-shutdown-all c)
+   (check #f (custodian-box-value cb))
+   (custodian-shutdown-all c)
+
+   (define c2 (make-custodian))
+   (define t/cust (parameterize ([current-custodian c2])
+                    (thread (lambda () (sync (make-semaphore))))))
+   (sync (system-idle-evt))
+   (check #t (thread-running? t/cust))
+   (custodian-shutdown-all c2)
+   (check #f (thread-running? t/cust))
+   
+   (define c3 (make-custodian))
+   (define c4 (make-custodian c3))
+   (define t/cust2 (parameterize ([current-custodian c4])
+                     (thread (lambda () (sync (make-semaphore))))))
+   (sync (system-idle-evt))
+   (check #t (thread-running? t/cust2))
+   (custodian-shutdown-all c3)
+   (check #f (thread-running? t/cust2))
    
    (set! done? #t)))
 

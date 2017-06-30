@@ -1,7 +1,6 @@
 #lang racket/base
 (require "../common/internal-error.rkt"
-         "../common/atomic.rkt"
-         "../host/evt.rkt"
+         "../host/thread.rkt"
          "port.rkt"
          "input-port.rkt"
          "count.rkt")

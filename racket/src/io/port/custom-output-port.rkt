@@ -1,7 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../common/atomic.rkt"
-         "../host/evt.rkt"
+         "../host/thread.rkt"
          "output-port.rkt"
          "custom-port.rkt"
          "pipe.rkt")

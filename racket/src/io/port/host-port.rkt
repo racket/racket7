@@ -1,7 +1,7 @@
 #lang racket/base
 (require "../host/rktio.rkt"
          "../host/error.rkt"
-         "../host/evt.rkt"
+         "../host/thread.rkt"
          "../sandman/main.rkt"
          "../file/error.rkt"
          "port.rkt"
@@ -10,7 +10,8 @@
          "peek-via-read-port.rkt"
          "file-stream.rkt"
          "file-truncate.rkt"
-         "buffer-mode.rkt")
+         "buffer-mode.rkt"
+         "close.rkt")
 
 (provide open-input-host
          open-output-host
@@ -26,38 +27,52 @@
                                                          pos)
                                     "error setting file size")]))
 
+;; in atomic mode
 (define (host-close host-fd)
-  (check-rktio-error*
-   (rktio_close rktio host-fd)
-   "error closing stream port"))
+  (define v (rktio_close rktio host-fd))
+  (when (rktio-error? v)
+    (end-atomic)
+    (raise-rktio-error #f v "error closing stream port")))
 
 ;; ----------------------------------------
 
+;; in atomic mode
+;; Current custodian must not be shut down.
 (define (open-input-host host-fd name)
   (define-values (port buffer-control)
     (open-input-peek-via-read
      #:name name
      #:data (host-data host-fd)
-     #:read-in (lambda (dest-bstr start end copy?)
-                 (define n (rktio_read_in rktio host-fd dest-bstr start end))
-                 (cond
-                   [(rktio-error? n)
-                    (raise-filesystem-error #f n "error reading from stream port")]
-                   [(eqv? n RKTIO_READ_EOF) eof]
-                   [(eqv? n 0) (wrap-evt (fd-evt host-fd RKTIO_POLL_READ)
-                                         (lambda (v) 0))]
-                   [else n]))
+     #:read-in
+     ;; in atomic mode
+     (lambda (dest-bstr start end copy?)
+       (define n (rktio_read_in rktio host-fd dest-bstr start end))
+       (cond
+         [(rktio-error? n)
+          (raise-filesystem-error #f n "error reading from stream port")]
+         [(eqv? n RKTIO_READ_EOF) eof]
+         [(eqv? n 0) (wrap-evt (fd-evt host-fd RKTIO_POLL_READ)
+                               (lambda (v) 0))]
+         [else n]))
      #:read-is-atomic? #t
-     #:close (lambda () (host-close host-fd))
+     #:close
+     ;; in atomic mode
+     (lambda ()
+       (host-close host-fd)
+       (unsafe-custodian-unregister port custodian-reference))
      #:file-position (make-file-position
                       host-fd
                       (case-lambda
                         [() (buffer-control)]
                         [(pos) (buffer-control pos)]))))
+  (define custodian-reference
+    (unsafe-custodian-register (current-custodian) port close-port #f #f))
   port)
 
 ;; ----------------------------------------
 
+;; in atomic mode
+;; Current custodian must not be shut down.
 (define (open-output-host host-fd name #:buffer-mode [buffer-mode 'infer])
   (define buffer (make-bytes 4096))
   (define buffer-start 0)
@@ -111,7 +126,7 @@
         (when buffer ; in case it was closed
           (loop)))))
 
-  ; ;in atomic mode
+  ;; in atomic mode
   (define (flush-buffer-fully-if-newline src-bstr src-start src-end enable-break?)
     (for ([b (in-bytes src-bstr src-start src-end)])
       (define newline? (or (eqv? b (char->integer #\newline))
@@ -120,62 +135,73 @@
       #:break newline?
       (void)))
 
-  (make-core-output-port
-   #:name name
-   #:data (host-data host-fd)
+  (define port
+    (make-core-output-port
+     #:name name
+     #:data (host-data host-fd)
 
-   #:evt evt
-   
-   #:write-out
-   ;; in atomic mode
-   (lambda (src-bstr src-start src-end nonbuffer/nonblock? enable-break? copy?)
-     (cond
-       [(= src-start src-end)
-        ;; Flush request
-        (and (flush-buffer) 0)]
-       [(and (not nonbuffer/nonblock?)
-             (< buffer-end (bytes-length buffer)))
-        (define amt (min (- src-end src-start) (- (bytes-length buffer) buffer-end)))
-        (bytes-copy! buffer buffer-end src-bstr src-start (+ src-start amt))
-        (set! buffer-end (+ buffer-end amt))
-        (unless nonbuffer/nonblock?
-          (when (eq? buffer-mode 'line)
-            ;; can temporarily leave atomic mode:
-            (flush-buffer-fully-if-newline src-bstr src-start src-end enable-break?)))
-        amt]
-       [(not (flush-buffer)) ; <- can temporarily leave atomic mode
-        #f]
-       [else
-        (define n (rktio_write_in rktio host-fd src-bstr src-start src-end))
-        (cond
-          [(rktio-error? n)
-           (end-atomic)
-           (raise-filesystem-error #f n "error writing to stream port")]
-          [else n])]))
+     #:evt evt
+     
+     #:write-out
+     ;; in atomic mode
+     (lambda (src-bstr src-start src-end nonbuffer/nonblock? enable-break? copy?)
+       (cond
+         [(= src-start src-end)
+          ;; Flush request
+          (and (flush-buffer) 0)]
+         [(and (not nonbuffer/nonblock?)
+               (< buffer-end (bytes-length buffer)))
+          (define amt (min (- src-end src-start) (- (bytes-length buffer) buffer-end)))
+          (bytes-copy! buffer buffer-end src-bstr src-start (+ src-start amt))
+          (set! buffer-end (+ buffer-end amt))
+          (unless nonbuffer/nonblock?
+            (when (eq? buffer-mode 'line)
+              ;; can temporarily leave atomic mode:
+              (flush-buffer-fully-if-newline src-bstr src-start src-end enable-break?)))
+          amt]
+         [(not (flush-buffer)) ; <- can temporarily leave atomic mode
+          #f]
+         [else
+          (define n (rktio_write_in rktio host-fd src-bstr src-start src-end))
+          (cond
+            [(rktio-error? n)
+             (end-atomic)
+             (raise-filesystem-error #f n "error writing to stream port")]
+            [else n])]))
 
-   #:get-write-evt-via-write-out? #t
+     #:get-write-evt-via-write-out? #t
 
-   #:close
-   ;; in atomic mode
-   (lambda ()
-     (flush-buffer-fully #f) ; can temporarily leave atomic mode
-     (when buffer ; <- in case a concurrent close succeeded
-       (plumber-flush-handle-remove! flush-handle)
-       (set! buffer #f)
-       (host-close host-fd)))
+     #:close
+     ;; in atomic mode
+     (lambda ()
+       (flush-buffer-fully #f) ; can temporarily leave atomic mode
+       (when buffer ; <- in case a concurrent close succeeded
+         (close-without-flush)))
 
-   #:file-position (make-file-position
-                    host-fd
-                    (case-lambda
-                      [()
-                       (start-atomic)
-                       (flush-buffer-fully #f)
-                       (end-atomic)]
-                      [(pos)
-                       (+ pos (- buffer-end buffer-start))]))
-   #:buffer-mode (case-lambda
-                   [() buffer-mode]
-                   [(mode) (set! buffer-mode mode)])))
+     #:file-position (make-file-position
+                      host-fd
+                      (case-lambda
+                        [()
+                         (start-atomic)
+                         (flush-buffer-fully #f)
+                         (end-atomic)]
+                        [(pos)
+                         (+ pos (- buffer-end buffer-start))]))
+     #:buffer-mode (case-lambda
+                     [() buffer-mode]
+                     [(mode) (set! buffer-mode mode)])))
+
+  ;; in atomic mode
+  (define (close-without-flush)
+    (plumber-flush-handle-remove! flush-handle)
+    (set! buffer #f)
+    (host-close host-fd)
+    (unsafe-custodian-unregister port custodian-reference))
+
+  (define custodian-reference
+    (unsafe-custodian-register (current-custodian) port close-without-flush #f #f))
+
+  port)
 
 ;; ----------------------------------------
 

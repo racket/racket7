@@ -1,5 +1,8 @@
 #lang racket/base
-(require "../common/check.rkt")
+(require "../common/check.rkt"
+         "../host/rktio.rkt"
+         "../host/error.rkt"
+         "../string/convert.rkt")
 
 (provide bytes-converter?
          bytes-open-converter
@@ -7,12 +10,22 @@
          bytes-convert
          bytes-convert-end)
 
-(struct bytes-converter ())
+(struct bytes-converter ([c #:mutable]))
 
 (define/who (bytes-open-converter from-str to-str)
   (check who string? from-str)
   (check who string? to-str)
-  (error who "not ready"))
+  (define props (rktio_convert_properties rktio))
+  (cond
+    [(zero? (bitwise-and props RKTIO_CONVERTER_SUPPORTED))
+     #f]
+    [else
+     (define c (rktio_converter_open rktio
+                                     (string->bytes/utf-8 from-str #\?)
+                                     (string->bytes/utf-8 to-str #\?)))
+     (when (rktio-error? c)
+       (raise-rktio-error who c "failed"))
+     (bytes-converter c)]))
 
 (define (bytes-close-converter converter)
   (void))

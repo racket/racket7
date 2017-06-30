@@ -1,5 +1,5 @@
 #lang racket/base
-(require "../common/atomic.rkt"
+(require "../host/thread.rkt"
          "logger.rkt"
          "receiver.rkt"
          "level.rkt")

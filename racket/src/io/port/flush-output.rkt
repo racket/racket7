@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../common/atomic.rkt"
+         "../host/thread.rkt"
          "output-port.rkt")
 
 (provide flush-output)

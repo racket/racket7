@@ -1,13 +1,11 @@
 #lang racket/base
-(require (only-in '#%kernel
-                  [open-input-file host:open-input-file]
-                  [open-output-file host:open-output-file])
-         "../common/check.rkt"
+(require "../common/check.rkt"
+         "../host/thread.rkt"
+         "../host/rktio.rkt"
          "../path/path.rkt"
          "../file/parameter.rkt"
          "../file/host.rkt"
          "../file/error.rkt"
-         "../host/rktio.rkt"
          "../format/main.rkt"
          "host-port.rkt"
          "close.rkt"
@@ -30,12 +28,15 @@
       [(text) RKTIO_OPEN_TEXT]
       [else 0]))
   (define host-path (->host path))
+  (start-atomic)
+  (check-current-custodian who)
   (define fd (rktio_open rktio
                          (->rktio host-path)
                          (+ RKTIO_OPEN_READ
                             (mode->flags mode1)
                             (mode->flags mode2))))
   (when (rktio-error? fd)
+    (end-atomic)
     (raise-filesystem-error who
                             fd
                             (format (string-append
@@ -43,6 +44,7 @@
                                      "  path: ~a")
                                     (host-> host-path))))
   (define p (open-input-host fd (host-> host-path)))
+  (end-atomic)
   (when (port-count-lines-enabled)
     (port-count-lines! p))
   p)
@@ -62,6 +64,8 @@
   (define (mode? v)
     (or (eq? mode1 v) (eq? mode2 v)))
   (define host-path (->host path))
+  (start-atomic)
+  (check-current-custodian who)
   (define fd0
     (rktio_open rktio
                 (->rktio host-path)
@@ -78,6 +82,7 @@
                                     (->rktio host-path)
                                     (current-force-delete-permissions)))
        (when (rktio-error? r)
+         (end-atomic)
          (raise-filesystem-error who
                                  r
                                  (format (string-append
@@ -91,6 +96,7 @@
                       (mode->flags mode2)))]
       [else fd0]))
   (when (rktio-error? fd)
+    (end-atomic)
     (raise-filesystem-error who
                             fd
                             (format (string-append
@@ -105,6 +111,7 @@
                                     (host-> host-path))))
   
   (define p (open-output-host fd (host-> host-path)))
+  (end-atomic)
   (when (port-count-lines-enabled)
     (port-count-lines! p))
   p)

@@ -132,6 +132,6 @@
          unsafe-custodian-register
          unsafe-custodian-unregister
 
-         #%evt-instance)
+         #%thread-instance)
 
 (module main racket/base)

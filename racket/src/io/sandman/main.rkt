@@ -1,7 +1,7 @@
 #lang racket/base
 (require "../../thread/sandman-struct.rkt"
          "../common/internal-error.rkt"
-         "../host/evt.rkt"
+         "../host/thread.rkt"
          "../host/rktio.rkt")
 
 ;; Create an extended sandman that can sleep with a rktio poll set. An

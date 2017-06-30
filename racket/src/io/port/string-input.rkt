@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../host/evt.rkt"
+         "../host/thread.rkt"
          "parameter.rkt"
          "read-and-peek.rkt"
          "input-port.rkt"

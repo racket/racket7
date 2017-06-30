@@ -5,14 +5,15 @@
          "schedule-info.rkt"
          "sandman.rkt"
          "atomic.rkt"
+         "custodian.rkt"
          "thread.rkt")
 
 ;; Unsafe scheduler-cooperation functions are made available to
-;; clients through a `#%evt` primitive linklet instance:
+;; clients through a `#%thread` primitive linklet instance:
 
-(provide #%evt-instance)
+(provide #%thread-instance)
 
-(define #%evt-instance
+(define #%thread-instance
   (hasheq 'make-semaphore make-semaphore
           'semaphore-post semaphore-post
           'semaphore-wait semaphore-wait
@@ -34,5 +35,9 @@
           'schedule-info-did-work! schedule-info-did-work!
           'start-atomic start-atomic
           'end-atomic end-atomic
+          'current-custodian current-custodian
+          'custodian-shut-down? custodian-shut-down?
+          'unsafe-custodian-register unsafe-custodian-register
+          'unsafe-custodian-unregister unsafe-custodian-unregister
           'thread-push-kill-callback! thread-push-kill-callback!
           'thread-pop-kill-callback! thread-pop-kill-callback!))

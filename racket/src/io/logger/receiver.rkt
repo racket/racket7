@@ -1,8 +1,7 @@
 #lang racket/base
-(require "../common/atomic.rkt"
-         "../common/check.rkt"
+(require "../common/check.rkt"
          "../../common/queue.rkt"
-         "../host/evt.rkt"
+         "../host/thread.rkt"
          "../host/rktio.rkt"
          "../string/convert.rkt"
          "level.rkt"

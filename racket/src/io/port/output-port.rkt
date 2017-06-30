@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../host/evt.rkt"
+         "../host/thread.rkt"
          "port.rkt")
 
 (provide prop:output-port

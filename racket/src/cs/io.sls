@@ -201,7 +201,7 @@
 
   (define (primitive-table key)
     (case key
-      [(|#%evt|) |#%evt-instance|]
+      [(|#%thread|) |#%thread-instance|]
       [(|#%rktio|) |#%rktio-instance|]
       [else #f]))
 
