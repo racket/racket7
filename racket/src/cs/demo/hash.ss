@@ -40,9 +40,25 @@
 (check (hash-ref (hash-set (hash) (trans 1 2) 'ok) (trans 1 2) #f) 'ok)
 (check (hash-ref (hash-set (hash) (trans 1 2) 'ok) (trans 1 3) #f) #f)
 
-
 (check (equal? (hash 1 'x 2 'y) (hash 2 'y 1 'x)) #t)
 (check (hash-ref (hash (hash 1 'x 2 'y) 7) (hash 2 'y 1 'x) #f) 7)
+
+;; Check `equal?`-based weak hash tables
+(let ([ht (make-weak-hash)]
+      [apple (string #\a #\p #\p #\l #\e)]
+      [banana (list "banana")])
+  (check (hash-ref ht "apple" 'no) 'no)
+  (check (hash-set! ht apple 'yes) (void))
+  (check (hash-ref ht "apple" 'no) 'yes)
+  (check (hash-ref ht apple 'no) 'yes)
+  (check (hash-set! ht apple banana) (void))
+  (let ([bp (weak-cons banana #f)])
+    (set! apple #f)
+    (set! banana #f)
+    (collect (collect-maximum-generation))
+    (check (car bp) #!bwp)
+    ;; Ensure that `ht` stays live until here
+    (check (hash? ht) #t)))
 
 (define (shuffle l)
   (define a (make-vector (length l)))

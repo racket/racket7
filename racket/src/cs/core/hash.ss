@@ -614,114 +614,115 @@
 ;; Chez Scheme doesn't provide weak hash table with `equal?` comparisons,
 ;; so build our own
 
-(define-record weak-equal-hash (ht         ; integer[hash code] -> list of weak pairs
+(define-record weak-equal-hash (keys-ht    ; integer[equal hash code] -> weak list of keys
+                                vals-ht    ; weak, eq?-based hash table: key -> value
                                 count      ; number of items in the table (= sum of list lengths)
                                 prune-at   ; count at which we should try to prune empty weak boxes
                                 keys))     ; for iteration: a vector that is enlarged on demand
 
 (define (make-weak-hash)
-  (make-weak-equal-hash (hasheqv) 0 128 #f))
+  (make-weak-equal-hash (hasheqv) (make-weak-eq-hashtable) 0 128 #f))
 
 (define (weak-hash-copy ht)
-  (make-weak-equal-hash (weak-equal-hash-ht ht)
+  (make-weak-equal-hash (weak-equal-hash-keys-ht ht)
+                        (hashtable-copy (weak-equal-hash-vals-ht ht))
                         (weak-equal-hash-count ht)
                         (weak-equal-hash-prune-at ht)
                         #f))
 
 (define (weak-hash-ref t key fail)
   (let* ([code (equal-hash-code key)]
-         [vals (intmap-ref (weak-equal-hash-ht t) code '())])
-    (let loop ([vals vals])
+         [keys (intmap-ref (weak-equal-hash-keys-ht t) code '())])
+    (let loop ([keys keys])
       (cond
-       [(null? vals)
+       [(null? keys)
         ;; Not in the table:
         (if (procedure? fail)
             (fail)
             fail)]
-       [(equal? (caar vals) key)
-        (cdar vals)]
-       [else (loop (cdr vals))]))))
+       [(equal? (car keys) key)
+        (let ([v (hashtable-ref (weak-equal-hash-vals-ht t) (car keys) none)])
+          (if (eq? v none)
+              (if (procedure? fail)
+                  (fail)
+                  fail)
+              v))]
+       [else (loop (cdr keys))]))))
 
 (define (weak-hash-ref-key ht key)
   (let* ([code (equal-hash-code key)]
-         [vals (intmap-ref (weak-equal-hash-ht ht) code '())])
-    (let loop ([vals vals])
+         [keys (intmap-ref (weak-equal-hash-keys-ht ht) code '())])
+    (let loop ([keys keys])
       (cond
-       [(null? vals) #f]
-       [(equal? (car vals) key) (car vals)]
-       [else (loop (cdr vals))]))))
+       [(null? keys) #f]
+       [(equal? (car keys) key) (car keys)]
+       [else (loop (cdr keys))]))))
 
 (define (weak-hash-set! t k v)
   (let* ([code (equal-hash-code k)]
-         [vals (intmap-ref (weak-equal-hash-ht t) code '())])
-    (let loop ([vals vals])
+         [keys (intmap-ref (weak-equal-hash-keys-ht t) code '())])
+    (let loop ([keys keys])
       (cond
-       [(null? vals)
+       [(null? keys)
         ;; Not in the table:
         (set-weak-equal-hash-keys! t #f)
         (when (= (weak-equal-hash-count t) (weak-equal-hash-prune-at t))
           (prune-table! t))
-        (let* ([ht (weak-equal-hash-ht t)])
+        (let* ([ht (weak-equal-hash-keys-ht t)])
           (set-weak-equal-hash-count! t
                                       (add1 (weak-equal-hash-count t)))
-          (set-weak-equal-hash-ht! t
-                                   (intmap-set ht code
-                                               (cons (weak-cons k v)
-                                                     (intmap-ref ht code '())))))]
-       [(equal? (caar vals) k)
-        (set-cdr! (car vals) v)]
-       [else (loop (cdr vals))]))))
+          (set-weak-equal-hash-keys-ht! t
+                                        (intmap-set ht code
+                                                    (weak-cons k
+                                                               (intmap-ref ht code '()))))
+          (hashtable-set! (weak-equal-hash-vals-ht t) k v))]
+       [(equal? (car keys) k)
+        (hashtable-set! (weak-equal-hash-vals-ht t) (car keys) v)]
+       [else (loop (cdr keys))]))))
 
 (define (weak-hash-remove! t k)
   (let* ([code (equal-hash-code k)]
-         [vals (intmap-ref (weak-equal-hash-ht t) code '())])
-    (let loop ([vals vals])
+         [keys (intmap-ref (weak-equal-hash-keys-ht t) code '())])
+    (let loop ([keys keys])
       (cond
-       [(null? vals)
+       [(null? keys)
         ;; Not in the table
         (void)]
-       [(equal? (caar vals) k)
-        (set-car! (car vals) #f)
-        (set-cdr! (car vals) #f)]
-       [else (loop (cdr vals))]))))
+       [(equal? (car keys) k)
+        (hashtable-delete! (weak-equal-hash-vals-ht t) (car keys))
+        (set-car! keys #!bwp)]
+       [else (loop (cdr keys))]))))
 
 (define (weak-hash-clear! t)
-  (set-weak-equal-hash-ht! t (hasheqv))
+  (set-weak-equal-hash-keys-ht! t (hasheqv))
+  (hashtable-clear! (weak-equal-hash-vals-ht t))
   (set-weak-equal-hash-count! t 0)
   (set-weak-equal-hash-prune-at! t 128))
 
-(define (weak-hash-for-each ht proc)
-  (intmap-for-each
-   (weak-equal-hash-ht ht)
-   (lambda (k l)
-     (let loop ([l l])
-       (cond
-        [(null? l) (void)]
-        [else
-         (let ([k (caar l)])
-           (unless (bwp-object? k)
-             (proc k (cdar l))))
-         (loop (cdr l))])))))
+(define (weak-hash-for-each t proc)
+  (let* ([ht (weak-equal-hash-vals-ht t)]
+         [keys (hashtable-keys ht)]
+         [len (#%vector-length keys)])
+    (let loop ([i 0])
+      (unless (fx= i len)
+        (let ([key (#%vector-ref keys i)])
+          (proc key (hashtable-ref ht key #f)))
+        (loop (fx1+ i))))))
 
 (define (weak-hash-map t proc)
-  (let ([ht (weak-equal-hash-ht t)])
-    (let loop ([i (unsafe-intmap-iterate-first ht)])
+  (let* ([ht (weak-equal-hash-vals-ht t)]
+         [keys (hashtable-keys ht)]
+         [len (#%vector-length keys)])
+    (let loop ([i 0])
       (cond
-       [i (let iloop ([l (unsafe-intmap-iterate-value ht i)])
-            (cond
-             [(null? l) (loop (unsafe-intmap-iterate-next ht i))]
-             [else
-              (let ([k (caar l)])
-                (if (bwp-object? k)
-                    (iloop (cdr l))
-                    (cons (proc k (cdar l))
-                          (iloop (cdr l)))))]))]
-       [else '()]))))
+       [(fx= i len) '()]
+       [else
+        (let ([key (#%vector-ref keys i)])
+          (cons (proc key (hashtable-ref ht key #f))
+                (loop (fx1+ i))))]))))
 
-(define (weak-hash-count ht)
-  (define c 0)
-  (weak-hash-for-each ht (lambda (k v) (set! c (add1 c))))
-  c)
+(define (weak-hash-count t)
+  (hashtable-size (weak-equal-hash-vals-ht t)))
 
 (define (prepare-weak-iterate! ht i)
   (let* ([current-vec (weak-equal-hash-keys ht)])
@@ -738,16 +739,16 @@
           (call/cc
            (lambda (esc)
              (intmap-for-each
-              (weak-equal-hash-ht ht)
+              (weak-equal-hash-keys-ht ht)
               (lambda (k l)
                 (let loop ([l l])
                   (cond
                    [(null? l) (void)]
                    [else
-                    ;; Add `(car l)` even if the key is #!bwp,
+                    ;; Add `l` even if the key is #!bwp,
                     ;; so that iteration works right if a key
                     ;; is removed
-                    (vector-set! vec pos (car l))
+                    (vector-set! vec pos l)
                     (set! pos (add1 pos))
                     (if (= pos len)
                         ;; That's enough keys
@@ -798,7 +799,7 @@
 
 (define (weak-hash-iterate-value ht i)
   (define key (do-weak-hash-iterate-key 'weak-hash-iterate-value ht i))
-  (let ([val (weak-hash-ref ht key none)])
+  (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
     (if (eq? val none)
         (raise-arguments-error
          'weak-hash-iterate-value "no element at index"
@@ -808,7 +809,7 @@
 (define (weak-hash-iterate-key+value ht i)
   (define key (do-weak-hash-iterate-key 'weak-hash-iterate-key+value ht i))
   (values key
-          (let ([val (weak-hash-ref ht key none)])
+          (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
             (if (eq? val none)
                 (raise-arguments-error
                  'weak-hash-iterate-key+value "no element at index"
@@ -818,7 +819,7 @@
 (define (weak-hash-iterate-pair ht i)
   (define key (do-weak-hash-iterate-key 'weak-hash-iterate-pair ht i))
   (cons key
-        (let ([val (weak-hash-ref ht key none)])
+        (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
           (if (eq? val none)
               (raise-arguments-error
                'weak-hash-iterate-paur "no element at index"
@@ -829,7 +830,7 @@
 ;; of remaining entries, and remember to prune again when
 ;; the number of entries doubles (up to at least reaches 128)
 (define (prune-table! t)
-  (let ([ht (weak-equal-hash-ht t)])
+  (let ([ht (weak-equal-hash-keys-ht t)])
     (let-values ([(new-ht count)
                   (let loop ([ht ht]
                              [i (intmap-iterate-first ht)]
@@ -838,13 +839,17 @@
                      [(not i) (values ht count)]
                      [else
                       (let-values ([(key l) (intmap-iterate-key+value ht i #f)])
-                        (let ([l (chez:filter (lambda (p) (not (bwp-object? (car p)))) l)])
+                        (let ([l (let loop ([l l])
+                                   (cond
+                                    [(null? l) l]
+                                    [(bwp-object? (car l)) (loop (cdr l))]
+                                    [else (weak-cons (car l) (loop (cdr l)))]))])
                           (loop (if (null? l)
                                     ht
                                     (hash-set ht key l))
                                 (intmap-iterate-next ht i)
                                 (+ count (length l)))))]))])
-      (set-weak-equal-hash-ht! t new-ht)
+      (set-weak-equal-hash-keys-ht! t new-ht)
       (set-weak-equal-hash-count! t count)
       (set-weak-equal-hash-prune-at! t (max 128 (* 2 count))))))
 
