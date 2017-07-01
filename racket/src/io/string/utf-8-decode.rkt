@@ -32,6 +32,9 @@
 ;;  * 'error : encoding error, but only when `error-ch` is #f
 ;;  * state-for-aborts : see `abort-mode` above
 ;;
+;; Beware that there is a similar copy of this code in "../converter/utf-8.rkt",
+;; but that one is different enough to make abstraction difficult.
+;;
 (define (utf-8-decode! in-bstr in-start in-end
                        out-str out-start out-end  ; `out-str` and `out-end` can be #f no string result needed
                        #:error-char [error-ch #f] ; replaces an encoding error if non-#f
@@ -49,8 +52,10 @@
     (if state
         (utf-8-state-remaining state)
         0))
+
   ;; Iterate through the given byte string
   (let loop ([i in-start] [j out-start] [base-i base-i] [accum accum] [remaining remaining])
+
     ;; Shared handling for encoding failures:
     (define (encoding-failure)
       (cond
@@ -69,6 +74,7 @@
         (values (- base-i in-start)
                 (- j out-start)
                 'error)]))
+    
     ;; Shared handling for decoding success:
     (define (continue)
       (define next-j (add1 j))
@@ -82,6 +88,7 @@
                     'continues))]
        [else
         (loop next-i next-j next-i 0 0)]))
+    
     ;; Dispatch on byte:
     (cond
      [(= i in-end)
@@ -122,23 +129,18 @@
        [else
         ;; Encoding...
         (cond
-         [(= #b10000000 (bitwise-and b #b11000000))
-          ;; A continuation byte
+          [(= #b10000000 (bitwise-and b #b11000000))
+           ;; A continuation byte
           (cond
            [(zero? remaining)
             ;; We weren't continuing
             (encoding-failure)]
            [else
             (define next (bitwise-and b #b00111111))
-            ;; If `next` is zero, that's an encoding mistake
+            (define next-accum (bitwise-ior (arithmetic-shift accum 6) next))
             (cond
-             [(zero? next)
-              (encoding-failure)]
-             [else
-              (define next-accum (+ (arithmetic-shift accum 6) next))
-              (cond
-               [(= 1 remaining)
-                (cond
+              [(= 1 remaining)
+               (cond
                  [(and (next-accum . < . #x10FFFF)
                        (not (and (next-accum . >= . #xD800)
                                  (next-accum . <= . #xDFFF))))
@@ -147,21 +149,38 @@
                  [else
                   ;; Not a valid character
                   (encoding-failure)])]
-               [else
-                (loop (add1 i) j base-i next-accum (sub1 remaining))])])])]
-         [(not (zero? remaining))
-          ;; Trying to start a new encoding while one is in
-          ;; progress
-          (encoding-failure)]
-         [(= #b11000000 (bitwise-and b #b11100000))
-          ;; Start a two-byte encoding
-          (loop (add1 i) j i (bitwise-and b #b11111) 1)]
+              [(and (= 2 remaining)
+                    (next-accum . <= . #b11111))
+               ;; A shorter byte sequence would work, so this is an
+               ;; encoding mistae.
+               (encoding-failure)]
+              [(and (= 3 remaining)
+                    (next-accum . <= . #b1111))
+               ;; A shorter byte sequence would work
+               (encoding-failure)]
+              [else
+               ;; Continue an encoding.
+               (loop (add1 i) j base-i next-accum (sub1 remaining))])])]
+          [(not (zero? remaining))
+           ;; Trying to start a new encoding while one is in
+           ;; progress
+           (encoding-failure)]
+          [(= #b11000000 (bitwise-and b #b11100000))
+           ;; Start a two-byte encoding
+           (define accum (bitwise-and b #b11111))
+           ;; If `accum` is zero, that's an encoding mistake,
+           ;; because a shorted byte sequence would work.
+           (cond
+             [(zero? accum) (encoding-failure)]
+             [else (loop (add1 i) j i accum 1)])]
          [(= #b11100000 (bitwise-and b #b11110000))
           ;; Start a three-byte encoding
-          (loop (add1 i) j i (bitwise-and b #b1111) 2)]
+          (define accum (bitwise-and b #b1111))
+          (loop (add1 i) j i accum 2)]
          [(= #b11110000 (bitwise-and b #b11111000))
           ;; Start a four-byte encoding
-          (loop (add1 i) j i (bitwise-and b #b111) 3)]
+          (define accum (bitwise-and b #b111))
+          (loop (add1 i) j i  accum 3)]
          [else
           ;; Five- or six-byte encodings don't produce valid
           ;; characters

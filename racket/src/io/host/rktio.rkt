@@ -44,6 +44,7 @@
 (define-function #f rktio_timestamp_ref)
 (define-function #f rktio_is_timestamp)
 (define-function #f rktio_identity_to_vector)
+(define-function #f rktio_convert_result_to_vector)
 (define-function #f rktio_to_bytes)
 (define-function #f rktio_to_bytes_list)
 (define-function #f rktio_NULL)

@@ -1014,6 +1014,21 @@ intptr_t rktio_convert(rktio_t *rktio,
 
 #define RKTIO_CONVERT_ERROR (-1)
 
+typedef struct rktio_convert_result_t {
+  intptr_t in_consumed;  /* input bytes converted */
+  intptr_t out_produced; /* output bytes produced */
+  intptr_t converted;    /* characters converted, can be `RKTIO_CONVERT_ERROR` */
+} rktio_convert_result_t;
+
+RKTIO_EXTERN rktio_convert_result_t *rktio_convert_in(rktio_t *rktio,
+                                                      rktio_converter_t *cvt,
+                                                      char *in, intptr_t in_start, intptr_t in_end,
+                                                      char *out, intptr_t out_start, intptr_t out_end);
+/* The same as rktio_convert`, but accepting start and end positions
+   and returning results as an allocated struct. A conversion error
+   doesn't return a NULL result; instead, `converted` in the result
+   reports the error. */
+
 RKTIO_EXTERN char *rktio_locale_recase(rktio_t *rktio,
                                        rktio_bool_t to_up,
                                        char *in);

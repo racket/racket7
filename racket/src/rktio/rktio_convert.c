@@ -463,6 +463,29 @@ intptr_t rktio_convert(rktio_t *rktio,
   return (intptr_t)r;
 }
 
+rktio_convert_result_t *rktio_convert_in(rktio_t *rktio,
+                                         rktio_converter_t *cvt,
+                                         char *in, intptr_t in_start, intptr_t in_end,
+                                         char *out, intptr_t out_start, intptr_t out_end)
+{
+  intptr_t converted;
+  intptr_t in_left = in_end - in_start;
+  intptr_t out_left = out_end - out_start;
+  char *in_p = in + in_start;
+  char *out_p = out + out_start;
+  rktio_convert_result_t *r;
+
+  converted = rktio_convert(rktio, cvt, (in ? &in_p : NULL), &in_left, &out_p, &out_left);
+
+  r = malloc(sizeof(rktio_convert_result_t));
+
+  r->in_consumed = in_p - (in + in_start);
+  r->out_produced = out_p - (out + out_start);
+  r->converted = converted;
+
+  return r;
+}
+
 /*============================================================*/
 /* Case conversion                                            */
 /*============================================================*/

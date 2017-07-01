@@ -132,6 +132,13 @@
          (ftype-ref rktio_identity_t (a_bits) p 0)
          (ftype-ref rktio_identity_t (b_bits) p 0)
          (ftype-ref rktio_identity_t (c_bits) p 0))))
+    
+    (define (rktio_convert_result_to_vector p)
+      (let ([p (make-ftype-pointer rktio_convert_result_t p)])
+        (vector
+         (ftype-ref rktio_convert_result_t (in_consumed) p 0)
+         (ftype-ref rktio_convert_result_t (out_produced) p 0)
+         (ftype-ref rktio_convert_result_t (converted) p 0))))
 
       (define (cast v from to)
         (let ([p (malloc from)])
@@ -185,6 +192,7 @@
                                  'rktio_timestamp_ref rktio_timestamp_ref
                                  'rktio_is_timestamp rktio_is_timestamp
                                  'rktio_identity_to_vector rktio_identity_to_vector
+                                 'rktio_convert_result_to_vector rktio_convert_result_to_vector
                                  'rktio_to_bytes rktio_to_bytes
                                  'rktio_to_bytes_list rktio_to_bytes_list]
                                 form ...)]))

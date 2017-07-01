@@ -59,8 +59,10 @@
       (let () e ...)
       (start-atomic))))
 
+;; in atomic mode
 (define (check-current-custodian who)
   (when (custodian-shut-down? (current-custodian))
+    (end-atomic)
     (raise
      (exn:fail
       (string-append (symbol->string who) ": the current custodian has been shut down")

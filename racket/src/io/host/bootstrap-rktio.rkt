@@ -98,6 +98,13 @@
      (Rrktio_identity_t-b_bits p)
      (Rrktio_identity_t-c_bits p))))
 
+(define (rktio_convert_result_to_vector p)
+  (let ([p (cast p _pointer _Rrktio_convert_result_t-pointer)])
+    (vector
+     (Rrktio_convert_result_t-in_consumed p)
+     (Rrktio_convert_result_t-out_produced p)
+     (Rrktio_convert_result_t-converted p))))
+
 (define (rktio_to_bytes fs)
   (bytes-copy (cast fs _pointer _bytes)))
 
@@ -143,6 +150,7 @@
                                          'rktio_timestamp_ref rktio_timestamp_ref
                                          'rktio_is_timestamp rktio_is_timestamp
                                          'rktio_identity_to_vector rktio_identity_to_vector
+                                         'rktio_convert_result_to_vector rktio_convert_result_to_vector
                                          'rktio_to_bytes rktio_to_bytes
                                          'rktio_to_bytes_list rktio_to_bytes_list]
                                         form ...))
