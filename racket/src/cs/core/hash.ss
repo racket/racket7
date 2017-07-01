@@ -666,8 +666,8 @@
                                       (add1 (weak-equal-hash-count t)))
           (set-weak-equal-hash-ht! t
                                    (intmap-set ht code
-                                                       (cons (weak-cons k v)
-                                                             (intmap-ref ht code '())))))]
+                                               (cons (weak-cons k v)
+                                                     (intmap-ref ht code '())))))]
        [(equal? (caar vals) k)
         (set-cdr! (car vals) v)]
        [else (loop (cdr vals))]))))

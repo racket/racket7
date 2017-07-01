@@ -170,6 +170,9 @@ control-demo: core.so
 foreign-demo: core.so
 	$(SCHEME) chezpart.so core.so demo/foreign.ss
 
+will-demo: core.so
+	$(SCHEME) chezpart.so core.so demo/will.ss
+
 future-demo: core.so
 	$(SCHEME) chezpart.so core.so demo/future.ss
 

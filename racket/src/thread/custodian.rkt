@@ -82,7 +82,11 @@
                    [at-exit? (at-exit-callback callback we)]
                    [else (willed-callback callback we)]))
       (when we
-        (hash-set! (custodian-wills cust) we #t))
+        (hash-set! (custodian-wills cust) we #t)
+        ;; Register with a will executor that we never poll
+        ;; has the effect of turning a weak reference into
+        ;; a strong one when there are no other references:
+        (will-register we obj void))
       (custodian-reference cust)])))
 
 (define (unsafe-custodian-unregister obj cref)
