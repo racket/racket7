@@ -20,7 +20,7 @@ Requirements:
 
    By default, `make` will use the enclosing Racket build. Go back to
    the root of this repository/distribution and build so that at least
-   the "compiler-lib" package is installed.
+   the "compiler-lib" and "parser-tools-lib" packages are installed.
 
    If you'd like to use an existing installation of Racket, instead,
    you can use `make RACKET=...` to set the command for `racket`.
@@ -168,11 +168,12 @@ Status and thoughts on various Racket subsystems:
    integrate I/O, the scheduler needs access to the OS's
    select()/epoll()/kqueue()/WaitMultipleEvents().
 
- * There's a large gap between Racket and Chez Scheme's native I/O.
-   Probably, part of Racket's C implementation should be pulled out
-   into a dynamic library (with only non-blocking operations as
-   relatively thin layers over the OS), which can then be loaded into
-   Chez Scheme and used via the FFI.
+ * The "rktio" library fills the gap between Racket and Chez Scheme's
+   native I/O. The "rktio" library provides a minimal, non-blocking,
+   non-GCed interface to OS-specific functionality. Its' compiled to a
+   shared library and loadied into Chez Scheme, and then Racket's I/O
+   API is implemented in Racket by calling rktio as a kind of foreign
+   library.
 
  * The Racket FFI looks a lot like the Chez Scheme FFI, so I expect
    that to mostly work, although there may be allocation issues.

@@ -14,7 +14,9 @@
     [(gc) '3m]
     [(link) 'framework]
     [(machine) "localhost info..."]
-    [(so-suffix) (string->utf8 ".dylib")]
+    [(so-suffix) (case (machine-type)
+                   [(a6osx ta6osx i3osx ti3osx) (string->utf8 ".dylib")]
+                   [else (string->utf8 ".so")])]
     [(so-mode) 'local]
     [(fs-change) '#(#f #f #f #f)]
     [(cross) 'infer]

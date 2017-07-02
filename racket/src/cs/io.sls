@@ -108,7 +108,8 @@
            ret-type name ([rktio-type rktio] [arg-type arg] ...))]))
 
     (define loaded-librktio
-      (load-shared-object "../../lib/librktio.dylib"))
+      (load-shared-object (string-append "../../lib/librktio"
+                                         (utf8->string (system-type 'so-suffix)))))
 
     (define (rktio-lookup name)
       (foreign-entry (symbol->string name)))
