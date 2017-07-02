@@ -108,6 +108,16 @@
 (define (rktio_to_bytes fs)
   (bytes-copy (cast fs _pointer _bytes)))
 
+(define (rktio_to_shorts fs)
+  (let loop ([len 0])
+    (cond
+      [(zero? (ptr-ref fs _short len))
+       (define bstr (make-bytes (* len 2)))
+       (memcpy bstr fs (* len 2))
+       bstr]
+      [else
+       (loop (add1 len))])))
+
 ;; Unlike `rktio_to_bytes`, frees the array and strings
 (define (rktio_to_bytes_list lls)
   (begin0
@@ -152,6 +162,7 @@
                                          'rktio_identity_to_vector rktio_identity_to_vector
                                          'rktio_convert_result_to_vector rktio_convert_result_to_vector
                                          'rktio_to_bytes rktio_to_bytes
-                                         'rktio_to_bytes_list rktio_to_bytes_list]
+                                         'rktio_to_bytes_list rktio_to_bytes_list
+                                         'rktio_to_shorts rktio_to_shorts]
                                         form ...))
                    (include "../compiled/rktio.rktl")))

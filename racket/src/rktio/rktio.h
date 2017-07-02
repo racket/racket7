@@ -1029,15 +1029,15 @@ RKTIO_EXTERN rktio_convert_result_t *rktio_convert_in(rktio_t *rktio,
    doesn't return a NULL result; instead, `converted` in the result
    reports the error. */
 
-RKTIO_EXTERN char *rktio_locale_recase(rktio_t *rktio,
-                                       rktio_bool_t to_up,
-                                       char *in);
+RKTIO_EXTERN_NOERR char *rktio_locale_recase(rktio_t *rktio,
+                                             rktio_bool_t to_up,
+                                             char *in);
 /* Upcases (of `to_up`) or downcases (if `!to_up`) the content of `in`
    using the current locale's encoding and case conversion. */
 
-RKTIO_EXTERN rktio_char16_t *rktio_recase_utf16(rktio_t *rktio,
-                                                rktio_bool_t to_up, rktio_char16_t *s1,
-                                                intptr_t len, intptr_t *olen);
+RKTIO_EXTERN_NOERR rktio_char16_t *rktio_recase_utf16(rktio_t *rktio,
+                                                      rktio_bool_t to_up, rktio_char16_t *s1,
+                                                      intptr_t len, intptr_t *olen);
 /* Converts the case of a string encoded in UTF-16 for the system's
    default locale if the OS provided direct support for it. The
    `RKTIO_CONVERT_RECASE_UTF16 property from

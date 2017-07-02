@@ -293,6 +293,19 @@
                           (loop (add1 j))])))
                     (loop (add1 i))))))
 
+(define-ctype _short_bytes 'void* 'bytes
+  (lambda (x) x)
+  (lambda (x) (let loop ([i 0])
+                (if (fx= 0 (foreign-ref 'unsigned-8 x i))
+                    (let ([bstr (make-bytes i)])
+                      (let loop ([j 0])
+                        (cond
+                         [(= j i) bstr]
+                         [else
+                          (bytes-set! bstr j (foreign-ref 'unsigned-8 x j))
+                          (loop (add1 j))])))
+                    (loop (+ i 2))))))
+
 (define-ctype _double* 'double 'double
   (lambda (x) (if (real? x)
                   (exact->inexact x)

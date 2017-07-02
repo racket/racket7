@@ -1,7 +1,7 @@
 #lang racket/base
 (require "../print/custom-write.rkt"
          "../port/string-output.rkt"
-         "../string/convert.rkt")
+         "../locale/string.rkt")
 
 (provide (struct-out path)
          is-path?

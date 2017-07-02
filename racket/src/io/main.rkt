@@ -4,6 +4,7 @@
          "path/main.rkt"
          "string/main.rkt"
          "converter/main.rkt"
+         "locale/main.rkt"
          "format/main.rkt"
          "print/main.rkt"
          "error/main.rkt"
@@ -15,6 +16,7 @@
          (all-from-out "path/main.rkt")
          (all-from-out "string/main.rkt")
          (all-from-out "converter/main.rkt")
+         (all-from-out "locale/main.rkt")
          (all-from-out "format/main.rkt")
          (all-from-out "print/main.rkt")
          (all-from-out "error/main.rkt")

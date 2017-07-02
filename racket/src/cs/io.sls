@@ -148,6 +148,9 @@
     (define (rktio_to_bytes fs)
       (cast fs _uintptr _bytes))
 
+    (define (rktio_to_shorts fs)
+      (cast fs _uintptr _short_bytes))
+
     ;; Unlike `rktio_to_bytes`, frees the array and strings
     (define (rktio_to_bytes_list lls)
       (begin0
@@ -194,7 +197,8 @@
                                  'rktio_identity_to_vector rktio_identity_to_vector
                                  'rktio_convert_result_to_vector rktio_convert_result_to_vector
                                  'rktio_to_bytes rktio_to_bytes
-                                 'rktio_to_bytes_list rktio_to_bytes_list]
+                                 'rktio_to_bytes_list rktio_to_bytes_list
+                                 'rktio_to_shorts rktio_to_shorts]
                                 form ...)]))
         (include "../io/compiled/rktio.rktl"))))
   

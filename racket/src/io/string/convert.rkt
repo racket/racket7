@@ -5,7 +5,6 @@
 
 (provide bytes->string/latin-1
          bytes->string/utf-8
-         bytes->string/locale
          bytes-utf-8-length
          
          bytes-utf-8-index
@@ -13,7 +12,6 @@
          
          string->bytes/latin-1
          string->bytes/utf-8
-         string->bytes/locale
          string-utf-8-length
 
          char-utf-8-length)
@@ -67,11 +65,6 @@
 (define/who (bytes-utf-8-length bstr [err-char #f] [start 0] [end (and (bytes? bstr)
                                                                        (bytes-length bstr))])
   (do-bytes->string/utf-8 who bstr err-char start end #:just-length? #t))
-
-;; For now, always use UTF-8 as locale encoding
-(define/who (bytes->string/locale bstr [err-char #f] [start 0] [end (and (bytes? bstr)
-                                                                         (bytes-length bstr))])
-  (do-bytes->string/utf-8 who bstr err-char start end))
 
 (define (raise-encoding-error who bstr start end)
   (raise-arguments-error who "byte string is not a well-formed UTF-8 encoding"
@@ -175,11 +168,6 @@
 (define/who (string-utf-8-length str [start 0] [end (and (string? str)
                                                          (string-length str))])
   (do-string->bytes/utf-8 who str #f start end #:just-length? #t))
-
-;; For now, always use UTF-8 as locale encoding
-(define/who (string->bytes/locale str [err-byte #f] [start 0] [end (and (string? str)
-                                                                        (string-length str))])
-  (do-string->bytes/utf-8 who str err-byte start end))
 
 ;; ----------------------------------------
 

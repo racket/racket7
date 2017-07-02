@@ -47,6 +47,7 @@
 (define-function #f rktio_convert_result_to_vector)
 (define-function #f rktio_to_bytes)
 (define-function #f rktio_to_bytes_list)
+(define-function #f rktio_to_shorts)
 (define-function #f rktio_NULL)
 
 ;; Add an explicit nul terminator, since the host system's

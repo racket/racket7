@@ -476,6 +476,43 @@
 
 ;; ----------------------------------------
 
+(parameterize ([current-locale "C"])
+  (test #"A*Z" (string->bytes/locale "A\u3BBZ" 42)))
+
+;; Latin-1
+(parameterize ([current-locale "en_US.ISO8859-1"])
+  (test #"!\xD6!" (string->bytes/locale "!\uD6!"))
+  (test "!\uD6!" (bytes->string/locale #"!\xD6!")))
+
+(parameterize ([current-locale "en_US.UTF-8"])
+  (test #f (string<? "Éric" "Dric")))
+(when (eq? 'unix (system-type))
+  (parameterize ([current-locale "fr_FR.ISO8859-1"])
+    (test #t (string-locale<? "Éric" "Dric"))))
+
+(test #t (string-locale<? "apple" "applex"))
+(test #f (string-locale=? "apple" "applex"))
+(test #f (string-locale>? "apple" "applex"))
+
+(test #t (string-locale<? "apple\0x" "apple\0y"))
+(test #f (string-locale=? "apple\0x" "apple\0y"))
+(test #f (string-locale>? "apple\0x" "apple\0y"))
+
+(test #t (string-locale-ci=? "apple" "AppLE"))
+(test #f (string-locale-ci=? "apple" "AppLEx"))
+
+(test #t (boolean? (string-locale<? "Apple" "apple")))
+(test #f (string-locale-ci<? "Apple" "apple"))
+
+(test #t (and (member (string-locale-downcase "Éric")
+                      '("éric" "Éric"))
+              #t))
+(when (eq? 'unix (system-type))
+  (parameterize ([current-locale "en_US.ISO8859-1"])
+    (test "Éric" (string-locale-downcase "Éric"))))
+
+;; ----------------------------------------
+
 (time
  (let loop ([j 10])
    (unless (zero? j)

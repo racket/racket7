@@ -284,26 +284,6 @@
           v))]
    [else v]))
 
-(define current-locale
-  (make-parameter (string->immutable-string "")
-                  (lambda (v)
-                    (unless (or (not v) (string? v))
-                      (raise-argument-error 'current-locale "(or/c #f string?)" v))
-                    (and v (string->immutable-string v)))))
-
-(define (string-locale-ci<? . args) (apply (string-ci<? args)))
-(define (string-locale-ci=? . args) (apply (string-ci=? args)))
-(define (string-locale-ci>? . args) (apply (string-ci>? args)))
-(define (string-locale<? . args) (apply (string<? args)))
-(define (string-locale=? . args) (apply (string=? args)))
-(define (string-locale>? . args) (apply (string>? args)))
-(define (string-locale-downcase s) (string-downcase s))
-(define (string-locale-upcase s) (string-upcase s))
-
-(define (locale-string-encoding) "UTF-8")
-
-(define (system-language+country) "en_US")
-
 (define (make-known-char-range-list)
   '((0 255 #f)))
 
@@ -494,18 +474,6 @@
 
    current-directory-for-user
    srcloc->string
-
-   current-locale
-   string-locale-ci<?
-   string-locale-ci=?
-   string-locale-ci>?
-   string-locale-downcase
-   string-locale-upcase
-   string-locale<?
-   string-locale=?
-   string-locale>?
-   locale-string-encoding
-   system-language+country
 
    make-known-char-range-list
    

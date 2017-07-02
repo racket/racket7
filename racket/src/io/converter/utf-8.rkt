@@ -3,7 +3,8 @@
                   RKTIO_ERROR_CONVERT_BAD_SEQUENCE
                   RKTIO_ERROR_CONVERT_PREMATURE_END
                   RKTIO_ERROR_CONVERT_NOT_ENOUGH_SPACE)
-         "../string/utf-8-encode.rkt")
+         "../string/utf-8-encode.rkt"
+         "../common/set-two.rkt")
 
 (provide utf-8-converter
          utf-8-converter?
@@ -72,7 +73,7 @@
             (bytes-set! out-bstr (+ j 2) #o275)
             (continue-after-permissive (+ j 3))]
            [(and to-utf-16? ((+ j 2) . <= . out-end))
-            (byte-set-two! out-bstr j #xFF #xFD)
+            (bytes-set-two! out-bstr j #xFF #xFD)
             (continue-after-permissive (+ j 2))]
            [else
             (values (- base-i in-start)
@@ -122,7 +123,7 @@
               (bytes-set! out-bstr j b)
               (continue (add1 j))]
              [((add1 j) . < . out-end)
-              (byte-set-two! out-bstr j 0 b)
+              (bytes-set-two! out-bstr j 0 b)
               (continue (+ j 2))]
              [else
               (values (- base-i in-start) 
@@ -161,15 +162,15 @@
                        [(and (v . < . #x10000)
                              ((+ j 2) . <= . out-end))
                         ;; No need for a surrogate pair (so, 2 bytes)
-                        (byte-set-two! out-bstr j (arithmetic-shift v -8) (bitwise-and v #xFF))
+                        (bytes-set-two! out-bstr j (arithmetic-shift v -8) (bitwise-and v #xFF))
                         (continue (+ j 2))]
                        [((+ j 4) . <= . out-end)
                         ;; Write surrogate pair (as 4 bytes)
                         (define av (- v #x10000))
                         (define hi (bitwise-ior #xD800 (bitwise-and (arithmetic-shift av -10) #x3FF)))
                         (define lo (bitwise-ior #xDC00 (bitwise-and av #x3FF)))
-                        (byte-set-two! out-bstr j (arithmetic-shift hi -8) (bitwise-and hi #xFF))
-                        (byte-set-two! out-bstr (+ j 2) (arithmetic-shift lo -8) (bitwise-and lo #xFF))
+                        (bytes-set-two! out-bstr j (arithmetic-shift hi -8) (bitwise-and hi #xFF))
+                        (bytes-set-two! out-bstr (+ j 2) (arithmetic-shift lo -8) (bitwise-and lo #xFF))
                         (continue (+ j 4))]
                        [else
                         ;; Not enought space for UTF-16 encoding
@@ -291,14 +292,3 @@
                 (continue v (+ i 2))]
                [else (done 'error)])])]
          [else (continue v (+ i 2))])])))
-
-;; ----------------------------------------
-
-(define (byte-set-two! out-bstr j hi lo)
-  (cond
-    [big-endian?
-     (bytes-set! out-bstr j hi)
-     (bytes-set! out-bstr (+ j 1) lo)]
-    [else
-     (bytes-set! out-bstr j lo)
-     (bytes-set! out-bstr (+ j 1) hi)]))
