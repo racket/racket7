@@ -792,10 +792,24 @@
                                                                (list (cons guard (+ parent-fields-count fields)))))
                                                    parent-guards))))))
 
-(define (unsafe-struct-ref s i)
+(define (unsafe-struct*-ref s i)
   (#3%vector-ref s i))
-(define (unsafe-struct-set! s i v)
+(define (unsafe-struct*-set! s i v)
   (#3%vector-set! s i v))
+
+(define (unsafe-struct-ref s i)
+  (if (impersonator? s)
+      (let* ([rtd (record-rtd s)]
+             [pos (- i (struct-type-parent-field-count rtd))])
+        (impersonate-ref (record-field-accessor rtd i) rtd pos s))
+      (unsafe-struct*-ref s i)))
+
+(define (unsafe-struct-set! s i v)
+  (if (impersonator? s)
+      (let* ([rtd (record-rtd s)]
+             [pos (- i (struct-type-parent-field-count rtd))])
+        (impersonate-set! (record-field-mutator rtd i) rtd pos s v))
+      (unsafe-struct*-set! s i v)))
 
 (define-values (prop:equal+hash equal+hash? equal+hash-ref)
   (make-struct-type-property 'equal+hash
@@ -852,8 +866,8 @@
            (let loop ([j 0])
              (if (fx= j n)
                  #t
-                 (and (eql? (unsafe-struct-ref s1 j)
-                            (unsafe-struct-ref s2 j))
+                 (and (eql? (unsafe-struct*-ref s1 j)
+                            (unsafe-struct*-ref s2 j))
                       (loop (fx+ j 1)))))))))
          
 (define (default-struct-hash s hash-code)
@@ -864,7 +878,7 @@
             (if (fx= j n)
                 hc
                 (loop (fx+ j 1)
-                      (hash-code-combine hc (hash-code (unsafe-struct-ref s j)))))))
+                      (hash-code-combine hc (hash-code (unsafe-struct*-ref s j)))))))
         (eq-hash-code s))))
 
 (define (struct->vector s)
@@ -904,7 +918,7 @@
                         (cond
                          [(= n len) (loop vec-pos rec-pos (record-type-parent rtd) #f)]
                          [else
-                          (vector-set! vec (+ vec-pos n) (unsafe-struct-ref s (+ rec-pos n)))
+                          (vector-set! vec (+ vec-pos n) (unsafe-struct*-ref s (+ rec-pos n)))
                           (floop (add1 n))])))]
                    [dots-already?
                     ;; Skip another opaque region

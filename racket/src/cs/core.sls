@@ -189,8 +189,6 @@
           struct-info
           struct-type-make-constructor
           struct-type-make-predicate
-          unsafe-struct-ref
-          unsafe-struct-set!
           struct->vector
           prefab-key?
           prefab-struct-key
@@ -278,6 +276,8 @@
           impersonate-vector*
           chaperone-vector
           chaperone-vector*
+          unsafe-impersonate-vector
+          unsafe-chaperone-vector
 
           box? unbox set-box!
           box-cas!
@@ -394,6 +394,7 @@
           unsafe-cdr
           unsafe-list-tail
           unsafe-list-ref
+          unsafe-cons-list
 
           unsafe-fx+
           unsafe-fx-
@@ -431,6 +432,13 @@
           unsafe-flmin
           unsafe-flmax
 
+          unsafe-fl->fx
+          unsafe-fx->fl
+
+          unsafe-make-flrectangular
+          unsafe-flreal-part
+          unsafe-flimag-part
+
           unsafe-flround
           unsafe-flfloor
           unsafe-flceiling
@@ -459,6 +467,12 @@
           extflonum? real->extfl extflround shared-extflvector
           extflsin extflsqrt extfltan extfltruncate extflvector
           extflvector-length extflvector-ref extflvector-set! extflvector?
+
+          unsafe-extfl* unsafe-extfl+ unsafe-extfl- unsafe-extfl/
+          unsafe-extfl< unsafe-extfl<= unsafe-extfl= unsafe-extfl> unsafe-extfl>=
+          unsafe-extflabs unsafe-extflmax unsafe-extflmin
+          unsafe-extfl->fx unsafe-fx->extfl unsafe-extflsqrt
+          unsafe-extflvector-length unsafe-extflvector-ref unsafe-extflvector-set!
 
           tcp-listener? tcp-port?
           tcp-abandon-port tcp-accept tcp-accept-evt tcp-accept-ready?
@@ -495,6 +509,12 @@
           unsafe-unbox*
           unsafe-set-box!
           unsafe-set-box*!
+          unsafe-box*-cas!
+
+          unsafe-mcar
+          unsafe-mcdr
+          unsafe-set-mcar!
+          unsafe-set-mcdr!
 
           unsafe-vector-ref
           unsafe-vector-set!
@@ -516,6 +536,22 @@
           check-not-unsafe-undefined/assign
 
           unsafe-string-length
+          unsafe-string-ref
+          unsafe-string-set!
+
+          unsafe-struct-ref
+          unsafe-struct-set!
+          unsafe-struct*-ref
+          unsafe-struct*-set!
+
+          unsafe-s16vector-ref
+          unsafe-s16vector-set!
+          unsafe-u16vector-ref
+          unsafe-u16vector-set!
+          unsafe-f64vector-ref
+          unsafe-f64vector-set!
+          unsafe-f80vector-set!
+          unsafe-f80vector-ref
 
 	  ;; future scheduler functions
 

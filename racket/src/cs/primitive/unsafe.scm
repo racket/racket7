@@ -6,6 +6,7 @@
    unsafe-cdr
    unsafe-list-tail
    unsafe-list-ref
+   unsafe-cons-list
 
    unsafe-fx+
    unsafe-fx-
@@ -43,6 +44,17 @@
    unsafe-flmin
    unsafe-flmax
 
+   unsafe-fx->fl
+   unsafe-fl->fx
+   
+   unsafe-flrandom
+
+   unsafe-flsqrt
+
+   unsafe-make-flrectangular
+   unsafe-flreal-part
+   unsafe-flimag-part
+
    ;; Currently omitted since regular Racket's #%unsafe does not provide them
 
    ;; unsafe-flround
@@ -58,10 +70,38 @@
    ;; unsafe-flatan
    ;; unsafe-fllog
    ;; unsafe-flexp
-   ;; unsafe-flsqrt
    ;; unsafe-flexpt
 
-   unsafe-flrandom
+   unsafe-extfl*
+   unsafe-extfl+
+   unsafe-extfl-
+   unsafe-extfl/
+   unsafe-extfl<
+   unsafe-extfl<=
+   unsafe-extfl=
+   unsafe-extfl>
+   unsafe-extfl>=
+   unsafe-extflabs
+   unsafe-extflmax
+   unsafe-extflmin
+   unsafe-extflsqrt
+   unsafe-extfl->fx
+   unsafe-fx->extfl
+
+   unsafe-extflvector-length
+   unsafe-extflvector-ref
+   unsafe-extflvector-set!
+
+   unsafe-unbox*
+   unsafe-set-box*!
+   unsafe-set-box!
+   unsafe-unbox
+   unsafe-box*-cas!
+
+   unsafe-mcar
+   unsafe-mcdr
+   unsafe-set-mcar!
+   unsafe-set-mcdr!
 
    unsafe-vector-ref
    unsafe-vector-set!
@@ -78,14 +118,27 @@
    unsafe-flvector-ref
    unsafe-flvector-set!
 
+   unsafe-s16vector-ref
+   unsafe-s16vector-set!
+   unsafe-u16vector-ref
+   unsafe-u16vector-set!
+   unsafe-f64vector-ref
+   unsafe-f64vector-set!
+   unsafe-f80vector-set!
+   unsafe-f80vector-ref
+
    unsafe-bytes-length
    unsafe-bytes-ref
    unsafe-bytes-set!
 
    unsafe-string-length
+   unsafe-string-set!
+   unsafe-string-ref
+   
    unsafe-struct-ref
-
    unsafe-struct-set!
+   unsafe-struct*-ref
+   unsafe-struct*-set!
    
    unsafe-immutable-hash-iterate-key+value
    unsafe-immutable-hash-iterate-pair
@@ -108,6 +161,8 @@
 
    unsafe-chaperone-procedure
    unsafe-impersonate-procedure
+   unsafe-impersonate-vector
+   unsafe-chaperone-vector
 
    unsafe-undefined
    check-not-unsafe-undefined

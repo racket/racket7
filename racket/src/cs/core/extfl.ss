@@ -66,4 +66,23 @@
   extflvector
   extflvector-length
   extflvector-ref
-  extflvector-set!)
+  extflvector-set!
+
+  unsafe-extfl*
+  unsafe-extfl+
+  unsafe-extfl-
+  unsafe-extfl/
+  unsafe-extfl<
+  unsafe-extfl<=
+  unsafe-extfl=
+  unsafe-extfl>
+  unsafe-extfl>=
+  unsafe-extflabs
+  unsafe-extflmax
+  unsafe-extflmin
+  unsafe-extflsqrt
+  unsafe-extfl->fx
+  unsafe-fx->extfl
+  unsafe-extflvector-length
+  unsafe-extflvector-ref
+  unsafe-extflvector-set!)

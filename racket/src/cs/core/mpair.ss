@@ -18,3 +18,16 @@
 (define/who (set-mcdr! m v)
   (check who mpair? m)
   (set-mpair-cdr! m v))
+
+(define (unsafe-mcar m)
+  (mpair-car m))
+
+(define (unsafe-mcdr m)
+  (mpair-cdr m))
+
+(define (unsafe-set-mcar! m v)
+  (set-mpair-car! m v))
+
+(define (unsafe-set-mcdr! m v)
+  (set-mpair-cdr! m v))
+

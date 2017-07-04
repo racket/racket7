@@ -65,9 +65,9 @@
                           make-props-chaperone props))
 
 (define/who (impersonate-vector* vec ref set . props)
-  (check who mutable-vector? vec)
-  (do-impersonate-vector who make-vector*-impersonator vec ref set
-                         make-props-impersonator props))
+  (check who mutable-vector? :contract "(and/c vector? (not/c immutable?))" vec)
+  (do-impersonate-vector* who make-vector*-impersonator vec ref set
+                          make-props-impersonator props))
 
 (define (do-impersonate-vector* who make-vector*-impersonator vec ref set
                                 make-props-impersonator props)
@@ -84,6 +84,32 @@
     (if (or ref set)
         (make-vector*-impersonator val vec props ref set)
         (make-props-impersonator val vec props))))
+
+;; ----------------------------------------
+
+(define-record vector-unsafe-chaperone chaperone (vec))
+(define-record vector-unsafe-impersonator impersonator (vec))
+
+(define/who (unsafe-impersonate-vector vec alt-vec . props)
+  (check who mutable-vector? :contract "(and/c vector? (not/c immutable?))" vec)
+  (check who vector? alt-vec)
+  (do-unsafe-impersonate-vector who make-vector-unsafe-impersonator vec alt-vec props))
+
+(define/who (unsafe-chaperone-vector vec alt-vec . props)
+  (check who vector? vec)
+  (check who vector? alt-vec)
+  (do-unsafe-impersonate-vector who make-vector-unsafe-chaperone vec alt-vec props))
+
+(define (do-unsafe-impersonate-vector who make-vector-unsafe-impersonator vec alt-vec props)
+  (let ([val (if (impersonator? vec)
+                 (impersonator-val vec)
+                 vec)]
+        [props (add-impersonator-properties who
+                                            props
+                                            (if (impersonator? vec)
+                                                (impersonator-props vec)
+                                                empty-hasheq))])
+    (make-vector-unsafe-impersonator val vec props alt-vec)))
 
 ;; ----------------------------------------
 
@@ -136,6 +162,10 @@
             (if (vector*-impersonator? o)
                 ((vector-impersonator-ref o) orig o idx val)
                 ((vector-impersonator-ref o) o idx val)))]
+         [(vector-unsafe-impersonator? o)
+          (vector-ref (vector-unsafe-impersonator-vec o)  idx)]
+         [(vector-unsafe-chaperone? o)
+          (vector-ref (vector-unsafe-chaperone-vec o)  idx)]
          [else (loop (impersonator-next o))]))
       ;; Let primitive report the error:
       (#2%vector-ref orig idx)))
@@ -184,6 +214,10 @@
                   (if (vector*-impersonator? o)
                       ((vector-impersonator-set o) orig o idx val)
                       ((vector-impersonator-set o) o idx val)))]
+           [(vector-unsafe-impersonator? o)
+            (#2%vector-set! (vector-unsafe-impersonator-vec o) idx val)]
+           [(vector-unsafe-chaperone? o)
+            (#2%vector-set! (vector-unsafe-chaperone-vec o) idx val)]
            [else (loop next val)]))]))]))
 
 ;; ----------------------------------------

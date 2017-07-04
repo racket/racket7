@@ -1,8 +1,8 @@
 (define/who (box-cas! b v1 v2)
   (check who mutable-box? :contract "(and/c box? (not/c immutable?))" b)
-  (unsafe-box-cas! b v1 v2))
+  (unsafe-box*-cas! b v1 v2))
 
-(define (unsafe-box-cas! b v1 v2)
+(define (unsafe-box*-cas! b v1 v2)
   (with-interrupts-disabled
    (and (eq? v1 (#3%unbox b))
         (#3%set-box! b v2)

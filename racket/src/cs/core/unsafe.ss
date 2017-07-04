@@ -39,6 +39,9 @@
 (define unsafe-flmin #3%flmin)
 (define unsafe-flmax #3%flmax)
 
+(define unsafe-fx->fl #3%fixnum->flonum)
+(define unsafe-fl->fx #3%flonum->fixnum)
+
 (define unsafe-flround #3%flround)
 (define unsafe-flfloor #3%flfloor)
 (define unsafe-flceiling #3%flceiling)
@@ -73,6 +76,34 @@
 (define unsafe-fxvector-length #3%fxvector-length)
 (define unsafe-fxvector-ref #3%fxvector-ref)
 (define unsafe-fxvector-set! #3%fxvector-set!)
+
+(define (unsafe-s16vector-ref cptr k)
+  (foreign-ref 'int16 (cpointer-addr cptr) k))
+(define (unsafe-s16vector-set! cptr k v)
+  (foreign-set! 'int16 (cpointer-addr cptr) k v))
+
+(define (unsafe-u16vector-ref cptr k)
+  (foreign-ref 'uint16 (cpointer-addr cptr) k))
+(define (unsafe-u16vector-set! cptr k v)
+  (foreign-set! 'uint16 (cpointer-addr cptr) k v))
+
+(define (unsafe-f64vector-ref cptr k)
+  (foreign-ref 'double (cpointer-addr cptr) k))
+(define (unsafe-f64vector-set! cptr k v)
+  (foreign-set! 'double (cpointer-addr cptr) k v))
+
+;; FIXME
+(define (unsafe-f80vector-ref cptr k)
+  (foreign-ref 'double (cpointer-addr cptr) k))
+(define (unsafe-f80vector-set! cptr k v)
+  (foreign-set! 'double (cpointer-addr cptr) k v))
+
+(define (unsafe-make-flrectangular r i)
+  (#3%make-rectangular r i))
+(define (unsafe-flreal-part c)
+  (#3%real-part c))
+(define (unsafe-flimag-part c)
+  (#3%imag-part c))
 
 (define unsafe-undefined (let ([p (make-record-type "undefined" '())])
                            ((record-constructor p))))

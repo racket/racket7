@@ -35,3 +35,6 @@
    [(fx= 0 n) l2]
    [else (cons (car l) (append-n (cdr l) (fx1- n) l2))]))
   
+(define (unsafe-cons-list a d)
+  ;; Can assume that `d` is a list
+  (cons a d))
