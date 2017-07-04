@@ -166,10 +166,11 @@
    [(s radix) (string->number s radix #f 'decimal-as-inexact)]
    [(s radix mode) (string->number s radix mode 'decimal-as-inexact)]
    [(s radix mode decimal)
-    ;; FIXME
-    (cond
-     [(equal? s "+nan.f") +nan.0]
-     [else (chez:string->number s radix)])]))
+    (if (and (eq? mode 'read) ; => need to watch out for extflonums
+             (extflonum-string? s))
+        (make-extflonum s)
+        ;; The argument is constrained to fixnum, bignum, and flonum forms
+        (chez:string->number s radix))]))
 
 (define/who (quotient/remainder n m)
   (check who integer? n)

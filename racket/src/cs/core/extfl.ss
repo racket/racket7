@@ -1,6 +1,19 @@
 
+(define-record-type extflonum
+  (fields str)
+  (nongenerative #{extflonum lb32cq34kbljz9rpowkzge-0}))
+
+;; used by `string->number`
+(define (extflonum-string? s)
+  ;; It's an extflonum if there's any #\t
+  (let loop ([i (string-length s)])
+    (and (fx> i 0)
+         (let ([i (sub1 i)])
+           (let ([c (string-ref s i)])
+             (or (char=? #\t c) (char=? #\T c)
+                 (loop i)))))))
+
 (define (extflonum-available?) #f)
-(define (extflonum? v) #f)
 (define (extflvector? v) #f)
 
 (define-syntax (define-extfl-ids stx)

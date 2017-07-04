@@ -28,7 +28,7 @@
 (define-boolean-parameter read-accept-compiled #f)
 (define-boolean-parameter read-accept-box #t)
 ;; (define-boolean-parameter read-accept-bar-quote #t) - shared with printer
-;; (define-boolean-parameter read-decimal-as-inexact #t) - shared with `string->number`
+(define-boolean-parameter read-decimal-as-inexact #t)
 (define-boolean-parameter read-accept-dot #t)
 (define-boolean-parameter read-accept-infix-dot #t)
 (define-boolean-parameter read-accept-quasiquote #t)

@@ -446,8 +446,10 @@
                                                    (format
                                                     (string-append "namespace mismatch;\n"
                                                                    " variable not found\n"
+                                                                   "  module: ~a\n"
                                                                    "  variable name: ~s\n"
                                                                    "  phase level: ~s")
+                                                    (module-binding-module binding)
                                                     (module-binding-sym binding)
                                                     (module-binding-phase binding))))))
   (namespace-set-variable! m-ns (phase+ phase-shift phase-level) adjusted-sym val as-constant?))

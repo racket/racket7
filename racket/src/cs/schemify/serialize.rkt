@@ -1,5 +1,6 @@
 #lang racket/base
-(require "match.rkt")
+(require racket/extflonum
+         "match.rkt")
 
 (provide convert-for-serialize)
 
@@ -124,6 +125,7 @@
                    (lift-quoted? e))]
     [(box? q) (lift-quoted? (unbox q))]
     [(prefab-struct-key q) #t]
+    [(extflonum? q) #t]
     [else #f]))
 
 ;; Construct an expression to be lifted
@@ -180,6 +182,8 @@
             => (lambda (key)
                  `(make-prefab-struct ',key ,@(map make-construct
                                                    (cdr (vector->list (struct->vector q))))))]
+           [(extflonum? q)
+            `(string->number ,(format "~a" q) 10 'read)]
            [else `(quote ,q)]))
        (cond
          [(quote? rhs) rhs]

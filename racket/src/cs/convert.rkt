@@ -3,6 +3,7 @@
          racket/pretty
          racket/match
          racket/file
+         racket/extflonum
          "schemify/schemify.rkt"
          "schemify/known.rkt"
          "schemify/lift.rkt"
@@ -68,6 +69,10 @@
          (list-of-keywords? (cadr v)))
     (define s (gensym 'kws))
     (lift-set! (cadr v) s)]
+   [(and (quote? v)
+         (extflonum? (cadr v)))
+    (define s (gensym 'extfl))
+    (lift-set! (cadr v) s)]
    [(pair? v)
     (lift (car v))
     (lift (cdr v))]))
@@ -129,12 +134,14 @@
               (hash? (cadr v))
               (nested-hash? (cadr v))
               (keyword? (cadr v))
-              (list-of-keywords? (cadr v))))
+              (list-of-keywords? (cadr v))
+              (extflonum? (cadr v))))
      10]
     [(bytes? v) (* 3 (bytes-length v))]
     [(and (symbol? v) (regexp-match? #rx"#" (symbol->string v)))
      (+ 2 (string-length (symbol->string v)))]
     [(char? v) 5]
+    [(single-flonum? v) 5]
     [(or (keyword? v)
          (regexp? v)
          (pregexp? v)
@@ -155,7 +162,8 @@
               (hash? (cadr v))
               (nested-hash? (cadr v))
               (keyword? (cadr v))
-              (list-of-keywords? (cadr v))))
+              (list-of-keywords? (cadr v))
+              (extflonum? (cadr v))))
      (write (hash-ref lifts (cadr v)) out)]
     [(bytes? v)
      (display "#vu8")
@@ -164,6 +172,8 @@
      (write-string (format "|~a|" v) out)]
     [(char? v)
      (write-string (format "#\\x~x" (char->integer v)) out)]
+    [(single-flonum? v)
+     (write (real->double-flonum v) out)]
     [else #f])))
 
 ;; ----------------------------------------
@@ -211,6 +221,7 @@
               [(keyword? k)
                `(string->keyword ,(keyword->string k))]
               [(null? k) ''()]
+              [(extflonum? k) `(string->number ,(format "~a" k) 10 'read)]
               [else k])))))
 
      ;; Write out converted forms

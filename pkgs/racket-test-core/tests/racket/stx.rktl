@@ -2496,7 +2496,7 @@
 (err/rt-test (syntax-property #'+ 1 #'+ #t)
              (lambda (exn)
                (regexp-match
-                #rx"expected an interned symbol key for a preserved property"
+                #rx"key for a perserved property must be an interned symbol"
                 (exn-message exn))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

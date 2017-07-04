@@ -526,6 +526,23 @@ static Scheme_Object *do_CHECK_SINGLE(Scheme_Object *v, int s, int long_dbl,
     return scheme_false;                                                       \
   }
 
+/*
+  The scheme_read-number() parser could be simplified somewhat,
+  because it only has to work for:
+
+     - `string->number` when called on a well-formed fixnum, bignum,
+        {double-,single-,ext}flonum;
+
+     - reading S-expression literals from bytes, where numbers will be
+       in a canonical form (no `#`), but where symbols still must be
+       distinguished from numbers; and
+
+     - printing symbols, to detect when they need to be escaped.
+
+  For those purposes, it doesn't need to provide good error messages,
+  deal with non-default exactness, or handle non-base-10
+  representations for non-real numbers.
+*/
 Scheme_Object *scheme_read_number(const mzchar *str, intptr_t len,
 				  int is_float, 
 				  int is_not_float,

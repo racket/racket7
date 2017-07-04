@@ -469,7 +469,6 @@
    filesystem-change-evt
    filesystem-change-evt-cancel
    filesystem-change-evt?
-   will-execute
    current-thread-initial-stack-size
 
    current-directory-for-user

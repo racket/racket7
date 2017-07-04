@@ -28,7 +28,8 @@
          "box.rkt"
          "regexp.rkt"
          "extension.rkt"
-         "language.rkt")
+         "language.rkt"
+         "number.rkt")
 
 (provide read
          read-language
@@ -37,6 +38,8 @@
          make-readtable
          readtable?
          readtable-mapping
+
+         string->number
 
          (all-from-out "primitive-parameter.rkt")
          (all-from-out "special-comment.rkt"))

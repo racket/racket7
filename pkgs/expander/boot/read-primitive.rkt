@@ -3,7 +3,8 @@
          "../read/api.rkt"
          "../read/primitive-parameter.rkt"
          "../read/readtable.rkt"
-         "../read/special-comment.rkt")
+         "../read/special-comment.rkt"
+         "../read/number.rkt")
 
 ;; Reader primitives are in their own module so that they can be
 ;; treated specially by the bootstrapped flattened. The expanded form
@@ -17,6 +18,8 @@
                 read/recursive
                 read-language
 
+                string->number
+
                 current-reader-guard
                 ;; read-case-sensitive - shared with printer
                 read-square-bracket-as-paren
@@ -28,7 +31,7 @@
                 read-accept-compiled
                 read-accept-box
                 ;; read-accept-bar-quote - shared with printer
-                ;; read-decimal-as-inexact - shared with `string->number`
+                read-decimal-as-inexact
                 read-accept-dot
                 read-accept-infix-dot
                 read-accept-quasiquote

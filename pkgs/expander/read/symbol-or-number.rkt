@@ -7,7 +7,8 @@
          "consume.rkt"
          "accum-string.rkt"
          "error.rkt"
-         "parameter.rkt")
+         "parameter.rkt"
+         "number.rkt")
 
 (provide read-symbol-or-number)
 
