@@ -502,6 +502,25 @@
 
 ;; ----------------------------------------
 
+(define-values (prop:checked-procedure checked-procedure? checked-procedure-ref)
+  (make-struct-type-property 'checked-procedure
+                             (lambda (v s)
+                               (unless (not (list-ref s 6))
+                                 (raise-arguments-error 'prop:checked-procedure
+                                                        "not allowed on a structure type with a supertype"))
+                               (unless (>= (+ (list-ref s 1) (list-ref s 2)) 2)
+                                 (raise-arguments-error 'prop:checked-procedure
+                                                        "need at least two fields in the structure type"))
+                               #t)))
+
+(define (checked-procedure-check-and-extract st v alt-proc v1 v2)
+  (if (and (checked-procedure? v)
+           (|#%app| (unsafe-struct-ref v 0) v1 v2))
+      (unsafe-struct-ref v 1)
+      (|#%app| alt-proc v v1 v2)))
+
+;; ----------------------------------------
+
 (define (set-primitive-applicables!)
   (struct-property-set! prop:procedure
                         (record-type-descriptor parameter)

@@ -1,16 +1,7 @@
 ;; Temporary compatibility stubs
 
-(define-values (prop:checked-procedure checked-procedure? checked-procedure-ref)
-  (make-struct-type-property 'checked-procedure))
 (define-values (prop:arity-string arity-string? arity-string-ref)
   (make-struct-type-property 'arity-string))
-
-(define (checked-procedure-check-and-extract st v alt-proc v1 v2)
-  (if (and (record? v st)
-           (checked-procedure? v)
-           (|#%app| (unsafe-struct-ref v 0) v1 v2))
-      (unsafe-struct-ref v 1)
-      (|#%app| alt-proc v v1 v2)))
 
 (define-values (prop:chaperone-unsafe-undefined chaperone-unsafe-undefined? chaperone-unsafe-undefined-ref)
   (make-struct-type-property 'chaperone-unsafe-undefined))
@@ -316,10 +307,7 @@
 (define compat-table
   (make-primitive-table
 
-   prop:checked-procedure checked-procedure? checked-procedure-ref
    prop:arity-string arity-string? arity-string-ref
-
-   checked-procedure-check-and-extract
 
    chaperone-evt
    chaperone-channel

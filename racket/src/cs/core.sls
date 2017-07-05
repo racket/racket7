@@ -130,6 +130,8 @@
           procedure-reduce-arity
           procedure-rename
           procedure-arity?
+          prop:checked-procedure
+          checked-procedure-check-and-extract
 
           equal?
           equal?/recur
