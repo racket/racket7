@@ -357,13 +357,7 @@
 (define (hash=? ht1 ht2 eql?)
   (cond
    [(and (intmap? ht1)
-         (intmap? ht2)
-         (or (and (intmap-eq? ht1)
-                  (intmap-eq? ht2))
-             (and (intmap-eqv? ht1)
-                  (intmap-eqv? ht2))
-             (and (intmap-equal? ht1)
-                  (intmap-equal? ht2))))
+         (intmap? ht2))
     (intmap=? ht1 ht2 eql?)]
    [(and (hash? ht1)
          (hash? ht2)
@@ -375,6 +369,7 @@
                   (hash-equal? ht2)))
          (eq? (hash-weak? ht1) (hash-weak? ht2)))
     (and (= (hash-count ht1) (hash-count ht2))
+         ;; This generic comparison supports impersonators
          (let loop ([i (hash-iterate-first ht1)])
            (cond
             [(not i) #t]
@@ -393,6 +388,7 @@
   (cond
    [(intmap? ht) (intmap-hash-code ht hash)]
    [else
+    ;; This generic hashing supports impersonators
     (let loop ([hc 0] [i (hash-iterate-first ht)])
       (cond
        [(not i) hc]

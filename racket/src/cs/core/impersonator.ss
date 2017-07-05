@@ -351,6 +351,40 @@
 
 ;; ----------------------------------------
 
+(define-values (prop:impersonator-of impersonator-of-redirect? impersonator-of-ref)
+  (make-struct-type-property 'impersonator-of
+                             (lambda (v info)
+                               (check 'guard-for-prop:impersonator-of (procedure-arity-includes/c 1) v)
+                               ;; Add a tag to track origin of the `prop:impersonator-of` value
+                               (cons (gensym "tag") v))))
+
+(define (extract-impersonator-of who a)
+  (and (impersonator-of-redirect? a)
+       (let* ([tag+ref (impersonator-of-ref a)]
+              [a2 ((cdr tag+ref) a)])
+         (cond
+          [(not a2)
+           ;; `prop:impersonator-of` function can report #f to mean
+           ;; "not an impersonator, after all"
+           #f]
+          [else
+           (let ([different
+                  (lambda (what)
+                    (raise-arguments-error who (format (string-append "impersonator-of property procedure returned a"
+                                                                      " value with a different `~a` source")
+                                                       what)
+                                           "original value" a
+                                           "returned value" a2))])
+             (unless (and (impersonator-of-redirect? a2)
+                          (eq? (car tag+ref)
+                               (car (impersonator-of-ref a2))))
+               (different 'prop:impersonator-of))
+             (unless (record-equal-procedure a a2)
+               (different 'prop:equal+hash))
+             a2)]))))
+
+;; ----------------------------------------
+
 (define (set-impersonator-applicables!)
   (struct-property-set! prop:procedure
                         (record-type-descriptor props-procedure-impersonator)

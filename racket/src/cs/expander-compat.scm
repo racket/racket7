@@ -2,8 +2,6 @@
 
 (define-values (prop:checked-procedure checked-procedure? checked-procedure-ref)
   (make-struct-type-property 'checked-procedure))
-(define-values (prop:impersonator-of -impersonator-of? impersonator-of-ref)
-  (make-struct-type-property 'impersonator-of))
 (define-values (prop:arity-string arity-string? arity-string-ref)
   (make-struct-type-property 'arity-string))
 
@@ -319,7 +317,6 @@
   (make-primitive-table
 
    prop:checked-procedure checked-procedure? checked-procedure-ref
-   prop:impersonator-of -impersonator-of? impersonator-of-ref
    prop:arity-string arity-string? arity-string-ref
 
    checked-procedure-check-and-extract

@@ -38,7 +38,7 @@
 (check (vector-set! v2 1 12) (void))
 
 (check (impersonator-of? v1i v2)
-       #t)
+       #f)
 (check (impersonator-of? v2 v1i)
        #f)
 (check (impersonator-of? v1i v1)
@@ -64,7 +64,7 @@
 (check (chaperone-of? v1c v1)
        #t)
 (check (chaperone-of? v1i v1)
-       #t)
+       #f)
 (check (impersonator-of? v1c v1)
        #t)
 
@@ -115,7 +115,7 @@
 (check (impersonator-of? fc fi) #f)
 
 (check (chaperone-of? fc f) #t)
-(check (chaperone-of? fi f) #t)
+(check (chaperone-of? fi f) #f)
 (check (chaperone-of? fi fc) #f)
 (check (chaperone-of? fc fi) #t)
 
@@ -359,6 +359,8 @@
     (check (hash-iterate-value ht2c i) 'a)
     (check (ops!) '(key get equal-key got)))
 
+  (check (equal? (hash-remove ht1c 5) ht1c) #t)
+
   ;; Check that hash table updates maintain chaperone identity
   (check (chaperone-of? (hash-remove ht1c 5) ht1c) #t)
   (check (chaperone-of? (hash-set (hash-remove ht1c 1) 1 'a) ht1c) #t)
@@ -366,3 +368,42 @@
   (check (chaperone-of? ht1 (hash-remove ht1c 5)) #f)
   
   (void))
+
+;; ----------------------------------------
+;; `prop:impersonator-of`
+
+(let ()
+  (define-values (struct:s-a make-s-a s-a? s-a-ref s-a-set!)
+    (make-struct-type 's-a #f 2 0 #f (list (cons prop:equal+hash
+                                                 ;; Equality compares only the first field
+                                                 (list
+                                                  (lambda (a b eql?)
+                                                    (eql? (|#%app| s-a-ref a 0)
+                                                          (|#%app| s-a-ref b 0)))
+                                                  (lambda (a hc)
+                                                    (hc (|#%app| s-a-ref a 0)))
+                                                  (lambda (a hc)
+                                                    (hc (|#%app| s-a-ref a 0)))))
+                                           (cons prop:impersonator-of
+                                                 ;; Second field contains impersonated record
+                                                 (lambda (a)
+                                                   (|#%app| s-a-ref a 1))))))
+
+  (define a1 (make-s-a 1 #f))
+  (define a1i (make-s-a #f a1))
+  
+  (check (equal? a1 (make-s-a 1 #f)) #t)
+  (check (equal? a1 (make-s-a 3 #f)) #f)
+
+  (check (equal? a1 a1i) #t)
+  (check (equal? a1i a1) #t)
+  (check (impersonator-of? a1i a1) #t)
+  (check (impersonator-of? a1 a1i) #f)
+
+  (check (chaperone-of? a1i a1) #f)
+  (check (chaperone-of? a1 a1i) #f)
+
+  (void))
+
+
+  

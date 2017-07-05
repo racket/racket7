@@ -145,6 +145,7 @@
           make-impersonator-property
           impersonator-property-accessor-procedure?
           impersonator-ephemeron
+          prop:impersonator-of
 
           impersonate-procedure
           chaperone-procedure
@@ -589,7 +590,7 @@
   (include "core/symbol.ss")
   (include "core/struct.ss")
   (include "core/prefab.ss")
-  (include "core/chaperone.ss")
+  (include "core/impersonator.ss")
   (include "core/equal.ss")
   (include "core/number.ss")
   (include "core/procedure.ss")

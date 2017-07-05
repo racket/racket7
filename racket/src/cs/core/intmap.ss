@@ -359,7 +359,8 @@
 
 ;; equality
 (define (intmap=? a b eql?)
-  ($intmap=? (intmap-eqtype a) (intmap-root a) (intmap-root b) eql?))
+  (and (eq? (intmap-eqtype a) (intmap-eqtype b))
+       ($intmap=? (intmap-eqtype a) (intmap-root a) (intmap-root b) eql?)))
 
 (define ($intmap=? et a b eql?)
   (cond
@@ -413,12 +414,14 @@
 
 (define ignored/intmap
   (begin
+    ;; Go through generic `hash` versions to support `a`
+    ;; and `b` as impersonated hash tables
     (record-type-equal-procedure (record-type-descriptor intmap)
                                  (lambda (a b eql?)
-                                   (intmap=? a b eql?)))
+                                   (hash=? a b eql?)))
     (record-type-hash-procedure (record-type-descriptor intmap)
                                 (lambda (a hash)
-                                  (intmap-hash-code a hash)))))
+                                  (hash-hash-code a hash)))))
 
 ;; subset
 (define (intmap-keys-subset? a b)

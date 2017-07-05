@@ -190,7 +190,7 @@ CORE_SRCS = core/check.ss \
             core/struct.ss \
             core/prefab.ss \
             core/procedure.ss \
-            core/chaperone.ss \
+            core/impersonator.ss \
             core/equal.ss \
             core/object-name.ss \
             core/arity.ss \

@@ -1,13 +1,14 @@
 
 ;; Re-implement `equal?` to support impersonators and chaperones
 
-(define (do-equal? orig-a orig-b stop-at? eql?)
+(define (do-equal? orig-a orig-b mode eql?)
   (let equal? ([orig-a orig-a] [orig-b orig-b] [ctx #f])
     (let loop ([a orig-a] [b orig-b])
-      (or (eq? a b)
+      (or (eqv? a b)
           (cond
            [(and (hash-impersonator? a)
-                 (hash-impersonator? b))
+                 (hash-impersonator? b)
+                 (not (eq? mode 'chaperone-of?)))
             ;; For immutable hashes, it's ok for the two objects to not be eq,
             ;; as long as the interpositions are the same and the underlying
             ;; values are `{impersonator,chaperone}-of?`:
@@ -22,16 +23,31 @@
                       (hash-chaperone-procs b))
                  (loop (impersonator-next a)
                        (impersonator-next b)))]
-           [(props-impersonator? b)
+           [(and (props-impersonator? b)
+                 (not (eq? mode 'chaperone-of?)))
             (loop a (impersonator-next b))]
            [(props-chaperone? b)
             (loop a (impersonator-next b))]
-           [(impersonator? a)
+           [(and (impersonator? a)
+                 (or (not (eq? mode 'chaperone-of?))
+                     (chaperone? a)))
             (loop (impersonator-next a) b)]
-           [(stop-at? b)
-            #f]
            [(impersonator? b)
-            (loop a (impersonator-next b))]
+            (cond
+             [(eq? mode 'impersonator-of?)
+              ;; stop here, unless `prop:impersonator-of` is relevant
+              (let ([a2 (extract-impersonator-of mode a)])
+                (cond
+                 [a2 (or (check-union-find ctx a b)
+                         (let ([ctx (deeper-context ctx)])
+                           (equal? a2 b ctx)))]
+                 [else #f]))]
+             [(and (eq? mode 'chaperone-of?)
+                   (chaperone? b))
+              ;; `a` does not include `b`, so give up
+              #f]
+             [else
+              (loop a (impersonator-next b))])]
            [(#%vector? a)
             (and (#%vector? b)
                  (let ([len (#%vector-length a)])
@@ -67,21 +83,36 @@
                            (equal? (unbox orig-a) (unbox orig-b) ctx)))))]
            [(record? a)
             (and (record? b)
-                 (let ([rec-equal? (record-equal-procedure a b)])
-                   (and rec-equal?
-                        (or (check-union-find ctx a b)
-                            (if eql?
-                                (rec-equal? orig-a orig-b eql?)
-                                (let ([ctx (deeper-context ctx)])
-                                  (rec-equal? orig-a orig-b
-                                              (lambda (a b)
-                                                (equal? a b ctx)))))))))]
+                 ;; Check for for `prop:impersonator-of`
+                 (let ([a2 (and (not (eq? mode 'chaperone-of?))
+                                (extract-impersonator-of mode a))]
+                       [b2 (and (eq? mode 'equal?)
+                                (extract-impersonator-of mode b))])
+                   (cond
+                    [(or a2 b2)
+                     ;; `prop:impersonator-of` takes precedence over
+                     ;; other forms of checking
+                     (or (check-union-find ctx a b)
+                         (let ([ctx (deeper-context ctx)])
+                           (equal? (or a a2) (or b b2) ctx)))]
+                    [else
+                     ;; No `prop:impersonator-of`, so check for
+                     ;; `prop:equal+hash` or transparency
+                     (let ([rec-equal? (record-equal-procedure a b)])
+                       (and rec-equal?
+                            (or (check-union-find ctx a b)
+                                (if eql?
+                                    (rec-equal? orig-a orig-b eql?)
+                                    (let ([ctx (deeper-context ctx)])
+                                      (rec-equal? orig-a orig-b
+                                                  (lambda (a b)
+                                                    (equal? a b ctx))))))))])))]
            [else
             (#%equal? a b)])))))
 
-(define (equal? a b) (do-equal? a b (lambda (x) #f) #f))
-(define (impersonator-of? a b) (do-equal? a b impersonator? #f))
-(define (chaperone-of? a b) (do-equal? a b chaperone? #f))
+(define (equal? a b) (do-equal? a b 'equal? #f))
+(define (impersonator-of? a b) (do-equal? a b 'impersonator-of? #f))
+(define (chaperone-of? a b) (do-equal? a b 'chaperone-of? #f))
 
 (define/who (equal?/recur a b eql?)
   (check who (procedure-arity-includes/c 2) eql?)

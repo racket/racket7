@@ -131,19 +131,23 @@
   (fxzero? (hamt-count h)))
 
 (define (hamt=? a b eql?)
-  (node=? a b eql? 0))
+  (and (eq? (hnode-eqtype a)
+            (hnode-eqtype b))
+       (node=? a b eql? 0)))
 
 (define (hamt-hash-code a hash)
   (node-hash-code a hash 0))
 
 (define ignored/hamt
   (begin
+    ;; Go through generic `hash` versions to support `a`
+    ;; and `b` as impersonated hash tables
     (record-type-equal-procedure (record-type-descriptor bnode)
                                  (lambda (a b eql?)
-                                   (hamt=? a b eql?)))
+                                   (hash=? a b eql?)))
     (record-type-hash-procedure (record-type-descriptor bnode)
                                 (lambda (a hash)
-                                  (hamt-hash-code a hash)))))
+                                  (hash-hash-code a hash)))))
 
 (define (hamt-keys-subset? a b)
   (or (hamt-empty? a)
