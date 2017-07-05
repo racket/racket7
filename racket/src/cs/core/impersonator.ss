@@ -49,6 +49,12 @@
               new-r)]
            [else
             (loop (impersonator-next v))]))]
+       [(and (struct-undefined-chaperone? v)
+             rtd)
+        (let ([r (loop (impersonator-next v))])
+          (when (eq? r unsafe-undefined)
+            (raise-unsafe-undefined 'struct-ref "undefined" "use" acc (impersonator-val v) (cdr key)))
+          r)]
        [(impersonator? v)
         (loop (impersonator-next v))]
        [else (|#%app| acc v)]))]
@@ -87,6 +93,12 @@
                   (loop (impersonator-next v) new-a)]))]
              [else
               (loop (impersonator-next v) a)]))]
+         [(struct-undefined-chaperone? v)
+          (when (eq? (unsafe-struct*-ref (impersonator-val v) pos) unsafe-undefined)
+            (unless (eq? (continuation-mark-set-first #f prop:chaperone-unsafe-undefined)
+                         unsafe-undefined)
+              (raise-unsafe-undefined 'struct-set! "assignment disallowed" "assign" set (impersonator-val v) pos)))
+          (loop (impersonator-next v) a)]
          [(impersonator? v)
           (loop (impersonator-next v) a)]
          [else (set v a)])))]
@@ -348,6 +360,57 @@
         (loop (cddr args))]
        [else
         (loop (cddr args))])))
+
+;; ----------------------------------------
+
+(define-record struct-undefined-chaperone chaperone ())
+(define-record procedure-struct-undefined-chaperone chaperone ())
+
+(define-values (prop:chaperone-unsafe-undefined chaperone-unsafe-undefined? chaperone-unsafe-undefined-ref)
+  (make-struct-type-property 'chaperone-unsafe-undefined
+                             (lambda (v info)
+                               (check 'guard-for-prop:chaperone-unsafe-undefined
+                                      (lambda (v) (and (list? v) (andmap symbol? v)))
+                                      :contract "(listof symbol?)"
+                                      v)
+                               v)))
+
+(define (chaperone-struct-unsafe-undefined v)
+  (cond
+   [(not (record? v))
+    v]
+   [else
+    ((if (procedure? v)
+         make-procedure-struct-undefined-chaperone
+         make-struct-undefined-chaperone)
+     (strip-impersonator v)
+     v
+     (if (impersonator? v)
+         (impersonator-props v)
+         empty-hasheq))]))
+
+(define (raise-unsafe-undefined who short-msg what orig-proc v pos)
+  (let* ([names (if (chaperone-unsafe-undefined? v)
+                    (chaperone-unsafe-undefined-ref v)
+                    '())]
+         [len (length names)])
+  (cond
+   [(< pos len)
+    (let ([n (list-ref names (- len pos 1))])
+      (raise
+       (|#%app|
+        exn:fail:contract:variable
+        (format "~a: ~a;\n cannot ~a field before initialization"
+                n short-msg what)
+        (current-continuation-marks)
+        n)))]
+   [else
+    (raise
+     (|#%app|
+      exn:fail:contract
+      (format "~a: ~a;\n cannot ~as field before initialization"
+              (object-name orig-proc) short-msg what)
+      (current-continuation-marks)))])))
 
 ;; ----------------------------------------
 

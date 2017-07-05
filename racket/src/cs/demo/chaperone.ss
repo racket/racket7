@@ -8,6 +8,17 @@
        (unless (equal? v expect-v)
          (error 'check (format "failed: ~s => ~s" 'got v))))]))
 
+(define-syntax check-error
+  (syntax-rules ()
+    [(_ expr)
+     (check (call-with-current-continuation
+             (lambda (esc)
+               (with-continuation-mark
+                exception-handler-key
+                (lambda (exn) (|#%app| esc 'expected-error))
+                expr)))
+            'expected-error)]))
+
 ;; ----------------------------------------
 
 (define v1 (vector 1 2 3))
@@ -404,6 +415,44 @@
   (check (chaperone-of? a1 a1i) #f)
 
   (void))
-
-
   
+;; ----------------------------------------
+;; `chaperone-struct-unsafe-undefined`
+
+(let ()
+  (define-values (struct:s-a make-s-a s-a? s-a-ref s-a-set!)
+    (make-struct-type 's-a #f 2 0 #f))
+  (define s-a-x (make-struct-field-accessor s-a-ref 0 'x))
+  (define set-s-a-x! (make-struct-field-mutator s-a-set! 0 'x))
+  (define s-a-y (make-struct-field-accessor s-a-ref 1 'y))
+  (define set-s-a-y! (make-struct-field-mutator s-a-set! 1 'y))
+
+  (define a1 (make-s-a 1 unsafe-undefined))
+  (define a1c (chaperone-struct-unsafe-undefined a1))
+
+  (check unsafe-undefined (|#%app| s-a-ref a1 1))
+  (check 1 (|#%app| s-a-ref a1c 0))
+  (check 1 (s-a-x a1c))
+  (check-error (|#%app| s-a-ref a1c 1))
+  (check-error (s-a-y a1c))
+  
+  (void))
+
+(let ()
+  (define-values (struct:s-a make-s-a s-a? s-a-ref s-a-set!)
+    (make-struct-type 's-a #f 2 0 #f (list (cons
+                                            prop:chaperone-unsafe-undefined
+                                            '(y x)))))
+  (define s-a-x (make-struct-field-accessor s-a-ref 0 'x))
+  (define set-s-a-x! (make-struct-field-mutator s-a-set! 0 'x))
+  (define s-a-y (make-struct-field-accessor s-a-ref 1 'y))
+  (define set-s-a-y! (make-struct-field-mutator s-a-set! 1 'y))
+
+  (define a1 (|#%app| make-s-a 1 unsafe-undefined))
+
+  (check 1 (|#%app| s-a-ref a1 0))
+  (check 1 (s-a-x a1))
+  (check-error (|#%app| s-a-ref a1 1))
+  (check-error (s-a-y a1))
+  
+  (void))

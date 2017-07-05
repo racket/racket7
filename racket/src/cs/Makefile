@@ -85,9 +85,14 @@ schemify.so: schemify.sls compiled/schemify.scm $(SCHEMIFY_DEPS)
 compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
 	$(CONVERT) --skip-export compiled/schemify.rktl compiled/schemify.scm
 
+# Ignoring functions from `#%read` works beause they won't appear in
+# the simplified expansion, and declaring "collect.rkt" pure works
+# around a limitation of the flattener:
+IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
+
 compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
 	$(RACKET) -N raco -l- raco make ../../../pkgs/expander/bootstrap-run.rkt
-	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t schemify/main.rkt -c compiled/cache-src -k ../.. ++knot read - -s -x -o compiled/schemify.rktl
+	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t schemify/main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/schemify.rktl
 
 
 known-primitive.so: known-primitive.sls

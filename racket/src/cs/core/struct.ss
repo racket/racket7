@@ -692,30 +692,39 @@
 
 ;; Called directly from a schemified declaration that has a guard:
 (define (struct-type-constructor-add-guards ctr rtd name)
-  (let ([guards (struct-type-guards rtd)])
-    (if (null? guards)
+  (let ([guards (struct-type-guards rtd)]
+        [chaparone-undefined? (chaperone-unsafe-undefined? rtd)])
+    (if (and (null? guards)
+             (not chaparone-undefined?))
         ctr
         (procedure-maybe-rename
          (procedure-reduce-arity
-          (let ([name (record-type-name rtd)])
-            (lambda args
-              (let loop ([guards guards] [args args])
-                (cond
-                 [(null? guards)
-                  (apply ctr args)]
-                 [else
-                  (let ([guard (caar guards)]
-                        [fields-count (cdar guards)])
-                    (call-with-values
-                     (lambda ()
-                       (apply guard (append-n args fields-count (list name))))
-                     (lambda results
-                       (unless (= (length results) fields-count)
-                         (raise-result-arity-error "calling guard procedure" fields-count results))
-                       (loop (cdr guards)
-                             (if (= fields-count (length args))
-                                 results
-                                 (append results (list-tail args fields-count)))))))]))))
+          (let ([base-ctr
+                 (if (null? guards)
+                     ctr
+                     (let ([name (record-type-name rtd)])
+                       (lambda args
+                         (let loop ([guards guards] [args args])
+                           (cond
+                            [(null? guards)
+                             (apply ctr args)]
+                            [else
+                             (let ([guard (caar guards)]
+                                   [fields-count (cdar guards)])
+                               (call-with-values
+                                   (lambda ()
+                                     (apply guard (append-n args fields-count (list name))))
+                                 (lambda results
+                                   (unless (= (length results) fields-count)
+                                     (raise-result-arity-error "calling guard procedure" fields-count results))
+                                   (loop (cdr guards)
+                                         (if (= fields-count (length args))
+                                             results
+                                             (append results (list-tail args fields-count)))))))])))))])
+            (if chaparone-undefined?
+                (lambda args
+                  (chaperone-struct-unsafe-undefined (apply base-ctr args)))
+                base-ctr))
           (- (struct-type-field-count rtd)
              (struct-type-auto-field-count rtd)))
          (or name (object-name ctr))))))

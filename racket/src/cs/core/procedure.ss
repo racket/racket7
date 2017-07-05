@@ -591,7 +591,8 @@
     (register-procedure-impersonator-struct-type! (record-type-descriptor procedure*-chaperone))
     (register-procedure-impersonator-struct-type! (record-type-descriptor procedure*-impersonator))
     (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-chaperone))
-    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-impersonator)))
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-impersonator))
+    (register-procedure-impersonator-struct-type! (record-type-descriptor procedure-struct-undefined-chaperone)))
 
   (let ([register-unsafe-procedure-impersonator-struct-type!
          (lambda (rtd)

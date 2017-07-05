@@ -49,6 +49,13 @@
                      [`(,_ 'prefab) '()]
                      [`,_ #f])]
                   [parent-sti (and u-parent (hash-ref-either knowns imports u-parent))])
+              (define (includes-property? name)
+                (and (pair? rest)
+                     (match (car rest)
+                       [`(list (cons ,props ,vals) ...)
+                        (for/or ([prop (in-list props)])
+                          (eq? (unwrap prop) name))]
+                       [`,_ #f])))
               (and prefab-imms
                    (struct-type-info name
                                      parent
@@ -56,18 +63,13 @@
                                      (+ fields (if u-parent
                                                    (known-struct-type-field-count parent-sti)
                                                    0))
-                                     ;; no guard => pure constructor
+                                     ;; no guard & no prop:chaperone-unsafe-undefined => pure constructor
                                      (and (or (not u-parent)
                                               (known-struct-type-pure-constructor? parent-sti))
                                           (or ((length rest) . < . 5)
-                                              (not (unwrap (list-ref rest 4)))))
-                                     ;; look for `prop:authentic`
-                                     (and (pair? rest)
-                                          (match (car rest)
-                                            [`(list (cons ,props ,vals) ...)
-                                             (for/or ([prop (in-list props)])
-                                               (eq? (unwrap prop) 'prop:authentic))]
-                                            [`,_ #f]))
+                                              (not (unwrap (list-ref rest 4))))
+                                          (not (includes-property? 'prop:chaperone-unsafe-undefined)))
+                                     (includes-property? 'prop:authentic)
                                      (if (eq? prefab-imms 'non-prefab)
                                          #f
                                          prefab-imms)

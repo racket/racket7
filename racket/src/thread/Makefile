@@ -2,9 +2,10 @@
 RACKET = ../../bin/racket
 RACO = ../../bin/raco
 
-# Ignoring functions from `#%read` works beause they won't
-# appear in the simplified expansion:
-IGNORE = ++knot read -
+# Ignoring functions from `#%read` works beause they won't appear in
+# the simplified expansion, and declaring "collect.rkt" pure works
+# around a limitation of the flattener:
+IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
 
 thread-src:
 	$(RACO) make main.rkt

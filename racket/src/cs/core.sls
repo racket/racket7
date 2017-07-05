@@ -203,6 +203,8 @@
           inspector-superior?
           impersonate-struct
           chaperone-struct
+          chaperone-struct-unsafe-undefined
+          prop:chaperone-unsafe-undefined
 
           prop:object-name
           object-name

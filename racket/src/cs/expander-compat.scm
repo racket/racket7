@@ -3,11 +3,6 @@
 (define-values (prop:arity-string arity-string? arity-string-ref)
   (make-struct-type-property 'arity-string))
 
-(define-values (prop:chaperone-unsafe-undefined chaperone-unsafe-undefined? chaperone-unsafe-undefined-ref)
-  (make-struct-type-property 'chaperone-unsafe-undefined))
-
-(define (chaperone-struct-unsafe-undefined v) v)
-
 (define (chaperone-evt v . args) v)
 (define (chaperone-channel v . args) v)
 (define (impersonate-channel v . args) v)
@@ -424,9 +419,6 @@
    datum-intern-literal
    current-load-extension
    string->number
-
-   prop:chaperone-unsafe-undefined
-   chaperone-struct-unsafe-undefined
 
    reset-future-logs-for-tracing!
    mark-future-trace-end!
