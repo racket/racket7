@@ -455,6 +455,7 @@ extern Scheme_Secondary_Hash_Proc *scheme_type_hash2s;
 
 void scheme_init_port_config(void);
 void scheme_init_port_fun_config(void);
+void scheme_init_resolver_config(void);
 Scheme_Config *scheme_init_error_escape_proc(Scheme_Config *c);
 void scheme_init_error_config(void);
 #ifndef NO_SCHEME_EXNS
@@ -2548,8 +2549,6 @@ XFORM_NONGCING int scheme_strncmp(const char *a, const char *b, int len);
 
 #define _scheme_make_char(ch) scheme_make_character(ch)
 
-Scheme_Object *scheme_default_eval_handler(int, Scheme_Object *[]);
-Scheme_Object *scheme_default_compile_handler(int, Scheme_Object *[]);
 Scheme_Object *scheme_default_print_handler(int, Scheme_Object *[]);
 Scheme_Object *scheme_default_prompt_read_handler(int, Scheme_Object *[]);
 Scheme_Object *scheme_default_read_input_port_handler(int argc, Scheme_Object *[]);
@@ -3424,8 +3423,6 @@ int scheme_is_regular_file(char *filename);
 void scheme_do_format(const char *procname, Scheme_Object *port,
 		      const mzchar *format, int flen,
 		      int fpos, int offset, int argc, Scheme_Object **argv);
-
-Scheme_Object *scheme_load_with_clrd(int argc, Scheme_Object *argv[], char *who, int handler_param);
 
 Scheme_Object *scheme_default_load_extension(int argc, Scheme_Object **argv);
 

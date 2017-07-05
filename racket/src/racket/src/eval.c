@@ -208,8 +208,6 @@ READ_ONLY static Scheme_Object *zero_rands_ptr; /* &zero_rands_ptr is dummy rand
 
 /* locals */
 static Scheme_Object *enable_break(int, Scheme_Object *[]);
-static Scheme_Object *current_eval(int argc, Scheme_Object *[]);
-static Scheme_Object *current_compile(int argc, Scheme_Object *[]);
 
 static Scheme_Object *allow_set_undefined(int argc, Scheme_Object **argv);
 static Scheme_Object *compile_module_constants(int argc, Scheme_Object **argv);
@@ -260,8 +258,6 @@ scheme_init_eval (Scheme_Startup_Env *env)
 
   ADD_PRIM_W_ARITY("break-enabled",                           enable_break,                          0, 1, env);
 
-  ADD_PARAMETER("current-eval",                      current_eval,             MZCONFIG_EVAL_HANDLER,          env);
-  ADD_PARAMETER("current-compile",                   current_compile,          MZCONFIG_COMPILE_HANDLER,       env);
   ADD_PARAMETER("compile-allow-set!-undefined",      allow_set_undefined,      MZCONFIG_ALLOW_SET_UNDEFINED,   env);
   ADD_PARAMETER("compile-enforce-module-constants",  compile_module_constants, MZCONFIG_COMPILE_MODULE_CONSTS, env);
   ADD_PARAMETER("eval-jit-enabled",                  use_jit,                  MZCONFIG_USE_JIT,               env);
@@ -3555,38 +3551,6 @@ Scheme_Object *scheme_tail_eval_expr(Scheme_Object *obj)
 }
 
 /* local functions */
-
-Scheme_Object *
-scheme_default_eval_handler(int argc, Scheme_Object **argv)
-{
-  scheme_signal_error("default eval handler should be replaced");
-  return scheme_void;
-}
-
-Scheme_Object *
-scheme_default_compile_handler(int argc, Scheme_Object **argv)
-{
-  scheme_signal_error("default compile handler should be replaced");
-  return scheme_void;
-}
-
-static Scheme_Object *
-current_eval(int argc, Scheme_Object **argv)
-{
-  return scheme_param_config("current-eval", 
-			     scheme_make_integer(MZCONFIG_EVAL_HANDLER),
-			     argc, argv,
-			     1, NULL, NULL, 0);
-}
-
-static Scheme_Object *
-current_compile(int argc, Scheme_Object **argv)
-{
-  return scheme_param_config("current-compile", 
-			     scheme_make_integer(MZCONFIG_COMPILE_HANDLER),
-			     argc, argv,
-			     2, NULL, NULL, 0);
-}
 
 static Scheme_Object *read_syntax(Scheme_Object *port, Scheme_Object *src)
 {

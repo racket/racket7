@@ -149,6 +149,8 @@ Scheme_Env *scheme_restart_instance()
 
   boot_module_resolver();
 
+  scheme_init_resolver_config();
+
   return env;
 }
 
@@ -518,6 +520,8 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 
  
   boot_module_resolver();
+
+  scheme_init_resolver_config();
 
   scheme_starting_up = 0;
 

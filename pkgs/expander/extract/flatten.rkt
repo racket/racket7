@@ -26,7 +26,7 @@
                           #:linklets linklets
                           #:needed-linklets-in-order needed-linklets-in-order
                           #:instance-knot-ties instance-knot-ties))
-  
+
   (for ([var (in-hash-keys variable-names)]
         #:when (symbol? (link-name (variable-link var))))
     (error 'flatten "found a dependency on a non-primitive: ~s from ~s"

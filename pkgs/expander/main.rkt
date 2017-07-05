@@ -1,11 +1,13 @@
 #lang racket/base
-(require racket/private/load
-         "common/set.rkt"
+(require "common/set.rkt"
          "common/module-path.rkt"
          "namespace/namespace.rkt"
          "eval/main.rkt"
          "eval/dynamic-require.rkt"
          "eval/reflect.rkt"
+         "eval/load.rkt"
+         "eval/collection.rkt"
+         "eval/parameter.rkt"
          "read/api.rkt"
          "read/primitive-parameter.rkt"
          "namespace/api.rkt"
@@ -39,6 +41,26 @@
          compile
          eval
          read
+
+         load
+         load/use-compiled
+         load-extension
+
+         current-eval
+         current-compile
+         current-load
+         current-load/use-compiled
+
+         find-library-collection-paths
+         find-library-collection-links
+         
+         current-library-collection-paths
+         current-library-collection-links
+         use-compiled-file-paths
+         current-compiled-file-roots
+         use-compiled-file-check
+         use-collection-link-paths
+         use-user-specific-search-paths
          
          compile-to-linklets
          

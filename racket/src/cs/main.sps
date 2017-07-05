@@ -14,6 +14,7 @@
                executable-yield-handler
                load-on-demand-enabled
                eval
+               load
                dynamic-require
                namespace-require
                version
@@ -25,6 +26,9 @@
  (unless (pair? (command-line-arguments))
    (error 'racket "expected a `self` executable path to start"))
  (set-exec-file! (path->complete-path (car (command-line-arguments))))
+
+ (|#%app| use-compiled-file-paths
+  (list (string->path (string-append "compiled/" (symbol->string (machine-type))))))
 
  (define (see saw . args)
    (let loop ([saw saw] [args args])
@@ -146,6 +150,14 @@
                     loads))
              (no-init! saw)
              (flags-loop rest-args (see saw 'non-config 'lib)))]
+          [("-f" "--load")
+           (let-values ([(file-name rest-args) (next-arg "file name" arg within-arg args)])
+             (set! loads
+                   (cons
+                    (lambda ()
+                      (load file-name))
+                    loads))
+             (flags-loop rest-args (see saw 'non-config)))]
           [("-i" "--repl") 
            (set! repl? #t)
            (set! version? #t)

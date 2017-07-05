@@ -104,9 +104,6 @@
 
 (define (reparameterize . args) (void))
 
-(define current-eval
-  (make-parameter (lambda args (error "eval not ready"))))
-
 (define executable-yield-handler
   (make-parameter void (lambda (p)
                          (unless (and (procedure? p)
@@ -128,31 +125,7 @@
 (define current-command-line-arguments
   (make-parameter '#()))
 
-(define current-library-collection-paths
-  (make-parameter null))
-(define current-library-collection-links
-  (make-parameter null))
-(define use-collection-link-paths
-  (make-parameter null))
-(define use-user-specific-search-paths
-  (make-parameter #t))
-(define use-compiled-file-paths
-  (make-parameter (list (string->path (string-append "compiled/" (symbol->string (machine-type)))))))
-(define use-compiled-file-check
-  (make-parameter 'modify-seconds
-                  (lambda (v)
-                    (unless (or (eq? v 'exists)
-                                (eq? v 'modify-seconds))
-                      (raise-argument-error 'use-compiled-file-check
-                                            "(or/c 'modify-seconds 'exists)"
-                                            v))
-                    v)))
-(define current-compiled-file-roots
-  (make-parameter '(same)))
 (define current-write-relative-directory
-  (make-parameter #f))
-
-(define current-load/use-compiled
   (make-parameter #f))
 
 (define current-code-inspector
@@ -180,10 +153,6 @@
   (make-parameter
    (lambda () (|#%app| current-input-port))))
 
-(define current-compile
-  (make-parameter 'current-compile))
-(define current-load
-  (make-parameter 'current-load))
 (define load-on-demand-enabled
   (make-parameter #t))
 
@@ -193,10 +162,6 @@
   (make-parameter #f))
 (define compile-allow-set!-undefined
   (make-parameter #f))
-
-(define (load s) (|#%app| (|#%app| current-load) s #f))
-
-(define (load-extension f) (error "no load-extension"))
 
 (define (cache-configuration id proc) (proc))
 
@@ -420,23 +385,12 @@
    environment-variables?
 
    reparameterize
-   current-eval
    read-decimal-as-inexact
    read-accept-bar-quote
 
    read-case-sensitive
 
-   current-library-collection-paths
-   current-library-collection-links
-   current-command-line-arguments
-   use-collection-link-paths
-   use-user-specific-search-paths
-   use-compiled-file-paths
-   use-compiled-file-check
-   current-compiled-file-roots
    current-write-relative-directory
-
-   current-load/use-compiled
 
    current-code-inspector
    current-print
@@ -445,16 +399,12 @@
    error-print-source-location
    current-prompt-read
 
-   current-compile
-   current-load
-   load
    load-on-demand-enabled
 
    compile-enforce-module-constants
    compile-context-preservation-enabled
    compile-allow-set!-undefined
 
-   load-extension
    cache-configuration
 
    open-input-output-file

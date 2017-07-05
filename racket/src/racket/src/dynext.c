@@ -85,7 +85,6 @@ static char *dlerror(void) {
 # include "schemex.h"
 #endif
 
-static Scheme_Object *load_extension(int argc, Scheme_Object **argv);
 static Scheme_Object *current_load_extension(int argc, Scheme_Object *argv[]);
 
 #ifdef LINK_EXTENSIONS_BY_TABLE
@@ -134,7 +133,6 @@ void scheme_init_dynamic_extension(Scheme_Startup_Env *env)
 #endif
   }
 
-  ADD_PRIM_W_ARITY2("load-extension", load_extension, 1, 1, 0, -1, env);
   ADD_PARAMETER("current-load-extension", current_load_extension, MZCONFIG_LOAD_EXTENSION_HANDLER, env);
 }
 
@@ -496,11 +494,6 @@ void scheme_register_extension_global(void *ptr, intptr_t size)
   GC_add_roots((char *)ptr, (char *)(((char *)ptr) + size + 1));
 }
 
-static Scheme_Object *load_extension(int argc, Scheme_Object **argv)
-{
-  return scheme_load_with_clrd(argc, argv, "load-extension", MZCONFIG_LOAD_EXTENSION_HANDLER);
-}
-
 Scheme_Object *scheme_default_load_extension(int argc, Scheme_Object **argv)
 {
   char *filename;
@@ -522,10 +515,10 @@ Scheme_Object *scheme_default_load_extension(int argc, Scheme_Object **argv)
 
 Scheme_Object *scheme_load_extension(const char *filename, Scheme_Env *env)
 {
-  Scheme_Object *a[1];
-
+  Scheme_Object *load_ext_proc, *a[1];
+  load_ext_proc = scheme_get_startup_export("load-extension");
   a[0] = scheme_make_byte_string(filename);
-  return load_extension(1, a);
+  return scheme_apply_multi(load_ext_proc, 1, a);
 }
 
 void scheme_free_dynamic_extensions()

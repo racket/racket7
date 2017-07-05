@@ -1,9 +1,10 @@
 #lang racket/base
 (require '#%paramz
-         racket/private/collect
+         "../eval/collection.rkt"
          "../syntax/api.rkt"
          "../eval/main.rkt"
          "../eval/dynamic-require.rkt"
+         "../eval/parameter.rkt"
          "../host/linklet.rkt"
          "../namespace/namespace.rkt"
          "../namespace/api.rkt"

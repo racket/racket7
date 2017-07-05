@@ -2,6 +2,9 @@
 (require "../eval/main.rkt"
          "../eval/dynamic-require.rkt"
          "../eval/reflect.rkt"
+         "../eval/load.rkt"
+         "../eval/parameter.rkt"
+         "../eval/collection.rkt"
          (prefix-in wrapper: "../eval/api.rkt")
          "../namespace/namespace.rkt"
          "../namespace/api.rkt"
@@ -23,6 +26,27 @@
           'expand-syntax-to-top-form wrapper:expand-syntax-to-top-form
           'dynamic-require dynamic-require
           'dynamic-require-for-syntax dynamic-require-for-syntax
+          'load load
+          'load-extension load-extension
+          'load/use-compiled load/use-compiled
+
+          'current-eval current-eval
+          'current-compile current-compile
+          'current-load current-load
+          'current-load/use-compiled current-load/use-compiled
+
+          'collection-path collection-path
+          'collection-file-path collection-file-path
+          'find-library-collection-paths find-library-collection-paths
+          'find-library-collection-links find-library-collection-links
+
+          'current-library-collection-paths current-library-collection-paths
+          'current-library-collection-links current-library-collection-links
+          'use-compiled-file-paths use-compiled-file-paths
+          'current-compiled-file-roots current-compiled-file-roots
+          'use-compiled-file-check use-compiled-file-check
+          'use-collection-link-paths use-collection-link-paths
+          'use-user-specific-search-paths use-user-specific-search-paths
 
           'compiled-expression? compiled-expression?
           'compiled-module-expression? compiled-module-expression?

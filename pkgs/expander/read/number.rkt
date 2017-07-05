@@ -1,13 +1,12 @@
 #lang racket/base
 (require racket/private/check
          racket/extflonum
-         (only-in racket/base
-                  ;; Call the host `string->number` function only
-                  ;; on valid fixnum, bignum, {single-,double-,ext}flonum
-                  ;; representations that contain digits, possibly a
-                  ;; leading sign, possibly a `.`, and possibly an
-                  ;; exponent marker
-                  [string->number host:string->number])
+         ;; Call the host `string->number` function only
+         ;; on valid fixnum, bignum, {single-,double-,ext}flonum
+         ;; representations that contain digits, possibly a
+         ;; leading sign, possibly a `.`, and possibly an
+         ;; exponent marker
+         (prefix-in host: "../host/string-to-number.rkt")
          "parameter.rkt")
 
 (provide string->number)

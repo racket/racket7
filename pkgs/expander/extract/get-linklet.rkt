@@ -18,7 +18,8 @@
                        #:compiled-modules compiled-modules
                        #:seen seen
                        #:linklets linklets
-                       #:linklets-in-order linklets-in-order)
+                       #:linklets-in-order linklets-in-order
+                       #:side-effect-free-modules side-effect-free-modules)
   (let get-linklets! ([lnk lnk] [first? #t])
     (define name (link-name lnk))
     (define phase (link-phase lnk))
@@ -50,7 +51,8 @@
                           (skip-abi-imports (linklet-import-variables linklet))
                           null))
       ;; Extract phase-specific info on side effects:
-      (define side-effects? (and (member phase (hash-ref h 'side-effects '()))
+      (define side-effects? (and (not (hash-ref side-effect-free-modules name #f))
+                                 (member phase (hash-ref h 'side-effects '()))
                                  #t))
       ;; Extract phase-specific mapping of the linklet arguments to modules
       (define uses

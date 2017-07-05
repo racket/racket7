@@ -3,7 +3,8 @@
          (prefix-in direct: "../namespace/api.rkt")
          "../syntax/api.rkt"
          "../namespace/namespace.rkt"
-         "../common/contract.rkt")
+         "../common/contract.rkt"
+         "parameter.rkt")
 
 ;; These wrappers implement the protocol for whether to use
 ;; `namespace-synatx-introduce` on the argument to `eval`, etc.

@@ -94,15 +94,11 @@ static Scheme_Object *sch_print (int, Scheme_Object *[]);
 static Scheme_Object *newline (int, Scheme_Object *[]);
 static Scheme_Object *write_char (int, Scheme_Object *[]);
 static Scheme_Object *write_byte (int, Scheme_Object *[]);
-static Scheme_Object *load (int, Scheme_Object *[]);
-static Scheme_Object *current_load (int, Scheme_Object *[]);
-static Scheme_Object *current_load_use_compiled (int, Scheme_Object *[]);
 static Scheme_Object *current_load_directory(int argc, Scheme_Object *argv[]);
 static Scheme_Object *current_write_directory(int argc, Scheme_Object *argv[]);
 #ifdef LOAD_ON_DEMAND
 static Scheme_Object *load_on_demand_enabled(int argc, Scheme_Object *argv[]);
 #endif
-static Scheme_Object *default_load (int, Scheme_Object *[]);
 static Scheme_Object *flush_output (int, Scheme_Object *[]);
 static Scheme_Object *open_input_char_string (int, Scheme_Object *[]);
 static Scheme_Object *open_input_byte_string (int, Scheme_Object *[]);
@@ -163,6 +159,15 @@ READ_ONLY Scheme_Object *scheme_print_proc;
 SHARED_OK Scheme_Object *initial_compiled_file_paths;
 SHARED_OK Scheme_Object *initial_compiled_file_roots;
 
+SHARED_OK static int compiled_file_check = SCHEME_COMPILED_FILE_CHECK_MODIFY_SECONDS;
+ROSYM static Scheme_Object *initial_compiled_file_check_symbol;
+
+SHARED_OK int scheme_ignore_user_paths;
+void scheme_set_ignore_user_paths(int v) { scheme_ignore_user_paths = v; }
+
+SHARED_OK int scheme_ignore_link_paths;
+void scheme_set_ignore_link_paths(int v) { scheme_ignore_link_paths = v; }
+
 THREAD_LOCAL_DECL(static Scheme_Object *dummy_input_port);
 THREAD_LOCAL_DECL(static Scheme_Object *dummy_output_port);
 
@@ -220,8 +225,6 @@ scheme_init_port_fun(Scheme_Startup_Env *env)
   ADD_PARAMETER("current-input-port",                current_input_port,         MZCONFIG_INPUT_PORT,  env);
   ADD_PARAMETER("current-output-port",               current_output_port,        MZCONFIG_OUTPUT_PORT, env);
   ADD_PARAMETER("current-error-port",                current_error_port,         MZCONFIG_ERROR_PORT,  env); 
-  ADD_PARAMETER("current-load",                      current_load,               MZCONFIG_LOAD_HANDLER,          env);
-  ADD_PARAMETER("current-load/use-compiled",         current_load_use_compiled,  MZCONFIG_LOAD_COMPILED_HANDLER, env);
   ADD_PARAMETER("current-load-relative-directory",   current_load_directory,     MZCONFIG_LOAD_DIRECTORY,        env);
   ADD_PARAMETER("current-write-relative-directory",  current_write_directory,    MZCONFIG_WRITE_DIRECTORY,       env);
   ADD_PARAMETER("global-port-print-handler",         global_port_print_handler,  MZCONFIG_PORT_PRINT_HANDLER,    env);
@@ -255,7 +258,6 @@ scheme_init_port_fun(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY2("call-with-input-file",  call_with_input_file,   2, 3, 0, -1, env);
   ADD_PRIM_W_ARITY2("with-output-to-file",   with_output_to_file,    2, 4, 0, -1, env);
   ADD_PRIM_W_ARITY2("with-input-from-file",  with_input_from_file,   2, 3, 0, -1, env);
-  ADD_PRIM_W_ARITY2("load",                  load,                   1, 1, 0, -1, env);
   ADD_PRIM_W_ARITY2("make-pipe",             sch_pipe,               0, 3, 2,  2, env);
   ADD_PRIM_W_ARITY2("port-next-location",    port_next_location,     1, 1, 3,  3, env);
   ADD_NONCM_PRIM("set-port-next-location!",  set_port_next_location, 4, 4, env);
@@ -341,35 +343,84 @@ scheme_init_port_fun(Scheme_Startup_Env *env)
     = scheme_make_prim_w_arity(sch_default_global_port_print_handler, "default-global-port-print-handler", 2, 3);
 }
 
+void scheme_init_param_symbol()
+{
+  REGISTER_SO(initial_compiled_file_check_symbol);
+  if (compiled_file_check == SCHEME_COMPILED_FILE_CHECK_MODIFY_SECONDS)
+    initial_compiled_file_check_symbol = scheme_intern_symbol("modify-seconds");
+  else
+    initial_compiled_file_check_symbol = scheme_intern_symbol("exists");
+}
 
 void scheme_init_port_fun_config(void)
 {
   scheme_set_root_param(MZCONFIG_LOAD_DIRECTORY, scheme_false);
   scheme_set_root_param(MZCONFIG_WRITE_DIRECTORY, scheme_false);
-  if (initial_compiled_file_paths)
-    scheme_set_root_param(MZCONFIG_USE_COMPILED_KIND, initial_compiled_file_paths);
-  else
-    scheme_set_root_param(MZCONFIG_USE_COMPILED_KIND, scheme_make_pair(scheme_make_path("compiled"), scheme_null));
-  if (initial_compiled_file_roots)
-    scheme_set_root_param(MZCONFIG_USE_COMPILED_ROOTS, initial_compiled_file_roots);
-  else
-    scheme_set_root_param(MZCONFIG_USE_COMPILED_ROOTS, scheme_make_pair(scheme_intern_symbol("same"), scheme_null));
-  scheme_set_root_param(MZCONFIG_USE_USER_PATHS, (scheme_ignore_user_paths ? scheme_false : scheme_true));
-  scheme_set_root_param(MZCONFIG_USE_LINK_PATHS, (scheme_ignore_link_paths ? scheme_false : scheme_true));
-
-  {
-    Scheme_Object *dlh;
-    dlh = scheme_make_prim_w_arity2(default_load, "default-load-handler", 2, 2, 0, -1);
-    scheme_set_root_param(MZCONFIG_LOAD_HANDLER, dlh);
-  }
 
   scheme_set_root_param(MZCONFIG_PORT_PRINT_HANDLER, scheme_default_global_print_handler);
-
+  
   /* Use dummy port: */
   REGISTER_SO(dummy_input_port);
   REGISTER_SO(dummy_output_port);
   dummy_input_port = scheme_make_byte_string_input_port("");
   dummy_output_port = scheme_make_null_output_port(1);
+}
+
+static void set_param(const char *name, Scheme_Object *val)
+{
+  Scheme_Object *param, *a[1];
+  param = scheme_get_startup_export(name);
+  a[0] = val;
+  (void)_scheme_apply_multi(param, 1, a);
+}
+
+static Scheme_Object *get_param(const char *name)
+{
+  Scheme_Object *param;
+  param = scheme_get_startup_export(name);
+  return _scheme_apply(param, 0, NULL);
+}
+
+void scheme_init_resolver_config(void)
+{
+  set_param("use-compiled-file-check", initial_compiled_file_check_symbol);
+  if (initial_compiled_file_paths)
+    set_param("use-compiled-file-paths", initial_compiled_file_paths);
+  else
+    set_param("use-compiled-file-paths", scheme_make_pair(scheme_make_path("compiled"), scheme_null));
+  if (initial_compiled_file_roots)
+    set_param("current-compiled-file-roots", initial_compiled_file_roots);
+  else
+    set_param("current-compiled-file-roots", scheme_make_pair(scheme_intern_symbol("same"), scheme_null));
+  set_param("use-user-specific-search-paths", (scheme_ignore_user_paths ? scheme_false : scheme_true));
+  set_param("use-collection-link-paths", (scheme_ignore_link_paths ? scheme_false : scheme_true));
+}
+
+Scheme_Object *scheme_current_library_collection_paths(int argc, Scheme_Object *argv[])
+{
+  if (argc) {
+    set_param("current-library-collection-paths", argv[0]);
+    return scheme_void;
+  } else
+    return get_param("current-library-collection-paths");
+}
+
+Scheme_Object *scheme_current_library_collection_links(int argc, Scheme_Object *argv[])
+{
+  if (argc) {
+    set_param("current-library-collection-links", argv[0]);
+    return scheme_void;
+  } else
+    return get_param("current-library-collection-links");
+}
+
+Scheme_Object *scheme_compiled_file_roots(int argc, Scheme_Object *argv[])
+{
+  if (argc) {
+    set_param("current-compiled-file-roots", argv[0]);
+    return scheme_void;
+  } else
+    return get_param("current-compiled-file-roots");
 }
 
 void scheme_set_compiled_file_paths(Scheme_Object *list)
@@ -384,6 +435,11 @@ void scheme_set_compiled_file_roots(Scheme_Object *list)
   if (!initial_compiled_file_roots)
     REGISTER_SO(initial_compiled_file_roots);
   initial_compiled_file_roots = list;
+}
+
+void scheme_set_compiled_file_check(int c)
+{
+  compiled_file_check = c;
 }
 
 /*========================================================================*/
@@ -4326,72 +4382,6 @@ static Scheme_Object *filesystem_change_evt_cancel(int argc, Scheme_Object **arg
   return scheme_void;
 }
 
-static Scheme_Object *default_load(int argc, Scheme_Object *argv[])
-{
-  scheme_signal_error("default load handler should have been replaced");
-  return NULL;
-}
-
-Scheme_Object *scheme_load_with_clrd(int argc, Scheme_Object *argv[],
-				     char *who, int handler_param)
-{
-  const char *filename;
-  Scheme_Object *load_dir, *a[2], *filename_path, *v;
-  Scheme_Cont_Frame_Data cframe;
-  Scheme_Config *config;
-
-  if (!SCHEME_PATH_STRINGP(argv[0]))
-    scheme_wrong_contract(who, "path-string?", 0, argc, argv);
-
-  filename = scheme_expand_string_filename(argv[0],
-					   who,
-					   NULL,
-					   SCHEME_GUARD_FILE_READ);
-
-  /* Calculate load directory */
-  load_dir = scheme_get_file_directory(filename);
-
-  filename_path = scheme_make_sized_path((char *)filename, -1, 0);
-
-  config = scheme_extend_config(scheme_current_config(),
-				MZCONFIG_LOAD_DIRECTORY,
-				load_dir);
-
-  scheme_push_continuation_frame(&cframe);
-  scheme_set_cont_mark(scheme_parameterization_key, (Scheme_Object *)config);
-
-  a[0] = filename_path;
-  a[1] = scheme_false;
-  v = _scheme_apply_multi(scheme_get_param(config, handler_param), 2, a);
-
-  scheme_pop_continuation_frame(&cframe);
-
-  return v;
-}
-
-static Scheme_Object *load(int argc, Scheme_Object *argv[])
-{
-  return scheme_load_with_clrd(argc, argv, "load", MZCONFIG_LOAD_HANDLER);
-}
-
-static Scheme_Object *
-current_load(int argc, Scheme_Object *argv[])
-{
-  return scheme_param_config("current-load",
-			     scheme_make_integer(MZCONFIG_LOAD_HANDLER),
-			     argc, argv,
-			     2, NULL, NULL, 0);
-}
-
-static Scheme_Object *
-current_load_use_compiled(int argc, Scheme_Object *argv[])
-{
-  return scheme_param_config("current-load/use-compiled",
-			     scheme_make_integer(MZCONFIG_LOAD_COMPILED_HANDLER),
-			     argc, argv,
-			     2, NULL, NULL, 0);
-}
-
 static Scheme_Object *abs_directory_p(const char *name, Scheme_Object *d)
 {
   if (!SCHEME_FALSEP(d)) {
@@ -4485,7 +4475,7 @@ load_on_demand_enabled(int argc, Scheme_Object *argv[])
 
 Scheme_Object *scheme_load(const char *file)
 {
-  Scheme_Object *p[1];
+  Scheme_Object *p[1], *load_proc;
   mz_jmp_buf newbuf, * volatile savebuf;
   Scheme_Object * volatile val;
 
@@ -4495,8 +4485,8 @@ Scheme_Object *scheme_load(const char *file)
   if (scheme_setjmp(newbuf)) {
     val = NULL;
   } else {
-    val = scheme_apply_multi(scheme_make_prim_w_arity((Scheme_Prim *)load, "internal-load", 0, -1),
-                             1, p);
+    load_proc = scheme_get_startup_export("load");
+    val = scheme_apply_multi(load_proc, 1, p);
   }
   scheme_current_thread->error_buf = savebuf;
 

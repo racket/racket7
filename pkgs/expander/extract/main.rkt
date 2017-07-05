@@ -24,11 +24,17 @@
                  #:print-extracted-to print-extracted-to
                  #:as-c? as-c?
                  #:as-decompiled? as-decompiled?
-                 ;; Table of symbol -> (listof module-path),
+                 ;; Table of symbol -> (listof knot-spec),
                  ;; to redirect a remaining import back to
                  ;; an implementation that is defined in the
-                 ;; flattened code:
-                 #:instance-knot-ties instance-knot-ties)
+                 ;; flattened code; a knot-spec as a module-path
+                 ;; redirect to there, or as 'ignored avoids both
+                 ;; a knot and complaining
+                 #:instance-knot-ties instance-knot-ties
+                 ;; Override linklet compiler's simple inference
+                 ;; of side-effects to remove a module from the
+                 ;; flattened form if it's not otherwise referenced:
+                 #:side-effect-free-modules side-effect-free-modules)
   ;; Located modules:
   (define compiled-modules (make-hash))
 
@@ -63,7 +69,8 @@
                  #:compiled-modules compiled-modules
                  #:seen seen
                  #:linklets linklets
-                 #:linklets-in-order linklets-in-order)
+                 #:linklets-in-order linklets-in-order
+                 #:side-effect-free-modules side-effect-free-modules)
   
   ;; Compute which linklets are actually used as imports
   (needed! start-link 'start

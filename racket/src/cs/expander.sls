@@ -1,10 +1,5 @@
 (library (expander)
-  (export find-library-collection-links
-          current-library-collection-links
-          current-library-collection-paths
-          find-library-collection-paths
-          use-compiled-file-paths
-          current-command-line-arguments
+  (export current-command-line-arguments
           executable-yield-handler
           load-on-demand-enabled
           call-in-main-thread

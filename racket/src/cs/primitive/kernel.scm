@@ -1,4 +1,8 @@
 
+;; This table omits anything that the expander implements itself,
+;; since the expander will export its own variant nistead of the
+;; `kernel-table` variant.
+
 (define kernel-table
   (make-primitive-table
    *
@@ -173,8 +177,6 @@
    cos
    current-code-inspector
    current-command-line-arguments
-   current-compile
-   current-compiled-file-roots
    current-continuation-marks
    current-custodian
    current-directory
@@ -182,7 +184,6 @@
    current-drive
    current-environment-variables
    current-error-port
-   current-eval
    current-evt-pseudo-random-generator
    current-force-delete-permissions
    current-gc-milliseconds
@@ -190,12 +191,8 @@
    current-inexact-milliseconds
    current-input-port
    current-inspector
-   current-library-collection-links
-   current-library-collection-paths
-   current-load
    current-load-extension
    current-load-relative-directory
-   current-load/use-compiled
    current-locale
    current-logger
    current-memory-use
@@ -385,8 +382,6 @@
    list-tail
    list?
    list-pair?
-   load
-   load-extension
    load-on-demand-enabled
    locale-string-encoding
    log
@@ -775,10 +770,6 @@
    truncate
    unbox
    uncaught-exception-handler
-   use-collection-link-paths
-   use-compiled-file-check
-   use-compiled-file-paths
-   use-user-specific-search-paths
    values
    vector
    vector->immutable-vector

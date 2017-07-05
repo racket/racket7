@@ -4,7 +4,9 @@
          racket/runtime-path
          (only-in racket/base
                   [eval host:eval]
-                  [namespace-require host:namespace-require])
+                  [namespace-require host:namespace-require]
+                  [current-library-collection-paths host:current-library-collection-paths]
+                  [current-library-collection-links host:current-library-collection-links])
          "common/set.rkt"
          "main.rkt"
          "namespace/namespace.rkt"
@@ -35,6 +37,7 @@
 (define extract-to-c? #f)
 (define extract-to-decompiled? #f)
 (define instance-knot-ties (make-hasheq))
+(define side-effect-free-modules (make-hash))
 (define quiet-load? #f)
 (define startup-module main.rkt)
 (define submod-name #f)
@@ -88,6 +91,8 @@
                                    (path->complete-path path))
                                l))
                   null)]
+   [("++pure") path "Insist that <path> is a module without side-effects"
+    (hash-set! side-effect-free-modules (simplify-path (path->complete-path path)) #t)]
    #:once-any
    [("-t") file "Load specified file"
     (set! startup-module (path->complete-path file))]
@@ -122,9 +127,13 @@
 
 ;; Redirect module search to another installation:
 (when checkout-directory
-  (current-library-collection-paths (list (build-path checkout-directory "collects")))
-  (current-library-collection-links (list #f
-                                          (build-path checkout-directory "share" "links.rktd"))))
+  (let ([l (list (build-path checkout-directory "collects"))])
+    (current-library-collection-paths l)
+    (host:current-library-collection-paths l))
+  (let ([l (list #f
+                 (build-path checkout-directory "share" "links.rktd"))])
+    (current-library-collection-links l)
+    (host:current-library-collection-links l)))
 
 ;; Replace the load handler to stash compiled modules in the cache
 ;; and/or load them from the cache
@@ -237,7 +246,8 @@
            #:print-extracted-to print-extracted-to
            #:as-c? extract-to-c?
            #:as-decompiled? extract-to-decompiled?
-           #:instance-knot-ties instance-knot-ties))
+           #:instance-knot-ties instance-knot-ties
+           #:side-effect-free-modules side-effect-free-modules))
 
 (when load-file
   (load load-file))
