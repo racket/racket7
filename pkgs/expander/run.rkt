@@ -128,12 +128,13 @@
 ;; Redirect module search to another installation:
 (when checkout-directory
   (let ([l (list (build-path checkout-directory "collects"))])
-    (current-library-collection-paths l)
     (host:current-library-collection-paths l))
   (let ([l (list #f
                  (build-path checkout-directory "share" "links.rktd"))])
-    (current-library-collection-links l)
     (host:current-library-collection-links l)))
+
+(current-library-collection-paths (host:current-library-collection-paths))
+(current-library-collection-links (host:current-library-collection-links))
 
 ;; Replace the load handler to stash compiled modules in the cache
 ;; and/or load them from the cache
