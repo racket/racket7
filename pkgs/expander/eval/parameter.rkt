@@ -114,7 +114,8 @@
                   (lambda (v)
                     (check who (lambda (v) (or (eq? v 'modify-seconds) (eq? v 'exists)))
                            #:contract "(or/c 'modify-seconds 'exists)"
-                           v))))
+                           v)
+                    v)))
 
 (define use-collection-link-paths
   (make-parameter #t (lambda (v) (and v #t))))
