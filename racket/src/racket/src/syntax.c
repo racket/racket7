@@ -427,10 +427,10 @@ static Scheme_Object *syntax_to_datum_inner(Scheme_Object *o)
 
     j = scheme_hash_tree_next(ht, -1);
     while (j != i) {
-      scheme_hash_tree_index(ht, i, &key, &val);
+      scheme_hash_tree_index(ht, j, &key, &val);
       val = syntax_to_datum_inner(val);
       ht2 = scheme_hash_tree_set(ht2, key, val);
-      i = scheme_hash_tree_next(ht, i);
+      j = scheme_hash_tree_next(ht, j);
     }
     
     scheme_hash_tree_index(ht, i, &key, &val);
