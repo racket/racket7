@@ -68,11 +68,10 @@
   (define (compile-to-bytevector s)
     (let-values ([(o get) (open-bytevector-output-port)])
       (compile-to-port (list `(lambda () ,s)) o)
-      (let ([bstr (get)])
-        (cons (bytevector-compress bstr) (bytevector-length bstr)))))
+      (bytevector-compress (get))))
 
-  (define (eval-from-bytevector bv+orig-len)
-    (let ([bv (bytevector-uncompress (car bv+orig-len) (cdr bv+orig-len))])
+  (define (eval-from-bytevector c-bv)
+    (let ([bv (bytevector-uncompress c-bv)])
       ;; HACK: This probably always works for the `lambda` or
       ;; `let`+`lambda` forms that we compile as linklets, but we need a
       ;; better function from the host Scheme:

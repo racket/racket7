@@ -7,7 +7,7 @@ UNSAFE_COMP = # '(optimize-level 3)'
 # Controls whether core is built as unsafe:
 CORE_UNSAFE_COMP = '(optimize-level 3)'
 
-BASE_COMP = '(reset-handler abort) (keyboard-interrupt-handler abort) (record-source-lines-and-columns \#t) (generate-wpo-files \#t)'
+BASE_COMP = '(load "compile-config.ss")'
 COMP = echo $(UNSAFE_COMP) $(BASE_COMP)
 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
