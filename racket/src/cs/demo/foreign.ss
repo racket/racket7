@@ -34,3 +34,38 @@
 (ptr-set! icell _scheme car)
 (check (ptr-ref icell _scheme) car)
 (free-immobile-cell icell)
+
+;; ----------------------------------------
+
+(define sym1 (gensym))
+(define s/done? #f)
+(define done 0)
+
+(define wb (make-weak-box sym1))
+
+(define we/s (make-stubborn-will-executor))
+(will-register we/s sym1 (lambda (s)
+                           (unless (eq? s (weak-box-value wb))
+                             (error 'stubborn-executor-test "box context wrong"))
+                           (set! s/done? (symbol? s))))
+
+(define we (make-will-executor))
+(will-register we sym1 (letrec ([will (lambda (s)
+                                        (when s/done?
+                                          (error 'stubborn-executor-test "done too early"))
+                                        (set! done (add1 done))
+                                        (unless (= done 10)
+                                          (will-register we s will)))])
+                         will))
+
+(set! sym1 #f)
+
+(let loop ()
+  (unless s/done?
+    (collect (collect-maximum-generation))
+    (will-try-execute we)
+    (will-try-execute we/s)
+    (loop)))
+(collect (collect-maximum-generation))
+(unless (not (weak-box-value wb))
+  (error 'stubborn-executor-test "weak box still has a value"))

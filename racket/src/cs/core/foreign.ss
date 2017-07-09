@@ -513,10 +513,6 @@
   ;; FIXME:
   #f)
 
-;; FIXME:
-(define (make-stubborn-will-executor)
-  (make-will-executor))
-
 (define (ffi-lib name . args)
   #f)
 
@@ -632,9 +628,14 @@
 
 ;; ----------------------------------------
 
-;; FIXME:
+;; With finalization through an ordered guardian,
+;; a "late" weak hash table is just a hash table.
 (define (make-late-weak-hasheq)
   (make-weak-hasheq))
+
+;; Same for late weak boxes:
+(define (make-late-weak-box b)
+  (make-weak-box b))
 
 (define malloc
   ;; Recognize common ordering as fast cases, and dispatch to
@@ -779,7 +780,6 @@
   ffi-obj-name
   lookup-errno
   make-array-type
-  make-late-weak-box
   make-sized-byte-string
   make-union-type
   memcpy

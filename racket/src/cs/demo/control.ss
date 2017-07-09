@@ -477,7 +477,7 @@
                 (lambda (remain a b c pre t-post) (list a b c pre t-post post n))
                 (lambda (e)
                   (loop e (add1 n)))))
-           '(1 2 3 10 0 10 11))))
+           '(1 2 3 10 0 10 10))))
 
 ;; ----------------------------------------
 ;; Thread cells (which are really engine cells):

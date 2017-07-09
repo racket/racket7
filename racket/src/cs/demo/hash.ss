@@ -56,6 +56,7 @@
     (set! apple #f)
     (set! banana #f)
     (collect (collect-maximum-generation))
+    (collect (collect-maximum-generation))
     (check (car bp) #!bwp)
     ;; Ensure that `ht` stays live until here
     (check (hash? ht) #t)))
