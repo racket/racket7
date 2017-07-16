@@ -276,6 +276,7 @@
           vector->values
           vector-fill!
           vector->immutable-vector
+          vector->list
 
           impersonate-vector
           impersonate-vector*

@@ -42,30 +42,42 @@
                                          (record-rtd v)))])
                       (and rtd
                            (not (eq? none (struct-property-ref st rtd none))))))]
-            [fail (lambda (v)
-                    (raise-argument-error (string->symbol (string-append
-                                                           (symbol->string name)
-                                                           "-ref"))
-                                          (string-append
-                                           (symbol->string name)
-                                           "?")
-                                          v))])
-       (letrec ([acc (lambda (v)
+            [accessor-name (string->symbol (string-append
+                                            (symbol->string name)
+                                            "-ref"))]
+            [predicate-name (string->symbol
+                             (string-append
+                              (symbol->string name)
+                              "?"))]
+            [default-fail
+              (lambda (v)
+                (raise-argument-error accessor-name
+                                      (symbol->string predicate-name)
+                                      v))]
+            [do-fail (lambda (fail v)
                        (cond
-                        [(and (impersonator? v)
-                              (pred v))
-                         (impersonate-struct-or-property-ref acc #f acc v)]
-                        [else
-                         (let* ([rtd (if (record-type-descriptor? v)
-                                         v
-                                         (and (record? v)
-                                              (record-rtd v)))])
-                           (if rtd
-                               (let ([pv (struct-property-ref st rtd none)])
-                                 (if (eq? pv none)
-                                     (fail v)
-                                     pv))
-                               (fail v)))]))])
+                        [(eq? fail default-fail) (default-fail v)]
+                        [(procedure? fail) (|#%app| fail)]
+                        [else fail]))])
+       (letrec ([acc
+                 (case-lambda
+                  [(v fail)
+                   (cond
+                    [(and (impersonator? v)
+                          (pred v))
+                     (impersonate-struct-or-property-ref acc #f acc v)]
+                    [else
+                     (let* ([rtd (if (record-type-descriptor? v)
+                                     v
+                                     (and (record? v)
+                                          (record-rtd v)))])
+                       (if rtd
+                           (let ([pv (struct-property-ref st rtd none)])
+                             (if (eq? pv none)
+                                 (do-fail fail v)
+                                 pv))
+                           (do-fail fail v)))])]
+                  [(v) (acc v default-fail)])])
          (hashtable-set! property-accessors
                          acc
                          (cons pred can-impersonate?))

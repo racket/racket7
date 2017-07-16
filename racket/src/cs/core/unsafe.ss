@@ -110,8 +110,10 @@
 
 (define (check-not-unsafe-undefined v sym)
   (when (eq? v unsafe-undefined)
-    (raise-arguments-error sym "undefined;\n cannot use before initialization")))
+    (raise-arguments-error sym "undefined;\n cannot use before initialization"))
+  v)
 
 (define (check-not-unsafe-undefined/assign v sym)
   (when (eq? v unsafe-undefined)
-    (raise-arguments-error sym "assignment disallowed;\n cannot assign before initialization")))
+    (raise-arguments-error sym "assignment disallowed;\n cannot assign before initialization"))
+  v)

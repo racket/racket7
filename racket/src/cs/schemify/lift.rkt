@@ -189,7 +189,7 @@
            [(zero? (hash-count lifts)) v]
            [else
             `(letrec ,(extract-lifted-bindings lifts)
-               ,(reannotate v `(lambda ,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts))))]))]
+               ,(reannotate v `(lambda ,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts #hasheq()))))]))]
       [`(case-lambda [,argss . ,bodys] ...)
        ;; Lift each clause separately, then splice results:
        (let ([lams (for/list ([args (in-list argss)]
@@ -481,44 +481,46 @@
   ;; ----------------------------------------
   ;; Pass 2: convert calls based on previously collected information
     
-  (define (convert-lifted-calls-in-expr v lifts)
+  (define (convert-lifted-calls-in-expr v lifts frees)
     (let convert ([v v])
       (match v
         [`(let . ,_)
-         (convert-lifted-calls-in-let v lifts)]
+         (convert-lifted-calls-in-let v lifts frees)]
         [`(letrec . ,_)
-         (convert-lifted-calls-in-let v lifts)]
+         (convert-lifted-calls-in-let v lifts frees)]
         [`(letrec* . ,_)
-         (convert-lifted-calls-in-let v lifts)]
+         (convert-lifted-calls-in-let v lifts frees)]
         [`(let-values . ,_)
-         (convert-lifted-calls-in-let v lifts)]
+         (convert-lifted-calls-in-let v lifts frees)]
         [`(letrec-values . ,_)
-         (convert-lifted-calls-in-let v lifts)]
+         (convert-lifted-calls-in-let v lifts frees)]
         [`((letrec ([,id ,rhs]) ,rator) ,rands ...)
          (convert (reannotate v `(letrec ([,id ,rhs]) (,rator . ,rands))))]
         [`((letrec* ([,id ,rhs]) ,rator) ,rands ...)
          (convert (reannotate v `(letrec* ([,id ,rhs]) (,rator . ,rands))))]
         [`(lambda ,args . ,body)
-         (reannotate v `(lambda ,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts)))]
+         (reannotate v `(lambda ,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts frees)))]
         [`(case-lambda [,argss . ,bodys] ...)
          (reannotate v `(case-lambda
                           ,@(for/list ([args (in-list argss)]
                                        [body (in-list bodys)])
-                              `[,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts)])))]
+                              `[,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts frees)])))]
         [`(begin . ,vs)
-         (reannotate v `(begin . ,(convert-lifted-calls-in-seq vs lifts)))]
+         (reannotate v `(begin . ,(convert-lifted-calls-in-seq vs lifts frees)))]
         [`(begin0 . ,vs)
-         (reannotate v `(begin0 . ,(convert-lifted-calls-in-seq vs lifts)))]
+         (reannotate v `(begin0 . ,(convert-lifted-calls-in-seq vs lifts frees)))]
         [`(quote . ,_) v]
         [`(if ,tst ,thn ,els)
          (reannotate v `(if ,(convert tst) ,(convert thn) ,(convert els)))]
         [`(with-continuation-mark ,key ,val ,body)
          (reannotate v `(with-continuation-mark ,(convert key) ,(convert val) ,(convert body)))]
         [`(set! ,id ,rhs)
-         (define info (hash-ref lifts (unwrap id) #f))
+         (define info (and (hash-ref lifts (unwrap id) #f)))
          (cond
            [(and (indirected? info)
-                 (indirected-mutator info))
+                 (let ([mutator-var (indirected-mutator info)])
+                   (and (hash-ref frees mutator-var #f)
+                        mutator-var)))
             => (lambda (mutator-var)
                  (reannotate v `(,mutator-var ,(convert rhs))))]
            [else
@@ -528,15 +530,19 @@
          (define info (hash-ref lifts (unwrap id) #f))
          (cond
            [(and (indirected? info)
-                 (indirected-variable-reference info))
+                 (let ([var-ref-var (indirected-variable-reference info)])
+                   (and (hash-ref frees var-ref-var #f)
+                        var-ref-var)))
             => (lambda (var-ref-var)
                  var-ref-var)]
            [else v])]
         [`(,rator . ,rands)
-         (let ([rands (convert-lifted-calls-in-seq rands lifts)])
+         (let ([rands (convert-lifted-calls-in-seq rands lifts frees)])
            (define f (unwrap rator))
            (cond
-             [(and (symbol? f) (hash-ref lifts f #f))
+             [(and (symbol? f)
+                   (let ([p (hash-ref lifts f #f)])
+                     (and (liftable? p) p)))
               => (lambda (proc)
                    (reannotate v `(,rator ,@(liftable-frees proc) . ,rands)))]
              [else
@@ -547,16 +553,18 @@
                            (hash-ref lifts var #f)))
          (cond
            [(and (indirected? info)
-                 (indirected-accessor info))
+                 (let ([accessor-var (indirected-accessor info)])
+                   (and (hash-ref frees accessor-var #f)
+                        accessor-var)))
             => (lambda (accessor-var)
                  (reannotate v `(,accessor-var)))]
            [else v])])))
   
-  (define (convert-lifted-calls-in-seq vs lifts)
+  (define (convert-lifted-calls-in-seq vs lifts frees)
     (reannotate vs (for/list ([v (in-wrap-list vs)])
-                     (convert-lifted-calls-in-expr v lifts))))
+                     (convert-lifted-calls-in-expr v lifts frees))))
 
-  (define (convert-lifted-calls-in-let v lifts)
+  (define (convert-lifted-calls-in-let v lifts frees)
     (match v
       [`(,let-id ([,ids ,rhss] ...) . ,body)
        (reannotate
@@ -564,17 +572,17 @@
         `(,let-id ,(for/list ([id (in-list ids)]
                               [rhs (in-list rhss)]
                               #:unless (liftable? (hash-ref lifts id #f)))
-                     `[,id ,(convert-lifted-calls-in-expr rhs lifts)])
-                  . ,(convert-lifted-calls-in-seq/add-mutators body ids lifts)))]))
+                     `[,id ,(convert-lifted-calls-in-expr rhs lifts frees)])
+                  . ,(convert-lifted-calls-in-seq/add-mutators body ids lifts frees)))]))
 
   ;; For any `id` in `ids` that needs a mutator or variable-reference
   ;; binding to pass to a lifted function (as indicated by an
   ;; `indirected` mapping in `lifts`), add the binding. The `ids` can
   ;; be any tree of annotated symbols.
-  (define (convert-lifted-calls-in-seq/add-mutators vs ids lifts)
+  (define (convert-lifted-calls-in-seq/add-mutators vs ids lifts frees)
     (let loop ([ids ids])
       (cond
-        [(null? ids) (convert-lifted-calls-in-seq vs lifts)]
+        [(null? ids) (convert-lifted-calls-in-seq vs lifts frees)]
         [(wrap-pair? ids)
          (let ([a (wrap-car ids)])
            (cond
@@ -613,17 +621,19 @@
   (define (extract-lifted-bindings lifts)
     (for/list ([(f proc) (in-hash lifts)]
                #:when (liftable? proc))
-      (let ([new-args (liftable-frees proc)]
-            [rhs (liftable-expr proc)])
+      (let* ([new-args (liftable-frees proc)]
+             [frees (for/hash ([arg (in-list new-args)])
+                      (values arg #t))]
+             [rhs (liftable-expr proc)])
         `[,f ,(match rhs
                 [`(lambda ,args . ,body)
-                 (let ([body (convert-lifted-calls-in-seq body lifts)])
+                 (let ([body (convert-lifted-calls-in-seq body lifts frees)])
                    (reannotate rhs `(lambda ,(append new-args args) . ,body)))]
                 [`(case-lambda [,argss . ,bodys] ...)
                  (reannotate rhs `(case-lambda
                                     ,@(for/list ([args (in-list argss)]
                                                  [body (in-list bodys)])
-                                        (let ([body (convert-lifted-calls-in-seq body lifts)])
+                                        (let ([body (convert-lifted-calls-in-seq body lifts frees)])
                                           `[,(append new-args args) . ,body]))))])])))
 
   ;; ----------------------------------------

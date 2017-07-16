@@ -222,6 +222,23 @@
 
 ;; ----------------------------------------
 
+(define/who (vector->list vec)
+  (cond
+   [(#%vector? vec)
+    (#3%vector->list vec)]
+   [(vector? vec)
+    (let ([len (vector-length vec)])
+      (let loop ([i len] [accum '()])
+        (cond
+         [(fx= i 0) accum]
+         [else
+          (let ([i (fx- i 1)])
+            (loop i (cons (vector-ref vec i) accum)))])))]
+   [else
+    (raise-argument-error who "vector?" vec)]))
+
+;; ----------------------------------------
+
 (define/who (vector-copy vec)
   (cond
    [(#%vector? vec)

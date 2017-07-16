@@ -98,8 +98,8 @@
                      [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
                      [forward-break-to #:mutable] ; #f or a thread to receive ths thread's breaks
                      
-                     [waiting-mail? #:mutable]
-                     [mailbox #:mutable]) ;; mailbox
+                     [waiting-mail? #:mutable] ; whether to wake up on `thread-send`
+                     [mailbox #:mutable])
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t i-cb r-cb) (thread-internal-suspend! t #f i-cb r-cb))
@@ -195,8 +195,8 @@
   (check who thread? t)
   (eq? 'done (thread-engine t)))
 
-;; set to be done here........
 ;; In atomic mode
+;; Terminating the current thread does not suspend or exit
 (define (thread-dead! t)
   (set-thread-engine! t 'done)
   (when (thread-dead-sema t)
@@ -210,9 +210,7 @@
     (thread-group-remove! (thread-parent t) t)])
   (remove-from-sleeping-threads! t)
   (run-kill-callbacks! t)
-  (unsafe-custodian-unregister t (thread-custodian-reference t))
-  (when (eq? t root-thread)
-    (exit)))
+  (unsafe-custodian-unregister t (thread-custodian-reference t)))
 
 ;; ----------------------------------------
 ;; Thread termination
@@ -233,6 +231,8 @@
    (unless (thread-dead? t)
      (thread-dead! t)))
   (when (eq? t (current-thread))
+    (when (eq? t root-thread)
+      (force-exit 0))
     (engine-block)))
 
 (define (run-kill-callbacks! t)

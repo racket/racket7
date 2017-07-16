@@ -31,7 +31,7 @@
                            exit-handler
                            equal?
                            vector? mutable-vector? vector-length vector-ref vector-set!
-                           vector-copy vector-fill! vector->immutable-vector
+                           vector-copy vector-fill! vector->immutable-vector vector->list
                            random random-seed
                            box? unbox set-box!)
                    [make-parameter chez:make-parameter]
