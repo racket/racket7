@@ -1,6 +1,7 @@
 #lang racket/base
 (require "check.rkt"
-         "atomic.rkt")
+         "atomic.rkt"
+         (only-in '#%foreign make-stubborn-will-executor))
 
 (provide current-custodian
          make-custodian
@@ -21,7 +22,6 @@
          raise-custodian-is-shut-down)
 
 (struct custodian (children     ; weakly maps maps object to callback
-                   wills        ; a set of will executors that turn weak links into strong
                    [shut-down? #:mutable]
                    [parent-reference #:mutable])
   #:authentic)
@@ -44,7 +44,6 @@
 
 (define (create-custodian)
   (custodian (make-weak-hasheq)
-             (make-hasheq)
              #f
              #f))
   
@@ -67,14 +66,18 @@
 (define (unsafe-make-custodian-at-root)
   (make-custodian root-custodian))
 
+;; The given `callback` will be run in atomic mode.
+;; Unless `weak?` is true, the given `obj` is registered with an ordered
+;; finalizer, so don't supply an `obj` that is exposed to safe code
+;; that might see `obj` after finalization through a weak reference
+;; (and detect that `obj` is thereafter retained strongly).
 (define (unsafe-custodian-register cust obj callback at-exit? weak?)
   (atomically
    (cond
      [(custodian-shut-down? cust) #f]
      [else
       (define we (and (not weak?)
-                      ;; FIXME: this should be a "late" executor
-                      (make-will-executor)))
+                      (make-stubborn-will-executor)))
       (hash-set! (custodian-children cust)
                  obj
                  (cond
@@ -82,10 +85,9 @@
                    [at-exit? (at-exit-callback callback we)]
                    [else (willed-callback callback we)]))
       (when we
-        (hash-set! (custodian-wills cust) we #t)
-        ;; Register with a will executor that we never poll
-        ;; has the effect of turning a weak reference into
-        ;; a strong one when there are no other references:
+        ;; Registering with a will executor that we never poll has the
+        ;; effect of turning a weak reference into a strong one when
+        ;; there are no other references:
         (will-register we obj void))
       (custodian-reference cust)])))
 
@@ -95,9 +97,7 @@
      (define c (custodian-reference-c cref))
      (unless (custodian-shut-down? c)
        (define cb (hash-ref (custodian-children c) obj #f))
-       (hash-remove! (custodian-children c) obj)
-       (when (willed-callback? cb)
-         (hash-remove! (custodian-wills c) (willed-callback-will cb)))))))
+       (hash-remove! (custodian-children c) obj)))))
 
 (define/who (custodian-shutdown-all c)
   (check who custodian? c)
@@ -106,8 +106,7 @@
      (set-custodian-shut-down?! c #t)
      (for ([(child callback) (in-hash (custodian-children c))])
        (callback child))
-     (hash-clear! (custodian-children c))
-     (hash-clear! (custodian-wills c)))))
+     (hash-clear! (custodian-children c)))))
 
 (define (subordinate? c super-c)
   (let loop ([p (custodian-reference-c (custodian-parent-reference c))])

@@ -16,7 +16,7 @@
   (let try-again ()
     (start-atomic)
     (cond
-      [(core-port-closed? out)
+      [(closed-state-closed? (core-port-closed out))
        (end-atomic)
        (raise-arguments-error who
                               "output port is closed"

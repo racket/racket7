@@ -98,9 +98,8 @@
                     get-location
                     file-position
                     buffer-mode
-                    
-                    #f   ; closed?
-                    #f   ; closed-sema
+
+                    (closed-state #f #f)
                     init-offset ; offset
                     #f   ; state
                     #f   ; cr-state

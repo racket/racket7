@@ -59,14 +59,14 @@
      ;; in atomic mode
      (lambda ()
        (host-close host-fd)
-       (unsafe-custodian-unregister port custodian-reference))
+       (unsafe-custodian-unregister host-fd custodian-reference))
      #:file-position (make-file-position
                       host-fd
                       (case-lambda
                         [() (buffer-control)]
                         [(pos) (buffer-control pos)]))))
   (define custodian-reference
-    (unsafe-custodian-register (current-custodian) port close-port #f #f))
+    (register-fd-close (current-custodian) host-fd port))
   port)
 
 ;; ----------------------------------------
@@ -176,7 +176,10 @@
      (lambda ()
        (flush-buffer-fully #f) ; can temporarily leave atomic mode
        (when buffer ; <- in case a concurrent close succeeded
-         (close-without-flush)))
+         (plumber-flush-handle-remove! flush-handle)
+         (set! buffer #f)
+         (host-close host-fd)
+         (unsafe-custodian-unregister host-fd custodian-reference)))
 
      #:file-position (make-file-position
                       host-fd
@@ -191,15 +194,8 @@
                      [() buffer-mode]
                      [(mode) (set! buffer-mode mode)])))
 
-  ;; in atomic mode
-  (define (close-without-flush)
-    (plumber-flush-handle-remove! flush-handle)
-    (set! buffer #f)
-    (host-close host-fd)
-    (unsafe-custodian-unregister port custodian-reference))
-
   (define custodian-reference
-    (unsafe-custodian-register (current-custodian) port close-without-flush #f #f))
+    (register-fd-close (current-custodian) host-fd port))
 
   port)
 
@@ -287,3 +283,16 @@
                                          (rktio_poll_add rktio (fd-evt-fd fde) ps mode)))))
         (end-atomic)
         (values #f fde)]))))
+
+;; ----------------------------------------
+
+(define (register-fd-close custodian host-fd port)
+  (define closed (core-port-closed port))
+  (unsafe-custodian-register custodian
+                             host-fd
+                             ;; in atomic mode
+                             (lambda (host-fd)
+                               (host-close host-fd)
+                               (set-closed-state! closed))
+                             #f
+                             #f))

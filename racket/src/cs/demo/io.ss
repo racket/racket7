@@ -51,6 +51,24 @@
 
 ;; ----------------------------------------
 
+(let ([c (make-custodian)])
+  (with-continuation-mark
+      parameterization-key
+      (extend-parameterization (continuation-mark-set-first #f parameterization-key) current-custodian c)
+    (let ()
+      (define p (open-input-file "compiled/io.scm"))
+      (define wb (make-weak-box p))
+      (define we (make-will-executor))
+      (will-register we p values)
+      (set! p #f)
+      (collect (collect-maximum-generation))
+      (test #t (input-port? (will-try-execute we)))
+      (collect (collect-maximum-generation))
+      (test #f (weak-box-value wb))
+      (custodian-shutdown-all c))))
+
+;; ----------------------------------------
+
 (call-in-main-thread
  (lambda ()
    (define root-logger (make-logger))
