@@ -122,9 +122,12 @@
 (define (make-weak-box v)
   (create-weak-box (weak-cons v #t)))
 
-(define/who (weak-box-value v)
-  (check who weak-box? v)
-  (let ([c (car (weak-box-p v))])
-    (if (eq? c #!bwp)
-        #f
-        c)))
+(define/who weak-box-value
+  (case-lambda
+   [(v no-value)
+    (check who weak-box? v)
+    (let ([c (car (weak-box-p v))])
+      (if (eq? c #!bwp)
+          no-value
+          c))]
+   [(v) (weak-box-value v #f)]))
