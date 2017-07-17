@@ -629,7 +629,6 @@
    regexp?
    relative-path?
    rename-file-or-directory
-   reparameterize
    replace-evt
    resolve-path
    reverse
