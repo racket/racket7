@@ -37,7 +37,8 @@
   (check who :test (and (list? alist) (andmap pair? alist)) :contract "(listof pair?)" alist)
   (for-each (lambda (p)
               (hash-set! ht (car p) (cdr p)))
-            alist))
+            alist)
+  ht)
 
 (define-syntax define-hash-constructors
   (syntax-rules ()
