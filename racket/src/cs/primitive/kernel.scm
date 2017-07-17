@@ -48,7 +48,6 @@
    box-immutable
    box?
    break-enabled
-   break-enabled-key
    break-thread
    build-path
    build-path/convention-type
@@ -88,7 +87,6 @@
    bytes>=?
    bytes?
    caadr
-   cache-configuration
    call-in-nested-thread
    call-with-composable-continuation
    call-with-continuation-barrier
@@ -150,7 +148,6 @@
    char-ci>=?
    char-ci>?
    ;; char-utf-8-length
-   check-for-break
    checked-procedure-check-and-extract
    choice-evt
    cleanse-path
@@ -268,7 +265,6 @@
    exact-positive-integer?
    exact?
    exact->inexact
-   exception-handler-key
    executable-yield-handler
    exit
    exit-handler
@@ -279,7 +275,6 @@
    exp
    explode-path
    expt
-   extend-parameterization
    file-exists?
    file-or-directory-modify-seconds
    file-or-directory-identity
@@ -434,7 +429,6 @@
    make-security-guard
    make-semaphore
    make-shared-bytes
-   make-shared-flvector
    make-sibling-inspector
    make-string
    make-struct-field-accessor
@@ -477,7 +471,6 @@
    parameter?
    parameter-procedure=?
    parameterization?
-   parameterization-key
    path->bytes
    path->complete-path
    path->directory-path
@@ -645,7 +638,6 @@
    set-box!
    set-phantom-bytes!
    shared-bytes
-   shared-flvector
    shell-execute
    simplify-path
    sin
@@ -810,11 +802,6 @@
    write-string
    zero?
 
-   flsin flcos fltan
-   flasin flacos flatan
-   fltruncate flround flfloor flceiling
-   flexp fllog flexpt
-   
    keyword<?
    string->keyword
    keyword->string
