@@ -61,6 +61,7 @@
   (provide (struct-out thread)
 
            make-initial-thread
+           root-thread
            thread-dead!
            thread-did-work!
            
@@ -306,7 +307,7 @@
                                        (interrupt-callback)))
    (thread-group-remove! (thread-parent t) t)
    (when timeout-at
-     (add-to-sleeping-threads! t timeout-at))
+     (add-to-sleeping-threads! t (sandman-merge-timeout #f timeout-at)))
    (when (eq? t (current-thread))
      (thread-did-work!))
    ;; It's ok if the thread gets interrupted

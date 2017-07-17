@@ -7,7 +7,8 @@
          "thread-group.rkt"
          "schedule-info.rkt"
          (submod "thread.rkt" scheduling)
-         "system-idle-evt.rkt")
+         "system-idle-evt.rkt"
+         "exit.rkt")
 
 ;; Many scheduler details are implemented in "thread.rkt", but this
 ;; module handles the thread selection, thread swapping, and
@@ -58,6 +59,8 @@
        (unless (zero? (current-atomic))
          (internal-error "terminated in atomic mode!"))
        (thread-dead! t)
+       (when (eq? root-thread t)
+         (force-exit 0))
        (thread-did-work!)
        (select-thread!))
      (lambda (e)

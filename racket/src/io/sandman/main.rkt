@@ -29,8 +29,8 @@
     (sandman
      ;; sleep
      (lambda (exts)
-       (define timeout-at (exts-timeout-at exts))
-       (define fd-adders (exts-fd-adders exts))
+       (define timeout-at (and exts (exts-timeout-at exts)))
+       (define fd-adders (and exts (exts-fd-adders exts)))
        (define ps (rktio_make_poll_set rktio))
        (let loop ([fd-adders fd-adders])
          (cond
@@ -59,11 +59,15 @@
 
      ;; sleepers-external-events
      (lambda ()
-       ((sandman-do-sleepers-external-events timeout-sandman)))
+       (define timeout-at ((sandman-do-sleepers-external-events timeout-sandman)))
+       (and timeout-at
+            (exts timeout-at #f)))
 
      ;; add-thread!
      (lambda (t exts)
-       (unless (null? (exts-fd-adders exts))
+       (define fd-adders (exts-fd-adders exts))
+       (unless (or (not fd-adders)
+                   (null? fd-adders))
          (internal-error "cannot sleep on fds"))
        ((sandman-do-add-thread! timeout-sandman) t (exts-timeout-at exts)))
      
