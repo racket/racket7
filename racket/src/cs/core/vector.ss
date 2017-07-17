@@ -1,7 +1,9 @@
 (define (vector-immutable . args)
-  (let ([vec (apply vector args)])
-    (#%$vector-set-immutable! vec)
-    vec))
+  (if (null? args)
+      (vector->immutable-vector '#())
+      (let ([vec (apply vector args)])
+        (#%$vector-set-immutable! vec)
+        vec)))
 
 ;; ----------------------------------------
 
