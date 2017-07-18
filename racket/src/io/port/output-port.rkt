@@ -1,7 +1,8 @@
 #lang racket/base
 (require "../common/check.rkt"
          "../host/thread.rkt"
-         "port.rkt")
+         "port.rkt"
+         "evt.rkt")
 
 (provide prop:output-port
          output-port?
@@ -19,7 +20,12 @@
                                (check-immutable-field 'prop:output-port v sti)
                                (if (exact-nonnegative-integer? v)
                                    (make-struct-field-accessor (list-ref sti 3) v)
-                                   v))))
+                                   v))
+                             (list (cons prop:secondary-evt
+                                         (lambda (v) port->evt))
+                                   (cons prop:output-port-evt
+                                         (lambda (o)
+                                           (output-port-evt-ref (->core-output-port o)))))))
 
 (define (output-port? p)
   (or (core-output-port? p)
@@ -68,8 +74,8 @@
    [write-handler #:mutable]
    [print-handler #:mutable]
    [display-handler #:mutable])
-  #:property prop:evt (lambda (o) (wrap-evt (core-output-port-evt o)
-                                            (lambda (v) o))))
+  #:authentic
+  #:property prop:output-port-evt (lambda (o) (core-output-port-evt o)))
 
 (struct write-evt (proc)
   #:property prop:evt (poller

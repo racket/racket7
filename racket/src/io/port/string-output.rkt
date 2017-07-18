@@ -20,11 +20,12 @@
   (check who exact-nonnegative-integer? start)
   (check who exact-nonnegative-integer? end)
   (check-range who start end (string-length str) str)
-  (let loop ([i start])
-    (cond
-     [(= i end) (- i start)]
-     [else
-      (define next-i (min end (+ i 4096)))
-      (define bstr (string->bytes/utf-8 str 0 i next-i))
-      (do-write-bytes who out bstr 0 (bytes-length bstr))
-      (loop next-i)])))
+  (let ([out (->core-output-port out)])
+    (let loop ([i start])
+      (cond
+        [(= i end) (- i start)]
+        [else
+         (define next-i (min end (+ i 4096)))
+         (define bstr (string->bytes/utf-8 str 0 i next-i))
+         (do-write-bytes who out bstr 0 (bytes-length bstr))
+         (loop next-i)]))))

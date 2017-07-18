@@ -11,7 +11,9 @@
 ;; within the dynamic extent of a `poller` callback to mean that the
 ;; poller is selected. Since `nack` propagation is based on a thread,
 ;; this approximation won't work right if an event is actually
-;; contended.
+;; contended. Also, `prop:secondary-evt` is just `prop:evt`, so
+;; `prop:evt` cannot be mixed with `prop:input-port` or
+;; `prop:output-port`.
 
 (struct poller (proc)
   #:property prop:procedure
@@ -75,6 +77,7 @@
                          'sync-atomic-poll-evt? sync-atomic-poll-evt?
                          'evt? evt?
                          'prop:evt prop:evt
+                         'prop:secondary-evt prop:evt
                          'poller poller
                          'poll-ctx-poll? poll-ctx-poll?
                          'poll-ctx-select-proc poll-ctx-select-proc

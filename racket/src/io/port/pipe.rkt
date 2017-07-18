@@ -188,7 +188,11 @@
                               (- len peek-start)))
              (bytes-copy! dest-bstr dest-start bstr peek-start (+ peek-start amt))
              amt])]))
-     
+
+     #:byte-ready
+     (lambda ()
+       (not (zero? (content-length))))
+
      #:close
      (lambda ()
        (progress!))

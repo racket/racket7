@@ -12,8 +12,7 @@
                           #:buffer-ok? [buffer-ok? #f]
                           #:zero-ok? [zero-ok? #f]
                           #:enable-break? [enable-break? #f])
-  (define write-out (core-output-port-write-out out))
-  (let try-again ()
+  (let try-again ([out out])
     (start-atomic)
     (cond
       [(closed-state-closed? (core-port-closed out))
@@ -25,28 +24,34 @@
        (end-atomic)
        0]
       [else
-       (define v (write-out bstr start end (not buffer-ok?) enable-break? copy-bstr?))
-       (let result-loop ([v v])
-         (cond
-           [(not v)
-            (end-atomic)
-            (if zero-ok?
-                0
-                (try-again))]
-           [(evt? v)
-            (end-atomic)
+       (define write-out (core-output-port-write-out out))
+       (cond
+         [(procedure? write-out)
+          (define v (write-out bstr start end (not buffer-ok?) enable-break? copy-bstr?))
+          (let result-loop ([v v])
             (cond
-              [zero-ok? 0]
+              [(not v)
+               (end-atomic)
+               (if zero-ok?
+                   0
+                   (try-again out))]
+              [(evt? v)
+               (end-atomic)
+               (cond
+                 [zero-ok? 0]
+                 [else
+                  (define new-v (if enable-break?
+                                    (sync/enable-break v)
+                                    (sync v)))
+                  (start-atomic)
+                  (result-loop new-v)])]
+              [(exact-positive-integer? v)
+               (port-count! out v bstr start)
+               (end-atomic)
+               v]
               [else
-               (define new-v (if enable-break?
-                                 (sync/enable-break v)
-                                 (sync v)))
-               (start-atomic)
-               (result-loop new-v)])]
-           [(exact-positive-integer? v)
-            (port-count! out v bstr start)
-            (end-atomic)
-            v]
-           [else
-            (end-atomic)
-            (internal-error (format "write-some-bytes: weird result ~s for ~s ~s ~s" v bstr start end))]))])))
+               (end-atomic)
+               (internal-error (format "write-some-bytes: weird result ~s for ~s ~s ~s" v bstr start end))]))]
+         [else
+          (end-atomic)
+          (try-again (->core-output-port write-out))])])))

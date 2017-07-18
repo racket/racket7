@@ -1,4 +1,6 @@
 #lang racket/base
+(require "../host/thread.rkt"
+         "evt.rkt")
 
 (provide (struct-out core-port)
          (struct-out closed-state))
@@ -22,9 +24,10 @@
                    [line #:mutable]   ; count newlines
                    [column #:mutable] ; count UTF-8 characters in line
                    [position #:mutable]) ; count UTF-8 characters
-  #:property prop:object-name (struct-field-index name))
+  #:authentic
+  #:property prop:object-name (struct-field-index name)
+  #:property prop:secondary-evt port->evt)
 
 (struct closed-state ([closed? #:mutable]
                       [closed-sema #:mutable]) ; #f or a semaphore posed on close
   #:authentic)
-  

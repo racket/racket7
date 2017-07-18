@@ -71,6 +71,10 @@
           amt]
          [else eof]))
 
+     #:byte-ready
+     (lambda ()
+       (i . < . len))
+
      #:close
      (lambda ()
        (progress!))

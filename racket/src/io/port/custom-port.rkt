@@ -43,7 +43,8 @@
 (define (make-init-offset+file-position user-init-position)
   (define init-offset
     (if (or (procedure? user-init-position)
-            (input-port? user-init-position))
+            (input-port? user-init-position)
+            (output-port? user-init-position))
         #f
         (sub1 user-init-position)))
 

@@ -117,6 +117,22 @@
            (peek-byte)
            v)]))
 
+  ;; in atomic mode
+  (define (do-byte-ready)
+    (cond
+      [(positive? (pipe-content-length peek-pipe-i))
+       #t]
+      [peeked-eof?
+       #t]
+      [else
+       (define v (pull-some-bytes))
+       (cond
+         [(retry-pull? v)
+          (do-byte-ready)]
+         [(evt? v) v]
+         [else
+          (not (eqv? v 0))])]))
+
   (define (purge-buffer)
     (atomically
      (set!-values (peek-pipe-i peek-pipe-o) (make-pipe))
@@ -146,6 +162,7 @@
            #:read-in do-read-in
            #:peek-byte peek-byte
            #:peek-in do-peek-in
+           #:byte-ready do-byte-ready
 
            #:get-progress-evt (and read-is-atomic?
                                    get-progress-evt)

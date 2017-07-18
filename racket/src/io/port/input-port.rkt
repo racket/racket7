@@ -1,6 +1,8 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "port.rkt")
+         "../host/thread.rkt"
+         "port.rkt"
+         "evt.rkt")
 
 (provide prop:input-port
          input-port?
@@ -18,7 +20,12 @@
                                (check-immutable-field 'prop:input-port v sti)
                                (if (exact-nonnegative-integer? v)
                                    (make-struct-field-accessor (list-ref sti 3) v)
-                                   v))))
+                                   v))
+                             (list (cons prop:secondary-evt
+                                         (lambda (v) port->evt))
+                                   (cons prop:input-port-evt
+                                         (lambda (i)
+                                           (input-port-evt-ref (->core-input-port i)))))))
 
 (define (input-port? p)
   (or (core-input-port? p)
@@ -77,6 +84,15 @@
    ;;          The `copy?` flag is the same as for `read-in`.  The return values
    ;;          are the same as documented for `make-input-port`.
 
+   byte-ready  ; port or (-> (or/c boolean? evt))
+   ;;          Called in atomic mode.
+   ;;          A port value makes sense when `peek-in` has a port value.
+   ;;          Otherwise, check whether a peek on one byte would succeed
+   ;;          without blocking and return a boolean, or return an event
+   ;;          that effectively does the same. The event's value doesn't
+   ;;          matter, because it will be wrapped to return some original
+   ;;          port.
+
    get-progress-evt ; #f or (-> evt?)
    ;;           *Not* called in atomic mode.
    ;;           Optional support for progress events.
@@ -90,7 +106,24 @@
    ;;          failure.
 
    [pending-eof? #:mutable]
-   [read-handler #:mutable]))
+   [read-handler #:mutable])
+  #:authentic
+  #:property prop:input-port-evt (lambda (i)
+                                   (define byte-ready (core-input-port-byte-ready i))
+                                   (cond
+                                     [(input-port? byte-ready)
+                                      byte-ready]
+                                     [else
+                                      (poller
+                                       (lambda (self sched-info)
+                                         (define v (byte-ready))
+                                         (cond
+                                           [(evt? v)
+                                            (values #f v)]
+                                           [(eq? v #t)
+                                            (values (list #t) #f)]
+                                           [else
+                                            (values #f self)])))])))
 
 (define (make-core-input-port #:name name
                               #:data [data #f]
@@ -98,6 +131,7 @@
                               #:read-in read-in
                               #:peek-byte [peek-byte #f]
                               #:peek-in peek-in
+                              #:byte-ready byte-ready
                               #:close close
                               #:get-progress-evt [get-progress-evt #f]
                               #:commit [commit #f]
@@ -127,6 +161,7 @@
                    read-in
                    peek-byte
                    peek-in
+                   byte-ready
                    get-progress-evt
                    commit
                    #f   ; pending-eof?
@@ -136,4 +171,5 @@
   (make-core-input-port #:name 'empty
                         #:read-in (lambda (bstr start-k end-k copy?) eof)
                         #:peek-in (lambda (bstr start-k end-k skip-k copy?) eof)
+                        #:byte-ready (lambda () #f)
                         #:close void))

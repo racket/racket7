@@ -218,6 +218,16 @@
 (test '(special #f 1 2 3) (peek-byte-or-special specialist))
 (test '#&(special src 1 2 3) (peek-byte-or-special specialist 0 #f box 'src))
 
+(let-values ([(i o) (make-pipe)])
+  (struct my-i (i) #:property prop:input-port 0)
+  (struct my-o (o) #:property prop:output-port 0)
+  (define c-i (let ([i (my-i i)])
+                (make-input-port 'c-i i i void)))
+  (define c-o (let ([o (my-o o)])
+                (make-output-port 'c-o o o void)))
+  (write-bytes #"hello" c-o)
+  (test #"hello" (read-bytes 5 c-i)))
+
 (test "apλple" (bytes->string/utf-8 (string->bytes/utf-8 "!!ap\u3BBple__" #f 2) #f 0 7))
 (test "ap?ple" (bytes->string/latin-1 (string->bytes/latin-1 "ap\u3BBple" (char->integer #\?))))
 (test "apλp\uF7F8\U00101234le" (bytes->string/utf-8 (string->bytes/utf-8 "ap\u3BBp\uF7F8\U101234le")))

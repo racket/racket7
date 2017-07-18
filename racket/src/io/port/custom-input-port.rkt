@@ -147,6 +147,7 @@
           (wrap-check-read-evt-result '|user port read| r dest-start dest-end #f #f)]
          [else r])]))
 
+  ;; in atomic mode
   ;; Used only if `user-peek-in` is a function:
   (define (peek-in dest-bstr dest-start dest-end skip-k progress-evt copy?)
     (cond
@@ -170,6 +171,20 @@
          [(evt? r)
           (wrap-check-read-evt-result '|user port peek| r dest-start dest-end #t progress-evt)]
          [else r])]))
+
+  ;; in atomic mode
+  ;; Used only if `user-peek-in` is a function:
+  (define (byte-ready)
+    (cond
+      [(and input-pipe
+            (positive? (pipe-content-length input-pipe)))
+       #t]
+      [else
+       (define bstr (make-bytes 1))
+       (define v (peek-in bstr 0 1 0 #f #f))
+       (cond
+         [(evt? v) v]
+         [else (not (eqv? v 0))])]))
 
   ;; in atomic mode
   (define (close)
@@ -216,6 +231,10 @@
      (if (input-port? user-peek-in)
          user-peek-in
          peek-in)
+     #:byte-ready
+     (if (input-port? user-peek-in)
+         user-peek-in
+         byte-ready)
      #:close close
      #:get-progress-evt (and user-get-progress-evt get-progress-evt)
      #:commit (and user-commit commit)

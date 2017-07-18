@@ -101,7 +101,7 @@
                (internal-error (format "weird read-bytes result ~s" v))]))]
          [else
           (end-atomic)
-          (loop read-in)])])))
+          (loop (->core-input-port read-in))])])))
 
 ;; Like `read-some-bytes!`, but merely peeks
 (define (peek-some-bytes! who orig-in bstr start end skip

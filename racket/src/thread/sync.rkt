@@ -176,13 +176,16 @@
 
 ;; ----------------------------------------
 
+(define MAX-SYNC-TRIES-ON-ONE-EVT 10)
+
 ;; Run through the events of a `sync` one time; returns a thunk to
 ;; call in tail position --- possibly one that calls `none-k`.
 (define (sync-poll s none-k
                    #:just-poll? [just-poll? #f]
                    #:did-work? [did-work? #f])
   (define sched-info (make-schedule-info #:did-work? did-work?))
-  (let loop ([sr (syncing-syncers s)])
+  (let loop ([sr (syncing-syncers s)]
+             [retries 0]) ; count retries on `sr`, and advance if it's too many
     ((atomically
       (cond
        [(syncing-selected s)
@@ -193,6 +196,9 @@
         (when just-poll?
           (syncing-done! s none-syncer))
         (lambda () (none-k sched-info))]
+       [(= retries MAX-SYNC-TRIES-ON-ONE-EVT)
+        (schedule-info-did-work! sched-info)
+        (loop (syncer-next sr) 0)]
        [else
         (define-values (results new-evt)
           (evt-poll (syncer-evt sr) (poll-ctx just-poll?
@@ -202,13 +208,23 @@
                                               ;; must be invoked in atomic mode
                                               (lambda ()
                                                 (syncing-done! s sr))
-                                              ;; Information to propagate the to thread
+                                              ;; Information to propagate to the thread
                                               ;; scheduler
                                               sched-info)))
         (cond
          [results
           (syncing-done! s sr)
           (make-result-thunk sr results)]
+         [(delayed-poll? new-evt)
+          ;; Have to go out of atomic mode to continue:
+          (lambda ()
+            (let ([new-evt ((delayed-poll-resume new-evt))])
+              ;; Since we left atomic mode, double-check that we're
+              ;; still syncing before installing the replacement event:
+              (atomically
+               (unless (syncing-selected s)
+                 (set-syncer-evt! sr new-evt)))
+              (loop sr (add1 retries))))]
          [(choice-evt? new-evt)
           (when (or (pair? (syncer-interrupts sr))
                     (pair? (syncer-abandons sr))
@@ -219,11 +235,11 @@
               [(not new-syncers)
                ;; Empy choice, so drop it:
                (syncer-remove! sr s)
-               (lambda () (loop (syncer-next sr)))]
+               (lambda () (loop (syncer-next sr) 0))]
               [else
                ;; Splice in new syncers, and start there
                (syncer-replace! sr new-syncers s)
-               (lambda () (loop new-syncers))]))]
+               (lambda () (loop new-syncers (add1 retries)))]))]
          [(wrap-evt? new-evt)
           (set-syncer-wraps! sr (cons (wrap-evt-wrap new-evt)
                                       (let ([l (syncer-wraps sr)])
@@ -234,13 +250,13 @@
                                             ;; Allow handler in tail position:
                                             l))))
           (set-syncer-evt! sr (wrap-evt-evt new-evt))
-          (lambda () (loop sr))]
+          (lambda () (loop sr (add1 retries)))]
          [(control-state-evt? new-evt)
           (set-syncer-interrupts! sr (cons (control-state-evt-interrupt-proc new-evt) (syncer-interrupts sr)))
           (set-syncer-abandons! sr (cons (control-state-evt-abandon-proc new-evt) (syncer-abandons sr)))
           (set-syncer-retries! sr (cons (control-state-evt-retry-proc new-evt) (syncer-retries sr)))
           (set-syncer-evt! sr (control-state-evt-evt new-evt))
-          (lambda () (loop sr))]
+          (lambda () (loop sr (add1 retries)))]
          [(poll-guard-evt? new-evt)
           (lambda ()
             ;; Out of atomic region:
@@ -248,15 +264,15 @@
             (set-syncer-evt! sr (if (evt? generated)
                                     generated
                                     (wrap-evt always-evt (lambda (a) generated))))
-            (loop sr))]
+            (loop sr (add1 retries)))]
          [(and (never-evt? new-evt)
                (null? (syncer-interrupts sr)))
           ;; Drop this event, since it will never get selected
           (syncer-remove! sr s)
-          (lambda () (loop (syncer-next sr)))]
+          (lambda () (loop (syncer-next sr) 0))]
          [else
           (set-syncer-evt! sr new-evt)
-          (lambda () (loop (syncer-next sr)))])])))))
+          (lambda () (loop (syncer-next sr) 0))])])))))
 
 (define (make-result-thunk sr results)
   (define wraps (syncer-wraps sr))

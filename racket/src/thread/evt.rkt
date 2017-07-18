@@ -18,10 +18,25 @@
          (struct-out choice-evt)
 
          (struct-out poller)
-         (struct-out poll-ctx))
+         (struct-out poll-ctx)
 
-(define-values (prop:evt evt? evt-ref)
+         (struct-out delayed-poll)
+
+         prop:secondary-evt)
+
+(define-values (prop:evt primary-evt? primary-evt-ref)
   (make-struct-type-property 'evt))
+
+;; `prop:secondary-evt` is for primitive property types that
+;; (due to histoical, bad design choices) act like `prop:evt`
+;; without implying `prop:evt`. Specifically, it's used for
+;; input and output ports.
+(define-values (prop:secondary-evt secondary-evt? secondary-evt-ref)
+  (make-struct-type-property 'secondary-evt))
+
+(define (evt? v)
+  (or (primary-evt? v)
+      (secondary-evt? v)))
 
 ;; A poller as a `prop:evt` value wraps a procedure that is called
 ;; in atomic mode
@@ -78,26 +93,43 @@
                            interrupt-proc ; thunk for break/kill initiated or otherwise before `abandon-proc`
                            abandon-proc ; thunk for not selected, including break/kill complete
                            retry-proc) ; thunk for resume from break; return `(values _val _ready?)`
-        #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
 (struct poll-guard-evt (proc)
-        #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
 (struct choice-evt (evts)
-        #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
 ;; Called in atomic mode
 ;; Checks whether an event is ready; returns the same results
-;; as a poller
+;; as a poller. If getting an event requires going out of atomic mode
+;; (to call a `prop:evt` procedure) then return a `delayed-poll`
+;; struct.
 (define (evt-poll evt poll-ctx)
-  (let* ([v (evt-ref evt)]
+  (let* ([v (if (primary-evt? evt)
+                (primary-evt-ref evt)
+                (secondary-evt-ref evt))]
          [v (if (fixnum? v)
                 (unsafe-struct-ref evt v)
-                v)]
-         [v (if (procedure? v)
-                (v evt)
                 v)])
     (cond
-     [(evt? v) (values #f v)]
-     [(poller? v) ((poller-proc v) evt poll-ctx)]
-     [else (values #f never-evt)])))
+      [(procedure? v)
+       (values #f (delayed-poll
+                   ;; out of atomic mode:
+                   (lambda ()
+                     (let ([v (call-with-continuation-barrier (lambda () (v evt)))])
+                       (cond
+                         [(evt? v) v]
+                         [(poller? v) (poller-evt v)]
+                         [else the-never-evt])))))]
+      [(evt? v) (values #f v)]
+      [(poller? v) ((poller-proc v) evt poll-ctx)]
+      [else (values #f the-never-evt)])))
+
+;; Possible result from `evt-poll`:
+(struct delayed-poll (resume))
+
+;; Used to handle a `poller` result from a delayed poll:
+(struct poller-evt (poller)
+  #:property prop:evt (struct-field-index poller))

@@ -28,6 +28,7 @@
         evt?
         sync-atomic-poll-evt?
         prop:evt
+        prop:secondary-evt
         poller
         poll-ctx-poll?
         poll-ctx-select-proc

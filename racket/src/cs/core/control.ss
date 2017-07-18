@@ -726,7 +726,7 @@
                                      #f))
              (proc)))
           (current-mark-stack (mark-stack-frame-prev (current-mark-stack)))
-          ;; To support existing a uninterrupted region on resumption of
+          ;; To support exiting an uninterrupted region on resumption of
           ;; a continuation (see `call-with-end-uninterrupted`):
           (when (current-in-uninterrupted)
             (pariah (end-uninterrupted 'cm))))))))
