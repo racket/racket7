@@ -1,10 +1,10 @@
 (define-record struct-type-prop (name guard supers))
 
 ;; Record the properties that are implemented by each rtd:
-(define rtd-props (make-weak-eq-hashtable))
+(define rtd-props (make-ephemeron-eq-hashtable))
 
 ;; Maps a property-accessor function to `(cons predicate-proc can-impersonate)`:
-(define property-accessors (make-weak-eq-hashtable))
+(define property-accessors (make-ephemeron-eq-hashtable))
 
 (define (struct-type-property? v)
   (struct-type-prop? v))
@@ -283,7 +283,7 @@
 
 ;; Records which fields of an rtd are mutable, where an rtd that is
 ;; not in the table has no mutable fields:
-(define rtd-mutables (make-weak-eq-hashtable))
+(define rtd-mutables (make-ephemeron-eq-hashtable))
 
 ;; Accessors and mutators that need a position are wrapped in these records:
 (define-record position-based-accessor (rtd offset field-count))
@@ -291,10 +291,10 @@
 
 ;; Register other procedures in hash tables; avoid wrapping to
 ;; avoid making the procedures slower
-(define struct-constructors (make-weak-eq-hashtable))
-(define struct-predicates (make-weak-eq-hashtable))
-(define struct-field-accessors (make-weak-eq-hashtable))
-(define struct-field-mutators (make-weak-eq-hashtable))
+(define struct-constructors (make-ephemeron-eq-hashtable))
+(define struct-predicates (make-ephemeron-eq-hashtable))
+(define struct-field-accessors (make-ephemeron-eq-hashtable))
+(define struct-field-mutators (make-ephemeron-eq-hashtable))
 
 (define (register-struct-constructor! p)
   (hashtable-set! struct-constructors p #t))

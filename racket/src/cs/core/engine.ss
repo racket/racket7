@@ -94,7 +94,7 @@
          (apply (engine-state-complete es) remain-ticks args))))))
 
 (define (make-empty-thread-cell-values)
-  (make-weak-eq-hashtable))
+  (make-ephemeron-eq-hashtable))
 
 (define root-thread-cell-values (make-empty-thread-cell-values))
 
@@ -119,7 +119,7 @@
 
 (define (new-engine-thread-cell-values)
   (let ([current-t (current-engine-thread-cell-values)]
-        [new-t (make-weak-eq-hashtable)])
+        [new-t (make-ephemeron-eq-hashtable)])
     (when current-t
       (hash-table-for-each
        current-t

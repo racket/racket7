@@ -63,8 +63,28 @@
       (bytes-allocated)])]))
 
 (define (dump-memory-stats . args)
-  (chez:fprintf (current-error-port) "Current memory use: ~a\n" (bytes-allocated))
-  (void))
+  (enable-object-counts #t)
+  (collect (collect-maximum-generation))
+  (let* ([counts (object-counts)]
+         [extract (lambda (static? cxr)
+                    (lambda (c) (if (or static? (not (eq? (car c) 'static)))
+                                    (cxr c)
+                                    0)))]
+         [get-count (lambda (static?) (lambda (e) (apply + (map (extract static? cadr) (cdr e)))))]
+         [get-bytes (lambda (static?) (lambda (e) (apply + (map (extract static? cddr) (cdr e)))))])
+    (enable-object-counts #f)
+    (chez:fprintf (current-error-port) "Current memory use: ~a\n" (bytes-allocated))
+    (for-each (lambda (e)
+                (chez:fprintf (current-error-port) " ~a   ~a ~a | ~a ~a\n"
+                              (car e)
+                              ((get-count #f) e) ((get-bytes #f) e)
+                              ((get-count #t) e) ((get-bytes #t) e)))
+              (list-sort (lambda (a b) (< ((get-bytes #f) a) ((get-bytes #f) b))) counts))
+    (chez:fprintf (current-error-port) " total  ~a ~a | ~a ~a\n"
+                  (apply + (map (get-count #f) counts))
+                  (apply + (map (get-bytes #f) counts))
+                  (apply + (map (get-count #t) counts))
+                  (apply + (map (get-bytes #t) counts)))))
 
 ;; ----------------------------------------
 

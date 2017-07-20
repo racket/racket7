@@ -20,17 +20,11 @@
 
 (define/who (symbol->string s)
   (check who symbol? s)
-  (string-copy
-   (or (and (gensym? s)
-            (getprop s 'racket-string))
-       (chez:symbol->string s))))
+  (string-copy (chez:symbol->string s)))
 
 (define/who (string->uninterned-symbol str)
   (check who string? str)
-  (let* ([str (string->immutable-string str)]
-         [sym (gensym str)])
-    (putprop sym 'racket-string str)
-    sym))
+  (gensym (string->immutable-string str)))
 
 (define/who (string->unreadable-symbol str)
   (check who string? str)
@@ -38,7 +32,6 @@
         [sym (string->symbol str)])
     (or (getprop sym 'racket-unreadable)
         (let ([u-sym (gensym str)])
-          (putprop u-sym 'racket-string str)
           (putprop sym 'racket-unreadable u-sym)
           u-sym))))
 

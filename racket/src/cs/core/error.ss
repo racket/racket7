@@ -364,7 +364,7 @@
     (chez:exit 1))
   ((|#%app| error-escape-handler)))
 
-(define link-instantiate-continuations (make-weak-eq-hashtable))
+(define link-instantiate-continuations (make-ephemeron-eq-hashtable))
 
 ;; For `instantiate-linklet` to help report which linklet is being run:
 (define (register-linklet-instantiate-continuation! k name)
@@ -374,7 +374,7 @@
 ;; Convert a contination to a list of function-name and
 ;; source information. Cache the result half-way up the
 ;; traversal, so that it's amortized constant time.
-(define cached-traces (make-weak-eq-hashtable))
+(define cached-traces (make-ephemeron-eq-hashtable))
 (define (continuation->trace k)
   (let ([i (inspect/object k)])
     (call-with-values

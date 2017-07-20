@@ -21,7 +21,8 @@
 (define (eq-hash-code x)
   (cond
    [(symbol? x) (symbol-fast-hash x)]
-   [(fixnum? x) x]
+   [(number? x) (number-hash x)]
+   [(char? x) (char->integer x)]
    [else
     (or (eq-hashtable-ref codes x #f)
         (let ([c (fx1+ counter)])

@@ -246,6 +246,7 @@
  (define minor-gcs 0)
  (define major-gcs 0)
  (define auto-gcs 0)
+ (define peak-mem 0)
  (set-garbage-collect-notify!
   (let ([root-logger (|#%app| current-logger)])
     (lambda (gen pre-allocated pre-allocated+overhead pre-time pre-cpu-time
@@ -254,6 +255,7 @@
         (if minor?
             (set! minor-gcs (add1 minor-gcs))
             (set! major-gcs (add1 major-gcs)))
+        (set! peak-mem (max peak-mem pre-allocated))
         (when (log-level? root-logger 'debug 'GC)
           (let ([delta (- pre-allocated post-allocated)])
             (log-message root-logger 'debug 'GC
@@ -274,7 +276,7 @@
       (when (log-level? root-logger 'info 'GC)
         (log-message root-logger 'info 'GC
                      (chez:format "0:atexit peak ~a; alloc ~a; major ~a; minor ~a; ~ams"
-                                  (K "" (maximum-memory-bytes))
+                                  (K "" peak-mem)
                                   (K "" (- (+ (bytes-deallocated) (bytes-allocated)) (initial-bytes-allocated)))
                                   major-gcs
                                   minor-gcs
