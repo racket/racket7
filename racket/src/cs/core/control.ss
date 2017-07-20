@@ -36,7 +36,7 @@
 ;; in `current-empty-k`.
 
 ;; The host Scheme implementation takes care of winders from
-;; `dynamic-wind`, which means that tings generally work if host
+;; `dynamic-wind`, which means that things generally work if host
 ;; functions uses `dynamic-wind` (e.g., for `with-input-from-file`).
 ;; We assume that no host Scheme winders end up using continuations
 ;; (or calling client-provided code that can use continuations), so
@@ -251,7 +251,7 @@
                   ;; Not necessarily called in tail position, but that's ok:
                   (lambda (k/no-wind)
                     ;; At this point, the winders list is empty.
-                    ;; Push another continuation frame so we can drop it's `next`
+                    ;; Push another continuation frame so we can drop its `next`
                     (call-as-non-tail
                      (lambda ()
                        ;; drop the rest of the current continuation from the
@@ -309,7 +309,7 @@
           [(applying? r)
            ;; We're applying a non-composable continuation --- past
            ;; this prompt, or else we would have stopped.
-           ;; Continue escaping to an encloding prompt:
+           ;; Continue escaping to an enclosing prompt:
            (current-metacontinuation (cdr (current-metacontinuation)))
            (apply-continuation (applying-c r)
                                (applying-args r))]))]))))
