@@ -20,13 +20,14 @@
 
 (define (read-syntax src in)
   (cond
-   [(default-read-handler? in)
-    (read* in
-           #:for-syntax? #t
-           #:source src)]
-   [else
-    ;; `values` forces a single result value:
-    (values ((port-read-handler in) in src))]))
+    [(default-read-handler? in)
+     (maybe-flush-stdout in)
+     (read* in
+            #:for-syntax? #t
+            #:source src)]
+    [else
+     ;; `values` forces a single result value:
+     (values ((port-read-handler in) in src))]))
 
 (define (read-syntax/recursive src in start readtable graph?)
   (read* in
@@ -39,12 +40,13 @@
 
 (define (read in)
   (cond
-   [(default-read-handler? in)
-    (read* in
-           #:for-syntax? #f)]
-   [else
-    ;; `values` forces a single result value:
-    (values ((port-read-handler in) in))]))
+    [(default-read-handler? in)
+     (maybe-flush-stdout in)
+     (read* in
+            #:for-syntax? #f)]
+    [else
+     ;; `values` forces a single result value:
+     (values ((port-read-handler in) in))]))
 
 (define (read/recursive in start readtable graph?)
   (read* in
@@ -137,6 +139,15 @@
     #t]
    [else
     (eq? default-read-handler (port-read-handler in))]))
+
+(define orig-input-port (current-input-port))
+(define orig-output-port (current-output-port))
+(define orig-error-port (current-error-port))
+
+(define (maybe-flush-stdout in)
+  (when (eq? in orig-input-port)
+    (flush-output orig-output-port)
+    (flush-output orig-error-port)))
 
 ;; ----------------------------------------
 

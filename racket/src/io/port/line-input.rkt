@@ -3,7 +3,8 @@
          "input-port.rkt"
          "bytes-input.rkt"
          "string-input.rkt"
-         "parameter.rkt")
+         "parameter.rkt"
+         "flush-output.rkt")
 
 (provide read-bytes-line
          read-line)
@@ -20,6 +21,7 @@
   (define/who (read-line [in (current-input-port)] [mode 'linefeed])
     (check who input-port? in)
     (check who ok-mode? #:contract ok-mode-str mode)
+    (maybe-flush-stdout in)
     (define cr? (memq mode '(return any any-one)))
     (define lf? (memq mode '(linefeed any any-one)))
     (define crlf? (memq mode '(return-linefeed any)))

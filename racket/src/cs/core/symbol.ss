@@ -35,8 +35,19 @@
           (putprop sym 'racket-unreadable u-sym)
           u-sym))))
 
-(define/who (symbol<? a b)
-  (check who symbol? a)
-  (check who symbol? b)
-  (string<? (symbol->string a)
-            (symbol->string b)))
+(define/who symbol<?
+  (case-lambda
+   [(a b)
+    (check who symbol? a)
+    (check who symbol? b)
+    (string<? (symbol->string a)
+              (symbol->string b))]
+   [(a . as)
+    (check who symbol? a)
+    (let loop ([a a] [as as] [r #t])
+      (cond
+       [(null? as) r]
+       [else
+        (let ([b (car as)])
+          (check who symbol? b)
+          (loop b (cdr as) (and r (symbol<? a b))))]))]))

@@ -28,6 +28,11 @@ LINKLET_DEPS = $(SCHEMIFY_DEPS) schemify.so
 EXPANDER_DEPS = $(LINKLET_DEPS) linklet.so
 MAIN_DEPS = $(EXPANDER_DEPS) expander.so
 
+all:
+	$(MAKE) rktio
+	$(MAKE) rktl
+	$(MAKE) expander.so
+
 expander-demo: expander.so demo/expander.ss
 	$(SCHEME) $(EXPANDER_DEPS) expander.so demo/expander.ss
 
@@ -135,6 +140,9 @@ compiled/io.scm: ../io/compiled/io.rktl $(CONVERT_DEPS)
 
 io-rktl:
 	$(MAKE) bounce BOUNCE_DIR=../io BOUNCE_TARGET=io-src
+
+rktio:
+	$(MAKE) bounce BOUNCE_DIR=../io BOUNCE_TARGET=rktio
 
 
 thread-demo: thread.so

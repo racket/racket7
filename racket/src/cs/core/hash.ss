@@ -724,6 +724,7 @@
 (define (prepare-weak-iterate! ht i)
   (let* ([current-vec (weak-equal-hash-keys ht)])
     (or (and i
+             current-vec
              (> (vector-length current-vec) i)
              current-vec)
         (let* ([len (max 16
@@ -751,16 +752,17 @@
                         ;; That's enough keys
                         (esc (void))
                         (loop (cdr l)))]))))))
+          (set-weak-equal-hash-keys! ht vec)
           vec))))
 
 (define (weak-hash-iterate-first ht)
   (weak-hash-iterate-next ht #f))
 
 (define (weak-hash-iterate-next ht init-i)
-  (let retry ([i init-i])
+  (let retry ([i (and init-i (add1 init-i))])
     (let* ([vec (prepare-weak-iterate! ht i)]
            [len (vector-length vec)])
-      (let loop ([i i])
+      (let loop ([i (or i 0)])
         (cond
          [(= i len)
           ;; expand set of prepared keys
@@ -774,7 +776,7 @@
              [(not p)
               ;; no more keys available
               #f]
-             [(bwp-object? (car p)) (add1 i)]
+             [(bwp-object? (car p)) (loop (add1 i))]
              [else i]))])))))
 
 (define (do-weak-hash-iterate-key who ht i)
@@ -792,10 +794,10 @@
      [else k])))
 
 (define (weak-hash-iterate-key ht i)
-  (do-weak-hash-iterate-key 'weak-hash-iterate-key ht i))
+  (do-weak-hash-iterate-key 'hash-iterate-key ht i))
 
 (define (weak-hash-iterate-value ht i)
-  (define key (do-weak-hash-iterate-key 'weak-hash-iterate-value ht i))
+  (define key (do-weak-hash-iterate-key 'hash-iterate-value ht i))
   (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
     (if (eq? val none)
         (raise-arguments-error
@@ -804,7 +806,7 @@
         val)))
 
 (define (weak-hash-iterate-key+value ht i)
-  (define key (do-weak-hash-iterate-key 'weak-hash-iterate-key+value ht i))
+  (define key (do-weak-hash-iterate-key 'hash-iterate-key+value ht i))
   (values key
           (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
             (if (eq? val none)
@@ -814,7 +816,7 @@
                 val))))
 
 (define (weak-hash-iterate-pair ht i)
-  (define key (do-weak-hash-iterate-key 'weak-hash-iterate-pair ht i))
+  (define key (do-weak-hash-iterate-key 'hash-iterate-pair ht i))
   (cons key
         (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
           (if (eq? val none)

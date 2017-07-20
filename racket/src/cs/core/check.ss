@@ -19,7 +19,6 @@
   (syntax-case stx (:test :contract :or-false)
     [(_ who pred :contract ctc v)
      #`(unless (pred v)
-         (chez:printf "~s ~s\n" who v)
          (raise-argument-error who ctc v))]
     [(_ who :test test-expr :contract ctc v)
      #`(unless test-expr

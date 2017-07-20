@@ -399,7 +399,7 @@
           (define int-id (unwrap id))
           (define ex-id (hash-ref exports int-id #f))
           (if ex-id
-              `(variable-set! ,ex-id ,(schemify rhs) ',(variable-constance int-id knowns mutated))
+              `(variable-set! ,ex-id ,(schemify rhs) '#f)
               `(set! ,id ,(schemify rhs)))]
          [`(variable-reference-constant? (#%variable-reference ,id))
           (let ([id (unwrap id)])

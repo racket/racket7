@@ -21,7 +21,7 @@ Requirements:
    By default, `make` will use the enclosing Racket build. Go back to
    the root of this repository/distribution and build so that at least
    the "compiler-lib" and "parser-tools-lib" packages are installed,
-   eiether with just `make` or with
+   either with just `make` or with
 
       make PKGS="compiler-lib parser-tools-lib"
 
@@ -31,8 +31,8 @@ Requirements:
 
 Building:
 
-Running `make` will build the Racket-on-Chez implementation and
-run a demo that loads `racket/base` from source.
+Running `make` will build the Racket-on-Chez implementation. Use `make
+expander-demo` to run a demo that loads `racket/base` from source.
 
 Use `make setup` to try to build ".zo" files for collection-based
 libraries. Compilation should get theough the main "collects"
@@ -116,8 +116,9 @@ Files in this directory:
          Racket) of the thread and event subsystem.
 
          CAUTION: The makefile here doesn't track dependencies for
-         "*.rktl" files, so run `make rktl` if you change any of those
-         implementations.
+         "*.rktl" files for any target except the default `make`
+         target. Run `make rktl` if you change any of those
+         implementations when using a target other than the default.
 
  ../build/so-rktio/rktio.rktl (generated) and
  ../../lib/librktio.{so,dylib,dll} (generated) - Created when building

@@ -23,14 +23,22 @@ demo-thread: compiled/rktio.rktl
 	$(RACO) make demo-thread.rkt
 	$(RACKET) demo-thread.rkt
 
+
 compiled/rktio.rktl: ../rktio/parse.rkt ../rktio/rktio.h
-	$(MAKE) build-rktio RACKET="`$(RACKET) ../cs/absify.rkt --exec $(RACKET)`" PREFIX="`$(RACKET) ../cs/absify.rkt ../..`"
+	$(MAKE) rktio
 	mkdir -p compiled
 	$(RACKET) ../rktio/parse.rkt -o compiled/rktio.rktl ../rktio/rktio.h
 
+rktio:
+	$(MAKE) ../build/so-rktio/Makefile
+	$(MAKE) build-rktio RACKET="`$(RACKET) ../cs/absify.rkt --exec $(RACKET)`" PREFIX="`$(RACKET) ../cs/absify.rkt ../..`"
+
 build-rktio:
-	mkdir -p ../build/so-rktio
-	cd ../build/so-rktio; ../../rktio/configure --enable-standalone --prefix=$(PREFIX)
 	cd ../build/so-rktio; make install-shared-object
 
-.PHONY: io-src demo
+../build/so-rktio/Makefile: ../rktio/configure ../rktio/Makefile.in ../rktio/rktio_config.h.in
+	mkdir -p ../build/so-rktio
+	cd ../build/so-rktio; ../../rktio/configure --enable-standalone --prefix=$(PREFIX)
+
+
+.PHONY: io-src demo rktio build-rktio

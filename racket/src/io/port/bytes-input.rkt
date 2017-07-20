@@ -5,7 +5,8 @@
          "read-and-peek.rkt"
          "input-port.rkt"
          "count.rkt"
-         "progress-evt.rkt")
+         "progress-evt.rkt"
+         "flush-output.rkt")
 
 (provide read-byte
          read-bytes
@@ -61,6 +62,7 @@
 (define/who (read-bytes amt [in (current-input-port)])
   (check who exact-nonnegative-integer? amt)
   (check who input-port? in)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (define bstr (make-bytes amt))
     (define v (do-read-bytes! 'read-bytes in bstr 0 amt))
@@ -77,6 +79,7 @@
   (check who exact-nonnegative-integer? start-pos)
   (check who exact-nonnegative-integer? end-pos)
   (check-range who start-pos end-pos (bytes-length bstr) bstr)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (do-read-bytes! who in bstr start-pos end-pos)))
 
@@ -88,6 +91,7 @@
   (check who exact-nonnegative-integer? start-pos)
   (check who exact-nonnegative-integer? end-pos)
   (check-range who start-pos end-pos (bytes-length bstr) bstr)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (read-some-bytes! who in bstr start-pos end-pos #:zero-ok? zero-ok? #:enable-break? enable-break?)))
 
@@ -138,6 +142,7 @@
   (check who exact-nonnegative-integer? amt)
   (check who exact-nonnegative-integer? skip-k)
   (check who input-port? in)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (define bstr (make-bytes amt))
     (define v (do-peek-bytes! 'read-bytes in bstr 0 amt skip-k))
@@ -155,6 +160,7 @@
   (check who exact-nonnegative-integer? start-pos)
   (check who exact-nonnegative-integer? end-pos)
   (check-range who start-pos end-pos (bytes-length bstr) bstr)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (do-peek-bytes! who in bstr start-pos end-pos skip-k)))
 
@@ -171,6 +177,7 @@
   (when progress-evt
     (check-progress-evt who progress-evt in))
   (check-range who start-pos end-pos (bytes-length bstr) bstr)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (peek-some-bytes! who in bstr start-pos end-pos skip-k
                       #:progress-evt progress-evt                      

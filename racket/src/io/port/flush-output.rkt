@@ -1,11 +1,13 @@
 #lang racket/base
 (require "../common/check.rkt"
          "../host/thread.rkt"
+         "parameter.rkt"
          "output-port.rkt")
 
-(provide flush-output)
+(provide flush-output
+         maybe-flush-stdout)
 
-(define/who (flush-output p)
+(define/who (flush-output [p (current-output-port)])
   (check who output-port? p)
   (let ([p (->core-output-port p)])
     (let loop ()
@@ -15,3 +17,14 @@
         [(eq? r 0) (void)]
         [(not r) (loop)]
         [else (error 'flush-output "weird result")]))))
+
+;; ----------------------------------------
+
+(define orig-input-port (current-input-port))
+(define orig-output-port (current-output-port))
+(define orig-error-port (current-error-port))
+
+(define (maybe-flush-stdout in)
+  (when (eq? in orig-input-port)
+    (flush-output orig-output-port)
+    (flush-output orig-error-port)))

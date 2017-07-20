@@ -28,8 +28,10 @@
 (define-syntax check
   (syntax-rules ()
     [(_ a b)
-     (unless (equal? a b)
-       (error 'check (format "failed ~s" 'a)))]))
+     (let ([av a]
+           [bv b])
+       (unless (equal? av bv)
+         (error 'check (format "failed ~s = ~s [expected ~s]" 'a av bv))))]))
 
 (check (equal? (top 1 2) (top 1 3)) #t)
 (check (equal? (top 1 2) (top 2 2)) #f)
@@ -325,7 +327,16 @@
                                       'three-hundred
                                       (string->number e)))
                   (error 'weak "wrong value"))]))
-            evens))
+            evens)
+  (let loop ([i (hash-iterate-first ht)] [c 0])
+    (if i
+        (begin
+          (check (string? (hash-iterate-key ht i)) #t)
+          (loop (hash-iterate-next ht i) (add1 c)))
+        (check (hash-count ht) c)))
+  (check (positive? (length evens)) #t))
+
+(check (hash-iterate-first (make-weak-hash)) #f)
 
 ;; ----------------------------------------
 

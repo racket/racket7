@@ -6,7 +6,8 @@
          "input-port.rkt"
          (submod "bytes-input.rkt" internal)
          "../string/utf-8-decode.rkt"
-         "count.rkt")
+         "count.rkt"
+         "flush-output.rkt")
 
 (provide read-char
          read-string
@@ -253,6 +254,7 @@
 (define/who (read-string amt [in (current-input-port)])
   (check who exact-nonnegative-integer? amt)
   (check who input-port? in)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (define bstr (make-string amt))
     (define v (do-read-string! 'read-string in bstr 0 amt))
@@ -269,6 +271,7 @@
   (check who exact-nonnegative-integer? start-pos)
   (check who exact-nonnegative-integer? end-pos)
   (check-range who start-pos end-pos (string-length str) str)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (do-read-string! who in str start-pos end-pos)))
 
@@ -305,6 +308,7 @@
   (check who exact-nonnegative-integer? amt)
   (check who exact-nonnegative-integer? skip-k)
   (check who input-port? in)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (define bstr (make-string amt))
     (define v (do-peek-string! who bstr in 0 amt skip-k))
@@ -322,5 +326,6 @@
   (check who exact-nonnegative-integer? start-pos)
   (check who exact-nonnegative-integer? end-pos)
   (check-range who start-pos end-pos (string-length str) str)
+  (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (do-peek-string! who str in start-pos end-pos skip-k)))

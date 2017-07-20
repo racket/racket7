@@ -248,7 +248,8 @@
     (cond
      [(variable-constance var)
       (raise
-       (exn:fail:contract:variable
+       (|#%app|
+        exn:fail:contract:variable
         (string-append (symbol->string (variable-name var))
                        ": cannot modify constant")
         (current-continuation-marks)
@@ -262,7 +263,8 @@
     (define v (variable-val var))
     (if (eq? v unsafe-undefined)
         (raise
-         (exn:fail:contract:variable
+         (|#%app|
+          exn:fail:contract:variable
           (string-append (symbol->string (variable-name var))
                          ": undefined;\n cannot reference undefined identifier")
           (current-continuation-marks)

@@ -2,6 +2,7 @@
 (require "../common/check.rkt"
          "input-port.rkt"
          "output-port.rkt"
+         "flush-output.rkt"
          "../print/main.rkt")
 
 (provide port-read-handler
@@ -35,9 +36,11 @@
   (case-lambda
     [(i)
      (check who input-port? i)
+     (maybe-flush-stdout i)
      (installed-read i)]
     [(i src)
      (check who input-port? i)
+     (maybe-flush-stdout i)
      (installed-read-syntax src i)]))
 
 (define installed-read #f)
