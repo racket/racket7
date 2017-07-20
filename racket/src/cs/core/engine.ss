@@ -1,8 +1,8 @@
 ;; Like Chez's engine API, but
-;;   - works with delimites-continuations entensions in "core-control.ss"
+;;   - works with delimited-continuations extensions in "core-control.ss"
 ;;   - doesn't run winders when suspending or resuming an engine
 ;;   - accepts an extra "prefix" argument to run code within an engine
-;;     just before resuming te engine's continuation
+;;     just before resuming the engine's continuation
 
 ;; Don't mix Chez engines with this implementation, because we take
 ;; over the timer.
@@ -63,7 +63,7 @@
       (error 'engine-block "not currently running an engine"))
     (reset-handler (engine-state-reset-handler es))
     (start-implicit-uninterrupted 'block)
-    ;; Extra pair of parens awround swap is to apply a prefix
+    ;; Extra pair of parens around swap is to apply a prefix
     ;; function on swapping back in:
     ((swap-metacontinuation
       (engine-state-mc es)
