@@ -8,6 +8,9 @@ This is a work-in-progress implementation of Racket with
 
      racket/src/cs/README.txt
 
+If you just `make` in the top-level directory, you're getting the
+first bullet above, but not the second one.
+
 ----------------------------------------
 
 This is the source code for the core of Racket.  See
