@@ -46,6 +46,7 @@
           engine-block
           engine-return
           set-ctl-c-handler! ; not exported to Racket
+          get-ctl-c-handler  ; not exported to Racket
           set-scheduler-lock-callbacks! ; not exported to Racket
 
           make-thread-cell

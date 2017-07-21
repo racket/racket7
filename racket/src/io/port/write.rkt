@@ -51,7 +51,7 @@
                v]
               [else
                (end-atomic)
-               (internal-error (format "write-some-bytes: weird result ~s for ~s ~s ~s" v bstr start end))]))]
+               (internal-error (format "write-some-bytes: weird result ~s for ~s ~s ~s at ~s" v bstr start end out))]))]
          [else
           (end-atomic)
           (try-again (->core-output-port write-out))])])))

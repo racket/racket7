@@ -62,6 +62,7 @@
 
            make-initial-thread
            root-thread
+           thread-running?
            thread-dead!
            thread-did-work!
            
@@ -95,7 +96,7 @@
                     
                      [needs-retry? #:mutable] ; => resuming implies an retry action
                      
-                     [pending-break? #:mutable]
+                     [pending-break #:mutable] ; #f, 'break, 'hang-up, or 'terminate
                      [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
                      [forward-break-to #:mutable] ; #f or a thread to receive ths thread's breaks
                      
@@ -151,7 +152,7 @@
 
                     #f ; needs-retry?
 
-                    #f ; pending-break?
+                    #f ; pending-break
                     #f ; ignore-thread-cells
                     #f; forward-break-to
 
@@ -497,7 +498,7 @@
   (define t (current-thread))
   ((atomically
     (cond
-     [(and (thread-pending-break? t)
+     [(and (thread-pending-break t)
            (break-enabled)
            (not (thread-ignore-break-cell? t (current-break-enabled-cell)))
            (zero? (current-break-suspend))
@@ -505,30 +506,40 @@
            ;; break checking to the continuation (instead
            ;; of raising an asynchronous exception now)
            (not (thread-needs-retry? t)))
-      (set-thread-pending-break?! t #f)
+      (define exn:break* (case (thread-pending-break t)
+                           [(hang-up) exn:break:hang-up/non-engine]
+                           [(terminate) exn:break:terminate/non-engine]
+                           [else exn:break/non-engine]))
+      (set-thread-pending-break! t #f)
       (lambda ()
         ;; Out of atomic mode
         (call-with-escape-continuation
          (lambda (k)
-           (raise (exn:break/non-engine
+           (raise (exn:break*
                    "user break"
                    (current-continuation-marks)
                    k)))))]
      [else void]))))
 
-(define/who (break-thread t)
+(define/who (break-thread t [kind #f])
   (check who thread? t)
-  (do-break-thread t (current-thread)))
+  (check who (lambda (k) (or (not k) (eq? k 'hang-up) (eq? k 'terminate)))
+         #:contract "(or/c #f 'hang-up 'terminate)"
+         kind)
+  (do-break-thread t (or kind 'break) (current-thread)))
 
-(define (do-break-thread t check-t)
+(define (do-break-thread t kind check-t)
   ((atomically
-    (unless (thread-pending-break? t)
-      (cond
-        [(thread-forward-break-to t)
-         => (lambda (other-t)
-              (lambda () (do-break-thread other-t check-t)))]
-        [else
-         (set-thread-pending-break?! t #t)
+    (cond
+      [(thread-forward-break-to t)
+       => (lambda (other-t)
+            (lambda () (do-break-thread other-t kind check-t)))]
+      [else
+       (when (and (thread-pending-break t)
+                  (break>? kind (thread-pending-break t)))
+         (set-thread-pending-break! t kind))
+       (unless (thread-pending-break t)
+         (set-thread-pending-break! t kind)
          (unless (thread-suspended? t)
            (cond
              [(thread-interrupt-callback t)
@@ -538,15 +549,21 @@
                    ;; turn out to be disabled, the wait will be
                    ;; retried through the retry callback
                    (interrupt-callback)
-                   (thread-internal-resume! t))]))
-         void]))))
+                   (thread-internal-resume! t))])))
+       void])))
   (when (eq? t check-t)
     (check-for-break)))
 
+(define (break>? k1 k2)
+  (cond
+    [(eq? k1 'break) #f]
+    [(eq? k1 'hang-up) (eq? k2 'break)]
+    [else (not (eq? k2 'terminate))]))
+
 (void
  (set-ctl-c-handler!
-  (lambda ()
-    (do-break-thread root-thread #f))))
+  (lambda (kind)
+    (do-break-thread root-thread kind #f))))
 
 ;; in atomic mode:
 (define (thread-ignore-break-cell? t bc)

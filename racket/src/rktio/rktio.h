@@ -902,6 +902,23 @@ RKTIO_EXTERN void rktio_flush_signals_received(rktio_t *rktio);
 /* Clears any pending signal so that it doesn't interrupt the next
    `rktio_sleep`. */
 
+RKTIO_EXTERN void rktio_install_os_signal_handler(rktio_t *rktio);
+/* Installs OS-level handlers for SIGINT, SIGTERM, and SIGHUP (or
+   Ctl-C on Windows) to signal the handle of `rktio` and also record
+   the signal for reporting via `rktio_poll_os_signal`. Only one
+   `rktio` can be registered this way at a time. This function must
+   not be called in two threads at the same time. */
+
+RKTIO_EXTERN_NOERR int rktio_poll_os_signal(rktio_t *rktio);
+/* Returns one of the following, not counting the last one: */
+#define RKTIO_OS_SIGNAL_NONE (-1)
+enum {
+  RKTIO_OS_SIGNAL_INT,
+  RKTIO_OS_SIGNAL_TERM,
+  RKTIO_OS_SIGNAL_HUP,
+  RKTIO_NUM_OS_SIGNALS
+};
+
 /*************************************************/
 /* Time and date                                 */
 

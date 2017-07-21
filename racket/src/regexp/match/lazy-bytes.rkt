@@ -49,11 +49,12 @@
   ;; we have the byte
   (bytes-ref (lazy-bytes-bstr s) (- pos (lazy-bytes-discarded-count s))))
 
-(define (lazy-bytes-advance! s pos force?)
+(define (lazy-bytes-advance! s given-pos force?)
   ;; If we advance far enough and not peeking,
   ;; then flush unneeded bytes...
   ;; The promise is that we won't ask for bytes before
   ;; `pos` minus the `max-lookbehind`
+  (define pos (min given-pos (lazy-bytes-end s)))
   (when force?
     (lazy-bytes-before-end? s pos 'eof))
   (when (and (lazy-bytes? s)

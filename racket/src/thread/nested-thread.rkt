@@ -64,8 +64,8 @@
    (make-thread-cell #f)
    (begin
      
-     (when (thread-pending-break? t)
-       (break-thread (current-thread)))
+     (when (thread-pending-break t)
+       (break-thread (current-thread) (thread-pending-break t)))
      
      (when (eq? result-kind 'exn)
        (raise result))

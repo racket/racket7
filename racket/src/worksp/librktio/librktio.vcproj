@@ -143,6 +143,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\rktio\rktio_signal.c"
+				>
+			</File>
+			<File
 				RelativePath="..\..\rktio\rktio_envvars.c"
 				>
 			</File>

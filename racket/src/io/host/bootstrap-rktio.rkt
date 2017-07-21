@@ -3,7 +3,9 @@
          (only-in '#%linklet primitive-table)
          ffi/unsafe
          ffi/unsafe/atomic
-         (for-syntax racket/base))
+         (for-syntax racket/base)
+         (only-in racket/base
+                  [void racket:void]))
 
 (define librktio (ffi-lib "librktio"))
 
@@ -131,6 +133,12 @@
           null))
     (rktio_free lls)))
 
+(define (rktio_do_install_os_signal_handler rktio)
+  (racket:void))
+(define (rktio_get_ctl_c_handler)
+  (lambda (k)
+    (racket:void)))
+
 (primitive-table '#%rktio
                  (let ()
                    (define-syntax extract-functions
@@ -163,6 +171,8 @@
                                          'rktio_convert_result_to_vector rktio_convert_result_to_vector
                                          'rktio_to_bytes rktio_to_bytes
                                          'rktio_to_bytes_list rktio_to_bytes_list
-                                         'rktio_to_shorts rktio_to_shorts]
+                                         'rktio_to_shorts rktio_to_shorts
+                                         'rktio_do_install_os_signal_handler rktio_do_install_os_signal_handler
+                                         'rktio_get_ctl_c_handler rktio_get_ctl_c_handler]
                                         form ...))
                    (include "../compiled/rktio.rktl")))

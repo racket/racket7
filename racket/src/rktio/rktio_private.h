@@ -99,6 +99,8 @@ struct rktio_t {
 #ifdef RKTIO_SYSTEM_WINDOWS
   HANDLE hEventLog;
 #endif
+
+  int pending_os_signals[RKTIO_NUM_OS_SIGNALS];
 };
 
 /*========================================================================*/
@@ -324,3 +326,6 @@ void rktio_syslog_clean(rktio_t* rktio);
 #endif
 
 char *rktio_strndup(char *s, intptr_t len);
+
+void rktio_set_signal_handler(int sig_id, void (*proc)(int));
+void rktio_forget_os_signal_handler(rktio_t *rktio);

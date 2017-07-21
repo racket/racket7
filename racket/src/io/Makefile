@@ -30,10 +30,10 @@ compiled/rktio.rktl: ../rktio/parse.rkt ../rktio/rktio.h
 	$(RACKET) ../rktio/parse.rkt -o compiled/rktio.rktl ../rktio/rktio.h
 
 rktio:
-	$(MAKE) ../build/so-rktio/Makefile
 	$(MAKE) build-rktio RACKET="`$(RACKET) ../cs/absify.rkt --exec $(RACKET)`" PREFIX="`$(RACKET) ../cs/absify.rkt ../..`"
 
 build-rktio:
+	$(MAKE) ../build/so-rktio/Makefile
 	cd ../build/so-rktio; make install-shared-object
 
 ../build/so-rktio/Makefile: ../rktio/configure ../rktio/Makefile.in ../rktio/rktio_config.h.in

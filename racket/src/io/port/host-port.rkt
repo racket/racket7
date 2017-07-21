@@ -167,6 +167,7 @@
             [(rktio-error? n)
              (end-atomic)
              (raise-filesystem-error #f n "error writing to stream port")]
+            [(zero? n) (wrap-evt evt (lambda (v) #f))]
             [else n])]))
 
      #:get-write-evt-via-write-out? #t

@@ -78,8 +78,16 @@
   (cond
    [(and (not (sandman-any-sleepers?))
          (not (any-idle-waiters?)))
-    ;; all threads done
-    (void)]
+    ;; all threads done or blocked
+    (cond
+      [(thread-running? root-thread)
+       ;; we shouldn't exit, because the main thread is
+       ;; blocked, but it's not going to become unblocked;
+       ;; sleep forever or until a signal changes things
+       (process-sleep)
+       (select-thread!)]
+      [else
+       (void)])]
    [else
     ;; try again, which should lead to `process-sleep`
     (select-thread!)]))

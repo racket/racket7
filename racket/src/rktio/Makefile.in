@@ -31,6 +31,7 @@ OBJS = rktio_fs.@LTO@ \
        rktio_network.@LTO@ \
        rktio_pipe.@LTO@ \
        rktio_process.@LTO@ \
+       rktio_signal.@LTO@ \
        rktio_envvars.@LTO@ \
        rktio_fs_change.@LTO@ \
        rktio_flock.@LTO@ \
@@ -82,6 +83,9 @@ rktio_pipe.@LTO@: $(srcdir)/rktio_pipe.c $(RKTIO_HEADERS)
 
 rktio_process.@LTO@: $(srcdir)/rktio_process.c $(RKTIO_HEADERS)
 	$(CC) $(CFLAGS) -I$(srcdir) -I. -o rktio_process.@LTO@ -c $(srcdir)/rktio_process.c
+
+rktio_signal.@LTO@: $(srcdir)/rktio_signal.c $(RKTIO_HEADERS)
+	$(CC) $(CFLAGS) -I$(srcdir) -I. -o rktio_signal.@LTO@ -c $(srcdir)/rktio_signal.c
 
 rktio_envvars.@LTO@: $(srcdir)/rktio_envvars.c $(RKTIO_HEADERS)
 	$(CC) $(CFLAGS) -I$(srcdir) -I. -o rktio_envvars.@LTO@ -c $(srcdir)/rktio_envvars.c

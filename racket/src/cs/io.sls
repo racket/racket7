@@ -165,6 +165,12 @@
              null))
        (rktio_free lls)))
 
+    (define (rktio_do_install_os_signal_handler rktio)
+      (rktio_install_os_signal_handler rktio))
+
+    (define (rktio_get_ctl_c_handler)
+      (get-ctl-c-handler))
+
     (define |#%rktio-instance|
       (let ()
         (define-syntax extract-functions
@@ -199,7 +205,9 @@
                                  'rktio_convert_result_to_vector rktio_convert_result_to_vector
                                  'rktio_to_bytes rktio_to_bytes
                                  'rktio_to_bytes_list rktio_to_bytes_list
-                                 'rktio_to_shorts rktio_to_shorts]
+                                 'rktio_to_shorts rktio_to_shorts
+                                 'rktio_do_install_os_signal_handler rktio_do_install_os_signal_handler
+                                 'rktio_get_ctl_c_handler rktio_get_ctl_c_handler]
                                 form ...)]))
         (include "../io/compiled/rktio.rktl"))))
   

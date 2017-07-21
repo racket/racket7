@@ -90,6 +90,8 @@
 (define break-enabled-key (gensym 'break-enabled))
 
 (struct exn:break/non-engine exn:break ())
+(struct exn:break:hang-up/non-engine exn:break/non-engine ())
+(struct exn:break:terminate/non-engine exn:break/non-engine ())
 
 (primitive-table '#%engine
                  (hash 
@@ -107,4 +109,8 @@
                   'break-enabled-key
                   break-enabled-key
                   'exn:break/non-engine
-                  exn:break/non-engine))
+                  exn:break/non-engine
+                  'exn:break:hang-up/non-engine
+                  exn:break:hang-up/non-engine
+                  'exn:break:terminate/non-engine
+                  exn:break:terminate/non-engine))

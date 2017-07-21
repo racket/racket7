@@ -12,7 +12,11 @@
 (define current-engine-state (internal-make-thread-parameter #f))
 
 (define (set-ctl-c-handler! proc)
-  (keyboard-interrupt-handler proc))
+  (keyboard-interrupt-handler (case-lambda
+                               [() (proc 'break)]
+                               [(kind) (proc kind)])))
+(define (get-ctl-c-handler)
+  (keyboard-interrupt-handler))
 
 (define (make-engine thunk init-break-enabled-cell empty-config?)
   (let ([paramz (if empty-config?

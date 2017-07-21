@@ -49,6 +49,8 @@
 (define-function #f rktio_to_bytes_list)
 (define-function #f rktio_to_shorts)
 (define-function #f rktio_NULL)
+(define-function #f rktio_do_install_os_signal_handler)
+(define-function #f rktio_get_ctl_c_handler)
 
 ;; Add an explicit nul terminator, since the host system's
 ;; representation of byte strings might not always have one.
@@ -70,3 +72,5 @@
        (eqv? (rktio-errno v) errno)))
 
 (define rktio (rktio_init))
+
+(void (rktio_do_install_os_signal_handler rktio))

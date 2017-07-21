@@ -32,7 +32,9 @@
                      'set-ctl-c-handler! core:set-ctl-c-handler!
                      'root-continuation-prompt-tag core:root-continuation-prompt-tag
                      'break-enabled-key break-enabled-key
-                     'exn:break/non-engine exn:break)]
+                     'exn:break/non-engine exn:break
+                     'exn:break:hang-up/non-engine exn:break:hang-up
+                     'exn:break:terminate/non-engine exn:break:terminate)]
       [else #f]))
 
   ;; Tie knots:
