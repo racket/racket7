@@ -87,7 +87,10 @@
 
   ;; Used before/after write:
   (define (check-input-unblocking)
-    (when (and (input-empty?) (not output-closed?)) (semaphore-post read-ready-sema)))
+    (when (and (input-empty?) (not output-closed?)) (semaphore-post read-ready-sema))
+    (when more-read-ready-sema
+      (semaphore-post more-read-ready-sema)
+      (set! more-read-ready-sema #f)))
   (define (check-output-blocking)
     (when (output-full?) (semaphore-wait write-ready-sema)))
 
@@ -319,6 +322,8 @@
          (set! output-closed? #t)
          (when write-ready-sema
            (semaphore-post write-ready-sema))
+         (when more-read-ready-sema
+           (semaphore-post more-read-ready-sema))
          (semaphore-post read-ready-sema)))))
 
   ;; Results ----------------------------------------

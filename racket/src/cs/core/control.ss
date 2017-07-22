@@ -302,7 +302,7 @@
                     (aborting-args r))]
             [else
              ;; Aborting to an enclosing prompt, so keep going:
-             (current-metacontinuation (cdr (current-metacontinuation)))
+             (pop-metacontinuation-frame)
              (do-abort-current-continuation (aborting-tag r)
                                             (aborting-args r)
                                             (aborting-wind? r))])]
@@ -310,7 +310,7 @@
            ;; We're applying a non-composable continuation --- past
            ;; this prompt, or else we would have stopped.
            ;; Continue escaping to an enclosing prompt:
-           (current-metacontinuation (cdr (current-metacontinuation)))
+           (pop-metacontinuation-frame)
            (apply-continuation (applying-c r)
                                (applying-args r))]))]))))
 
@@ -366,8 +366,11 @@
     ((reset-handler))]
    [else
     (unless wind? (#%$current-winders '()))
-    ((metacontinuation-frame-resume-k/no-wind (car (current-metacontinuation)))
-     (make-aborting tag args wind?))]))
+    (let ([mf (car (current-metacontinuation))])
+      ((metacontinuation-frame-resume-k/no-wind mf)
+       ;; An `aborting` record tells the metacontinuation's continuation
+       ;; to handle to continue jumping:
+       (make-aborting tag args wind?)))]))
 
 ;; ----------------------------------------
 
@@ -379,7 +382,7 @@
    #f
    (lambda ()
      (end-uninterrupted 'barrier)
-     (p))))
+     (|#%app| p))))
 
 ;; ----------------------------------------
 ;; Capturing and applying continuations
@@ -402,7 +405,8 @@
       (lambda ()
         (call/cc
          (lambda (k)
-           (proc
+           (|#%app|
+            proc
             (make-non-composable-continuation
              k
              (current-mark-stack)
@@ -423,7 +427,8 @@
    (lambda ()
      ((if wind? call/cc call/cc-no-winders)
       (lambda (k)
-        (p
+        (|#%app|
+         p
          ((if wind?
               make-composable-continuation
               make-composable-continuation/no-wind)
@@ -440,7 +445,7 @@
   (let ([tag (make-continuation-prompt-tag)])
     (call-with-continuation-prompt
      (lambda ()
-       (p (make-escape-continuation tag)))
+       (|#%app| p (make-escape-continuation tag)))
      tag
      values)))
 
@@ -460,30 +465,32 @@
        ;; with the composable one:
        (if (composable-continuation/no-wind? c)
            (apply-immediate-continuation/no-wind c args)
-           (apply-immediate-continuation c args))))]
+           (apply-immediate-continuation c (reverse (full-continuation-mc c)) args))))]
    [(non-composable-continuation? c)
-    (let* ([tag (non-composable-continuation-tag c)]
-           [common-mc
-            ;; We check every time, just in case control operations
-            ;; change the current continuation out from under us.
-            (find-common-metacontinuation (full-continuation-mc c)
-                                          (current-metacontinuation)
-                                          (strip-impersonator tag))])
-      (cond
-       [(eq? common-mc (current-metacontinuation))
-        ;; Add a cc guard if `tag` is impersonated:
-        (wrap-cc-guard-for-impersonator! tag)
-        ;; Replace the current metacontinuation frame's continuation
-        ;; with the saved one; this replacement will take care of any
-        ;; shared winders within the frame.
-        (apply-immediate-continuation c args)]
-       [else
-        ;; Jump back to the nearest prompt, then continue jumping
-        ;; as needed from there:
-        ((metacontinuation-frame-resume-k/no-wind (car (current-metacontinuation)))
-         ;; An `applying` record tells the metacontinuation's continuation
-         ;; to continue jumping:
-         (make-applying c args))]))]
+    (let* ([tag (non-composable-continuation-tag c)])
+      (let-values ([(common-mc   ; shared part of the current metacontinuation
+                     rmc-append) ; non-shared part of the destination metacontinuation
+                    ;; We check every time, just in case control operations
+                    ;; change the current continuation out from under us.
+                    (find-common-metacontinuation (full-continuation-mc c)
+                                                  (current-metacontinuation)
+                                                  (strip-impersonator tag))])
+        (cond
+         [(eq? common-mc (current-metacontinuation))
+          ;; Add a cc guard if `tag` is impersonated:
+          (wrap-cc-guard-for-impersonator! tag)
+          ;; Replace the current metacontinuation frame's continuation
+          ;; with the saved one; this replacement will take care of any
+          ;; shared winders within the frame.
+          (apply-immediate-continuation c rmc-append args)]
+         [else
+          ;; Jump back to the nearest prompt, then continue jumping
+          ;; as needed from there:
+          (let ([mf (car (current-metacontinuation))])
+            ((metacontinuation-frame-resume-k/no-wind mf)
+             ;; An `applying` record tells the metacontinuation's continuation
+             ;; to continue jumping:
+             (make-applying c args)))])))]
    [(escape-continuation? c)
     (let ([tag (escape-continuation-tag c)])
       (unless (continuation-prompt-available? tag)
@@ -492,9 +499,9 @@
       (do-abort-current-continuation tag args #t))]))
 
 ;; Apply a continuation within the current metacontinuation frame:
-(define (apply-immediate-continuation c args)
+(define (apply-immediate-continuation c rmc args)
   (call-with-appended-metacontinuation
-   (full-continuation-mc c)
+   rmc
    (lambda ()
      (current-mark-stack (full-continuation-mark-stack c))
      (current-empty-k (full-continuation-empty-k c))
@@ -551,10 +558,11 @@
              [rev-mc rev-mc]
              [base-current-mc base-current-mc])
     (cond
-     [(null? rev-mc) base-current-mc]
+     [(null? rev-mc) (values base-current-mc '())]
      [(null? rev-current)
       (check-for-barriers rev-mc)
-      base-current-mc]
+      ;; Return the shared part plus the unshared-to-append part
+      (values base-current-mc rev-mc)]
      [(eq? (metacontinuation-frame-resume-k (car rev-mc))
            (metacontinuation-frame-resume-k (caar rev-current)))
       ;; Matches, so update base and look shallower
@@ -565,8 +573,8 @@
       ;; Doesn't match, so we've found the shared part;
       ;; check for barriers that we'd have to reintroduce
       (check-for-barriers rev-mc)
-      ;; Return the shared part
-      (cdar rev-current)])))
+      ;; Return the shared part plus the unshared-to-append part
+      (values (cdar rev-current) rev-mc)])))
 
 (define (check-for-barriers rev-mc)
   (let loop ([rev-mc rev-mc])
@@ -629,7 +637,7 @@
     (raise-arguments-error who "continuation includes no prompt with the given tag"
                            "tag" tag)))
 
-(define (call-with-appended-metacontinuation mc proc)
+(define (call-with-appended-metacontinuation rmc proc)
   ;; Assumes that the current metacontinuation frame is ready to be
   ;; replaced with `mc` plus `proc`.
   ;; In the simple case of no winders and an empty frame immediate
@@ -637,7 +645,7 @@
   ;;  (current-metacontinuation (append mc (current-metacontinuation)))
   ;; But, to run winders and replace anything in the current frame,
   ;; we proceed frame-by-frame in `mc`.
-  (let loop ([rmc (reverse mc)])
+  (let loop ([rmc rmc])
     (cond
      [(null? rmc) (proc)]
      [else
@@ -655,7 +663,7 @@
                              ;; resuming appended winders, but we'll keep
                              ;; them in the metacontinuation, instead:
                              (#%$current-winders '())
-                             ;; addend frame:
+                             ;; add frame:
                              (current-metacontinuation (cons mf (current-metacontinuation)))
                              ;; next...
                              (loop rmc))))]))])))
@@ -739,7 +747,10 @@
                           (hasheq key val)
                           #f))
   (proc)
-  (current-mark-stack (mark-stack-frame-prev (current-mark-stack))))
+  ;; If we're in an escape process, then `(current-mark-stack)` might not
+  ;; match, and that's ok; it doesn't matter what we set the mark stack to
+  (when (current-mark-stack)
+    (current-mark-stack (mark-stack-frame-prev (current-mark-stack)))))
 
 (define (current-mark-chain)
   (get-current-mark-chain (current-mark-stack) (current-metacontinuation)))
@@ -804,13 +815,13 @@
         [else
          (call/cc (lambda (k)
                     (if (eq? k (mark-stack-frame-k (current-mark-stack)))
-                        (proc (let ([v (intmap-ref (mark-stack-frame-table (current-mark-stack))
-                                                   key
-                                                   none)])
-                                (if (eq? v none)
-                                    default-v
-                                    (wrapper v))))
-                        (proc default-v))))]))]))
+                        (|#%app| proc (let ([v (intmap-ref (mark-stack-frame-table (current-mark-stack))
+                                                           key
+                                                           none)])
+                                        (if (eq? v none)
+                                            default-v
+                                            (wrapper v))))
+                        (|#%app| proc default-v))))]))]))
 
 (define/who continuation-mark-set-first
   (case-lambda
@@ -1106,7 +1117,8 @@
       (cond
        [(or (continuation-mark-key-impersonator? k)
             (continuation-mark-key-chaperone? k))
-        (let ([new-v ((if (continuation-mark-key-impersonator? k)
+        (let ([new-v (|#%app|
+                      (if (continuation-mark-key-impersonator? k)
                           (continuation-mark-key-impersonator-set k)
                           (continuation-mark-key-chaperone-set k))
                       v)])
@@ -1136,7 +1148,7 @@
               [get-rest (loop (impersonator-next k))])
           (lambda (v)
             (let* ([v (get-rest v)]
-                   [new-v (get v)])
+                   [new-v (|#%app| get v)])
               (unless (or (continuation-mark-key-impersonator? k)
                           (chaperone-of? new-v v))
                 (raise-chaperone-error who "value" v new-v))
@@ -1313,7 +1325,7 @@
                              (continuation-prompt-tag-impersonator-or-chaperone-procs tag))]
             [chaperone? (continuation-prompt-tag-chaperone? tag)])
         (loop! (impersonator-next tag))
-        (let ([new-cc-guard (cc-impersonate (current-cc-guard))])
+        (let ([new-cc-guard (|#%app| cc-impersonate (current-cc-guard))])
           (when chaperone?
             (unless (chaperone-of? new-cc-guard (current-cc-guard))
               (raise-chaperone-error 'call-with-current-continuation

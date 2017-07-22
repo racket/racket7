@@ -500,7 +500,8 @@
 
 (define (condition->exn v)
   (if (condition? v)
-      (|#%app| exn:fail (exn->string v) (current-continuation-marks))
+      ;; FIXME: To a good approximation, everything is a contract error, but...
+      (|#%app| exn:fail:contract (exn->string v) (current-continuation-marks))
       v))
 
 (define/who uncaught-exception-handler
@@ -535,12 +536,12 @@
                                               exception-handler-key
                                               the-root-continuation-prompt-tag)]
              [v (condition->exn v)])
-         (let loop ([hs hs])
+         (let loop ([hs hs] [v v])
            (cond
             [(null? hs)
              (|#%app| (|#%app| uncaught-exception-handler) v)]
             [else
              (let ([h (car hs)]
                    [hs (cdr hs)])
-               (|#%app| h v)
-               (loop hs))])))]))))
+               (let ([new-v (|#%app| h v)])
+                 (loop hs new-v)))])))]))))
