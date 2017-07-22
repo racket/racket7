@@ -2,6 +2,12 @@
 (define-record-type (flvector create-flvector flvector?)
   (fields bstr))
 
+(define (flvector=? a b eql?)
+  (bytevector=? (flvector-bstr a) (flvector-bstr b)))
+
+(define (flvector-hash-code a hc)
+  (hc (flvector-bstr a)))
+
 (define (do-flvector who xs)
   (let ([bstr (make-bytevector (* 8 (length xs)))])
     (let loop ([xs xs] [i 0])
@@ -102,3 +108,11 @@
   (case-lambda
    [(size) (make-shared-flvector size 0.0)]
    [(size init) (do-make-flvector 'make-shared-flvector size init)]))
+
+;; ----------------------------------------
+
+(define (set-flvector-hash!)
+  (record-type-equal-procedure (record-type-descriptor flvector)
+                               flvector=?)
+  (record-type-hash-procedure (record-type-descriptor flvector)
+                              flvector-hash-code))

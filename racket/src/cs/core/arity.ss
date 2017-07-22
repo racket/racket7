@@ -4,7 +4,7 @@
    [(exact-nonnegative-integer? a)
     (bitwise-arithmetic-shift-left 1 a)]
    [(arity-at-least? a)
-    (- -1 (bitwise-arithmetic-shift-left 1 (arity-at-least-value a)))]
+    (bitwise-xor -1 (sub1 (bitwise-arithmetic-shift-left 1 (arity-at-least-value a))))]
    [(list? a)
     (let loop ([mask 0] [l a])
       (cond

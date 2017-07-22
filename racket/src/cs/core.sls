@@ -645,6 +645,7 @@
   (set-continuation-applicables!)
   (set-impersonator-applicables!)
   (set-hash-hash!)
+  (set-flvector-hash!)
   (set-impersonator-hash!)
   (set-procedure-impersonator-hash!)
   (set-vector-impersonator-hash!)

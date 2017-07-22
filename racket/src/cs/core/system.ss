@@ -8,7 +8,7 @@
 
 (define (system-type* mode)
   (case mode
-    [(vm) 'not-chez-scheme]
+    [(vm) 'chez-scheme]
     [(os) 'unix]
     [(word) 64]
     [(gc) '3m]

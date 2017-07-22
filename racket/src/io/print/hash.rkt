@@ -47,4 +47,4 @@
      (if (andmap bytes? (cdr keys))
          (sort keys bytes<?)
          keys)]
-    [else #f]))
+    [else keys]))

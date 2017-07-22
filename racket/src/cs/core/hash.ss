@@ -98,18 +98,12 @@
     (impersonate-hash-remove! ht k)]
    [else (raise-argument-error 'hash-remove! "(and/c hash? (not/c immutable?))" ht)]))
 
-#|
- hash-clear! procedures do not use the table’s semaphore to guard the traversal as a whole.
- Changes by one thread to a hash table can affect the keys and values seen by another thread
- part-way through its traversal of the same hash table.
-
- Maybe lock isn't needed even for set-mutable-hash-keys! ?
-|#
 (define (hash-clear! ht)
   (cond
    [(mutable-hash? ht)
     (lock-acquire (mutable-hash-lock ht))
     (set-mutable-hash-keys! ht '#())
+    (set-mutable-hash-keys-stale?! ht #t)
     (hashtable-clear! (mutable-hash-ht ht))
     (lock-release (mutable-hash-lock ht))]
    [(weak-equal-hash? ht) (weak-hash-clear! ht)]
@@ -336,14 +330,15 @@
              (and (hash-eqv? ht1)
                   (hash-eqv? ht2))
              (and (hash-equal? ht1)
-                  (hash-equal? ht2)))
-         (eq? (hash-weak? ht1) (hash-weak? ht2)))
+                  (hash-equal? ht2))))
     (and (<= (hash-count ht1) (hash-count ht2))
          (let ([ok? #t])
-           (hash-table-for-each
+           (hash-for-each
             ht1
             (lambda (k v)
-              (not (eq? none (hashtable-ref ht2 k none)))))))]
+              (when ok?
+                (set! ok? (not (eq? none (hash-ref ht2 k none)))))))
+           ok?))]
    [(not (hash? ht1))
     (raise-argument-error 'hash-keys-subset? "hash?" ht1)]
    [(not (hash? ht2))
@@ -622,7 +617,7 @@
 
 (define (weak-hash-copy ht)
   (make-weak-equal-hash (weak-equal-hash-keys-ht ht)
-                        (hashtable-copy (weak-equal-hash-vals-ht ht))
+                        (hashtable-copy (weak-equal-hash-vals-ht ht) #t)
                         (weak-equal-hash-count ht)
                         (weak-equal-hash-prune-at ht)
                         #f))
@@ -679,22 +674,42 @@
 
 (define (weak-hash-remove! t k)
   (let* ([code (equal-hash-code k)]
-         [keys (intmap-ref (weak-equal-hash-keys-ht t) code '())])
-    (let loop ([keys keys])
-      (cond
-       [(null? keys)
-        ;; Not in the table
-        (void)]
-       [(equal? (car keys) k)
-        (hashtable-delete! (weak-equal-hash-vals-ht t) (car keys))
-        (set-car! keys #!bwp)]
-       [else (loop (cdr keys))]))))
+         [keys (intmap-ref (weak-equal-hash-keys-ht t) code '())]
+         [keep-bwp?
+          ;; If we have a `keys` array, then preserve the shape of
+          ;; each key lst in `(weak-equal-hash-keys-ht t)` so that
+          ;; the `keys` array remains consistent with that shape
+          (and (weak-equal-hash-keys t) #t)]
+         [new-keys
+          (let loop ([keys keys])
+            (cond
+             [(null? keys)
+              ;; Not in the table
+              #f]
+             [(equal? (car keys) k)
+              (hashtable-delete! (weak-equal-hash-vals-ht t) (car keys))
+              (if keep-bwp?
+                  (weak-cons #!bwp keys)
+                  (cdr keys))]
+             [else
+              (let ([new-keys (loop (cdr keys))])
+                (and new-keys
+                     (if (and (not keep-bwp?)
+                              (bwp-object? (car keys)))
+                         new-keys
+                         (weak-cons (car keys) new-keys))))]))])
+    (when new-keys
+      (set-weak-equal-hash-keys-ht! t
+                                    (if (null? new-keys)
+                                        (intmap-remove (weak-equal-hash-keys-ht t) code)
+                                        (intmap-set (weak-equal-hash-keys-ht t) code new-keys))))))
 
 (define (weak-hash-clear! t)
   (set-weak-equal-hash-keys-ht! t (hasheqv))
   (hashtable-clear! (weak-equal-hash-vals-ht t))
   (set-weak-equal-hash-count! t 0)
-  (set-weak-equal-hash-prune-at! t 128))
+  (set-weak-equal-hash-prune-at! t 128)
+  (set-weak-equal-hash-keys! t #f))
 
 (define (weak-hash-for-each t proc)
   (let* ([ht (weak-equal-hash-vals-ht t)]
@@ -723,9 +738,8 @@
 
 (define (prepare-weak-iterate! ht i)
   (let* ([current-vec (weak-equal-hash-keys ht)])
-    (or (and i
-             current-vec
-             (> (vector-length current-vec) i)
+    (or (and current-vec
+             (> (vector-length current-vec) (or i 1))
              current-vec)
         (let* ([len (max 16
                          (* 2 (if current-vec
@@ -777,6 +791,9 @@
               ;; no more keys available
               #f]
              [(bwp-object? (car p)) (loop (add1 i))]
+             [(not (hashtable-contains? (weak-equal-hash-vals-ht ht) (car p)))
+              ;; key was removed from table after `keys` array was formed
+              (loop (add1 i))]
              [else i]))])))))
 
 (define (do-weak-hash-iterate-key who ht i)
