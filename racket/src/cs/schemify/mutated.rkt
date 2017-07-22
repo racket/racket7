@@ -88,8 +88,8 @@
       (let ([id (unwrap id)])
         (when (eq? 'not-ready (hash-ref mutated id 'not-ready))
           (hash-set! mutated id (lambda () (unless done?
-                                        (set! done? #t)
-                                        (thunk))))))))
+                                             (set! done? #t)
+                                             (thunk))))))))
   (let find-mutated! ([v v] [ids ids])
     (define (find-mutated!* l ids)
       (let loop ([l l])
@@ -141,37 +141,43 @@
        (find-mutated! exp ids)
        (find-mutated!* exps #f)]
       [`(set! ,id ,rhs)
-       (hash-set! mutated id 'set!ed)
+       (let ([id (unwrap id)])
+         (define old-state (hash-ref mutated id #f))
+         (hash-set! mutated id 'set!ed)
+         (when (delayed-mutated-state? old-state)
+           (old-state)))
        (find-mutated! rhs #f)]
       [`(#%variable-reference . ,_) (void)]
       [`(,rator ,exps ...)
        (cond
-        [(and ids
-              (symbol? rator)
-              (not (hash-ref mutated rator #f))
-              (let ([v (hash-ref-either knowns imports rator)])
-                (and (known-constructor? v)
-                     (= (length exps) (known-constructor-field-count v))))
-              (for/and ([exp (in-list exps)])
-                (simple? exp prim-knowns knowns imports mutated)))
-         ;; Can delay construction
-         (delay! ids (lambda () (find-mutated!* exps #f)))]
-        [else
-         (find-mutated! rator #f)
-         (find-mutated!* exps #f)])]
+         [(and ids
+               (let ([rator (unwrap rator)])
+                 (and (symbol? rator)
+                      (not (hash-ref mutated rator #f))
+                      (let ([v (hash-ref-either knowns imports rator)])
+                        (and (known-constructor? v)
+                             (= (length exps) (known-constructor-field-count v))))
+                      (for/and ([exp (in-list exps)])
+                        (simple? exp prim-knowns knowns imports mutated)))))
+          ;; Can delay construction
+          (delay! ids (lambda () (find-mutated!* exps #f)))]
+         [else
+          (find-mutated! rator #f)
+          (find-mutated!* exps #f)])]
       [`,_
-       (when (symbol? v)
-         (define state (hash-ref mutated v #f))
-         (cond
-          [(not-ready-mutated-state? state)
-           (hash-set! mutated v 'too-early)]
-          [(delayed-mutated-state? state)
+       (let ([v (unwrap v)])
+         (when (symbol? v)
+           (define state (hash-ref mutated v #f))
            (cond
-            [ids
-             ;; Chain delays
-             (delay! ids (lambda ()
-                           (hash-remove! mutated v)
-                           (state)))]
-            [else
-             (hash-remove! mutated v)
-             (state)])]))])))
+             [(not-ready-mutated-state? state)
+              (hash-set! mutated v 'too-early)]
+             [(delayed-mutated-state? state)
+              (cond
+                [ids
+                 ;; Chain delays
+                 (delay! ids (lambda ()
+                               (hash-remove! mutated v)
+                               (state)))]
+                [else
+                 (hash-remove! mutated v)
+                 (state)])])))])))
