@@ -246,7 +246,7 @@
    [else
     (define prefix-len (bytes-length prefix))
     ;; The lazy-bytes record will include the prefix,
-    ;; and it won't includes bytes/characters before
+    ;; and it won't include bytes/characters before
     ;; `start-offset`:
     (define start-pos prefix-len)
     (define search-pos (if (= start-offset search-offset)
@@ -260,12 +260,18 @@
        [(bytes? in) (open-input-bytes/no-copy in start-offset end-offset)]
        [(string? in) (open-input-string/lazy in start-offset end-offset)]
        [else in]))
-    (when (and (not peek?) (positive? start-offset))
-      ;; Consume and write bytes that we're skipping over:
+    (define any-bytes-left?
       (cond
-       [(bytes? in) (when out (write-bytes in out 0 start-offset))]
-       [(string? in) (when out (write-string in out 0 start-offset))]
-       [(input-port? in) (copy-port-bytes port-in out start-offset)]))
+        [(and (input-port? in)
+              (positive? start-offset))
+         (cond
+           [peek?
+            ;; Make sure we can skip over `start-offset` bytes:
+            (not (eof-object? (peek-byte port-in (sub1 start-offset))))]
+           [else
+            ;; discard skipped bytes:
+            (copy-port-bytes port-in #f start-offset)])]
+        [else #t]))
     ;; Create a lazy string from the port:
     (define lb-in (make-lazy-bytes port-in (if peek? start-offset 0) prefix
                                    peek? immediate-only? progress-evt
@@ -278,7 +284,11 @@
                             [else (- end-offset start-offset)]))))
     
     ;; Search for a match:
-    (define-values (ms-pos me-pos) (search-match rx lb-in search-pos 0 end-pos state))
+    (define-values (ms-pos me-pos)
+      (if any-bytes-left?
+          (search-match rx lb-in search-pos 0 end-pos state)
+          ;; Couldn't skip past `start-offset` bytes for an input port:
+          (values #f #f)))
     
     ;; To write and consume skipped bytes, but we'll do this only
     ;; after we've extracted match information from the lazy byte
@@ -305,7 +315,13 @@
      (case (and ms-pos
                 (not (lazy-bytes-failed? lb-in))
                 mode)
-       [(#f) (add-end-bytes #f end-bytes-count #f #f)]
+       [(#f)
+        (when (and (not peek?)
+                   any-bytes-left?
+                   (input-port? in))
+          ;; Consume non-matching bytes
+          (copy-port-bytes port-in out (if (eq? 'eof end-offset) #f end-offset)))
+        (add-end-bytes #f end-bytes-count #f #f)]
        [(?) #t]
        [(positions)
         ;; Result positions correspond to the port after `start-offset`, 

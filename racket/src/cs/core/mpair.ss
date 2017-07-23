@@ -31,3 +31,12 @@
 (define (unsafe-set-mcdr! m v)
   (set-mpair-cdr! m v))
 
+(define (set-mpair-hash!)
+  (record-type-equal-procedure (record-type-descriptor mpair)
+                               (lambda (a b eql?)
+                                 (and (eql? (mcar a) (mcar b))
+                                      (eql? (mcdr a) (mcdr b)))))
+  (record-type-hash-procedure (record-type-descriptor flvector)
+                              (lambda (a hc)
+                                (hash-code-combine (hc (mcar a))
+                                                   (hc (mcar a))))))

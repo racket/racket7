@@ -15,8 +15,20 @@
   (check who keyword? kw)
   (symbol->string (keyword-symbol kw)))
 
-(define/who (keyword<? a b)
-  (check who keyword? a)
-  (check who keyword? b)
-  (symbol<? (keyword-symbol a)
-            (keyword-symbol b)))
+(define/who keyword<?
+  (case-lambda
+   [(a b)
+    (check who keyword? a)
+    (check who keyword? b)
+    (symbol<? (keyword-symbol a)
+              (keyword-symbol b))]
+   [(a b . cs)
+    (check who keyword? a)
+    (check who keyword? b)
+    (let loop ([prev b] [cs cs] [lt? (keyword<? a b)])
+      (cond
+       [(null? cs) lt?]
+       [else
+        (let ([c (car cs)])
+          (check who keyword? c)
+          (loop c (cdr cs) (and lt? (keyword<? prev c))))]))]))

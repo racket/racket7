@@ -62,3 +62,7 @@
   (bitwise-and (+ (bitwise-arithmetic-shift-left hc 2)
                   v)
                (greatest-fixnum)))
+
+(define (hash-code-combine-unordered hc v)
+  (bitwise-and (+ hc v)
+               (greatest-fixnum)))

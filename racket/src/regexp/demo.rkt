@@ -1,6 +1,39 @@
 #lang racket/base
 (require (prefix-in rx: "main.rkt"))
 
+(define-syntax-rule (test expr v)
+  (let ([b expr])
+    (unless (equal? b v)
+      (error 'test "failed: ~s => ~s" 'expr b))))
+
+(test (rx:regexp-match "" (open-input-string "123") 4)
+      #f)
+(test (rx:regexp-match-peek "" (open-input-string "123") 4)
+      #f)
+
+(for* ([succeed? '(#f #t)]
+       [char '(#\x #\u3BB)])
+  (for ([N '(1 100 1000 1023 1024 10000)])
+    (for ([M (list 0 (quotient N 2))])
+      (define o (open-output-bytes))
+      (log-error "N = ~a, M = ~a" N M)
+      (void (rx:regexp-match-positions "y" 
+                                       (string-append
+                                        (make-string N char)
+                                        (if succeed? "y" ""))
+                                       M
+                                       (+ N (if succeed? 1 0))
+                                       o))
+      (test (string-length (get-output-string o)) (- N M)))))
+
+;; Test bounded byte consumption on failure:
+(let ([is (open-input-string "barfoo")]) 
+  (test (list (rx:regexp-match "^foo" is 0 3) (read-char is)) '(#f #\f)))
+(let ([is (open-input-string "barfoo")]) 
+  (test (list (rx:regexp-match "foo" is 0 3) (read-char is)) '(#f #\f)))
+
+;; ----------------------------------------
+
 (define (check rx in N [M (max 1 (quotient N 10))])
   (define c-start (current-inexact-milliseconds))
   (define orig-rx

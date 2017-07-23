@@ -254,25 +254,28 @@
              v))]
       [else (raise-argument-error 'hash-ref "hash?" ht)])]))
 
-(define/who (hash-for-each ht proc)
-  (check who hash? ht)
-  (check who (procedure-arity-includes/c 2) proc)
-  (cond
-   [(mutable-hash? ht)
-    (let loop ([i (hash-iterate-first ht)])
-      (when i
-        (let-values ([(key val) (hash-iterate-key+value ht i)])
-          (proc key val))
-        (loop (hash-iterate-next ht i))))]
-   [(intmap? ht) (intmap-for-each ht proc)]
-   [(weak-equal-hash? ht) (weak-hash-for-each ht proc)]
-   [else
-    ;; impersoonated
-    (let loop ([i (hash-iterate-first ht)])
-      (when i
-        (let-values ([(key val) (hash-iterate-key+value ht i)])
-          (proc key val)
-          (loop (hash-iterate-next ht i)))))]))
+(define/who hash-for-each
+  (case-lambda
+   [(ht proc) (hash-for-each ht proc #f)]
+   [(ht proc try-order?)
+    (check who hash? ht)
+    (check who (procedure-arity-includes/c 2) proc)
+    (cond
+     [(mutable-hash? ht)
+      (let loop ([i (hash-iterate-first ht)])
+        (when i
+          (let-values ([(key val) (hash-iterate-key+value ht i)])
+            (proc key val))
+          (loop (hash-iterate-next ht i))))]
+     [(intmap? ht) (intmap-for-each ht proc)]
+     [(weak-equal-hash? ht) (weak-hash-for-each ht proc)]
+     [else
+      ;; impersonated
+      (let loop ([i (hash-iterate-first ht)])
+        (when i
+          (let-values ([(key val) (hash-iterate-key+value ht i)])
+            (proc key val)
+            (loop (hash-iterate-next ht i)))))])]))
 
 (define/who hash-map
   (case-lambda
@@ -392,12 +395,12 @@
         (let* ([eq-key? (hash-eq? ht)]
                [eqv-key? (and (not eq?) (hash-eqv? ht))])
           (let-values ([(key val) (hash-iterate-key+value ht i)])
-            (let ([hc (hash-code-combine hc
-                                         (cond
-                                          [eq-key? (eq-hash-code key)]
-                                          [eqv-key? (eqv-hash-code key)]
-                                          [else (hash key)]))])
-              (loop (hash-code-combine hc (hash val))
+            (let ([hc (hash-code-combine-unordered hc
+                                                   (cond
+                                                    [eq-key? (eq-hash-code key)]
+                                                    [eqv-key? (eqv-hash-code key)]
+                                                    [else (hash key)]))])
+              (loop (hash-code-combine-unordered hc (hash val))
                     (hash-iterate-next ht i)))))]))]))
 
 
@@ -463,7 +466,9 @@
         (cond
          [(> i len)
           (raise-arguments-error 'hash-iterate-next "no element at index"
-                                 "index" init-i)]
+                                 "index" init-i
+                                 "within length" len
+                                 "vec" vec)]
          [(= i len)
           #f]
          [else
@@ -472,7 +477,7 @@
             (cond
              [(bwp-object? key)
               ;; A hash table change or disappeared weak reference
-              (loop (add1 i))]
+              (loop i)]
              [else
               (if (or (not (mutable-hash-keys-stale? ht))
                       (begin
@@ -482,7 +487,7 @@
                           contains?)))
                   i
                   ;; Skip, due to a hash table change
-                  (loop (add1 i)))]))])))))
+                  (loop i))]))])))))
 
 (define (do-hash-iterate-key+value who ht i
                                    intmap-iterate-key+value
@@ -612,8 +617,10 @@
                                 prune-at   ; count at which we should try to prune empty weak boxes
                                 keys))     ; for iteration: a vector that is enlarged on demand
 
-(define (make-weak-hash)
-  (make-weak-equal-hash (hasheqv) (make-weak-eq-hashtable) 0 128 #f))
+(define make-weak-hash
+  (case-lambda
+   [() (make-weak-equal-hash (hasheqv) (make-weak-eq-hashtable) 0 128 #f)]
+   [(alist) (fill-hash! 'make-weak-hash (make-weak-hash) alist)]))
 
 (define (weak-hash-copy ht)
   (make-weak-equal-hash (weak-equal-hash-keys-ht ht)
@@ -782,7 +789,7 @@
           ;; expand set of prepared keys
           (retry i)]
          [(> i len)
-          (raise-arguments-error 'hash-iterate-next "no element at index"
+          (raise-arguments-error 'hash-iterate-next "no element at weak index"
                                  "index" init-i)]
          [else
           (let ([p (vector-ref vec i)])

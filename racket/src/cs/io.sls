@@ -5,7 +5,6 @@
           (rename (only (chezscheme)
                         read-char peek-char
                         current-directory
-                        format
                         error
                         input-port? output-port?
                         file-position flush-output-port
@@ -213,7 +212,24 @@
   
   ;; ----------------------------------------
 
-  (define string-locale-downcase string-downcase)
+  (define format
+    (case-lambda
+     [(fmt arg)
+      (unless (equal? fmt "~s")
+        (raise-arguments-error 'format "should only be used as a fallback"
+                               "format string" fmt
+                               "argument" arg))
+      (cond
+       [(record? arg)
+        (chez:format "#<~a>" (record-type-name (record-rtd arg)))]
+       [else
+        (chez:format "~s" arg)])]
+     [(fmt . args)
+      (raise-arguments-error 'format "should only be used as a fallback"
+                             "format string" fmt
+                             "arguments" args)]))
+
+  ;; ----------------------------------------
 
   (define (char-blank? v) (char-whitespace? v))
   (define (char-graphic? v) #t)
@@ -225,8 +241,6 @@
       [(|#%thread|) |#%thread-instance|]
       [(|#%rktio|) |#%rktio-instance|]
       [else #f]))
-
-  (define (terminal-port? p) #f)
 
   (include "compiled/io.scm")
   

@@ -11,7 +11,7 @@
 
 ;; Convert a `let` to nested lets to enforce order; we
 ;; rely on the fact that the Racket expander generates
-;; expressions that have no shadowing (and inroduce
+;; expressions that have no shadowing (and introduce
 ;; shadowing here)
 (define (left-to-right/let ids rhss bodys
                            unannotate prim-knowns knowns imports mutated)
@@ -19,22 +19,27 @@
    [(null? (cdr ids))
     `(let ([,(car ids) ,(car rhss)]) . ,bodys)]
    [else
-    (let loop ([ids ids] [rhss rhss] [binds null])
+    (let loop ([ids ids] [rhss rhss] [all-simple? #t] [binds null])
       (cond
-       [(null? (cdr rhss))
-        (if (null? binds)
-            `(let ([,(car ids) ,(car rhss)])
-              . ,bodys)
-            `(let ([,(car ids) ,(car rhss)])
-              (let ,binds
-                . ,bodys)))]
-       [(simple? (unannotate (car rhss)) prim-knowns knowns imports mutated)
-        `(let ([,(car ids) ,(car rhss)])
-          ,(loop (cdr ids) (cdr rhss) binds))]
+        [(null? (cdr rhss))
+         (define id (car ids))
+         (define rhs (car rhss))
+         (if (and all-simple?
+                  (simple? (unannotate rhs) prim-knowns knowns imports mutated))
+             `(let ([,id ,rhs])
+                . ,bodys)
+             `(let ([,id ,rhs])
+                (let ,binds
+                  . ,bodys)))]
        [else
         (define id (car ids))
-        `(let ([,id ,(car rhss)])
-          ,(loop (cdr ids) (cdr rhss) (cons `[,id ,id] binds)))]))]))
+        (define rhs (car rhss))
+        `(let ([,id ,rhs])
+           ,(loop (cdr ids)
+                  (cdr rhss)
+                  (and all-simple?
+                       (simple? (unannotate rhs) prim-knowns knowns imports mutated))
+                  (cons `[,id ,id] binds)))]))]))
 
 ;; Convert a `let-values` to nested `let-values`es to
 ;; enforce order

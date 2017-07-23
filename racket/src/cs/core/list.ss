@@ -38,3 +38,7 @@
 (define (unsafe-cons-list a d)
   ;; Can assume that `d` is a list
   (cons a d))
+
+(define (list-pair? v)
+  (and (pair? v)
+       (list? v)))

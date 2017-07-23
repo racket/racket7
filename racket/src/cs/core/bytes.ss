@@ -65,7 +65,7 @@
          (bytevector-copy! src s-start dest d-start s-len)))]))
 
 (define/who (bytes-fill! bstr b)
-  (check who bytes? bstr)
+  (check who mutable-bytevector? :contract "(and/c bytes? (not/c immutable?))" bstr)
   (check who byte? b)
   (bytevector-fill! bstr b))
 

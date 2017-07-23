@@ -114,20 +114,6 @@
        [else
         (raise-argument-error who "procedure?" orig-f)]))]))
 
-(define (mask->arity mask)
-  (let loop ([mask mask] [pos 0])
-    (cond
-     [(= mask 0) null]
-     [(= mask -1) (|#%app| arity-at-least pos)]
-     [(bitwise-bit-set? mask 0)
-      (let ([rest (loop (bitwise-arithmetic-shift-right mask 1) (add1 pos))])
-        (cond
-         [(null? rest) pos]
-         [(pair? rest) (cons pos rest)]
-         [else (list pos rest)]))]
-     [else
-      (loop (bitwise-arithmetic-shift-right mask 1) (add1 pos))])))
-
 ;; Public, limited variant:
 (define/who (procedure-extract-target f)
   (cond

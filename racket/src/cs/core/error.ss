@@ -29,7 +29,7 @@
                     v)))
 
 (define/who error-print-context-length
-  (make-parameter 32
+  (make-parameter 16
                   (lambda (v)
                     (check who exact-nonnegative-integer? v)
                     v)))
@@ -215,17 +215,15 @@
     [(who what pos arg . args)
      (do-raise-type-error 'raise-argument-error "given" who what pos arg args)]))
 
-(define (raise-mismatch-error who what . more)
-  (unless (symbol? who)
-    (raise-argument-error 'raise-mismatch-error "symbol?" who))
-  (unless (string? what)
-    (raise-argument-error 'raise-mismatch-error "string?" what))
+(define/who (raise-mismatch-error in-who what . more)
+  (check who symbol? in-who)
+  (check who string? what)
   (raise
    (|#%app|
     exn:fail:contract
     (apply
      string-append
-     (symbol->string who)
+     (symbol->string in-who)
      ": "
      what
      (let loop ([more more])
@@ -296,11 +294,21 @@
                        upper-bound
                        #f)]))
 
-(define (raise-arity-error name arity . args)
+(define/who (raise-arity-error name arity . args)
+  (check who (lambda (p) (or (symbol? name) (procedure? name)))
+         :contract "(or/c symbol? procedure?)"
+         name)
+  (check who procedure-arity? arity)
   (raise
    (|#%app|
     exn:fail:contract:arity
     (string-append
+     (let ([name (if (procedure? name)
+                     (object-name name)
+                     name)])
+       (if (symbol? name)
+           (string-append (symbol->string name) ": ")
+           ""))
      "arity mismatch;\n"
      " the expected number of arguments does not match the given number\n"
      (expected-arity-string arity)
@@ -500,9 +508,26 @@
 
 (define (condition->exn v)
   (if (condition? v)
-      ;; FIXME: To a good approximation, everything is a contract error, but...
-      (|#%app| exn:fail:contract (exn->string v) (current-continuation-marks))
+      (|#%app|
+       (cond
+        [(and (format-condition? v)
+              (or (string-prefix? "incorrect number of arguments" (condition-message v))
+                  (string-suffix? "values to single value return context" (condition-message v))
+                  (string-prefix? "incorrect number of values received in multiple value context" (condition-message v))))
+         exn:fail:contract:arity]
+        [else
+         exn:fail:contract])
+       (exn->string v)
+       (current-continuation-marks))
       v))
+
+(define (string-prefix? p str)
+  (and (>= (string-length str) (string-length p))
+       (string=? (substring str 0 (string-length p)) p)))
+
+(define (string-suffix? p str)
+  (and (>= (string-length str) (string-length p))
+       (string=? (substring str (- (string-length str) (string-length p)) (string-length str)) p)))
 
 (define/who uncaught-exception-handler
   (make-parameter default-uncaught-exception-handler

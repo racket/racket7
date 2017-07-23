@@ -116,12 +116,16 @@
                [max-length (write-string/max " . " o max-length)]
                [max-length (p who (cdr v) mode o max-length)])
           (write-string/max ")" o max-length))]))]
+   [(vector? v)
+    (p who (vector->list v) mode o (write-string/max "#" o max-length))]
    [(hash? v)
     (print-hash v o max-length p who mode)]
    [(custom-write? v)
     (let ([o (make-output-port/max o max-length)])
       ((custom-write-accessor v) v o mode)
       (output-port/max-max-length o max-length))]
+   [(struct? v)
+    (p who (struct->vector v) mode o max-length)]
    [else
     ;; As a last resort, fall back to the host `format`:
     (write-string/max (format "~s" v) o max-length)]))

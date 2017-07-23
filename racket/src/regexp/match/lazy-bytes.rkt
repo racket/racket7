@@ -30,9 +30,9 @@
                          out max-lookbehind)
   (define len (bytes-length prefix))
   (lazy-bytes prefix len in skip-amt len
-                   peek? immediate-only? progress-evt
-                   out max-lookbehind
-                   #f 0))
+              peek? immediate-only? progress-evt
+              out max-lookbehind
+              #f 0))
 
 (define (lazy-bytes-before-end? s pos end)
   (and (or (not (exact-integer? end))

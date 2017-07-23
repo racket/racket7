@@ -97,20 +97,15 @@
                                                  p))
                          p)))
 
-(define read-decimal-as-inexact
-  (make-parameter #t))
-
-(define read-accept-bar-quote
-  (make-parameter #t))
-
-(define read-case-sensitive
-  (make-parameter #t))
-
 (define current-command-line-arguments
-  (make-parameter '#()))
-
-(define current-write-relative-directory
-  (make-parameter #f))
+  (make-parameter '#() (lambda (v)
+                         (define l (and (vector? v)
+                                        (vector->list v)))
+                         (unless (and (vector? v)
+                                      (andmap string? l))
+                           (raise-argument-error 'current-command-line-arguments
+                                                 "(vectorof string?)"))
+                         (list->vector (map string->immutable-string l)))))
 
 (define current-code-inspector
   (make-parameter (|#%app| current-inspector)))
@@ -205,8 +200,9 @@
 (define (procedure->method p)
   p)
 
-(define (list-pair? v) #f)
-(define (interned-char? v) #f)
+(define (interned-char? v)
+  (and (char? v) (< (char->integer v) 256)))
+
 (define (true-object? v) (eq? v #t))
 
 (define eval-jit-enabled
@@ -408,7 +404,6 @@
    
    procedure->method
 
-   list-pair?
    interned-char?
    true-object?
    

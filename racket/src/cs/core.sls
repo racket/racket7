@@ -265,6 +265,7 @@
           symbol->string
 
           list?
+          list-pair?
 
           vector?
           mutable-vector?
@@ -644,6 +645,7 @@
   (set-primitive-applicables!)
   (set-continuation-applicables!)
   (set-impersonator-applicables!)
+  (set-mpair-hash!)
   (set-hash-hash!)
   (set-flvector-hash!)
   (set-impersonator-hash!)
