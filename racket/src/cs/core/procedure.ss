@@ -17,7 +17,7 @@
 (define-values (prop:incomplete-arity incomplete-arity? incomplete-arity-ref)
   (make-struct-type-property 'incomplete-arity))
 
-;; Integer value is a field to use; boxed value is a field taht provides a mask
+;; Integer value is a field to use; boxed value is a field that provides a mask
 (define-values (prop:procedure-arity procedure-arity-prop? procedure-arity-ref)
   (make-struct-type-property 'procedure-arity))
 

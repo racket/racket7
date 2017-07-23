@@ -469,6 +469,7 @@
    (vector-ref top 1)
    (test #t equal? (unbox b-regular) '(ref prop-only))
    (test #t equal? (unbox b-star) '(ref top))
+   (printf "HERE ~s\n" chaperone-vector)
    (test #t equal? (unbox b-top) '(ref prop-only))
    (reset-and-test-boxes)
    (vector-set! top 1 4)
@@ -825,9 +826,10 @@
                        ": contract violation")
                       (exn-message exn))
                 (test #t
-                      (regexp-match?
-                       "(and/c vector? (not/c impersonator?))"
-                       (exn-message exn)))))
+                      regexp-match?
+                      "[(]and/c vector[?] [(]not/c impersonator[?][)][)]"
+                      (exn-message exn))
+                #t))
  (clear)
  (define vc*1 (do-chap (vector 93 77 26) 'vc*1))
  (define cvc*1 (add-prop vc*1 p1 'p1-cvc*1 #:redirect #t))

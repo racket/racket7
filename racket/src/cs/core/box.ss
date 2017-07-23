@@ -94,7 +94,7 @@
         (let ([next (impersonator-next o)])
           (cond
            [(box-chaperone? o)
-            (let ([new-val ((box-chaperone-set o) o val)])
+            (let ([new-val ((box-chaperone-set o) next val)])
               (unless (chaperone-of? new-val val)
                 (raise-arguments-error 'set-box!
                                        "chaperone produced a result that is not a chaperone of the original result"
@@ -102,7 +102,7 @@
                                        "original result" val))
               (loop next val))]
            [(box-impersonator? o)
-            (loop next ((box-impersonator-set o) o val))]
+            (loop next ((box-impersonator-set o) next val))]
            [else (loop next val)]))]))]))
 
 (define (set-box-impersonator-hash!)

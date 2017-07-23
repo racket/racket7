@@ -87,7 +87,8 @@
 
 (define (struct-type-property-accessor-procedure? v)
   (and (procedure? v)
-       (hashtable-ref property-accessors v #f)
+       (let ([v (strip-impersonator v)])
+         (hashtable-ref property-accessors v #f))
        #t))
 
 (define (struct-type-property-accessor-procedure-pred v)
@@ -820,9 +821,11 @@
 
 (define (unsafe-struct-ref s i)
   (if (impersonator? s)
-      (let* ([rtd (record-rtd s)]
-             [pos (- i (struct-type-parent-field-count rtd))])
-        (impersonate-ref (record-field-accessor rtd i) rtd pos s))
+      (let loop ([rtd (record-rtd s)])
+        (let ([pos (- i (struct-type-parent-field-count rtd))])
+          (if (fx>= pos 0)
+              (impersonate-ref (record-field-accessor rtd i) rtd pos s)
+              (loop (record-type-parent rtd)))))
       (unsafe-struct*-ref s i)))
 
 (define (unsafe-struct-set! s i v)
@@ -892,15 +895,30 @@
                       (loop (fx+ j 1)))))))))
          
 (define (default-struct-hash s hash-code)
-  (let ([t (record-rtd s)])
-    (if (struct-type-transparent? t)
-        (let ([n (struct-type-field-count t)])
-          (let loop ([j 0] [hc 0])
-            (if (fx= j n)
-                hc
-                (loop (fx+ j 1)
-                      (hash-code-combine hc (hash-code (unsafe-struct*-ref s j)))))))
-        (eq-hash-code s))))
+  (cond
+   [(not (impersonator? s))
+    ;; Same as the loop below, but uses `unsafe-struct*-ref`:
+    (let ([t (record-rtd s)])
+      (if (struct-type-transparent? t)
+          (let ([n (struct-type-field-count t)])
+            (let loop ([j 0] [hc 0])
+              (if (fx= j n)
+                  hc
+                  (loop (fx+ j 1)
+                        (hash-code-combine hc (hash-code (unsafe-struct*-ref s j)))))))
+          (eq-hash-code s)))]
+   [else
+    ;; Impersonator variant uses `unsafe-struct-ref` to trigger wrappers:
+    (let ([raw-s (impersonator-val s)])
+      (let ([t (record-rtd raw-s)])
+        (if (struct-type-transparent? t)
+            (let ([n (struct-type-field-count t)])
+              (let loop ([j 0] [hc 0])
+                (if (fx= j n)
+                    hc
+                    (loop (fx+ j 1)
+                          (hash-code-combine hc (hash-code (unsafe-struct-ref s j)))))))
+            (eq-hash-code raw-s))))]))
 
 (define (struct->vector s)
   (if (record? s)

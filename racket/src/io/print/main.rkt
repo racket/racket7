@@ -118,6 +118,10 @@
           (write-string/max ")" o max-length))]))]
    [(vector? v)
     (p who (vector->list v) mode o (write-string/max "#" o max-length))]
+   [(box? v)
+    (if (print-box)
+        (p who (unbox v) mode o (write-string/max "#&" o max-length))
+        (write-string/max "#<box>" o max-length))]
    [(hash? v)
     (print-hash v o max-length p who mode)]
    [(custom-write? v)

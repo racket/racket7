@@ -220,8 +220,13 @@
                                "format string" fmt
                                "argument" arg))
       (cond
-       [(record? arg)
-        (chez:format "#<~a>" (record-type-name (record-rtd arg)))]
+       [(and (record? arg)
+             (or (not (impersonator? arg))
+                 (record? (unsafe-struct*-ref arg 0))))
+        (let ([arg (if (impersonator? arg)
+                       (unsafe-struct*-ref arg 0)
+                       arg)])
+          (chez:format "#<~a>" (record-type-name (record-rtd arg))))]
        [else
         (chez:format "~s" arg)])]
      [(fmt . args)

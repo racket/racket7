@@ -50,6 +50,9 @@
               (loop a (impersonator-next b))])]
            [(#%vector? a)
             (and (#%vector? b)
+                 (or (not (eq? mode 'chaperone-of?))
+                     (and (immutable-vector? a)
+                          (immutable-vector? b)))
                  (let ([len (#%vector-length a)])
                    (and (fx= len (#%vector-length b))
                         (or
@@ -76,6 +79,9 @@
                             (equal? (cdr a) (cdr b) ctx))))))]
            [(#%box? a)
             (and (#%box? b)
+                 (or (not (eq? mode 'chaperone-of?))
+                     (and (immutable-box? a)
+                          (immutable-box? b)))
                  (or (check-union-find ctx a b)
                      (if eql?
                          (eql? (unbox orig-a) (unbox orig-b))
@@ -107,6 +113,13 @@
                                       (rec-equal? orig-a orig-b
                                                   (lambda (a b)
                                                     (equal? a b ctx))))))))])))]
+           [(and (eq? mode 'chaperone-of?)
+                 ;; Mutable strings and bytevectors must be `eq?` for `chaperone-of?`
+                 (or (mutable-string? a)
+                     (mutable-string? b)
+                     (mutable-bytevector? a)
+                     (mutable-bytevector? b)))
+            #f]
            [else
             (#%equal? a b)])))))
 

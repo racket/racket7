@@ -36,6 +36,7 @@
                                make-props-impersonator props)
   (check who (procedure-arity-includes/c 3) :or-false ref)
   (check who (procedure-arity-includes/c 3) :or-false set)
+  (check-vector-wrapper-consistent who ref set)
   (let ([val (if (impersonator? vec)
                  (impersonator-val vec)
                  vec)]
@@ -56,6 +57,13 @@
                               (lambda (i hash-code)
                                 (hash-code (vector-copy i)))))
 
+(define (check-vector-wrapper-consistent who ref set)
+  (unless (eq? (not ref) (not set))
+    (raise-arguments-error who
+                           "accessor and mutator wrapper must be both `#f` or neither `#f`"
+                           "accessor wrapper" ref
+                           "mutator wrapper" set)))
+
 ;; ----------------------------------------
 
 (define-record vector*-chaperone vector-chaperone ())
@@ -75,6 +83,7 @@
                                 make-props-impersonator props)
   (check who (procedure-arity-includes/c 4) :or-false ref)
   (check who (procedure-arity-includes/c 4) :or-false set)
+  (check-vector-wrapper-consistent who ref set)
   (let ([val (if (impersonator? vec)
                  (impersonator-val vec)
                  vec)]
@@ -94,12 +103,16 @@
 
 (define/who (unsafe-impersonate-vector vec alt-vec . props)
   (check who mutable-vector? :contract "(and/c vector? (not/c immutable?))" vec)
-  (check who vector? alt-vec)
+  (check who (lambda (p) (and (vector? p) (not (impersonator? p))))
+         :contract "(and/c vector? (not/c impersonator?))"
+         alt-vec)
   (do-unsafe-impersonate-vector who make-vector-unsafe-impersonator vec alt-vec props))
 
 (define/who (unsafe-chaperone-vector vec alt-vec . props)
   (check who vector? vec)
-  (check who vector? alt-vec)
+  (check who (lambda (p) (and (vector? p) (not (impersonator? p))))
+         :contract "(and/c vector? (not/c impersonator?))"
+         alt-vec)
   (do-unsafe-impersonate-vector who make-vector-unsafe-chaperone vec alt-vec props))
 
 (define (do-unsafe-impersonate-vector who make-vector-unsafe-impersonator vec alt-vec props)
@@ -126,7 +139,13 @@
 (define (impersonate-vector-length vec)
   (if (and (impersonator? vec)
            (#%vector? (impersonator-val vec)))
-      (#%vector-length (impersonator-val vec))
+      (cond
+       [(vector-unsafe-chaperone? vec)
+        (#%vector-length (vector-unsafe-chaperone-vec vec))]
+       [(vector-unsafe-impersonator? vec)
+        (#%vector-length (vector-unsafe-impersonator-vec vec))]
+       [else
+        (#%vector-length (impersonator-val vec))])
       ;; Let primitive report the error:
       (#2%vector-length vec)))
 
@@ -149,10 +168,11 @@
         (cond
          [(#%vector? o) (#%vector-ref o idx)]
          [(vector-chaperone? o)
-          (let* ([val (loop (impersonator-next o))]
+          (let* ([o-next (impersonator-next o)]
+                 [val (loop o-next)]
                  [new-val (if (vector*-chaperone? o)
-                              ((vector-chaperone-ref o) orig o idx val)
-                              ((vector-chaperone-ref o) o idx val))])
+                              ((vector-chaperone-ref o) orig o-next idx val)
+                              ((vector-chaperone-ref o) o-next idx val))])
             (unless (chaperone-of? new-val val)
               (raise-arguments-error 'vector-ref
                                      "chaperone produced a result that is not a chaperone of the original result"
@@ -160,10 +180,11 @@
                                      "original result" val))
             new-val)]
          [(vector-impersonator? o)
-          (let ([val  (loop (impersonator-next o))])
+          (let* ([o-next (impersonator-next o)]
+                 [val (loop o-next)])
             (if (vector*-impersonator? o)
-                ((vector-impersonator-ref o) orig o idx val)
-                ((vector-impersonator-ref o) o idx val)))]
+                ((vector-impersonator-ref o) orig o-next idx val)
+                ((vector-impersonator-ref o) o-next idx val)))]
          [(vector-unsafe-impersonator? o)
           (vector-ref (vector-unsafe-impersonator-vec o)  idx)]
          [(vector-unsafe-chaperone? o)
@@ -203,8 +224,8 @@
           (cond
            [(vector-chaperone? o)
             (let ([new-val (if (vector*-chaperone? o)
-                               ((vector-chaperone-set o) orig o idx val)
-                               ((vector-chaperone-set o) o idx val))])
+                               ((vector-chaperone-set o) orig next idx val)
+                               ((vector-chaperone-set o) next idx val))])
               (unless (chaperone-of? new-val val)
                 (raise-arguments-error 'vector-set!
                                        "chaperone produced a result that is not a chaperone of the original result"
@@ -214,8 +235,8 @@
            [(vector-impersonator? o)
             (loop next
                   (if (vector*-impersonator? o)
-                      ((vector-impersonator-set o) orig o idx val)
-                      ((vector-impersonator-set o) o idx val)))]
+                      ((vector-impersonator-set o) orig next idx val)
+                      ((vector-impersonator-set o) next idx val)))]
            [(vector-unsafe-impersonator? o)
             (#2%vector-set! (vector-unsafe-impersonator-vec o) idx val)]
            [(vector-unsafe-chaperone? o)

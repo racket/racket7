@@ -350,7 +350,7 @@
        [(null? args) empty-hash]
        [(struct-accessor-procedure? (car args))
         (let ([rtd+pos (struct-accessor-procedure-rtd+pos (strip-impersonator (car args)))])
-          (unless (or (struct-type-transparent? (car rtd+pos))
+          (unless (or (struct-type-immediate-transparent? (car rtd+pos))
                       (hash-ref mutator-reps rtd+pos #f))
             (raise-arguments-error who
                                    "accessor redirection for a non-transparent field requires a mutator redirection"
@@ -455,21 +455,39 @@
   (struct-property-set! prop:procedure
                         (record-type-descriptor props-procedure-chaperone)
                         impersonate-apply)
+  (struct-property-set! prop:procedure-arity
+                        (record-type-descriptor props-procedure-impersonator)
+                        0)
+  (struct-property-set! prop:procedure-arity
+                        (record-type-descriptor props-procedure-chaperone)
+                        0)
 
   (struct-property-set! prop:procedure
                         (record-type-descriptor impersonator-property-accessor-procedure)
                         0))
 
 (define (set-impersonator-hash!)
-  (record-type-hash-procedure (record-type-descriptor props-impersonator)
-                              (lambda (c hash-code)
-                                (hash-code (impersonator-next c))))
-  (record-type-hash-procedure (record-type-descriptor props-chaperone)
-                              (lambda (c hash-code)
-                                (hash-code (impersonator-next c))))
-  (record-type-hash-procedure (record-type-descriptor props-procedure-impersonator)
-                              (lambda (c hash-code)
-                                (hash-code (impersonator-next c))))
-  (record-type-hash-procedure (record-type-descriptor props-procedure-chaperone)
-                              (lambda (c hash-code)
-                                (hash-code (impersonator-next c)))))
+  (let ([struct-impersonator-hash-code
+         (lambda (c hash-code)
+           ((record-type-hash-procedure
+             (record-rtd (impersonator-val c)))
+            c
+            hash-code))])
+    (let ([add (lambda (rtd)
+                 (record-type-hash-procedure rtd struct-impersonator-hash-code))])
+      (add (record-type-descriptor struct-impersonator))
+      (add (record-type-descriptor struct-chaperone))
+      (add (record-type-descriptor procedure-struct-impersonator))
+      (add (record-type-descriptor procedure-struct-chaperone)))
+    (let ([add (lambda (rtd)
+                 (record-type-hash-procedure rtd
+                                             (lambda (c hash-code)
+                                               (cond
+                                                [(record? (impersonator-val c))
+                                                 (struct-impersonator-hash-code c hash-code)]
+                                                [else
+                                                 (hash-code (impersonator-next c))]))))])
+      (add (record-type-descriptor props-impersonator))
+      (add (record-type-descriptor props-chaperone))
+      (add (record-type-descriptor props-procedure-impersonator))
+      (add (record-type-descriptor props-procedure-chaperone)))))

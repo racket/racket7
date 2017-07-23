@@ -916,7 +916,7 @@
                             (or (not (car args))
                                 (and (procedure? (car args))
                                      (procedure-arity-includes? (car args) 1))))]
-         [clear (if clear-given? (car args) #f)]
+         [clear (if clear-given? (car args) void)]
          [args (if clear-given? (cdr args) args)]
          [equal-key-given? (and (pair? args)
                                 (or (not (car args))
@@ -925,7 +925,7 @@
          [equal-key (if equal-key-given?
                         (car args)
                         (lambda (ht k) k))]
-         [args (if equal-key-given? (cdr args) #f)])
+         [args (if equal-key-given? (cdr args) args)])
     (make-hash-chaperone (strip-impersonator ht)
                          ht
                          (add-impersonator-properties who
@@ -1023,8 +1023,9 @@
                    [(eq? r none) none]
                    [else
                     (let ([new-r (new-v-or-wrap next-ht new-k r)])
-                      (unless (chaperone-of? new-r r)
-                        (raise-chaperone-error who "value" new-r r))
+                      (when chaperone?
+                        (unless (chaperone-of? new-r r)
+                          (raise-chaperone-error who "value" new-r r)))
                       new-r)]))]
                [args
                 (raise-arguments-error who
