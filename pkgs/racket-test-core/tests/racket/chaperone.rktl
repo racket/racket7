@@ -469,7 +469,6 @@
    (vector-ref top 1)
    (test #t equal? (unbox b-regular) '(ref prop-only))
    (test #t equal? (unbox b-star) '(ref top))
-   (printf "HERE ~s\n" chaperone-vector)
    (test #t equal? (unbox b-top) '(ref prop-only))
    (reset-and-test-boxes)
    (vector-set! top 1 4)
@@ -1891,7 +1890,7 @@
                                  (set! access-k k)
                                  k))]
            [test (lambda (val proc . args)
-                   ;; Avoid printign hash-table argument, which implicitly uses `ref':
+                   ;; Avoid printing hash-table argument, which implicitly uses `ref':
                    (let ([got (apply proc args)])
                      (test #t (format "~s ~s ~s" proc val got) (equal? val got))))])
       (test #f hash-iterate-first h1)

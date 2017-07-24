@@ -8,6 +8,11 @@
         (#3%set-box! b v2)
         #t)))
 
+(define (unsafe-box*-cas+! b delta)
+  (let ([v (unsafe-unbox* b)])
+    (unless (unsafe-box*-cas! b v (+ v delta))
+      (unsafe-box*-cas+! b delta))))
+
 ;; ----------------------------------------
 
 (define-record box-chaperone chaperone (ref set))
@@ -24,6 +29,7 @@
       (pariah (impersonate-unbox b))))
 
 (define (unsafe-unbox b)
+  ;; must handle impersonators
   (unbox b))
 
 (define (set-box! b v)
@@ -32,6 +38,7 @@
       (pariah (impersonate-set-box! b v))))
 
 (define (unsafe-set-box! b v)
+  ;; must handle impersonators
   (set-box! b v))
 
 (define/who (chaperone-box b ref set . props)

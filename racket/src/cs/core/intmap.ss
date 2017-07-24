@@ -240,13 +240,13 @@
   (case et
     [(eq) (eq? k1 k2)]
     [(eqv) (eqv? k1 k2)]
-    [else (equal? k1 k2)]))
+    [else (key-equal? k1 k2)]))
 
 (define-syntax-rule (hash-code et k)
   (case et
     [(eq) (eq-hash-code k)]
     [(eqv) (eqv-hash-code k)]
-    [else (equal-hash-code k)]))
+    [else (key-equal-hash-code k)]))
 
 (define ($fail default)
   (if (procedure? default)

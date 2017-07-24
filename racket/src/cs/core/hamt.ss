@@ -308,13 +308,13 @@
   (case (hnode-eqtype n)
     [(eq)  (eq? k1 k2)]
     [(eqv) (eqv? k1 k2)]
-    [else  (equal? k1 k2)]))
+    [else  (key-equal? k1 k2)]))
 
 (define (hash-code n k)
   (case (hnode-eqtype n)
     [(eq)  (eq-hash-code k)]
     [(eqv) (eqv-hash-code k)]
-    [else  (equal-hash-code k)]))
+    [else  (key-equal-hash-code k)]))
 
 (define (key-ref n i)
   (#%vector-ref (hnode-keys n) i))

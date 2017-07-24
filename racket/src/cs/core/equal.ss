@@ -175,3 +175,50 @@
           (hashtable-set! ht a next-a)
           (loop next-a)))))
   av)
+
+;; ----------------------------------------
+
+;; The `key-equal-hash-code` and `key-equal?` functions allow
+;; interposition on key equality through a hash table impersonator.
+;; They call `equal-hash-code` or `equal?` unless the current
+;; continuation maps `key-equality-wrap-key` to a key-wrapping
+;; function.
+
+(define key-equality-wrap-key (gensym))
+
+;; Looking in the continaution is expensive relative to `equal?`, so
+;; look in a box as a quick pre-test. Multiple threads may increment
+;; the counter in the box, so that's why it's only a pre-test.
+(define key-equality-maybe-redirect (box 0))
+
+(define (key-equal-hash-code k)
+  (let ([get-k (and (fx> (unbox key-equality-maybe-redirect) 0)
+                    (continuation-mark-set-first #f key-equality-wrap-key))])
+    (if get-k
+        (with-continuation-mark key-equality-wrap-key #f
+          (equal-hash-code (get-k k)))
+        (equal-hash-code k))))
+
+(define (key-equal? k1 k2)
+  (let ([get-k (and (fx> (unbox key-equality-maybe-redirect) 0)
+                    (continuation-mark-set-first #f key-equality-wrap-key))])
+    (if get-k
+        (with-continuation-mark key-equality-wrap-key #f
+          (equal? (get-k k1) (get-k k2)))
+        (equal? k1 k2))))
+
+(define (call-with-equality-wrap get-k key thunk)
+  (unsafe-box*-cas+! key-equality-maybe-redirect 1)
+  (let ([get-k
+         ;; record `(get-k key)` so that we
+         ;; don't have to compute it multiple
+         ;; times:
+         (let ([got-k (get-k key)])
+           (lambda (k2)
+             (if (eq? k2 key)
+                 got-k
+                 (get-k k2))))])
+    (let ([r (with-continuation-mark key-equality-wrap-key get-k
+               (thunk))])
+      (unsafe-box*-cas+! key-equality-maybe-redirect -1)
+      r)))
