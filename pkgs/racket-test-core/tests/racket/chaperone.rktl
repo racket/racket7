@@ -2214,11 +2214,11 @@
       (test 'vec7 hash-ref ht (vector 7) #f)
       (hash-set! ht key 'vec2)
       (test 'vec2 hash-ref ht (vector 1 2))
-      (err/rt-test (hash-ref cht (vector 1 2) #f) one-exn?)
       (test 2 length (hash-keys cht)) ; can extract keys without hashing or comparing
       (test 'vec2 hash-ref ht key)
-      (test 'vec7 hash-ref ht key7))))
-    
+      (test 'vec7 hash-ref ht key7)
+      (err/rt-test (hash-ref cht (vector 1 2) #f) one-exn?))))
+
 ;; ----------------------------------------
 
 ;; Check broken key impersonator:

@@ -876,22 +876,17 @@
         (and p-rtd
              (struct-type-any-transparent? p-rtd)))))
 
-(define (struct-transparent-type r)
-  (let ([t (record-rtd r)])
-    (and (struct-type-transparent? t)
-         t)))
-
 (define (default-struct-equal? s1 s2 eql?)
-  (let ([t1 (record-rtd s1)]
-        [t2 (record-rtd s2)])
+  (let ([t1 (record-rtd (strip-impersonator s1))]
+        [t2 (record-rtd (strip-impersonator s2))])
     (and (eq? t1 t2)
          (struct-type-transparent? t1)
          (let ([n (struct-type-field-count t1)])
            (let loop ([j 0])
              (if (fx= j n)
                  #t
-                 (and (eql? (unsafe-struct*-ref s1 j)
-                            (unsafe-struct*-ref s2 j))
+                 (and (eql? (unsafe-struct-ref s1 j)
+                            (unsafe-struct-ref s2 j))
                       (loop (fx+ j 1)))))))))
          
 (define (default-struct-hash s hash-code)
