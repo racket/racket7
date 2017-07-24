@@ -52,7 +52,7 @@
 (define (set-vector-impersonator-hash!)
   (record-type-hash-procedure (record-type-descriptor vector-chaperone)
                               (lambda (c hash-code)
-                                (hash-code (impersonator-next c))))
+                                (hash-code (vector-copy c))))
   (record-type-hash-procedure (record-type-descriptor vector-impersonator)
                               (lambda (i hash-code)
                                 (hash-code (vector-copy i)))))

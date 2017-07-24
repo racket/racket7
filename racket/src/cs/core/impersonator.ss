@@ -121,22 +121,28 @@
   (let ([p (create-impersonator-property name)]
         [predicate-name (string->symbol (format "~a?" name))]
         [accessor-name (string->symbol (format "~a-accessor" name))])
-    (values p
-            (make-named-procedure
-             (lambda (v)
-               (and (impersonator? v)
-                    (not (eq? none (hash-ref (impersonator-props v) p none)))))
-             predicate-name)
-            (make-impersonator-property-accessor-procedure
-             (lambda (v)
-               (and (impersonator? v)
+    (letrec ([predicate
+              (lambda (v)
+                (if (impersonator? v)
+                    (not (eq? none (hash-ref (impersonator-props v) p none)))
+                    (let ([iv (extract-impersonator-of predicate-name v)])
+                      (and iv
+                           (predicate iv)))))]
+             [accessor
+              (lambda (v)
+                (if (impersonator? v)
                     (let ([pv (hash-ref (impersonator-props v) p none)])
                       (if (eq? none pv)
                           (raise-argument-error accessor-name
                                                 (format "~a?" name)
                                                 v)
-                          pv))))
-             accessor-name))))
+                          pv))
+                    (let ([iv (extract-impersonator-of accessor-name v)])
+                      (and iv
+                           (accessor iv)))))])
+      (values p
+              (make-named-procedure predicate predicate-name)
+              (make-impersonator-property-accessor-procedure accessor accessor-name)))))
 
 (define (impersonator-property-accessor-procedure? v)
   (or (raw:impersonator-property-accessor-procedure? v)
@@ -442,7 +448,7 @@
                           (eq? (car tag+ref)
                                (car (impersonator-of-ref a2))))
                (different 'prop:impersonator-of))
-             (unless (record-equal-procedure a a2)
+             (unless (record-equal-procedure a (strip-impersonator a2))
                (different 'prop:equal+hash))
              a2)]))))
 

@@ -68,6 +68,10 @@
           (if (chez:procedure? v)
               v
               (try-extract-procedure v)))]
+       [(eq? v 'unsafe)
+        (if (chaperone? f)
+            (unsafe-procedure-chaperone-replace-proc f)
+            (unsafe-procedure-impersonator-replace-proc f))]
        [else #f]))]
    [else #f]))
 
@@ -102,8 +106,8 @@
           (cond
            [a
             (if (exact-integer? a)
-                (proc-arity-mask (unsafe-struct-ref f a) shift)
-                (bitwise-arithmetic-shift-right (unsafe-struct-ref f (unbox a)) shift))]
+                (proc-arity-mask (unsafe-struct*-ref f a) shift)
+                (bitwise-arithmetic-shift-right (unsafe-struct*-ref f (unbox a)) shift))]
            [else
             (let ([v (struct-property-ref prop:procedure rtd #f)])
               (cond
@@ -272,7 +276,7 @@
       (|#%app| (impersonator-val proc) args)]
      [else
       ;; Loop through wrappers so that `{chaperone,impersonate}-procedure*`
-      ;; wrappers can receive the original `proc` argument:
+      ;; wrappers can receive the original `proc` argument
       (let loop ([p proc] [args args])
         (cond
          [(or (procedure-impersonator? p)
@@ -367,7 +371,17 @@
          [(impersonator? p)
           (loop (impersonator-next p) args)]
          [else
-          (apply p args)]))])))
+          ;; If `p` is a structure whose `prop:procedure` value is an
+          ;; integer `i`, then we should extract the field at position
+          ;; `i` from `proc`, not from `p`, so that any interpositions
+          ;; on that access are performed.
+          (let ([v (and (record? p)
+                        (struct-property-ref prop:procedure (record-rtd p) #f))])
+            (cond
+             [(integer? v)
+              (apply (unsafe-struct-ref proc v) args)]
+             [else
+              (apply p args)]))]))])))
 
 (define (set-procedure-impersonator-hash!)
   (record-type-hash-procedure (record-type-descriptor procedure-chaperone)
@@ -499,10 +513,14 @@
                                                         "need at least two fields in the structure type"))
                                #t)))
 
-(define (checked-procedure-check-and-extract st v alt-proc v1 v2)
+(define/who (checked-procedure-check-and-extract st v alt-proc v1 v2)
+  (check who record-type-descriptor?
+         :contract "(and/c struct-type? (not/c impersonator?))"
+         st)
   (if (and (checked-procedure? v)
-           (|#%app| (unsafe-struct-ref v 0) v1 v2))
-      (unsafe-struct-ref v 1)
+           (record? v st)
+           (|#%app| (unsafe-struct*-ref v 0) v1 v2))
+      (unsafe-struct*-ref v 1)
       (|#%app| alt-proc v v1 v2)))
 
 ;; ----------------------------------------
@@ -521,12 +539,12 @@
                           (cond
                            [(and (record? s (position-based-accessor-rtd pba))
                                  (< p (position-based-accessor-field-count pba)))
-                            (unsafe-struct-ref s (+ p (position-based-accessor-offset pba)))]
+                            (unsafe-struct*-ref s (+ p (position-based-accessor-offset pba)))]
                            [(and (impersonator? s)
                                  (record? (impersonator-val s) (position-based-accessor-rtd pba))
                                  (< p (position-based-accessor-field-count pba)))
                             (impersonate-ref (lambda (s)
-                                               (unsafe-struct-ref s (+ p (position-based-accessor-offset pba))))
+                                               (unsafe-struct*-ref s (+ p (position-based-accessor-offset pba))))
                                              (position-based-accessor-rtd pba)
                                              p
                                              s)]
@@ -582,7 +600,7 @@
 
   (let ([register-unsafe-procedure-impersonator-struct-type!
          (lambda (rtd)
-           (struct-property-set! prop:procedure rtd 3)
+           (struct-property-set! prop:procedure rtd 'unsafe)
            (struct-property-set! prop:procedure-arity rtd 0))])
     (register-unsafe-procedure-impersonator-struct-type! (record-type-descriptor unsafe-procedure-impersonator))
     (register-unsafe-procedure-impersonator-struct-type! (record-type-descriptor unsafe-procedure-chaperone))))

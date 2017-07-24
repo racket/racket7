@@ -108,7 +108,7 @@
 (define (set-box-impersonator-hash!)
   (record-type-hash-procedure (record-type-descriptor box-chaperone)
                               (lambda (c hash-code)
-                                (hash-code (impersonator-next c))))
+                                (hash-code (box (unbox c)))))
   (record-type-hash-procedure (record-type-descriptor box-impersonator)
                               (lambda (i hash-code)
                                 (hash-code (box (unbox i))))))

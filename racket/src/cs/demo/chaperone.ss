@@ -86,7 +86,7 @@
                                 (chaperone-vector
                                  e
                                  (lambda (v i e) e)
-                                 #f))
+                                 (lambda (v i e) e)))
                               (lambda (v i e) e)))
 (check (chaperone-of? vvc vv)
        #t)

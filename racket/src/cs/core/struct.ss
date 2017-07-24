@@ -821,7 +821,7 @@
 
 (define (unsafe-struct-ref s i)
   (if (impersonator? s)
-      (let loop ([rtd (record-rtd s)])
+      (let loop ([rtd (record-rtd (impersonator-val s))])
         (let ([pos (- i (struct-type-parent-field-count rtd))])
           (if (fx>= pos 0)
               (impersonate-ref (record-field-accessor rtd i) rtd pos s)

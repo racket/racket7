@@ -130,6 +130,15 @@
       (output-port/max-max-length o max-length))]
    [(struct? v)
     (p who (struct->vector v) mode o max-length)]
+   [(procedure? v)
+    (define name (object-name v))
+    (cond
+      [(symbol? name)
+       (let* ([max-length (write-string/max "#<procedure:" o max-length)]
+              [max-length (p who name #f  o max-length)])
+         (write-string/max ">" o max-length))]
+      [else
+       (write-string/max "#<procedure>" o max-length)])]
    [else
     ;; As a last resort, fall back to the host `format`:
     (write-string/max (format "~s" v) o max-length)]))
