@@ -210,14 +210,16 @@
 (define (call-with-equality-wrap get-k key thunk)
   (unsafe-box*-cas+! key-equality-maybe-redirect 1)
   (let ([get-k
-         ;; record `(get-k key)` so that we
-         ;; don't have to compute it multiple
-         ;; times:
-         (let ([got-k (get-k key)])
-           (lambda (k2)
-             (if (eq? k2 key)
-                 got-k
-                 (get-k k2))))])
+         (if (eq? key none)
+             get-k
+             ;; record `(get-k key)` so that we
+             ;; don't have to compute it multiple
+             ;; times:
+             (let ([got-k (get-k key)])
+               (lambda (k2)
+                 (if (eq? k2 key)
+                     got-k
+                     (get-k k2)))))])
     (let ([r (with-continuation-mark key-equality-wrap-key get-k
                (thunk))])
       (unsafe-box*-cas+! key-equality-maybe-redirect -1)

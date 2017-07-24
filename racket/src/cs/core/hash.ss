@@ -1,7 +1,10 @@
 ;; To support iteration and locking, we wrap Chez's mutable hash
 ;; tables in a `mutable-hash` record:
-(define-record mutable-hash (ht keys keys-stale? lock))
-(define (create-mutable-hash ht kind) (make-mutable-hash ht '#() #t (make-lock kind)))
+(define-record mutable-hash (ht          ; Chez Scheme hashtable
+                             keys        ; vector of keys for iteration
+                             keys-mapped ; an `eq?` or `eq?`-based mapping `keys` values
+                             lock))
+(define (create-mutable-hash ht kind) (make-mutable-hash ht #f #f (make-lock kind)))
 
 (define (authentic-hash? v) (or (intmap? v) (mutable-hash? v) (weak-equal-hash? v)))
 (define (hash? v) (or (authentic-hash? v)
@@ -72,7 +75,10 @@
   (cond
    [(mutable-hash? ht)
     (lock-acquire (mutable-hash-lock ht))
-    (set-mutable-hash-keys-stale?! ht #t)
+    (when (and (mutable-hash-keys ht)
+               (not (hashtable-contains? (mutable-hash-ht ht) k)))
+      (set-mutable-hash-keys! ht #f)
+      (set-mutable-hash-keys-mapped! ht #f))
     (hashtable-set! (mutable-hash-ht ht) k v)
     (lock-release (mutable-hash-lock ht))]
    [(weak-equal-hash? ht) (weak-hash-set! ht k v)]
@@ -87,7 +93,19 @@
   (cond
    [(mutable-hash? ht)
     (lock-acquire (mutable-hash-lock ht))
-    (set-mutable-hash-keys-stale?! ht #t)
+    (when (and (mutable-hash-keys ht)
+               (hash-equal? ht))
+      ;; Track which keys in the vector are no longer mapped
+      (unless (mutable-hash-keys-mapped ht)
+        (let ([mapped (make-eq-hashtable)])
+          (set-mutable-hash-keys-mapped! ht mapped)
+          (vector-for-each (lambda (k)
+                             (hashtable-set! mapped k #t))
+                           (mutable-hash-keys ht))))
+      ;; get specific key that is currently mapped for `k`
+      ;; by getting the entry pair:
+      (let ([e (hashtable-cell (mutable-hash-ht ht) k #f)])
+        (hashtable-delete! (mutable-hash-ht ht) (car e))))
     (hashtable-delete! (mutable-hash-ht ht) k)
     (lock-release (mutable-hash-lock ht))]
    [(weak-equal-hash? ht) (weak-hash-remove! ht k)]
@@ -102,8 +120,8 @@
   (cond
    [(mutable-hash? ht)
     (lock-acquire (mutable-hash-lock ht))
-    (set-mutable-hash-keys! ht '#())
-    (set-mutable-hash-keys-stale?! ht #t)
+    (set-mutable-hash-keys! ht #f)
+    (set-mutable-hash-keys-mapped! ht #f)
     (hashtable-clear! (mutable-hash-ht ht))
     (lock-release (mutable-hash-lock ht))]
    [(weak-equal-hash? ht) (weak-hash-clear! ht)]
@@ -410,24 +428,32 @@
 (define (prepare-iterate! ht i)
   (lock-acquire (mutable-hash-lock ht))
   (let ([vec (mutable-hash-keys ht)])
-    (or (and (or i (not (mutable-hash-keys-stale? ht)))
-             (lock-release (mutable-hash-lock ht))
-             vec)
-        (let ([vec (hashtable-keys (mutable-hash-ht ht))])
-          ;; Keep a weak reference to each key, in case
-          ;; it's removed or we have a weak hash table:
-          (let loop ([i (vector-length vec)])
-            (unless (zero? i)
-              (let* ([i (sub1 i)]
-                     [key (vector-ref vec i)])
-                (vector-set! vec i (weak-cons key #f))
-                (loop i))))
-          (set-mutable-hash-keys! ht vec)
-          (set-mutable-hash-keys-stale?! ht #f)
-	  (lock-release (mutable-hash-lock ht))
-          vec))))
+    (cond
+     [vec
+      (lock-release (mutable-hash-lock ht))
+      vec]
+     [else
+      (let ([vec (hashtable-keys (mutable-hash-ht ht))])
+        ;; Keep a weak reference to each key, in case
+        ;; it's removed or we have a weak hash table:
+        (let loop ([i (vector-length vec)])
+          (unless (zero? i)
+            (let* ([i (sub1 i)]
+                   [key (vector-ref vec i)])
+              (vector-set! vec i (weak-cons key #f))
+              (loop i))))
+        (set-mutable-hash-keys! ht vec)
+        (set-mutable-hash-keys-mapped! ht (if (hash-equal? ht)
+                                              ;; Build mapped-key tracking on demand:
+                                              #f
+                                              ;; In case it's a weak hash table,
+                                              ;; double-check the original table
+                                              ;; before reporting a position/key:
+                                              (mutable-hash-ht ht)))
+        (lock-release (mutable-hash-lock ht))
+        vec)])))
 
-(define (hash-iterate-first ht)
+(define/who (hash-iterate-first ht)
   (cond
    [(intmap? ht)
     (intmap-iterate-first ht)]
@@ -436,13 +462,14 @@
    [(weak-equal-hash? ht) (weak-hash-iterate-first ht)]
    [(and (impersonator? ht)
          (authentic-hash? (impersonator-val ht)))
+    ;; `hash-iterate-first` must not hash any keys:
     (hash-iterate-first (impersonator-val ht))]
-   [else (raise-argument-error 'hash-iterate-first "hash?" ht)]))
+   [else (raise-argument-error who "hash?" ht)]))
 
 (define (check-i who i)
   (check who exact-nonnegative-integer? i))
 
-(define (hash-iterate-next ht i)
+(define/who (hash-iterate-next ht i)
   (cond
    [(intmap? ht)
     (check-i 'hash-iterate-next i)
@@ -455,8 +482,9 @@
     (weak-hash-iterate-next ht i)]
    [(and (impersonator? ht)
          (authentic-hash? (impersonator-val ht)))
+    ;; `hash-iterate-next` must not hash any keys:
     (hash-iterate-next (impersonator-val ht) i)]
-   [else (raise-argument-error 'hash-iterate-next "hash?" ht)]))
+   [else (raise-argument-error who "hash?" ht)]))
 
 (define (mutable-hash-iterate-next ht init-i)
   (let* ([vec (prepare-iterate! ht init-i)] ; vec expected to have > `init-i` elements
@@ -479,10 +507,10 @@
               ;; A hash table change or disappeared weak reference
               (loop i)]
              [else
-              (if (or (not (mutable-hash-keys-stale? ht))
+              (if (or (not (mutable-hash-keys-mapped ht))
                       (begin
                         (lock-acquire (mutable-hash-lock ht))
-                        (let ([contains? (hashtable-contains? (mutable-hash-ht ht) key)])
+                        (let ([contains? (hashtable-contains? (mutable-hash-keys-mapped ht) key)])
                           (lock-release (mutable-hash-lock ht))
                           contains?)))
                   i
@@ -513,11 +541,23 @@
            [key (car p)]
            [v (if (bwp-object? key)
                   none
-                  (begin
+                  (cond
+                   [(not value?)
+                    ;; Impersonator support relies on not `equal?`-hashing
+                    ;; the candidate key at this point
+                    (cond
+                     [(mutable-hash-keys-mapped ht)
+                      => (lambda (keys-mapped)
+                           (lock-acquire (mutable-hash-lock ht))
+                           (let ([v (hashtable-ref keys-mapped key none)])
+                             (lock-release (mutable-hash-lock ht))
+                             v))]
+                     [else #t])]
+                   [else
                     (lock-acquire (mutable-hash-lock ht))
                     (let ([v (hashtable-ref (mutable-hash-ht ht) key none)])
                       (lock-release (mutable-hash-lock ht))
-                      v)))])
+                      v)]))])
       (if (eq? v none)
           (raise-arguments-error who "no element at index"
                                  "index" i)
@@ -998,13 +1038,7 @@
                          (hash-impersonator-procs ht)
                          (hash-chaperone-procs ht))]
               [next-ht (impersonator-next ht)])
-          (let ([get-k (and wrap-key?
-                            (lambda (k)
-                              (let* ([k (get-k k)]
-                                     [new-k ((hash-procs-equal-key procs) next-ht k)])
-                                (unless (or (not chaperone?) (chaperone-of? new-k k))
-                                  (raise-chaperone-error who "key" new-k k))
-                                new-k)))])
+          (let ([get-k (and wrap-key? (extend-get-k who get-k procs next-ht chaperone?))])
             (call-with-values
                 (lambda () (apply-wrapper procs next-ht k v))
               (case-lambda
@@ -1061,6 +1095,15 @@
              (lambda () (authentic-op ht k v)))
             (authentic-op ht k v))]))))
 
+;; Add a layer of interposition on `equal?` and `equal-hash-code`:
+(define (extend-get-k who get-k procs next-ht chaperone?)
+  (lambda (k)
+    (let* ([k (get-k k)]
+           [new-k ((hash-procs-equal-key procs) next-ht k)])
+      (unless (or (not chaperone?) (chaperone-of? new-k k))
+        (raise-chaperone-error who "key" new-k k))
+      new-k)))
+
 (define (impersonate-hash-clear! ht)
   (let loop ([ht ht])
     (cond
@@ -1109,7 +1152,7 @@
 (define (impersonate-hash-iterate-key+value who ht i key? value? pair?)
   (let ([key (impersonate-hash-iterate-key who ht i)])
     (cond
-     [(and key? (not value?)) key]
+     [(not value?) key]
      [else
       (let ([val (hash-ref ht key none)])
         (cond
@@ -1124,6 +1167,8 @@
          [else val]))])))
 
 (define (impersonate-hash-iterate-key who ht i)
+  ;; We don't have to set up `get-k`, because `hash-iterate-key`
+  ;; is prohibited from hashing any keys
   (let loop ([ht ht])
     (cond
      [(hash-impersonator? ht)
@@ -1141,4 +1186,8 @@
      [(impersonator? ht)
       (loop (impersonator-next ht))]
      [else
-      (hash-iterate-key ht i)])))
+      ;; The same as `hash-iterate-key`, but with the correct `who`:
+      (do-hash-iterate-key+value who ht i
+                                 intmap-iterate-key
+                                 weak-hash-iterate-key
+                                 #t #f #f)])))
