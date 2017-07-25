@@ -15,18 +15,20 @@
                                     (rktio-errno err)))
   (define system-msg (rktio_to_bytes p))
   (end-atomic)
-  (format "~a~a~a\n  system error: ~a; ~a=~a"
-          (or who "")
-          (if who ": " "")
-          base-msg
-          (bytes->string/utf-8 system-msg #\?)
-          (let ([kind (rktio-errkind err)])
-            (cond
-              [(eqv? kind RKTIO_ERROR_KIND_POSIX) "errno"]
-              [(eqv? kind RKTIO_ERROR_KIND_WINDOWS) "win_err"]
-              [(eqv? kind RKTIO_ERROR_KIND_GAI) "gai_err"]
-              [else "rkt_err"]))
-          (rktio-errno err)))
+  (string-append (if who (symbol->string who) "")
+                 (if who ": " "")
+                 base-msg
+                 "\n  system error: "
+                 (bytes->string/utf-8 system-msg #\?)
+                 "; "
+                 (let ([kind (rktio-errkind err)])
+                   (cond
+                     [(eqv? kind RKTIO_ERROR_KIND_POSIX) "errno"]
+                     [(eqv? kind RKTIO_ERROR_KIND_WINDOWS) "win_err"]
+                     [(eqv? kind RKTIO_ERROR_KIND_GAI) "gai_err"]
+                     [else "rkt_err"]))
+                 "="
+                 (number->string (rktio-errno err))))
 
 (define (raise-rktio-error who err base-msg)
   (raise

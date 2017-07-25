@@ -21,7 +21,7 @@ Requirements:
    By default, `make` will use the enclosing Racket build. Go back to
    the root of this repository/distribution and build so that at least
    the "compiler-lib" and "parser-tools-lib" packages are installed,
-   either with just `make` or with
+   either with just `make` (for a full build) or with
 
       make PKGS="compiler-lib parser-tools-lib"
 
