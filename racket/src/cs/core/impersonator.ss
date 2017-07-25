@@ -14,6 +14,14 @@
       (impersonator-val v)
       v))
 
+(define (raise-chaperone-error who what e e2)
+  (raise-arguments-error
+   who
+   (string-append "non-chaperone result; received a" (if (equal? what "argument") "n" "") " " what
+                  " that is not a chaperone of the original " what)
+   "original" e
+   "received" e2))
+
 (define (impersonate-ref acc rtd pos orig)
   (impersonate-struct-or-property-ref acc rtd (cons rtd pos) orig))
 
@@ -40,12 +48,7 @@
                            [else (wrapper orig r)])])
               (when (struct-chaperone? v)
                 (unless (chaperone-of? new-r r)
-                  (raise-arguments-error 'struct-ref
-                                         (string-append
-                                          "non-chaperone result;\n"
-                                          " received a value that is not a chaperone of the original value")
-                                         "original" r
-                                         "received" new-r)))
+                  (raise-chaperone-error 'struct-ref "value" r new-r)))
               new-r)]
            [else
             (loop (impersonator-next v))]))]
@@ -80,12 +83,7 @@
                             [else (wrapper orig a)])])
                 (when (struct-chaperone? v)
                   (unless (chaperone-of? new-a a)
-                    (raise-arguments-error 'struct-set!
-                                           (string-append
-                                            "non-chaperone result;\n"
-                                            " received a value that is not a chaperone of the original value")
-                                           "original" a
-                                           "received" new-a)))
+                    (raise-chaperone-error 'struct-set! "value" a new-a)))
                 (cond
                  [(pair? wrapper)
                   (|#%app| (car wrapper) (impersonator-next v) new-a)]
@@ -105,6 +103,99 @@
    [else
     ;; Let mutator report the error:
     (set orig a)]))
+
+(define (impersonate-struct-info orig)
+  (let loop ([v orig])
+    (cond
+     [(struct-chaperone? v)
+      (let ([wrapper (hash-ref (struct-impersonator/chaperone-procs v) struct-info #f)])
+        (cond
+         [wrapper
+          (let-values ([(rtd skipped?) (loop (impersonator-next v))])
+            (cond
+             [(not rtd) (values #f skipped?)]
+             [else
+              (call-with-values (lambda () (wrapper rtd skipped?))
+                (case-lambda
+                 [(new-rtd new-skipped?)
+                  (unless (chaperone-of? new-rtd rtd)
+                    (raise-chaperone-error 'struct-info "value" rtd new-rtd))
+                  (unless (chaperone-of? new-skipped? skipped?)
+                    (raise-chaperone-error 'struct-info "value" skipped? new-skipped?))
+                  (values new-rtd new-skipped?)]
+                 [args (raise-impersonator-result-arity-error 'struct-info orig 2 args)]))]))]
+         [else
+          (loop (impersonator-next v))]))]
+     [(impersonator? v)
+      (loop (impersonator-next v))]
+     [else (struct-info v)])))
+
+(define (raise-impersonator-result-arity-error who orig n args)
+  (raise
+   (|#%app|
+    exn:fail:contract:arity
+    (string-append
+     (symbol->string who) ": arity mismatch;\n"
+     " received wrong number of values from a chaperone's replacement procedure\n"
+     "  expected: " (number->string n) "\n"
+     "  received: " (number->string (length args)) "\n"
+     "  chaperone: " (error-value->string orig)))))
+
+;; ----------------------------------------
+
+(define-record struct-type-chaperone chaperone (struct-info make-constructor guard))
+
+(define/who (chaperone-struct-type rtd struct-info-proc make-constructor-proc guard-proc . props)
+  (check who struct-type? rtd)
+  (check who (procedure-arity-includes/c 8) struct-info-proc)
+  (check who (procedure-arity-includes/c 1) make-constructor-proc)
+  (check who procedure? guard-proc)
+  (make-struct-type-chaperone
+   (strip-impersonator rtd)
+   rtd
+   (add-impersonator-properties who
+                                props
+                                (if (impersonator? rtd)
+                                    (impersonator-props rtd)
+                                    empty-hasheq))
+   struct-info-proc
+   make-constructor-proc
+   guard-proc))
+
+(define (chaperone-constructor rtd ctr)
+  (let loop ([rtd rtd])
+    (cond
+     [(struct-type-chaperone? rtd)
+      (let* ([ctr (loop (impersonator-next rtd))]
+             [new-ctr ((struct-type-chaperone-make-constructor rtd) ctr)])
+        (unless (chaperone-of? new-ctr ctr)
+          (raise-chaperone-error 'struct-type-make-constructor "value" ctr new-ctr))
+        new-ctr)]
+     [(impersonator? rtd)
+      (loop (impersonator-next rtd))]
+     [else ctr])))
+
+(define (chaperone-struct-type-info orig-rtd get-results)
+  (apply
+   values
+   (let loop ([rtd orig-rtd])
+     (cond
+      [(struct-type-chaperone? rtd)
+       (let ([results (loop (impersonator-next rtd))])
+         (let-values ([new-results (apply (struct-type-chaperone-struct-info rtd) results)])
+           (cond
+            [(= (length results) (length new-results))
+             (for-each (lambda (r new-r)
+                         (unless (chaperone-of? new-r r)
+                           (raise-chaperone-error 'struct-type-info "value" r new-r)))
+                       results
+                       new-results)
+             new-results]
+            [else
+             (raise-impersonator-result-arity-error 'struct-type-info orig-rtd (length results) new-results)])))]
+      [(impersonator? rtd)
+       (loop (impersonator-next rtd))]
+      [else (call-with-values get-results list)]))))
 
 ;; ----------------------------------------
 
@@ -210,7 +301,7 @@
            [orig-args (if st (cdr args) args)]
            [val (strip-impersonator v)]
            [orig-iprops (if (impersonator? v) (impersonator-props v) empty-hasheq)])
-      (unless (or (not st) (record? val st))
+      (unless (or (not st) (record? val (strip-impersonator st)))
         (raise-arguments-error who "given value is not an instance of the given structure type"
                                "struct type" st
                                "value" v))

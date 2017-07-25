@@ -166,7 +166,7 @@
           raise-range-error
           raise-arity-error
           raise-type-error
-          raise-binding-result-arity-error
+          raise-binding-result-arity-error ; not exported to Racket
 
           make-struct-type-property
           struct-type-property?
@@ -206,6 +206,7 @@
           chaperone-struct
           chaperone-struct-unsafe-undefined
           prop:chaperone-unsafe-undefined
+          chaperone-struct-type
 
           prop:object-name
           object-name

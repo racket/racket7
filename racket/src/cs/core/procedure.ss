@@ -269,6 +269,11 @@
       (k #f #f #f)])))
 
 (define (impersonate-apply proc . args)
+  (impersonate-apply/parameter proc #t args))
+
+;; If `actually-call?` is #f, then don't call the procedure in `proc`,
+;; because we're trying to get an inpersonated-parameter value
+(define (impersonate-apply/parameter proc actually-call? args)
   (let ([n (length args)])
     (cond
      [(not (procedure-arity-includes? (impersonator-val proc) n))
@@ -380,6 +385,8 @@
             (cond
              [(integer? v)
               (apply (unsafe-struct-ref proc v) args)]
+             [(not actually-call?)
+              (apply values args)]
              [else
               (apply p args)]))]))])))
 
@@ -390,14 +397,6 @@
   (record-type-hash-procedure (record-type-descriptor procedure-impersonator)
                               (lambda (i hash-code)
                                 (hash-code (impersonator-next i)))))
-
-(define (raise-chaperone-error who what e e2)
-  (raise-arguments-error
-   who
-   (string-append "non-chaperone result; received a" (if (equal? what "argument") "n" "") " " what
-                  " that is not a chaperone of the original " what)
-   "original" e
-   "received" e2))
 
 (define (raise-result-wrapper-result-arity-error)
   (raise

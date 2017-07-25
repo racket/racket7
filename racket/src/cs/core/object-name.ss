@@ -38,4 +38,6 @@
     (object-name (impersonator-val v))]
    [(procedure? v)
     (object-name (extract-procedure v))]
+   [(struct-type? v)
+    (record-type-name v)]
    [else #f]))

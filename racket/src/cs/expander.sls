@@ -151,7 +151,8 @@
     (eval '(define-syntax |#%app|
              (syntax-rules ()
                [(_ rator rand ...)
-                ((extract-procedure rator) rand ...)]))))
+                ((extract-procedure rator) rand ...)])))
+    (eval `(define raise-binding-result-arity-error ',raise-binding-result-arity-error)))
 
   ;; ----------------------------------------
 

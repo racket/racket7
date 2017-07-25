@@ -6,7 +6,6 @@
 (define (chaperone-evt v . args) v)
 (define (chaperone-channel v . args) v)
 (define (impersonate-channel v . args) v)
-(define (chaperone-struct-type v . args) v)
 
 (define (replace-evt a b) (error 'replace-evt "unsupported"))
 
@@ -303,7 +302,6 @@
    chaperone-evt
    chaperone-channel
    impersonate-channel
-   chaperone-struct-type
 
    replace-evt
 

@@ -14,10 +14,14 @@
      [(and (parameter? (car args))
            (pair? (cdr args)))
       (let dloop ([p (car args)] [v (cadr args)])
-        (if (derived-parameter? p)
-            (dloop (derived-parameter-next p) ((derived-parameter-guard p) v))
-            (loop (intmap-set ht p (make-thread-cell v #t))
-                  (cddr args))))]
+        (cond
+         [(derived-parameter? p)
+          (dloop (derived-parameter-next p) ((derived-parameter-guard p) v))]
+         [(impersonator? p)
+          (dloop (impersonator-val p) (impersonate-apply/parameter p #f (list v)))]
+         [else
+          (loop (intmap-set ht p (make-thread-cell v #t))
+                (cddr args))]))]
      [(parameter? (car args))
       (raise-arguments-error 'extend-parameterization
                              "missing value for parameter"
@@ -38,12 +42,15 @@
               key
               #f))
 
-(define-record-type (parameter create-parameter parameter?)
+(define-record-type (parameter create-parameter authentic-parameter?)
   (fields proc))
 
 (define-record-type (derived-parameter create-derived-parameter derived-parameter?)
   (parent parameter)
   (fields next guard))
+
+(define (parameter? v)
+  (authentic-parameter? (strip-impersonator v)))
 
 (define/who make-parameter
   (case-lambda
@@ -67,7 +74,9 @@
        self)]))
 
 (define/who (make-derived-parameter p guard wrap)
-  (check who parameter? p)
+  (check who authentic-parameter?
+         :contract "(and/c parameter? (not/c impersonator?))"
+         p)
   (check who (procedure-arity-includes/c 1) guard)
   (check who (procedure-arity-includes/c 1) wrap)
   (create-derived-parameter (let ([self (parameter-proc p)])
