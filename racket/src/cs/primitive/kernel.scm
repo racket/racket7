@@ -594,7 +594,6 @@
    read-case-sensitive
    read-char
    read-char-or-special
-   read-decimal-as-inexact
    read-line
    read-on-demand-source
    read-string

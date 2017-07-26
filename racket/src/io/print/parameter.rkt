@@ -23,7 +23,6 @@
 (define-boolean-parameter print-boolean-long-form #f)
 (define-boolean-parameter print-reader-abbreviations #t)
 
-(define-boolean-parameter read-decimal-as-inexact #t)
 (define-boolean-parameter read-accept-bar-quote #t)
 (define-boolean-parameter read-case-sensitive #t)
 

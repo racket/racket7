@@ -16,7 +16,8 @@
          "named.rkt"
          "parameter.rkt"
          "mode.rkt"
-         "graph.rkt")
+         "graph.rkt"
+         "config.rkt")
 
 (provide display
          write
@@ -37,20 +38,23 @@
 (define/who (display v [o (current-output-port)] [max-length #f])
   (check who output-port? o)
   (check who max-length? #:contract max-length-contract max-length)
-  (dots (p who v DISPLAY-MODE o (sub3 max-length) (detect-graph v DISPLAY-MODE)) o)
+  (define config (make-print-config))
+  (dots (p who v DISPLAY-MODE o (sub3 max-length) (detect-graph v DISPLAY-MODE config) config) o)
   (void))
 
 (define/who (write v [o (current-output-port)] [max-length #f])
   (check who output-port? o)
   (check who max-length? #:contract max-length-contract max-length)
-  (dots (p who v WRITE-MODE o (sub3 max-length) (detect-graph v WRITE-MODE)) o)
+  (define config (make-print-config))
+  (dots (p who v WRITE-MODE o (sub3 max-length) (detect-graph v WRITE-MODE config) config) o)
   (void))
 
 (define/who (print v [o (current-output-port)] [quote-depth PRINT-MODE/UNQUOTED] [max-length #f])
   (check who output-port? o)
   (check who print-mode? #:contract "(or/c 0 1)" quote-depth)
   (check who max-length? #:contract max-length-contract max-length)
-  (dots (p who v quote-depth o (sub3 max-length) (detect-graph v quote-depth)) o)
+  (define config (make-print-config))
+  (dots (p who v quote-depth o (sub3 max-length) (detect-graph v quote-depth config) config) o)
   (void))
 
 (define/who (newline [o (current-output-port)])
@@ -76,14 +80,14 @@
 ;; ----------------------------------------
 
 ;; Returns the max length that is still available
-(define (p who v mode o max-length graph)
+(define (p who v mode o max-length graph config)
   (cond
     [(and graph (hash-ref graph v #f))
      => (lambda (g)
           (cond
             [(and (as-constructor? g)
                   (not (as-constructor-tag g)))
-             (p/no-graph-no-quote who v mode o max-length graph)]
+             (p/no-graph-no-quote who v mode o max-length graph config)]
             [(string? g)
              (let* ([max-length (write-string/max "#" o max-length)]
                     [max-length (write-string/max g o max-length)])
@@ -96,11 +100,11 @@
                     [max-length (write-string/max gs o max-length)]
                     [max-length (write-string/max "=" o max-length)])
                (hash-set! graph v gs)
-               (p/no-graph who v mode o max-length graph))]))]
+               (p/no-graph who v mode o max-length graph config))]))]
     [else
-     (p/no-graph who v mode o max-length graph)]))
+     (p/no-graph who v mode o max-length graph config)]))
 
-(define (p/no-graph who v mode o max-length graph)
+(define (p/no-graph who v mode o max-length graph config)
   (cond
     [(and (eq? mode PRINT-MODE/UNQUOTED)
           (or (null? v)
@@ -114,11 +118,11 @@
      ;; Since this value is not marked for constructor mode,
      ;; transition to quote mode:
      (let ([max-length (write-string/max "'" o max-length)])
-       (p/no-graph-no-quote who v PRINT-MODE/QUOTED o max-length graph))]
+       (p/no-graph-no-quote who v PRINT-MODE/QUOTED o max-length graph config))]
     [else
-     (p/no-graph-no-quote who v mode o max-length graph)]))
+     (p/no-graph-no-quote who v mode o max-length graph config)]))
 
-(define (p/no-graph-no-quote who v mode o max-length graph)
+(define (p/no-graph-no-quote who v mode o max-length graph config)
   (cond
     [(eq? max-length 'full) 'full]
     [(null? v)
@@ -136,13 +140,14 @@
     [(symbol? v)
      (cond
        [(eq? mode DISPLAY-MODE) (write-string/max (symbol->string v) o max-length)]
-       [else (print-symbol v o max-length)])]
+       [else (print-symbol v o max-length config)])]
     [(keyword? v)
      (let ([max-length (write-string/max "#:" o max-length)])
        (cond
          [(eq? mode DISPLAY-MODE) (write-string/max (keyword->string v) o max-length)]
          [else
-          (print-symbol (string->symbol (keyword->string v)) o max-length)]))]
+          (print-symbol (string->symbol (keyword->string v)) o max-length config
+                        #:for-keyword? #t)]))]
     [(char? v)
      (cond
        [(eq? mode DISPLAY-MODE) (write-string/max (string v) o max-length)]
@@ -152,17 +157,19 @@
     [(eq? v #t)
      (write-string/max "#t" o max-length)]
     [(pair? v)
-     (print-list p who v mode o max-length graph #f #f)]
+     (print-list p who v mode o max-length graph config #f #f)]
     [(vector? v)
-     (print-list p who (vector->list v) mode o max-length graph "#(" "(vector ")]
+     (print-list p who (vector->list v) mode o max-length graph config "#(" "(vector ")]
     [(box? v)
-     (if (print-box)
-         (p who (unbox v) mode o (write-string/max "#&" o max-length) graph)
+     (if (config-get config print-box)
+         (p who (unbox v) mode o (write-string/max "#&" o max-length) graph config)
          (write-string/max "#<box>" o max-length))]
     [(hash? v)
-     (print-hash v o max-length p who mode graph)]
+     (if (config-get config print-hash-table)
+         (print-hash v o max-length p who mode graph config)
+         (write-string/max "#<hash>" o max-length))]
     [(mpair? v)
-     (print-mlist p who v mode o max-length graph)]
+     (print-mlist p who v mode o max-length graph config)]
     [(custom-write? v)
      (let ([o (make-output-port/max o max-length)])
        ((custom-write-accessor v) v o mode)
@@ -174,17 +181,19 @@
         (define alt-list-constructor
           ;; strip "struct:" from the first element of `l`:
           (string-append "(" (substring (symbol->string (car l)) 7) " "))
-        (print-list p who (cdr l) mode o max-length graph #f alt-list-constructor)]
+        (print-list p who (cdr l) mode o max-length graph config #f alt-list-constructor)]
        [(prefab-struct-key v)
         => (lambda (key)
              (define l (cons key (cdr (vector->list (struct->vector v)))))
-             (print-list p who l mode o max-length graph "#s(" #f))]
+             (print-list p who l mode o max-length graph config "#s(" #f))]
        [else
-        (p who (struct->vector v) mode o max-length graph)])]
+        (p who (struct->vector v) mode o max-length graph config)])]
     [(procedure? v)
      (print-named "procedure" v mode o max-length)]
     [(struct-type? v)
      (print-named "struct-type" v mode o max-length)]
+    [(eof-object? v)
+     (write-string/max "#<eof>" o max-length)]
     [else
      ;; As a last resort, fall back to the host `format`:
      (write-string/max (format "~s" v) o max-length)]))

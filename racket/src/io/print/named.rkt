@@ -1,6 +1,7 @@
 #lang racket/base
 (require "../port/string-output.rkt"
-         "write-with-max.rkt")
+         "write-with-max.rkt"
+         "symbol.rkt")
 
 (provide print-named)
 
@@ -11,7 +12,7 @@
     (cond
       [(symbol? name)
        (let* ([max-length (write-string/max ":" o max-length)]
-              [max-length (write-string/max (symbol->string name) o max-length)])
+              [max-length (write-string/max (symbol->print-string name #:for-type? #t) o max-length)])
          (write-string/max ">" o max-length))]
       [else
        (write-string/max ">" o max-length)])))

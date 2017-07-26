@@ -13,6 +13,7 @@
                   [path->string host:path->string]))
 
 (current-directory (host:path->string (host:current-directory)))
+(set-string->number?! string->number)
 
 (define-syntax-rule (test expect rhs)
   (let ([e expect]
@@ -524,8 +525,7 @@
 
 ;; ----------------------------------------
 
-;; Check cycle detection in printer:
-(define (print-cyclic v expect #:print [print print])
+(define (print-test v expect #:print [print print])
   (define o (open-output-string))
   (parameterize ([current-output-port o])
     (print v))
@@ -533,51 +533,59 @@
 
 (let ([b (box #f)])
   (set-box! b b)
-  (print-cyclic b "#0='#&#0#"))
+  (print-test b "#0='#&#0#"))
 
 (let ([b (vector #f #f)])
   (vector-set! b 0 b)
   (vector-set! b 1 b)
-  (print-cyclic b "#0='#(#0# #0#)")
-  (print-cyclic '(1) "'(1)")
-  (print-cyclic (cons 1 (cons 2 3)) "'(1 2 . 3)")
-  (print-cyclic (cons 1 (cons 2 (mcons 3 4))) "(cons 1 (cons 2 (mcons 3 4)))")
-  (print-cyclic (cons 1 (cons (mcons 3 4) null)) "(list 1 (mcons 3 4))"))
+  (print-test b "#0='#(#0# #0#)")
+  (print-test '(1) "'(1)")
+  (print-test (cons 1 (cons 2 3)) "'(1 2 . 3)")
+  (print-test (cons 1 (cons 2 (mcons 3 4))) "(cons 1 (cons 2 (mcons 3 4)))")
+  (print-test (cons 1 (cons (mcons 3 4) null)) "(list 1 (mcons 3 4))"))
 
 (let ([b (make-hash)])
   (hash-set! b 'self b)
-  (print-cyclic b "#0='#hash((self . #0#))"))
+  (print-test b "#0='#hash((self . #0#))"))
 
 (let ()
   (struct a (x) #:mutable #:transparent)
   (let ([an-a (a #f)])
     (set-a-x! an-a an-a)
-    (print-cyclic an-a "#0=(a #0#)")))
+    (print-test an-a "#0=(a #0#)")))
 
 (let ()
   (struct a (x) #:mutable #:prefab)
   (let ([an-a (a #f)])
     (set-a-x! an-a an-a)
-    (print-cyclic an-a "#0='#s((a #(0)) #0#)")))
+    (print-test an-a "#0='#s((a #(0)) #0#)")))
 
 (let ()
   (define p1 (cons 1 2))
   (define p2 (cons p1 p1))
-  (print-cyclic p2 "'((1 . 2) 1 . 2)")
+  (print-test p2 "'((1 . 2) 1 . 2)")
   (parameterize ([print-graph #t])
-    (print-cyclic p2 "'(#0=(1 . 2) . #0#)")))
+    (print-test p2 "'(#0=(1 . 2) . #0#)")))
 
 (let ()
   (define p1 (mcons 1 2))
   (define p2 (mcons p1 p1))
-  (print-cyclic p2 "(mcons (mcons 1 2) (mcons 1 2))")
-  (print-cyclic p2 #:print write "{{1 . 2} 1 . 2}")
+  (print-test p2 "(mcons (mcons 1 2) (mcons 1 2))")
+  (print-test p2 #:print write "{{1 . 2} 1 . 2}")
   (parameterize ([print-graph #t])
-    (print-cyclic p2 "(mcons #0=(mcons 1 2) #0#)"))
-  (print-cyclic (mcons 1 null) "(mcons 1 '())")
-  (print-cyclic (mcons 1 (mcons 2 null)) "(mcons 1 (mcons 2 '()))")
-  (print-cyclic (mcons 1 null) "{1}" #:print write)
-  (print-cyclic (mcons 1 (mcons 2 null)) "{1 2}" #:print write))
+    (print-test p2 "(mcons #0=(mcons 1 2) #0#)"))
+  (print-test (mcons 1 null) "(mcons 1 '())")
+  (print-test (mcons 1 (mcons 2 null)) "(mcons 1 (mcons 2 '()))")
+  (print-test (mcons 1 null) "{1}" #:print write)
+  (print-test (mcons 1 (mcons 2 null)) "{1 2}" #:print write))
+
+(print-test '|hello world| "'|hello world|")
+(print-test '|1.0| "'|1.0|")
+(print-test '1\|2 "'1\\|2")
+(print-test '#:apple "'#:apple")
+(print-test '#:|apple pie| "'#:|apple pie|")
+(print-test '#:1.0 "'#:1.0")
+(print-test 1.0 "1.0")
 
 ;; ----------------------------------------
 

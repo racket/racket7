@@ -5,7 +5,7 @@
 
 (provide print-list)
 
-(define (print-list p who v mode o max-length graph alt-list-prefix alt-list-constructor)
+(define (print-list p who v mode o max-length graph config alt-list-prefix alt-list-constructor)
   (define unquoted-pairs?
     (and (eq? mode PRINT-MODE/UNQUOTED)
          (not alt-list-constructor)
@@ -22,19 +22,19 @@
         [(eq? max-length 'full) 'full]
         [(and (null? (cdr v))
               (not unquoted-pairs?))
-         (let ([max-length (p who (car v) mode o max-length graph)])
+         (let ([max-length (p who (car v) mode o max-length graph config)])
            (write-string/max ")" o max-length))]
         [(and (pair? (cdr v))
               (or (not graph) (non-graph? (hash-ref graph (cdr v) #f)))
               (not unquoted-pairs?))
-         (let ([max-length (p who (car v) mode o max-length graph)])
+         (let ([max-length (p who (car v) mode o max-length graph config)])
            (loop (cdr v) (write-string/max " " o max-length)))]
         [else
-         (let* ([max-length (p who (car v) mode o max-length graph)]
+         (let* ([max-length (p who (car v) mode o max-length graph config)]
                 [max-length (if unquoted-pairs?
                                 (write-string/max " " o max-length)
                                 (write-string/max " . " o max-length))]
-                [max-length (p who (cdr v) mode o max-length graph)])
+                [max-length (p who (cdr v) mode o max-length graph config)])
            (write-string/max ")" o max-length))]))))
 
 (define (uninterrupted-list? v graph)

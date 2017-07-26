@@ -39,14 +39,19 @@
          alst)
   (create-hasheqv-placeholder alst))
 
-(define (make-reader-graph v)
+(define/who (make-reader-graph orig-v)
   (define ht (make-eq-hashtable))
-  (let loop ([v v])
+  (let loop ([v orig-v])
     (cond
      [(hashtable-ref ht v #f)
       => (lambda (p) p)]
      [(placeholder? v)
-      (loop (placeholder-val v))]
+      (let ([next (placeholder-val v)])
+        (when (eq? v next)
+          (raise-arguments-error who
+                                 "illegal placeholder cycle in value"
+                                 "value" orig-v))
+        (loop next))]
      [(pair? v)
       (let ([p (cons #f #f)])
         (hashtable-set! ht v p)

@@ -4,7 +4,7 @@
 
 (provide print-hash)
 
-(define (print-hash v o max-length p who mode graph)
+(define (print-hash v o max-length p who mode graph config)
   (define tag (cond
                 [(hash-eq? v) "#hasheq("]
                 [(hash-eqv? v) "#hasheqv("]
@@ -24,9 +24,9 @@
           (loop (cdr keys) max-length first?)]
          [else
           (let* ([max-length (write-string/max (if first? "(" " (") o max-length)]
-                 [max-length (p who key mode o max-length graph)]
+                 [max-length (p who key mode o max-length graph config)]
                  [max-length (write-string/max " . " o max-length)]
-                 [max-length (p who val mode o max-length graph)])
+                 [max-length (p who val mode o max-length graph config)])
             (loop (cdr keys) (write-string/max ")" o max-length) #f))])])))
 
 (define none (gensym 'none))

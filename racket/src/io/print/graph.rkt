@@ -3,25 +3,26 @@
          "../port/output-port.rkt"
          "parameter.rkt"
          "custom-write.rkt"
-         "mode.rkt")
+         "mode.rkt"
+         "config.rkt")
 
 (provide detect-graph
          (struct-out as-constructor))
 
-(define (detect-graph v mode)
+(define (detect-graph v mode config)
   (define print-graph? (print-graph))
   (cond
-    [(quick-no-graph? v 100 mode print-graph?) #f]
+    [(quick-no-graph? v 100 mode print-graph? config) #f]
     [else
      (define ht (make-hasheq))
-     (build-graph v ht print-graph? mode)]))
+     (build-graph v ht print-graph? mode config)]))
 
 ;; ----------------------------------------
 
 ;; Returns a true value if `v` can print without graph annotations and
 ;; without a constructor form (as opposed to quoted form) in `print`
 ;; mode
-(define (quick-no-graph? v fuel mode print-graph?)
+(define (quick-no-graph? v fuel mode print-graph? config)
   (let quick-no-graph? ([v v] [fuel fuel])
     (cond
       [(or (not fuel) (zero? fuel)) #f]
@@ -33,10 +34,12 @@
             (for/fold ([fuel (sub1 fuel)]) ([e (in-vector v)]
                                             #:break (not fuel))
               (quick-no-graph? e fuel)))]
-      [(box? v)
+      [(and (box? v)
+            (config-get config print-box))
        (and (not print-graph?)
             (quick-no-graph? (unbox v) (sub1 fuel)))]
-      [(hash? v)
+      [(and (hash? v)
+            (config-get config print-hash-table))
        (and (not print-graph?)
             (for/fold ([fuel (sub1 fuel)]) ([(k v) (in-hash v)]
                                             #:break (not fuel))
@@ -47,7 +50,8 @@
             (quick-no-graph? (mcdr v) (quick-no-graph? (mcar v) fuel)))]
       [(custom-write? v)
        #f]
-      [(struct? v)
+      [(and (struct? v)
+            (config-get config print-struct))
        (and (not print-graph?)
             (or (not (eq? mode PRINT-MODE/UNQUOTED))
                 (prefab-struct-key v)) ; can quote a prefab in `print` mode
@@ -87,7 +91,7 @@
 ;; values other than `as-constructor` are removed. All
 ;; 'checked entries will be cleared out before the hash table
 ;; is returned.
-(define (build-graph v ht print-graph? mode)
+(define (build-graph v ht print-graph? mode config)
   (define counter 0)
   (define cycle? #f)
   (define constructor? #f)
@@ -133,11 +137,13 @@
            (or (build-graph e mode)
                unquoted?)))
        (done! v unquoted?)]
-      [(box? v)
+      [(and (box? v)
+            (config-get config print-box))
        (checking! v)
        (define unquoted? (build-graph (unbox v) mode))
        (done! v unquoted?)]
-      [(hash? v)
+      [(and (hash? v)
+            (config-get config print-hash-table))
        (checking! v)
        (define unquoted?
          (for/fold ([unquoted? #f]) ([(k v) (in-hash v)])

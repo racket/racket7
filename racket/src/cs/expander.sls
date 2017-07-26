@@ -158,4 +158,10 @@
 
   ;; `install-reader!` is from the `io` library, where the
   ;; given functions are used by the default port read handler
-  (install-reader! 1/read 1/read-syntax))
+  (install-reader! 1/read 1/read-syntax)
+
+  ;; `set-string->number?!` is also from the `io` library, where
+  ;; the printer needs to check whether a string parses as a number
+  ;; for deciding wheter to quote the string
+  (set-string->number?! (lambda (str)
+                          (not (not (1/string->number str 10 'read))))))

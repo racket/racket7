@@ -359,7 +359,6 @@
    environment-variables?
 
    reparameterize
-   read-decimal-as-inexact
    read-accept-bar-quote
 
    read-case-sensitive
