@@ -55,6 +55,9 @@
               (wrap v in config #f)
               (let loop ([seq seq])
                 (if (null? (cdr seq)) (car seq) (loop (cdr seq))))))
+        (when ((integer-length expected-len) . >= . 48)
+          ;; implausibly large
+          (raise (exn:fail:out-of-memory "out of memory" (current-continuation-marks))))
         (define vec
           (case vector-mode
             [(any) (make-vector expected-len (last-or 0))]

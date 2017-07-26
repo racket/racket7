@@ -86,7 +86,7 @@
 
 (test "*(1 2 3 apple\t\u0001 end <spot> file 1\"2\"3 #hash((a . 1) (b . 2)))*"
       (format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file") #"1\"2\"3" #hash((b . 2) (a . 1)))))
-(test "*(1 2 3 \"apple\\t\\u0001\" end <spot> #\"1\\\"2\\\"3\t\\0010\")*"
+(test "*'(1 2 3 \"apple\\t\\u0001\" end <spot> #\"1\\\"2\\\"3\t\\0010\")*"
       (format "*~.v*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) #"1\"2\"3\t\0010")))
 
 (fprintf (current-output-port) "*~v*" '!!!)
@@ -520,6 +520,64 @@
 (when (eq? 'unix (system-type))
   (parameterize ([current-locale "en_US.ISO8859-1"])
     (test "Éric" (string-locale-downcase "Éric"))))
+
+
+;; ----------------------------------------
+
+;; Check cycle detection in printer:
+(define (print-cyclic v expect #:print [print print])
+  (define o (open-output-string))
+  (parameterize ([current-output-port o])
+    (print v))
+  (test expect (get-output-string o)))
+
+(let ([b (box #f)])
+  (set-box! b b)
+  (print-cyclic b "#0='#&#0#"))
+
+(let ([b (vector #f #f)])
+  (vector-set! b 0 b)
+  (vector-set! b 1 b)
+  (print-cyclic b "#0='#(#0# #0#)")
+  (print-cyclic '(1) "'(1)")
+  (print-cyclic (cons 1 (cons 2 3)) "'(1 2 . 3)")
+  (print-cyclic (cons 1 (cons 2 (mcons 3 4))) "(cons 1 (cons 2 (mcons 3 4)))")
+  (print-cyclic (cons 1 (cons (mcons 3 4) null)) "(list 1 (mcons 3 4))"))
+
+(let ([b (make-hash)])
+  (hash-set! b 'self b)
+  (print-cyclic b "#0='#hash((self . #0#))"))
+
+(let ()
+  (struct a (x) #:mutable #:transparent)
+  (let ([an-a (a #f)])
+    (set-a-x! an-a an-a)
+    (print-cyclic an-a "#0=(a #0#)")))
+
+(let ()
+  (struct a (x) #:mutable #:prefab)
+  (let ([an-a (a #f)])
+    (set-a-x! an-a an-a)
+    (print-cyclic an-a "#0='#s((a #(0)) #0#)")))
+
+(let ()
+  (define p1 (cons 1 2))
+  (define p2 (cons p1 p1))
+  (print-cyclic p2 "'((1 . 2) 1 . 2)")
+  (parameterize ([print-graph #t])
+    (print-cyclic p2 "'(#0=(1 . 2) . #0#)")))
+
+(let ()
+  (define p1 (mcons 1 2))
+  (define p2 (mcons p1 p1))
+  (print-cyclic p2 "(mcons (mcons 1 2) (mcons 1 2))")
+  (print-cyclic p2 #:print write "{{1 . 2} 1 . 2}")
+  (parameterize ([print-graph #t])
+    (print-cyclic p2 "(mcons #0=(mcons 1 2) #0#)"))
+  (print-cyclic (mcons 1 null) "(mcons 1 '())")
+  (print-cyclic (mcons 1 (mcons 2 null)) "(mcons 1 (mcons 2 '()))")
+  (print-cyclic (mcons 1 null) "{1}" #:print write)
+  (print-cyclic (mcons 1 (mcons 2 null)) "{1 2}" #:print write))
 
 ;; ----------------------------------------
 
