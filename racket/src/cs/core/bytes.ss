@@ -18,7 +18,7 @@
 
 (define/who make-bytes
   (case-lambda
-   [(n) (#2%make-bytevector n)]
+   [(n) (#2%make-bytevector n 0)]
    [(n b)
     (check who exact-nonnegative-integer? n)
     (check who byte? b)
@@ -26,7 +26,7 @@
 
 (define/who make-shared-bytes
   (case-lambda
-   [(n) (#2%make-bytevector n)]
+   [(n) (#2%make-bytevector n 0)]
    [(n b)
     (check who exact-nonnegative-integer? n)
     (check who byte? b)

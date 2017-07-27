@@ -1,4 +1,5 @@
 #lang racket/base
+(require "../host/thread.rkt")
 
 ;; To make a port act like an event, the `prop:secondary-evt` property
 ;; must be mapped to `port->evt` --- both for the `core-port`

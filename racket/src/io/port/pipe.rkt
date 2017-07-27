@@ -46,6 +46,7 @@
   (define start 0)
   (define end 0)
   (define write-pos #f) ; to adjust the write position via `file-position` on a string port
+  (define input-closed? #f)
   (define output-closed? #f)
   (define data
     (pipe-data
@@ -198,13 +199,18 @@
 
      #:close
      (lambda ()
-       (progress!))
+       (unless input-closed?
+         (set! input-closed? #t)
+         (progress!)))
 
      #:get-progress-evt
      (lambda ()
-       (unless progress-sema
-         (set! progress-sema (make-semaphore)))
-       (semaphore-peek-evt progress-sema))
+       (cond
+         [input-closed? always-evt]
+         [else
+          (unless progress-sema
+            (set! progress-sema (make-semaphore)))
+          (semaphore-peek-evt progress-sema)]))
 
      #:commit
      ;; Allows `amt` to be zero and #f for other arguments,
@@ -219,19 +225,24 @@
           (and (not (sync/timeout 0 progress-evt))
                (sync/timeout 0 ext-evt)
                (let ([amt (min amt (content-length))])
-                 (define dest-bstr (make-bytes amt))
                  (cond
-                   [(start . < . end)
-                    (bytes-copy! dest-bstr 0 bstr start (+ start amt))]
+                   [(zero? amt)
+                    ;; There was nothing to commit; claim success for 0 bytes
+                    #""]
                    [else
-                    (define amt1 (min (- len start) amt))
-                    (bytes-copy! dest-bstr 0 bstr start (+ start amt1))
-                    (when (amt1 . < . amt)
-                      (bytes-copy! dest-bstr amt1 bstr 0 (- amt amt1)))])
-                 (set! start (modulo (+ start amt) len))
-                 (progress!)
-                 (check-input-blocking)
-                 dest-bstr))]))))
+                    (define dest-bstr (make-bytes amt))
+                    (cond
+                      [(start . < . end)
+                       (bytes-copy! dest-bstr 0 bstr start (+ start amt))]
+                      [else
+                       (define amt1 (min (- len start) amt))
+                       (bytes-copy! dest-bstr 0 bstr start (+ start amt1))
+                       (when (amt1 . < . amt)
+                         (bytes-copy! dest-bstr amt1 bstr 0 (- amt amt1)))])
+                    (set! start (modulo (+ start amt) len))
+                    (progress!)
+                    (check-input-blocking)
+                    dest-bstr])))]))))
 
   ;; out ----------------------------------------
   (define op

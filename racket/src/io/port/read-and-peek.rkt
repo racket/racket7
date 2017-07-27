@@ -116,6 +116,11 @@
       [(= start end)
        (end-atomic)
        0]
+      ;; check progress evt before continuing with other possibilities
+      [(and progress-evt
+            (sync/timeout 0 progress-evt))
+       (end-atomic)
+       0]
       [(closed-state-closed? (core-port-closed in))
        (end-atomic)
        (raise-arguments-error who
@@ -124,6 +129,7 @@
       ;; previously detected EOF? (never skip past it)
       [(core-input-port-pending-eof? in)
        (end-atomic)
+       
        eof]
       [else
        (define peek-in (core-input-port-peek-in in))
@@ -131,34 +137,33 @@
          [(procedure? peek-in)
           (define v (peek-in bstr start end skip progress-evt copy-bstr?))
           (end-atomic)
-          (cond
-            [(exact-nonnegative-integer? v)
-             (cond
-               [(zero? v)
-                (if zero-ok?
-                    0
-                    (loop in))]
-               [(v . <= . (- end start)) v]
-               [else
-                (raise-arguments-error who
-                                       "result integer is larger than the supplied byte string"
-                                       "result" v
-                                       "byte-string length" (- end start))])]
-            [(eof-object? v) eof]
-            [(evt? v)
-             (cond
-               [zero-ok? 0]
-               [else
-                (sync v)
-                (loop in)])]
-            [(procedure? v)
-             (if special-ok?
-                 v
-                 (raise-arguments-error who
-                                        "non-character in an unsupported context"
-                                        "port" orig-in))]
-            [else
-             (internal-error (format "weird peek-bytes result ~s" v))])]
+          (let result-loop ([v v])
+            (cond
+              [(exact-nonnegative-integer? v)
+               (cond
+                 [(zero? v)
+                  (if zero-ok?
+                      0
+                      (loop in))]
+                 [(v . <= . (- end start)) v]
+                 [else
+                  (raise-arguments-error who
+                                         "result integer is larger than the supplied byte string"
+                                         "result" v
+                                         "byte-string length" (- end start))])]
+              [(eof-object? v) eof]
+              [(evt? v)
+               (cond
+                 [zero-ok? 0]
+                 [else (result-loop (sync v))])]
+              [(procedure? v)
+               (if special-ok?
+                   v
+                   (raise-arguments-error who
+                                          "non-character in an unsupported context"
+                                          "port" orig-in))]
+              [else
+               (internal-error (format "weird peek-bytes result ~s" v))]))]
          [else
           (end-atomic)
           (loop peek-in)])])))

@@ -32,7 +32,7 @@
         #:mutable)
 
 (define (make-syncer evt wraps)
-  (syncer evt null #f wraps null null #f #f))
+  (syncer evt wraps #f null null null #f #f))
 
 (define none-syncer (make-syncer #f null))
 

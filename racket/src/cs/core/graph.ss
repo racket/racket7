@@ -135,7 +135,7 @@
                            (hash-set! orig-p key val)
                            (hash-set p key val))
                        (hash-iterate-next v i)
-                       (or diff? (not (and (eq? key new-key) (val new-val)))))))])))]
+                       (or diff? (not (and (eq? key new-key) (eq? val new-val)))))))])))]
      [(hash-placeholder? v)
       (let* ([orig-p (cond
                       [(hasheq-placeholder? v) (make-intmap-shell 'eq)]

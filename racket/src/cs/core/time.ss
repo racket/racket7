@@ -69,6 +69,10 @@
                    nanosecond
                    (string->immutable-string time-zone-name))))
 
+;; Direct constructor to avoid checks:
+(define make-date*/direct
+  (record-constructor (make-record-constructor-descriptor struct:date* #f #f)))
+
 (define (time->ms t)
   (+ (* 1000. (time-second t))
      (/ (time-nanosecond t) 1000000.)))
@@ -114,15 +118,15 @@
                         (floor (* (- s (floor s)) 1000000000))
                         (floor s))]
          [d (time-utc->date tm)])
-    (make-date* (chez:date-second d)
-                (chez:date-minute d)
-                (chez:date-hour d)
-                (chez:date-day d)
-                (chez:date-month d)
-                (chez:date-year d)
-                (chez:date-week-day d)
-                (chez:date-year-day d)
-                (chez:date-dst? d)
-                (date-zone-offset d)
-                (date-nanosecond d)
-                (date-zone-name d))))
+    (make-date*/direct (chez:date-second d)
+                       (chez:date-minute d)
+                       (chez:date-hour d)
+                       (chez:date-day d)
+                       (chez:date-month d)
+                       (chez:date-year d)
+                       (chez:date-week-day d)
+                       (chez:date-year-day d)
+                       (chez:date-dst? d)
+                       (date-zone-offset d)
+                       (date-nanosecond d)
+                       (date-zone-name d))))

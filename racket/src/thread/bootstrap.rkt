@@ -65,7 +65,7 @@
        (if (and (exn:break? exn)
                 ctl-c-handler)
            (begin
-             (ctl-c-handler)
+             (ctl-c-handler 'break)
              ((exn:break-continuation exn)))
            exn))
      (lambda ()

@@ -574,6 +574,7 @@
 ;; Test mid-stream EOF
 
 (define (test-mid-stream-eof use-peek?)
+(define no-peek? #f)
   (define chars (map (lambda (x)
 		       (if (char? x) (char->integer x) x))
 		     (append

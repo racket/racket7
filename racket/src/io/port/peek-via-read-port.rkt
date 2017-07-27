@@ -49,7 +49,7 @@
          ((core-input-port-read-in peek-pipe-i) dest-bstr start end copy?)]
         [peeked-eof?
          (set! peeked-eof? #f)
-         (progress!)
+         ;; an EOF doesn't count as progress
          eof]
         [else
          (cond
@@ -73,7 +73,7 @@
        b]
       [peeked-eof?
        (set! peeked-eof? #f)
-       (progress!)
+       ;; an EOF doesn't count as progress
        eof]
       [else
        (define v (pull-some-bytes))

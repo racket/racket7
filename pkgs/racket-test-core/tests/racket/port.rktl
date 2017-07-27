@@ -150,6 +150,7 @@
 ;; This port produces 0, 1, 2, 0, 1, 2, etc,
 ;;  but it is not thread-safe, because multiple
 ;;  threads might read and change n
+(define mod3-peeked? #f)
 (define mod3-cycle/one-thread
   (let* ([n 2]
 	 [mod! (lambda (s delta)
@@ -157,14 +158,16 @@
                  1)])
     (make-input-port
      'mod3-cycle/not-thread-safe
-     (lambda (s) 
+     (lambda (s)
        (set! n (modulo (add1 n) 3))
        (mod! s 0))
-     (lambda (s skip progress-evt) 
-       (mod! s skip))
+     (lambda (s skip progress-evt)
+       (set! mod3-peeked? #t)
+       (mod! s (add1 skip)))
      void)))
 (test "01201" read-string 5 mod3-cycle/one-thread)
-(test "20120" peek-string 5 (expt 2 5000) mod3-cycle/one-thread)
+(test #f values mod3-peeked?)
+(test "20120" peek-string 5 (sub1 (expt 2 5000)) mod3-cycle/one-thread)
 
 ;; Same thing, but thread-safe and kill-safe, and with progress
 ;; events. Only the server thread touches the stateful part

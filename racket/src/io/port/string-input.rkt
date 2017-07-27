@@ -36,34 +36,27 @@
   (define amt (- end start))
   (define bstr (make-bytes amt))
   ;; We're allowed to read up to `amt` characters, which means at
-  ;; least `amt` bytes. However, if we read `amt` bytes, the last
-  ;; `utf-8-max-aborts-amt` might not be ready to convert without
-  ;; reading even more. If the port doesn't have more bytes available,
-  ;; we'd be stuck, even though we may have enough to prdocue a
-  ;; result. So, read most of the bytes, but peek the tail.
-  (define min-consume-ok-amt (if just-peek?
-                                 0
-                                 (max 0 (- amt utf-8-max-aborts-amt))))
+  ;; least `amt` bytes.
   (define consumed-v
-    (if (positive? min-consume-ok-amt)
-        (read-some-bytes! who orig-in bstr 0 min-consume-ok-amt
-                          #:zero-ok? zero-ok?
-                          #:copy-bstr? #f
-                          #:keep-eof? keep-eof?
-                          #:special-ok? special-ok?)
-        0))
+    (cond
+      [just-peek? 0]
+      [else
+       (read-some-bytes! who orig-in bstr 0 amt
+                         #:zero-ok? zero-ok?
+                         #:copy-bstr? #f
+                         #:keep-eof? keep-eof?
+                         #:special-ok? special-ok?)]))
   (define v
     (cond
-      [(and (exact-integer? consumed-v)
-            (= consumed-v min-consume-ok-amt))
-       (let ([v2 (peek-some-bytes! who orig-in 
-                                   bstr consumed-v (+ consumed-v (- amt min-consume-ok-amt)) skip-k
-                                   #:zero-ok? #t)])
-         (cond
-           [(exact-integer? v2) (+ consumed-v v2)]
-           [(zero? consumed-v) v2]
-           [else consumed-v]))]
+      [just-peek?
+       (peek-some-bytes! who orig-in 
+                         bstr consumed-v amt skip-k
+                         #:copy-bstr? #f
+                         #:zero-ok? zero-ok?)]
       [else consumed-v]))
+  ;; At this point, `v` is the number of bytes that we have ready, and
+  ;; the first `consumed-v` of those are read (as opposed to just
+  ;; peeked) from the port. [Currently, `consumed-v` is either 0 or `v`.]
   (cond
     [(not (exact-integer? v)) v]
     [(zero? v) 0]
@@ -96,7 +89,7 @@
              ;; errors
              (define-values (used-bytes got-chars new-state)
                (utf-8-decode! bstr 0 (if (integer? v) v 0)
-                              str start amt
+                              str start (+ start amt)
                               #:error-char #\?
                               #:state state
                               #:abort-mode (if (integer? v)
@@ -121,7 +114,7 @@
                 got-chars])]))]
        [else
         ;; Conversion succeeded for at least 1 character. If there's
-        ;; an issue for getting more, let another call to `read-some-chars`
+        ;; an need to get more, let another call to `read-some-chars!`
         ;; deal with it.
         (define actually-used-bytes (- used-bytes (if (utf-8-state? state)
                                                       (utf-8-state-pending-amt state)
@@ -148,7 +141,7 @@
    [(= v amt) v]
    [else
     (let loop ([got v])
-      (define v (read-some-chars! who in str got amt
+      (define v (read-some-chars! who in str (+ start got) end
                                   #:keep-eof? #t
                                   #:just-peek? just-peek?
                                   #:skip (if just-peek?
@@ -311,7 +304,7 @@
   (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (define bstr (make-string amt))
-    (define v (do-peek-string! who bstr in 0 amt skip-k))
+    (define v (do-peek-string! who in bstr 0 amt skip-k))
     (if (exact-integer? v)
         (if (= v amt)
             bstr

@@ -473,15 +473,17 @@
                                    (let ([parent-count (if parent-rtd*
                                                            (struct-type-field-count parent-rtd*)
                                                            0)])
-                                     (guard val
-                                            (list name
-                                                  fields
-                                                  auto-fields
-                                                  (make-position-based-accessor rtd parent-count (+ fields auto-fields))
-                                                  (make-position-based-mutator rtd parent-count (+ fields auto-fields))
-                                                  all-immutables
-                                                  parent-rtd
-                                                  #f)))
+                                     (|#%app|
+                                      guard
+                                      val
+                                      (list name
+                                            fields
+                                            auto-fields
+                                            (make-position-based-accessor rtd parent-count (+ fields auto-fields))
+                                            (make-position-based-mutator rtd parent-count (+ fields auto-fields))
+                                            all-immutables
+                                            parent-rtd
+                                            #f)))
                                    val))])
                         (when (eq? prop prop:equal+hash)
                           (record-type-equal-procedure rtd (car val))

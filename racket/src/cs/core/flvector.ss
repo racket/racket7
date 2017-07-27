@@ -37,7 +37,8 @@
       (let loop ([i 0])
         (unless (= i bsize)
           (bytevector-ieee-double-set! bstr i init (native-endianness))
-          (loop (fx+ i 8)))))]))
+          (loop (fx+ i 8))))
+      (create-flvector bstr))]))
 
 (define make-flvector
   (case-lambda
@@ -83,8 +84,8 @@
 (define (unsafe-flvector-set! flvec pos val)
   (#3%bytevector-ieee-double-set! (flvector-bstr flvec)
                                   (#3%fxsll pos 3)
-                                  (native-endianness)
-                                  val))
+                                  val
+                                  (native-endianness)))
 
 (define/who flvector-copy
   (case-lambda

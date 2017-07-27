@@ -60,6 +60,10 @@
           (values (core-port-line p)
                   (core-port-column p)
                   (core-port-position p))])]
+      [(core-port-file-position p)
+       => (lambda (file-position)
+            (define offset (file-position))
+            (values #f #f (and offset (add1 offset))))]
       [else
        (define offset (core-port-offset p))
        (values #f #f (and offset (add1 offset)))])))

@@ -139,12 +139,36 @@
 (test #"11111" (read-bytes 5 fancy-infinite-ones))
 (test #t (evt? (port-progress-evt fancy-infinite-ones)))
 (test #t (port-commit-peeked 5 (port-progress-evt fancy-infinite-ones) always-evt fancy-infinite-ones))
-(test '(#f #f #f) (call-with-values (lambda () (port-next-location fancy-infinite-ones)) list))
+(test '(#f #f 99) (call-with-values (lambda () (port-next-location fancy-infinite-ones)) list))
 (port-count-lines! fancy-infinite-ones)
 (test '(7 42 1024) (call-with-values (lambda () (port-next-location fancy-infinite-ones)) list))
 (test 98 (file-position fancy-infinite-ones))
 (test 'block (file-stream-buffer-mode fancy-infinite-ones))
 (test (void) (file-stream-buffer-mode fancy-infinite-ones 'none))
+
+(define mod3-peeked? #f)
+(define mod3-cycle/one-thread
+  (let* ([n 2]
+	 [mod! (lambda (s delta)
+		 (bytes-set! s 0 (+ 48 (modulo (+ n delta) 3)))
+                 1)])
+    (make-input-port
+     'mod3-cycle/not-thread-safe
+     (lambda (s)
+       (set! n (modulo (add1 n) 3))
+       (mod! s 0))
+     (lambda (s skip progress-evt)
+       (set! mod3-peeked? #t)
+       (mod! s (add1 skip)))
+     void)))
+(test "01201" (read-string 5 mod3-cycle/one-thread))
+(test #f mod3-peeked?)
+(test "01201" (peek-string 5 (expt 2 5000) mod3-cycle/one-thread))
+
+(let-values ([(r w) (make-pipe)])
+  (write-byte 200 w)
+  (test #t (byte-ready? r))
+  (test #f (char-ready? r)))
 
 (define accum-list '())
 (define accum-sema (make-semaphore 1))

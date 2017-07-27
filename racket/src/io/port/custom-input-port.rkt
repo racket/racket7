@@ -69,10 +69,19 @@
           (make-bytes len)
           dest-bstr))
     (define n (read-in user-bstr))
-    (when (exact-positive-integer? n)
-      (unless (eq? user-bstr dest-bstr)
-        (bytes-copy! dest-bstr dest-start user-bstr 0 len)))
-    n)
+    (cond
+      [(eq? user-bstr dest-bstr)
+       n]
+      [(evt? n)
+       (wrap-evt n
+                 (lambda (n)
+                   (when (exact-positive-integer? n)
+                     (bytes-copy! dest-bstr dest-start user-bstr 0 len))
+                   n))]
+      [else
+       (when (exact-positive-integer? n)
+         (bytes-copy! dest-bstr dest-start user-bstr 0 len))
+       n]))
 
   ;; in atomic mode
   (define (check-read-result who r dest-start dest-end #:peek? [peek? #f] #:ok-false? [ok-false? #f])
@@ -207,7 +216,7 @@
     (cond
       [(not r) #f]
       [(bytes? r) r]
-      [else (make-bytes amt #\x)]))
+      [else (make-bytes amt (char->integer #\x))]))
 
   (define get-location
     (and user-get-location

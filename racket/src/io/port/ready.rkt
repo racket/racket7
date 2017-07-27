@@ -26,14 +26,16 @@
       [else
        (define bstr (make-bytes 1))
        (let loop ([offset 0] [state #f])
-         (when (eq? 1 (peek-bytes-avail!* (make-bytes 1) offset #f in))
-           (define-values (used-bytes got-chars state)
-             (utf-8-decode! bstr 0 1
-                            #f 0 #f
-                            #:error-char #\?
-                            #:abort-mode 'state
-                            #:state state))
-           (cond
-             [(utf-8-state? state)
-              (loop (add1 offset) state)]
-             [else #t])))])))
+         (cond
+           [(eq? 1 (peek-bytes-avail!* bstr offset #f in))
+            (define-values (used-bytes got-chars new-state)
+              (utf-8-decode! bstr 0 1
+                             #f 0 #f
+                             #:error-char #\?
+                             #:abort-mode 'state
+                             #:state state))
+            (cond
+              [(utf-8-state? new-state)
+               (loop (add1 offset) new-state)]
+              [else #t])]
+           [else #f]))])))

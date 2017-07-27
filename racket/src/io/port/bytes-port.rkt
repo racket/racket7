@@ -37,6 +37,7 @@
          (if (pos . < . len)
              (begin
                (set! i (add1 pos))
+               (progress!)
                (bytes-ref bstr pos))
              eof)))
      
