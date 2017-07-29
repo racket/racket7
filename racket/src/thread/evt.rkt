@@ -47,7 +47,11 @@
 ;; If a poller does any work that can allow some thread to
 ;; become unblocked, then it must tell the scheduler via
 ;; `schedule-info-did-work!`.
-(struct poller (proc))
+(struct poller (proc)
+  ;; A `poller` is normally recognized directly so that
+  ;; this `prop:evt` is irrelevant, but it allows a `poller`
+  ;; to be used as an evt:
+  #:property prop:evt (lambda (self) self))
 
 ;; Provided to a `poller` function:
 (struct poll-ctx (poll?         ; whether events are being polled once (i.e., 0 timeout)
@@ -107,9 +111,12 @@
 ;; (to call a `prop:evt` procedure) then return a `delayed-poll`
 ;; struct.
 (define (evt-poll evt poll-ctx)
-  (let* ([v (if (primary-evt? evt)
-                (primary-evt-ref evt)
-                (secondary-evt-ref evt))]
+  (let* ([v (cond
+              [(poller? evt) evt]
+              [(primary-evt? evt)
+               (primary-evt-ref evt)]
+              [else
+               (secondary-evt-ref evt)])]
          [v (if (fixnum? v)
                 (unsafe-struct-ref evt v)
                 v)])
@@ -121,15 +128,10 @@
                      (let ([v (call-with-continuation-barrier (lambda () (v evt)))])
                        (cond
                          [(evt? v) v]
-                         [(poller? v) (poller-evt v)]
                          [else the-never-evt])))))]
-      [(evt? v) (values #f v)]
       [(poller? v) ((poller-proc v) evt poll-ctx)]
+      [(evt? v) (values #f v)]
       [else (values #f the-never-evt)])))
 
 ;; Possible result from `evt-poll`:
 (struct delayed-poll (resume))
-
-;; Used to handle a `poller` result from a delayed poll:
-(struct poller-evt (poller)
-  #:property prop:evt (struct-field-index poller))

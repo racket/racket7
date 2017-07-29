@@ -238,9 +238,9 @@
                      void)))
 (port-count-lines! specialist)
 
-(test '(special #f 1 0 1) (read-byte-or-special specialist))
+(test '(special #f #f #f #f) (read-byte-or-special specialist))
 (test '#&(special src 1 1 2) (read-byte-or-special specialist box 'src))
-(test '(special #f 1 2 3) (peek-byte-or-special specialist))
+(test '(special #f #f #f #f) (peek-byte-or-special specialist))
 (test '#&(special src 1 2 3) (peek-byte-or-special specialist 0 #f box 'src))
 
 (let-values ([(i o) (make-pipe)])

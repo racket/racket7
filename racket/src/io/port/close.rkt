@@ -46,7 +46,7 @@
 
 (define (port-closed-evt p)
   (let ([p (cond
-             [(input-port? p) (->core-output-port p)]
+             [(input-port? p) (->core-input-port p)]
              [(output-port? p) (->core-output-port p)]
              [else
               (raise-argument-error 'port-closed-evt "port?" p)])])

@@ -523,7 +523,12 @@
   (let ([s (make-bytes 6 (char->integer #\-))])
     (test 5 read-bytes-avail! s in)
     (test #"12311-" values s))
-  (test 3 write-bytes-avail #"1234" out))
+  (test 3 values
+        (let loop ([n 0])
+          (define v (write-bytes-avail* #"1234" out))
+          (if (zero? v)
+              n
+              (loop (+ n v))))))
 
 ;; Further test of peeking in a limited pipe (shouldn't get stuck):
 (let-values ([(i o) (make-pipe 50)]
@@ -660,9 +665,9 @@
 		   void)])
 	   (let ([t (thread (lambda () (with-handlers ([exn:break? void])
 					 (read-char p))))])
-	     (sleep 0.1)
+	     (sync (system-idle-evt))
 	     (break-thread t)
-	     (sleep 0.1)
+	     (sync (system-idle-evt))
 	     (test #f thread-running? t))))])
   (try sync)
   (try sync/enable-break)

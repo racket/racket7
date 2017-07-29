@@ -109,21 +109,25 @@
    [read-handler #:mutable])
   #:authentic
   #:property prop:input-port-evt (lambda (i)
-                                   (define byte-ready (core-input-port-byte-ready i))
                                    (cond
-                                     [(input-port? byte-ready)
-                                      byte-ready]
+                                     [(closed-state-closed? (core-port-closed i))
+                                      always-evt]
                                      [else
-                                      (poller
-                                       (lambda (self sched-info)
-                                         (define v (byte-ready))
-                                         (cond
-                                           [(evt? v)
-                                            (values #f v)]
-                                           [(eq? v #t)
-                                            (values (list #t) #f)]
-                                           [else
-                                            (values #f self)])))])))
+                                      (define byte-ready (core-input-port-byte-ready i))
+                                      (cond
+                                        [(input-port? byte-ready)
+                                         byte-ready]
+                                        [else
+                                         (poller
+                                          (lambda (self sched-info)
+                                            (define v (byte-ready))
+                                            (cond
+                                              [(evt? v)
+                                               (values #f v)]
+                                              [(eq? v #t)
+                                               (values (list #t) #f)]
+                                              [else
+                                               (values #f self)])))])])))
 
 (define (make-core-input-port #:name name
                               #:data [data #f]
@@ -151,6 +155,7 @@
                    
                    (closed-state #f #f)
                    init-offset ; offset
+                   #f   ; count?
                    #f   ; state
                    #f   ; cr-state
                    #f   ; line

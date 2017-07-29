@@ -19,6 +19,7 @@
           'semaphore-wait semaphore-wait
           'semaphore-peek-evt semaphore-peek-evt
           'wrap-evt wrap-evt
+          'choice-evt choice-evt
           'sync sync
           'sync/timeout sync/timeout
           'evt? evt?

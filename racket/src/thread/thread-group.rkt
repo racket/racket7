@@ -23,16 +23,14 @@
 
 ;; Threads and thread groups subtype `node`:
 (struct node ([prev #:mutable]
-              [next #:mutable])
-        #:transparent)
+              [next #:mutable]))
 (define (child-node child) child) ; a child instantiates a `node` subtype
 (define (node-child n) n)
 
 (struct thread-group node (parent
                            [chain-start #:mutable] ; all children
                            [chain #:mutable] ; children remaining to be scheduled round-robin
-                           [chain-end #:mutable])
-        #:transparent)
+                           [chain-end #:mutable]))
 
 (define root-thread-group (thread-group #f #f #f #f #f #f))
 

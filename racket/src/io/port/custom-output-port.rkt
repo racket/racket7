@@ -112,11 +112,14 @@
           ((core-output-port-write-out output-pipe) bstr start end non-block/buffer? enable-break? copy?)])]
       [else
        (define r
-         (parameterize-break #f
-           (non-atomically
-            (if copy?
-                (user-write-out (subbytes bstr start end) 0 (- end start) non-block/buffer? enable-break?)
-                (user-write-out bstr start end non-block/buffer? enable-break?)))))
+         ;; Always tell user port to re-enable breaks if it blocks, since
+         ;; we always disable breaks:
+         (let ([enable-break? (and (not non-block/buffer?) (break-enabled))])
+           (parameterize-break #f
+             (non-atomically
+              (if copy?
+                  (user-write-out (subbytes bstr start end) 0 (- end start) non-block/buffer? enable-break?)
+                  (user-write-out bstr start end non-block/buffer? enable-break?))))))
        (check-write-result '|user port write| r start end non-block/buffer?)
        (cond
          [(pipe-output-port? r)
@@ -132,8 +135,10 @@
     (wrap-check-write-evt-result '|user port write-evt| r start end #t))
 
   (define (write-out-special v non-block/buffer? enable-break?)
-    (parameterize-break #f
-      (user-write-out-special v non-block/buffer? enable-break?)))
+    (let ([enable-break? (and (not non-block/buffer?) (break-enabled))])
+      (parameterize-break #f
+        (non-atomically
+         (user-write-out-special v non-block/buffer? enable-break?)))))
 
   (define get-location
     (and user-get-location

@@ -2,7 +2,8 @@
 (require "../common/check.rkt"
          "../host/thread.rkt"
          "output-port.rkt"
-         "parameter.rkt")
+         "parameter.rkt"
+         "count.rkt")
 
 (provide write-special
          write-special-avail*
@@ -28,16 +29,23 @@
          (port-loop write-out-special)]
         [else
          (let loop ()
-           (define r (write-out-special v #f #f))
+           (start-atomic)
+           (define r (write-out-special v (not retry?) #f))
            (let result-loop ([r r])
              (cond
-               [(not r) (if retry?
-                            (loop)
-                            #f)]
+               [(not r)
+                (end-atomic)
+                (if retry?
+                    (loop)
+                    #f)]
                [(evt? r)
+                (end-atomic)
                 (and retry?
                      (result-loop (sync r)))]
-               [else #t])))]))))
+               [else
+                (port-count! o 1 #"x" 0)
+                (end-atomic)
+                #t])))]))))
 
 (define/who (write-special v [o (current-output-port)])
   (do-write-special who #:retry? #t v o))

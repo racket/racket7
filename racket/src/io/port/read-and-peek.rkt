@@ -33,7 +33,11 @@
                           #:keep-eof? [keep-eof? #f]
                           ;; If not `special-ok?` and a special value is
                           ;; received, raise an exception
-                          #:special-ok? [special-ok? #t])
+                          #:special-ok? [special-ok? #t]
+                          ;; For a special result, limit the procedure
+                          ;; to 4 unless `read-byte-or-special`, etc.,
+                          ;; need access to a 0-argument version
+                          #:limit-special-arity? [limit-special-arity? #t])
   (let loop ([in orig-in])
     (start-atomic)
     (cond
@@ -82,18 +86,16 @@
                (cond
                  [zero-ok? 0]
                  [else
-                  (define next-v (sync v))
+                  (define next-v (if enable-break?
+                                     (sync/enable-break v)
+                                     (sync v)))
                   (start-atomic)
                   (result-loop next-v)])]
               [(procedure? v)
                (if special-ok?
-                   v
-                   (raise-arguments-error who
-                                          "non-character in an unsupported context"
-                                          "port" orig-in))]
-              [(procedure? v)
-               (if special-ok?
-                   v
+                   (if limit-special-arity?
+                       (lambda (a b c d) (v a b c d))
+                       v)
                    (raise-arguments-error who
                                           "non-character in an unsupported context"
                                           "port" orig-in))]
@@ -109,7 +111,8 @@
                           #:zero-ok? [zero-ok? #f]
                           #:enable-break? [enable-break? #f]
                           #:copy-bstr? [copy-bstr? #t]
-                          #:special-ok? [special-ok? #t])
+                          #:special-ok? [special-ok? #t]
+                          #:limit-special-arity? [limit-special-arity? #t])
   (let loop ([in orig-in])
     (start-atomic)
     (cond
@@ -155,10 +158,14 @@
               [(evt? v)
                (cond
                  [zero-ok? 0]
-                 [else (result-loop (sync v))])]
+                 [else (result-loop (if enable-break?
+                                        (sync/enable-break v)
+                                        (sync v)))])]
               [(procedure? v)
                (if special-ok?
-                   v
+                   (if limit-special-arity?
+                       (lambda (a b c d) (v a b c d))
+                       v)
                    (raise-arguments-error who
                                           "non-character in an unsupported context"
                                           "port" orig-in))]
@@ -190,7 +197,10 @@
 ;; Use the general path; may return a procedure for a special
 (define (read-byte-via-bytes in #:special-ok? [special-ok? #t])
   (define bstr (make-bytes 1))
-  (define v (read-some-bytes! 'read-byte in bstr 0 1 #:copy-bstr? #f #:special-ok? special-ok?))
+  (define v (read-some-bytes! 'read-byte in bstr 0 1
+                              #:copy-bstr? #f
+                              #:special-ok? special-ok?
+                              #:limit-special-arity? #f))
   (if (eq? v 1)
       (bytes-ref bstr 0)
       v))
@@ -213,6 +223,7 @@
   (define v (peek-some-bytes! 'peek-byte in bstr 0 1 skip-k
                               #:copy-bstr? #f
                               #:special-ok? special-ok?
+                              #:limit-special-arity? #f
                               #:progress-evt progress-evt))
   (if (eq? v 1)
       (bytes-ref bstr 0)

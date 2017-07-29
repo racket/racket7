@@ -11,7 +11,8 @@
          "file-stream.rkt"
          "file-truncate.rkt"
          "buffer-mode.rkt"
-         "close.rkt")
+         "close.rkt"
+         "count.rkt")
 
 (provide open-input-host
          open-output-host
@@ -51,7 +52,7 @@
          [(rktio-error? n)
           (raise-filesystem-error #f n "error reading from stream port")]
          [(eqv? n RKTIO_READ_EOF) eof]
-         [(eqv? n 0) (wrap-evt (fd-evt host-fd RKTIO_POLL_READ)
+         [(eqv? n 0) (wrap-evt (fd-evt host-fd RKTIO_POLL_READ (core-port-closed port))
                                (lambda (v) 0))]
          [else n]))
      #:read-is-atomic? #t
@@ -88,7 +89,7 @@
         (set! buffer-mode 'line)
         (set! buffer-mode 'block)))
 
-  (define evt (fd-evt host-fd RKTIO_POLL_WRITE))
+  (define evt (fd-evt host-fd RKTIO_POLL_WRITE #f))
 
   ;; in atomic mode
   ;; Returns `#t` if the buffer is already or successfully flushed
@@ -170,7 +171,9 @@
             [(zero? n) (wrap-evt evt (lambda (v) #f))]
             [else n])]))
 
-     #:get-write-evt-via-write-out? #t
+     #:count-write-evt-via-write-out
+     (lambda (v bstr start)
+       (port-count! port v bstr start))
 
      #:close
      ;; in atomic mode
@@ -197,6 +200,8 @@
 
   (define custodian-reference
     (register-fd-close (current-custodian) host-fd port))
+
+  (set-fd-evt-closed! evt (core-port-closed port))
 
   port)
 
@@ -244,46 +249,47 @@
 
 ;; ----------------------------------------
 
-(struct fd-evt (fd mode)
+(struct fd-evt (fd mode [closed #:mutable])
   #:property
   prop:evt
   (poller
    ;; This function is called by the scheduler for `sync` to check
    ;; whether the file descriptor has data available:
    (lambda (fde ctx)
-     (define mode (fd-evt-mode fde))
-     (start-atomic)
-     (define ready?
-       (or
-        (and (eqv? RKTIO_POLL_READ (bitwise-and mode RKTIO_POLL_READ))
-             (eqv? (rktio_poll_read_ready rktio (fd-evt-fd fde))
-                   RKTIO_POLL_READY))
-        (and (eqv? RKTIO_POLL_WRITE (bitwise-and mode RKTIO_POLL_WRITE))
-             (eqv? (rktio_poll_write_ready rktio (fd-evt-fd fde))
-                   RKTIO_POLL_READY))))
      (cond
-       [ready?
-        (end-atomic)
+       [(closed-state-closed? (fd-evt-closed fde))
         (values (list fde) #f)]
        [else
-        ;; If `sched-info` is not #f, then we can register this file
-        ;; descriptor so that if no thread is able to make progress,
-        ;; the Racket process will sleep, but it will wake up when
-        ;; input is available. The implementation of external events
-        ;; is from the current sandman, which will in turn be the
-        ;; one (or build on the one) in "../sandman".
-        (define sched-info (poll-ctx-sched-info ctx))
-        (when sched-info
-          (schedule-info-current-exts sched-info
-                                      (sandman-add-poll-set-adder
-                                       (schedule-info-current-exts sched-info)
-                                       ;; Cooperate with the sandman by registering
-                                       ;; a funciton that takes a poll set and
-                                       ;; adds to it:
-                                       (lambda (ps)
-                                         (rktio_poll_add rktio (fd-evt-fd fde) ps mode)))))
-        (end-atomic)
-        (values #f fde)]))))
+        (define mode (fd-evt-mode fde))
+        (define ready?
+          (or
+           (and (eqv? RKTIO_POLL_READ (bitwise-and mode RKTIO_POLL_READ))
+                (eqv? (rktio_poll_read_ready rktio (fd-evt-fd fde))
+                      RKTIO_POLL_READY))
+           (and (eqv? RKTIO_POLL_WRITE (bitwise-and mode RKTIO_POLL_WRITE))
+                (eqv? (rktio_poll_write_ready rktio (fd-evt-fd fde))
+                      RKTIO_POLL_READY))))
+        (cond
+          [ready?
+           (values (list fde) #f)]
+          [else
+           ;; If `sched-info` is not #f, then we can register this file
+           ;; descriptor so that if no thread is able to make progress,
+           ;; the Racket process will sleep, but it will wake up when
+           ;; input is available. The implementation of external events
+           ;; is from the current sandman, which will in turn be the
+           ;; one (or build on the one) in "../sandman".
+           (define sched-info (poll-ctx-sched-info ctx))
+           (when sched-info
+             (schedule-info-current-exts sched-info
+                                         (sandman-add-poll-set-adder
+                                          (schedule-info-current-exts sched-info)
+                                          ;; Cooperate with the sandman by registering
+                                          ;; a funciton that takes a poll set and
+                                          ;; adds to it:
+                                          (lambda (ps)
+                                            (rktio_poll_add rktio (fd-evt-fd fde) ps mode)))))
+           (values #f fde)])]))))
 
 ;; ----------------------------------------
 

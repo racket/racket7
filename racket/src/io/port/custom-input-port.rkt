@@ -133,6 +133,27 @@
                        (wrap-check-read-evt-result who r dest-start dest-end peek? ok-false?)]
                       [else r]))))
 
+  ;; possibly in atomic mode
+  (define (wrap-procedure-result r)
+    (define called? #f)
+    (define (called!)
+      (when called?
+        (raise-arguments-error 'read-special "cannot be called a second time"))
+      (set! called? #t))
+    (define (four-args a b c d)
+      (called!)
+      (check 'read-special exact-positive-integer? #:or-false b)
+      (check 'read-special exact-nonnegative-integer? #:or-false c)
+      (check 'read-special exact-positive-integer? #:or-false d)
+      (r a b c d))
+    (cond
+      [(procedure-arity-includes? r 0)
+       (case-lambda
+         [() (called!) (r)]
+         [(a b c d) (four-args a b c d)])]
+      [else
+       four-args]))
+
   ;; in atomic mode
   (define (read-in dest-bstr dest-start dest-end copy?)
     (cond
@@ -154,6 +175,8 @@
           (read-in dest-bstr dest-start dest-end copy?)]
          [(evt? r)
           (wrap-check-read-evt-result '|user port read| r dest-start dest-end #f #f)]
+         [(procedure? r)
+          (wrap-procedure-result r)]
          [else r])]))
 
   ;; in atomic mode
@@ -179,6 +202,8 @@
           (peek-in dest-bstr dest-start dest-end skip-k progress-evt copy?)]
          [(evt? r)
           (wrap-check-read-evt-result '|user port peek| r dest-start dest-end #t progress-evt)]
+         [(procedure? r)
+          (wrap-procedure-result r)]
          [else r])]))
 
   ;; in atomic mode

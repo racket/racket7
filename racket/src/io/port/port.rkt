@@ -19,6 +19,7 @@
                    closed        ; `closed-state`
 
                    [offset #:mutable] ; count plain bytes
+                   [count? #:mutable] ; whether line counting is enabled
                    [state #:mutable] ; state of UTF-8 decoding
                    [cr-state #:mutable] ; state of CRLF counting as a single LF
                    [line #:mutable]   ; count newlines

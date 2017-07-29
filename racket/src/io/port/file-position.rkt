@@ -16,7 +16,8 @@
                                  (exn:fail:filesystem
                                   (string-append
                                    "file-position: the port's current position is not known\n port: "
-                                   ((error-value->string-handler) p (error-print-width)))))))]
+                                   ((error-value->string-handler) p (error-print-width)))
+                                  (current-continuation-marks)))))]
     [(p pos)
      (unless (or (input-port? p) (output-port? p))
        (raise-argument-error who "port?" p))

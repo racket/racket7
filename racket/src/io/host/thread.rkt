@@ -23,6 +23,7 @@
         semaphore-wait
         semaphore-peek-evt
         wrap-evt
+        choice-evt ; raw variant that takes a list of evts
         sync
         sync/timeout
         evt?

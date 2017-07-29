@@ -60,9 +60,8 @@
    ;;          copied if necessary. The return values are the same as
    ;;          documented for `make-output-port`.
 
-   write-out-special ; (any no-block/buffer? enable-break? -> ...)
-   ;;          *Not* called in atomic mode (since only custom ports
-   ;;          implement it).
+   write-out-special ; (any no-block/buffer? enable-break? -> boolean?)
+   ;;          Called in atomic mode.
 
    get-write-evt ; (bstr start-k end-k -> evt?)
    ;;            *Not* called in atomic mode.
@@ -75,7 +74,16 @@
    [print-handler #:mutable]
    [display-handler #:mutable])
   #:authentic
-  #:property prop:output-port-evt (lambda (o) (core-output-port-evt o)))
+  #:property prop:output-port-evt (lambda (o)
+                                    (choice-evt
+                                     (list
+                                      (poller
+                                       (lambda (self sched-info)
+                                         (cond
+                                           [(closed-state-closed? (core-port-closed o))
+                                            (values '(#t) #f)]
+                                           [else (values #f self)])))
+                                      (core-output-port-evt o)))))
 
 (struct write-evt (proc)
   #:property prop:evt (poller
@@ -89,7 +97,7 @@
                                #:close close
                                #:write-out-special [write-out-special #f]
                                #:get-write-evt [get-write-evt #f]
-                               #:get-write-evt-via-write-out? [get-write-evt-via-write-out? #f]
+                               #:count-write-evt-via-write-out [count-write-evt-via-write-out #f]
                                #:get-write-special-evt [get-write-special-evt #f]
                                #:get-location [get-location #f]
                                #:count-lines! [count-lines! #f]
@@ -107,6 +115,7 @@
 
                     (closed-state #f #f)
                     init-offset ; offset
+                    #f   ; count?
                     #f   ; state
                     #f   ; cr-state
                     #f   ; line
@@ -117,7 +126,7 @@
                     write-out
                     write-out-special
                     (or get-write-evt
-                        (and get-write-evt-via-write-out?
+                        (and count-write-evt-via-write-out
                              ;; If `write-out` is always atomic (in no-block, no-buffer mode),
                              ;; then an event can poll `write-out`:
                              (lambda (src-bstr src-start src-end)
@@ -125,16 +134,18 @@
                                 ;; in atomic mode:
                                 (lambda (self)
                                   (define v (write-out src-bstr src-start src-end #f #f #t))
+                                  (when (exact-integer? v)
+                                    (count-write-evt-via-write-out v src-bstr src-start))
                                   (if (evt? v)
                                       ;; FIXME: should be `(replace-evt v self)`
                                       (values #f self)
                                       (values (list v) #f)))))))
                     get-write-special-evt
-
+                    
                     #f   ; write-handler
                     #f   ; display-handler
                     #f)) ; print-handler
-
+  
 (define empty-output-port
   (make-core-output-port #:name 'empty
                          #:evt always-evt
