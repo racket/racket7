@@ -31,6 +31,8 @@
   (or (core-output-port? p)
       (output-port-via-property? p)))
 
+;; This function should not be called in atomic mode,
+;; since it can invoke an artitrary function
 (define (->core-output-port v)
   (cond
     [(core-output-port? v) v]

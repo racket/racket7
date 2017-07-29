@@ -11,7 +11,6 @@
 
 (define (port-try-file-lock? port mode) #f)
 (define (port-file-unlock port) (void))
-(define (port-file-identity port) (error 'port-file-identity "not yet supported"))
 
 (define (equal-secondary-hash-code v) (equal-hash-code v))
 
@@ -303,7 +302,6 @@
 
    port-try-file-lock?
    port-file-unlock
-   port-file-identity
 
    primitive?
    primitive-closure?

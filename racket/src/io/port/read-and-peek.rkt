@@ -41,7 +41,7 @@
   (let loop ([in orig-in])
     (start-atomic)
     (cond
-      [(= start end)
+      [(= start end) ; intentionally before the port-closed check
        (end-atomic)
        0]
       [(closed-state-closed? (core-port-closed in))

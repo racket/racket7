@@ -1,8 +1,10 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/thread.rkt"
          "port.rkt"
          "input-port.rkt"
-         "output-port.rkt")
+         "output-port.rkt"
+         "check.rkt")
 
 (provide file-position
          file-position*)
@@ -31,7 +33,9 @@
        (define file-position (core-port-file-position cp))
        (cond
          [(and (procedure? file-position) (procedure-arity-includes? file-position 1))
-          (file-position pos)]
+          (atomically
+           (check-not-closed who cp p)
+           (file-position pos))]
          [else
           (raise-arguments-error who
                                  "setting position allowed for file-stream and string ports only"
@@ -41,18 +45,22 @@
 (define/who (file-position* p)
   (do-simple-file-position who p (lambda () #f)))
 
-(define (do-simple-file-position who p fail-k)
+(define (do-simple-file-position who orig-p fail-k)
   (let ([p (cond
-             [(input-port? p) (->core-input-port p)]
-             [(output-port? p) (->core-output-port p)]
-             [else (raise-argument-error who "port?" p)])])
+             [(input-port? orig-p) (->core-input-port orig-p)]
+             [(output-port? orig-p) (->core-output-port orig-p)]
+             [else (raise-argument-error who "port?" orig-p)])])
+    (start-atomic)
+    (check-not-closed who p orig-p)
     (define file-position (core-port-file-position p))
     (cond
       [(or (input-port? file-position)
            (output-port? file-position))
+       (end-atomic)
        (do-simple-file-position who file-position fail-k)]
       [else
-       (or (if file-position
-               (file-position)
-               (core-port-offset p))
-           (fail-k))])))
+       (define pos (if file-position
+                       (file-position)
+                       (core-port-offset p)))
+       (end-atomic)
+       (or pos (fail-k))])))

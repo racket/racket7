@@ -19,7 +19,7 @@
                  ;; don't add "system error", because it
                  ;; will be redundant
                  (if who
-                     (format "~a: ~a" who base-msg)
+                     (string-append (symbol->string who) ": " base-msg)
                      base-msg)]
                 [else
                  (format-rktio-message who err base-msg)]))

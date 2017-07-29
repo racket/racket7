@@ -68,7 +68,7 @@
     (pipe-data
      ;; get-content-length
      (lambda ()
-       (content-length))
+       (atomically (content-length)))
      ;; write-position
      (case-lambda
        [() (or write-pos end)]

@@ -9,6 +9,7 @@
          "../format/main.rkt"
          "parameter.rkt"
          "host.rkt"
+         "identity.rkt"
          "error.rkt"
          (only-in "error.rkt"
                   set-maybe-raise-missing-module!)
@@ -273,25 +274,7 @@
   (check who path-string? p)
   (define host-path (->host p))
   (start-atomic)
-  (define r0 (rktio_path_identity rktio (->rktio host-path) (not as-link?)))
-  (define r (if (rktio-error? r0)
-                r0
-                (begin0
-                  (rktio_identity_to_vector r0)
-                  (rktio_free r0))))
-  (end-atomic)
-  (when (rktio-error? r0)
-    (raise-filesystem-error who
-                            r
-                            (format (string-append
-                                     "error obtaining identity for path\n"
-                                     "  path: ~a")
-                                    (host-> host-path))))
-  (+ (vector-ref r 0)
-     (arithmetic-shift (vector-ref r 1)
-                       (vector-ref r 3))
-     (arithmetic-shift (vector-ref r 2)
-                       (+ (vector-ref r 3) (vector-ref r 4)))))
+  (path-or-fd-identity who #:host-path host-path #:as-link? as-link?))
 
 (define/who (file-size p)
   (check who path-string? p)

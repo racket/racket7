@@ -17,6 +17,7 @@
          "file-stream.rkt"
          (only-in "host-port.rkt"
                   terminal-port?)
+         "file-identity.rkt"
          "bytes-port.rkt"
          "string-port.rkt"
          "custom-input-port.rkt"
@@ -129,6 +130,8 @@
          port-closed-evt
 
          file-stream-buffer-mode
+
+         port-file-identity
 
          file-position
          file-position*

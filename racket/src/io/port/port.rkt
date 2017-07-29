@@ -13,7 +13,7 @@
 
                    count-lines!  ; #f or procedure
                    get-location  ; #f or procedure
-                   file-position ; #f, port, or procedure
+                   file-position ; #f, port, or procedure called in atomic mode
                    buffer-mode   ; #f or procedure
 
                    closed        ; `closed-state`

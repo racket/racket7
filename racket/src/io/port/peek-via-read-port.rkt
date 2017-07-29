@@ -133,10 +133,10 @@
          [else
           (not (eqv? v 0))])]))
 
+  ;; in atomic mode
   (define (purge-buffer)
-    (atomically
-     (set!-values (peek-pipe-i peek-pipe-o) (make-pipe))
-     (set! peeked-eof? #f)))
+    (set!-values (peek-pipe-i peek-pipe-o) (make-pipe))
+    (set! peeked-eof? #f))
 
   (define (get-progress-evt)
     ((core-input-port-get-progress-evt peek-pipe-i)))
@@ -178,6 +178,7 @@
            #:file-position file-position
            #:buffer-mode (or alt-buffer-mode do-buffer-mode))
 
+          ;; in atomic mode:
           (case-lambda
             [() (purge-buffer)]
             [(pos) (- pos (pipe-content-length peek-pipe-i))])))
