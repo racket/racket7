@@ -13,13 +13,18 @@
   (let ([max-length
          (cond
            [(eq? mode PRINT-MODE/UNQUOTED)
-            (if unquoted-pairs?
-                (write-string/max "(cons " o max-length)
-                (write-string/max (or alt-list-constructor "(list ") o max-length))]
+            (let ([max-length
+                   (if unquoted-pairs?
+                       (write-string/max "(cons" o max-length)
+                       (write-string/max (or alt-list-constructor "(list") o max-length))])
+              (cond
+                [(null? v) max-length]
+                [else (write-string/max " " o max-length)]))]
            [else (write-string/max (or alt-list-prefix "(") o max-length)])])
     (let loop ([v v] [max-length max-length])
       (cond
         [(eq? max-length 'full) 'full]
+        [(null? v) (write-string/max ")" o max-length)]
         [(and (null? (cdr v))
               (not unquoted-pairs?))
          (let ([max-length (p who (car v) mode o max-length graph config)])

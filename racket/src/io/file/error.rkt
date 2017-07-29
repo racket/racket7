@@ -3,9 +3,17 @@
          "../host/error.rkt")
 
 (provide raise-filesystem-error
-         copy-file-step-string)
+         copy-file-step-string
 
-(define (raise-filesystem-error who err base-msg)
+         maybe-raise-missing-module
+         set-maybe-raise-missing-module!)
+
+(define (raise-filesystem-error who orig-err base-msg)
+  (define err (cond
+                [(racket-error? orig-err RKTIO_ERROR_EXISTS)
+                 orig-err]
+                [else
+                 (remap-rktio-error orig-err)]))
   (define msg (cond
                 [(racket-error? err RKTIO_ERROR_EXISTS)
                  ;; don't add "system error", because it
@@ -57,3 +65,8 @@
        [(eqv? step RKTIO_COPY_STEP_WRITE_DEST_METADATA)
         "error writing destination-file metadata"]
        [else "copy failed"])]))
+
+(define maybe-raise-missing-module void)
+
+(define (set-maybe-raise-missing-module! proc)
+  (set! maybe-raise-missing-module proc))

@@ -3,5 +3,4 @@
   (import (chezpart)
           (core)
           (io))
-  (define (char-graphic? x) #f)
   (include "compiled/regexp.scm"))

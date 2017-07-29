@@ -236,9 +236,6 @@
 
   ;; ----------------------------------------
 
-  (define (char-blank? v) (char-whitespace? v))
-  (define (char-graphic? v) #t)
-
   (define (system-path-convention-type) 'unix)
 
   (define (primitive-table key)

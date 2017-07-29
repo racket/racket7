@@ -220,6 +220,7 @@ CORE_SRCS = core/check.ss \
             core/srcloc.ss \
             core/bytes.ss \
             core/string.ss \
+            core/char.ss \
             core/symbol.ss \
             core/list.ss \
             core/vector.ss \

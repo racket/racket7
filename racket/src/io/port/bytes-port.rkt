@@ -18,6 +18,7 @@
 (define/who (open-input-bytes bstr [name 'string])
   (check who bytes? bstr)
   (define i 0)
+  (define alt-pos #f)
   (define len (bytes-length bstr))
 
   (define progress-sema #f)
@@ -102,10 +103,16 @@
 
      #:file-position
      (case-lambda
-       [() i]
-       [(new-pos) (set! i (if (eof-object? new-pos)
-                              len
-                              (min len new-pos)))])))
+       [() (or alt-pos i)]
+       [(new-pos)
+        (set! i (if (eof-object? new-pos)
+                    len
+                    (min len new-pos)))
+        (set! alt-pos
+              (and new-pos
+                   (not (eof-object? new-pos))
+                   (new-pos . > . i)
+                   new-pos))])))
 
   (when (port-count-lines-enabled)
     (port-count-lines! p))
@@ -113,14 +120,14 @@
 
 ;; ----------------------------------------
 
-(struct output-bytes-data (i))
+(struct output-bytes-data (i reset))
 
 (define (open-output-bytes [name 'string])
   (define-values (i o) (make-pipe))
   (define p
     (make-core-output-port
      #:name name
-     #:data (output-bytes-data i)
+     #:data (output-bytes-data i (lambda () (pipe-discard-all i)))
      #:evt o
      #:write-out (core-output-port-write-out o)
      #:close (core-port-close o)
@@ -150,12 +157,21 @@
   (check who (lambda (v) (and (output-port? o) (string-port? o)))
          #:contract "(and/c output-port? string-port?)"
          o)
+  (check who exact-nonnegative-integer? start-pos)
+  (check who exact-nonnegative-integer? #:or-false end-pos)
   (let ([o (->core-output-port o)])
     (define i (output-bytes-data-i (core-port-data o)))
     (define len (pipe-content-length i))
+    (when (start-pos . > . len)
+      (raise-range-error who "port content" "starting" start-pos o 0 len #f))
+    (when end-pos
+      (unless (<= start-pos end-pos len)
+        (raise-range-error who "port content" "ending" end-pos o 0 len start-pos)))
     (define amt (- (min len (or end-pos len)) start-pos))
     (define bstr (make-bytes amt))
     (peek-bytes! bstr start-pos i)
+    (when reset?
+      ((output-bytes-data-reset (core-port-data o))))
     bstr))
 
 ;; ----------------------------------------

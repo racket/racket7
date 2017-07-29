@@ -10,6 +10,8 @@
          "parameter.rkt"
          "host.rkt"
          "error.rkt"
+         (only-in "error.rkt"
+                  set-maybe-raise-missing-module!)
          (only-in racket/base
                   [make-directory host:make-directory]
                   [delete-file host:delete-file]
@@ -43,7 +45,10 @@
          make-file-or-directory-link
          resolve-path
          expand-user-path
-         filesystem-root-list)
+         filesystem-root-list
+
+         ;; For the expander to register `maybe-raise-missing-module`:
+         set-maybe-raise-missing-module!)
 
 (define/who (directory-exists? p)
   (check who path-string? p)

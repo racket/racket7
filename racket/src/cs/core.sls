@@ -258,6 +258,12 @@
           string-copy!
           substring
 
+          char-blank?
+          char-iso-control?
+          char-punctuation?
+          char-graphic?
+          char-symbolic?
+
           gensym
           symbol-interned?
           symbol-unreadable?
@@ -617,6 +623,7 @@
   (include "core/srcloc.ss")
   (include "core/bytes.ss")
   (include "core/string.ss")
+  (include "core/char.ss")
   (include "core/list.ss")
   (include "core/vector.ss")
   (include "core/box.ss")

@@ -27,6 +27,7 @@
           'prop:evt prop:evt
           'prop:secondary-evt prop:secondary-evt
           'poller poller
+          'poller-evt poller-evt
           'poll-ctx-poll? poll-ctx-poll?
           'poll-ctx-select-proc poll-ctx-select-proc
           'poll-ctx-sched-info poll-ctx-sched-info

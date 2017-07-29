@@ -21,6 +21,7 @@
                (let ([c (integer->char b)])
                  (and (or (char-blank? c)
                           (char-graphic? c))
+                      (not (char=? c #\tab))
                       (not (char=? c #\"))
                       (not (char=? c #\\)))))
           (loop start-i (add1 i) max-length)]

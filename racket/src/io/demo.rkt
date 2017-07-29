@@ -21,6 +21,7 @@
     (unless (equal? e v)
       (error 'failed "~s: ~e" 'rhs v))))
 
+
 (test #t (file-exists? "demo.rkt"))
 (test #f (file-exists? "compiled"))
 (test #f (file-exists? "compiled/demo-file"))
@@ -87,7 +88,7 @@
 
 (test "*(1 2 3 apple\t\u0001 end <spot> file 1\"2\"3 #hash((a . 1) (b . 2)))*"
       (format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file") #"1\"2\"3" #hash((b . 2) (a . 1)))))
-(test "*'(1 2 3 \"apple\\t\\u0001\" end <spot> #\"1\\\"2\\\"3\t\\0010\")*"
+(test "*'(1 2 3 \"apple\\t\\u0001\" end <spot> #\"1\\\"2\\\"3\\t\\0010\")*"
       (format "*~.v*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) #"1\"2\"3\t\0010")))
 
 (fprintf (current-output-port) "*~v*" '!!!)
@@ -328,7 +329,7 @@
   (test (void) (file-position in eof))
   (test 5 (file-position in))
   (test (void) (file-position in 100))
-  (test 5 (file-position in)))
+  (test 100 (file-position in)))
 
 (let ()
   (define out (open-output-bytes))

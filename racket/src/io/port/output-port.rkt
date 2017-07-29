@@ -77,12 +77,13 @@
   #:property prop:output-port-evt (lambda (o)
                                     (choice-evt
                                      (list
-                                      (poller
-                                       (lambda (self sched-info)
-                                         (cond
-                                           [(closed-state-closed? (core-port-closed o))
-                                            (values '(#t) #f)]
-                                           [else (values #f self)])))
+                                      (poller-evt
+                                       (poller
+                                        (lambda (self sched-info)
+                                          (cond
+                                            [(closed-state-closed? (core-port-closed o))
+                                             (values '(#t) #f)]
+                                            [else (values #f self)]))))
                                       (core-output-port-evt o)))))
 
 (struct write-evt (proc)

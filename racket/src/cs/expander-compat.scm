@@ -35,12 +35,6 @@
 (define flimag-part imag-part)
 (define make-flrectangular make-rectangular)
 
-(define (char-graphic? x) #f)
-(define (char-blank? x) #f)
-(define (char-iso-control? x) #f)
-(define (char-punctuation? x) #f)
-(define (char-symbolic? x) #f)
-
 (define system-library-subpath
   (case-lambda
    [() (system-library-subpath (system-type 'gc))]
@@ -329,12 +323,6 @@
    flreal-part
    flimag-part
    make-flrectangular
-
-   char-graphic?
-   char-blank?
-   char-iso-control?
-   char-punctuation?
-   char-symbolic?
 
    system-type
    system-library-subpath

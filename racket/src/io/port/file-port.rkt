@@ -2,6 +2,7 @@
 (require "../common/check.rkt"
          "../host/thread.rkt"
          "../host/rktio.rkt"
+         "../host/error.rkt"
          "../path/path.rkt"
          "../file/parameter.rkt"
          "../file/host.rkt"
@@ -37,6 +38,9 @@
                             (mode->flags mode2))))
   (when (rktio-error? fd)
     (end-atomic)
+    (when (or (eq? mode1 'module) (eq? mode2 'module))
+      (maybe-raise-missing-module who (host-> host-path) "" "" ""
+                                  (format-rktio-system-error-message fd)))
     (raise-filesystem-error who
                             fd
                             (format (string-append

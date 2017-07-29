@@ -118,16 +118,17 @@
                                         [(input-port? byte-ready)
                                          byte-ready]
                                         [else
-                                         (poller
-                                          (lambda (self sched-info)
-                                            (define v (byte-ready))
-                                            (cond
-                                              [(evt? v)
-                                               (values #f v)]
-                                              [(eq? v #t)
-                                               (values (list #t) #f)]
-                                              [else
-                                               (values #f self)])))])])))
+                                         (poller-evt
+                                          (poller
+                                           (lambda (self sched-info)
+                                             (define v (byte-ready))
+                                             (cond
+                                               [(evt? v)
+                                                (values #f v)]
+                                               [(eq? v #t)
+                                                (values (list #t) #f)]
+                                               [else
+                                                (values #f self)]))))])])))
 
 (define (make-core-input-port #:name name
                               #:data [data #f]

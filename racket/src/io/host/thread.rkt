@@ -31,6 +31,7 @@
         prop:evt
         prop:secondary-evt
         poller
+        poller-evt
         poll-ctx-poll?
         poll-ctx-select-proc
         poll-ctx-sched-info

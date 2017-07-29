@@ -159,7 +159,7 @@
     [(pair? v)
      (print-list p who v mode o max-length graph config #f #f)]
     [(vector? v)
-     (print-list p who (vector->list v) mode o max-length graph config "#(" "(vector ")]
+     (print-list p who (vector->list v) mode o max-length graph config "#(" "(vector")]
     [(box? v)
      (if (config-get config print-box)
          (p who (unbox v) mode o (write-string/max "#&" o max-length) graph config)
@@ -180,7 +180,7 @@
         (define l (vector->list (struct->vector v)))
         (define alt-list-constructor
           ;; strip "struct:" from the first element of `l`:
-          (string-append "(" (substring (symbol->string (car l)) 7) " "))
+          (string-append "(" (substring (symbol->string (car l)) 7)))
         (print-list p who (cdr l) mode o max-length graph config #f alt-list-constructor)]
        [(prefab-struct-key v)
         => (lambda (key)

@@ -10,12 +10,14 @@
          pipe-input-port?
          pipe-output-port?
          pipe-content-length
-         pipe-write-position)
+         pipe-write-position
+         pipe-discard-all)
 
 (define (min+1 a b) (if a (min (add1 a) b) b))
 
 (struct pipe-data (get-content-length
-                   write-position))
+                   write-position
+                   discard-all))
 
 (define (pipe-input-port? p)
   (and (input-port? p)
@@ -39,6 +41,9 @@
     [(p) ((pipe-data-write-position (core-port-data p)))]
     [(p pos) ((pipe-data-write-position (core-port-data p)) pos)]))
 
+(define (pipe-discard-all p)
+  ((pipe-data-discard-all (core-port-data p))))
+
 (define/who (make-pipe [limit #f] [input-name 'pipe] [output-name 'pipe])
   (check who #:or-false exact-positive-integer? limit)
   (define bstr (make-bytes (min+1 limit 16)))
@@ -49,26 +54,6 @@
   (define write-pos #f) ; to adjust the write position via `file-position` on a string port
   (define input-closed? #f)
   (define output-closed? #f)
-  (define data
-    (pipe-data
-     (lambda ()
-       (if (start . <= . end)
-           (- end start)
-           (+ end (- len start))))
-     (case-lambda
-       [() (or write-pos end)]
-       [(pos)
-        ;; `pos` must be between `start` and `end`
-        (if (= pos end)
-            (set! write-pos #f)
-            (set! write-pos pos))])))
-
-  (define read-ready-sema (make-semaphore))
-  (define write-ready-sema (and limit (make-semaphore 1)))
-  (define more-read-ready-sema #f) ; for lookahead peeks
-  (define read-ready-evt (semaphore-peek-evt read-ready-sema))
-  (define write-ready-evt (and limit (semaphore-peek-evt write-ready-sema)))
-  (define progress-sema #f)
 
   (define (content-length)
     (if (start . <= . end)
@@ -78,6 +63,33 @@
   (define (output-full?)
     (and limit
          ((content-length) . >= . (+ limit peeked-amt))))
+
+  (define data
+    (pipe-data
+     ;; get-content-length
+     (lambda ()
+       (content-length))
+     ;; write-position
+     (case-lambda
+       [() (or write-pos end)]
+       [(pos)
+        ;; `pos` must be between `start` and `end`
+        (if (= pos end)
+            (set! write-pos #f)
+            (set! write-pos pos))])
+     ;; discard-all
+     (lambda ()
+       (set! peeked-amt 0)
+       (set! start 0)
+       (set! end 0)
+       (set! write-pos #f))))
+
+  (define read-ready-sema (make-semaphore))
+  (define write-ready-sema (and limit (make-semaphore 1)))
+  (define more-read-ready-sema #f) ; for lookahead peeks
+  (define read-ready-evt (semaphore-peek-evt read-ready-sema))
+  (define write-ready-evt (and limit (semaphore-peek-evt write-ready-sema)))
+  (define progress-sema #f)
 
   ;; Used before/after read:
   (define (check-output-unblocking)

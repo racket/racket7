@@ -23,10 +23,15 @@
      (lambda (poll?)
        (parameterize ([current-async-semaphore async-sema])
          (define-values (results new-evt)
-           ((poller-proc p) s (poll-ctx poll? (lambda () (semaphore-post async-sema)))))
+           ((poller-proc p) (if poll? never-evt s) (poll-ctx poll? (lambda () (semaphore-post async-sema)))))
          (if results
              (wrap-evt always-evt (lambda (v) (apply values results)))
              new-evt))))))
+
+(define (poller-evt v)
+  (struct poller-evt ()
+    #:property prop:evt (lambda (self) (v self)))
+  (poller-evt))
 
 (struct poll-ctx (poll? select-proc))
 
@@ -80,6 +85,7 @@
                          'prop:evt prop:evt
                          'prop:secondary-evt prop:evt
                          'poller poller
+                         'poller-evt poller-evt
                          'poll-ctx-poll? poll-ctx-poll?
                          'poll-ctx-select-proc poll-ctx-select-proc
                          'poll-ctx-sched-info poll-ctx-sched-info
