@@ -103,6 +103,7 @@
          
          open-input-file
          open-output-file
+         open-input-output-file
          call-with-input-file
          call-with-output-file
          with-input-from-file

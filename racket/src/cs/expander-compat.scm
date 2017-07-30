@@ -136,8 +136,6 @@
 
 (define (cache-configuration id proc) (proc))
 
-(define (open-input-output-file . args) (error "no open-input-output-file"))
-
 (define exec-file #f)
 (define (set-exec-file! p) (set! exec-file p))
 
@@ -365,8 +363,6 @@
    compile-allow-set!-undefined
 
    cache-configuration
-
-   open-input-output-file
 
    find-system-path
 

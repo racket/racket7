@@ -22,11 +22,12 @@
   (define buffer-mode 'block)
 
   ;; in atomic mode
-  (define (pull-some-bytes [amt (bytes-length buf)])
+  (define (pull-some-bytes [amt (bytes-length buf)] #:keep-eof? [keep-eof? #t])
     (define v (read-in buf 0 amt #f))
     (cond
       [(eof-object? v)
-       (set! peeked-eof? #t)
+       (when keep-eof?
+         (set! peeked-eof? #t))
        eof]
       [(evt? v) v]
       [(eqv? v 0) 0]
@@ -76,7 +77,7 @@
        ;; an EOF doesn't count as progress
        eof]
       [else
-       (define v (pull-some-bytes))
+       (define v (pull-some-bytes #:keep-eof? #f))
        (cond
          [(retry-pull? v) (read-byte)]
          [else

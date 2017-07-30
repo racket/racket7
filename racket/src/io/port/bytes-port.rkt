@@ -143,6 +143,13 @@
           [(eof-object? new-pos)
            (pipe-write-position o len)]
           [(new-pos . > . len)
+           (when (new-pos . >= . (expt 2 48))
+             ;; implausibly large
+             (end-atomic)
+             (raise-arguments-error 'file-position
+                                    "new position is too large"
+                                    "port" p
+                                    "position" new-pos))
            (pipe-write-position o len)
            (define amt (- new-pos len))
            ((core-output-port-write-out o) (make-bytes amt 0) 0 amt #f #f #f)
@@ -163,10 +170,10 @@
     (define i (output-bytes-data-i (core-port-data o)))
     (define len (pipe-content-length i))
     (when (start-pos . > . len)
-      (raise-range-error who "port content" "starting" start-pos o 0 len #f))
+      (raise-range-error who "port content" "starting " start-pos o 0 len #f))
     (when end-pos
       (unless (<= start-pos end-pos len)
-        (raise-range-error who "port content" "ending" end-pos o 0 len start-pos)))
+        (raise-range-error who "port content" "ending " end-pos o 0 len start-pos)))
     (define amt (- (min len (or end-pos len)) start-pos))
     (define bstr (make-bytes amt))
     (peek-bytes! bstr start-pos i)

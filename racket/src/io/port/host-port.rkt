@@ -30,17 +30,20 @@
                                     "error setting file size")]))
 
 ;; in atomic mode
-(define (host-close host-fd)
-  (define v (rktio_close rktio host-fd))
-  (when (rktio-error? v)
-    (end-atomic)
-    (raise-rktio-error #f v "error closing stream port")))
+(define (host-close host-fd fd-refcount)
+  (set-box! fd-refcount (sub1 (unbox fd-refcount)))
+  (when (zero? (unbox fd-refcount))
+    (define v (rktio_close rktio host-fd))
+    (when (rktio-error? v)
+      (end-atomic)
+      (raise-rktio-error #f v "error closing stream port"))))
 
 ;; ----------------------------------------
 
 ;; in atomic mode
 ;; Current custodian must not be shut down.
-(define (open-input-host host-fd name)
+(define (open-input-host host-fd name
+                         #:fd-refcount [fd-refcount (box 1)])
   (define-values (port buffer-control)
     (open-input-peek-via-read
      #:name name
@@ -61,7 +64,7 @@
      #:close
      ;; in atomic mode
      (lambda ()
-       (host-close host-fd)
+       (host-close host-fd fd-refcount)
        (unsafe-custodian-unregister host-fd custodian-reference))
      #:file-position (make-file-position
                       host-fd
@@ -69,14 +72,16 @@
                         [() (buffer-control)]
                         [(pos) (buffer-control pos)]))))
   (define custodian-reference
-    (register-fd-close (current-custodian) host-fd port))
+    (register-fd-close (current-custodian) host-fd fd-refcount port))
   port)
 
 ;; ----------------------------------------
 
 ;; in atomic mode
 ;; Current custodian must not be shut down.
-(define (open-output-host host-fd name #:buffer-mode [buffer-mode 'infer])
+(define (open-output-host host-fd name
+                          #:buffer-mode [buffer-mode 'infer]
+                          #:fd-refcount [fd-refcount (box 1)])
   (define buffer (make-bytes 4096))
   (define buffer-start 0)
   (define buffer-end 0)
@@ -184,7 +189,7 @@
        (when buffer ; <- in case a concurrent close succeeded
          (plumber-flush-handle-remove! flush-handle)
          (set! buffer #f)
-         (host-close host-fd)
+         (host-close host-fd fd-refcount)
          (unsafe-custodian-unregister host-fd custodian-reference)))
 
      #:file-position (make-file-position
@@ -204,7 +209,7 @@
                      [(mode) (set! buffer-mode mode)])))
 
   (define custodian-reference
-    (register-fd-close (current-custodian) host-fd port))
+    (register-fd-close (current-custodian) host-fd fd-refcount port))
 
   (set-fd-evt-closed! evt (core-port-closed port))
 
@@ -299,13 +304,13 @@
 
 ;; ----------------------------------------
 
-(define (register-fd-close custodian host-fd port)
+(define (register-fd-close custodian host-fd fd-refcount port)
   (define closed (core-port-closed port))
   (unsafe-custodian-register custodian
                              host-fd
                              ;; in atomic mode
                              (lambda (host-fd)
-                               (host-close host-fd)
+                               (host-close host-fd fd-refcount)
                                (set-closed-state! closed))
                              #f
                              #f))

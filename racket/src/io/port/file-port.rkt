@@ -15,6 +15,7 @@
 
 (provide open-input-file
          open-output-file
+         open-input-output-file
          call-with-input-file
          call-with-output-file
          with-input-from-file
@@ -53,7 +54,7 @@
     (port-count-lines! p))
   p)
 
-(define/who (open-output-file path [mode1 none] [mode2 none])
+(define (do-open-output-file #:plus-input? [plus-input? #f] who path mode1 mode2)
   (check who path-string? path)
   (define (mode->flags mode)
     (case mode
@@ -71,12 +72,13 @@
   (define host-path (->host path))
   (start-atomic)
   (check-current-custodian who)
+  (define flags
+    (+ RKTIO_OPEN_WRITE
+       (if plus-input? RKTIO_OPEN_READ 0)
+       (mode->flags mode1)
+       (mode->flags mode2)))
   (define fd0
-    (rktio_open rktio
-                (->rktio host-path)
-                (+ RKTIO_OPEN_WRITE
-                   (mode->flags mode1)
-                   (mode->flags mode2))))
+    (rktio_open rktio (->rktio host-path) flags))
   (define fd
     (cond
       [(not (rktio-error? fd0)) fd0]
@@ -94,11 +96,7 @@
                                           "error deleting file\n"
                                           "  path: ~a")
                                          (host-> host-path))))
-       (rktio_open rktio
-                   (->rktio host-path)
-                   (+ RKTIO_OPEN_WRITE
-                      (mode->flags mode1)
-                      (mode->flags mode2)))]
+       (rktio_open rktio (->rktio host-path) flags)]
       [else fd0]))
   (when (rktio-error? fd)
     (end-atomic)
@@ -114,12 +112,25 @@
                                        "path is a directory"]
                                       [else "error opening file"])
                                     (host-> host-path))))
-  
-  (define p (open-output-host fd (host-> host-path)))
+  (define opened-path (host-> host-path))
+  (define refcount (box (if plus-input? 2 1)))
+  (define op (open-output-host fd opened-path #:fd-refcount refcount))
+  (define ip (and plus-input?
+                  (open-input-host fd opened-path #:fd-refcount refcount)))
   (end-atomic)
   (when (port-count-lines-enabled)
-    (port-count-lines! p))
-  p)
+    (port-count-lines! op)
+    (when plus-input?
+      (port-count-lines! ip)))
+  (if plus-input?
+      (values ip op)
+      op))
+
+(define/who (open-output-file path [mode1 none] [mode2 none])
+  (do-open-output-file who path mode1 mode2))
+
+(define/who (open-input-output-file path [mode1 none] [mode2 none])
+  (do-open-output-file #:plus-input? #t who path mode1 mode2))
 
 (define/who (call-with-input-file path proc [mode none])
   (check who path-string? path)
