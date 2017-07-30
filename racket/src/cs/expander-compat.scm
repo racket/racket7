@@ -9,9 +9,6 @@
 
 (define (replace-evt a b) (error 'replace-evt "unsupported"))
 
-(define (port-try-file-lock? port mode) #f)
-(define (port-file-unlock port) (void))
-
 (define (equal-secondary-hash-code v) (equal-hash-code v))
 
 (define (primitive? v) #f)
@@ -297,9 +294,6 @@
    replace-evt
 
    equal-secondary-hash-code
-
-   port-try-file-lock?
-   port-file-unlock
 
    primitive?
    primitive-closure?

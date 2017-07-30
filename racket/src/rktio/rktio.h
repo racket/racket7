@@ -295,9 +295,8 @@ rktio_tri_t rktio_poll_write_flushed(rktio_t *rktio, rktio_fd_t *rfd);
    (because the sent data doesn't persist beyond closing the pipe). */
 
 RKTIO_EXTERN_ERR(RKTIO_LOCK_ERROR)
-rktio_tri_t rktio_file_lock_try(rktio_t *rktio, rktio_fd_t *rfd, int excl);
-RKTIO_EXTERN_ERR(RKTIO_LOCK_ERROR)
-rktio_ok_t rktio_file_unlock(rktio_t *rktio, rktio_fd_t *rfd);
+rktio_tri_t rktio_file_lock_try(rktio_t *rktio, rktio_fd_t *rfd, rktio_bool_t excl);
+RKTIO_EXTERN rktio_ok_t rktio_file_unlock(rktio_t *rktio, rktio_fd_t *rfd);
 /* Advisory file locks, where `excl` attempts to claim an exclusive
    lock. Whether these work in various situations depend on many OS
    details, where the differences involve promoting from non-exlcusive

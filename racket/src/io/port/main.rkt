@@ -18,6 +18,7 @@
          (only-in "host-port.rkt"
                   terminal-port?)
          "file-identity.rkt"
+         "file-lock.rkt"
          "bytes-port.rkt"
          "string-port.rkt"
          "custom-input-port.rkt"
@@ -133,6 +134,8 @@
          file-stream-buffer-mode
 
          port-file-identity
+         port-try-file-lock?
+         port-file-unlock
 
          file-position
          file-position*
