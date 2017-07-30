@@ -87,7 +87,8 @@
   (define read-ready-sema (make-semaphore))
   (define write-ready-sema (and limit (make-semaphore 1)))
   (define more-read-ready-sema #f) ; for lookahead peeks
-  (define read-ready-evt (semaphore-peek-evt read-ready-sema))
+  (define read-ready-evt (wrap-evt (semaphore-peek-evt read-ready-sema)
+                                   (lambda (v) 0)))
   (define write-ready-evt (and limit (semaphore-peek-evt write-ready-sema)))
   (define progress-sema #f)
 
@@ -148,9 +149,7 @@
          [(input-empty?)
           (if output-closed?
               eof
-              (wrap-evt read-ready-evt
-                        ;; 0 result means "ask again"
-                        (lambda (v) 0)))]
+              read-ready-evt)]
          [else
           (check-output-unblocking)
           (begin0

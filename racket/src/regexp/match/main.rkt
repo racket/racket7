@@ -301,7 +301,7 @@
             ;; Flush bytes before match:
             (lazy-bytes-advance! lb-in ms-pos #t)
             ;; Consume bytes that correspond to match:
-            (copy-port-bytes port-in #f (- me-pos ms-pos)))]
+            (copy-port-bytes port-in #f me-pos))]
          [(eq? end-pos 'eof)
           ;; copy all remaining bytes from input to output
           (copy-port-bytes port-in out #f)]

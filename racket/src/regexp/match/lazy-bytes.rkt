@@ -70,7 +70,7 @@
       (define bstr (lazy-bytes-bstr s))
       (define out (lazy-bytes-out s))
       (when out
-        ;; Discard bytes out `out`
+        ;; Discard bytes to `out`
         (define prefix-len (lazy-bytes-prefix-len s))
         (write-bytes bstr
                      out

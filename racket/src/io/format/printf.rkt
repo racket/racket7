@@ -77,7 +77,8 @@
                                  (loop i i args)))
          (write-string fmt o start-i i)
          (let ([i (add1 i)])
-           (case (string-ref fmt i)
+           (define c (string-ref fmt i))
+           (case c
              [(#\~)
               (write-string "~" o)
               (next i args)]
@@ -127,27 +128,27 @@
               (next i (cdr args))]
              [else
               (cond
-               [(char-whitespace? (string-ref fmt i))
-                ;; Skip whitespace, but no more than one newline:
+               [(char-whitespace? c)
+                ;; Skip whitespace, but no more than one newline/return:
                 (let ws-loop ([i i] [saw-newline? #f])
                   (cond
                    [(= i len) (loop i i args)]
                    [else
                     (define c (string-ref fmt i))
                     (case c
-                      [(#\n)
+                      [(#\newline)
                        (if saw-newline?
                            (loop i i args)
                            (ws-loop (add1 i) #t))]
-                      [(#\r)
+                      [(#\return)
                        (if saw-newline?
                            (loop i i args)
                            (ws-loop (if (and ((add1 i) . < . len)
-                                             (char=? #\n (string-ref fmt (add1 i))))
+                                             (char=? #\newline (string-ref fmt (add1 i))))
                                         (+ i 2)
                                         (add1 i))
                                     #t))]
-                      [else (if (char-whitespace? (string-ref fmt i))
+                      [else (if (char-whitespace? c)
                                 (ws-loop (add1 i) saw-newline?)
                                 (loop i i args))])]))])]))]
         [else

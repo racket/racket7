@@ -76,11 +76,11 @@
        (wrap-evt n
                  (lambda (n)
                    (when (exact-positive-integer? n)
-                     (bytes-copy! dest-bstr dest-start user-bstr 0 len))
+                     (bytes-copy! dest-bstr dest-start user-bstr 0 n))
                    n))]
       [else
        (when (exact-positive-integer? n)
-         (bytes-copy! dest-bstr dest-start user-bstr 0 len))
+         (bytes-copy! dest-bstr dest-start user-bstr 0 n))
        n]))
 
   ;; in atomic mode

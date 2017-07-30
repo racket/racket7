@@ -84,7 +84,7 @@
   #:property prop:custom-write (lambda (v o mode)
                                  (fprintf o "<~a>" (animal-name v))))
 
-(test "1\n0!\"hi\"" (format "1~%~  \n  ~o~c~s" 0 #\! "hi"))
+(test "1\n\rx0!\"hi\"" (format "1~%~  \n  \rx~ ~o~c~s" 0 #\! "hi"))
 
 (test "*(1 2 3 apple\t\u0001 end <spot> file 1\"2\"3 #hash((a . 1) (b . 2)))*"
       (format "*~a*" `(1 2 3 "apple\t\001" end ,(animal 'spot 155) ,(string->path "file") #"1\"2\"3" #hash((b . 2) (a . 1)))))
