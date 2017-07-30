@@ -16,7 +16,7 @@
                [(input-port? p) (->core-input-port p)]
                [else (->core-output-port p)]))
   (start-atomic)
-  (check-not-closed who cp p)
+  (check-not-closed who cp)
   (define fd (let ([pd (core-port-data cp)])
                ((file-stream-ref pd) pd)))
   (path-or-fd-identity who #:fd fd #:port p))

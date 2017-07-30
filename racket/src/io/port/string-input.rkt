@@ -3,11 +3,13 @@
          "../host/thread.rkt"
          "parameter.rkt"
          "read-and-peek.rkt"
+         "port.rkt"
          "input-port.rkt"
          (submod "bytes-input.rkt" internal)
          "../string/utf-8-decode.rkt"
          "count.rkt"
-         "flush-output.rkt")
+         "flush-output.rkt"
+         "check.rkt")
 
 (provide read-char
          read-string
@@ -164,6 +166,7 @@
   (define b
     (let loop ()
       (start-atomic)
+      (check-not-closed who in)
       (define b (read-byte))
       (cond
         [(evt? b)

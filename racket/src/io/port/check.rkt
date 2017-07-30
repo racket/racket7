@@ -11,7 +11,7 @@
 ;; Atomic mode is required on entry because an operation
 ;; that is prefixed when a port-closed check normally needs
 ;; to happen atomically with respect to the check.
-(define (check-not-closed who cp orig-p)
+(define (check-not-closed who cp)
   (when (closed-state-closed? (core-port-closed cp))
     (end-atomic)
     (define input? (core-input-port? cp))
@@ -22,5 +22,4 @@
                            (if input?
                                "input port"
                                "output port")
-                           orig-p)))
-
+                           cp)))

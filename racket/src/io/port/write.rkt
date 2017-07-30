@@ -3,7 +3,8 @@
          "../host/thread.rkt"
          "port.rkt"
          "output-port.rkt"
-         "count.rkt")
+         "count.rkt"
+         "check.rkt")
 
 (provide write-some-bytes)
 
@@ -14,12 +15,8 @@
                           #:enable-break? [enable-break? #f])
   (let try-again ([out out])
     (start-atomic)
+    (check-not-closed who out)
     (cond
-      [(closed-state-closed? (core-port-closed out))
-       (end-atomic)
-       (raise-arguments-error who
-                              "output port is closed"
-                              "output port" out)]
       [(= start end)
        (end-atomic)
        0]

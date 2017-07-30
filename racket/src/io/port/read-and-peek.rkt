@@ -3,7 +3,8 @@
          "../host/thread.rkt"
          "port.rkt"
          "input-port.rkt"
-         "count.rkt")
+         "count.rkt"
+         "check.rkt")
 
 (provide read-some-bytes!
          peek-some-bytes!
@@ -45,10 +46,7 @@
        (end-atomic)
        0]
       [(closed-state-closed? (core-port-closed in))
-       (end-atomic)
-       (raise-arguments-error who
-                              "input port is closed"
-                              "input port" orig-in)]
+       (check-not-closed who in)]
       ;; previously detected EOF?
       [(core-input-port-pending-eof? in)
        (unless keep-eof?
@@ -125,10 +123,7 @@
        (end-atomic)
        0]
       [(closed-state-closed? (core-port-closed in))
-       (end-atomic)
-       (raise-arguments-error who
-                              "input port is closed"
-                              "input port" orig-in)]
+       (check-not-closed who in)]
       ;; previously detected EOF? (never skip past it)
       [(core-input-port-pending-eof? in)
        (end-atomic)
@@ -173,26 +168,30 @@
                (internal-error (format "weird peek-bytes result ~s" v))]))]
          [else
           (end-atomic)
-          (loop peek-in)])])))
+          (loop (->core-input-port peek-in))])])))
 
 
 ;; Use a `read-byte` shortcut
-(define (do-read-byte read-byte in)
+(define (do-read-byte who read-byte in)
   (let loop ()
     (start-atomic)
-    (define b (read-byte))
     (cond
-      [(eof-object? b)
-       (end-atomic)
-       b]
-      [(evt? b)
-       (end-atomic)
-       (sync b)
-       (loop)]
+      [(closed-state-closed? (core-port-closed in))
+       (check-not-closed who in)]
       [else
-       (port-count-byte! in b)
-       (end-atomic)
-       b])))
+       (define b (read-byte))
+       (cond
+         [(eof-object? b)
+          (end-atomic)
+          b]
+         [(evt? b)
+          (end-atomic)
+          (sync b)
+          (loop)]
+         [else
+          (port-count-byte! in b)
+          (end-atomic)
+          b])])))
 
 ;; Use the general path; may return a procedure for a special
 (define (read-byte-via-bytes in #:special-ok? [special-ok? #t])
@@ -206,9 +205,12 @@
       v))
 
 ;; Use a `peek-byte` shortcut
-(define (do-peek-byte peek-byte in)
+(define (do-peek-byte who peek-byte in orig-in)
   (let loop ()
-    (define b (atomically (peek-byte)))
+    (start-atomic)
+    (check-not-closed who in)
+    (define b (peek-byte))
+    (end-atomic)
     (cond
       [(evt? b)
        (sync b)

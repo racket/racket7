@@ -34,7 +34,7 @@
        (cond
          [(and (procedure? file-position) (procedure-arity-includes? file-position 1))
           (atomically
-           (check-not-closed who cp p)
+           (check-not-closed who cp)
            (file-position pos))]
          [else
           (raise-arguments-error who
@@ -51,7 +51,7 @@
              [(output-port? orig-p) (->core-output-port orig-p)]
              [else (raise-argument-error who "port?" orig-p)])])
     (start-atomic)
-    (check-not-closed who p orig-p)
+    (check-not-closed who p)
     (define file-position (core-port-file-position p))
     (cond
       [(or (input-port? file-position)

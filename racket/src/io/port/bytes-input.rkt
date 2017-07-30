@@ -30,33 +30,30 @@
 ;; Read `(- end start)` bytes, stopping early only if an EOF is found
 (define (do-read-bytes! who in bstr start end)
   (define amt (- end start))
+  (define v (read-some-bytes! who in bstr start end))
   (cond
-    [(zero? amt) 0]
+    [(not (exact-integer? v)) v]
+    [(= v amt) v]
     [else
-     (define v (read-some-bytes! who in bstr start end))
-     (cond
-       [(not (exact-integer? v)) v]
-       [(= v amt) v]
-       [else
-        (let loop ([got v])
-          (define v (read-some-bytes! who in bstr got amt #:keep-eof? #t #:special-ok? #f))
+     (let loop ([got v])
+       (define v (read-some-bytes! who in bstr got amt #:keep-eof? #t #:special-ok? #f))
+       (cond
+         [(eof-object? v)
+          got]
+         [else
+          (define new-got (+ got v))
           (cond
-            [(eof-object? v)
-             got]
-            [else
-             (define new-got (+ got v))
-             (cond
-               [(= new-got amt) amt]
-               [else (loop new-got)])]))])]))
+            [(= new-got amt) amt]
+            [else (loop new-got)])]))]))
 
 ;; ----------------------------------------
 
-(define/who (read-byte [in (current-input-port)])
-  (check who input-port? in)
-  (let ([in (->core-input-port in)])
+(define/who (read-byte [orig-in (current-input-port)])
+  (check who input-port? orig-in)
+  (let ([in (->core-input-port orig-in)])
     (define read-byte (core-input-port-read-byte in))
     (cond
-      [read-byte (do-read-byte read-byte in)]
+      [read-byte (do-read-byte who read-byte in)]
       [else (read-byte-via-bytes in #:special-ok? #f)])))
 
 (define/who (read-bytes amt [in (current-input-port)])
@@ -129,14 +126,15 @@
              [else (loop new-got)])]))])
       v))
 
-(define/who (peek-byte [in (current-input-port)] [skip-k 0])
-  (check who input-port? in)
+(define/who (peek-byte [orig-in (current-input-port)] [skip-k 0])
+  (check who input-port? orig-in)
   (check who exact-nonnegative-integer? skip-k)
-  (define peek-byte (and (zero? skip-k)
-                         (core-input-port-peek-byte in)))
-  (cond
-   [peek-byte (do-peek-byte peek-byte in)]
-   [else (peek-byte-via-bytes in skip-k #:special-ok? #f)]))
+  (let ([in (->core-input-port orig-in)])
+    (define peek-byte (and (zero? skip-k)
+                           (core-input-port-peek-byte in)))
+    (cond
+      [peek-byte (do-peek-byte who peek-byte in orig-in)]
+      [else (peek-byte-via-bytes in skip-k #:special-ok? #f)])))
 
 (define/who (peek-bytes amt skip-k [in (current-input-port)])
   (check who exact-nonnegative-integer? amt)

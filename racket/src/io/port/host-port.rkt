@@ -12,7 +12,8 @@
          "file-truncate.rkt"
          "buffer-mode.rkt"
          "close.rkt"
-         "count.rkt")
+         "count.rkt"
+         "check.rkt")
 
 (provide open-input-host
          open-output-host
@@ -50,6 +51,7 @@
        (define n (rktio_read_in rktio host-fd dest-bstr start end))
        (cond
          [(rktio-error? n)
+          (end-atomic)
           (raise-filesystem-error #f n "error reading from stream port")]
          [(eqv? n RKTIO_READ_EOF) eof]
          [(eqv? n 0) (wrap-evt (fd-evt host-fd RKTIO_POLL_READ (core-port-closed port))
@@ -194,10 +196,7 @@
                          ;; flushing can leave atomic mode, so make sure the
                          ;; port is still open before continuing
                          (unless buffer
-                           (end-atomic)
-                           (raise-arguments-error 'file-position
-                                                  "output port is closed"
-                                                  "output port" port))]
+                           (check-not-closed 'file-position port))]
                         [(pos)
                          (+ pos (- buffer-end buffer-start))]))
      #:buffer-mode (case-lambda

@@ -64,6 +64,7 @@
                           RKTIO_OPEN_MUST_EXIST)]
       [(update) RKTIO_OPEN_CAN_EXIST]
       [(must-update) RKTIO_OPEN_MUST_EXIST]
+      [(append) RKTIO_OPEN_APPEND]
       [else 0]))
   (define (mode? v)
     (or (eq? mode1 v) (eq? mode2 v)))
