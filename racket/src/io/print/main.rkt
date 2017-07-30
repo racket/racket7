@@ -3,6 +3,7 @@
          "../port/output-port.rkt"
          "../port/string-output.rkt"
          "../port/bytes-output.rkt"
+         "../port/bytes-port.rkt"
          "../port/parameter.rkt"
          "custom-write.rkt"
          "write-with-max.rkt"
@@ -35,27 +36,82 @@
 
          (all-from-out "parameter.rkt"))
 
-(define/who (display v [o (current-output-port)] [max-length #f])
+(module+ internal
+  (provide do-display
+           do-write
+           do-print
+           do-global-print
+
+           install-do-global-print!))
+
+(define/who (display v [o (current-output-port)])
   (check who output-port? o)
-  (check who max-length? #:contract max-length-contract max-length)
+  (let ([co (->core-output-port o)])
+    (define display-handler (core-output-port-display-handler co))
+    (if display-handler
+        (display-handler v o)
+        (do-display who v co))
+    (void)))
+
+(define (do-display who v o [max-length #f])
   (define config (make-print-config))
   (dots (p who v DISPLAY-MODE o (sub3 max-length) (detect-graph v DISPLAY-MODE config) config) o)
   (void))
 
-(define/who (write v [o (current-output-port)] [max-length #f])
+(define/who (write v [o (current-output-port)])
   (check who output-port? o)
-  (check who max-length? #:contract max-length-contract max-length)
+  (let ([co (->core-output-port o)])
+    (define write-handler (core-output-port-write-handler co))
+    (if write-handler
+        (write-handler v o)
+        (do-write who v co))
+    (void)))
+
+(define (do-write who v o [max-length #f])
   (define config (make-print-config))
   (dots (p who v WRITE-MODE o (sub3 max-length) (detect-graph v WRITE-MODE config) config) o)
   (void))
 
-(define/who (print v [o (current-output-port)] [quote-depth PRINT-MODE/UNQUOTED] [max-length #f])
+(define/who (print v [o (current-output-port)] [quote-depth PRINT-MODE/UNQUOTED])
   (check who output-port? o)
   (check who print-mode? #:contract "(or/c 0 1)" quote-depth)
-  (check who max-length? #:contract max-length-contract max-length)
+  (let ([co (->core-output-port o)])
+    (define print-handler (core-output-port-print-handler co))
+    (if print-handler
+        (print-handler v o quote-depth)
+        (do-global-print who v co quote-depth))
+    (void)))
+
+(define (do-print who v o [quote-depth PRINT-MODE/UNQUOTED] [max-length #f])
   (define config (make-print-config))
   (dots (p who v quote-depth o (sub3 max-length) (detect-graph v quote-depth config) config) o)
   (void))
+
+(define do-global-print void)
+
+(define (install-do-global-print! param default-value)
+  (set! do-global-print
+        (lambda (who v o [quote-depth PRINT-MODE/UNQUOTED] [max-length #f])
+          (define global-print (param))
+          (cond
+            [(eq? global-print default-value)
+             (do-print who v o quote-depth max-length)]
+            [(not max-length)
+             (global-print v o quote-depth)]
+            [else
+             ;; There's currently no way to communicate `max-length`
+             ;; to the `global-print` function, but we should only get
+             ;; here when `o` is a string port for errors, so write to
+             ;; a fresh string port and truncate as needed.
+             (define o2 (open-output-bytes))
+             (global-print v o2 quote-depth)
+             (define bstr (get-output-bytes o2))
+             (if ((bytes-length bstr) . <= . max-length)
+                 (write-bytes bstr o)
+                 (begin
+                   (write-bytes (subbytes bstr 0 (sub3 max-length)) o)
+                   (write-bytes #"..." o)))])
+          (void))))
 
 (define/who (newline [o (current-output-port)])
   (check who output-port? o)

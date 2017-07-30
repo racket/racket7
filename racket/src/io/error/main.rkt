@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../port/string-port.rkt"
-         "../print/main.rkt"
+         (submod "../print/main.rkt" internal)
          "../format/printf.rkt")
 
 (provide error
@@ -55,5 +55,5 @@
                             "exact-nonnegative-integer?"
                             len))
     (define o (open-output-string))
-    (print v o 0 len)
+    (do-global-print 'default-error-value->string-handler v o 0 len)
     (get-output-string o))))

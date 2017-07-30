@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../print/main.rkt"
+         (submod "../print/main.rkt" internal)
          "../port/string-output.rkt")
 
 (provide do-printf)
@@ -84,13 +85,13 @@
               (write-string "\n" o)
               (next i args)]
              [(#\a #\A)
-              (display (car args) o)
+              (do-display who (car args) o)
               (next i (cdr args))]
              [(#\s #\S)
-              (write (car args) o)
+              (do-write who (car args) o)
               (next i (cdr args))]
              [(#\v #\V)
-              (print (car args) o)
+              (do-global-print who (car args) o)
               (next i (cdr args))]
              [(#\e #\E)
               (write-string ((error-value->string-handler)
@@ -102,13 +103,15 @@
               (let ([i (add1 i)])
                 (case (string-ref fmt i)
                   [(#\a #\A)
-                   (display (car args) o (error-print-width))
+                   (do-display who (car args) o (error-print-width))
                    (next i (cdr args))]
                   [(#\s #\S)
-                   (write (car args) o (error-print-width))
+                   (do-write who (car args) o (error-print-width))
                    (next i (cdr args))]
                   [(#\v #\V)
-                   (print (car args) o 0 (error-print-width))
+                   ;; Intentionally using `do-print` instead of
+                   ;; `do-global-print`:
+                   (do-print who (car args) o 0 (error-print-width))
                    (next i (cdr args))]))]
              [(#\x #\X)
               (write-string (number->string (car args) 16) o)

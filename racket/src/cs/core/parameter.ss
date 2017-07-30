@@ -16,12 +16,16 @@
       (let dloop ([p (car args)] [v (cadr args)])
         (cond
          [(derived-parameter? p)
-          (dloop (derived-parameter-next p) ((derived-parameter-guard p) v))]
+          (dloop (derived-parameter-next p) ((parameter-guard p) v))]
          [(impersonator? p)
           (dloop (impersonator-val p) (impersonate-apply/parameter p #f (list v)))]
          [else
-          (loop (intmap-set ht p (make-thread-cell v #t))
-                (cddr args))]))]
+          (let* ([guard (parameter-guard p)]
+                 [v (if guard
+                        (guard v)
+                        v)])
+            (loop (intmap-set ht p (make-thread-cell v #t))
+                  (cddr args)))]))]
      [(parameter? (car args))
       (raise-arguments-error 'extend-parameterization
                              "missing value for parameter"
@@ -43,11 +47,11 @@
               #f))
 
 (define-record-type (parameter create-parameter authentic-parameter?)
-  (fields proc))
+  (fields proc guard))
 
 (define-record-type (derived-parameter create-derived-parameter derived-parameter?)
   (parent parameter)
-  (fields next guard))
+  (fields next))
 
 (define (parameter? v)
   (authentic-parameter? (strip-impersonator v)))
@@ -70,7 +74,8 @@
                          default-c)])
               (thread-cell-set! c (if guard
                                       (guard v)
-                                      v)))])))
+                                      v)))])
+          guard))
        self)]))
 
 (define/who (make-derived-parameter p guard wrap)
@@ -83,8 +88,8 @@
                               (case-lambda
                                [(v) (self (guard v))]
                                [() (wrap (self))]))
-                            p
-                            guard))
+                            guard
+                            p))
 
 (define/who (parameter-procedure=? a b)
   (check who parameter? a)

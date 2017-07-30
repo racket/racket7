@@ -3,7 +3,7 @@
          "input-port.rkt"
          "output-port.rkt"
          "flush-output.rkt"
-         "../print/main.rkt")
+         (submod "../print/main.rkt" internal))
 
 (provide port-read-handler
          port-write-handler
@@ -11,6 +11,7 @@
          port-print-handler
 
          global-port-print-handler
+         default-global-port-print-handler
 
          install-reader!)
 
@@ -25,9 +26,9 @@
      (check who input-port? i)
      (check who (lambda (p)
                   (and (procedure? p)
-                       (procedure-arity-includes? p 2)
-                       (procedure-arity-includes? p 3)))
-            #:contract "(and/c (procedure-arity-includes/c 2) (procedure-arity-includes/c 3))"
+                       (procedure-arity-includes? p 1)
+                       (procedure-arity-includes? p 2)))
+            #:contract "(and/c (procedure-arity-includes/c 1) (procedure-arity-includes/c 2))"
             h)
      (let ([i (->core-input-port i)])
        (set-core-input-port-read-handler! i h))]))
@@ -63,11 +64,13 @@
      (check who output-port? o)
      (check who (procedure-arity-includes/c 2) h)
      (let ([o (->core-output-port o)])
-       (set-core-output-port-write-handler! o h))]))
+       (set-core-output-port-write-handler! o (if (eq? h default-port-write-handler)
+                                                  #f
+                                                  h)))]))
 
 (define/who (default-port-write-handler v o)
   (check who output-port? o)
-  (write v o))
+  (do-write 'write v o))
 
 (define/who port-display-handler
   (case-lambda
@@ -80,11 +83,13 @@
      (check who output-port? o)
      (check who (procedure-arity-includes/c 2) h)
      (let ([o (->core-output-port o)])
-       (set-core-output-port-display-handler! o h))]))
+       (set-core-output-port-display-handler! o (if (eq? h default-port-display-handler)
+                                                    #f
+                                                    h)))]))
 
 (define/who (default-port-display-handler v o)
   (check who output-port? o)
-  (display v o))
+  (do-display 'display v o))
 
 (define/who port-print-handler
   (case-lambda
@@ -97,9 +102,13 @@
      (check who output-port? o)
      (check who (procedure-arity-includes/c 2) h)
      (let ([o (->core-output-port o)])
-       (set-core-output-port-print-handler! o (if (procedure-arity-includes? h 3)
-                                                  h
-                                                  (lambda (v o [w #f]) (h v o)))))]))
+       (set-core-output-port-print-handler! o (cond
+                                                [(eq? h default-port-print-handler)
+                                                 #f]
+                                                [(procedure-arity-includes? h 3)
+                                                 h]
+                                                [else
+                                                 (lambda (v o [w #f]) (h v o))])))]))
 
 (define/who (default-port-print-handler v o [quote-depth 0])
   (check who output-port? o)
@@ -108,13 +117,15 @@
          quote-depth)
   ((global-port-print-handler) v o quote-depth))
 
+(define/who (default-global-port-print-handler v o [quote-depth 0])
+  (check who output-port? o)
+  (check who (lambda (d) (or (eq? d 0) (eq? d 1)))
+         #:contract "(or/c 0 1)"
+         quote-depth)
+  (do-print 'print v o quote-depth))
+
 (define/who global-port-print-handler
-  (make-parameter (lambda (v o [quote-depth 0])
-                    (check who output-port? o)
-                    (check who (lambda (d) (or (eq? d 0) (eq? d 1)))
-                           #:contract "(or/c 0 1)"
-                           quote-depth)
-                    (print v o quote-depth))
+  (make-parameter default-global-port-print-handler
                   (lambda (p)
                     (check who
                            (procedure-arity-includes/c 2)
@@ -125,3 +136,6 @@
                     (if (procedure-arity-includes? p 3)
                         p
                         (lambda (v o [quote-depth 0]) (p v o))))))
+
+(void (install-do-global-print! global-port-print-handler
+                                default-global-port-print-handler))
