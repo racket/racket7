@@ -21,7 +21,6 @@
     (unless (equal? e v)
       (error 'failed "~s: ~e" 'rhs v))))
 
-
 (test #t (file-exists? "demo.rkt"))
 (test #f (file-exists? "compiled"))
 (test #f (file-exists? "compiled/demo-file"))

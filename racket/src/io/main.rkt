@@ -10,7 +10,8 @@
          "error/main.rkt"
          "logger/main.rkt"
          "file/main.rkt"
-         "security/main.rkt")
+         "security/main.rkt"
+         "envvar/main.rkt")
 
 (provide (all-from-out "port/main.rkt")
          (all-from-out "path/main.rkt")
@@ -22,6 +23,7 @@
          (all-from-out "error/main.rkt")
          (all-from-out "logger/main.rkt")
          (all-from-out "file/main.rkt")
-         (all-from-out "security/main.rkt"))
+         (all-from-out "security/main.rkt")
+         (all-from-out "envvar/main.rkt"))
 
 (module main racket/base)

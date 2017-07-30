@@ -59,22 +59,6 @@
 
 (define (shell-execute . args) (error "shell-execute"))
 
-(define (make-environment-variables . args)
-  #f)
-(define (environment-variables-ref e k)
-  (let ([v (getenv (bytes->string/utf-8 k))])
-    (and v (string->bytes/utf-8 v))))
-(define current-environment-variables
-  (make-parameter #f))
-(define (environment-variables-set! e k v)
-  (error "environment-variables-set! not ready"))
-(define (environment-variables-copy e)
-  'copy)
-(define (environment-variables-names e)
-  'names)
-(define (environment-variables? e)
-  #f)
-
 (define (reparameterize . args) (void))
 
 (define executable-yield-handler
@@ -327,14 +311,6 @@
    subprocess-wait
    current-subprocess-custodian-mode
    shell-execute
-
-   make-environment-variables
-   environment-variables-ref
-   current-environment-variables
-   environment-variables-set!
-   environment-variables-copy
-   environment-variables-names
-   environment-variables?
 
    reparameterize
    read-accept-bar-quote
