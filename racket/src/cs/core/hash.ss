@@ -2,7 +2,7 @@
 ;; tables in a `mutable-hash` record:
 (define-record mutable-hash (ht           ; Chez Scheme hashtable
                              keys         ; vector of keys for iteration
-                             keys-removed ; 'check or a weak, `eq?`-based mapping of `keys` values
+                             keys-removed ; 'check or a weak, `eqv?`-based mapping of `keys` values
                              lock))
 (define (create-mutable-hash ht kind) (make-mutable-hash ht #f #f (make-lock kind)))
 
@@ -98,7 +98,8 @@
        [(hash-equal? ht)
         ;; Track which keys in the vector are no longer mapped
         (unless (mutable-hash-keys-removed ht)
-          (set-mutable-hash-keys-removed! ht (make-weak-eq-hashtable)))
+          ;; We use an `eqv?` table to work with flonums
+          (set-mutable-hash-keys-removed! ht (make-weak-eqv-hashtable)))
         ;; Get specific key that is currently mapped for `k`
         ;; by getting the entry pair:
         (let ([e (hashtable-cell (mutable-hash-ht ht) k #f)])
@@ -440,7 +441,7 @@
           (unless (zero? i)
             (let* ([i (sub1 i)]
                    [key (vector-ref vec i)])
-              (vector-set! vec i (weak-cons key #f))
+              (vector-set! vec i (weak/fl-cons key #f))
               (loop i))))
         (set-mutable-hash-keys! ht vec)
         (set-mutable-hash-keys-removed! ht #f)
@@ -716,8 +717,8 @@
                                       (add1 (weak-equal-hash-count t)))
           (set-weak-equal-hash-keys-ht! t
                                         (intmap-set ht code
-                                                    (weak-cons k
-                                                               (intmap-ref ht code '()))))
+                                                    (weak/fl-cons k
+                                                                  (intmap-ref ht code '()))))
           (hashtable-set! (weak-equal-hash-vals-ht t) k v))]
        [(key-equal? (car keys) k)
         (hashtable-set! (weak-equal-hash-vals-ht t) (car keys) v)]
@@ -740,7 +741,7 @@
              [(key-equal? (car keys) k)
               (hashtable-delete! (weak-equal-hash-vals-ht t) (car keys))
               (if keep-bwp?
-                  (weak-cons #!bwp keys)
+                  (cons #!bwp keys)
                   (cdr keys))]
              [else
               (let ([new-keys (loop (cdr keys))])
@@ -748,7 +749,7 @@
                      (if (and (not keep-bwp?)
                               (bwp-object? (car keys)))
                          new-keys
-                         (weak-cons (car keys) new-keys))))]))])
+                         (weak/fl-cons (car keys) new-keys))))]))])
     (when new-keys
       (set-weak-equal-hash-keys-ht! t
                                     (if (null? new-keys)
@@ -910,7 +911,7 @@
                                    (cond
                                     [(null? l) l]
                                     [(bwp-object? (car l)) (loop (cdr l))]
-                                    [else (weak-cons (car l) (loop (cdr l)))]))])
+                                    [else (weak/fl-cons (car l) (loop (cdr l)))]))])
                           (loop (if (null? l)
                                     ht
                                     (hash-set ht key l))
@@ -919,6 +920,15 @@
       (set-weak-equal-hash-keys-ht! t new-ht)
       (set-weak-equal-hash-count! t count)
       (set-weak-equal-hash-prune-at! t (max 128 (* 2 count))))))
+
+;; ----------------------------------------
+
+(define (weak/fl-cons key d)
+  ;; Special case for flonums, which are never retained in weak pairs,
+  ;; but we want to treat them like fixnums and other immediates:
+  (if (flonum? key)
+      (cons key d)
+      (weak-cons key d)))
 
 ;; ----------------------------------------
 

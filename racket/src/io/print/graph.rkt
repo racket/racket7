@@ -28,7 +28,7 @@
       [(or (not fuel) (zero? fuel)) #f]
       [(pair? v)
        (and (not print-graph?)
-            (quick-no-graph? (cdr v) (quick-no-graph? (car v) fuel)))]
+            (quick-no-graph? (cdr v) (quick-no-graph? (car v) (sub1 fuel))))]
       [(vector? v)
        (and (not print-graph?)
             (for/fold ([fuel (sub1 fuel)]) ([e (in-vector v)]
@@ -47,7 +47,7 @@
       [(mpair? v)
        (and (not print-graph?)
             (not (eq? mode PRINT-MODE/UNQUOTED))
-            (quick-no-graph? (mcdr v) (quick-no-graph? (mcar v) fuel)))]
+            (quick-no-graph? (mcdr v) (quick-no-graph? (mcar v) (sub1 fuel))))]
       [(custom-write? v)
        #f]
       [(and (struct? v)

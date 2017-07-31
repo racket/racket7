@@ -40,6 +40,7 @@
             c))
       (symbol-hash sym)))
 
+;; Mostly copied from Chez Scheme's "newhash.ss":
 (define number-hash
   (lambda (z)
     (cond
@@ -47,7 +48,8 @@
      [(flonum? z) (#3%$flhash z)]
      [(bignum? z) (modulo z (most-positive-fixnum))]
      [(ratnum? z) (number-hash (+ (* (numerator z) 5) (denominator z)))]
-     [else (logxor (lognot (number-hash (real-part z))) (number-hash (imag-part z)))])))
+     [else (logand (logxor (lognot (number-hash (real-part z))) (number-hash (imag-part z)))
+                   (most-positive-fixnum))])))
 
 (define (eqv-hash-code x)
   (cond
