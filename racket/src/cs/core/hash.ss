@@ -1,8 +1,8 @@
 ;; To support iteration and locking, we wrap Chez's mutable hash
 ;; tables in a `mutable-hash` record:
-(define-record mutable-hash (ht          ; Chez Scheme hashtable
-                             keys        ; vector of keys for iteration
-                             keys-mapped ; an `eq?` or `eq?`-based mapping `keys` values
+(define-record mutable-hash (ht           ; Chez Scheme hashtable
+                             keys         ; vector of keys for iteration
+                             keys-removed ; 'check or a weak, `eq?`-based mapping of `keys` values
                              lock))
 (define (create-mutable-hash ht kind) (make-mutable-hash ht #f #f (make-lock kind)))
 
@@ -78,7 +78,7 @@
     (when (and (mutable-hash-keys ht)
                (not (hashtable-contains? (mutable-hash-ht ht) k)))
       (set-mutable-hash-keys! ht #f)
-      (set-mutable-hash-keys-mapped! ht #f))
+      (set-mutable-hash-keys-removed! ht #f))
     (hashtable-set! (mutable-hash-ht ht) k v)
     (lock-release (mutable-hash-lock ht))]
    [(weak-equal-hash? ht) (weak-hash-set! ht k v)]
@@ -93,19 +93,19 @@
   (cond
    [(mutable-hash? ht)
     (lock-acquire (mutable-hash-lock ht))
-    (when (and (mutable-hash-keys ht)
-               (hash-equal? ht))
-      ;; Track which keys in the vector are no longer mapped
-      (unless (mutable-hash-keys-mapped ht)
-        (let ([mapped (make-eq-hashtable)])
-          (set-mutable-hash-keys-mapped! ht mapped)
-          (vector-for-each (lambda (k)
-                             (hashtable-set! mapped k #t))
-                           (mutable-hash-keys ht))))
-      ;; get specific key that is currently mapped for `k`
-      ;; by getting the entry pair:
-      (let ([e (hashtable-cell (mutable-hash-ht ht) k #f)])
-        (hashtable-delete! (mutable-hash-ht ht) (car e))))
+    (when (mutable-hash-keys ht)
+      (cond
+       [(hash-equal? ht)
+        ;; Track which keys in the vector are no longer mapped
+        (unless (mutable-hash-keys-removed ht)
+          (set-mutable-hash-keys-removed! ht (make-weak-eq-hashtable)))
+        ;; Get specific key that is currently mapped for `k`
+        ;; by getting the entry pair:
+        (let ([e (hashtable-cell (mutable-hash-ht ht) k #f)])
+          (hashtable-set! (mutable-hash-keys-removed ht) (car e) #t))]
+       [else
+        ; Record that we need to check the table:
+        (set-mutable-hash-keys-removed! ht 'check)]))
     (hashtable-delete! (mutable-hash-ht ht) k)
     (lock-release (mutable-hash-lock ht))]
    [(weak-equal-hash? ht) (weak-hash-remove! ht k)]
@@ -121,7 +121,7 @@
    [(mutable-hash? ht)
     (lock-acquire (mutable-hash-lock ht))
     (set-mutable-hash-keys! ht #f)
-    (set-mutable-hash-keys-mapped! ht #f)
+    (set-mutable-hash-keys-removed! ht #f)
     (hashtable-clear! (mutable-hash-ht ht))
     (lock-release (mutable-hash-lock ht))]
    [(weak-equal-hash? ht) (weak-hash-clear! ht)]
@@ -443,13 +443,7 @@
               (vector-set! vec i (weak-cons key #f))
               (loop i))))
         (set-mutable-hash-keys! ht vec)
-        (set-mutable-hash-keys-mapped! ht (if (hash-equal? ht)
-                                              ;; Build mapped-key tracking on demand:
-                                              #f
-                                              ;; In case it's a weak hash table,
-                                              ;; double-check the original table
-                                              ;; before reporting a position/key:
-                                              (mutable-hash-ht ht)))
+        (set-mutable-hash-keys-removed! ht #f)
         (lock-release (mutable-hash-lock ht))
         vec)])))
 
@@ -506,16 +500,20 @@
              [(bwp-object? key)
               ;; A hash table change or disappeared weak reference
               (loop i)]
-             [else
-              (if (or (not (mutable-hash-keys-mapped ht))
-                      (begin
-                        (lock-acquire (mutable-hash-lock ht))
-                        (let ([contains? (hashtable-contains? (mutable-hash-keys-mapped ht) key)])
-                          (lock-release (mutable-hash-lock ht))
-                          contains?)))
-                  i
-                  ;; Skip, due to a hash table change
-                  (loop i))]))])))))
+             [(mutable-hash-keys-removed ht)
+              => (lambda (keys-removed)
+                   (lock-acquire (mutable-hash-lock ht))
+                   (let ([removed?
+                          (if (eq? keys-removed 'check)
+                              (not (hashtable-contains? (mutable-hash-ht ht) key))
+                              (hashtable-contains? keys-removed key))])
+                     (lock-release (mutable-hash-lock ht))
+                     (if removed?
+                         ;; Skip, due to a hash table change
+                         (loop i)
+                         ;; Key is still mapped:
+                         i)))]
+             [else i]))])))))
 
 (define (do-hash-iterate-key+value who ht i
                                    intmap-iterate-key+value
@@ -543,15 +541,21 @@
                   none
                   (cond
                    [(not value?)
-                    ;; Impersonator support relies on not `equal?`-hashing
-                    ;; the candidate key at this point
+                    ;; We need to check whether the key is still
+                    ;; mapped by the hash table, but impersonator
+                    ;; support relies on not `equal?`-hashing the
+                    ;; candidate key at this point. The `keys-removed`
+                    ;; weak `eq?`-based table serves that purpose.
                     (cond
-                     [(mutable-hash-keys-mapped ht)
-                      => (lambda (keys-mapped)
+                     [(mutable-hash-keys-removed ht)
+                      => (lambda (keys-removed)
                            (lock-acquire (mutable-hash-lock ht))
-                           (let ([v (hashtable-ref keys-mapped key none)])
+                           (let ([removed?
+                                  (if (eq? keys-removed 'check)
+                                      (not (hashtable-contains? (mutable-hash-ht ht) key))
+                                      (hashtable-contains? keys-removed key))])
                              (lock-release (mutable-hash-lock ht))
-                             v))]
+                             (if removed? none #t)))]
                      [else #t])]
                    [else
                     (lock-acquire (mutable-hash-lock ht))
