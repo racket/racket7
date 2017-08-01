@@ -811,12 +811,10 @@
       (if (and pos span (or (path? src) (string? src)))
           (let ([pos (sub1 pos)]) ; Racket positions are 1-based; host Scheme positions are 0-based
             (make-annotation e
-                             (make-source-object (source->sfd src)
-                                                 (if (and line column)
-                                                     ;; Racket columns are 0-based; host-Scheme columns are 1-based
-                                                     (make-file-position-object pos line (add1 column))
-                                                     pos)
-                                                 (+ pos span))
+                             (if (and line column)
+                                 ;; Racket columns are 0-based; host-Scheme columns are 1-based
+                                 (make-source-object (source->sfd src) pos (+ pos span) line (add1 column))
+                                 (make-source-object (source->sfd src) pos (+ pos span)))
                              stripped-e))
           e)))
 

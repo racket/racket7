@@ -434,11 +434,13 @@
              [name (car p)]
              [loc (and (cdr p)
                        (call-with-values (lambda ()
-                                           (let ([src (cdr p)])
-                                             (if (file-position-object? (source-object-bfp src))
-                                                 (locate-source (source-object-sfd (cdr p))
-                                                                (source-object-bfp (cdr p)))
-                                                 (values (source-file-descriptor-path (source-object-sfd src))
+                                           (let* ([src (cdr p)]
+                                                  [path (source-file-descriptor-path (source-object-sfd src))])
+                                             (if (source-object-line src)
+                                                 (values path
+                                                         (source-object-line src)
+                                                         (source-object-column src))
+                                                 (values path
                                                          (source-object-bfp src)))))
                          (case-lambda
                           [() #f]
@@ -546,6 +548,15 @@
                   (lambda (v)
                     (check who (procedure-arity-includes/c 0) v)
                     v)))
+
+(define (set-no-locate-source!)
+  ;; Disable searching through the filesystem to convert a source +
+  ;; position to line and column information. Instead, Racket
+  ;; constructs source objects that preserve the line and column if
+  ;; available.
+  (current-locate-source-object-source
+   (lambda (src start? cache?)
+     (values))))
 
 (define (set-base-exception-handler!)
   (current-exception-state (create-exception-state))

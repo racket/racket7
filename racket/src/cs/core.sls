@@ -648,6 +648,7 @@
   (include "core/queue.ss")
   (include "core/future-scheduler.ss")
   
+  (set-no-locate-source!)
   (set-base-exception-handler!)
   (set-collect-handler!)
   (set-primitive-applicables!)

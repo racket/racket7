@@ -11,7 +11,7 @@
               (= c 0)))))
 
 (define (bytes-environment-variable-name? k)
-  (and (bytes? k)
+  (and (bytes-no-nuls? k)
        (rktio_is_ok_envvar_name rktio k)))
 
 (define (normalize-key k)
