@@ -31,10 +31,11 @@
 
   (module (|#%rktio-instance|)
     (meta define (convert-type t)
-          (syntax-case t (ref * rktio_bool_t)
+          (syntax-case t (ref *ref rktio_bool_t rktio_const_string_t)
             [(ref . _) #'uptr]
-            [(*ref ._) #'u8*]
+            [(*ref . _) #'u8*]
             [rktio_bool_t #'boolean]
+            [rktio_const_string_t #'u8*]
             [else t]))
 
     (define-ftype intptr_t iptr)
@@ -50,7 +51,10 @@
         [(_ id expr) (define id expr)]))
     
     (define-syntax (define-type stx)
-      (syntax-case stx ()
+      (syntax-case stx (rktio_const_string_t)
+        [(_ rktio_const_string_t old_type)
+         ;; skip
+         #'(begin)]
         [(_ type old-type)
          (with-syntax ([old-type (convert-type #'old-type)])
            #'(define-ftype type old-type))]))
@@ -61,14 +65,31 @@
          (with-syntax ([(old-type ...) (map convert-type #'(old-type ...))])
            #'(define-ftype type (struct [field old-type] ...)))]))
 
+    (define-syntax (let-wrappers stx)
+      ;; When an argument has type `rktio_const_string_t`, add an
+      ;; explicit NUL terminator byte
+      (syntax-case stx (rktio_const_string_t)
+        [(_ () body) #'body]
+        [(_ ([rktio_const_string_t arg-name] . args) body)
+         #'(let ([arg-name (add-nul-terminator arg-name)])
+             (let-wrappers args body))]
+        [(_ (_ . args) body)
+         #'(let-wrappers args body)]))
+    (define (add-nul-terminator bstr)
+      (bytes-append bstr '#vu8(0)))
+
     (meta define (convert-function stx)
           (syntax-case stx ()
-            [(_ ret-type name ([arg-type arg-name] ...))
+            [(_ ret-type name ([orig-arg-type arg-name] ...))
              (with-syntax ([ret-type (convert-type #'ret-type)]
-                           [(arg-type ...) (map convert-type #'(arg-type ...))])
-               #'(foreign-procedure (rktio-lookup 'name)
-                                    (arg-type ...)
-                                    ret-type))]))
+                           [(arg-type ...) (map convert-type #'(orig-arg-type ...))])
+               #'(let ([proc (foreign-procedure (rktio-lookup 'name)
+                                                (arg-type ...)
+                                                ret-type)])
+                   (lambda (arg-name ...)
+                     (let-wrappers
+                      ([orig-arg-type arg-name] ...)
+                      (proc arg-name ...)))))]))
 
     (define-syntax (define-function stx)
       (syntax-case stx ()

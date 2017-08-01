@@ -1195,7 +1195,7 @@ int rktio_process_allowed_flags(rktio_t *rktio)
 /*========================================================================*/
 
 rktio_process_result_t *rktio_process(rktio_t *rktio,
-                                      const char *command, int argc, char **argv,
+                                      const char *command, int argc, rktio_const_string_t *argv,
                                       rktio_fd_t *stdout_fd, rktio_fd_t *stdin_fd, rktio_fd_t *stderr_fd,
                                       const char *current_directory, rktio_envvars_t *envvars,
                                       int flags)
@@ -1460,7 +1460,7 @@ rktio_process_result_t *rktio_process(rktio_t *rktio,
 
       {
 	int err, i;
-        char **new_argv;
+        rktio_const_string_t *new_argv;
 
         /* add a NULL terminator */
         new_argv = malloc(sizeof(char *) * (argc + 1));
@@ -1472,7 +1472,7 @@ rktio_process_result_t *rktio_process(rktio_t *rktio,
         if (!env)
           env = rktio_get_environ_array();
         
-	err = MSC_IZE(execve)(command, new_argv, (char **)env);
+	err = MSC_IZE(execve)(command, (char **)new_argv, (char **)env);
         if (err)
           err = errno;
 

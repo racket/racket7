@@ -125,6 +125,11 @@ typedef unsigned short rktio_char16_t;
 /* A UTF-16 code unit. A `rktio_char16_t *` is meant to be the same as
    `wchar_t *` on Windows. */
 
+typedef const char *rktio_const_string_t;
+/* An argument that is a NUL-terminated string, as opposed to a buffer
+   where a length is provided separately and doesn't need to be
+   NUL-terminated. */
+
 /*************************************************/
 /* DLL paths                                     */
 
@@ -202,7 +207,7 @@ RKTIO_EXTERN_NOERR int rktio_fd_modes(rktio_t *rktio, rktio_fd_t *rfd);
    `rktio_system_fd` and those that are inferred. The
    `RKTIO_OPEN_INIT` flag is not recorded, however. */
 
-RKTIO_EXTERN rktio_fd_t *rktio_open(rktio_t *rktio, const char *src, int modes);
+RKTIO_EXTERN rktio_fd_t *rktio_open(rktio_t *rktio, rktio_const_string_t src, int modes);
 /* Can report `RKTIO_ERROR_DOES_NOT_EXIST` in place of a system error
    in read mode, and can report `RKTIO_ERROR_IS_A_DIRECTORY`,
    `RKTIO_ERROR_EXISTS`, or `RKTIO_ERROR_ACCESS_DENIED` in place of a
@@ -347,7 +352,7 @@ typedef struct rktio_addrinfo_lookup_t rktio_addrinfo_lookup_t;
 typedef struct rktio_addrinfo_t rktio_addrinfo_t;
 
 RKTIO_EXTERN rktio_addrinfo_lookup_t *rktio_start_addrinfo_lookup(rktio_t *rktio,
-                                                                  const char *hostname, int portno,
+                                                                  rktio_const_string_t hostname, int portno,
                                                                   int family, rktio_bool_t passive, rktio_bool_t tcp);
 /* The `family` argument should be one of the following: */
 #define RKTIO_FAMILY_ANY (-1)
@@ -473,7 +478,7 @@ enum {
 /*************************************************/
 /* Environment variables                         */
 
-RKTIO_EXTERN rktio_bool_t rktio_is_ok_envvar_name(rktio_t *rktio, const char *name);
+RKTIO_EXTERN rktio_bool_t rktio_is_ok_envvar_name(rktio_t *rktio, rktio_const_string_t name);
 /* Checks whether a string is valid as a new (e.g., no "="). */
 
 RKTIO_EXTERN rktio_bool_t rktio_are_envvar_names_case_insensitive(rktio_t *rktio);
@@ -481,12 +486,12 @@ RKTIO_EXTERN rktio_bool_t rktio_are_envvar_names_case_insensitive(rktio_t *rktio
    That doesn't mean that clients need to case-fold names, but clients
    may want to immitate the OS. */
 
-RKTIO_EXTERN char *rktio_getenv(rktio_t *rktio, const char *name);
+RKTIO_EXTERN char *rktio_getenv(rktio_t *rktio, rktio_const_string_t name);
 /* Gets an environment variable value, or reports
    `RKTIO_ERROR_NO_SUCH_ENVVAR` when returning NULL; the result must
    be freed. */
 
-RKTIO_EXTERN rktio_ok_t rktio_setenv(rktio_t *rktio, const char *name, const char *val);
+RKTIO_EXTERN rktio_ok_t rktio_setenv(rktio_t *rktio, rktio_const_string_t name, rktio_const_string_t val);
 /* Set an environment variable's value, where a NULL value for `val`
    unsets it. */
 
@@ -504,8 +509,8 @@ RKTIO_EXTERN rktio_envvars_t *rktio_envvars_copy(rktio_t *rktio, rktio_envvars_t
 RKTIO_EXTERN void rktio_envvars_free(rktio_t *rktio, rktio_envvars_t *envvars);
 /* Deallocates an environment-variables record: */
 
-RKTIO_EXTERN char *rktio_envvars_get(rktio_t *rktio, rktio_envvars_t *envvars, const char *name);
-RKTIO_EXTERN void rktio_envvars_set(rktio_t *rktio, rktio_envvars_t *envvars, const char *name, const char *value);
+RKTIO_EXTERN char *rktio_envvars_get(rktio_t *rktio, rktio_envvars_t *envvars, rktio_const_string_t name);
+RKTIO_EXTERN void rktio_envvars_set(rktio_t *rktio, rktio_envvars_t *envvars, rktio_const_string_t name, rktio_const_string_t value);
 /* Access/update environment-variables record by name. */
 
 RKTIO_EXTERN_NOERR intptr_t rktio_envvars_count(rktio_t *rktio, rktio_envvars_t *envvars);
@@ -526,9 +531,9 @@ typedef struct rktio_process_result_t {
 } rktio_process_result_t;
 
 RKTIO_EXTERN rktio_process_result_t *rktio_process(rktio_t *rktio,
-                                                   const char *command, int argc, char **argv,
+                                                   rktio_const_string_t command, int argc, rktio_const_string_t *argv,
                                                    rktio_fd_t *stdout_fd, rktio_fd_t *stdin_fd, rktio_fd_t *stderr_fd,
-                                                   const char *current_directory, rktio_envvars_t *envvars,
+                                                   rktio_const_string_t current_directory, rktio_envvars_t *envvars,
                                                    int flags);
 /* `flags` flags: */
 #define RKTIO_PROCESS_NEW_GROUP                 (1<<0)
@@ -585,7 +590,7 @@ RKTIO_EXTERN_NOERR int rktio_fs_change_properties(rktio_t *rktio);
 typedef struct rktio_fs_change_t rktio_fs_change_t;
 struct rktio_ltps_t; /* forward reference */
 
-RKTIO_EXTERN rktio_fs_change_t *rktio_fs_change(rktio_t *rktio, const char *path,
+RKTIO_EXTERN rktio_fs_change_t *rktio_fs_change(rktio_t *rktio, rktio_const_string_t path,
                                                 struct rktio_ltps_t *ltps);
 /* Creates a filesystem-change tracker that reports changes in `path`
    after creation of the tracker. The properties repotred by
@@ -720,33 +725,33 @@ RKTIO_EXTERN void rktio_sleep(rktio_t *rktio, float nsecs, rktio_poll_set_t *fds
 /*************************************************/
 /* Files, directories, and links                 */
 
-RKTIO_EXTERN rktio_bool_t rktio_file_exists(rktio_t *rktio, const char *filename);
-RKTIO_EXTERN rktio_bool_t rktio_directory_exists(rktio_t *rktio, const char *dirname);
-RKTIO_EXTERN rktio_bool_t rktio_link_exists(rktio_t *rktio, const char *filename);
-RKTIO_EXTERN rktio_bool_t rktio_is_regular_file(rktio_t *rktio, const char *filename);
+RKTIO_EXTERN rktio_bool_t rktio_file_exists(rktio_t *rktio, rktio_const_string_t filename);
+RKTIO_EXTERN rktio_bool_t rktio_directory_exists(rktio_t *rktio, rktio_const_string_t dirname);
+RKTIO_EXTERN rktio_bool_t rktio_link_exists(rktio_t *rktio, rktio_const_string_t filename);
+RKTIO_EXTERN rktio_bool_t rktio_is_regular_file(rktio_t *rktio, rktio_const_string_t filename);
 
-RKTIO_EXTERN rktio_ok_t rktio_delete_file(rktio_t *rktio, const char *fn, rktio_bool_t enable_write_on_fail);
+RKTIO_EXTERN rktio_ok_t rktio_delete_file(rktio_t *rktio, rktio_const_string_t fn, rktio_bool_t enable_write_on_fail);
 
-RKTIO_EXTERN rktio_ok_t rktio_rename_file(rktio_t *rktio, const char *dest, const char *src, rktio_bool_t exists_ok);
+RKTIO_EXTERN rktio_ok_t rktio_rename_file(rktio_t *rktio, rktio_const_string_t dest, rktio_const_string_t src, rktio_bool_t exists_ok);
 /* Can report `RKTIO_ERROR_EXISTS`. */
 
 RKTIO_EXTERN char *rktio_get_current_directory(rktio_t *rktio);
-RKTIO_EXTERN rktio_ok_t rktio_set_current_directory(rktio_t *rktio, const char *path);
+RKTIO_EXTERN rktio_ok_t rktio_set_current_directory(rktio_t *rktio, rktio_const_string_t path);
 
-RKTIO_EXTERN rktio_ok_t rktio_make_directory(rktio_t *rktio, const char *filename);
+RKTIO_EXTERN rktio_ok_t rktio_make_directory(rktio_t *rktio, rktio_const_string_t filename);
 /* Can report `RKTIO_ERROR_EXISTS`. */
 
-RKTIO_EXTERN rktio_ok_t rktio_delete_directory(rktio_t *rktio, const char *filename, const char *current_directory,
+RKTIO_EXTERN rktio_ok_t rktio_delete_directory(rktio_t *rktio, rktio_const_string_t filename, rktio_const_string_t current_directory,
                                                rktio_bool_t enable_write_on_fail);
 /* The `current_directory` argument is used on Windows to avoid being
    in `filename` (instead) as a directory while trying to delete it.
    The `enable_write_on_fail` argument also applied to Windows. */
 
-RKTIO_EXTERN char *rktio_readlink(rktio_t *rktio, const char *fullfilename);
+RKTIO_EXTERN char *rktio_readlink(rktio_t *rktio, rktio_const_string_t fullfilename);
 /* Argument should not have a trailing separator. Can report
    `RKTIO_ERROR_NOT_A_LINK`. */
 
-RKTIO_EXTERN rktio_ok_t rktio_make_link(rktio_t *rktio, const char *src, const char *dest,
+RKTIO_EXTERN rktio_ok_t rktio_make_link(rktio_t *rktio, rktio_const_string_t src, rktio_const_string_t dest,
                                         rktio_bool_t dest_is_directory);
 /* The `dest_is_directory` argument is used only
    on Windows. Can report `RKTIO_ERROR_EXISTS`. */
@@ -756,10 +761,10 @@ RKTIO_EXTERN rktio_ok_t rktio_make_link(rktio_t *rktio, const char *src, const c
 
 typedef intptr_t rktio_timestamp_t;
 
-RKTIO_EXTERN rktio_filesize_t *rktio_file_size(rktio_t *rktio, const char *filename);
+RKTIO_EXTERN rktio_filesize_t *rktio_file_size(rktio_t *rktio, rktio_const_string_t filename);
 
-RKTIO_EXTERN rktio_timestamp_t *rktio_get_file_modify_seconds(rktio_t *rktio, const char *file);
-RKTIO_EXTERN rktio_ok_t rktio_set_file_modify_seconds(rktio_t *rktio, const char *file, rktio_timestamp_t secs);
+RKTIO_EXTERN rktio_timestamp_t *rktio_get_file_modify_seconds(rktio_t *rktio, rktio_const_string_t file);
+RKTIO_EXTERN rktio_ok_t rktio_set_file_modify_seconds(rktio_t *rktio, rktio_const_string_t file, rktio_timestamp_t secs);
 
 typedef struct rktio_identity_t {
   uintptr_t a, b, c;
@@ -767,7 +772,7 @@ typedef struct rktio_identity_t {
 } rktio_identity_t;
 
 RKTIO_EXTERN rktio_identity_t *rktio_fd_identity(rktio_t *rktio, rktio_fd_t *fd);
-RKTIO_EXTERN rktio_identity_t *rktio_path_identity(rktio_t *rktio, const char *path, rktio_bool_t follow_links);
+RKTIO_EXTERN rktio_identity_t *rktio_path_identity(rktio_t *rktio, rktio_const_string_t path, rktio_bool_t follow_links);
 
 /*************************************************/
 /* Permissions                                   */
@@ -780,11 +785,11 @@ RKTIO_EXTERN rktio_identity_t *rktio_path_identity(rktio_t *rktio, const char *p
 #define RKTIO_PERMISSION_ERROR (-1)
 
 RKTIO_EXTERN_ERR(RKTIO_PERMISSION_ERROR)
-int rktio_get_file_or_directory_permissions(rktio_t *rktio, const char *filename, rktio_bool_t all_bits);
+int rktio_get_file_or_directory_permissions(rktio_t *rktio, rktio_const_string_t filename, rktio_bool_t all_bits);
 /* Result is `RKTIO_PERMISSION_ERROR` for error, otherwise a combination of
    bits. If not `all_bits`, then use constants above. */
 
-RKTIO_EXTERN rktio_ok_t rktio_set_file_or_directory_permissions(rktio_t *rktio, const char *filename, int new_bits);
+RKTIO_EXTERN rktio_ok_t rktio_set_file_or_directory_permissions(rktio_t *rktio, rktio_const_string_t filename, int new_bits);
 /* The `new_bits` format corresponds to `all_bits` for getting permissions.
    Can report `RKTIO_ERROR_BAD_PERMISSION` for bits that make no sense. */
 
@@ -793,7 +798,7 @@ RKTIO_EXTERN rktio_ok_t rktio_set_file_or_directory_permissions(rktio_t *rktio, 
 
 typedef struct rktio_directory_list_t rktio_directory_list_t;
 
-RKTIO_EXTERN rktio_directory_list_t *rktio_directory_list_start(rktio_t *rktio, const char *dirname);
+RKTIO_EXTERN rktio_directory_list_t *rktio_directory_list_start(rktio_t *rktio, rktio_const_string_t dirname);
 /* On Windows, the given `dirname` must be normalized and not have
    `.` or `..`: */
 
@@ -815,7 +820,7 @@ RKTIO_EXTERN char **rktio_filesystem_roots(rktio_t *rktio);
 
 typedef struct rktio_file_copy_t rktio_file_copy_t;
 
-RKTIO_EXTERN_STEP rktio_file_copy_t *rktio_copy_file_start(rktio_t *rktio, const char *dest, const char *src,
+RKTIO_EXTERN_STEP rktio_file_copy_t *rktio_copy_file_start(rktio_t *rktio, rktio_const_string_t dest, rktio_const_string_t src,
                                                            rktio_bool_t exists_ok);
 /* Starts a file copy. Depending on the OS, this step may perform the
    whole copy, or it may just get started. Can report
@@ -869,7 +874,7 @@ enum {
   RKTIO_PATH_INIT_FILE
 };
 
-RKTIO_EXTERN char *rktio_expand_user_tilde(rktio_t *rktio, const char *filename);
+RKTIO_EXTERN char *rktio_expand_user_tilde(rktio_t *rktio, rktio_const_string_t filename);
 /* Path must start with tilde, otherwise `RKTIO_ERROR_NO_TILDE`.
    Other possible errors are `RKTIO_ERROR_ILL_FORMED_USER` and
    `RKTIO_ERROR_UNKNOWN_USER`. */
@@ -959,10 +964,10 @@ enum {
 };
 
 RKTIO_EXTERN rktio_ok_t rktio_shell_execute(rktio_t *rktio,
-                                            const char *verb,
-                                            const char *target,
-                                            const char *arg,
-                                            const char *dir,
+                                            rktio_const_string_t verb,
+                                            rktio_const_string_t target,
+                                            rktio_const_string_t arg,
+                                            rktio_const_string_t dir,
                                             int show_mode);
 /* Supported only on Windows to run `ShellExecute`. The `dir` argument
    needs to have normalized path separators. */
@@ -970,7 +975,7 @@ RKTIO_EXTERN rktio_ok_t rktio_shell_execute(rktio_t *rktio,
 /*************************************************/
 /* Path conversion                               */
 
-RKTIO_EXTERN rktio_char16_t *rktio_path_to_wide_path(rktio_t *rktio, const char *p);
+RKTIO_EXTERN rktio_char16_t *rktio_path_to_wide_path(rktio_t *rktio, rktio_const_string_t p);
 RKTIO_EXTERN_NOERR char *rktio_wide_path_to_path(rktio_t *rktio, const rktio_char16_t *wp);
 /* Convert to/from the OS's native path representation. These
    functions are useful only on Windows. The `rktio_path_to_wide_path`
@@ -979,8 +984,8 @@ RKTIO_EXTERN_NOERR char *rktio_wide_path_to_path(rktio_t *rktio, const rktio_cha
 /*************************************************/
 /* Logging                                       */
 
-RKTIO_EXTERN rktio_ok_t rktio_syslog(rktio_t *rktio, int level, const char *name, const char *msg,
-                                     const char *exec_name);
+RKTIO_EXTERN rktio_ok_t rktio_syslog(rktio_t *rktio, int level, rktio_const_string_t name, rktio_const_string_t msg,
+                                     rktio_const_string_t exec_name);
 /* Adds a message to the system log. The `name` argument can be NULL,
    and it is added to the front of the message with a separating ": "
    if non_NULL. The `exec_name` is the current executable name; it's
@@ -1007,7 +1012,7 @@ RKTIO_EXTERN_NOERR int rktio_convert_properties(rktio_t *rktio);
 
 typedef struct rktio_converter_t rktio_converter_t;
 
-RKTIO_EXTERN rktio_converter_t *rktio_converter_open(rktio_t *rktio, const char *to_enc, const char *from_enc);
+RKTIO_EXTERN rktio_converter_t *rktio_converter_open(rktio_t *rktio, rktio_const_string_t to_enc, rktio_const_string_t from_enc);
 /* Creates an encoding converter. */
 
 RKTIO_EXTERN void rktio_converter_close(rktio_t *rktio, rktio_converter_t *cvt);
@@ -1047,7 +1052,7 @@ RKTIO_EXTERN rktio_convert_result_t *rktio_convert_in(rktio_t *rktio,
 
 RKTIO_EXTERN_NOERR char *rktio_locale_recase(rktio_t *rktio,
                                              rktio_bool_t to_up,
-                                             char *in);
+                                             rktio_const_string_t in);
 /* Upcases (of `to_up`) or downcases (if `!to_up`) the content of `in`
    using the current locale's encoding and case conversion. */
 
@@ -1061,7 +1066,7 @@ RKTIO_EXTERN_NOERR rktio_char16_t *rktio_recase_utf16(rktio_t *rktio,
    Takes and optionally returns a length (`olen` can be NULL), but the
    UTF-16 sequence is expected to have no nuls. */
 
-RKTIO_EXTERN_NOERR int rktio_locale_strcoll(rktio_t *rktio, char *s1, char *s2);
+RKTIO_EXTERN_NOERR int rktio_locale_strcoll(rktio_t *rktio, rktio_const_string_t s1, rktio_const_string_t s2);
 /* Returns -1 if `s1` is less than `s2` by the current locale's
    comparison, positive is `s1` is greater, and 0 if the strings
    are equal. */
@@ -1080,7 +1085,7 @@ RKTIO_EXTERN_NOERR int rktio_strcoll_utf16(rktio_t *rktio,
 RKTIO_EXTERN char *rktio_locale_encoding(rktio_t *rktio);
 /* Returns the name of the current locale's encoding. */
 
-RKTIO_EXTERN void rktio_set_locale(rktio_t *rktio, char *name);
+RKTIO_EXTERN void rktio_set_locale(rktio_t *rktio, rktio_const_string_t name);
 /* Sets the current locale, which affects string comparisons and
    conversions. It can also affect the C library's character-property
    predicates and number printing/parsing. The empty string

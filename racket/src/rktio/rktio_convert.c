@@ -205,7 +205,7 @@ int rktio_convert_properties(rktio_t *rktio)
 /* Current locale                                             */
 /*============================================================*/
 
-void rktio_set_locale(rktio_t *rktio, char *name)
+void rktio_set_locale(rktio_t *rktio, const char *name)
 {
   /* We only need CTYPE and COLLATE; two calls seem to be much
      faster than one call with ALL */
@@ -492,7 +492,7 @@ rktio_convert_result_t *rktio_convert_in(rktio_t *rktio,
 
 char *rktio_locale_recase(rktio_t *rktio,
                           rktio_bool_t to_up,
-                          char *in)
+                          const char *in)
 {
   char *out;
 
@@ -650,7 +650,7 @@ rktio_char16_t *rktio_recase_utf16(rktio_t *rktio, rktio_bool_t to_up, rktio_cha
 /* Native string comparison                                   */
 /*============================================================*/
 
-int rktio_locale_strcoll(rktio_t *rktio, char *s1, char *s2)
+int rktio_locale_strcoll(rktio_t *rktio, const char *s1, const char *s2)
 {
   return strcoll(s1, s2);
 }
