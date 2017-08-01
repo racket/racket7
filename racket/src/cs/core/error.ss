@@ -556,7 +556,15 @@
   ;; available.
   (current-locate-source-object-source
    (lambda (src start? cache?)
-     (values))))
+     (cond
+      [(source-object-line src)
+       ;; Line and column are available without searching
+       (values (source-file-descriptor-path (source-object-sfd src))
+               (source-object-column src)
+               (source-object-column src))]
+      [else
+       ;; Don't search
+       (values)]))))
 
 (define (set-base-exception-handler!)
   (current-exception-state (create-exception-state))
