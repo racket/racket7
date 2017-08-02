@@ -86,8 +86,11 @@
        (set-core-port-position! p pos)))))
 
 ;; in atomic mode
-;; When line counting is enabled, increment line, column, etc. counts,
-;; which involves UTF-8 decoding
+;; When line counting is enabled, increment line, column, etc. counts
+;; --- which involves UTF-8 decoding. To make column and position counting
+;; interact well with decoding errors, the column and position are advanced
+;; while accumulating decoding information, and then the column and position
+;; can go backwards when the decoding completes.
 (define (port-count! in amt bstr start)
   (increment-offset! in amt)
   (when (core-port-count? in)
@@ -99,6 +102,28 @@
                [position (core-port-position in)]
                [state (core-port-state in)]
                [cr-state (core-port-cr-state in)]) ; #t => previous char was #\return
+      (define (finish-utf-8 i abort-mode)
+        (define-values (used-bytes got-chars new-state)
+          (utf-8-decode! bstr (- i span) i
+                         #f 0 #f
+                         #:error-char #\?
+                         #:abort-mode abort-mode
+                         #:state state))
+        (define delta-chars (- got-chars
+                               ;; Correct for earlier increment of position
+                               ;; and column based on not-yet-decoded bytes,
+                               ;; leaving counts for still-not-decoded bytes
+                               ;; in place:
+                               (+ span
+                                  (- (if (utf-8-state? state)
+                                         (utf-8-state-pending-amt state)
+                                         0)
+                                     (if (utf-8-state? new-state)
+                                         (utf-8-state-pending-amt new-state)
+                                         0)))))
+        (define (keep-aborts s) (if (eq? s 'complete) #f s))
+        (loop i 0 line (and column (+ column delta-chars)) (and position (+ position delta-chars))
+              (keep-aborts new-state) #f))
       (cond
        [(= i end)
         (cond
@@ -108,25 +133,13 @@
           (set-core-port-position! in position)
           (set-core-port-state! in state)
           (set-core-port-cr-state! in cr-state)]
-         [else
+         [else          
           ;; span doesn't include CR, LF, or tab
-          (define-values (used-bytes got-chars new-state)
-            (utf-8-decode! bstr (- end span) end
-                           #f 0 #f
-                           #:error-char #\?
-                           #:abort-mode 'state
-                           #:state state))
-          (define (keep-aborts s) (if (eq? s 'complete) #f s))
-          (loop end 0 line (and column (+ column got-chars)) (and position (+ position got-chars)) (keep-aborts new-state) #f)])]
+          (finish-utf-8 end 'state)])]
        [else
         (define b (bytes-ref bstr i))
         (define (end-utf-8) ; => next byte is ASCII, so we can terminate a UTF-8 sequence
-          (define-values (used-bytes got-chars new-state)
-            (utf-8-decode! bstr (- i span) i
-                           #f 0 #f
-                           #:error-char #\?
-                           #:state state))
-          (loop i 0 line (and column (+ column got-chars)) (and position (+ position got-chars)) #f #f))
+          (finish-utf-8 i 'error))
         (cond
          [(eq? b (char->integer #\newline))
           (cond
@@ -147,9 +160,11 @@
          [(b . < . 128)
           (if (and (zero? span) (not state))
               (loop (add1 i) 0 line (and column (add1 column)) (and position (add1 position)) #f #f)
-              (loop (add1 i) (add1 span) line column position state #f))]
+              (loop (add1 i) (add1 span) line (and column (add1 column)) (and position (add1 position)) state #f))]
          [else
-          (loop (add1 i) (add1 span) line column position state #f)])]))))
+          ;; This is where we tentatively increment the column and position, to be
+          ;; reverted later if decoding collapses multiple bytes:
+          (loop (add1 i) (add1 span) line (and column (add1 column)) (and position (add1 position)) state #f)])]))))
 
 ;; in atomic mode
 ;; If `b` is not a byte, it is treated like

@@ -20,6 +20,8 @@
         [v rhs])
     (unless (equal? e v)
       (error 'failed "~s: ~e" 'rhs v))))
+  
+(test #f (bytes-utf-8-ref #"\364\220\200\200" 0))
 
 (test #t (file-exists? "demo.rkt"))
 (test #f (file-exists? "compiled"))
@@ -500,7 +502,7 @@
   (test `(#"\355\240\200X" 4 complete)
         (call-with-values (lambda () (bytes-convert c (reorder #"\0\330X\0"))) list))
   ;; unpaired low surrogate
-  (test `(#"" 0 aborts)
+  (test `(#"\355\260\201" 2 complete)
         (call-with-values (lambda () (bytes-convert c (reorder #"\1\334"))) list))
   (test `(#"\355\260\201X" 4 complete)
         (call-with-values (lambda () (bytes-convert c (reorder #"\1\334X\0"))) list))
@@ -699,5 +701,5 @@
 (test #\l (bytes-utf-8-ref (string->bytes/utf-8 "apλple") 3 #\? 1))
 (test #f (bytes-utf-8-ref (string->bytes/utf-8 "apλple") 6))
 
-(test 4 (bytes-utf-8-index #"apple" 3))
-(test 5 (bytes-utf-8-index (string->bytes/utf-8 "apλple") 3))
+(test 3 (bytes-utf-8-index #"apple" 3))
+(test 4 (bytes-utf-8-index (string->bytes/utf-8 "apλple") 3))

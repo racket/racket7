@@ -4,8 +4,8 @@
 
          utf-8-encode-dispatch)
 
-;; Returns (values chars-used bytes-written (or/c 'complete 'aborts))
-;; where 'aborts is the result when the result byte string doesn't
+;; Returns (values chars-used bytes-written (or/c 'complete 'continues))
+;; where 'continues is the result when the result byte string doesn't
 ;; have enough room
 (define (utf-8-encode! in-str in-start in-end
                        out-bstr out-start out-end)  ; `out-bstr` and `out-end` can be #f no bytes result needed
@@ -27,26 +27,26 @@
                                            out-bstr out-start out-end j
                                            continue)
   (cond
-    [(b . < . #x7F)
+    [(b . <= . #x7F)
      (cond
        [(and out-end (= j out-end))
-        (values (- i in-start) (- j out-start) 'aborts)]
+        (values (- i in-start) (- j out-start) 'continues)]
        [else
         (when out-bstr (bytes-set! out-bstr j b))
         (continue (add1 j))])]
-    [(b . < . #x7FF)
+    [(b . <= . #x7FF)
      (cond
        [(and out-end ((add1 j) . >= . out-end))
-        (values (- i in-start) (- j out-start) 'aborts)]
+        (values (- i in-start) (- j out-start) 'continues)]
        [else
         (when out-bstr
           (bytes-set! out-bstr j (bitwise-ior #b11000000 (arithmetic-shift b -6)))
           (bytes-set! out-bstr (add1 j) (bitwise-ior #b10000000 (bitwise-and b #b111111))))
         (continue (+ j 2))])]
-    [(b . < . #xFFFF)
+    [(b . <= . #xFFFF)
      (cond
        [(and out-end ((+ j 2) . >= . out-end))
-        (values (- i in-start) (- j out-start) 'aborts)]
+        (values (- i in-start) (- j out-start) 'continues)]
        [else
         (when out-bstr
           (bytes-set! out-bstr j (bitwise-ior #b11100000 (arithmetic-shift b -12)))
@@ -57,7 +57,7 @@
     [else
      (cond
        [(and out-end ((+ j 3) . >= . out-end))
-        (values (- i in-start) (- j out-start) 'aborts)]
+        (values (- i in-start) (- j out-start) 'continues)]
        [else
         (when out-bstr
           (bytes-set! out-bstr j (bitwise-ior #b11110000 (arithmetic-shift b -18)))

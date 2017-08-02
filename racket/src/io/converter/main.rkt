@@ -43,6 +43,9 @@
     [(and (string=? from-str "platform-UTF-16") (string=? to-str "platform-UTF-8"))
      (bytes-converter (utf-8-converter platform-utf-16 platform-utf-8)
                       #f)]
+    ;; "UTF-8-ish" is also known as "WTF-8".
+    ;; "UTF-16-ish" is similar to UTF-16, but allows unpaired surrogates --- which is still
+    ;; different from UCS-2, since paired surrogates are decoded as in UTF-16.
     [(and (string=? from-str "UTF-8-ish") (string=? to-str "UTF-16-ish"))
      (bytes-converter (utf-8-converter 'utf-8-ish 'utf-16-ish)
                       #f)]

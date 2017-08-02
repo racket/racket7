@@ -67,7 +67,7 @@
      (define-values (used-bytes got-chars state)
        (utf-8-decode! bstr 0 v
                       str start (+ start amt)
-                      #:error-char #\?
+                      #:error-char #\uFFFD
                       #:abort-mode 'state))
      ;; Includes consumed bytes:
      (define actually-used-bytes (- used-bytes
@@ -111,7 +111,7 @@
                    (values 0 0 state)
                    (utf-8-decode! bstr 0 (if (integer? v) v 0)
                                   str start (+ start amt)
-                                  #:error-char #\?
+                                  #:error-char #\uFFFD
                                   #:state (and (utf-8-state? state) state)
                                   #:abort-mode (if (integer? v)
                                                    'state
@@ -228,7 +228,7 @@
         (cond
           [(eq? state 'error)
            ;; This happens if the byte is a UTF-8 continuation byte
-           #\?]
+           #\uFFFD]
           [else
            ;; Need to peek ahead
            (let loop ([skip-k 0] [state state])
@@ -237,13 +237,13 @@
                [(or (eof-object? v)
                     (procedure? v))
                 ;; Already-consumed byte is an error byte
-                #\?]
+                #\uFFFD]
                [else
                 (define-values (used-bytes got-chars new-state)
                   (utf-8-decode! bstr 0 1
                                  str 0 1
                                  #:state state
-                                 #:error-char #\?
+                                 #:error-char #\uFFFD
                                  #:abort-mode 'state))
                 (cond
                   [(= got-chars 1)

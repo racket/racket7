@@ -151,9 +151,13 @@
                (define v next-accum)
                (define next-i (add1 i))
                (cond
+                 [(v . < . 128)
+                  ;; A shorter byte sequence would work
+                  (encoding-failure)]
                  [(or from-utf-8-ish?
-                      (not (and (v . >= . #xD800)
-                                (v . <= . #xDFFF))))
+                      (not (or (v . > . #x10FFFF)
+                               (and (v . >= . #xD800)
+                                    (v . <= . #xDFFF)))))
                   ;; A character to write, either in UTF-16 output for UTF-8
                   (cond
                     [to-utf-16?
@@ -193,7 +197,7 @@
                           (loop (add1 from-i) (add1 to-j))]))])]
                  [else
                   ;; Not a valid character --- an unpaired surrogate
-                  ;; in normal UTF-8 decoding (not UTF-8-ish)
+                  ;; or too-large value in normal UTF-8 decoding (not UTF-8-ish)
                   (encoding-failure)])]
               [(and (= 2 remaining)
                     (next-accum . <= . #b11111))
@@ -203,6 +207,10 @@
                     (next-accum . <= . #b1111))
                ;; A shorter byte sequence would work
                (encoding-failure)]
+              ;; We could check here for 3 remaining and `next-accum`
+              ;; >= #b100010000, which implies a result above #x10FFFF.
+              ;; The old decoder doesn't do that, and we'll stick to the
+              ;; old behavior for now
               [else
                ;; An encoding continues...
                (loop (add1 i) j base-i next-accum (sub1 remaining))])])]
@@ -224,7 +232,12 @@
          [(= #b11110000 (bitwise-and b #b11111000))
           ;; Start a four-byte encoding
           (define accum (bitwise-and b #b111))
-          (loop (add1 i) j i  accum 3)]
+          (cond
+            [(accum . > . 4)
+             ;; Will be greater than #x10FFFF
+             (encoding-failure)]
+            [else
+             (loop (add1 i) j i  accum 3)])]
          [else
           ;; Five- or six-byte encodings don't produce valid
           ;; characters
@@ -239,7 +252,7 @@
       (values (- i in-start)
               (- j out-start)
               status))
-    
+
     (cond
       [(= i in-end)
        (done 'complete)]
@@ -290,5 +303,5 @@
                [from-utf-16-ish?
                 ;; continue anyway
                 (continue v (+ i 2))]
-               [else (done 'error)])])]
+               [else (done 'aborts)])])]
          [else (continue v (+ i 2))])])))

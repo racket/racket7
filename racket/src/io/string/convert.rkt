@@ -47,7 +47,9 @@
                    #:error-char err-char
                    #:abort-mode 'error))
   (cond
-    [(eq? state 'error) (raise-encoding-error who bstr start end)]
+    [(eq? state 'error) (if just-length?
+                            #f
+                            (raise-encoding-error who bstr start end))]
     [just-length? got-chars]
     [else
      ;; Create result string:
@@ -92,10 +94,10 @@
                        #:abort-mode 'error)))
   (cond
     [(eq? state 'error)
-     (raise-encoding-error who bstr start end)]
+     #f]
     [(eq? state 'continues)
      (cond
-       [(and get-index? err-char ((+ start initial-used-bytes) . < . end))
+       [(and get-index? ((+ start initial-used-bytes) . < . end))
         initial-used-bytes]
        [else
         ;; Get one more byte
@@ -105,8 +107,8 @@
                          str 0 1
                          #:error-char err-char))
         (cond
-          [(eq? state 'error)
-           (raise-encoding-error who bstr start end)]
+          [(eq? new-state 'error)
+           #f]
           [(or (eq? state 'continues)
                (or (and (eq? state 'complete)
                         (= got-chars 1))))
@@ -181,7 +183,7 @@
   (check 'char-utf-8-length char? c)
   (define n (char->integer c))
   (cond
-    [(n . < . #x7F) 1]
-    [(n . < . #x7FF) 2]
-    [(n . < . #xFFFF) 3]
+    [(n . <= . #x7F) 1]
+    [(n . <= . #x7FF) 2]
+    [(n . <= . #xFFFF) 3]
     [else 4]))

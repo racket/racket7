@@ -141,7 +141,8 @@
             (cond
               [(= 1 remaining)
                (cond
-                 [(and (next-accum . < . #x10FFFF)
+                 [(and (next-accum . > . 127)
+                       (next-accum . <= . #x10FFFF)
                        (not (and (next-accum . >= . #xD800)
                                  (next-accum . <= . #xDFFF))))
                   (when out-str (string-set! out-str j (integer->char next-accum)))
