@@ -84,30 +84,36 @@
   (check-range who start end (bytes-length bstr) bstr)
   ;; First, decode `skip` items:
   (define-values (initial-used-bytes initial-got-chars state)
-    (utf-8-decode! bstr start end
-                   #f 0 skip 
-                   #:error-char err-char
-                   #:abort-mode 'error))
+    (if (zero? skip)
+        (values 0 0 (if (= start end) 'complete 'continues))
+        (utf-8-decode! bstr start end
+                       #f 0 skip 
+                       #:error-char err-char
+                       #:abort-mode 'error)))
   (cond
     [(eq? state 'error)
      (raise-encoding-error who bstr start end)]
     [(eq? state 'continues)
-     ;; Get one more byte
-     (define str (and (not get-index?) (make-string 1)))
-     (define-values (used-bytes got-chars new-state)
-       (utf-8-decode! bstr (+ start initial-used-bytes) end
-                      str 0 1
-                      #:error-char err-char))
      (cond
-       [(eq? state 'error)
-        (raise-encoding-error who bstr start end)]
-       [(or (eq? state 'continues)
-            (or (and (eq? state 'complete)
-                     (= got-chars 1))))
-        (if get-index?
-            (+ initial-used-bytes used-bytes)
-            (string-ref str 0))]
-       [else #f])]
+       [(and get-index? err-char ((+ start initial-used-bytes) . < . end))
+        initial-used-bytes]
+       [else
+        ;; Get one more byte
+        (define str (and (not get-index?) (make-string 1)))
+        (define-values (used-bytes got-chars new-state)
+          (utf-8-decode! bstr (+ start initial-used-bytes) end
+                         str 0 1
+                         #:error-char err-char))
+        (cond
+          [(eq? state 'error)
+           (raise-encoding-error who bstr start end)]
+          [(or (eq? state 'continues)
+               (or (and (eq? state 'complete)
+                        (= got-chars 1))))
+           (if get-index?
+               initial-used-bytes
+               (string-ref str 0))]
+          [else #f])])]
     [else #f]))
 
 (define/who (bytes-utf-8-ref bstr [skip 0] [err-char #f] [start 0] [end (and (bytes? bstr)

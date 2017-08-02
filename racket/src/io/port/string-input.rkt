@@ -27,7 +27,8 @@
 ;; Read up to `(- end start)` characters by UTF-8 decoding of bytes,
 ;; producing at least one character unless `zero-ok?`, but it's
 ;; possible that fewer that `(- end start)` characters are read. The
-;; result is either EOF or the number of read characters
+;; result is two values: either EOF or the number of read characters,
+;; and the number of converted bytes
 (define (read-some-chars! who orig-in str start end
                           #:zero-ok? [zero-ok? #f]
                           #:extra-bytes-amt [extra-bytes-amt 0]
@@ -60,71 +61,102 @@
   ;; the first `consumed-v` of those are read (as opposed to just
   ;; peeked) from the port. [Currently, `consumed-v` is either 0 or `v`.]
   (cond
-    [(not (exact-integer? v)) v]
-    [(zero? v) 0]
+    [(not (exact-integer? v)) (values v 0)]
+    [(zero? v) (values 0 0)]
     [else
      (define-values (used-bytes got-chars state)
        (utf-8-decode! bstr 0 v
                       str start (+ start amt)
                       #:error-char #\?
                       #:abort-mode 'state))
+     ;; Includes consumed bytes:
+     (define actually-used-bytes (- used-bytes
+                                    (if (utf-8-state? state)
+                                        (utf-8-state-pending-amt state)
+                                        0)))
      ;; The `state` result can't be 'continues, because N
      ;; bytes will never produce > N chars; it can't be
      ;; 'error, because we provide an error character; it
      ;; can't be 'aborts, because we request an abort state
      (cond
-       [(zero? got-chars)
+       [(or (zero? got-chars)
+            (actually-used-bytes . < . consumed-v))
         ;; The state must be an abort state.
         ;; We need to try harder to get a character; even if
-        ;; `zero-ok?` is true, we may need to explicitly ask
-        ;; for more bytes to make any progress
-        (let loop ([skip-k (+ skip-k (- v consumed-v))] [state state])
+        ;; `zero-ok?` is true, we may need to try asking
+        ;; for more bytes to make any progress for a polling
+        ;; request
+        (let loop ([skip-k (+ skip-k (- v consumed-v))]
+                   [total-used-bytes used-bytes]
+                   [state state]
+                   [total-chars got-chars]
+                   [start (+ start got-chars)]
+                   [amt (- amt got-chars)])
           (define v (peek-some-bytes! who orig-in bstr 0 1 skip-k
                                       #:zero-ok? zero-ok?
                                       #:special-ok? special-ok?))
           (cond
-            [(eq? v 0) 0]
+            [(and (eq? v 0)
+                  (zero? consumed-v))
+             ;; `zero-ok?` must be true, and we haven't
+             ;; consumed any bytes, so give up
+             (values 0 0)]
             [else
              ;; Try to convert with the additional byte; v can be
              ;; `eof` or a special-value procedure, in which case the
              ;; abort mode should be 'error to trigger decodings as
              ;; errors
              (define-values (used-bytes got-chars new-state)
-               (utf-8-decode! bstr 0 (if (integer? v) v 0)
-                              str start (+ start amt)
-                              #:error-char #\?
-                              #:state state
-                              #:abort-mode (if (integer? v)
-                                               'state
-                                               'error)))
+               (if (eq? v 0)
+                   (values 0 0 state)
+                   (utf-8-decode! bstr 0 (if (integer? v) v 0)
+                                  str start (+ start amt)
+                                  #:error-char #\?
+                                  #:state (and (utf-8-state? state) state)
+                                  #:abort-mode (if (integer? v)
+                                                   'state
+                                                   'error))))
              (cond
                [(zero? got-chars)
                 ;; Try even harder; we shouldn't get here if v was `eof`
                 ;; or a special-value procedure
-                (loop (+ skip-k v) new-state)]
+                (loop (+ skip-k v) (+ total-used-bytes used-bytes) new-state total-chars start amt)]
                [else
-                ;; At this point `used-bytes` can be negative, since
+                ;; At this point `used-bytes` by itself can be negative, since
                 ;; conversion may not have used all the bytes that
-                ;; we peeked to try to complete a decoding
-                (unless just-peek?
-                  (define actually-used-bytes (+ skip-k used-bytes))
-                  (unless (zero? actually-used-bytes)
-                    (define finish-bstr (if (actually-used-bytes . <= . (bytes-length bstr))
-                                            bstr
-                                            (make-bytes actually-used-bytes)))
-                    (do-read-bytes! who orig-in finish-bstr 0 actually-used-bytes)))
-                got-chars])]))]
+                ;; we peeked to try to complete a decoding. Those unused bytes
+                ;; count again `skip-k`. Meanwhile, an error state might
+                ;; report that some other bytes aren't actually consumed, yet.
+                ;; Does not include consumed bytes:
+                (define actually-used-bytes (- (+ total-used-bytes
+                                                  used-bytes)
+                                               (if (utf-8-state? new-state)
+                                                   (utf-8-state-pending-amt new-state)
+                                                   0)))
+                (cond
+                  [(actually-used-bytes . < . consumed-v)
+                   ;; We need to inspect at least one more byte to
+                   ;; consume the bytes that we have already consumed from
+                   ;; the point
+                   (loop (+ skip-k v) (+ total-used-bytes used-bytes) new-state
+                         (+ total-chars got-chars) (+ start got-chars) (- amt got-chars))]
+                  [else
+                   (unless just-peek?
+                     (let ([discard-bytes (- actually-used-bytes consumed-v)])
+                       (define finish-bstr (if (discard-bytes . <= . (bytes-length bstr))
+                                               bstr
+                                               (make-bytes discard-bytes)))
+                       (do-read-bytes! who orig-in finish-bstr 0 discard-bytes)))
+                   (values (+ total-chars got-chars)
+                           actually-used-bytes)])])]))]
        [else
-        ;; Conversion succeeded for at least 1 character. If there's
-        ;; an need to get more, let another call to `read-some-chars!`
-        ;; deal with it.
-        (define actually-used-bytes (- used-bytes (if (utf-8-state? state)
-                                                      (utf-8-state-pending-amt state)
-                                                      0)))
+        ;; Conversion succeeded for at least 1 character. Since we used
+        ;; all bytes that we consumed from the port, if more characters are needed,
+        ;; another call to `read-some-chars!` can deal with it.
         (unless (or just-peek?
                     (= actually-used-bytes consumed-v))
           (do-read-bytes! who orig-in bstr 0 (- actually-used-bytes consumed-v)))
-        got-chars])]))
+        (values got-chars actually-used-bytes)])]))
 
 ;; ----------------------------------------
 
@@ -134,21 +166,21 @@
                          #:skip [skip-k 0]
                          #:special-ok? [special-ok? #f])
   (define amt (- end start))
-  (define v (read-some-chars! who in str start end
-                              #:just-peek? just-peek?
-                              #:skip skip-k
-                              #:special-ok? special-ok?))
+  (define-values (v used-bytes) (read-some-chars! who in str start end
+                                                  #:just-peek? just-peek?
+                                                  #:skip skip-k
+                                                  #:special-ok? special-ok?))
   (cond
    [(not (exact-integer? v)) v]
    [(= v amt) v]
    [else
-    (let loop ([got v])
-      (define v (read-some-chars! who in str (+ start got) end
-                                  #:keep-eof? #t
-                                  #:just-peek? just-peek?
-                                  #:skip (if just-peek?
-                                             (+ skip-k got)
-                                             0)))
+    (let loop ([got v] [total-used-bytes used-bytes])
+      (define-values (v used-bytes) (read-some-chars! who in str (+ start got) end
+                                                      #:keep-eof? #t
+                                                      #:just-peek? just-peek?
+                                                      #:skip (if just-peek?
+                                                                 (+ skip-k total-used-bytes)
+                                                                 0)))
       (cond
         [(eof-object? v)
          got]
@@ -156,7 +188,7 @@
          (define new-got (+ got v))
          (cond
            [(= new-got amt) amt]
-           [else (loop new-got)])]))]))
+           [else (loop new-got (+ total-used-bytes used-bytes))])]))]))
 
 ;; ----------------------------------------
 
@@ -235,7 +267,7 @@
     (cond
       [(not read-byte)
        (define str (make-string 1))
-       (define v (read-some-chars! who in str 0 1 #:special-ok? special-ok?))
+       (define-values (v used-bytes) (read-some-chars! who in str 0 1 #:special-ok? special-ok?))
        (if (eq? v 1)
            (string-ref str 0)
            v)]

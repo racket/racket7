@@ -126,7 +126,7 @@
                            #f 0 #f
                            #:error-char #\?
                            #:state state))
-          (loop end 0 line (and column (+ column got-chars)) (and position (+ position got-chars)) #f #f))
+          (loop i 0 line (and column (+ column got-chars)) (and position (+ position got-chars)) #f #f))
         (cond
          [(eq? b (char->integer #\newline))
           (cond
@@ -142,7 +142,7 @@
               (end-utf-8))]
          [(eq? b (char->integer #\tab))
           (if (and (zero? span) (not state))
-              (loop (add1 i) 0 line (and column (+ column (bitwise-and (+ column 7) -8))) (and position (add1 position)) #f #f)
+              (loop (add1 i) 0 line (and column (+ (bitwise-and column -8) 8)) (and position (add1 position)) #f #f)
               (end-utf-8))]
          [(b . < . 128)
           (if (and (zero? span) (not state))
@@ -160,6 +160,7 @@
     (cond
      [(or (core-port-state in)
           (core-port-cr-state in)
+          (and (fixnum? b) (b . > . 127))
           (eq? b (char->integer #\return))
           (eq? b (char->integer #\newline))
           (eq? b (char->integer #\tab)))
