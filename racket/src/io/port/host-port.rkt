@@ -157,7 +157,8 @@
          [(= src-start src-end)
           ;; Flush request
           (and (flush-buffer) 0)]
-         [(and (not nonbuffer/nonblock?)
+         [(and (not (eq? buffer-mode 'none))
+               (not nonbuffer/nonblock?)
                (< buffer-end (bytes-length buffer)))
           (define amt (min (- src-end src-start) (- (bytes-length buffer) buffer-end)))
           (bytes-copy! buffer buffer-end src-bstr src-start (+ src-start amt))

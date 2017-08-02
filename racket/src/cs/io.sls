@@ -268,4 +268,8 @@
   (include "compiled/io.scm")
   
   ;; Initialize:
-  (|#%app| 1/current-directory (current-directory)))
+  (|#%app| 1/current-directory (current-directory))
+  (|#%app|
+   error-display-handler
+   (make-default-error-display-handler (lambda (fmt . args)
+                                         (apply 1/fprintf (|#%app| 1/current-error-port) fmt args)))))

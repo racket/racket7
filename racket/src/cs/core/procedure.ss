@@ -136,7 +136,9 @@
     #f]))
 
 (define (not-a-procedure f)
-  (error 'apply (format "not a procedure: ~s" f)))
+  (raise-arguments-error 'application
+                         "not a procedure;\n expected a procedure that can be applied to arguments"
+                         "given" f))
 
 (define/who (procedure-result-arity p)
   (check who procedure? p)

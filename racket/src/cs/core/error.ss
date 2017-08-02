@@ -357,9 +357,6 @@
      [(3) "rd"]
      [else "th"])))
 
-(define (eprintf fmt . args)
-  (apply fprintf (current-error-port) fmt args))
-
 ;; ----------------------------------------
 
 (define exception-handler-key (gensym "exception-handler-key"))
@@ -450,35 +447,44 @@
             (cons (cons name loc) (loop (cdr l) ls))
             (loop (cdr l) ls)))])))
 
-(define (default-error-display-handler msg v)
-  (eprintf "~a" msg)
-  (when (or (continuation-condition? v)
-            (and (exn? v)
-                 (not (exn:fail:user? v))))
-    (eprintf "\n  context...:")
-    (let loop ([l (traces->context
-                   (if (exn? v)
-                       (continuation-mark-set-traces (exn-continuation-marks v))
-                       (list (continuation->trace (condition-continuation v)))))]
-               [n (|#%app| error-print-context-length)])
-      (unless (or (null? l) (zero? n))
-        (let* ([p (car l)]
-               [s (cdr p)])
-          (cond
-           [(and s
-                 (srcloc-line s)
-                 (srcloc-column s))
-            (eprintf "\n   ~a:~a:~a" (srcloc-source s) (srcloc-line s) (srcloc-column s))
-            (when (car p)
-              (eprintf ": ~a" (car p)))]
-           [(and s (srcloc-position s))
-            (eprintf "\n   ~a::~a" (srcloc-source s) (srcloc-position s))
-            (when (car p)
-              (eprintf ": ~a" (car p)))]
-           [(car p)
-            (eprintf "\n   ~a" (car p))]))
-        (loop (cdr l) (sub1 n)))))
-  (eprintf "\n"))
+(define (make-default-error-display-handler eprintf)
+  (define (default-error-display-handler msg v)
+    (eprintf "~a" msg)
+    (when (or (continuation-condition? v)
+              (and (exn? v)
+                   (not (exn:fail:user? v))))
+      (eprintf "\n  context...:")
+      (let loop ([l (traces->context
+                     (if (exn? v)
+                         (continuation-mark-set-traces (exn-continuation-marks v))
+                         (list (continuation->trace (condition-continuation v)))))]
+                 [n (|#%app| error-print-context-length)])
+        (unless (or (null? l) (zero? n))
+          (let* ([p (car l)]
+                 [s (cdr p)])
+            (cond
+             [(and s
+                   (srcloc-line s)
+                   (srcloc-column s))
+              (eprintf "\n   ~a:~a:~a" (srcloc-source s) (srcloc-line s) (srcloc-column s))
+              (when (car p)
+                (eprintf ": ~a" (car p)))]
+             [(and s (srcloc-position s))
+              (eprintf "\n   ~a::~a" (srcloc-source s) (srcloc-position s))
+              (when (car p)
+                (eprintf ": ~a" (car p)))]
+             [(car p)
+              (eprintf "\n   ~a" (car p))]))
+          (loop (cdr l) (sub1 n)))))
+    (eprintf "\n"))
+  default-error-display-handler)
+
+;; For startup, install a display handler that uses host-Scheme
+;; output (to be replaced later with one that uses Racket output):
+(define default-error-display-handler
+  (let ([eprintf (lambda (fmt . args)
+                   (apply fprintf (current-error-port) fmt args))])
+    (make-default-error-display-handler eprintf)))
 
 (define (default-error-escape-handler)
   (abort-current-continuation (default-continuation-prompt-tag) void))

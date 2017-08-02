@@ -417,9 +417,9 @@
                 ,e)
               `(make-instance-variable-reference 
                 instance-variable-reference
-                ,(if (hash-ref mutated (unwrap id) #f)
-                     'mutable
-                     'immutable)))]
+                ',(if (hash-ref mutated (unwrap id) #f)
+                      'mutable
+                      'immutable)))]
          [`(equal? ,exp1 ,exp2)
           (let ([exp1 (schemify exp1)]
                 [exp2 (schemify exp2)])

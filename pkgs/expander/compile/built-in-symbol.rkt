@@ -56,4 +56,5 @@
             variable-ref/no-check
             make-instance-variable-reference
             annotation?
-            annotation-expression))
+            annotation-expression
+            #%app))
