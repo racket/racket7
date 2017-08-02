@@ -269,7 +269,7 @@
   
   ;; Initialize:
   (|#%app| 1/current-directory (current-directory))
-  (|#%app|
-   error-display-handler
-   (make-default-error-display-handler (lambda (fmt . args)
-                                         (apply 1/fprintf (|#%app| 1/current-error-port) fmt args)))))
+  (set-log-system-message! (lambda (level str)
+                             (1/log-message root-logger level str #f)))
+  (set-error-display-eprintf! (lambda (fmt . args)
+                                (apply 1/fprintf (|#%app| 1/current-error-port) fmt args))))

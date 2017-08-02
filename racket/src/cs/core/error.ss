@@ -362,12 +362,44 @@
 (define exception-handler-key (gensym "exception-handler-key"))
 
 (define (default-uncaught-exception-handler exn)
-  (unless (exn:break:hang-up? exn)
-    ((|#%app| error-display-handler) (exn->string exn) exn))
-  (when (or (exn:break:hang-up? exn)
-            (exn:break:terminate? exn))
-    (chez:exit 1))
-  ((|#%app| error-escape-handler)))
+  (let ([message (if (exn? exn)
+                     (exn-message exn)
+                     (string-append "uncaught exception: "
+                                    (error-value->string exn)))])
+    (unless (exn:break:hang-up? exn)
+      (let ([display-handler (|#%app| error-display-handler)])
+        (call-with-parameterization
+         error-display-handler
+         (if (eq? display-handler default-error-display-handler)
+             emergency-error-display-handler
+             default-error-display-handler)
+         (lambda ()
+           (call-with-exception-handler
+            (make-nested-exception-handler "error display handler" exn)
+            (lambda ()
+              (call-with-break-disabled
+               (lambda ()
+                 (|#%app| display-handler message exn)))))))))
+    (when (or (exn:break:hang-up? exn)
+              (exn:break:terminate? exn))
+      (chez:exit 1))
+    (let ([escape-handler (|#%app| error-escape-handler)])
+      (call-with-parameterization
+       error-display-handler
+       default-error-display-handler
+       (lambda ()
+         (call-with-parameterization
+          error-escape-handler
+          default-error-escape-handler
+          (lambda ()
+            (call-with-exception-handler
+             (make-nested-exception-handler "error escape handler" exn)
+             (lambda ()
+               (call-with-break-disabled
+                (lambda ()
+                  (|#%app| escape-handler))))))))))
+    ;; In case the escape handler doesn't escape:
+    (default-error-escape-handler)))
 
 (define link-instantiate-continuations (make-ephemeron-eq-hashtable))
 
@@ -447,44 +479,45 @@
             (cons (cons name loc) (loop (cdr l) ls))
             (loop (cdr l) ls)))])))
 
-(define (make-default-error-display-handler eprintf)
-  (define (default-error-display-handler msg v)
-    (eprintf "~a" msg)
-    (when (or (continuation-condition? v)
-              (and (exn? v)
-                   (not (exn:fail:user? v))))
-      (eprintf "\n  context...:")
-      (let loop ([l (traces->context
-                     (if (exn? v)
-                         (continuation-mark-set-traces (exn-continuation-marks v))
-                         (list (continuation->trace (condition-continuation v)))))]
-                 [n (|#%app| error-print-context-length)])
-        (unless (or (null? l) (zero? n))
-          (let* ([p (car l)]
-                 [s (cdr p)])
-            (cond
-             [(and s
-                   (srcloc-line s)
-                   (srcloc-column s))
-              (eprintf "\n   ~a:~a:~a" (srcloc-source s) (srcloc-line s) (srcloc-column s))
-              (when (car p)
-                (eprintf ": ~a" (car p)))]
-             [(and s (srcloc-position s))
-              (eprintf "\n   ~a::~a" (srcloc-source s) (srcloc-position s))
-              (when (car p)
-                (eprintf ": ~a" (car p)))]
-             [(car p)
-              (eprintf "\n   ~a" (car p))]))
-          (loop (cdr l) (sub1 n)))))
-    (eprintf "\n"))
-  default-error-display-handler)
+(define (default-error-display-handler msg v)
+  (eprintf "~a" msg)
+  (when (or (continuation-condition? v)
+            (and (exn? v)
+                 (not (exn:fail:user? v))))
+    (eprintf "\n  context...:")
+    (let loop ([l (traces->context
+                   (if (exn? v)
+                       (continuation-mark-set-traces (exn-continuation-marks v))
+                       (list (continuation->trace (condition-continuation v)))))]
+               [n (|#%app| error-print-context-length)])
+      (unless (or (null? l) (zero? n))
+        (let* ([p (car l)]
+               [s (cdr p)])
+          (cond
+           [(and s
+                 (srcloc-line s)
+                 (srcloc-column s))
+            (eprintf "\n   ~a:~a:~a" (srcloc-source s) (srcloc-line s) (srcloc-column s))
+            (when (car p)
+              (eprintf ": ~a" (car p)))]
+           [(and s (srcloc-position s))
+            (eprintf "\n   ~a::~a" (srcloc-source s) (srcloc-position s))
+            (when (car p)
+              (eprintf ": ~a" (car p)))]
+           [(car p)
+            (eprintf "\n   ~a" (car p))]))
+        (loop (cdr l) (sub1 n)))))
+  (eprintf "\n"))
 
-;; For startup, install a display handler that uses host-Scheme
-;; output (to be replaced later with one that uses Racket output):
-(define default-error-display-handler
-  (let ([eprintf (lambda (fmt . args)
-                   (apply fprintf (current-error-port) fmt args))])
-    (make-default-error-display-handler eprintf)))
+(define eprintf
+  (lambda (fmt . args)
+    (apply fprintf (current-error-port) fmt args)))
+
+(define (emergency-error-display-handler msg v)
+  (log-system-message 'error msg))
+
+(define (set-error-display-eprintf! proc)
+  (set! eprintf proc))
 
 (define (default-error-escape-handler)
   (abort-current-continuation (default-continuation-prompt-tag) void))
@@ -579,19 +612,67 @@
      (cond
       [(and (warning? v)
             (not (non-continuable-violation? v)))
-       ;; FIXME: log message (instead of just throwing it away)
-       (void)]
+       (log-system-message 'warning (exn->string exn))]
       [else
        (let ([hs (continuation-mark-set->list (current-continuation-marks the-root-continuation-prompt-tag)
                                               exception-handler-key
                                               the-root-continuation-prompt-tag)]
              [v (condition->exn v)])
-         (let loop ([hs hs] [v v])
-           (cond
-            [(null? hs)
-             (|#%app| (|#%app| uncaught-exception-handler) v)]
-            [else
-             (let ([h (car hs)]
-                   [hs (cdr hs)])
-               (let ([new-v (|#%app| h v)])
-                 (loop hs new-v)))])))]))))
+         (let ([call-with-nested-handler
+                (lambda (thunk)
+                  (call-with-exception-handler
+                   (make-nested-exception-handler "exception handler" v)
+                   (lambda ()
+                     (call-with-break-disabled thunk))))])
+           (let loop ([hs hs] [v v])
+             (cond
+              [(null? hs)
+               (call-with-nested-handler
+                (lambda () (|#%app| (|#%app| uncaught-exception-handler) v)))
+               ;; Use `nested-exception-handler` if the uncaught-exception
+               ;; handler doesn't escape:
+               ((make-nested-exception-handler #f v) #f)]
+              [else
+               (let ([h (car hs)]
+                     [hs (cdr hs)])
+                 (let ([new-v (call-with-nested-handler
+                               (lambda () (|#%app| h v)))])
+                   (loop hs new-v)))]))))]))))
+
+(define (make-nested-exception-handler what old-exn)
+  (lambda (exn)
+    (let ([msg
+           (string-append
+            (cond
+             [(not what)
+              "handler for uncaught exceptions: did not escape"]
+             [else
+              (string-append
+               (cond [(exn? exn)
+                      (string-append "exception raised by " what)]
+                     [else
+                      (string-append "raise called (with non-exception value) by " what)])
+               ": "
+               (if (exn? exn)
+                   (exn-message exn)
+                   (error-value->string exn)))])
+            "; original "
+            (if (exn? old-exn)
+                "exception raised"
+                "raise called (with non-exception value)")
+            ": "
+            (if (exn? old-exn)
+                (exn-message old-exn)
+                (error-value->string old-exn)))])
+      (default-uncaught-exception-handler
+        (|#%app| exn:fail msg (current-continuation-marks))))))
+
+(define (call-with-exception-handler proc thunk)
+  (call/cm exception-handler-key proc thunk))
+
+;; ----------------------------------------
+
+(define log-system-message void)
+
+(define (set-log-system-message! proc)
+  (set! log-system-message proc))

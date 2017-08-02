@@ -1386,6 +1386,14 @@
      (end-uninterrupted 'dw))))
 
 ;; ----------------------------------------
+;; Breaks
+
+(define (call-with-break-disabled thunk)
+  (call/cm
+   break-enabled-key (make-thread-cell #f #t)
+   thunk))
+
+;; ----------------------------------------
 ;; Metacontinuation swapping for engines
 
 (define-record saved-metacontinuation (mc exn-state))

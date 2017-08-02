@@ -73,7 +73,8 @@
           error-display-handler
           error-escape-handler
           register-linklet-instantiate-continuation! ; not exported to Racket
-          make-default-error-display-handler ; not exported to Racket
+          set-error-display-eprintf! ; not exported to Racket
+          set-log-system-message! ; not exported to Racket
 
           current-inspector
           make-inspector
