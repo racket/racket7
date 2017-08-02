@@ -53,20 +53,20 @@
 
 (define/who (directory-exists? p)
   (check who path-string? p)
-  (rktio_directory_exists rktio (->rktio (->host p))))
+  (rktio_directory_exists rktio (->host p)))
 
 (define/who (file-exists? p)
   (check who path-string? p)
-  (rktio_file_exists rktio (->rktio (->host p))))
+  (rktio_file_exists rktio (->host p)))
 
 (define/who (link-exists? p)
   (check who path-string? p)
-  (rktio_link_exists rktio (->rktio (->host p))))
+  (rktio_link_exists rktio (->host p)))
 
 (define/who (make-directory p)
   (check who path-string? p)
   (define host-path (->host p))
-  (define r (rktio_make_directory rktio (->rktio host-path)))
+  (define r (rktio_make_directory rktio host-path))
   (when (rktio-error? r)
     (raise-filesystem-error who
                             r
@@ -82,7 +82,7 @@
   (check who path-string? p)
   (define host-path (->host p))
   (start-atomic)
-  (let ([dl (rktio_directory_list_start rktio (->rktio host-path))])
+  (let ([dl (rktio_directory_list_start rktio host-path)])
     (cond
       [(rktio-error? dl)
        (end-atomic)
@@ -128,7 +128,7 @@
   (check who path-string? p)
   (define host-path (->host p))
   (define r (rktio_delete_file rktio
-                               (->rktio host-path)
+                               host-path
                                (current-force-delete-permissions)))
   (when (rktio-error? r)
     (raise-filesystem-error who
@@ -142,8 +142,8 @@
   (check who path-string? p)
   (define host-path (->host p))
   (define r (rktio_delete_directory rktio
-                                    (->rktio host-path)
-                                    (->rktio (->host (current-directory)))
+                                    host-path
+                                    (->host (current-directory))
                                     (current-force-delete-permissions)))
   (when (rktio-error? r)
     (raise-filesystem-error who
@@ -158,10 +158,7 @@
   (check who path-string? new)
   (define host-old (->host old))
   (define host-new (->host new))
-  (define r (rktio_rename_file rktio
-                               (->rktio host-new)
-                               (->rktio host-old)
-                               exists-ok?))
+  (define r (rktio_rename_file rktio host-new host-old exists-ok?))
   (when (rktio-error? r)
     (raise-filesystem-error who
                             r
@@ -199,11 +196,8 @@
   (define host-path (->host p))
   (start-atomic)
   (define r0 (if secs
-                 (rktio_set_file_modify_seconds rktio
-                                                (->rktio host-path)
-                                                secs)
-                 (rktio_get_file_modify_seconds rktio
-                                                (->rktio host-path))))
+                 (rktio_set_file_modify_seconds rktio host-path secs)
+                 (rktio_get_file_modify_seconds rktio host-path)))
   (define r (if (and (not secs) (not (rktio-error? r0)))
                 (rktio_timestamp_ref r0)
                 r0))
@@ -233,12 +227,8 @@
   (define host-path (->host p))
   (define r
     (if (integer? mode)
-        (rktio_set_file_or_directory_permissions rktio
-                                                 (->rktio host-path)
-                                                 mode)
-        (rktio_get_file_or_directory_permissions rktio
-                                                 (->rktio host-path)
-                                                 (eq? mode 'bits))))
+        (rktio_set_file_or_directory_permissions rktio host-path mode)
+        (rktio_get_file_or_directory_permissions rktio host-path (eq? mode 'bits))))
   (when (rktio-error? r)
     (raise-filesystem-error who
                             r
@@ -280,7 +270,7 @@
   (check who path-string? p)
   (define host-path (->host p))
   (start-atomic)
-  (define r0 (rktio_file_size rktio (->rktio host-path)))
+  (define r0 (rktio_file_size rktio host-path))
   (define r (if (rktio-error? r0)
                 r0
                 (begin0
@@ -313,7 +303,7 @@
                                     (host-> src-host)
                                     (host-> dest-host))))
   (start-atomic)
-  (let ([cp (rktio_copy_file_start rktio (->rktio dest-host) (->rktio src-host) exists-ok?)])
+  (let ([cp (rktio_copy_file_start rktio dest-host src-host exists-ok?)])
     (cond
       [(rktio-error? cp)
        (end-atomic)
@@ -384,7 +374,7 @@
           (eqv? (bytes-ref bstr 0) (char->integer #\~)))
      (define host-path (->host/as-is path))
      (start-atomic)
-     (define r0 (rktio_expand_user_tilde rktio (->rktio host-path)))
+     (define r0 (rktio_expand_user_tilde rktio host-path))
      (define r (if (rktio-error? r0)
                    r0
                    (begin0

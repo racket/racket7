@@ -2,8 +2,7 @@
 (require racket/include
          (only-in '#%linklet primitive-table))
 
-(provide ->rktio
-         rktio
+(provide rktio
          rktio-error?
          rktio-errkind
          rktio-errno
@@ -51,15 +50,6 @@
 (define-function #f rktio_NULL)
 (define-function #f rktio_do_install_os_signal_handler)
 (define-function #f rktio_get_ctl_c_handler)
-
-;; Add an explicit nul terminator, since the host system's
-;; representation of byte strings might not always have one.
-(define (->rktio bstr)
-  (define len (bytes-length bstr))
-  (define new-bstr (make-bytes (add1 len)))
-  (bytes-copy! new-bstr 0 bstr 0 len)
-  (bytes-set! new-bstr len 0)
-  new-bstr)
 
 ;; Error results are represented as vectors:
 (define rktio-error? vector?)

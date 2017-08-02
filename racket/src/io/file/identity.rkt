@@ -13,7 +13,7 @@
                              #:fd [fd #f]
                              #:port [port #f]) ; for errors, and non-#f if `fd` provided
   (define r0 (if host-path
-                 (rktio_path_identity rktio (->rktio host-path) (not as-link?))
+                 (rktio_path_identity rktio host-path (not as-link?))
                  (rktio_fd_identity rktio fd)))
   (define r (if (rktio-error? r0)
                 r0

@@ -33,7 +33,7 @@
   (start-atomic)
   (check-current-custodian who)
   (define fd (rktio_open rktio
-                         (->rktio host-path)
+                         host-path
                          (+ RKTIO_OPEN_READ
                             (mode->flags mode1)
                             (mode->flags mode2))))
@@ -78,7 +78,7 @@
        (mode->flags mode1)
        (mode->flags mode2)))
   (define fd0
-    (rktio_open rktio (->rktio host-path) flags))
+    (rktio_open rktio host-path flags))
   (define fd
     (cond
       [(not (rktio-error? fd0)) fd0]
@@ -86,7 +86,7 @@
                 (racket-error? fd0 RKTIO_ERROR_ACCESS_DENIED))
             (or (mode? 'replace) (mode? 'truncate/replace)))
        (define r (rktio_delete_file rktio
-                                    (->rktio host-path)
+                                    host-path
                                     (current-force-delete-permissions)))
        (when (rktio-error? r)
          (end-atomic)
@@ -96,7 +96,7 @@
                                           "error deleting file\n"
                                           "  path: ~a")
                                          (host-> host-path))))
-       (rktio_open rktio (->rktio host-path) flags)]
+       (rktio_open rktio host-path flags)]
       [else fd0]))
   (when (rktio-error? fd)
     (end-atomic)
