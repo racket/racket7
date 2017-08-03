@@ -36,10 +36,11 @@ struct rktio_process_t {
 };
 
 /*========================================================================*/
-/* Status helper                                                          */
+/* Status and signal helpers                                              */
 /*========================================================================*/
 
 #if defined(RKTIO_SYSTEM_UNIX)
+
 static int extract_child_status(int status)
 {
   if (WIFEXITED(status))
@@ -51,6 +52,7 @@ static int extract_child_status(int status)
 
   return status;
 }
+
 #endif
 
 /*========================================================================*/

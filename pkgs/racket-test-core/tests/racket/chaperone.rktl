@@ -2220,6 +2220,56 @@
       (err/rt-test (hash-ref cht (vector 1 2) #f) one-exn?))))
 
 ;; ----------------------------------------
+;; Make sure chaperoned hash tables use a lock
+
+(for ([make-hash (list make-hash make-weak-hash)])
+  (define ht (make-hash))
+
+  (struct a (v)
+    #:property
+    prop:equal+hash
+    (list (lambda (a b eql?)
+            (when (zero? (random 20)) (sleep))
+            (eql? (a-v a) (a-v b)))
+          (lambda (a hc)
+            (when (zero? (random 20)) (sleep))
+            (hc (a-v a)))
+          (lambda (a hc)
+            (hc (a-v a)))))
+
+  (for ([i 1000])
+    (hash-set! ht (a i) i))
+
+  (define cht (chaperone-hash ht
+                              (lambda (ht k) (values k (lambda (ht k v) v)))
+                              (lambda (ht k v) (values k v))
+                              (lambda (ht k) k)
+                              (lambda (ht k) k)))
+
+  (define done (make-semaphore))
+  
+  (define ths
+    (for/list ([j 4])
+      (thread
+       (lambda ()
+         (for ([i 1000])
+           (define v (random 100000))
+           (define k (a v))
+           (hash-set! cht k v)
+           ;; Make sure the addition didn't get lost, which
+           ;; can happen when a lock is missing:
+           (unless (equal? (hash-ref cht k #f) v)
+             (error "oops")))
+         (semaphore-post done)))))
+
+  (for-each sync ths)
+
+  (test #t
+        'threads-finished
+        (for/and ([t ths])
+          (semaphore-try-wait? done))))
+
+;; ----------------------------------------
 
 ;; Check broken key impersonator:
 
