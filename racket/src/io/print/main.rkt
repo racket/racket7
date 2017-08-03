@@ -18,7 +18,8 @@
          "parameter.rkt"
          "mode.rkt"
          "graph.rkt"
-         "config.rkt")
+         "config.rkt"
+         "recur-handler.rkt")
 
 (provide display
          write
@@ -228,6 +229,10 @@
      (print-mlist p who v mode o max-length graph config)]
     [(custom-write? v)
      (let ([o (make-output-port/max o max-length)])
+       (set-port-handlers-to-recur!
+        o
+        (lambda (v o mode)
+          (p who v mode o (output-port/max-max-length o max-length) graph config)))
        ((custom-write-accessor v) v o mode)
        (output-port/max-max-length o max-length))]
     [(struct? v)
@@ -248,6 +253,8 @@
      (print-named "procedure" v mode o max-length)]
     [(struct-type? v)
      (print-named "struct-type" v mode o max-length)]
+    [(struct-type-property? v)
+     (print-named "struct-type-property" v mode o max-length)]
     [(eof-object? v)
      (write-string/max "#<eof>" o max-length)]
     [else

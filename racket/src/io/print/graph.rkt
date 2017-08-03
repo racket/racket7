@@ -4,7 +4,8 @@
          "parameter.rkt"
          "custom-write.rkt"
          "mode.rkt"
-         "config.rkt")
+         "config.rkt"
+         "recur-handler.rkt")
 
 (provide detect-graph
          (struct-out as-constructor))
@@ -164,18 +165,16 @@
        (define unquoted? (eq? print-quotable 'never))
        (unless checking-port
          (set! checking-port (open-output-nowhere))
-         (set-core-output-port-print-handler!
+         (set-port-handlers-to-recur!
           checking-port
-          (lambda (e p [mode 0])
-            (define e-unquoted? (build-graph e mode))
-            (unless (eq? print-quotable 'always)
-              (set! unquoted? (or e-unquoted? unquoted?)))))
-         (set-core-output-port-write-handler!
-          checking-port
-          (lambda (e p) (build-graph e WRITE-MODE)))
-         (set-core-output-port-display-handler!
-          checking-port
-          (lambda (e p) (build-graph e DISPLAY-MODE))))
+          (lambda (e p mode)
+            (cond
+              [(or (eq? mode PRINT-MODE/QUOTED)
+                   (eq? mode PRINT-MODE/UNQUOTED))
+               (define e-unquoted? (build-graph e mode))
+               (unless (eq? print-quotable 'always)
+                 (set! unquoted? (or e-unquoted? unquoted?)))]
+              [else (build-graph e mode)]))))
        (checking! v)
        ((custom-write-accessor v) v checking-port mode)
        (done! v unquoted?)]

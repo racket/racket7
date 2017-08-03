@@ -23,7 +23,14 @@
                     v)))
 
 (define/who error-value->string-handler
-  (make-parameter (lambda (v len) "[?error-value->string-handler not ready?]")
+  (make-parameter (lambda (v len)
+                    (cond
+                     [(or (number? v)
+                          (boolean? v)
+                          (string? v))
+                      (chez:format "~s" v)]
+                     [else
+                      "[?error-value->string-handler not ready?]"]))
                   (lambda (v)
                     (check who (procedure-arity-includes/c 2) v)
                     v)))

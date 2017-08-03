@@ -9,6 +9,9 @@
                                                           "field index >= initialized-field count for structure type"
                                                           "field index" v
                                                           "initialized-field count" (list-ref info 1)))
+                                 (unless (chez:memv v (list-ref info 5))
+                                   (raise-arguments-error 'guard-for-prop:object-name "field index not declared immutable"
+                                                          "field index" v))
                                  (+ v (let ([p (list-ref info 6)])
                                         (if p
                                             (struct-type-total*-field-count p)
@@ -37,7 +40,19 @@
    [(impersonator? v)
     (object-name (impersonator-val v))]
    [(procedure? v)
-    (object-name (try-extract-procedure v))]
+    (extract-procedure-name v)]
    [(struct-type? v)
     (record-type-name v)]
+   [(struct-type-property? v)
+    (struct-type-prop-name v)]
+   [(record? v)
+    (struct-object-name v)]
    [else #f]))
+
+(define (struct-object-name v)
+  (let ([rtd (record-rtd v)])
+    (and
+     ;; Having an entry in `rtd-props` is a sign that
+     ;; this structure type was created with `make-struct-type`:
+     (hashtable-contains? rtd-props rtd)
+     (object-name (record-rtd v)))))

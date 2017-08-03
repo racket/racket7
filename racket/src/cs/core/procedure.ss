@@ -76,6 +76,22 @@
        [else #f]))]
    [else #f]))
 
+(define (extract-procedure-name f)
+  (cond
+   [(and (reduced-arity-procedure? f)
+         (reduced-arity-procedure-name f))
+    => (lambda (name) name)]
+   [(record? f)
+    (let* ([v (struct-property-ref prop:procedure (record-rtd f) #f)])
+      (cond
+       [(fixnum? v)
+        (let ([v (unsafe-struct-ref f v)])
+          (cond
+           [(procedure? v) (object-name v)]
+           [else (struct-object-name f)]))]
+       [else (struct-object-name f)]))]
+   [else #f]))
+
 (define/who procedure-arity-includes?
   (case-lambda
    [(f n incomplete-ok?)

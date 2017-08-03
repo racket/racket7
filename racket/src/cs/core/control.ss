@@ -494,8 +494,8 @@
    [(escape-continuation? c)
     (let ([tag (escape-continuation-tag c)])
       (unless (continuation-prompt-available? tag)
-        (raise-arguments-error '|continuation application|
-                               "attempt to jump into an escape continuation"))
+        (raise-continuation-error '|continuation application|
+                                  "attempt to jump into an escape continuation"))
       (do-abort-current-continuation tag args #t))]))
 
 ;; Apply a continuation within the current metacontinuation frame:
@@ -582,8 +582,8 @@
       (when (eq? (metacontinuation-frame-tag (car rev-mc))
                  the-barrier-prompt-tag)
         (end-uninterrupted 'hit-barrier)
-        (raise-arguments-error '|continuation application|
-                               "attempt to cross a continuation barrier"))
+        (raise-continuation-error '|continuation application|
+                                  "attempt to cross a continuation barrier"))
       (loop (cdr rev-mc)))))
 
 (define (call-with-end-uninterrupted thunk)
@@ -611,7 +611,7 @@
 (define (extract-metacontinuation who tag barrier-ok?)
   (define (check-barrier-ok saw-barrier?)
     (when (and saw-barrier? (not barrier-ok?))
-      (raise-arguments-error who "cannot capture past continuation barrier")))
+      (raise-continuation-error who "cannot capture past continuation barrier")))
   (let loop ([mc (current-metacontinuation)] [saw-barrier? #f])
     (cond
      [(null? mc)
@@ -1384,6 +1384,15 @@
         (with-saved-mark-stack/non-break 'dw-post
           (post))))
      (end-uninterrupted 'dw))))
+
+;; ----------------------------------------
+
+(define (raise-continuation-error who msg)
+  (raise
+   (|#%app|
+    exn:fail:contract:continuation
+    (string-append (symbol->string who) ": " msg)
+    (current-continuation-marks))))
 
 ;; ----------------------------------------
 ;; Breaks
