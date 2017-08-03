@@ -10,7 +10,7 @@
                                           (if (exact-integer? v)
                                               (+ v (let ([p (list-ref info 6)])
                                                      (if p
-                                                         (struct-type-field-count p)
+                                                         (struct-type-total*-field-count p)
                                                          0)))
                                               v))))
 
@@ -67,7 +67,8 @@
         (let ([v (unsafe-struct-ref f v)])
           (if (chez:procedure? v)
               v
-              (try-extract-procedure v)))]
+              (or (try-extract-procedure v)
+                  (case-lambda))))]
        [(eq? v 'unsafe)
         (if (chaperone? f)
             (unsafe-procedure-chaperone-replace-proc f)
@@ -78,20 +79,18 @@
 (define/who procedure-arity-includes?
   (case-lambda
    [(f n incomplete-ok?)
-    (let ([mask (get-procedure-arity-mask who f)])
+    (let ([mask (get-procedure-arity-mask who f incomplete-ok?)])
       (check who exact-nonnegative-integer? n)
-      (and (bitwise-bit-set? mask n)
-           (or incomplete-ok?
-               (not (incomplete-arity? (strip-impersonator f))))))]
+      (bitwise-bit-set? mask n))]
    [(f n) (procedure-arity-includes? f n #f)]))
 
 (define (procedure-arity orig-f)
-  (mask->arity (get-procedure-arity-mask 'procedure-arity orig-f)))
+  (mask->arity (get-procedure-arity-mask 'procedure-arity orig-f #t)))
 
 (define/who (procedure-arity-mask orig-f)
-  (get-procedure-arity-mask who orig-f))
+  (get-procedure-arity-mask who orig-f #t))
 
-(define (get-procedure-arity-mask who orig-f)
+(define (get-procedure-arity-mask who orig-f incomplete-ok?)
   (cond
    [(chez:procedure? orig-f)
     (#%procedure-arity-mask orig-f)]
@@ -101,22 +100,28 @@
        [(chez:procedure? f)
         (bitwise-arithmetic-shift-right (#%procedure-arity-mask f) shift)]
        [(record? f)
-        (let* ([rtd (record-rtd f)]
-               [a (struct-property-ref prop:procedure-arity rtd #f)])
-          (cond
-           [a
-            (if (exact-integer? a)
-                (proc-arity-mask (unsafe-struct*-ref f a) shift)
-                (bitwise-arithmetic-shift-right (unsafe-struct*-ref f (unbox a)) shift))]
-           [else
-            (let ([v (struct-property-ref prop:procedure rtd #f)])
-              (cond
-               [(fixnum? v)
-                (proc-arity-mask (unsafe-struct-ref f v) shift)]
-               [else
-                (proc-arity-mask v (add1 shift))]))]))]
-       [else
-        (raise-argument-error who "procedure?" orig-f)]))]))
+        (cond
+         [(and (not incomplete-ok?)
+               (incomplete-arity? f))
+          0]
+         [else
+          (let* ([rtd (record-rtd f)]
+                 [a (struct-property-ref prop:procedure-arity rtd #f)])
+            (cond
+             [a
+              (if (exact-integer? a)
+                  (proc-arity-mask (unsafe-struct*-ref f a) shift)
+                  (bitwise-arithmetic-shift-right (unsafe-struct*-ref f (unbox a)) shift))]
+             [else
+              (let ([v (struct-property-ref prop:procedure rtd #f)])
+                (cond
+                 [(fixnum? v)
+                  (proc-arity-mask (unsafe-struct-ref f v) shift)]
+                 [else
+                  (proc-arity-mask v (add1 shift))]))]))])]
+       [(eq? f orig-f)
+        (raise-argument-error who "procedure?" orig-f)]
+       [else 0]))]))
 
 ;; Public, limited variant:
 (define/who (procedure-extract-target f)
@@ -539,11 +544,15 @@
                         (lambda (pba s p)
                           (cond
                            [(and (record? s (position-based-accessor-rtd pba))
-                                 (< p (position-based-accessor-field-count pba)))
+                                 (fixnum? p)
+                                 (fx>= p 0)
+                                 (fx< p (position-based-accessor-field-count pba)))
                             (unsafe-struct*-ref s (+ p (position-based-accessor-offset pba)))]
                            [(and (impersonator? s)
                                  (record? (impersonator-val s) (position-based-accessor-rtd pba))
-                                 (< p (position-based-accessor-field-count pba)))
+                                 (fixnum? p)
+                                 (fx>= p 0)
+                                 (fx< p (position-based-accessor-field-count pba)))
                             (impersonate-ref (lambda (s)
                                                (unsafe-struct*-ref s (+ p (position-based-accessor-offset pba))))
                                              (position-based-accessor-rtd pba)
@@ -556,10 +565,14 @@
                         (lambda (pbm s p v)
                           (cond
                            [(and (record? s (position-based-mutator-rtd pbm))
+                                 (fixnum? p)
+                                 (fx>= p 0)
                                  (< p (position-based-mutator-field-count pbm)))
                             (unsafe-struct-set! s (+ p (position-based-mutator-offset pbm)) v)]
                            [(and (impersonator? s)
                                  (record? (impersonator-val s) (position-based-mutator-rtd pbm))
+                                 (fixnum? p)
+                                 (fx>= p 0)
                                  (< p (position-based-mutator-field-count pbm)))
                             (impersonate-set! (lambda (s v)
                                                 (unsafe-struct-set! s (+ p (position-based-mutator-offset pbm)) v))

@@ -303,19 +303,19 @@
 (define (encode-prefab-key+count-as-symbol prefab-key+count)
   (string->symbol (chez:format "~a" prefab-key+count)))
 
-(define (immutables->mutables immutables fields-count)
+(define (immutables->mutables immutables init-count)
   (vector->immutable-vector
    (list->vector
     (let loop ([i 0])
       (cond
-       [(= i fields-count) null]
+       [(= i init-count) null]
        [(chez:member i immutables) (loop (add1 i))]
        [else (cons i (loop (add1 i)))])))))
 
-(define (mutables->immutables mutables fields-count)
+(define (mutables->immutables mutables init-count)
   (let loop ([i 0])
     (cond
-     [(fx= i fields-count) '()]
+     [(fx= i init-count) '()]
      [else
       (let jloop ([j (vector-length mutables)])
         (cond

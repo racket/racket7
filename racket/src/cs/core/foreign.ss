@@ -28,7 +28,7 @@
                                                           "index" v))
                                  (+ v (let ([p (list-ref info 6)])
                                         (if p
-                                            (struct-type-field-count p)
+                                            (struct-type-total*-field-count p)
                                             0)))]
                                 [(and (procedure? v)
                                       (procedure-arity-includes? v 1))

@@ -14,7 +14,11 @@
 (define (primitive? v) #f)
 (define (primitive-closure? v) #f)
 (define (primitive-result-arity prim)
-  (raise-argument-error 'primitive-result-arity "primitive?" prim))
+  (cond
+   [(eq? prim make-struct-type-property) 3]
+   [(eq? prim make-struct-type) 5]
+   [else
+    (raise-argument-error 'primitive-result-arity "primitive?" prim)]))
 
 (define fx->fl fixnum->flonum)
 (define fxrshift fxarithmetic-shift-right)

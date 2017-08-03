@@ -11,7 +11,7 @@
                                                           "initialized-field count" (list-ref info 1)))
                                  (+ v (let ([p (list-ref info 6)])
                                         (if p
-                                            (struct-type-field-count p)
+                                            (struct-type-total*-field-count p)
                                             0)))]
                                 [(and (procedure? v)
                                       (procedure-arity-includes? v 1))
@@ -37,7 +37,7 @@
    [(impersonator? v)
     (object-name (impersonator-val v))]
    [(procedure? v)
-    (object-name (extract-procedure v))]
+    (object-name (try-extract-procedure v))]
    [(struct-type? v)
     (record-type-name v)]
    [else #f]))

@@ -549,17 +549,42 @@
 
 (define (condition->exn v)
   (if (condition? v)
-      (|#%app|
-       (cond
-        [(and (format-condition? v)
-              (or (string-prefix? "incorrect number of arguments" (condition-message v))
-                  (string-suffix? "values to single value return context" (condition-message v))
-                  (string-prefix? "incorrect number of values received in multiple value context" (condition-message v))))
-         exn:fail:contract:arity]
-        [else
-         exn:fail:contract])
-       (exn->string v)
-       (current-continuation-marks))
+      (cond
+       [(and (format-condition? v)
+             (irritants-condition? v)
+             (string-prefix? "incorrect number of arguments" (condition-message v))
+             (pair? (condition-irritants v))
+             (procedure? (car (condition-irritants v))))
+        (let* ([proc (car (condition-irritants v))]
+               [name (object-name proc)]
+               [arity (procedure-arity proc)])
+          (|#%app|
+           exn:fail:contract:arity
+           (string-append
+            (if (symbol? name) (symbol->string name) "#<procedure>")
+            ": arity mismatch;\n the expected number of arguments does not match the given number"
+            (cond
+             [(list? arity)
+              ""]
+             [else
+              (string-append
+               "\n  expected: "
+               (cond
+                [(arity-at-least? arity) (string-append "at least " (number->string arity))]
+                [else (number->string arity)]))]))
+           (current-continuation-marks)))]
+       [else
+        (|#%app|
+         (cond
+          [(and (format-condition? v)
+                (or (string-prefix? "incorrect number of arguments" (condition-message v))
+                    (string-suffix? "values to single value return context" (condition-message v))
+                    (string-prefix? "incorrect number of values received in multiple value context" (condition-message v))))
+           exn:fail:contract:arity]
+          [else
+           exn:fail:contract])
+         (exn->string v)
+         (current-continuation-marks))])
       v))
 
 (define (string-prefix? p str)

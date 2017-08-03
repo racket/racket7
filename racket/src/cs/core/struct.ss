@@ -1,3 +1,15 @@
+;; Naming conventions:
+;;  - `rtd*` means an rtd that is not impersonators
+;;  - `init-count` means the number of fields supplied to the constructor,
+;;     not counting inherited fields
+;;  - `init*-count` means `init-count` plus inherited constructed fields
+;;  - `auto-count` means the number of fields automatically added,
+;;     not counting inherited fields
+;;  - `auto*-count` means `auto-count` plus inherited auto fields
+;;  - `total-count` means `init-count` plus `auto-count`
+;;  - `total*-count` means `init*-count` plus `auto*-count`
+;;  - `prefab-key+count` has a `total*-count`
+
 (define-record struct-type-prop (name guard supers))
 
 ;; Record the properties that are implemented by each rtd:
@@ -140,12 +152,12 @@
 
 ;; ----------------------------------------
 
-(define (check-make-struct-type-arguments who name parent-rtd fields-count auto-fields
+(define (check-make-struct-type-arguments who name parent-rtd init-count auto-count
                                           props insp proc-spec immutables guard constructor-name)
   (check who symbol? name)
   (check who :or-false struct-type? parent-rtd)
-  (check who exact-nonnegative-integer? fields-count)
-  (check who exact-nonnegative-integer? auto-fields)
+  (check who exact-nonnegative-integer? init-count)
+  (check who exact-nonnegative-integer? auto-count)
   (check who
          :test (or (not proc-spec)
                    (procedure? proc-spec)
@@ -223,11 +235,11 @@
                                    "redundant immutable field index"
                                    "index" i
                                    "in list" immutables))
-          (unless (< i fields-count)
+          (unless (< i init-count)
             (raise-arguments-error who
                                    "index for immutable field >= initialized-field count"
                                    "index" i
-                                   "initialized-field count" fields-count
+                                   "initialized-field count" init-count
                                    "in list" immutables))
           (loop (hash-set ht i #t) (cdr imms)))]))
 
@@ -235,11 +247,11 @@
       (when v
         (cond
          [(exact-nonnegative-integer? v)
-          (unless (< v fields-count)
+          (unless (< v init-count)
             (raise-arguments-error who
                                    "index for procedure >= initialized-field count"
                                    "index" v
-                                   "field count" fields-count))
+                                   "field count" init-count))
           (unless (or (eq? v proc-spec) (chez:memv v immutables))
             (raise-arguments-error who
                                    "field is not specified as immutable for a prop:procedure index"
@@ -252,10 +264,10 @@
                                  "expected" "(or/c procedure? exact-nonnegative-integer?)"
                                  "given" v)])))
 
-    (let ([parent-rtd (strip-impersonator parent-rtd)])
-      (when parent-rtd
+    (let ([parent-rtd* (strip-impersonator parent-rtd)])
+      (when parent-rtd*
         (let ([authentic? (not (eq? (hash-ref props-ht prop:authentic none) none))]
-              [authentic-parent? (struct-property-ref prop:authentic parent-rtd #f)])
+              [authentic-parent? (struct-property-ref prop:authentic parent-rtd* #f)])
           (when (not (eq? authentic? authentic-parent?))
             (if authentic?
                 (raise-arguments-error who
@@ -268,10 +280,10 @@
                                        "authentic type" parent-rtd)))))
 
       (when guard
-        (let ([expected-count (+ 1 fields-count
-                                 (if parent-rtd
-                                     (- (struct-type-field-count parent-rtd)
-                                        (struct-type-auto-field-count parent-rtd))
+        (let ([expected-count (+ 1
+                                 init-count
+                                 (if parent-rtd*
+                                     (get-field-info-init*-count (struct-type-field-info parent-rtd*))
                                      0))])
           (unless (procedure-arity-includes? guard expected-count)
             (raise-arguments-error who
@@ -344,61 +356,56 @@
 ;; transformation keeps the record type exposed to the compiler
 (define make-struct-type
   (case-lambda 
-    [(name parent-rtd fields auto-fields)
-     (make-struct-type name parent-rtd fields auto-fields #f '() (|#%app| current-inspector) #f '() #f name)]
-    [(name parent-rtd fields auto-fields auto-val)
-     (make-struct-type name parent-rtd fields auto-fields auto-val '() (|#%app| current-inspector) #f '() #f name)]
-    [(name parent-rtd fields auto-fields auto-val props)
-     (make-struct-type name parent-rtd fields auto-fields auto-val props (|#%app| current-inspector) #f '() #f name)]
-    [(name parent-rtd fields auto-fields auto-val props insp)
-     (make-struct-type name parent-rtd fields auto-fields auto-val props insp #f '() #f name)]
-    [(name parent-rtd fields auto-fields auto-val props insp proc-spec)
-     (make-struct-type name parent-rtd fields auto-fields auto-val props insp proc-spec '() #f name)]
-    [(name parent-rtd fields auto-fields auto-val props insp proc-spec immutables)
-     (make-struct-type name parent-rtd fields auto-fields auto-val props insp proc-spec immutables #f name)]
-    [(name parent-rtd fields auto-fields auto-val props insp proc-spec immutables guard)
-     (make-struct-type name parent-rtd fields auto-fields auto-val props insp proc-spec immutables guard name)]
-    [(name parent-rtd fields-count auto-fields auto-val props insp proc-spec immutables guard constructor-name)
-     (check-make-struct-type-arguments 'make-struct-type name parent-rtd fields-count auto-fields
+    [(name parent-rtd init-count auto-count)
+     (make-struct-type name parent-rtd init-count auto-count #f '() (|#%app| current-inspector) #f '() #f name)]
+    [(name parent-rtd init-count auto-count auto-val)
+     (make-struct-type name parent-rtd init-count auto-count auto-val '() (|#%app| current-inspector) #f '() #f name)]
+    [(name parent-rtd init-count auto-count auto-val props)
+     (make-struct-type name parent-rtd init-count auto-count auto-val props (|#%app| current-inspector) #f '() #f name)]
+    [(name parent-rtd init-count auto-count auto-val props insp)
+     (make-struct-type name parent-rtd init-count auto-count auto-val props insp #f '() #f name)]
+    [(name parent-rtd init-count auto-count auto-val props insp proc-spec)
+     (make-struct-type name parent-rtd init-count auto-count auto-val props insp proc-spec '() #f name)]
+    [(name parent-rtd init-count auto-count auto-val props insp proc-spec immutables)
+     (make-struct-type name parent-rtd init-count auto-count auto-val props insp proc-spec immutables #f name)]
+    [(name parent-rtd init-count auto-count auto-val props insp proc-spec immutables guard)
+     (make-struct-type name parent-rtd init-count auto-count auto-val props insp proc-spec immutables guard name)]
+    [(name parent-rtd init-count auto-count auto-val props insp proc-spec immutables guard constructor-name)
+     (check-make-struct-type-arguments 'make-struct-type name parent-rtd init-count auto-count
                                        props insp proc-spec immutables guard constructor-name)
      (let* ([prefab-uid (and (eq? insp 'prefab)
-                             (structure-type-lookup-prefab-uid name parent-rtd fields-count auto-fields auto-val immutables))]
+                             (structure-type-lookup-prefab-uid name parent-rtd init-count auto-count auto-val immutables))]
             [parent-rtd* (strip-impersonator parent-rtd)]
-            [total-field-count (+ (if parent-rtd*
-                                      (struct-type-field-count parent-rtd*)
-                                      0)
-                                  fields-count
-                                  auto-fields)]
+            [parent-fi (if parent-rtd*
+                           (struct-type-field-info parent-rtd*)
+                           empty-field-info)]
             [rtd (make-record-type-descriptor name
                                               parent-rtd*
                                               prefab-uid #f #f
-                                              (make-fields (+ fields-count auto-fields)))]
-            [parent-count (if parent-rtd*
-                              (struct-type-field-count parent-rtd*)
-                              0)]
-            [parent-auto-field-count (if parent-rtd*
-                                         (struct-type-auto-field-count parent-rtd*)
-                                         0)]
-            [total-auto-field-count (+ auto-fields parent-auto-field-count)]
-            [auto-field-adder (and (positive? total-auto-field-count)
-                                   (let ([pfa (and parent-rtd*
-                                                   (struct-type-auto-field-adder parent-rtd*))])
+                                              (make-fields (+ init-count auto-count)))]
+            [parent-auto*-count (get-field-info-auto*-count parent-fi)]
+            [parent-init*-count (get-field-info-init*-count parent-fi)]
+            [parent-total*-count (get-field-info-total*-count parent-fi)]
+            [init*-count (+ init-count parent-init*-count)]
+            [auto*-count (+ auto-count parent-auto*-count)]
+            [auto-field-adder (and (positive? auto*-count)
+                                   (let ([pfa (get-field-info-auto-adder parent-fi)])
                                      (lambda (args)
-                                       (args-insert args fields-count auto-fields auto-val pfa))))])
-       (struct-type-install-properties! rtd name fields-count auto-fields parent-rtd
+                                       (args-insert args init-count auto-count auto-val pfa))))])
+       (when (or parent-rtd* auto-field-adder)
+         (putprop (record-type-uid rtd) 'field-info (make-field-info init*-count auto*-count auto-field-adder)))
+       (struct-type-install-properties! rtd name init-count auto-count parent-rtd
                                         props insp proc-spec immutables guard constructor-name
                                         #t)
-       (when auto-field-adder
-         (putprop (record-type-uid rtd) 'auto-field (cons total-auto-field-count auto-field-adder)))
        (let ([ctr (struct-type-constructor-add-guards
                    (let ([c (record-constructor rtd)])
-                     (if (zero? total-auto-field-count)
+                     (if (zero? auto*-count)
                          c
                          (procedure-rename
                           (procedure-reduce-arity
                            (lambda args
-                             (apply c (auto-field-adder args)))
-                           (- total-field-count total-auto-field-count))
+                             (apply c (reverse (auto-field-adder (reverse args)))))
+                           init*-count)
                           (or constructor-name name))))
                    rtd
                    (or constructor-name name))]
@@ -411,29 +418,29 @@
          (values rtd
                  ctr
                  pred
-                 (make-position-based-accessor rtd parent-count (+ fields-count auto-fields))
-                 (make-position-based-mutator rtd parent-count (+ fields-count auto-fields)))))]))
+                 (make-position-based-accessor rtd parent-total*-count (+ init-count auto-count))
+                 (make-position-based-mutator rtd parent-total*-count (+ init-count auto-count)))))]))
 
 ;; Called both by `make-struct-type` and by a `schemify` transformation:
 (define struct-type-install-properties!
   (case-lambda
-   [(rtd name fields auto-fields parent-rtd)
-    (struct-type-install-properties! rtd name fields auto-fields parent-rtd '() (|#%app| current-inspector) #f '() #f name #f)]
-   [(rtd name fields auto-fields parent-rtd props)
-    (struct-type-install-properties! rtd name fields auto-fields parent-rtd props (|#%app| current-inspector) #f '() #f name #f)]
-   [(rtd name fields auto-fields parent-rtd props insp)
-    (struct-type-install-properties! rtd name fields auto-fields parent-rtd props insp #f '() #f name #f)]
-   [(rtd name fields auto-fields parent-rtd props insp proc-spec)
-    (struct-type-install-properties! rtd name fields auto-fields parent-rtd props insp proc-spec '() #f name #f)]
-   [(rtd name fields auto-fields parent-rtd props insp proc-spec immutables)
-    (struct-type-install-properties! rtd name fields auto-fields parent-rtd props insp proc-spec immutables #f name #f)]
-   [(rtd name fields auto-fields parent-rtd props insp proc-spec immutables guard)
-    (struct-type-install-properties! rtd name fields auto-fields parent-rtd props insp proc-spec immutables guard name #f)]
-   [(rtd name fields auto-fields parent-rtd props insp proc-spec immutables guard constructor-name)
-    (struct-type-install-properties! rtd name fields auto-fields parent-rtd props insp proc-spec immutables guard constructor-name #f)]
-   [(rtd name fields auto-fields parent-rtd props insp proc-spec immutables guard constructor-name skip-checks?)
+   [(rtd name init-count auto-count parent-rtd)
+    (struct-type-install-properties! rtd name init-count auto-count parent-rtd '() (|#%app| current-inspector) #f '() #f name #f)]
+   [(rtd name init-count auto-count parent-rtd props)
+    (struct-type-install-properties! rtd name init-count auto-count parent-rtd props (|#%app| current-inspector) #f '() #f name #f)]
+   [(rtd name init-count auto-count parent-rtd props insp)
+    (struct-type-install-properties! rtd name init-count auto-count parent-rtd props insp #f '() #f name #f)]
+   [(rtd name init-count auto-count parent-rtd props insp proc-spec)
+    (struct-type-install-properties! rtd name init-count auto-count parent-rtd props insp proc-spec '() #f name #f)]
+   [(rtd name init-count auto-count parent-rtd props insp proc-spec immutables)
+    (struct-type-install-properties! rtd name init-count auto-count parent-rtd props insp proc-spec immutables #f name #f)]
+   [(rtd name init-count auto-count parent-rtd props insp proc-spec immutables guard)
+    (struct-type-install-properties! rtd name init-count auto-count parent-rtd props insp proc-spec immutables guard name #f)]
+   [(rtd name init-count auto-count parent-rtd props insp proc-spec immutables guard constructor-name)
+    (struct-type-install-properties! rtd name init-count auto-count parent-rtd props insp proc-spec immutables guard constructor-name #f)]
+   [(rtd name init-count auto-count parent-rtd props insp proc-spec immutables guard constructor-name skip-checks?)
     (unless skip-checks?
-      (check-make-struct-type-arguments 'make-struct-type name parent-rtd fields auto-fields
+      (check-make-struct-type-arguments 'make-struct-type name parent-rtd init-count auto-count
                                         props insp proc-spec immutables guard constructor-name))
     (unless (eq? insp 'prefab) ; everything for prefab must be covered in `prefab-key+count->rtd`
       (let* ([parent-rtd* (strip-impersonator parent-rtd)]
@@ -444,7 +451,7 @@
              [all-immutables (if (integer? proc-spec)
                                  (cons proc-spec immutables)
                                  immutables)]
-             [mutables (immutables->mutables all-immutables fields)])
+             [mutables (immutables->mutables all-immutables init-count)])
         (when (not parent-rtd*)
           (record-type-equal-procedure rtd default-struct-equal?)
           (record-type-hash-procedure rtd default-struct-hash))
@@ -470,17 +477,17 @@
                       (let ([guarded-val
                              (let ([guard (struct-type-prop-guard prop)])
                                (if guard
-                                   (let ([parent-count (if parent-rtd*
-                                                           (struct-type-field-count parent-rtd*)
-                                                           0)])
+                                   (let ([parent-total*-count (if parent-rtd*
+                                                                  (struct-type-total*-field-count parent-rtd*)
+                                                                  0)])
                                      (|#%app|
                                       guard
                                       val
                                       (list name
-                                            fields
-                                            auto-fields
-                                            (make-position-based-accessor rtd parent-count (+ fields auto-fields))
-                                            (make-position-based-mutator rtd parent-count (+ fields auto-fields))
+                                            init-count
+                                            auto-count
+                                            (make-position-based-accessor rtd parent-total*-count (+ init-count auto-count))
+                                            (make-position-based-mutator rtd parent-total*-count (+ init-count auto-count))
                                             all-immutables
                                             parent-rtd
                                             #f)))
@@ -502,22 +509,22 @@
         (register-guards! rtd parent-rtd guard 'at-start)))]))
 
 ;; Used by a `schemify` transformation:
-(define (structure-type-lookup-prefab-uid name parent-rtd fields-count auto-fields auto-val immutables)
+(define (structure-type-lookup-prefab-uid name parent-rtd* init-count auto-count auto-val immutables)
   ;; Return a UID for a prefab structure type. We can assume that
   ;; `immutables` is well-formed, and checking an error reporting will
   ;; happen latter if necessary.
   (let ([prefab-key (derive-prefab-key name
-                                       (and parent-rtd
-                                            (getprop (record-type-uid parent-rtd) 'prefab-key+count))
-                                       fields-count
-                                       immutables auto-fields auto-val)]
-        [total-field-count (+ (if parent-rtd
-                                  (struct-type-field-count parent-rtd)
-                                  0)
-                              fields-count
-                              auto-fields)])
+                                       (and parent-rtd*
+                                            (getprop (record-type-uid parent-rtd*) 'prefab-key+count))
+                                       init-count
+                                       immutables auto-count auto-val)]
+        [total*-count (+ (if parent-rtd*
+                             (struct-type-total*-field-count parent-rtd*)
+                             0)
+                         init-count
+                         auto-count)])
     (record-type-uid
-     (prefab-key+count->rtd (cons prefab-key total-field-count)))))
+     (prefab-key+count->rtd (cons prefab-key total*-count)))))
 
 (define (prefab-key+count->rtd prefab-key+count)
   (cond
@@ -533,15 +540,15 @@
             (prefab-key->parent-prefab-key+count (car prefab-key+count))]
            [parent-rtd (and parent-prefab-key+count
                             (prefab-key+count->rtd parent-prefab-key+count))]
-           [num-fields (- (cdr prefab-key+count)
-                          (if parent-prefab-key+count
-                              (cdr parent-prefab-key+count)
-                              0))]
+           [total-count (- (cdr prefab-key+count)
+                           (if parent-prefab-key+count
+                               (cdr parent-prefab-key+count)
+                               0))]
            [uid (encode-prefab-key+count-as-symbol prefab-key+count)]
            [rtd (make-record-type-descriptor name
                                              parent-rtd
                                              uid #f #f
-                                             (make-fields num-fields))]
+                                             (make-fields total-count))]
            [mutables (prefab-key-mutables prefab-key)])
       (with-interrupts-disabled
        (cond
@@ -562,9 +569,9 @@
          rtd])))]))
 
 (define (check-accessor-or-mutator-index who rtd pos)
-  (let* ([fields-count (#%vector-length (record-type-field-names rtd))])
-    (unless (< pos fields-count)
-      (if (zero? fields-count)
+  (let* ([total-count (#%vector-length (record-type-field-names rtd))])
+    (unless (< pos total-count)
+      (if (zero? total-count)
           (raise-arguments-error who
                                  "index too large; no fields accessible"
                                  "index" pos
@@ -572,7 +579,7 @@
           (raise-arguments-error who
                                  "index too large"
                                  "index" pos
-                                 "maximum allowed index" (sub1 fields-count)
+                                 "maximum allowed index" (sub1 total-count)
                                  "structure type" rtd)))))
 
 (define/who make-struct-field-accessor
@@ -619,16 +626,18 @@
    [(pbm pos)
     (make-struct-field-mutator pbm pos #f)]))
 
-(define (args-insert args fields-count auto-fields auto-val pfa)
-  (let loop ([fields-count fields-count] [args args])
-    (if (zero? fields-count)
-        (let loop ([auto-fields auto-fields])
-          (if (zero? auto-fields)
-              (if pfa
+;; Takes constructor arguments and adds auto-argument values.
+;; Receives and returns `args` is in reverse order.
+(define (args-insert args fields-count auto-count auto-val pfa)
+  (let loop ([auto-count auto-count])
+    (if (zero? auto-count)
+        (if pfa
+            (let loop ([fields-count fields-count] [args args])
+              (if (zero? fields-count)
                   (pfa args)
-                  args)
-              (cons auto-val (loop (fx1- auto-fields)))))
-        (cons (car args) (loop (fx1- fields-count) (cdr args))))))                          
+                  (cons (car args) (loop (fx1- fields-count) (cdr args)))))
+            args)
+        (cons auto-val (loop (fx1- auto-count))))))
 
 ;; ----------------------------------------
 
@@ -666,24 +675,25 @@
   (check who struct-type? rtd)
   (let ([rtd* (strip-impersonator rtd)])
     (check-inspector-access 'struct-type-info rtd*)
-    (let* ([auto-fields (struct-type-auto-field-count rtd*)]
-           [fields-count (- (struct-type-field-count rtd*)
-                            auto-fields)]
+    (let* ([fi (struct-type-field-info rtd*)]
            [parent-rtd* (record-type-parent rtd*)]
-           [parent-count (if parent-rtd*
-                             (struct-type-field-count parent-rtd*)
-                             0)])
+           [parent-fi (if parent-rtd*
+                          (struct-type-field-info parent-rtd*)
+                          empty-field-info)]
+           [init-count (get-field-info-init-count fi parent-fi)]
+           [auto-count (get-field-info-auto-count fi parent-fi)]
+           [parent-total*-count (get-field-info-total*-count parent-fi)])
       (let-values ([(next-rtd* skipped?)
                     (if parent-rtd*
                         (next-visible-struct-type parent-rtd*)
                         (values #f #f))])
         (define (get-results)
           (values (record-type-name rtd*)
-                  fields-count
-                  auto-fields
-                  (make-position-based-accessor rtd* parent-count (+ fields-count auto-fields))
-                  (make-position-based-mutator rtd* parent-count (+ fields-count auto-fields))
-                  (mutables->immutables (hashtable-ref rtd-mutables rtd* '#()) fields-count)
+                  init-count
+                  auto-count
+                  (make-position-based-accessor rtd* parent-total*-count (+ init-count auto-count))
+                  (make-position-based-mutator rtd* parent-total*-count (+ init-count auto-count))
+                  (mutables->immutables (hashtable-ref rtd-mutables rtd* '#()) init-count)
                   next-rtd*
                   skipped?))
         (cond
@@ -703,16 +713,16 @@
   (let ([rtd* (strip-impersonator rtd)])
     (check-inspector-access who rtd*)
     (let ([ctr (struct-type-constructor-add-guards
-                (let ([c (record-constructor rtd*)]
-                      [auto-field-adder (struct-type-auto-field-adder rtd*)])
+                (let* ([c (record-constructor rtd*)]
+                       [fi (struct-type-field-info rtd*)]
+                       [auto-field-adder (get-field-info-auto-adder fi)])
                   (cond
                    [auto-field-adder
                     (procedure-maybe-rename
                      (procedure-reduce-arity
                       (lambda args
-                        (apply c (auto-field-adder args)))
-                      (- (struct-type-field-count rtd*)
-                         (struct-type-auto-field-count rtd*)))
+                        (apply c (reverse (auto-field-adder (reverse args)))))
+                      (get-field-info-init*-count fi))
                      (object-name c))]
                    [else c]))
                 rtd*
@@ -743,23 +753,22 @@
                              (apply ctr args)]
                             [else
                              (let ([guard (caar guards)]
-                                   [fields-count (cdar guards)])
+                                   [init*-count (cdar guards)])
                                (call-with-values
                                    (lambda ()
-                                     (apply guard (append-n args fields-count (list name))))
+                                     (apply guard (append-n args init*-count (list name))))
                                  (lambda results
-                                   (unless (= (length results) fields-count)
-                                     (raise-result-arity-error "calling guard procedure" fields-count results))
+                                   (unless (= (length results) init*-count)
+                                     (raise-result-arity-error "calling guard procedure" init*-count results))
                                    (loop (cdr guards)
-                                         (if (= fields-count (length args))
+                                         (if (= init*-count (length args))
                                              results
-                                             (append results (list-tail args fields-count)))))))])))))])
+                                             (append results (list-tail args init*-count)))))))])))))])
             (if chaparone-undefined?
                 (lambda args
                   (chaperone-struct-unsafe-undefined (apply base-ctr args)))
                 base-ctr))
-          (- (struct-type-field-count rtd)
-             (struct-type-auto-field-count rtd)))
+          (get-field-info-init*-count (struct-type-field-info rtd)))
          (or name (object-name ctr))))))
 
 (define (struct-type-constructor-add-guards* ctr rtd guard name)
@@ -777,24 +786,72 @@
       (register-struct-constructor! pred)
       pred)))
 
-(define (struct-type-auto-field-count rtd)
-  (car (getprop (record-type-uid rtd) 'auto-field '(0 . #f))))
+;; ----------------------------------------
 
-(define (struct-type-auto-field-adder rtd)
-  (cdr (getprop (record-type-uid rtd) 'auto-field '(0 . #f))))
+(define-record field-info (init*-count   ; includes parent init fields
+                           auto*-count   ; includes parent auto fields
+                           auto-adder)) ; #f or procedure to add auto fields for constructor
 
-(define (struct-type-field-count rtd)
-  (+ (let ([p-rtd (record-type-parent rtd)])
-       (if p-rtd
-           (struct-type-field-count p-rtd)
-           0))
-     (#%vector-length (record-type-field-names rtd))))
+(define empty-field-info 0)
 
-(define (struct-type-parent-field-count rtd)
-  (let ([p-rtd (record-type-parent rtd)])
-    (if p-rtd
-        (struct-type-field-count p-rtd)
+;; Returns either a `field-info` record or a fixnum N that
+;; corresponds to `(make-field-info N 0 #f)`.
+(define (struct-type-field-info rtd*)
+  (or (getprop (record-type-uid rtd*) 'field-info #f)
+      (let ([n (#%vector-length (record-type-field-names rtd*))]
+            [parent-rtd* (record-type-parent rtd*)])
+        ;; If `parent-rtd` is not #f, then we'll get here
+        ;; only if were still in the process of setting up
+        ;; `rtd`, so we won't have to recur far or often
+        ;; construct field-info records
+        (if parent-rtd*
+            (let ([parent-fi (struct-type-field-info parent-rtd*)])
+              (if (fixnum? parent-fi)
+                  (+ n parent-fi)
+                  (make-field-info (+ n (field-info-init*-count parent-fi))
+                                   (field-info-auto*-count parent-fi)
+                                   #f)))
+            n))))
+
+(define (get-field-info-init*-count fi)
+  (if (fixnum? fi)
+      fi
+      (field-info-init*-count fi)))
+
+(define (get-field-info-auto*-count fi)
+  (if (fixnum? fi)
+      0
+      (field-info-auto*-count fi)))
+
+(define (get-field-info-total*-count fi)
+  (if (fixnum? fi)
+      fi
+      (+ (field-info-init*-count fi)
+         (field-info-auto*-count fi))))
+
+(define (get-field-info-init-count fi parent-fi)
+  (- (get-field-info-init*-count fi)
+     (get-field-info-init*-count parent-fi)))
+
+(define (get-field-info-auto-count fi parent-fi)
+  (- (get-field-info-auto*-count fi)
+     (get-field-info-auto*-count parent-fi)))
+
+(define (get-field-info-auto-adder fi)
+  (if (fixnum? fi)
+      #f
+      (field-info-auto-adder fi)))
+
+(define (struct-type-total*-field-count rtd*)
+  (get-field-info-total*-count (struct-type-field-info rtd*)))
+
+(define (struct-type-parent-total*-count rtd*)
+  (let ([p-rtd* (record-type-parent rtd*)])
+    (if p-rtd*
+        (struct-type-total*-field-count p-rtd*)
         0)))
+
+;; ----------------------------------------
 
 (define (struct-type-field-mutable? rtd pos)
   (let ([mutables (hashtable-ref rtd-mutables rtd '#())])
@@ -816,28 +873,22 @@
                             (struct-type-guards parent-rtd*)
                             '())])
     (when (or guard (pair? parent-guards) (struct-type-chaperone? parent-rtd))
-      (let* ([fields (#%vector-length (record-type-field-names rtd))]
-             [parent-count (if parent-rtd*
-                               (struct-type-field-count parent-rtd*)
-                               0)]
-             [parent-auto-field-count (if parent-rtd*
-                                          (struct-type-auto-field-count parent-rtd*)
-                                          0)]
-             [parent-fields-count (- parent-count parent-auto-field-count)]
+      (let* ([fi (struct-type-field-info rtd)]
              [parent-guards (if (struct-type-chaperone? parent-rtd)
                                 (cons (cons (struct-type-chaperone-guard parent-rtd)
-                                            parent-fields-count)
+                                            (get-field-info-init*-count
+                                             (struct-type-field-info parent-rtd*)))
                                       parent-guards)
                                 parent-guards)])
         (putprop (record-type-uid rtd) 'guards (if guard
                                                    (if (eq? which-end 'at-start)
                                                        ;; Normal:
-                                                       (cons (cons guard (+ parent-fields-count fields))
+                                                       (cons (cons guard (get-field-info-init*-count fi))
                                                              parent-guards)
                                                        ;; Internal, makes primitive guards have a natural
                                                        ;; error order:
                                                        (append parent-guards
-                                                               (list (cons guard (+ parent-fields-count fields)))))
+                                                               (list (cons guard (get-field-info-init*-count fi)))))
                                                    parent-guards))))))
 
 (define (unsafe-struct*-ref s i)
@@ -847,18 +898,20 @@
 
 (define (unsafe-struct-ref s i)
   (if (impersonator? s)
-      (let loop ([rtd (record-rtd (impersonator-val s))])
-        (let ([pos (- i (struct-type-parent-field-count rtd))])
+      (let loop ([rtd* (record-rtd (impersonator-val s))])
+        (let ([pos (- i (struct-type-parent-total*-count rtd*))])
           (if (fx>= pos 0)
-              (impersonate-ref (record-field-accessor rtd i) rtd pos s)
-              (loop (record-type-parent rtd)))))
+              (impersonate-ref (record-field-accessor rtd* i) rtd* pos s)
+              (loop (record-type-parent rtd*)))))
       (unsafe-struct*-ref s i)))
 
 (define (unsafe-struct-set! s i v)
   (if (impersonator? s)
-      (let* ([rtd (record-rtd s)]
-             [pos (- i (struct-type-parent-field-count rtd))])
-        (impersonate-set! (record-field-mutator rtd i) rtd pos s v))
+      (let loop ([rtd* (record-rtd (impersonator-val s))])
+        (let* ([pos (- i (struct-type-parent-total*-count rtd*))])
+          (if (fx>= pos 0)
+              (impersonate-set! (record-field-mutator rtd* i) rtd* pos s v)
+              (loop (record-type-parent rtd*)))))
       (unsafe-struct*-set! s i v)))
 
 (define-values (prop:equal+hash equal+hash? equal+hash-ref)
@@ -907,7 +960,7 @@
         [t2 (record-rtd (strip-impersonator s2))])
     (and (eq? t1 t2)
          (struct-type-transparent? t1)
-         (let ([n (struct-type-field-count t1)])
+         (let ([n (struct-type-total*-field-count t1)])
            (let loop ([j 0])
              (if (fx= j n)
                  #t
@@ -921,7 +974,7 @@
     ;; Same as the loop below, but uses `unsafe-struct*-ref`:
     (let ([t (record-rtd s)])
       (if (struct-type-transparent? t)
-          (let ([n (struct-type-field-count t)])
+          (let ([n (struct-type-total*-field-count t)])
             (let loop ([j 0] [hc 0])
               (if (fx= j n)
                   hc
@@ -933,7 +986,7 @@
     (let ([raw-s (impersonator-val s)])
       (let ([t (record-rtd raw-s)])
         (if (struct-type-transparent? t)
-            (let ([n (struct-type-field-count t)])
+            (let ([n (struct-type-total*-field-count t)])
               (let loop ([j 0] [hc 0])
                 (if (fx= j n)
                     hc
@@ -941,55 +994,58 @@
                           (hash-code-combine hc (hash-code (unsafe-struct-ref s j)))))))
             (eq-hash-code raw-s))))]))
 
-(define (struct->vector s)
-  (if (record? s)
-      (let ([rtd (record-rtd s)])
-        ;; Create that vector that has '... for opaque ranges and each field
-        ;; value otherwise
-        (let-values ([(vec-len rec-len)
-                      ;; First, get the vector and record sizes
-                      (let loop ([vec-len 1] [rec-len 0] [rtd rtd] [dots-already? #f])
-                        (cond
-                         [(not rtd) (values vec-len rec-len)]
-                         [else
-                          (let ([len (#%vector-length (record-type-field-names rtd))])
-                            (cond
-                             [(struct-type-immediate-transparent? rtd)
-                              ;; A transparent region
-                              (loop (+ vec-len len) (+ rec-len len) (record-type-parent rtd) #f)]
-                             [dots-already?
-                              ;; An opaque region that follows an opaque region
-                              (loop vec-len (+ rec-len len) (record-type-parent rtd) #t)]
-                             [else
-                              ;; The start of opaque regions
-                              (loop (add1 vec-len) (+ rec-len len) (record-type-parent rtd) #t)]))]))])
-          ;; Walk though the record's types again, this time filling in the vector
-          (let ([vec (make-vector vec-len '...)])
-            (vector-set! vec 0 (string->symbol (format "struct:~a" (record-type-name rtd))))
-            (let loop ([vec-pos vec-len] [rec-pos rec-len] [rtd rtd] [dots-already? #f])
-              (when rtd
-                (let* ([len (#%vector-length (record-type-field-names rtd))]
-                       [rec-pos (- rec-pos len)])
-                  (cond
-                   [(struct-type-immediate-transparent? rtd)
-                    ;; Copy over a transparent region
-                    (let ([vec-pos (- vec-pos len)])
-                      (let floop ([n 0])
-                        (cond
-                         [(= n len) (loop vec-pos rec-pos (record-type-parent rtd) #f)]
-                         [else
-                          (vector-set! vec (+ vec-pos n) (unsafe-struct*-ref s (+ rec-pos n)))
-                          (floop (add1 n))])))]
-                   [dots-already?
-                    ;; Skip another opaque region
-                    (loop vec-pos rec-pos (record-type-parent rtd) #t)]
-                   [else
-                    ;; The vector already has '...
-                    (loop (sub1 vec-pos) rec-pos (record-type-parent rtd) #t)]))))
-            vec)))
-      ;; Any value that is not implemented as a record is treated as
-      ;; a fully opaque struct
-      (vector (string->symbol (format "struct:~a" ((inspect/object s) 'type))) '...)))
+(define struct->vector
+  (case-lambda
+   [(s dots)
+    (if (record? s)
+        (let ([rtd (record-rtd s)])
+          ;; Create that vector that has '... for opaque ranges and each field
+          ;; value otherwise
+          (let-values ([(vec-len rec-len)
+                        ;; First, get the vector and record sizes
+                        (let loop ([vec-len 1] [rec-len 0] [rtd rtd] [dots-already? #f])
+                          (cond
+                           [(not rtd) (values vec-len rec-len)]
+                           [else
+                            (let ([len (#%vector-length (record-type-field-names rtd))])
+                              (cond
+                               [(struct-type-immediate-transparent? rtd)
+                                ;; A transparent region
+                                (loop (+ vec-len len) (+ rec-len len) (record-type-parent rtd) #f)]
+                               [dots-already?
+                                ;; An opaque region that follows an opaque region
+                                (loop vec-len (+ rec-len len) (record-type-parent rtd) #t)]
+                               [else
+                                ;; The start of opaque regions
+                                (loop (add1 vec-len) (+ rec-len len) (record-type-parent rtd) #t)]))]))])
+            ;; Walk though the record's types again, this time filling in the vector
+            (let ([vec (make-vector vec-len dots)])
+              (vector-set! vec 0 (string->symbol (format "struct:~a" (record-type-name rtd))))
+              (let loop ([vec-pos vec-len] [rec-pos rec-len] [rtd rtd] [dots-already? #f])
+                (when rtd
+                  (let* ([len (#%vector-length (record-type-field-names rtd))]
+                         [rec-pos (- rec-pos len)])
+                    (cond
+                     [(struct-type-immediate-transparent? rtd)
+                      ;; Copy over a transparent region
+                      (let ([vec-pos (- vec-pos len)])
+                        (let floop ([n 0])
+                          (cond
+                           [(= n len) (loop vec-pos rec-pos (record-type-parent rtd) #f)]
+                           [else
+                            (vector-set! vec (+ vec-pos n) (unsafe-struct*-ref s (+ rec-pos n)))
+                            (floop (add1 n))])))]
+                     [dots-already?
+                      ;; Skip another opaque region
+                      (loop vec-pos rec-pos (record-type-parent rtd) #t)]
+                     [else
+                      ;; The vector already has `dots`
+                      (loop (sub1 vec-pos) rec-pos (record-type-parent rtd) #t)]))))
+              vec)))
+        ;; Any value that is not implemented as a record is treated as
+        ;; a fully opaque struct
+        (vector (string->symbol (format "struct:~a" ((inspect/object s) 'type))) dots))]
+   [(s) (struct->vector s '...)]))
 
 ;; ----------------------------------------
 
