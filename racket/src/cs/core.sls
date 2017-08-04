@@ -170,6 +170,10 @@
           raise-type-error
           raise-binding-result-arity-error ; not exported to Racket
 
+          (rename [make-unquoted-printing-string unquoted-printing-string])
+          unquoted-printing-string?
+          unquoted-printing-string-value
+
           make-struct-type-property
           struct-type-property?
           struct-type-property-accessor-procedure?

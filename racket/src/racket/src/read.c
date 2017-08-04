@@ -87,7 +87,6 @@ ROSYM static Scheme_Object *post_symbol;
 /* local function prototypes */
 static Scheme_Object *read_case_sensitive(int, Scheme_Object *[]);
 static Scheme_Object *read_accept_pipe_quote(int, Scheme_Object *[]);
-static Scheme_Object *read_decimal_as_inexact(int, Scheme_Object *[]);
 #ifdef LOAD_ON_DEMAND
 static Scheme_Object *read_delay_load(int, Scheme_Object *[]);
 #endif
@@ -280,7 +279,6 @@ void scheme_init_read(Scheme_Startup_Env *env)
 
   ADD_PARAMETER("read-case-sensitive",           read_case_sensitive,    MZCONFIG_CASE_SENS,                   env);
   ADD_PARAMETER("read-accept-bar-quote",         read_accept_pipe_quote, MZCONFIG_CAN_READ_PIPE_QUOTE,         env);
-  ADD_PARAMETER("read-decimal-as-inexact",       read_decimal_as_inexact,MZCONFIG_READ_DECIMAL_INEXACT,        env);
 #ifdef LOAD_ON_DEMAND
   ADD_PARAMETER("read-on-demand-source",         read_delay_load,        MZCONFIG_DELAY_LOAD_INFO,             env);
 #endif
@@ -335,12 +333,6 @@ static Scheme_Object *
 read_accept_pipe_quote(int argc, Scheme_Object *argv[])
 {
   DO_CHAR_PARAM("read-accept-pipe-quote", MZCONFIG_CAN_READ_PIPE_QUOTE);
-}
-
-static Scheme_Object *
-read_decimal_as_inexact(int argc, Scheme_Object *argv[])
-{
-  DO_CHAR_PARAM("read-decimal-as-inexact", MZCONFIG_READ_DECIMAL_INEXACT);
 }
 
 static Scheme_Object *

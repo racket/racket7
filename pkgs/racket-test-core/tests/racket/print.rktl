@@ -239,7 +239,8 @@
   (test "a b1234..." format "~.v" (unquoted-printing-string "a b12345678"))
   (test "who: oops\n  field: a b12345678\n"
         'raise-arguments-error
-        (parameterize ([current-error-port (open-output-bytes)])
+        (parameterize ([current-error-port (open-output-bytes)]
+                       [error-print-context-length 0])
           (call-with-continuation-prompt
            (lambda ()
              (raise-arguments-error 'who "oops" "field" (unquoted-printing-string "a b12345678")))

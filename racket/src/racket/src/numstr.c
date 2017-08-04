@@ -1794,8 +1794,7 @@ string_to_number (int argc, Scheme_Object *argv[])
       ESCAPED_BEFORE_HERE;
     }
   } else {
-    decimal_inexact = SCHEME_TRUEP(scheme_get_param(scheme_current_config(), 
-                                                    MZCONFIG_READ_DECIMAL_INEXACT));
+    decimal_inexact = 1;
   }
 
   mzstr = SCHEME_CHAR_STR_VAL(argv[0]);

@@ -713,8 +713,11 @@
 ;The optimizer is not capable of figuring out that the result of map is a list?
 (test-arg-types '(k:map procedure? list?) 'list?)
 (test-arg-types '(k:map procedure? list? list?) 'list?)
-(test-arg-types '(map procedure? list?) #f) ;should be list?
-(test-arg-types '(map procedure? list? list?) #f) ;should be list? 
+
+;Non-inlined slow-path means that the optimizer cannot infer for
+;non-built-in `map`:
+;(test-arg-types '(map procedure? list?) #f) ;should be list?
+;(test-arg-types '(map procedure? list? list?) #f) ;should be list? 
 
 (test-comp '(lambda (w z)
               (let ([x (list* w z)]

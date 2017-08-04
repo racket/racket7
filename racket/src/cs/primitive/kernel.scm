@@ -760,6 +760,9 @@
    truncate
    unbox
    uncaught-exception-handler
+   unquoted-printing-string
+   unquoted-printing-string?
+   unquoted-printing-string-value
    values
    vector
    vector->immutable-vector

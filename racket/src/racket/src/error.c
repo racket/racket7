@@ -823,9 +823,9 @@ void scheme_init_error(Scheme_Startup_Env *env)
 
   ADD_NONCM_PRIM("srcloc->string",   srcloc_to_string, 1, 1, env);
 
-  GLOBAL_NONCM_PRIM("unquoted-printing-string",   unquoted_printing_string, 1, 1, env);
-  GLOBAL_FOLDING_PRIM("unquoted-printing-string?",  unquoted_printing_string_p, 1, 1, 1, env);
-  GLOBAL_IMMED_PRIM("unquoted-printing-string-value",  unquoted_printing_string_value, 1, 1, env);
+  ADD_NONCM_PRIM("unquoted-printing-string",   unquoted_printing_string, 1, 1, env);
+  ADD_FOLDING_PRIM("unquoted-printing-string?",  unquoted_printing_string_p, 1, 1, 1, env);
+  ADD_IMMED_PRIM("unquoted-printing-string-value",  unquoted_printing_string_value, 1, 1, env);
 
   REGISTER_SO(scheme_def_exit_proc);
   REGISTER_SO(default_display_handler);

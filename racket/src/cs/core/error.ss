@@ -113,7 +113,10 @@
           [else
            (cons (string-append "\n  "
                                 (car more) ": "
-                                (error-value->string (cadr more)))
+                                (let ([val (cadr more)])
+                                  (if (unquoted-printing-string? val)
+                                      (unquoted-printing-string-value val)
+                                      (error-value->string val))))
                  (loop (cddr more)))])]
         [else
          (raise-argument-error 'raise-arguments-error "string?" (car more))])))
@@ -352,6 +355,18 @@
     exn:fail:unsupported
     (string-append (symbol->string id) ": unsupported")
     (current-continuation-marks))))
+
+;; ----------------------------------------
+
+(define-record-type (unquoted-printing-string new-unquoted-printing-string unquoted-printing-string?)
+  (fields value))
+
+(define make-unquoted-printing-string
+  (let ([unquoted-printing-string
+         (lambda (s)
+           (check 'unquoted-printing-string string? s)
+           (new-unquoted-printing-string s))])
+    unquoted-printing-string))
 
 ;; ----------------------------------------
 

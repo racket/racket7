@@ -83,7 +83,7 @@
                              [(string? p) (string->path p)]
                              [else
                               (for/hash ([(k v) (in-hash p)])
-                                (values k (to-path p)))]))
+                                (values k (to-path v)))]))
                          l))))
 
 (define/who use-compiled-file-paths
