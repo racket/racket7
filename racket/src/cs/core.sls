@@ -132,6 +132,7 @@
           procedure-closure-contents-eq?
           procedure-reduce-arity
           procedure-rename
+          procedure->method
           procedure-arity?
           prop:checked-procedure
           checked-procedure-check-and-extract

@@ -700,6 +700,7 @@
 
 (define ($current-mark-stack) (current-mark-stack))
 
+;; See copy in "expander.sls"
 (define-syntax with-continuation-mark
   (syntax-rules ()
     [(_ key val body)

@@ -172,9 +172,6 @@
                (srcloc-line s)
                (srcloc-column s))))
 
-(define (procedure->method p)
-  p)
-
 (define (interned-char? v)
   (and (char? v) (< (char->integer v) 256)))
 
@@ -357,8 +354,6 @@
 
    make-known-char-range-list
    
-   procedure->method
-
    interned-char?
    true-object?
    

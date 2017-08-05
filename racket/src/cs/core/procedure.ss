@@ -35,45 +35,65 @@
     [(proc args)
      (if (chez:procedure? proc)
          (chez:apply proc args)
-         (chez:apply (extract-procedure proc) args))]
+         (chez:apply (extract-procedure proc (length args)) args))]
+    [(proc)
+     (raise-arity-error 'apply (arity-at-least 2) proc)]
     [(proc . argss)
      (if (chez:procedure? proc)
          (chez:apply chez:apply proc argss)
-         (chez:apply chez:apply (extract-procedure proc) argss))]))
+         (let ([len (let loop ([argss argss])
+                      (cond
+                       [(null? (cdr argss)) (length (car argss))]
+                       [else (fx+ 1 (loop (cdr argss)))]))])
+           (chez:apply chez:apply (extract-procedure proc len) argss)))]))
 
-(define-syntax |#%app|
-  (syntax-rules ()
+;; See copy in "expander.sls"
+(define-syntax (|#%app| stx)
+  (syntax-case stx ()
     [(_ rator rand ...)
-     ((extract-procedure rator) rand ...)]))
+     (with-syntax ([n-args (length #'(rand ...))])
+       #'((extract-procedure rator n-args) rand ...))]))
 
-(define (extract-procedure f)
+(define (extract-procedure f n-args)
   (cond
    [(chez:procedure? f) f]
-   [else (or (try-extract-procedure f)
+   [else (or (try-extract-procedure/check-arity f n-args)
              (not-a-procedure f))]))
+
+;; returns #f or a host-Scheme procedure, and checks arity so that
+;; checking and reporting use the right top-level function
+(define (try-extract-procedure/check-arity f n-args)
+  (let ([v (try-extract-procedure f)])
+    (cond
+     [(not v) #f]
+     [(procedure-arity-includes? f n-args) v]
+     [else (wrong-arity-wrapper f)])))
 
 (define (try-extract-procedure f)
   (cond
+   [(chez:procedure? f) f]
    [(record? f)
-    (let* ([v (struct-property-ref prop:procedure (record-rtd f) #f)])
+    (let ([v (struct-property-ref prop:procedure (record-rtd f) none)])
       (cond
-       [(procedure? v) (case-lambda
-                         [() (|#%app| v f)]
-                         [(a) (|#%app| v f a)]
-                         [(a b) (|#%app| v f a b)]
-                         [(a b c) (|#%app| v f a b c)]
-                         [args (apply v f args)])]
+       [(eq? v none) #f]
        [(fixnum? v)
-        (let ([v (unsafe-struct-ref f v)])
-          (if (chez:procedure? v)
-              v
-              (or (try-extract-procedure v)
-                  (case-lambda))))]
+        (try-extract-procedure (unsafe-struct-ref f v))]
        [(eq? v 'unsafe)
-        (if (chaperone? f)
-            (unsafe-procedure-chaperone-replace-proc f)
-            (unsafe-procedure-impersonator-replace-proc f))]
-       [else #f]))]
+        (try-extract-procedure
+         (if (chaperone? f)
+             (unsafe-procedure-chaperone-replace-proc f)
+             (unsafe-procedure-impersonator-replace-proc f)))]
+       [else
+        (let ([v (try-extract-procedure v)])
+          (cond
+           [(not v) (case-lambda)]
+           [else
+            (case-lambda
+             [() (v f)]
+             [(a) (v f a)]
+             [(a b) (v f a b)]
+             [(a b c) (v f a b c)]
+             [args (chez:apply v f args)])]))]))]
    [else #f]))
 
 (define (extract-procedure-name f)
@@ -99,6 +119,9 @@
       (check who exact-nonnegative-integer? n)
       (bitwise-bit-set? mask n))]
    [(f n) (procedure-arity-includes? f n #f)]))
+
+(define (chez:procedure-arity-includes? proc n)
+  (bitwise-bit-set? (#%procedure-arity-mask proc) n))
 
 (define (procedure-arity orig-f)
   (mask->arity (get-procedure-arity-mask 'procedure-arity orig-f #t)))
@@ -161,9 +184,47 @@
                          "not a procedure;\n expected a procedure that can be applied to arguments"
                          "given" f))
 
+(define (wrong-arity-wrapper f)
+  (lambda args
+    (cond
+     [(procedure-is-method? f)
+      (chez:apply raise-arity-error
+                  f
+                  (let ([m (procedure-arity-mask f)])
+                    (if (not (bitwise-bit-set? m 0))
+                        (mask->arity (bitwise-arithmetic-shift-right m 1))
+                        (mask->arity m)))
+                  (cdr args))]
+     [else
+      (chez:apply raise-arity-error f (procedure-arity f) args)])))
+
 (define/who (procedure-result-arity p)
   (check who procedure? p)
   #f)
+
+;; ----------------------------------------
+
+(define-record method-procedure (proc))
+
+(define/who (procedure->method proc)
+  (check who procedure? proc)
+  (if (procedure-is-method? proc)
+      proc
+      (make-method-procedure proc)))
+
+(define (procedure-is-method? f)
+  (cond
+   [(chez:procedure? f) #f]
+   [(record? f)
+    (or (method-arity-error? f)
+        (let ([v (struct-property-ref prop:procedure (record-rtd f) #f)])
+          (cond
+           [(fixnum? v)
+            (procedure-is-method? (unsafe-struct-ref f v))]
+           [(eq? v 'unsafe)
+            (procedure-is-method? (impersonator-val f))]
+           [else (procedure-is-method? v)])))]
+   [else #f]))
 
 ;; ----------------------------------------
 
@@ -615,6 +676,13 @@
   (struct-property-set! prop:object-name
                         (record-type-descriptor reduced-arity-procedure)
                         2)
+
+  (struct-property-set! prop:procedure
+                        (record-type-descriptor method-procedure)
+                        0)
+  (struct-property-set! prop:method-arity-error
+                        (record-type-descriptor method-procedure)
+                        #t)
 
   (let ([register-procedure-impersonator-struct-type!
          (lambda (rtd)

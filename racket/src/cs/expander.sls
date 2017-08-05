@@ -131,6 +131,7 @@
       (install-table internal-table)))
 
   (when compile-as-independent?
+    ;; Copied of macros provided by `core`
     (eval '(define-syntax with-continuation-mark
              (syntax-rules ()
                [(_ key val body)
@@ -148,10 +149,11 @@
                     (if apply?
                         (#%apply values l)
                         l)))])))
-    (eval '(define-syntax |#%app|
-             (syntax-rules ()
+    (eval '(define-syntax (|#%app| stx)
+             (syntax-case stx ()
                [(_ rator rand ...)
-                ((extract-procedure rator) rand ...)])))
+                (with-syntax ([n-args (length #'(rand ...))])
+                  #'((extract-procedure rator n-args) rand ...))])))
     (eval `(define raise-binding-result-arity-error ',raise-binding-result-arity-error)))
 
   ;; ----------------------------------------
