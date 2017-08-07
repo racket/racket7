@@ -16,7 +16,9 @@
          custodian-limit-memory
 
          custodian-shut-down?
+         custodian-subordinate?
          custodian-manages-reference?
+         custodian-reference->custodian
          unsafe-make-custodian-at-root
          unsafe-custodian-register
          unsafe-custodian-unregister
@@ -40,7 +42,8 @@
 
 ;; Reporting registration in a custodian through this indirection
 ;; enables GCing custodians that aren't directly referenced, merging
-;; the managed objects into the parent
+;; the managed objects into the parent, although that posisbility is
+;; not currently implemented
 (struct custodian-reference (c)
   #:authentic)
 
@@ -98,7 +101,6 @@
     (atomically
      (define c (custodian-reference-c cref))
      (unless (custodian-shut-down? c)
-       (define cb (hash-ref (custodian-children c) obj #f))
        (hash-remove! (custodian-children c) obj)))))
 
 ;; Hook for thread scheduling:
@@ -117,25 +119,31 @@
   (unless (custodian-shut-down? c)
     (set-custodian-shut-down?! c #t)
     (for ([(child callback) (in-hash (custodian-children c))])
-      (callback child))
+      (if (procedure-arity-includes? callback 2)
+          (callback child c)
+          (callback child)))
     (hash-clear! (custodian-children c))))
 
-(define (subordinate? c super-c)
-  (let loop ([p (custodian-reference-c (custodian-parent-reference c))])
+(define (custodian-subordinate? c super-c)
+  (let loop ([p-cref (custodian-parent-reference c)])
+    (define p (and p-cref (custodian-reference-c p-cref)))
     (cond
       [(eq? p super-c) #t]
       [(not p) #f]
-      [else (loop (custodian-reference-c (custodian-parent-reference p)))])))
+      [else (loop (custodian-parent-reference p))])))
 
 (define (custodian-manages-reference? c cref)
   (define ref-c (custodian-reference-c cref))
   (or (eq? c ref-c)
-      (subordinate? ref-c c)))
+      (custodian-subordinate? ref-c c)))
+
+(define (custodian-reference->custodian cref)
+  (custodian-reference-c cref))
 
 (define/who (custodian-managed-list c super-c)
   (check who custodian? c)
   (check who custodian? super-c)
-  (unless (subordinate? c super-c)
+  (unless (custodian-subordinate? c super-c)
     (raise-arguments-error who "the second custodian does not manage the first custodian"
                            "first custodian" c
                            "second custodian" super-c))

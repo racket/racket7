@@ -1254,7 +1254,7 @@
       (collect-garbage)
       (plumber-flush-all c)
       (test 6 values done)
-      (set! h #f)
+      (test #t plumber-flush-handle? h)
       (collect-garbage)
       (plumber-flush-all c)
       (test 6 values done))))

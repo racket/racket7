@@ -34,7 +34,7 @@
                          parameterization-key paramz
                          (begin
                            (prefix)
-                           (call-with-values thunk engine-return))))
+                           (call-with-values (lambda () (|#%app| thunk)) engine-return))))
                    (if empty-config?
                        (make-empty-thread-cell-values)
                        (new-engine-thread-cell-values))
