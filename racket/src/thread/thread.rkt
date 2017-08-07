@@ -43,9 +43,11 @@
          
          thread-push-kill-callback!
          thread-pop-kill-callback!
+         thread-push-suspend+resume-callbacks!
+         thread-pop-suspend+resume-callbacks!
          
-         thread-internal-suspend!
-         thread-internal-resume!
+         thread-deschedule!
+         thread-reschedule!
          thread-yield
 
          thread-ignore-break-cell!
@@ -61,17 +63,20 @@
   (provide (struct-out thread)
 
            make-initial-thread
+           do-make-thread
            root-thread
            thread-running?
            thread-dead!
            thread-did-work!
            
-           thread-internal-resume!
+           thread-reschedule!
 
            poll-done-threads
 
            current-break-enabled-cell
-           check-for-break))
+           check-for-break
+
+           break-max))
 
 ;; ----------------------------------------
 
@@ -86,7 +91,9 @@
                      suspend-to-kill?
                      [kill-callbacks #:mutable] ; list of callbacks
                      
-                     [interrupt-callback #:mutable] ; non-#f when suspended
+                     [suspend+resume-callbacks #:mutable] ; list of (cons callback callback)
+                     [descheduled? #:mutable]
+                     [interrupt-callback #:mutable] ; non-#f => wake up on kill
                      
                      [dead-sema #:mutable] ; created on demand
                      [dead-evt #:mutable] ; created on demand
@@ -94,20 +101,18 @@
                      [suspended-sema #:mutable]
                      [resumed-sema #:mutable]
                     
-                     [needs-retry? #:mutable] ; => resuming implies an retry action
-                     
                      [pending-break #:mutable] ; #f, 'break, 'hang-up, or 'terminate
                      [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
-                     [forward-break-to #:mutable] ; #f or a thread to receive ths thread's breaks
+                     [forward-break-to #:mutable] ; #f or a thread to receive this thread's breaks
                      
                      [waiting-mail? #:mutable] ; whether to wake up on `thread-send`
                      [mailbox #:mutable])
         #:property prop:waiter
         (make-waiter-methods 
-         #:suspend! (lambda (t i-cb r-cb) (thread-internal-suspend! t #f i-cb r-cb))
-         #:resume! (lambda (t v) (thread-internal-resume! t) v))
+         #:suspend! (lambda (t i-cb r-cb) (thread-deschedule! t #f i-cb r-cb))
+         #:resume! (lambda (t v) (thread-reschedule! t) v))
         #:property prop:evt (lambda (t) (wrap-evt (get-thread-dead-evt t)
-                                             (lambda (v) t))))
+                                                  (lambda (v) t))))
 
 (define root-thread #f)
 
@@ -116,6 +121,7 @@
 
 (define (do-make-thread who
                         proc
+                        #:custodian [c (current-custodian)]
                         #:at-root? [at-root? #f]
                         #:initial? [initial? #f]
                         #:suspend-to-kill? [suspend-to-kill? #f])
@@ -140,8 +146,10 @@
                     #f ; custodian-reference
                     
                     suspend-to-kill?
-                    null
-                    
+                    null ; kill-callbacks
+
+                    null ; suspend+resume-callbacks
+                    #f ; descheduled
                     #f ; interrupt-callback
                     
                     #f ; dead-sema
@@ -150,17 +158,14 @@
                     #f ; suspended-sema
                     #f ; resumed-sema
 
-                    #f ; needs-retry?
-
                     #f ; pending-break
                     #f ; ignore-thread-cells
                     #f; forward-break-to
 
                     #f ; waiting for mail?
                     (make-queue))) ; mailbox
-  (define c (current-custodian))
   ((atomically
-    (define cref (unsafe-custodian-register c t kill-thread #f #t))
+    (define cref (unsafe-custodian-register c t do-kill-thread #f #t))
     (cond
       [cref
        (set-thread-custodian-reference! t cref)
@@ -203,15 +208,13 @@
   (set-thread-engine! t 'done)
   (when (thread-dead-sema t)
     (semaphore-post-all (thread-dead-sema t)))
-  (cond
-   [(thread-interrupt-callback t)
-    => (lambda (interrupt)
-         (set-thread-interrupt-callback! t void)
-         (interrupt))]
-   [else
-    (thread-group-remove! (thread-parent t) t)])
+  (run-interrupt-callback t)
+  (unless (thread-descheduled? t)
+    (thread-group-remove! (thread-parent t) t))
   (remove-from-sleeping-threads! t)
   (run-kill-callbacks! t)
+  (when (thread-forward-break-to t)
+    (do-break-thread (thread-forward-break-to t) 'break #f))
   (unsafe-custodian-unregister t (thread-custodian-reference t)))
 
 ;; ----------------------------------------
@@ -229,18 +232,43 @@
 
 (define/who (kill-thread t)
   (check who thread? t)
+  (unless (custodian-manages-reference? (current-custodian) (thread-custodian-reference t))
+    (raise-arguments-error who
+                           "the current custodian does not solely manage the specified thread"
+                           "thread" t))
   (atomically
-   (unless (thread-dead? t)
-     (thread-dead! t)))
+   (do-kill-thread t))
   (when (eq? t (current-thread))
     (when (eq? t root-thread)
       (force-exit 0))
-    (engine-block)))
+    (engine-block))
+  (check-for-break-after-kill))
 
+;; Called in atomic mode:
+(define (do-kill-thread t)
+  (unless (thread-dead? t)
+    (thread-dead! t)))
+
+;; Called in atomic mode:
 (define (run-kill-callbacks! t)
   (for ([cb (in-list (thread-kill-callbacks t))])
     (cb))
   (set-thread-kill-callbacks! t null))
+
+(define (check-for-break-after-kill)
+  ;; When a thread is terminated, it might be a nesting thread and
+  ;; send a break to a nestee --- and the current thread might be the
+  ;; nestee.
+  (check-for-break))
+
+(void (set-post-shutdown-action!
+       (lambda ()
+         ;; Check whether the current thread was terminated
+         (let ([t (current-thread)])
+           (when t ; in case custodians used (for testing) without threads
+             (when (thread-dead? t)
+               (engine-block))
+             (check-for-break-after-kill))))))
 
 ;; ----------------------------------------
 ;; Thread status events
@@ -290,57 +318,54 @@
   (define sleeping (sandman-add-sleeping-thread! t ext-events))
   (set-thread-sleeping! t sleeping))
 
+;; in atomic mode
 ;; Removes a thread from its thread group, so it won't be scheduled;
 ;; returns a thunk to be called in out of atomic mode to swap out the
-;; thread, where the thunk returns `(void)`; the `interrupt-callback`
-;; is called if the thread receives a break signal, is killed, or is
-;; suspended; if the break signal is supressed or resumed, then
-;; `retry-callback` is called to try again --- but `retry-callback`
-;; will only be used if `interrupt-callback` was previously called,
-;; and neither is called if the thread is "internal"-resumed normally
-;; instead of by a break signal of a `thread-resume`.
-(define (thread-internal-suspend! t timeout-at interrupt-callback retry-callback)
+;; thread, where the thunk returns `(void)`;
+(define (do-thread-deschedule! t timeout-at)
+  (set-thread-descheduled?! t #t)
+  (thread-group-remove! (thread-parent t) t)
+  (when timeout-at
+    (add-to-sleeping-threads! t (sandman-merge-timeout #f timeout-at)))
+  (when (eq? t (current-thread))
+    (thread-did-work!))
+  (lambda ()
+    (when (eq? t (current-thread))
+      (engine-block)
+      (check-for-break))))
+
+;; Extends `do-thread-deschdule!` where `t` is always `(current-thread)`.
+;; The `interrupt-callback` is called if the thread receives a break
+;; signal, is killed, or is suspended; if the break signal is
+;; supressed or resumed, then `retry-callback` is called to try again
+;; --- but `retry-callback` will only be used if `interrupt-callback`
+;; was previously called, and neither is called if the thread is
+;; "internal"-resumed normally instead of by a break signal of a
+;; `thread-resume`.
+(define (thread-deschedule! t timeout-at interrupt-callback retry-callback)
+  (define needs-retry? #f)
   (atomically
    (set-thread-interrupt-callback! t (lambda ()
                                        ;; If the interrupt callback gets invoked,
                                        ;; then remember that we need a retry
-                                       (set-thread-needs-retry?! t #t)
+                                       (set! needs-retry? #t)
                                        (interrupt-callback)))
-   (thread-group-remove! (thread-parent t) t)
-   (when timeout-at
-     (add-to-sleeping-threads! t (sandman-merge-timeout #f timeout-at)))
-   (when (eq? t (current-thread))
-     (thread-did-work!))
+   (define finish (do-thread-deschedule! t timeout-at))
    ;; It's ok if the thread gets interrupted
    ;; outside the atomic region, because we'd
    ;; swap it out anyway
    (lambda ()
      ;; In non-atomic mode:
-     (when (eq? t (current-thread))
-       (engine-block)
-       (check-for-retrying-break t retry-callback)))))
-
-;; Check for a break signal that woke up an operation that needs a
-;; specific retry action:
-(define (check-for-retrying-break t retry-callback)
-  ((atomically
-    (cond
-     [(thread-needs-retry? t)
-      ;; Since the callback wasn't cleared, the thread
-      ;; was woken up to check for a break
-      (set-thread-needs-retry?! t #f)
-      (thread-did-work!)
-      (lambda ()
-        ;; In non-atomic mode:
-        (check-for-break)
-        (retry-callback))]
-     [else void]))))
+     (finish)
+     (when needs-retry?
+       (retry-callback)))))
 
 ;; in atomic mode
 ;; Add a thread back to its thread group
-(define (thread-internal-resume! t)
+(define (thread-reschedule! t)
   (when (thread-dead? t)
     (internal-error "tried to resume a dead thread"))
+  (set-thread-descheduled?! t #f)
   (set-thread-interrupt-callback! t #f)
   (remove-from-sleeping-threads! t)
   (thread-group-add! (thread-parent t) t))
@@ -350,20 +375,18 @@
   ((atomically
     (unless (thread-suspended? t)
       (set-thread-suspended?! t #t)
-      (let ([interrupt-callback (thread-interrupt-callback t)])
-        (when interrupt-callback
-          ;; Suspending a thread is similar to issuing a break;
-          ;; the thread should get out of any queues where it's
-          ;; waiting, etc.
-          (set-thread-interrupt-callback! t void)
-          (interrupt-callback)))
+      ;; Suspending a thread is similar to issuing a break;
+      ;; the thread should get out of any queues where it's
+      ;; waiting, etc.:
+      (run-interrupt-callback t)
+      (run-suspend/resume-callbacks t car)
       (when (thread-suspended-sema t)
         (semaphore-post-all (thread-suspended-sema t))
         (set-thread-suspended-sema! t #f)))
     (cond
-     [(not (thread-interrupt-callback t)) ; => not internally suspended already
-      (thread-internal-suspend! t #f void void)]
-     [else 
+     [(not (thread-descheduled? t))
+      (do-thread-deschedule! t #f)]
+     [else
       void]))))
 
 (define/who (thread-resume t [benefactor #f])
@@ -378,7 +401,36 @@
          (semaphore-post-all (thread-resumed-sema t))
          (set-thread-resumed-sema! t #f))
        (set-thread-suspended?! t #f)
-       (thread-internal-resume! t)))))
+       (run-suspend/resume-callbacks t cdr)
+       (thread-reschedule! t)))))
+
+;; Called in atomic mode:
+;; Given callbacks are also called in atomic mode
+(define (thread-push-suspend+resume-callbacks! s-cb r-cb)
+  (define t (current-thread))
+  (set-thread-suspend+resume-callbacks! t (cons (cons s-cb r-cb)
+                                                (thread-suspend+resume-callbacks t))))
+
+;; Called in atomic mode:
+(define (thread-pop-suspend+resume-callbacks!)
+  (define t (current-thread))
+  (set-thread-suspend+resume-callbacks! t (cdr (thread-suspend+resume-callbacks t))))
+
+;; Called in atomic mode:
+(define (run-suspend/resume-callbacks t sel)
+  (for ([cbs (in-list (thread-suspend+resume-callbacks t))])
+    ((sel cbs))))
+
+;; Called in atomic mode:
+(define (run-interrupt-callback t)
+  (define interrupt-callback (thread-interrupt-callback t))
+  (when interrupt-callback
+    ;; The interrupt callback might remove the thread as
+    ;; a waiter on a semaphore of channel; if breaks
+    ;; turn out to be disabled, the wait will be
+    ;; retried through the retry callback
+    (set-thread-interrupt-callback! t #f)
+    (interrupt-callback)))
 
 ;; ----------------------------------------
 ;; Suspend and resume events
@@ -436,13 +488,13 @@
   (define until-msecs (+ (* secs 1000.0)
                          (current-inexact-milliseconds)))
   (let loop ()
-    ((thread-internal-suspend! (current-thread)
-                               until-msecs
-                               void
-                               (lambda ()
-                                 ;; Woke up due to an ignored break?
-                                 ;; Try again:
-                                 (loop))))))
+    ((thread-deschedule! (current-thread)
+                         until-msecs
+                         void
+                         (lambda ()
+                           ;; Woke up due to an ignored break?
+                           ;; Try again:
+                           (loop))))))
 
 ;; ----------------------------------------
 ;; Tracking thread progress
@@ -489,7 +541,10 @@
 (define break-enabled
   (case-lambda
     [() (thread-cell-ref (current-break-enabled-cell))]
-    [(on?) (thread-cell-set! (current-break-enabled-cell) on?)]))
+    [(on?)
+     (thread-cell-set! (current-break-enabled-cell) on?)
+     (when on?
+       (check-for-break))]))
 
 ;; When the continuation-mark mapping to `break-enabled-key` is
 ;; changed, or when a thread is just swapped in, then
@@ -501,11 +556,7 @@
      [(and (thread-pending-break t)
            (break-enabled)
            (not (thread-ignore-break-cell? t (current-break-enabled-cell)))
-           (zero? (current-break-suspend))
-           ;; If a retry is pending, then defer
-           ;; break checking to the continuation (instead
-           ;; of raising an asynchronous exception now)
-           (not (thread-needs-retry? t)))
+           (zero? (current-break-suspend)))
       (define exn:break* (case (thread-pending-break t)
                            [(hang-up) exn:break:hang-up/non-engine]
                            [(terminate) exn:break:terminate/non-engine]
@@ -528,6 +579,7 @@
          kind)
   (do-break-thread t (or kind 'break) (current-thread)))
 
+;; Might be called in atomic mode, but `check-t` is #f in that case
 (define (do-break-thread t kind check-t)
   ((atomically
     (cond
@@ -540,16 +592,10 @@
          (set-thread-pending-break! t kind))
        (unless (thread-pending-break t)
          (set-thread-pending-break! t kind)
-         (unless (thread-suspended? t)
-           (cond
-             [(thread-interrupt-callback t)
-              => (lambda (interrupt-callback)
-                   ;; The interrupt callback might remove the thread as
-                   ;; a waiter on a semaphore of channel; if breaks
-                   ;; turn out to be disabled, the wait will be
-                   ;; retried through the retry callback
-                   (interrupt-callback)
-                   (thread-internal-resume! t))])))
+         (when (thread-descheduled? t)
+           (unless (thread-suspended? t)
+             (run-interrupt-callback t)
+             (thread-reschedule! t))))
        void])))
   (when (eq? t check-t)
     (check-for-break)))
@@ -559,6 +605,12 @@
     [(eq? k1 'break) #f]
     [(eq? k1 'hang-up) (eq? k2 'break)]
     [else (not (eq? k2 'terminate))]))
+
+(define (break-max k1 k2)
+  (cond
+    [(not (and k1 k2)) (or k1 k2)]
+    [(break>? k1 k2) k1]
+    [else k2]))
 
 (void
  (set-ctl-c-handler!
@@ -629,7 +681,7 @@
        (enqueue-mail! thd v)
        (when (thread-waiting-mail? thd)
          (set-thread-waiting-mail?! thd #f)
-         (thread-internal-resume! thd))
+         (thread-reschedule! thd))
        void]
       [fail-thunk
        fail-thunk]
@@ -646,13 +698,13 @@
       [else
        (set-thread-waiting-mail?! t #t)
        (define do-yield
-         (thread-internal-suspend! t
-                                   #f
-                                   ;; Interrupted for break => not waiting for mail
-                                   (lambda ()
-                                     (set-thread-waiting-mail?! t #f))
-                                   ;; No retry action, because we always retry:
-                                   void))
+         (thread-deschedule! t
+                             #f
+                             ;; Interrupted for break => not waiting for mail
+                             (lambda ()
+                               (set-thread-waiting-mail?! t #f))
+                             ;; No retry action, because we always retry:
+                             void))
        ;; called out of atomic mode:
        (lambda ()
          (do-yield)

@@ -51,9 +51,9 @@
         (define gq (channel-get-queue ch))
         (define n (queue-add! gq (cons gw b)))
         (waiter-suspend! gw
-                         ;; On break/kill:
+                         ;; On break/kill/suspend:
                          (lambda () (queue-remove-node! gq n))
-                         ;; On retry after break:
+                         ;; On retry after break or resume:
                          (lambda () (receive)))]
        [else
         (set-box! b (cdr pw+v))
@@ -109,9 +109,9 @@
       (define pq (channel-put-queue ch))
       (define n (queue-add! pq (cons pw v)))
       (waiter-suspend! pw
-                       ;; On break/kill:
+                       ;; On break/kill/suspend:
                        (lambda () (queue-remove-node! pq n))
-                       ;; On retry after break:
+                       ;; On retry after break or resume:
                        (lambda () (channel-put ch v)))]
      [else
       (set-box! (cdr gw+b) v)

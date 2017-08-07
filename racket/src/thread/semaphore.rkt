@@ -91,17 +91,16 @@
       (define w (current-thread))
       (define q (semaphore-queue s))
       (define n (queue-add! q w))
-      (let retry ()
-        (waiter-suspend!
-         w
-         ;; On break signal (possibly to be ignored) or kill:
-         (lambda ()
-           (queue-remove-node! q n))
-         ;; This callback is used, in addition to the previous one, if
-         ;; the thread receives a break signal but doesn't escape
-         ;; (either because breaks are disabled or the handler
-         ;; continues):
-         (lambda () (semaphore-wait s))))]))))
+      (waiter-suspend!
+       w
+       ;; On break/kill/suspend:
+       (lambda () (queue-remove-node! q n))
+       ;; This callback is used, in addition to the previous one, if
+       ;; the thread receives a break signal but doesn't escape
+       ;; (either because breaks are disabled or the handler
+       ;; continues), if if the interrupt was to suspend and the thread
+       ;; is resumed:
+       (lambda () (semaphore-wait s)))]))))
 
 (define (semaphore-wait/poll s poll-ctx
                              #:peek? [peek? #f]

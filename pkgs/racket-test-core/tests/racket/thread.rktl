@@ -555,7 +555,10 @@
 	  (sleep)
 	  'not-void)))
 
-(err/rt-test (let/cc k (call-in-nested-thread (lambda () (k)))) exn:fail:contract:continuation?)
+;(err/rt-test (let/cc k (call-in-nested-thread (lambda () (k)))) exn:fail:contract:continuation?)
+(err/rt-test (call-with-continuation-barrier
+              (lambda ()
+                (let/cc k (call-in-nested-thread (lambda () (k)))) exn:fail:contract:continuation?)))
 (err/rt-test (let/ec k (call-in-nested-thread (lambda () (k)))) exn:fail:contract:continuation?)
 (err/rt-test ((call-in-nested-thread (lambda () (let/cc k k)))) exn:fail:contract:continuation?)
 (err/rt-test ((call-in-nested-thread (lambda () (let/ec k k)))) exn:fail:contract:continuation?)

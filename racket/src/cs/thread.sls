@@ -43,6 +43,10 @@
 
   (include "compiled/thread.scm")
 
+  (set-engine-exit-handler!
+   (lambda (v)
+     (|#%app| (|#%app| 1/exit-handler) v)))
+
   (set-scheduler-lock-callbacks! (lambda () (1/make-semaphore 1))
                                  1/semaphore-wait
                                  1/semaphore-post))

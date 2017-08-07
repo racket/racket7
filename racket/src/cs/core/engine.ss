@@ -18,6 +18,12 @@
 (define (get-ctl-c-handler)
   (keyboard-interrupt-handler))
 
+(define (engine-exit v)
+  (chez:exit v))
+
+(define (set-engine-exit-handler! proc)
+  (set! engine-exit proc))
+
 (define (make-engine thunk init-break-enabled-cell empty-config?)
   (let ([paramz (if empty-config?
                     empty-parameterization

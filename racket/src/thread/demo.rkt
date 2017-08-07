@@ -165,7 +165,7 @@
      (report-expected-break)
      (unless kill?
        (check #t ((current-inexact-milliseconds) . >= . (+ now3 0.1))))
-     
+
      ;; Check that a semaphore wait can be abandoned
      (define tstuck (thread (lambda () (semaphore-wait (make-semaphore)))))
      (sync (system-idle-evt))
@@ -187,7 +187,7 @@
      (report-expected-break)
      (check nack1 (sync nack1))
      (check nack2 (sync nack2))
-     
+
      ;; Make sure a `sync` can be abandoned during a guard callback
      (define tfail (thread (lambda ()
                              (sync (nack-guard-evt
@@ -327,7 +327,7 @@
    (check 10 (call-in-nested-thread (lambda () 10)))
    (check '(1 2) (call-with-values (lambda ()
                                      (call-in-nested-thread (lambda () (values 1 2))))
-                                   list))
+                   list))
 
    ;; Custodians
    (define c (make-custodian))

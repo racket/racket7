@@ -28,7 +28,6 @@
                            make-engine engine-block engine-return
                            current-eval load
                            sleep thread? buffer-mode?
-                           exit-handler
                            equal?
                            vector? mutable-vector? vector-length vector-ref vector-set!
                            vector-copy vector-fill! vector->immutable-vector vector->list
@@ -68,6 +67,7 @@
                    [memq chez:memq]
                    [error chez:error]
                    [raise chez:raise]
+                   [exit-handler chez:exit-handler]
                    [exit chez:exit]
                    [vector-sort! chez:vector-sort!]
                    [vector-sort chez:vector-sort]))))

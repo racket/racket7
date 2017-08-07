@@ -404,7 +404,7 @@
                  (|#%app| display-handler message exn)))))))))
     (when (or (exn:break:hang-up? exn)
               (exn:break:terminate? exn))
-      (chez:exit 1))
+      (engine-exit 1))
     (let ([escape-handler (|#%app| error-escape-handler)])
       (call-with-parameterization
        error-display-handler

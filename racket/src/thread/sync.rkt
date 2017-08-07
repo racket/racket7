@@ -18,7 +18,8 @@
 (struct syncing (selected ; #f or a syncer that has been selected
                  syncers  ; linked list of `syncer`s
                  wakeup   ; a callback for when something is selected
-                 disable-break) ; a thunk that disables breaks
+                 disable-break ; a thunk that disables breaks
+                 need-retry?) ; queued trigger to `syncing-retry!`
         #:mutable)
 
 (struct syncer (evt   ; the evt to sync; can get updated in sync loop
@@ -58,7 +59,7 @@
          timeout)
 
   (define local-break-cell (and enable-break?
-                                (make-thread-cell #t #t)))
+                                (make-thread-cell #t)))
 
   (define syncers (evts->syncers who args null))
   (define s (syncing #f ; selected
@@ -67,7 +68,8 @@
                      (and local-break-cell
                           (let ([t (current-thread)])
                             (lambda ()
-                              (thread-ignore-break-cell! t local-break-cell))))))
+                              (thread-ignore-break-cell! t local-break-cell))))
+                     #f)) ; need-retry?
 
   (begin0
     (with-continuation-mark
@@ -79,8 +81,12 @@
       (lambda ()
         (atomically
          (thread-push-kill-callback!
-          (lambda () (syncing-abandon! s)))))
+          (lambda () (syncing-abandon! s)))
+         (thread-push-suspend+resume-callbacks!
+          (lambda () (syncing-interrupt! s))
+          (lambda () (syncing-queue-retry! s)))))
       (lambda ()
+        (when enable-break? (check-for-break))
         (cond
           [(and (real? timeout) (zero? timeout))
            (sync-poll s (lambda (sched-info) #f) #:just-poll? #t)]
@@ -95,7 +101,7 @@
            (let loop ([did-work? #t])
              (cond
                [(and timeout
-                     (timeout-at . >= . (current-inexact-milliseconds)))
+                     (timeout-at . <= . (current-inexact-milliseconds)))
                 (syncing-done! s none-syncer)
                 #f]
                [(and (all-asynchronous? s)
@@ -111,6 +117,7 @@
                              (loop #f)))]))]))
       (lambda ()
         (atomically
+         (thread-pop-suspend+resume-callbacks!)
          (thread-pop-kill-callback!)
          (when local-break-cell
            (thread-remove-ignored-break-cell! (current-thread) local-break-cell))
@@ -186,6 +193,8 @@
   (define sched-info (make-schedule-info #:did-work? did-work?))
   (let loop ([sr (syncing-syncers s)]
              [retries 0]) ; count retries on `sr`, and advance if it's too many
+    (when (syncing-need-retry? s)
+      (syncing-retry! s))
     ((atomically
       (cond
        [(syncing-selected s)
@@ -198,7 +207,7 @@
         (lambda () (none-k sched-info))]
        [(= retries MAX-SYNC-TRIES-ON-ONE-EVT)
         (schedule-info-did-work! sched-info)
-        (loop (syncer-next sr) 0)]
+        (lambda () (loop (syncer-next sr) 0))]
        [else
         (define-values (results new-evt)
           (evt-poll (syncer-evt sr) (poll-ctx just-poll?
@@ -272,7 +281,7 @@
           (lambda () (loop (syncer-next sr) 0))]
          [else
           (set-syncer-evt! sr new-evt)
-          (lambda () (loop (syncer-next sr) 0))])])))))
+          (lambda () (loop sr (add1 retries)))])])))))
 
 (define (make-result-thunk sr results)
   (define wraps (syncer-wraps sr))
@@ -321,11 +330,10 @@
 (define (syncing-interrupt! s)
   (let loop ([sr (syncing-syncers s)])
     (when sr
-      (when (syncer-interrupted? sr)
-        (internal-error "interrupting an already-interrupted syncer"))
-      (set-syncer-interrupted?! sr #t)
-      (for ([interrupt (in-list (syncer-interrupts sr))])
-        (interrupt))
+      (unless (syncer-interrupted? sr)
+        (set-syncer-interrupted?! sr #t)
+        (for ([interrupt (in-list (syncer-interrupts sr))])
+          (interrupt)))
       (loop (syncer-next sr)))))
 
 ;; Called in atomic mode
@@ -334,19 +342,25 @@
 ;;  succeed immediately, moving the synchronization into "selected"
 ;;  state
 (define (syncing-retry! s)
-  (let loop ([sr (syncing-syncers s)] [done? #f])
+  (set-syncing-need-retry?! s #f)
+  (let loop ([sr (syncing-syncers s)])
     (when (and sr
                (not (syncing-selected s)))
-      (unless (syncer-interrupted? sr)
-        (internal-error "retrying a non-interrupted syncer"))
-      (set-syncer-interrupted?! sr #f)
-      ;; Although we keep a list of retries, we expect only
-      ;; one to be relevant
-      (for ([retry (in-list (syncer-retries sr))])
-        (define-values (result ready?) (retry))
-        (when ready?
-          (set-syncer-wraps! sr (cons (lambda args result) (syncer-wraps sr)))
-          (syncing-done! s sr))))))
+      (when (syncer-interrupted? sr)
+        (set-syncer-interrupted?! sr #f)
+        ;; Although we keep a list of retries, we expect only
+        ;; one to be relevant
+        (for ([retry (in-list (syncer-retries sr))])
+          (define-values (result ready?) (retry))
+          (when ready?
+            (set-syncer-wraps! sr (cons (lambda args result) (syncer-wraps sr)))
+            (syncing-done! s sr))))
+      (loop (syncer-next sr)))))
+
+;; Queue a retry when a check for breaks should happen before a retry
+;; that might immediately succeed
+(define (syncing-queue-retry! s)
+  (set-syncing-need-retry?! s #t))
 
 ;; ----------------------------------------
 
@@ -379,21 +393,24 @@
          s
          (lambda ()
            (set-syncing-wakeup! s void)
-           (thread-internal-resume! t)))
-        (thread-internal-suspend! t
-                                  timeout-at
-                                  (lambda ()
-                                    ;; Break/kill signal
-                                    (set-syncing-wakeup! s void)
-                                    (unless (syncing-selected s)
-                                      (syncing-interrupt! s)))
-                                  (lambda ()
-                                    ;; Continue from or ignore break...
-                                    ;; In non-atomic mode and tail position:
-                                    ((atomically
-                                      (unless (syncing-selected s)
-                                        (syncing-retry! s))
-                                      (retry)))))])))))
+           (thread-reschedule! t)))
+        ;; Suspend and resume callbacks will also
+        ;; interrupt and queue a retry, but it's ok
+        ;; to have both at this point
+        (thread-deschedule! t
+                            timeout-at
+                            (lambda ()
+                              ;; Interrupt due to break/kill/suspend
+                              (set-syncing-wakeup! s void)
+                              (unless (syncing-selected s)
+                                (syncing-interrupt! s)))
+                            (lambda ()
+                              ;; Continue from suspend or ignored break...
+                              ;; In non-atomic mode and tail position:
+                              ((atomically
+                                (unless (syncing-selected s)
+                                  (syncing-retry! s))
+                                (retry)))))])))))
 
 ;; ----------------------------------------
 

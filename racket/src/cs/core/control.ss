@@ -201,7 +201,7 @@
 (define (resume-metacontinuation results)
   ;; pop a metacontinuation frame
   (cond
-   [(null? (current-metacontinuation)) (chez:exit)]
+   [(null? (current-metacontinuation)) (engine-return)]
    [else
     (start-uninterrupted 'resume-mc)
     (let ([mf (car (current-metacontinuation))])

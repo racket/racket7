@@ -16,10 +16,12 @@
          custodian-limit-memory
 
          custodian-shut-down?
+         custodian-manages-reference?
          unsafe-make-custodian-at-root
          unsafe-custodian-register
          unsafe-custodian-unregister
-         raise-custodian-is-shut-down)
+         raise-custodian-is-shut-down
+         set-post-shutdown-action!)
 
 (struct custodian (children     ; weakly maps maps object to callback
                    [shut-down? #:mutable]
@@ -58,7 +60,7 @@
 (define/who (make-custodian [parent (current-custodian)])
   (check who custodian? parent)
   (define c (create-custodian))
-  (define cref (unsafe-custodian-register parent c custodian-shutdown-all #f #t))
+  (define cref (unsafe-custodian-register parent c do-custodian-shutdown-all #f #t))
   (set-custodian-parent-reference! c cref)
   (unless cref (raise-custodian-is-shut-down who parent))
   c)
@@ -99,14 +101,24 @@
        (define cb (hash-ref (custodian-children c) obj #f))
        (hash-remove! (custodian-children c) obj)))))
 
+;; Hook for thread scheduling:
+(define post-shutdown-action void)
+(define (set-post-shutdown-action! proc)
+  (set! post-shutdown-action proc))
+
 (define/who (custodian-shutdown-all c)
   (check who custodian? c)
   (atomically
-   (unless (custodian-shut-down? c)
-     (set-custodian-shut-down?! c #t)
-     (for ([(child callback) (in-hash (custodian-children c))])
-       (callback child))
-     (hash-clear! (custodian-children c)))))
+   (do-custodian-shutdown-all c))
+  (post-shutdown-action))
+
+;; In atomic mode
+(define (do-custodian-shutdown-all c)
+  (unless (custodian-shut-down? c)
+    (set-custodian-shut-down?! c #t)
+    (for ([(child callback) (in-hash (custodian-children c))])
+      (callback child))
+    (hash-clear! (custodian-children c))))
 
 (define (subordinate? c super-c)
   (let loop ([p (custodian-reference-c (custodian-parent-reference c))])
@@ -114,6 +126,11 @@
       [(eq? p super-c) #t]
       [(not p) #f]
       [else (loop (custodian-reference-c (custodian-parent-reference p)))])))
+
+(define (custodian-manages-reference? c cref)
+  (define ref-c (custodian-reference-c cref))
+  (or (eq? c ref-c)
+      (subordinate? ref-c c)))
 
 (define/who (custodian-managed-list c super-c)
   (check who custodian? c)
