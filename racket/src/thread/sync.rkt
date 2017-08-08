@@ -6,6 +6,8 @@
          "semaphore.rkt"
          "channel.rkt"
          "thread.rkt"
+         (only-in (submod "thread.rkt" scheduling)
+                  current-break-enabled-cell)
          "schedule-info.rkt")
 
 (provide sync
@@ -76,7 +78,7 @@
      break-enabled-key
      (if enable-break?
          local-break-cell
-         (continuation-mark-set-first #f break-enabled-key))
+         (current-break-enabled-cell))
      (dynamic-wind
       (lambda ()
         (atomically

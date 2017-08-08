@@ -121,7 +121,7 @@
       current-t
       (lambda (c v)
         (when (thread-cell-preserved? c)
-          (hashtable-delete! new-t c))))
+          (hashtable-delete! current-t c))))
      (hash-table-for-each
       new-t
       (lambda (c v)

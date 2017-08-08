@@ -999,9 +999,10 @@
        [loop (lambda ()
 	       (let loop ()
 		 (set! v (add1 v))
-		 (sync (car all-ticks))
-                 (set! all-ticks (cdr all-ticks))
-                 (loop)))]
+                 (unless (null? all-ticks)
+                   (sync (car all-ticks))
+                   (set! all-ticks (cdr all-ticks))
+                   (loop))))]
        [c0 (make-custodian)])
   (let ([try
 	 (lambda (resumable?)

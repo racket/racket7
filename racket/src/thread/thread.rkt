@@ -87,7 +87,7 @@
                      [sched-info #:mutable]
 
                      [custodian-references #:mutable] ; list of custodian references
-                     [beneficiaries #:mutable] ; a weak list for resume propagations
+                     [transitive-resumes #:mutable] ; a list of `transitive-resume`s
 
                      suspend-to-kill?
                      [kill-callbacks #:mutable] ; list of callbacks
@@ -98,7 +98,7 @@
                      
                      [dead-sema #:mutable] ; created on demand
                      [dead-evt #:mutable] ; created on demand
-                     [suspended? #:mutable]
+                     [suspended-box #:mutable] ; created on demand; box contains thread if suspended
                      [suspended-evt #:mutable]
                      [resumed-evt #:mutable]
                     
@@ -130,7 +130,8 @@
   (define p (if at-root?
                 root-thread-group
                 (current-thread-group)))
-  (define e (make-engine proc
+  (define e (make-engine (lambda ()
+                           (call-with-continuation-prompt proc))
                          (if (or initial? at-root?)
                              break-enabled-default-cell
                              (current-break-enabled-cell))
@@ -145,7 +146,7 @@
                     #f ; sched-info
 
                     null ; custodian-references
-                    null ; beneficiaries
+                    null ; transitive-resumes
                     
                     suspend-to-kill?
                     null ; kill-callbacks
@@ -156,7 +157,7 @@
                     
                     #f ; dead-sema
                     #f ; dead-evt
-                    #f ; suspended?
+                    #f ; suspended-box
                     #f ; suspended-evt
                     #f ; resumed-evt
 
@@ -194,6 +195,18 @@
 
 ;; ----------------------------------------
 ;; Thread status
+
+(define (thread-suspended? t)
+  (define b (thread-suspended-box t))
+  (and b (unbox b) #t))
+
+;; in atomic mode
+(define (set-thread-suspended?! t suspended?)
+  (define b (or (thread-suspended-box t)
+                (let ([b (box #f)])
+                  (set-thread-suspended-box! t b)
+                  b)))
+  (set-box! b (and suspended? t)))
 
 (define/who (thread-running? t)
   (check who thread? t)
@@ -438,7 +451,7 @@
       [(thread? benefactor)
        (for ([cr (in-list (thread-custodian-references benefactor))])
          (add-custodian-to-thread! t (custodian-reference->custodian cr)))
-       (add-beneficiary-to-thread! benefactor t)]
+       (add-transitive-resume-to-thread! benefactor t)]
       [(custodian? benefactor)
        (add-custodian-to-thread! t benefactor)])
     (when (and (thread-suspended? t)
@@ -451,7 +464,7 @@
       (set-thread-suspended?! t #f)
       (run-suspend/resume-callbacks t cdr)
       (thread-reschedule! t)
-      (do-resume-beneficiaries t #f))))
+      (do-resume-transitive-resumes t #f))))
 
 ;; in atomic mode
 (define (add-custodian-to-thread! t c)
@@ -463,7 +476,7 @@
          (cons (unsafe-custodian-register c t remove-thread-custodian #f #t)
                accum))
        (set-thread-custodian-references! t new-crs)
-       (do-resume-beneficiaries t c)]
+       (do-resume-transitive-resumes t c)]
       [else
        (define old-c (custodian-reference->custodian (car crs)))
        (cond
@@ -478,27 +491,35 @@
           ;; keep checking
           (loop (cdr crs) (cons (car crs) accum))])])))
 
+(struct transitive-resume (weak-box ; weak reference to thread
+                           box)     ; box is filled as stron reference if thread is suspended
+  #:authentic)
+
 ;; in atomic mode
-(define (add-beneficiary-to-thread! t b-t)
+(define (add-transitive-resume-to-thread! t b-t)
   ;; Look for `b-t` in list, and also prune
   ;; terminated threads
   (define new-l
-    (let loop ([l (thread-beneficiaries t)])
+    (let loop ([l (thread-transitive-resumes t)])
       (cond
-        [(null? l) (list (make-weak-box b-t))]
+        [(null? l)
+         ;; Force creation of `(thread-suspended-box t)`:
+         (set-thread-suspended?! b-t (thread-suspended? b-t))
+         (list (transitive-resume (make-weak-box b-t)
+                                  (thread-suspended-box b-t)))]
         [else
-         (let ([o-t (weak-box-value (car l))])
+         (let ([o-t (weak-box-value (transitive-resume-weak-box (car l)))])
            (cond
              [(not o-t) (loop (cdr l))]
              [(thread-dead? o-t) (loop (cdr l))]
              [(eq? b-t o-t) l]
              [else (cons (car l) (loop (cdr l)))]))])))
-  (set-thread-beneficiaries! t new-l))
+  (set-thread-transitive-resumes! t new-l))
 
 ;; in atomic mode
-(define (do-resume-beneficiaries t c)
-  (for ([b (in-list (thread-beneficiaries t))])
-    (define b-t (weak-box-value b))
+(define (do-resume-transitive-resumes t c)
+  (for ([tr (in-list (thread-transitive-resumes t))])
+    (define b-t (weak-box-value (transitive-resume-weak-box tr)))
     (when b-t
       (do-thread-resume b-t c))))
 
