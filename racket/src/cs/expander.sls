@@ -3,8 +3,6 @@
           executable-yield-handler
           load-on-demand-enabled
           call-in-main-thread
-          set-exec-file!
-          set-run-file!
           version
           exit)
   (import (chezpart)

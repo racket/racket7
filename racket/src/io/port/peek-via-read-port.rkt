@@ -119,7 +119,7 @@
            v)]))
 
   ;; in atomic mode
-  (define (do-byte-ready)
+  (define (do-byte-ready work-done!)
     (cond
       [(positive? (pipe-content-length peek-pipe-i))
        #t]
@@ -127,9 +127,10 @@
        #t]
       [else
        (define v (pull-some-bytes))
+       (work-done!)
        (cond
          [(retry-pull? v)
-          (do-byte-ready)]
+          (do-byte-ready void)]
          [(evt? v) v]
          [else
           (not (eqv? v 0))])]))

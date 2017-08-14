@@ -208,7 +208,7 @@
 
   ;; in atomic mode
   ;; Used only if `user-peek-in` is a function:
-  (define (byte-ready)
+  (define (byte-ready work-done!)
     (cond
       [(and input-pipe
             (positive? (pipe-content-length input-pipe)))
@@ -216,6 +216,7 @@
       [else
        (define bstr (make-bytes 1))
        (define v (peek-in bstr 0 1 0 #f #f))
+       (work-done!)
        (cond
          [(evt? v) v]
          [else (not (eqv? v 0))])]))

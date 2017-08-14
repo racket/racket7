@@ -89,6 +89,8 @@
                          'poll-ctx-poll? poll-ctx-poll?
                          'poll-ctx-select-proc poll-ctx-select-proc
                          'poll-ctx-sched-info poll-ctx-sched-info
+                         'set-poll-ctx-incomplete?! void
+                         'schedule-info-did-work! void
                          'control-state-evt control-state-evt
                          'async-evt async-evt
                          'schedule-info-current-exts schedule-info-current-exts

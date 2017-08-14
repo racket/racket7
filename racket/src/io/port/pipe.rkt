@@ -217,7 +217,7 @@
              amt])]))
 
      #:byte-ready
-     (lambda ()
+     (lambda (work-done!)
        (not (zero? (content-length))))
 
      #:close

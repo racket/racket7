@@ -3,7 +3,6 @@
                  eval)
          (core)
          (only (expander)
-               set-exec-file!
                boot
                current-command-line-arguments
                use-compiled-file-paths

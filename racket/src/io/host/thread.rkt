@@ -35,6 +35,8 @@
         poll-ctx-poll?
         poll-ctx-select-proc
         poll-ctx-sched-info
+        set-poll-ctx-incomplete?!
+        schedule-info-did-work!
         control-state-evt
         async-evt
         schedule-info-current-exts

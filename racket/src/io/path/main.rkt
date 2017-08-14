@@ -11,6 +11,7 @@
          "simplify.rkt"
          "parameter.rkt"
          "directory-path.rkt"
+         "system.rkt"
          "api.rkt")
 
 (provide (rename-out [is-path? path?])
@@ -47,7 +48,11 @@
          path->directory-path
          
          cleanse-path
-         simplify-path)
+         simplify-path
+
+         find-system-path
+         set-exec-file!
+         set-run-file!)
 
 (define/who (string->path s)
   (check who string? s)

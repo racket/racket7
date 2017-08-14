@@ -5024,10 +5024,10 @@ find_system_path(int argc, Scheme_Object **argv)
   } else {
     scheme_wrong_contract("find-system-path", 
                           "(or/c 'home-dir 'pref-dir 'pref-file 'temp-dir\n"
-                          "       'init-dir 'init-file 'addon-dir\n"
-                          "       'doc-dir 'desk-dir 'sys-dir 'exec-file 'run-file\n"
-                          "       'collects-dir 'config-dir 'orig-dir\n"
-                          "       'host-collects-dir 'host-config-fir)",
+                          "      'init-dir 'init-file 'addon-dir\n"
+                          "      'doc-dir 'desk-dir 'sys-dir 'exec-file 'run-file\n"
+                          "      'collects-dir 'config-dir 'orig-dir\n"
+                          "      'host-collects-dir 'host-config-dir)",
                           0, argc, argv);
     return NULL;
   }

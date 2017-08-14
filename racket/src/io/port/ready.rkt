@@ -19,7 +19,7 @@
       [else
        (start-atomic)
        (check-not-closed who in)
-       (define r (byte-ready))
+       (define r (byte-ready void))
        (end-atomic)
        (eq? #t r)])))
 
@@ -51,4 +51,5 @@
                  [(utf-8-state? new-state)
                   (loop (add1 offset) new-state)]
                  [else #t])]
-              [else #f]))])])))
+              [else #f]))])]
+      [else #f])))

@@ -80,7 +80,8 @@
 ;; Provided to a `poller` function:
 (struct poll-ctx (poll?         ; whether events are being polled once (i.e., 0 timeout)
                   select-proc   ; callback to asynchronously select the event being polled
-                  sched-info))  ; instructions to the scheduler, such as timeouts
+                  sched-info    ; instructions to the scheduler, such as timeouts
+                  [incomplete? #:mutable])) ; #t => getting back the same event does not imply a completed poll
 ;; If a `poller` callback keeps `select-proc` for asynchronous use,
 ;; then it should return a `control-state-evt` to ensure that
 ;; `select-proc` is not called if the event is abandoned.

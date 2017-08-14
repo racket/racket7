@@ -40,7 +40,7 @@
    ;; Check timeout
    (check #f (sync/timeout 0.1))
    (check #f (sync/timeout 0.1 never-evt))
-   
+
    ;; Check semaphore polling
    (check s (sync/timeout 0 s))
    (check #f (sync/timeout 0 s))

@@ -74,7 +74,7 @@
          [else eof]))
 
      #:byte-ready
-     (lambda ()
+     (lambda (work-done!)
        (i . < . len))
 
      #:close

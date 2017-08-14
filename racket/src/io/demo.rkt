@@ -20,7 +20,7 @@
         [v rhs])
     (unless (equal? e v)
       (error 'failed "~s: ~e" 'rhs v))))
-  
+
 (test #f (bytes-utf-8-ref #"\364\220\200\200" 0))
 
 (test #t (file-exists? "demo.rkt"))

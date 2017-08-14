@@ -119,25 +119,6 @@
 
 (define (cache-configuration id proc) (proc))
 
-(define exec-file #f)
-(define (set-exec-file! p) (set! exec-file p))
-
-(define run-file #f)
-(define (set-run-file! p) (set! run-file p))
-
-(define (find-system-path key)
-  (case key
-    [(exec-file) (or exec-file
-                     (string->path "/usr/local/bin/racket"))]
-    [(config-dir host-config-dir) (string->path "../config")]
-    [(collects-dir host-collects-dir) (string->path "../collects")]
-    [(addon-dir) (string->path "/tmp/addon")]
-    [(orig-dir) (string->path (|#%app| current-directory))]
-    [(run-file) (or run-file
-                    (find-system-path 'exec-file))]
-    [(temp-dir) (string->path (or (getenv "TMPDIR") "/usr/tmp/"))]
-    [else `(find-system-path-not-ready ,key)]))
-
 (define-values (prop:exn:srclocs exn:srclocs? exn:srclocs-accessor)
   (make-struct-type-property 'exn:srclocs))
 
@@ -332,8 +313,6 @@
    compile-allow-set!-undefined
 
    cache-configuration
-
-   find-system-path
 
    prop:exn:srclocs exn:srclocs? exn:srclocs-accessor
 

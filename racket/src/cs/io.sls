@@ -76,7 +76,7 @@
         [(_ (_ . args) body)
          #'(let-wrappers args body)]))
     (define (add-nul-terminator bstr)
-      (bytes-append bstr '#vu8(0)))
+      (and bstr (bytes-append bstr '#vu8(0))))
 
     (meta define (convert-function stx)
           (syntax-case stx ()
