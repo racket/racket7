@@ -36,6 +36,10 @@
    (define cpt2 (thread (lambda () (channel-put ch 'd))))
    (printf "3 ~a\n" (channel-get ch))
    (printf "4 ~a\n" (channel-get ch))
+
+   ;; Check timeout
+   (check #f (sync/timeout 0.1))
+   (check #f (sync/timeout 0.1 never-evt))
    
    ;; Check semaphore polling
    (check s (sync/timeout 0 s))
@@ -89,11 +93,19 @@
    (let loop ()
      (check 'ok (sync (nack-guard-evt (lambda (n) (set! nack n) (make-semaphore))) ok-evt))
      (unless nack (loop)))
-   (check nack (sync/timeout 0 nack))
+   (check (void) (sync/timeout 0 nack))
    
    (semaphore-post s)
    (check #f (sync/timeout 0 ch (channel-put-evt ch 'oops)))
    (check sp (sync/timeout #f ch (channel-put-evt ch 'oops) sp))
+
+   (let ([v #f])
+     (check #f (sync/timeout 0
+                             (nack-guard-evt
+                              (lambda (nack)
+                                (set! v nack)
+                                (choice-evt (make-semaphore) (make-semaphore))))))
+     (check (void) (sync/timeout 0 v)))
 
    ;; Check sleeping in main thread
    (define now1 (current-inexact-milliseconds))
@@ -117,6 +129,24 @@
    (thread (lambda () (set! v (add1 v))))
    (sync (system-idle-evt))
    (check 1 v)
+
+   ;; Check `replace-evt`
+   (check 5 (sync (replace-evt always-evt (lambda (v) (wrap-evt always-evt (lambda (v) 5))))))
+   (check #f (sync/timeout 0 (replace-evt never-evt void)))
+   (let ([ns null])
+     (check #f (sync/timeout 0 (replace-evt (choice-evt
+                                             (nack-guard-evt
+                                              (lambda (n)
+                                                (set! ns (cons n ns))
+                                                never-evt))
+                                             (nack-guard-evt
+                                              (lambda (n)
+                                                (set! ns (cons n ns))
+                                                never-evt)))
+                                            void)))
+     (check 2 (length ns))
+     (check (void) (sync (car ns)))
+     (check (void) (sync (cadr ns))))
 
    ;; Check `thread-send`
    (check (void) (thread-send (current-thread) 'sent0))
@@ -185,8 +215,8 @@
      (stop-thread tstuck2)
      (thread-wait tstuck2)
      (report-expected-break)
-     (check nack1 (sync nack1))
-     (check nack2 (sync nack2))
+     (check (void) (sync nack1))
+     (check (void) (sync nack2))
 
      ;; Make sure a `sync` can be abandoned during a guard callback
      (define tfail (thread (lambda ()
@@ -198,7 +228,7 @@
                                           (error "oops"))))))))
      (check tfail (sync tfail))
      (report-expected-exn "oops")
-     (check nack1 (sync nack1))
+     (check (void) (sync nack1))
      
      ;; Make sure nested abandoned `syncs` are ok
      (define tfail2 (thread (lambda ()
@@ -213,8 +243,8 @@
                                                     (error "oops")))))))))))
      (check tfail2 (sync tfail2))
      (report-expected-exn "oops")
-     (check nack1 (sync nack1))
-     (check nack2 (sync nack2)))
+     (check (void) (sync nack1))
+     (check (void) (sync nack2)))
    
    (check-break/kill #:kill? #f)
    (check-break/kill #:kill? #t)

@@ -363,6 +363,8 @@
 ;; returns a thunk to be called in out of atomic mode to swap out the
 ;; thread, where the thunk returns `(void)`;
 (define (do-thread-deschedule! t timeout-at)
+  (when (thread-descheduled? t)
+    (internal-error "tried to deschedule an descheduled thread"))
   (set-thread-descheduled?! t #t)
   (thread-group-remove! (thread-parent t) t)
   (when timeout-at
@@ -404,7 +406,9 @@
 ;; Add a thread back to its thread group
 (define (thread-reschedule! t)
   (when (thread-dead? t)
-    (internal-error "tried to resume a dead thread"))
+    (internal-error "tried to reschedule a dead thread"))
+  (unless (thread-descheduled? t)
+    (internal-error "tried to reschedule a scheduled thread"))
   (set-thread-descheduled?! t #f)
   (set-thread-interrupt-callback! t #f)
   (remove-from-sleeping-threads! t)

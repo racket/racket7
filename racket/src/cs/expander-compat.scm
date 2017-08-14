@@ -7,8 +7,6 @@
 (define (chaperone-channel v . args) v)
 (define (impersonate-channel v . args) v)
 
-(define (replace-evt a b) (error 'replace-evt "unsupported"))
-
 (define (equal-secondary-hash-code v) (equal-hash-code v))
 
 (define (primitive? v) #f)
@@ -277,8 +275,6 @@
    chaperone-evt
    chaperone-channel
    impersonate-channel
-
-   replace-evt
 
    equal-secondary-hash-code
 

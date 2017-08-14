@@ -5,6 +5,7 @@
          (rename-in "evt.rkt"
                     [wrap-evt raw:wrap-evt]
                     [handle-evt raw:handle-evt]
+                    [handle-evt? raw:handle-evt?]
                     [poll-guard-evt raw:poll-guard-evt]
                     [choice-evt raw:choice-evt])
          (rename-in "channel.rkt"
@@ -14,6 +15,7 @@
 
 (provide wrap-evt
          handle-evt
+         handle-evt?
          guard-evt
          poll-guard-evt
          nack-guard-evt
@@ -39,6 +41,14 @@
   (check who procedure? proc)
   (raw:handle-evt evt proc))
 
+(define/who (handle-evt? evt)
+  (check who evt? evt)
+  (let loop ([evt evt])
+    (or (raw:handle-evt? evt)
+        (and (choice-evt? evt)
+             (for/or ([evt (in-list (choice-evt-evts evt))])
+               (loop evt))))))
+
 (define/who (guard-evt proc)
   (check who (procedure-arity-includes/c 0) proc)
   (raw:poll-guard-evt (lambda (poll?) (proc))))
@@ -58,7 +68,7 @@
      (control-state-evt
       (raw:poll-guard-evt
        (lambda (poll?)
-         (define v (proc (raw:semaphore-peek-evt s)))
+         (define v (proc (wrap-evt (raw:semaphore-peek-evt s) void)))
          (if (evt? v)
              v
              (wrap-evt always-evt (lambda () v)))))

@@ -59,21 +59,22 @@
 ;; `select-proc` is not called if the event is abandoned.
 
 (struct never-evt ()
-        #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 (define the-never-evt (never-evt))
 
 (struct always-evt ()
-        #:property prop:evt (poller (lambda (self poll-ctx) (values (list self) #f))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values (list self) #f))))
 (define the-always-evt (always-evt))
 
 ;; A placeholder for an event that will be selected through a callback
 ;; instead of polling:
 (struct async-evt ()
-        #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 (define the-async-evt (async-evt))
 
 (struct wrap-evt (evt wrap)
-        #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self)))
+  #:reflection-name 'evt)
 (struct handle-evt wrap-evt ())
 
 ;; A `control-state-evt` enabled (unsafe) cooperation with the
@@ -97,10 +98,12 @@
   #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
 
 (struct poll-guard-evt (proc)
-  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self)))
+  #:reflection-name 'evt)
 
 (struct choice-evt (evts)
-  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self)))
+  #:reflection-name 'evt)
 
 ;; Called in atomic mode
 ;; Checks whether an event is ready; returns the same results

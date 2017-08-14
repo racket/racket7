@@ -4,8 +4,7 @@
          (only-in "evt.rkt"
                   evt? prop:evt
                   always-evt
-                  never-evt
-                  handle-evt?)
+                  never-evt)
          (except-in "semaphore.rkt"
                     semaphore-peek-evt)
          (except-in "channel.rkt"
@@ -88,6 +87,7 @@
          poll-guard-evt
          nack-guard-evt
          choice-evt
+         replace-evt
 
          system-idle-evt
          alarm-evt
