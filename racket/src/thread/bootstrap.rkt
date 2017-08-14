@@ -102,6 +102,8 @@
                   'engine-return
                   (lambda args
                     (error "engine-return: not ready"))
+                  'current-process-milliseconds
+                  current-process-milliseconds
                   'set-ctl-c-handler!
                   set-ctl-c-handler!
                   'root-continuation-prompt-tag

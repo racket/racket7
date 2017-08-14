@@ -34,7 +34,8 @@
                      'break-enabled-key break-enabled-key
                      'exn:break/non-engine exn:break
                      'exn:break:hang-up/non-engine exn:break:hang-up
-                     'exn:break:terminate/non-engine exn:break:terminate)]
+                     'exn:break:terminate/non-engine exn:break:terminate
+                     'current-process-milliseconds cpu-time)]
       [else #f]))
 
   ;; Tie knots:

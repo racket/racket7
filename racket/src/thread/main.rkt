@@ -21,7 +21,8 @@
          "exit.rkt"
          "plumber.rkt"
          "unsafe.rkt"
-         "instance.rkt")
+         "instance.rkt"
+         "time.rkt")
 
 (provide call-in-main-thread
          
@@ -115,6 +116,8 @@
          plumber-add-flush!
          plumber-flush-handle?
          plumber-flush-handle-remove!
+
+         current-process-milliseconds
 
          break-enabled
          check-for-break

@@ -107,7 +107,9 @@
                      [forward-break-to #:mutable] ; #f or a thread to receive this thread's breaks
                      
                      [waiting-mail? #:mutable] ; whether to wake up on `thread-send`
-                     [mailbox #:mutable])
+                     [mailbox #:mutable]
+
+                     [cpu-time #:mutable]) ; accumulates CPU time in milliseconds
         #:property prop:waiter
         (make-waiter-methods 
          #:suspend! (lambda (t i-cb r-cb) (thread-deschedule! t #f i-cb r-cb))
@@ -166,7 +168,9 @@
                     #f; forward-break-to
 
                     #f ; waiting for mail?
-                    (make-queue))) ; mailbox
+                    (make-queue) ; mailbox
+
+                    0)) ; cpu-time
   ((atomically
     (define cref (unsafe-custodian-register c t remove-thread-custodian #f #t))
     (cond

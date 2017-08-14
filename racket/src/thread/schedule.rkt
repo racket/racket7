@@ -48,6 +48,7 @@
   (set-thread-sched-info! t #f)
   (current-thread t)
   (let loop ([e e])
+    (define start (current-process-milliseconds))
     (e
      TICKS
      (lambda ()
@@ -55,6 +56,7 @@
        (when (positive? (current-atomic))
          (atomic-timeout-callback)))
      (lambda args
+       (accum-cpu-time! t start)
        (current-thread #f)
        (unless (zero? (current-atomic))
          (internal-error "terminated in atomic mode!"))
@@ -66,6 +68,7 @@
      (lambda (e)
        (cond
          [(zero? (current-atomic))
+          (accum-cpu-time! t start)
           (current-thread #f)
           (set-thread-engine! t e)
           (select-thread!)]
@@ -131,6 +134,12 @@
   (sandman-sleep exts)
   ;; Maybe some thread can proceed:
   (thread-did-work!))
+
+;; ----------------------------------------
+
+(define (accum-cpu-time! t start)
+  (set-thread-cpu-time! t (+ (thread-cpu-time t)
+                             (- (current-process-milliseconds) start))))
 
 ;; ----------------------------------------
 

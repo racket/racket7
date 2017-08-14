@@ -389,7 +389,6 @@
           time-apply
           current-inexact-milliseconds
           current-milliseconds
-          current-process-milliseconds
           current-gc-milliseconds
           current-seconds
           seconds->date
