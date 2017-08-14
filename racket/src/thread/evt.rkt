@@ -26,7 +26,34 @@
          poller-evt)
 
 (define-values (prop:evt primary-evt? primary-evt-ref)
-  (make-struct-type-property 'evt))
+  (make-struct-type-property 'evt
+                             (lambda (v info)
+                               (define who '|guard-for-prop:evt|)
+                               (cond
+                                 [(poller? v) v] ; part of the internal API, not the safe API
+                                 [(evt? v) v]
+                                 [(and (procedure? v)
+                                       (procedure-arity-includes? v 1))
+                                  v]
+                                 [(exact-nonnegative-integer? v)
+                                  (define init-count (cadr info))
+                                  (unless (v . < . init-count)
+                                    (raise-arguments-error who
+                                                           "index for immutable field >= initialized-field count"
+                                                           "index" v
+                                                           "initialized-field count" init-count))
+                                  (unless (memv v (list-ref info 5))
+                                    (raise-arguments-error who "field index not declared immutable"
+                                                           "field index" v))
+                                  (selector-prop-evt-value
+                                   (make-struct-field-accessor (list-ref info 3) v))]
+                                 [else
+                                  (raise-argument-error who
+                                                        "(or/c evt? (procedure-arity-includes/c 1) exact-nonnegative-integer?)"
+                                                        v)]))))
+
+(struct selector-prop-evt-value (selector)
+  #:authentic)
 
 ;; `prop:secondary-evt` is for primitive property types that
 ;; (due to histoical, bad design choices) act like `prop:evt`
@@ -116,8 +143,8 @@
                (primary-evt-ref evt)]
               [else
                (secondary-evt-ref evt)])]
-         [v (if (fixnum? v)
-                (unsafe-struct-ref evt v)
+         [v (if (selector-prop-evt-value? v)
+                ((selector-prop-evt-value-selector v) evt)
                 v)])
     (cond
       [(procedure? v)
@@ -128,7 +155,7 @@
                        (cond
                          [(evt? v) v]
                          [(poller? v) (poller-evt v)]
-                         [else the-never-evt])))))]
+                         [else (wrap-evt the-always-evt (lambda (v) evt))])))))]
       [(poller? v) ((poller-proc v) evt poll-ctx)]
       [(evt? v) (values #f v)]
       [else (values #f the-never-evt)])))
