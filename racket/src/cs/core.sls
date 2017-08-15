@@ -23,6 +23,7 @@
           impersonate-prompt-tag
           chaperone-prompt-tag
           (rename [break-enabled-key core:break-enabled-key])
+          set-break-enabled-transition-hook! ; not exported to Racket
           unsafe-abort-current-continuation/no-wind
           unsafe-call-with-composable-continuation/no-wind
 

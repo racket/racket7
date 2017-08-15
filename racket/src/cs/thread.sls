@@ -12,7 +12,8 @@
                   [engine-block core:engine-block]
                   [engine-return core:engine-return]
                   [set-ctl-c-handler! core:set-ctl-c-handler!]
-                  [root-continuation-prompt-tag core:root-continuation-prompt-tag]))
+                  [root-continuation-prompt-tag core:root-continuation-prompt-tag]
+                  [set-break-enabled-transition-hook! core:set-break-enabled-transition-hook!]))
 
   (define (exit n)
     (chez:exit n))
@@ -32,6 +33,7 @@
                      'set-ctl-c-handler! core:set-ctl-c-handler!
                      'root-continuation-prompt-tag core:root-continuation-prompt-tag
                      'break-enabled-key break-enabled-key
+                     'set-break-enabled-transition-hook! core:set-break-enabled-transition-hook!
                      'exn:break/non-engine exn:break
                      'exn:break:hang-up/non-engine exn:break:hang-up
                      'exn:break:terminate/non-engine exn:break:terminate

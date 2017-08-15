@@ -603,6 +603,15 @@
                     (string-suffix? "values to single value return context" (condition-message v))
                     (string-prefix? "incorrect number of values received in multiple value context" (condition-message v))))
            exn:fail:contract:arity]
+          [(and (format-condition? v)
+                (who-condition? v)
+                (eq? '/ (condition-who v))
+                (string=? "undefined for ~s" (condition-message v)))
+           exn:fail:contract:divide-by-zero]
+          [(and (format-condition? v)
+                (string=? "attempt to reference undefined variable ~s" (condition-message v)))
+           (lambda (msg marks)
+             (|#%app| exn:fail:contract:variable msg marks (car (condition-irritants v))))]
           [else
            exn:fail:contract])
          (exn->string v)

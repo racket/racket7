@@ -110,6 +110,8 @@
                   root-continuation-prompt-tag
                   'break-enabled-key
                   break-enabled-key
+                  'set-break-enabled-transition-hook!
+                  void
                   'exn:break/non-engine
                   exn:break/non-engine
                   'exn:break:hang-up/non-engine

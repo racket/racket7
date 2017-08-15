@@ -690,26 +690,34 @@
 ;; `check-for-break` should be called.
 (define (check-for-break)
   (define t (current-thread))
-  ((atomically
-    (cond
-     [(and (thread-pending-break t)
-           (break-enabled)
-           (not (thread-ignore-break-cell? t (current-break-enabled-cell)))
-           (zero? (current-break-suspend)))
-      (define exn:break* (case (thread-pending-break t)
-                           [(hang-up) exn:break:hang-up/non-engine]
-                           [(terminate) exn:break:terminate/non-engine]
-                           [else exn:break/non-engine]))
-      (set-thread-pending-break! t #f)
-      (lambda ()
-        ;; Out of atomic mode
-        (call-with-escape-continuation
-         (lambda (k)
-           (raise (exn:break*
-                   "user break"
-                   (current-continuation-marks)
-                   k)))))]
-     [else void]))))
+  (when t ; allow `check-for-break` before threads are running
+    ((atomically
+      (cond
+        [(and (thread-pending-break t)
+              (break-enabled)
+              (not (thread-ignore-break-cell? t (current-break-enabled-cell)))
+              (zero? (current-break-suspend)))
+         (define exn:break* (case (thread-pending-break t)
+                              [(hang-up) exn:break:hang-up/non-engine]
+                              [(terminate) exn:break:terminate/non-engine]
+                              [else exn:break/non-engine]))
+         (set-thread-pending-break! t #f)
+         (lambda ()
+           ;; Out of atomic mode
+           (call-with-escape-continuation
+            (lambda (k)
+              (raise (exn:break*
+                      "user break"
+                      (current-continuation-marks)
+                      k)))))]
+        [else void])))))
+
+;; The break-enabled transition hook is called by the host
+;; system when a control transfer (such as a continuation jump)
+;; enters a place where the `break-enabled-key` continuation
+;; mark has a different value.
+(void
+ (set-break-enabled-transition-hook! check-for-break))
 
 (define/who (break-thread t [kind #f])
   (check who thread? t)

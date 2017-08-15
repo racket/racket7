@@ -738,7 +738,7 @@
           ;; To support exiting an uninterrupted region on resumption of
           ;; a continuation (see `call-with-end-uninterrupted`):
           (when (current-in-uninterrupted)
-            (pariah (end-uninterrupted 'cm))))))))
+            (pariah (end-uninterrupted/call-hook 'cm))))))))
 
 ;; For internal use, such as `dynamic-wind` pre thunks:
 (define (call/cm/nontail key val proc)
@@ -750,6 +750,7 @@
   (proc)
   ;; If we're in an escape process, then `(current-mark-stack)` might not
   ;; match, and that's ok; it doesn't matter what we set the mark stack to
+  ;; in that case, so we do something that's right for the non-escape case
   (when (current-mark-stack)
     (current-mark-stack (mark-stack-frame-prev (current-mark-stack)))))
 
@@ -1377,14 +1378,14 @@
         (with-saved-mark-stack/non-break 'dw-pre
           (pre)))
       (lambda ()
-        (end-uninterrupted 'dw-body)
+        (end-uninterrupted/call-hook 'dw-body)
         (begin0
          (thunk)
          (start-uninterrupted 'dw-body)))
       (lambda ()
         (with-saved-mark-stack/non-break 'dw-post
           (post))))
-     (end-uninterrupted 'dw))))
+     (end-uninterrupted/call-hook 'dw))))
 
 ;; ----------------------------------------
 
@@ -1402,6 +1403,19 @@
   (call/cm
    break-enabled-key (make-thread-cell #f #t)
    thunk))
+
+;; Some points where we jump out of uninterrupted mode are also points
+;; where we might jump to a context where breaks are allowed. The
+;; `continuation-mark-change-hook` function allows a thread scheduler to
+;; inject a check at those points.
+(define (end-uninterrupted/call-hook who)
+  (end-uninterrupted who)
+  (break-enabled-transition-hook))
+
+(define break-enabled-transition-hook void)
+
+(define (set-break-enabled-transition-hook! proc)
+  (set! break-enabled-transition-hook proc))
 
 ;; ----------------------------------------
 ;; Metacontinuation swapping for engines
