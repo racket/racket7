@@ -89,7 +89,9 @@
   (define more-read-ready-sema #f) ; for lookahead peeks
   (define read-ready-evt (wrap-evt (semaphore-peek-evt read-ready-sema)
                                    (lambda (v) 0)))
-  (define write-ready-evt (and limit (semaphore-peek-evt write-ready-sema)))
+  (define write-ready-evt (if limit
+                              (semaphore-peek-evt write-ready-sema)
+                              always-evt))
   (define progress-sema #f)
 
   ;; Used before/after read:

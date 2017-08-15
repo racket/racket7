@@ -174,17 +174,25 @@
        (define arg (car evts))
        (when who
          (check who evt? arg))
-       (define sr (make-syncer arg wraps))
-       (unless (and (null? extended-commits)
-                    (null? guarded-abandons))
-         (set-syncer-commits! sr extended-commits)
-         (set-syncer-abandons! sr guarded-abandons))
-       (set-syncer-prev! sr last)
-       (when last
-         (set-syncer-next! last sr))
-       (loop (cdr evts)
-             (or first sr)
-             sr)])))
+       (cond
+         [(choice-evt? arg)
+          ;; Splice choice events eagerly to improve fairness
+          ;; of selection
+          (loop (append (choice-evt-evts arg) (cdr evts))
+                first
+                last)]
+         [else
+          (define sr (make-syncer arg wraps))
+          (unless (and (null? extended-commits)
+                       (null? guarded-abandons))
+            (set-syncer-commits! sr extended-commits)
+            (set-syncer-abandons! sr guarded-abandons))
+          (set-syncer-prev! sr last)
+          (when last
+            (set-syncer-next! last sr))
+          (loop (cdr evts)
+                (or first sr)
+                sr)])])))
 
 (define (cross-commits-and-abandons commits abandons)
   (cond
@@ -245,6 +253,7 @@
                    #:done-after-poll? [done-after-poll? #t]
                    #:did-work? [did-work? #f]
                    #:schedule-info [sched-info (make-schedule-info #:did-work? did-work?)])
+  (random-rotate-syncing! s)
   (let loop ([sr (syncing-syncers s)]
              [retries 0] ; count retries on `sr`, and advance if it's too many
              [polled-all-so-far? #t])
@@ -298,20 +307,21 @@
           (when (or (pair? (syncer-interrupts sr))
                     (pair? (syncer-retries sr)))
             (internal-error "choice event discovered after interrupt/retry callbacks"))
-          (let ([new-syncers (evts->syncers #f
-                                            (choice-evt-evts new-evt)
-                                            (syncer-wraps sr)
-                                            (syncer-commits sr)
-                                            (syncer-abandons sr))])
-            (cond
-              [(not new-syncers)
-               ;; Empy choice, so drop it:
-               (syncer-remove! sr s)
-               (lambda () (loop (syncer-next sr) 0 polled-all-so-far?))]
-              [else
-               ;; Splice in new syncers, and start there
-               (syncer-replace! sr new-syncers s)
-               (lambda () (loop new-syncers (add1 retries) polled-all-so-far?))]))]
+          (define new-syncers (random-rotate
+                               (evts->syncers #f
+                                              (choice-evt-evts new-evt)
+                                              (syncer-wraps sr)
+                                              (syncer-commits sr)
+                                              (syncer-abandons sr))))
+          (cond
+            [(not new-syncers)
+             ;; Empty choice, so drop it:
+             (syncer-remove! sr s)
+             (lambda () (loop (syncer-next sr) 0 polled-all-so-far?))]
+            [else
+             ;; Splice in new syncers, and start there
+             (syncer-replace! sr new-syncers s)
+             (lambda () (loop new-syncers (add1 retries) polled-all-so-far?))])]
          [(wrap-evt? new-evt)
           (set-syncer-wraps! sr (cons (wrap-evt-wrap new-evt)
                                       (let ([l (syncer-wraps sr)])
@@ -557,3 +567,36 @@
                   (lambda (v)
                     (check who pseudo-random-generator? v)
                     v)))
+
+;; rotates the order of syncers in `s` to implement fair selection:
+(define (random-rotate-syncing! s)
+  (set-syncing-syncers! s (random-rotate (syncing-syncers s))))
+
+(define (random-rotate first-sr)
+  (define n (let loop ([sr first-sr] [n 0])
+              (cond
+                [(not sr) n]
+                [else (loop (syncer-next sr) (add1 n))])))
+  (cond
+    [(n . <= . 1) first-sr]
+    [else
+     (define m (random n (current-evt-pseudo-random-generator)))
+     (cond
+       [(zero? m) first-sr]
+       [else
+        (let loop ([sr first-sr] [m (sub1 m)])
+          (cond
+            [(zero? m)
+             (define new-first-sr (syncer-next sr))
+             (set-syncer-next! sr #f)
+             (set-syncer-prev! new-first-sr #f)
+             (let loop ([next-sr new-first-sr])
+               (define next-next-sr (syncer-next next-sr))
+               (cond
+                 [(not next-next-sr)
+                  (set-syncer-next! next-sr first-sr)
+                  (set-syncer-prev! first-sr next-sr)
+                  new-first-sr]
+                 [else (loop next-next-sr)]))]
+            [else
+             (loop (syncer-next sr) (sub1 m))]))])]))
