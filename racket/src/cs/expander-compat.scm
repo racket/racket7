@@ -122,8 +122,6 @@
 (define-values (prop:exn:srclocs exn:srclocs? exn:srclocs-accessor)
   (make-struct-type-property 'exn:srclocs))
 
-(define (thread-receive-evt t) 'thread-receive-evt)
-
 (define current-thread-initial-stack-size
   (make-parameter 64
                   (lambda (v)
@@ -318,7 +316,6 @@
 
    gensym
 
-   thread-receive-evt
    filesystem-change-evt
    filesystem-change-evt-cancel
    filesystem-change-evt?

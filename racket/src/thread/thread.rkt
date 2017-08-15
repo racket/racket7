@@ -56,7 +56,8 @@
          thread-send
          thread-receive
          thread-try-receive
-         thread-rewind-receive)
+         thread-rewind-receive
+         thread-receive-evt)
 
 ;; Exports needed by "schedule.rkt":
 (module* scheduling #f
@@ -106,8 +107,8 @@
                      [ignore-break-cells #:mutable] ; => #f, a single cell, or a set of cells
                      [forward-break-to #:mutable] ; #f or a thread to receive this thread's breaks
                      
-                     [waiting-mail? #:mutable] ; whether to wake up on `thread-send`
-                     [mailbox #:mutable]
+                     [mailbox #:mutable] ; a queue of messages from `thread-send`
+                     [mailbox-wakeup #:mutable] ; callback to trigger (in atomic mode) on `thread-send`
 
                      [cpu-time #:mutable]) ; accumulates CPU time in milliseconds
         #:property prop:waiter
@@ -167,8 +168,8 @@
                     #f ; ignore-thread-cells
                     #f; forward-break-to
 
-                    #f ; waiting for mail?
                     (make-queue) ; mailbox
+                    void ; mailbox-wakeup
 
                     0)) ; cpu-time
   ((atomically
@@ -817,9 +818,9 @@
     (cond
       [(not (thread-dead? thd))
        (enqueue-mail! thd v)
-       (when (thread-waiting-mail? thd)
-         (set-thread-waiting-mail?! thd #f)
-         (thread-reschedule! thd))
+       (define wakeup (thread-mailbox-wakeup thd))
+       (set-thread-mailbox-wakeup! thd void)
+       (wakeup)
        void]
       [fail-thunk
        fail-thunk]
@@ -834,13 +835,16 @@
        (define v (dequeue-mail! t))
        (lambda () v)]
       [else
-       (set-thread-waiting-mail?! t #t)
+       ;; The current wakeup callback must be `void`, since this thread
+       ;; can't be in the middle of a `sync` (unless interrupted by a break)
+       ;; or `thread-receive`
+       (set-thread-mailbox-wakeup! t (lambda () (thread-reschedule! t)))
        (define do-yield
          (thread-deschedule! t
                              #f
                              ;; Interrupted for break => not waiting for mail
                              (lambda ()
-                               (set-thread-waiting-mail?! t #f))
+                               (set-thread-mailbox-wakeup! t void))
                              ;; No retry action, because we always retry:
                              void))
        ;; called out of atomic mode:
@@ -863,4 +867,34 @@
                (push-mail! t msg))
              lst)))
 
-;; todo: thread-receive-evt
+;; ----------------------------------------
+
+(struct thread-receiver-evt ()
+  #:property prop:evt (poller
+                       ;; in atomic mode:
+                       (lambda (self poll-ctx)
+                         (define t (current-thread))
+                         (cond
+                           [(is-mail? t) (values (list self) #f)]
+                           [(poll-ctx-poll? poll-ctx) (values #f self)]
+                           [else
+                            (define receive (let ([select-proc (poll-ctx-select-proc poll-ctx)])
+                                              (lambda ()
+                                                (when (is-mail? t)
+                                                  (select-proc)))))
+                            (define (add-wakeup-callback!)
+                              (define wakeup (thread-mailbox-wakeup t))
+                              (set-thread-mailbox-wakeup! t (lambda () (wakeup) (receive))))
+                            (add-wakeup-callback!)
+                            (values #f (control-state-evt
+                                        (wrap-evt async-evt (lambda (v) self))
+                                        ;; interrupt (all must be interrupted, so just install `void`):
+                                        (lambda () (set-thread-mailbox-wakeup! t void))
+                                        ;; abandon:
+                                        (lambda () (set! receive void))
+                                        ;; retry (was interrupted, but not abandoned):
+                                        (lambda () (add-wakeup-callback!))))])))
+  #:reflection-name 'thread-receive-evt)
+
+(define/who (thread-receive-evt)
+  (thread-receiver-evt))

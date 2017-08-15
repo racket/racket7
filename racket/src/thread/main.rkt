@@ -45,6 +45,7 @@
          thread-receive
          thread-try-receive
          thread-rewind-receive
+         thread-receive-evt
 
          sleep
          

@@ -161,7 +161,23 @@
                (sync (system-idle-evt))
                (thread-send t 'sent3))))
    (check 'sent3 (thread-receive))
-   
+
+   (define rcv (thread-receive-evt))
+   (check #f (sync/timeout 0 rcv))
+   (check (void) (thread-send (current-thread) 'sent4))
+   (check rcv (sync/timeout #f rcv))
+   (check 'sent4 (thread-receive))
+   (check #f (sync/timeout 0 rcv))
+
+   (let ([r #f])
+     (define t (thread (lambda ()
+                         (set! r (sync rcv rcv)))))
+     (sync (system-idle-evt))
+     (thread-send t 'ok)
+     (sync (system-idle-evt))
+     (check t (sync/timeout 0 t))
+     (check rcv r))
+
    (define (check-break/kill #:kill? kill?)
      (define stop-thread (if kill? kill-thread break-thread))
      (define (report-expected-exn what)
