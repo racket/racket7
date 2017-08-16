@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../common/resource.rkt"
          "../path/path.rkt"
          "../path/parameter.rkt"
          "../path/directory-path.rkt"
@@ -81,48 +82,42 @@
 (define/who (directory-list [p (current-directory)])
   (check who path-string? p)
   (define host-path (->host p))
-  (start-atomic)
-  (let ([dl (rktio_directory_list_start rktio host-path)])
-    (cond
-      [(rktio-error? dl)
-       (end-atomic)
-       (raise-filesystem-error who
-                               dl
-                               (format (string-append
-                                        "could not open directory\n"
-                                        "  path: ~a")
-                                       (host-> host-path)))]
-      [else
-       (thread-push-kill-callback!
-        (lambda () (when dl (rktio_directory_list_stop rktio dl))))
-       (dynamic-wind
-        void
-        (lambda ()
-          (end-atomic)
-          (let loop ()
-            (start-atomic)
-            (define fnp (rktio_directory_list_step rktio dl))
-            (define fn (if (rktio-error? fnp)
-                           fnp
-                           (rktio_to_bytes fnp)))
-            
-            (cond
-              [(rktio-error? fn)
-               (end-atomic)
-               (check-rktio-error fn "error reading directory")]
-              [(equal? fn #"")
-               (set! dl #f)
-               (end-atomic)
-               null]
-              [else
-               (rktio_free fnp)
-               (end-atomic)
-               (cons (host-> fn)
-                     (loop))])))
-        (lambda ()
-          (start-atomic)
-          (thread-pop-kill-callback!)
-          (end-atomic)))])))
+  (atomically
+   (call-with-resource
+    (rktio_directory_list_start rktio host-path)
+    ;; in atomic mode
+    (lambda (dl) (rktio_directory_list_stop rktio dl))
+    ;; in atomic mode
+    (lambda (dl)
+      (cond
+        [(rktio-error? dl)
+         (end-atomic)
+         (raise-filesystem-error who
+                                 dl
+                                 (format (string-append
+                                          "could not open directory\n"
+                                          "  path: ~a")
+                                         (host-> host-path)))]
+        [else
+         (end-atomic)
+         (let loop ([accum null])
+           (start-atomic)
+           (define fnp (rktio_directory_list_step rktio dl))
+           (define fn (if (rktio-error? fnp)
+                          fnp
+                          (rktio_to_bytes fnp)))
+           (cond
+             [(rktio-error? fn)
+              (end-atomic)
+              (check-rktio-error fn "error reading directory")]
+             [(equal? fn #"")
+              ;; `dl` is no longer valid; need to return still in
+              ;; atomic mode, so that `dl` is not destroyed again
+              accum]
+             [else
+              (rktio_free fnp)
+              (end-atomic)
+              (loop (cons (host-> fn) accum))]))])))))
 
 (define/who (delete-file p)
   (check who path-string? p)

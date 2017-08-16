@@ -3,17 +3,17 @@
          "../host/error.rkt"
          "output-port.rkt"
          "input-port.rkt"
-         "host-port.rkt")
+         "fd-port.rkt")
 
 (provide current-input-port
          current-output-port
          current-error-port)
 
 (define current-input-port
-  (make-parameter (open-input-host (check-rktio-error
-                                    (rktio_std_fd rktio RKTIO_STDIN)
-                                    "error initializing stdin")
-                                   'stdin)
+  (make-parameter (open-input-fd (check-rktio-error
+                                  (rktio_std_fd rktio RKTIO_STDIN)
+                                  "error initializing stdin")
+                                 'stdin)
                   (lambda (v)
                     (unless (input-port? v)
                       (raise-argument-error 'current-input-port
@@ -22,11 +22,11 @@
                     v)))
                   
 (define current-output-port
-  (make-parameter (open-output-host (check-rktio-error
-                                     (rktio_std_fd rktio RKTIO_STDOUT)
-                                     "error initializing stdout")
-                                    'stdout
-                                    #:buffer-mode 'infer)
+  (make-parameter (open-output-fd (check-rktio-error
+                                   (rktio_std_fd rktio RKTIO_STDOUT)
+                                   "error initializing stdout")
+                                  'stdout
+                                  #:buffer-mode 'infer)
                   (lambda (v)
                     (unless (output-port? v)
                       (raise-argument-error 'current-output-port
@@ -35,11 +35,11 @@
                     v)))
                   
 (define current-error-port
-  (make-parameter (open-output-host (check-rktio-error
-                                     (rktio_std_fd rktio RKTIO_STDERR)
-                                     "error initializing stderr")
-                                    'stderr
-                                    #:buffer-mode 'none)
+  (make-parameter (open-output-fd (check-rktio-error
+                                   (rktio_std_fd rktio RKTIO_STDERR)
+                                   "error initializing stderr")
+                                  'stderr
+                                  #:buffer-mode 'none)
                   (lambda (v)
                     (unless (output-port? v)
                       (raise-argument-error 'current-error-port

@@ -15,7 +15,7 @@
          "line-input.rkt"
          "file-port.rkt"
          "file-stream.rkt"
-         (only-in "host-port.rkt"
+         (only-in "fd-port.rkt"
                   terminal-port?)
          "file-identity.rkt"
          "file-lock.rkt"

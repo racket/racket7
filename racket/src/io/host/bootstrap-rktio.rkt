@@ -121,16 +121,20 @@
        (loop (add1 len))])))
 
 ;; Unlike `rktio_to_bytes`, frees the array and strings
-(define (rktio_to_bytes_list lls)
+(define (rktio_to_bytes_list lls [len #f])
   (begin0
     (let loop ([i 0])
-      (define bs (ptr-ref lls _bytes i))
-      (if bs
-          (cons (begin0
-                  (bytes-copy bs)
-                  (rktio_free bs))
-                (loop (add1 i)))
-          null))
+      (cond
+        [(and len (= i len))
+         null]
+        [else
+         (define bs (ptr-ref lls _bytes i))
+         (if bs
+             (cons (begin0
+                     (bytes-copy bs)
+                     (rktio_free bs))
+                   (loop (add1 i)))
+             null)]))
     (rktio_free lls)))
 
 (define (rktio_do_install_os_signal_handler rktio)

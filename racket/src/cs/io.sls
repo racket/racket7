@@ -67,12 +67,18 @@
 
     (define-syntax (let-wrappers stx)
       ;; When an argument has type `rktio_const_string_t`, add an
-      ;; explicit NUL terminator byte
-      (syntax-case stx (rktio_const_string_t)
+      ;; explicit NUL terminator byte; when an argument has a
+      ;; `nullable` wrapper, then add a #f -> 0 conversion
+      (syntax-case stx (rktio_const_string_t ref nullable)
         [(_ () body) #'body]
         [(_ ([rktio_const_string_t arg-name] . args) body)
          #'(let ([arg-name (add-nul-terminator arg-name)])
              (let-wrappers args body))]
+        [(_ ([(nullable type) arg-name] . args) body)
+         #'(let ([arg-name (or arg-name 0)])
+             (let-wrappers args body))]
+        [(_ ([(ref type) arg-name] . args) body)
+         #'(let-wrappers ([type arg-name] . args) body)]
         [(_ (_ . args) body)
          #'(let-wrappers args body)]))
     (define (add-nul-terminator bstr)
@@ -173,17 +179,24 @@
       (cast fs _uintptr _short_bytes))
 
     ;; Unlike `rktio_to_bytes`, frees the array and strings
-    (define (rktio_to_bytes_list lls)
-      (begin0
-       (let loop ([i 0])
-         (define bs (ptr-ref lls _bytes i))
-         (if bs
-             (cons (begin0
-                    (cast bs _uintptr _bytes)
-                    (rktio_free bs))
-                   (loop (add1 i)))
-             null))
-       (rktio_free lls)))
+    (define rktio_to_bytes_list
+      (case-lambda
+       [(lls) (rktio_to_bytes_list lls #f)]
+       [(lls len)
+        (begin0
+         (let loop ([i 0])
+           (cond
+            [(and len (fx= i len))
+             '()]
+            [else
+             (let ([bs (foreign-ref 'uptr lls (* i (foreign-sizeof 'uptr)))])
+               (if (not (eqv? 0 bs))
+                   (cons (begin0
+                          (cast bs _uintptr _bytes)
+                          (rktio_free bs))
+                         (loop (add1 i)))
+                   '()))]))
+         (rktio_free lls))]))
 
     (define (rktio_do_install_os_signal_handler rktio)
       (rktio_install_os_signal_handler rktio))

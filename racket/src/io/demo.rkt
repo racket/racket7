@@ -615,6 +615,29 @@
 
 ;; ----------------------------------------
 
+(define l (tcp-listen 59078 5 #t))
+(test #t (tcp-listener? l))
+
+(define-values (ti to) (tcp-connect "localhost" 59078))
+(define-values (tai tao) (tcp-accept l))
+
+(test 6 (write-string "hello\n" to))
+(flush-output to)
+(test "hello" (read-line tai))
+
+(test 9 (write-string "goodbyte\n" tao))
+(flush-output tao)
+(test "goodbyte" (read-line ti))
+
+(close-output-port to)
+(close-output-port tao)
+(close-input-port ti)
+(close-input-port tai)
+
+(tcp-close l)
+
+;; ----------------------------------------
+
 (time
  (let loop ([j 10])
    (unless (zero? j)

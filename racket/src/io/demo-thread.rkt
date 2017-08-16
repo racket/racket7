@@ -179,6 +179,26 @@
          (open-input-file "compiled/hello.txt")))
      (custodian-shutdown-all c))
 
+   ;; TCP and accept evts
+   (parameterize ([current-custodian (make-custodian)])
+     (define l (tcp-listen 59078 5 #t))
+     (test #t (tcp-listener? l))
+
+     (define acc-evt (tcp-accept-evt l))
+     (test #f (sync/timeout 0 acc-evt))
+
+     (define-values (ti to) (tcp-connect "localhost" 59078))
+
+     (define-values (tai tao) (apply values (sync acc-evt)))
+
+     (test 6 (write-string "hello\n" to))
+     (flush-output to)
+     (test "hello" (read-line tai))
+
+     (custodian-shutdown-all (current-custodian)))
+
+   ;; ----------------------------------------
+
    (printf "Enter to continue after confirming process sleeps...\n")
    (read-line)
    

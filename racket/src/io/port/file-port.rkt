@@ -8,7 +8,7 @@
          "../file/host.rkt"
          "../file/error.rkt"
          "../format/main.rkt"
-         "host-port.rkt"
+         "fd-port.rkt"
          "close.rkt"
          "parameter.rkt"
          "count.rkt")
@@ -48,7 +48,7 @@
                                      "cannot open input file\n"
                                      "  path: ~a")
                                     (host-> host-path))))
-  (define p (open-input-host fd (host-> host-path)))
+  (define p (open-input-fd fd (host-> host-path)))
   (end-atomic)
   (when (port-count-lines-enabled)
     (port-count-lines! p))
@@ -114,9 +114,9 @@
                                     (host-> host-path))))
   (define opened-path (host-> host-path))
   (define refcount (box (if plus-input? 2 1)))
-  (define op (open-output-host fd opened-path #:fd-refcount refcount))
+  (define op (open-output-fd fd opened-path #:fd-refcount refcount))
   (define ip (and plus-input?
-                  (open-input-host fd opened-path #:fd-refcount refcount)))
+                  (open-input-fd fd opened-path #:fd-refcount refcount)))
   (end-atomic)
   (when (port-count-lines-enabled)
     (port-count-lines! op)

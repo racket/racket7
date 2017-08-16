@@ -1,0 +1,58 @@
+#lang racket/base
+(require "../common/resource.rkt"
+         "../string/convert.rkt"
+         "../host/rktio.rkt"
+         "../host/thread.rkt"
+         "evt.rkt")
+
+(provide call-with-resolved-address)
+
+;; in atomic mode
+(define (call-with-resolved-address hostname port-no proc
+                                    #:enable-break? [enable-break? #f]
+                                    #:family [family RKTIO_FAMILY_ANY]
+                                    #:passive? [passive? #f]
+                                    #:tcp? [tcp? #t])
+  (cond
+    [(and (not hostname)
+          (not port-no))
+     (proc #f)]
+    [else
+     (call-with-resource
+      (box (rktio_start_addrinfo_lookup rktio
+                                        (and hostname (string->bytes/utf-8 hostname))
+                                        (or port-no 0)
+                                        family passive? tcp?))
+      ;; in atomic mode
+      (lambda (lookup-box)
+        (define lookup (unbox lookup-box))
+        (when lookup
+          (rktio_addrinfo_lookup_stop lookup)))
+      ;; in atomic mode
+      (lambda (lookup-box)
+        (define lookup (unbox lookup-box))
+        (let loop ()
+          (cond
+            [(eqv? (rktio_poll_addrinfo_lookup_ready rktio lookup)
+                   RKTIO_POLL_NOT_READY)
+             (end-atomic)
+             ((if enable-break? sync/enable-break sync)
+              (rktio-evt (lambda ()
+                           (not (eqv? (rktio_poll_addrinfo_lookup_ready rktio lookup)
+                                      RKTIO_POLL_NOT_READY)))
+                         (lambda (ps)
+                           (rktio_poll_add_addrinfo_lookup rktio lookup ps))))
+             (start-atomic)
+             (loop)]
+            [else
+             (set-box! lookup-box #f) ; receiving result implies `lookup` is destroyed
+             (call-with-resource
+              (rktio_addrinfo_lookup_get rktio lookup)
+              ;; in atomic mode
+              (lambda (addr) (rktio_addrinfo_free rktio addr))
+              ;; in atomic mode
+              (lambda (addr)
+                ;; `addr` may be an error; if so, let `proc` handle it
+                (begin0
+                  (proc addr)
+                  (rktio_addrinfo_free rktio addr))))]))))]))

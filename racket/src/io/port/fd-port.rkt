@@ -15,25 +15,31 @@
          "count.rkt"
          "check.rkt")
 
-(provide open-input-host
-         open-output-host
-         terminal-port?)
+(provide open-input-fd
+         open-output-fd
+         terminal-port?
+         fd-port-fd
+         maybe-fd-data-extra)
 
-(struct host-data (host-fd) ; host-system file descriptor
-  #:property prop:file-stream (lambda (hd) (host-data-host-fd hd))
+(struct fd-data (fd extra)
+  #:property prop:file-stream (lambda (fdd) (fd-data-fd fdd))
   #:property prop:file-truncate (case-lambda
-                                  [(hd pos)
+                                  [(fdd pos)
                                    (check-rktio-error*
                                     (rktio_set_file_size rktio
-                                                         (host-data-host-fd hd)
+                                                         (fd-data-fd fdd)
                                                          pos)
                                     "error setting file size")]))
 
+(define (maybe-fd-data-extra data)
+  (and (fd-data? data)
+       (fd-data-extra data)))
+
 ;; in atomic mode
-(define (host-close host-fd fd-refcount)
+(define (fd-close fd fd-refcount)
   (set-box! fd-refcount (sub1 (unbox fd-refcount)))
   (when (zero? (unbox fd-refcount))
-    (define v (rktio_close rktio host-fd))
+    (define v (rktio_close rktio fd))
     (when (rktio-error? v)
       (end-atomic)
       (raise-rktio-error #f v "error closing stream port"))))
@@ -42,46 +48,51 @@
 
 ;; in atomic mode
 ;; Current custodian must not be shut down.
-(define (open-input-host host-fd name
-                         #:fd-refcount [fd-refcount (box 1)])
+(define (open-input-fd fd name
+                       #:extra-data [extra-data #f]
+                       #:on-close [on-close void]
+                       #:fd-refcount [fd-refcount (box 1)])
   (define-values (port buffer-control)
     (open-input-peek-via-read
      #:name name
-     #:data (host-data host-fd)
+     #:data (fd-data fd extra-data)
      #:read-in
      ;; in atomic mode
      (lambda (dest-bstr start end copy?)
-       (define n (rktio_read_in rktio host-fd dest-bstr start end))
+       (define n (rktio_read_in rktio fd dest-bstr start end))
        (cond
          [(rktio-error? n)
           (end-atomic)
           (raise-filesystem-error #f n "error reading from stream port")]
          [(eqv? n RKTIO_READ_EOF) eof]
-         [(eqv? n 0) (wrap-evt (fd-evt host-fd RKTIO_POLL_READ (core-port-closed port))
+         [(eqv? n 0) (wrap-evt (fd-evt fd RKTIO_POLL_READ (core-port-closed port))
                                (lambda (v) 0))]
          [else n]))
      #:read-is-atomic? #t
      #:close
      ;; in atomic mode
      (lambda ()
-       (host-close host-fd fd-refcount)
-       (unsafe-custodian-unregister host-fd custodian-reference))
+       (on-close)
+       (fd-close fd fd-refcount)
+       (unsafe-custodian-unregister fd custodian-reference))
      #:file-position (make-file-position
-                      host-fd
+                      fd
                       (case-lambda
                         [() (buffer-control)]
                         [(pos) (buffer-control pos)]))))
   (define custodian-reference
-    (register-fd-close (current-custodian) host-fd fd-refcount port))
+    (register-fd-close (current-custodian) fd fd-refcount port))
   port)
 
 ;; ----------------------------------------
 
 ;; in atomic mode
 ;; Current custodian must not be shut down.
-(define (open-output-host host-fd name
-                          #:buffer-mode [buffer-mode 'infer]
-                          #:fd-refcount [fd-refcount (box 1)])
+(define (open-output-fd fd name
+                        #:extra-data [extra-data #f]
+                        #:buffer-mode [buffer-mode 'infer]
+                        #:fd-refcount [fd-refcount (box 1)]
+                        #:on-close [on-close void])
   (define buffer (make-bytes 4096))
   (define buffer-start 0)
   (define buffer-end 0)
@@ -92,18 +103,18 @@
                           (plumber-flush-handle-remove! h))))
   
   (when (eq? buffer-mode 'infer)
-    (if (rktio_fd_is_terminal rktio host-fd)
+    (if (rktio_fd_is_terminal rktio fd)
         (set! buffer-mode 'line)
         (set! buffer-mode 'block)))
 
-  (define evt (fd-evt host-fd RKTIO_POLL_WRITE #f))
+  (define evt (fd-evt fd RKTIO_POLL_WRITE #f))
 
   ;; in atomic mode
   ;; Returns `#t` if the buffer is already or successfully flushed
   (define (flush-buffer)
     (cond
       [(not (= buffer-start buffer-end))
-       (define n (rktio_write_in rktio host-fd buffer buffer-start buffer-end))
+       (define n (rktio_write_in rktio fd buffer buffer-start buffer-end))
        (cond
          [(rktio-error? n)
           (end-atomic)
@@ -146,7 +157,7 @@
   (define port
     (make-core-output-port
      #:name name
-     #:data (host-data host-fd)
+     #:data (fd-data fd extra-data)
 
      #:evt evt
      
@@ -171,7 +182,7 @@
          [(not (flush-buffer)) ; <- can temporarily leave atomic mode
           #f]
          [else
-          (define n (rktio_write_in rktio host-fd src-bstr src-start src-end))
+          (define n (rktio_write_in rktio fd src-bstr src-start src-end))
           (cond
             [(rktio-error? n)
              (end-atomic)
@@ -188,13 +199,14 @@
      (lambda ()
        (flush-buffer-fully #f) ; can temporarily leave atomic mode
        (when buffer ; <- in case a concurrent close succeeded
+         (on-close)
          (plumber-flush-handle-remove! flush-handle)
          (set! buffer #f)
-         (host-close host-fd fd-refcount)
-         (unsafe-custodian-unregister host-fd custodian-reference)))
+         (fd-close fd fd-refcount)
+         (unsafe-custodian-unregister fd custodian-reference)))
 
      #:file-position (make-file-position
-                      host-fd
+                      fd
                       ;; in atomic mode
                       (case-lambda
                         [()
@@ -210,7 +222,7 @@
                      [(mode) (set! buffer-mode mode)])))
 
   (define custodian-reference
-    (register-fd-close (current-custodian) host-fd fd-refcount port))
+    (register-fd-close (current-custodian) fd fd-refcount port))
 
   (set-fd-evt-closed! evt (core-port-closed port))
 
@@ -226,16 +238,25 @@
        [(output-port? p) (->core-output-port p)]
        [else
         (raise-argument-error 'terminal-port? "port?" p)])))
-  (and (host-data? p)
-       (rktio_fd_is_terminal (host-data-host-fd p))))
+  (and (fd-data? p)
+       (rktio_fd_is_terminal (fd-data-fd p))))
+
+(define (fd-port-fd p)
+  (define data
+    (core-port-data
+     (cond
+       [(input-port? p) (->core-input-port p)]
+       [else (->core-output-port p)])))
+  (and (fd-data? data)
+       (fd-data-fd data)))
 
 ;; ----------------------------------------
 
-(define (make-file-position host-fd buffer-control)
+(define (make-file-position fd buffer-control)
   ;; in atomic mode
   (case-lambda
     [()
-     (define ppos (rktio_get_file_position rktio host-fd))
+     (define ppos (rktio_get_file_position rktio fd))
      (cond
        [(rktio-error? ppos)
         (end-atomic)
@@ -248,7 +269,7 @@
      (buffer-control)
      (define r
        (rktio_set_file_position rktio
-                                host-fd
+                                fd
                                 (if (eof-object? pos)
                                     0
                                     pos)
@@ -297,7 +318,7 @@
                                          (sandman-add-poll-set-adder
                                           (schedule-info-current-exts sched-info)
                                           ;; Cooperate with the sandman by registering
-                                          ;; a funciton that takes a poll set and
+                                          ;; a function that takes a poll set and
                                           ;; adds to it:
                                           (lambda (ps)
                                             (rktio_poll_add rktio (fd-evt-fd fde) ps mode)))))
@@ -305,13 +326,13 @@
 
 ;; ----------------------------------------
 
-(define (register-fd-close custodian host-fd fd-refcount port)
+(define (register-fd-close custodian fd fd-refcount port)
   (define closed (core-port-closed port))
   (unsafe-custodian-register custodian
-                             host-fd
+                             fd
                              ;; in atomic mode
-                             (lambda (host-fd)
-                               (host-close host-fd fd-refcount)
+                             (lambda (fd)
+                               (fd-close fd fd-refcount)
                                (set-closed-state! closed))
                              #f
                              #f))

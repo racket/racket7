@@ -87,6 +87,8 @@ Thread and signal conventions:
 #define RKTIO_EXTERN_NOERR  RKTIO_EXTERN
 #define RKTIO_EXTERN_STEP   RKTIO_EXTERN
 
+#define RKTIO_NULLABLE      /* empty */
+
 /*************************************************/
 /* Initialization and general datatypes          */
 
@@ -389,7 +391,9 @@ rktio_tri_t rktio_poll_accept_ready(rktio_t *rktio, rktio_listener_t *listener);
 RKTIO_EXTERN rktio_fd_t *rktio_accept(rktio_t *rktio, rktio_listener_t *listener);
 /* Accepts one connection on a listener. */
 
-RKTIO_EXTERN rktio_connect_t *rktio_start_connect(rktio_t *rktio, rktio_addrinfo_t *remote, rktio_addrinfo_t *local);
+RKTIO_EXTERN rktio_connect_t *rktio_start_connect(rktio_t *rktio,
+                                                  rktio_addrinfo_t *remote,
+                                                  RKTIO_NULLABLE rktio_addrinfo_t *local);
 /* Starts a connection request. Addreses must not be freed until the
    connection is complete, errored, or stopped. */
 

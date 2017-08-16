@@ -497,10 +497,6 @@
           unsafe-extfl->fx unsafe-fx->extfl unsafe-extflsqrt
           unsafe-extflvector-length unsafe-extflvector-ref unsafe-extflvector-set!
 
-          tcp-listener? tcp-port?
-          tcp-abandon-port tcp-accept tcp-accept-evt tcp-accept-ready?
-          tcp-accept/enable-break tcp-addresses tcp-close tcp-connect
-          tcp-connect/enable-break tcp-listen
           udp? udp-bind! udp-bound? udp-close udp-connect! udp-connected?
           udp-multicast-interface udp-multicast-join-group! udp-multicast-leave-group!
           udp-multicast-loopback? udp-multicast-set-interface! udp-multicast-set-loopback!

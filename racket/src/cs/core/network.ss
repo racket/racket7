@@ -1,7 +1,5 @@
 
 (define (udp? v) #f)
-(define (tcp-listener? v) #f)
-(define (tcp-port? v) #f)
 
 (define-syntax (define-network-ids stx)
   (syntax-case stx ()
@@ -12,16 +10,6 @@
          ...)]))
 
 (define-network-ids
-  tcp-abandon-port
-  tcp-accept
-  tcp-accept-evt
-  tcp-accept-ready?
-  tcp-accept/enable-break
-  tcp-addresses
-  tcp-close
-  tcp-connect
-  tcp-connect/enable-break
-  tcp-listen
   udp-bind!
   udp-bound?
   udp-close
