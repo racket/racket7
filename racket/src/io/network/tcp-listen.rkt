@@ -2,6 +2,7 @@
 (require "../common/check.rkt"
          "../host/thread.rkt"
          "../host/rktio.rkt"
+         "../security/main.rkt"
          "port-number.rkt"
          "address.rkt"
          "error.rkt")
@@ -30,6 +31,7 @@
                                             (format "\n  hostname: ~a" hostname)
                                             "")
                                         (format "\n  port number: ~a" port-no))))
+  (security-guard-check-network who hostname port-no #f)
   (let loop ([family RKTIO_FAMILY_ANY])
     ((atomically
       ;; Result is a thunk that might call `loop`

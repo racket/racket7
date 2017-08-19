@@ -8,6 +8,7 @@
          "../host/thread.rkt"
          "../host/error.rkt"
          "../format/main.rkt"
+         "../security/main.rkt"
          "parameter.rkt"
          "host.rkt"
          "identity.rkt"
@@ -54,19 +55,19 @@
 
 (define/who (directory-exists? p)
   (check who path-string? p)
-  (rktio_directory_exists rktio (->host p)))
+  (rktio_directory_exists rktio (->host p who '(exists))))
 
 (define/who (file-exists? p)
   (check who path-string? p)
-  (rktio_file_exists rktio (->host p)))
+  (rktio_file_exists rktio (->host p who '(exists))))
 
 (define/who (link-exists? p)
   (check who path-string? p)
-  (rktio_link_exists rktio (->host p)))
+  (rktio_link_exists rktio (->host p who '(exists))))
 
 (define/who (make-directory p)
   (check who path-string? p)
-  (define host-path (->host p))
+  (define host-path (->host p who '(write)))
   (define r (rktio_make_directory rktio host-path))
   (when (rktio-error? r)
     (raise-filesystem-error who
@@ -81,7 +82,7 @@
 
 (define/who (directory-list [p (current-directory)])
   (check who path-string? p)
-  (define host-path (->host p))
+  (define host-path (->host p who '(read)))
   (atomically
    (call-with-resource
     (rktio_directory_list_start rktio host-path)
@@ -121,7 +122,7 @@
 
 (define/who (delete-file p)
   (check who path-string? p)
-  (define host-path (->host p))
+  (define host-path (->host p who '(delete)))
   (define r (rktio_delete_file rktio
                                host-path
                                (current-force-delete-permissions)))
@@ -135,10 +136,10 @@
 
 (define/who (delete-directory p)
   (check who path-string? p)
-  (define host-path (->host p))
+  (define host-path (->host p who '(delete)))
   (define r (rktio_delete_directory rktio
                                     host-path
-                                    (->host (current-directory))
+                                    (->host (current-directory) #f #f)
                                     (current-force-delete-permissions)))
   (when (rktio-error? r)
     (raise-filesystem-error who
@@ -151,8 +152,8 @@
 (define/who (rename-file-or-directory old new [exists-ok? #f])
   (check who path-string? old)
   (check who path-string? new)
-  (define host-old (->host old))
-  (define host-new (->host new))
+  (define host-old (->host old who '(read)))
+  (define host-new (->host new who '(write)))
   (define r (rktio_rename_file rktio host-new host-old exists-ok?))
   (when (rktio-error? r)
     (raise-filesystem-error who
@@ -188,7 +189,7 @@
       (raise-arguments-error who
                              "integer value is out-of-range"
                              "value" secs)))
-  (define host-path (->host p))
+  (define host-path (->host p who (if secs '(write) '(read))))
   (start-atomic)
   (define r0 (if secs
                  (rktio_set_file_modify_seconds rktio host-path secs)
@@ -219,7 +220,7 @@
                         (<= 0 m 65535))))
          #:contract "(or/c #f 'bits (integer-in 0 65535))"
          mode)
-  (define host-path (->host p))
+  (define host-path (->host p who (if (integer? mode) '(write) '(read))))
   (define r
     (if (integer? mode)
         (rktio_set_file_or_directory_permissions rktio host-path mode)
@@ -257,13 +258,13 @@
 
 (define/who (file-or-directory-identity p [as-link? #f])
   (check who path-string? p)
-  (define host-path (->host p))
+  (define host-path (->host p who '(exists)))
   (start-atomic)
   (path-or-fd-identity who #:host-path host-path #:as-link? as-link?))
 
 (define/who (file-size p)
   (check who path-string? p)
-  (define host-path (->host p))
+  (define host-path (->host p who '(read)))
   (start-atomic)
   (define r0 (rktio_file_size rktio host-path))
   (define r (if (rktio-error? r0)
@@ -285,8 +286,8 @@
 (define/who (copy-file src dest [exists-ok? #f])
   (check who path-string? src)
   (check who path-string? dest)
-  (define src-host (->host src))
-  (define dest-host (->host dest))
+  (define src-host (->host src who '(read)))
+  (define dest-host (->host dest who '(write delete)))
   (define (report-error r)
     (raise-filesystem-error who
                             r
@@ -329,8 +330,8 @@
   (check who path-string? to)
   (check who path-string? path)
   (define to-path (->path to))
-  (define to-host (->host/as-is to-path))
-  (define path-host (->host path))
+  (define path-host (->host path who '(write)))
+  (define to-host (->host/as-is to-path who (host-> path-host)))
   (define r (rktio_make_link rktio path-host to-host (directory-path? to-path)))
   (when (rktio-error? r)
     (raise-filesystem-error who
@@ -345,7 +346,7 @@
 
 (define/who (resolve-path p)
   (check who path-string? p)
-  (define host-path (->host (path->path-without-trailing-separator (->path p))))
+  (define host-path (->host (path->path-without-trailing-separator (->path p)) who '(exists)))
   (start-atomic)
   (define r0 (rktio_readlink rktio host-path))
   (define r (if (rktio-error? r0)
@@ -367,7 +368,7 @@
   (cond
     [(and (positive? (bytes-length bstr))
           (eqv? (bytes-ref bstr 0) (char->integer #\~)))
-     (define host-path (->host/as-is path))
+     (define host-path (->host/as-is path who #f))
      (start-atomic)
      (define r0 (rktio_expand_user_tilde rktio host-path))
      (define r (if (rktio-error? r0)
@@ -387,6 +388,7 @@
     [else path]))
 
 (define/who (filesystem-root-list)
+  (security-guard-check-file who #f '(exists))
   (start-atomic)
   (define r0 (rktio_filesystem_roots rktio))
   (define r (if (rktio-error? r0)

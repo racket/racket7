@@ -1,5 +1,8 @@
 #lang racket/base
-(require "../common/check.rkt")
+(require "../common/check.rkt"
+         "../path/path.rkt"
+         "../path/relativity.rkt"
+         "../network/port-number.rkt")
 
 (provide make-security-guard
          security-guard?
@@ -33,12 +36,44 @@
   (check who #:or-false (procedure-arity-includes/c 3) link-guard)
   (security-guard parent file-guard network-guard link-guard))
 
-(define (security-guard-check-file who path guards)
-  (void))
+(define/who (security-guard-check-file check-who given-path guards)
+  (check who symbol? check-who)
+  (check who path-string? #:or-false given-path)
+  (check who (lambda (l)
+               (and (list? l)
+                    (for/and ([s (in-list l)])
+                      (or (eq? s 'read)
+                          (eq? s 'write)
+                          (eq? s 'execute)
+                          (eq? s 'delete)
+                          (eq? s 'exists)))))
+         #:contract "(or/c 'read 'write 'execute 'delete 'exists)"
+         guards)
+  (define path (->path given-path))
+  (let loop ([sg (current-security-guard)])
+    (when sg
+      ((security-guard-file-guard sg) check-who path guards)
+      (loop (security-guard-parent sg)))))
 
-(define (security-guard-check-file-link who path dest)
-  (void))
+(define/who (security-guard-check-file-link check-who given-path given-dest)
+  (check who symbol? check-who)
+  (check who (lambda (p) (and (path-string? p) (complete-path? p)))
+         #:contract "(and/c path? complete-path?)"
+         given-path)
+  (check who path-string? given-dest)
+  (define path (->path given-path))
+  (define dest (->path given-dest))
+  (let loop ([sg (current-security-guard)])
+    (when sg
+      ((security-guard-link-guard sg) check-who path dest)
+      (loop (security-guard-parent sg)))))
 
-(define (security-guard-check-network who host port client?)
-  (void))
-
+(define/who (security-guard-check-network check-who given-host port client?)
+  (check who symbol? check-who)
+  (check who string? #:or-false given-host)
+  (check who listen-port-number? #:or-false port)
+  (define host (and given-host (string->immutable-string given-host)))
+  (let loop ([sg (current-security-guard)])
+    (when sg
+      ((security-guard-network-guard sg) check-who host port  (if client? 'client 'server))
+      (loop (security-guard-parent sg)))))

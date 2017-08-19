@@ -3,6 +3,7 @@
          "../host/thread.rkt"
          "../host/rktio.rkt"
          "../sandman/main.rkt"
+         "../security/main.rkt"
          "port-number.rkt"
          "check.rkt"
          "address.rkt"
@@ -74,7 +75,8 @@
   (check who udp? u)
   (check who string? hostname)
   (check who port-number? port-no)
-  (check-bstr who bstr start end))
+  (check-bstr who bstr start end)
+  (security-guard-check-network who hostname port-no #t))
 
 ;; ----------------------------------------
 
@@ -104,6 +106,7 @@
        u
        ;; in atomic mode:
        (lambda ()
+         (when addr (register-address-finalizer addr))
          (do-udp-maybe-send-to-addr who u addr bstr start end
                                     #:wait? #f
                                     #:handle-error (lambda (thunk) thunk))))))))

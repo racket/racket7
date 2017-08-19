@@ -6,7 +6,8 @@
          "evt.rkt"
          "error.rkt")
 
-(provide call-with-resolved-address)
+(provide call-with-resolved-address
+         register-address-finalizer)
 
 ;; in atomic mode
 (define (call-with-resolved-address hostname port-no proc
@@ -18,6 +19,7 @@
                                     #:passive? [passive? #f]
                                     #:tcp? [tcp? #t]
                                     #:retain-address? [retain-address? #f])
+  (poll-address-finalizations)
   (cond
     [(and (not hostname)
           (not port-no))
@@ -71,3 +73,18 @@
                      (proc addr)
                      (unless retain-address?
                        (rktio_addrinfo_free rktio addr)))])))]))))]))
+
+;; ----------------------------------------
+
+(define address-will-executor (make-will-executor))
+
+(define (register-address-finalizer addr)
+  (will-register address-will-executor
+                 addr
+                 (lambda (addr)
+                   (rktio_addrinfo_free rktio addr)
+                   #t)))
+
+(define (poll-address-finalizations)
+  (when (will-try-execute address-will-executor)
+    (poll-address-finalizations)))

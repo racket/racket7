@@ -9,7 +9,6 @@
          "relativity.rkt"
          "cleanse.rkt"
          "simplify.rkt"
-         "parameter.rkt"
          "directory-path.rkt"
          "system.rkt"
          "api.rkt")
@@ -42,6 +41,7 @@
          complete-path?
 
          current-directory
+         current-directory-for-user
          current-drive
 
          path->complete-path

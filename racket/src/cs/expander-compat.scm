@@ -140,8 +140,6 @@
 
 (define (filesystem-change-evt? v) #f)
 
-(define current-directory-for-user
-  (make-parameter (|#%app| current-directory)))
 (define (srcloc->string s)
   (and (srcloc-source s)
        (format "~a:~s:~s"

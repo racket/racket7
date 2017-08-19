@@ -4,6 +4,7 @@
          "../host/thread.rkt"
          "../host/rktio.rkt"
          "../host/error.rkt"
+         "../security/main.rkt"
          "tcp-port.rkt"
          "port-number.rkt"
          "address.rkt"
@@ -43,6 +44,7 @@
                                         (if port-no
                                             (format "\n  port number: ~a" port-no)
                                             ""))))
+  (security-guard-check-network who hostname port-no #t)
   (atomically
    (call-with-resolved-address
     hostname port-no

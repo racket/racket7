@@ -29,7 +29,7 @@
     (case mode
       [(text) RKTIO_OPEN_TEXT]
       [else 0]))
-  (define host-path (->host path))
+  (define host-path (->host path who '(read)))
   (start-atomic)
   (check-current-custodian who)
   (define fd (rktio_open rktio
@@ -69,7 +69,16 @@
       [else 0]))
   (define (mode? v)
     (or (eq? mode1 v) (eq? mode2 v)))
-  (define host-path (->host path))
+  (define host-path (->host path who (append '(write)
+                                             (if (or (mode? 'replace)
+                                                     (mode? 'truncate/replace))
+                                                 '(delete)
+                                                 '())
+                                             (if (or (mode? 'append)
+                                                     (mode? 'update)
+                                                     (mode? 'must-update))
+                                                 '(read)
+                                                 '()))))
   (start-atomic)
   (check-current-custodian who)
   (define flags
