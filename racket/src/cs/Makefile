@@ -240,7 +240,6 @@ CORE_SRCS = core/check.ss \
             core/system.ss \
             core/unsafe.ss \
             core/extfl.ss \
-            core/network.ss \
             core/place.ss \
             core/foreign.ss \
             core/future.ss \

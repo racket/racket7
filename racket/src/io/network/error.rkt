@@ -2,7 +2,8 @@
 (require "../host/rktio.rkt"
          "../host/error.rkt")
 
-(provide raise-network-error)
+(provide raise-network-error
+         raise-network-arguments-error)
 
 (define (raise-network-error who orig-err base-msg)
   (define err (remap-rktio-error orig-err))
@@ -24,3 +25,15 @@
       (exn:fail:network
        msg
        (current-continuation-marks))])))
+
+(define (raise-network-arguments-error who msg socket-str u)
+  (unless (equal? socket-str "socket")
+    (raise-argument-error 'raise-network-arguments-error
+                          "\"socket\""
+                          socket-str))
+  (raise
+   (exn:fail:network
+    (string-append (symbol->string who) ": " msg
+                   "\n  socket: "
+                   ((error-value->string-handler) u (error-print-width)))
+    (current-continuation-marks))))

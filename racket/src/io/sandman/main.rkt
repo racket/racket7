@@ -15,7 +15,8 @@
 ;; events, we don't implement that, and it's probably simpler to
 ;; connect events to semaphores through a long-term poll set...
 
-(provide sandman-add-poll-set-adder)
+(provide sandman-add-poll-set-adder
+         sandman-poll-ctx-add-poll-set-adder!)
 
 (struct exts (timeout-at fd-adders))
 
@@ -23,6 +24,13 @@
   (exts (and old-exts (exts-timeout-at old-exts))
         (cons adder (and old-exts (exts-fd-adders old-exts)))))
 
+(define (sandman-poll-ctx-add-poll-set-adder! poll-ctx adder)
+  (define sched-info (poll-ctx-sched-info poll-ctx))
+  (when sched-info
+    (schedule-info-current-exts sched-info
+                                (sandman-add-poll-set-adder
+                                 (schedule-info-current-exts sched-info)
+                                 adder))))
 (void
  (current-sandman
   (let ([timeout-sandman (current-sandman)])

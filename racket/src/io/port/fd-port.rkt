@@ -306,22 +306,19 @@
           [ready?
            (values (list fde) #f)]
           [else
-           ;; If `sched-info` is not #f, then we can register this file
+           ;; If `sched-info` in `poll-ctx` is not #f, then we can register this file
            ;; descriptor so that if no thread is able to make progress,
            ;; the Racket process will sleep, but it will wake up when
            ;; input is available. The implementation of external events
            ;; is from the current sandman, which will in turn be the
            ;; one (or build on the one) in "../sandman".
-           (define sched-info (poll-ctx-sched-info ctx))
-           (when sched-info
-             (schedule-info-current-exts sched-info
-                                         (sandman-add-poll-set-adder
-                                          (schedule-info-current-exts sched-info)
-                                          ;; Cooperate with the sandman by registering
-                                          ;; a function that takes a poll set and
-                                          ;; adds to it:
-                                          (lambda (ps)
-                                            (rktio_poll_add rktio (fd-evt-fd fde) ps mode)))))
+           (sandman-poll-ctx-add-poll-set-adder!
+            ctx
+            ;; Cooperate with the sandman by registering
+            ;; a function that takes a poll set and
+            ;; adds to it:
+            (lambda (ps)
+              (rktio_poll_add rktio (fd-evt-fd fde) ps mode)))
            (values #f fde)])]))))
 
 ;; ----------------------------------------

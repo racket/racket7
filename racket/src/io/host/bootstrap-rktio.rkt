@@ -90,6 +90,12 @@
   (let ([radix (arithmetic-shift 1 (sub1 (* 8 (ctype-sizeof rktio_timestamp_t))))])
     (<= (- radix) v (sub1 radix))))
 
+(define (rktio_recv_length_ref p)
+  (Rrktio_length_and_addrinfo_t-len (cast p _pointer rktio_length_and_addrinfo_t)))
+
+(define (rktio_recv_address_ref p)
+  (Rrktio_length_and_addrinfo_t-address (cast p _pointer rktio_length_and_addrinfo_t)))
+
 (define (rktio_identity_to_vector p)
   (let ([p (cast p _pointer _Rrktio_identity_t-pointer)])
     (vector
@@ -171,6 +177,8 @@
                                          'rktio_filesize_ref rktio_filesize_ref
                                          'rktio_timestamp_ref rktio_timestamp_ref
                                          'rktio_is_timestamp rktio_is_timestamp
+                                         'rktio_recv_length_ref rktio_recv_length_ref
+                                         'rktio_recv_address_ref rktio_recv_address_ref
                                          'rktio_identity_to_vector rktio_identity_to_vector
                                          'rktio_convert_result_to_vector rktio_convert_result_to_vector
                                          'rktio_to_bytes rktio_to_bytes

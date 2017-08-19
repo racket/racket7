@@ -22,4 +22,5 @@
                                       (sandman-add-poll-set-adder
                                        (schedule-info-current-exts sched-info)
                                        (rktio-evt-add-to-poll-set self))))
-        (values #f self)]))))
+        (values #f self)])))
+  #:authentic)

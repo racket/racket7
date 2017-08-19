@@ -197,6 +197,33 @@
 
      (custodian-shutdown-all (current-custodian)))
 
+   ;; UDP and evts
+   (define u1 (udp-open-socket))
+   (test (void) (udp-bind! u1 #f 10768))
+
+   (define u2 (udp-open-socket))
+
+   (define bstr (make-bytes 10))
+   (define r1-evt (udp-receive!-evt u1 bstr))
+
+   (test #f (sync/timeout 0 r1-evt))
+
+   (test (void) (sync (udp-send-to-evt u2 "localhost" 10768 #"hello")))
+
+   (let ([l (sync r1-evt)])
+     (test 5 (car l))
+     (test #"hello" (subbytes bstr 0 5)))
+
+   (test #f (sync/timeout 0 r1-evt))
+   (udp-close u1)
+   (udp-close u2)
+
+   ;; Check some expected errors:
+   (printf "[two expected errors coming up...]\n")
+   (sync (thread (lambda () (sync r1-evt))))
+   (sync (thread (lambda () (sync (udp-send-to-evt u2 "localhost" 10768 #"")))))
+   (printf "[two error messages about a UDP socket being closed were expected]\n")
+
    ;; ----------------------------------------
 
    (printf "Enter to continue after confirming process sleeps...\n")

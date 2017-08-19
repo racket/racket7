@@ -497,14 +497,6 @@
           unsafe-extfl->fx unsafe-fx->extfl unsafe-extflsqrt
           unsafe-extflvector-length unsafe-extflvector-ref unsafe-extflvector-set!
 
-          udp? udp-bind! udp-bound? udp-close udp-connect! udp-connected?
-          udp-multicast-interface udp-multicast-join-group! udp-multicast-leave-group!
-          udp-multicast-loopback? udp-multicast-set-interface! udp-multicast-set-loopback!
-          udp-multicast-set-ttl! udp-multicast-ttl udp-open-socket udp-receive! udp-receive!*
-          udp-receive!-evt udp-receive!/enable-break udp-receive-ready-evt udp-send
-          udp-send* udp-send-evt udp-send-ready-evt udp-send-to udp-send-to* udp-send-to-evt
-          udp-send-to/enable-break udp-send/enable-break
-
           place-enabled? place? place-channel? place-break
           place-channel-get place-channel-put place-sleep
           place-channel place-dead-evt place-kill place-message-allowed?
@@ -645,7 +637,6 @@
   (include "core/system.ss")
   (include "core/unsafe.ss")
   (include "core/extfl.ss")
-  (include "core/network.ss")
   (include "core/place.ss")
   (include "core/foreign.ss")
   (include "core/future.ss")	

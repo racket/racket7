@@ -425,7 +425,7 @@ RKTIO_EXTERN rktio_ok_t rktio_socket_shutdown(rktio_t *rktio, rktio_fd_t *rfd, i
 #define RKTIO_SHUTDOWN_READ   0
 #define RKTIO_SHUTDOWN_WRITE  1
 
-RKTIO_EXTERN rktio_fd_t *rktio_udp_open(rktio_t *rktio, rktio_addrinfo_t *addr, int family);
+RKTIO_EXTERN rktio_fd_t *rktio_udp_open(rktio_t *rktio, RKTIO_NULLABLE rktio_addrinfo_t *addr, int family);
 /* The `addr` argument can be NULL to create a socket without
    specifying an interface, and `family` is used only if `addr` is not
    specified. */
@@ -436,10 +436,15 @@ RKTIO_EXTERN rktio_ok_t rktio_udp_bind(rktio_t *rktio, rktio_fd_t *rfd, rktio_ad
 RKTIO_EXTERN rktio_ok_t rktio_udp_connect(rktio_t *rktio, rktio_fd_t *rfd, rktio_addrinfo_t *addr);
 
 RKTIO_EXTERN_ERR(RKTIO_WRITE_ERROR)
-intptr_t rktio_udp_sendto(rktio_t *rktio, rktio_fd_t *rfd, rktio_addrinfo_t *addr,
+intptr_t rktio_udp_sendto(rktio_t *rktio, rktio_fd_t *rfd, RKTIO_NULLABLE rktio_addrinfo_t *addr,
                           const char *buffer, intptr_t len);
 /* Extends `rktio_write` to accept a destination `addr`, and binds `rfd` if it 
    is not bound aready. The `addr` can be NULL if the socket is connected. */
+
+RKTIO_EXTERN_ERR(RKTIO_WRITE_ERROR)
+intptr_t rktio_udp_sendto_in(rktio_t *rktio, rktio_fd_t *rfd, RKTIO_NULLABLE rktio_addrinfo_t *addr,
+                             const char *buffer, intptr_t start, intptr_t end);
+/* Like `rktio_udp_sendto`, but with starting and ending offsets within `buffer`. */
 
 typedef struct rktio_length_and_addrinfo_t {
   intptr_t len;
@@ -451,6 +456,10 @@ RKTIO_EXTERN rktio_length_and_addrinfo_t *rktio_udp_recvfrom(rktio_t *rktio, rkt
 /* Extend `rktio_read` to report the sender. If the reported error can
    be `RKTIO_ERROR_TRY_AGAIN` or `RKTIO_ERROR_INFO_TRY_AGAIN`, where
    the latter can happen if the sock claims to be ready to read. */
+
+RKTIO_EXTERN rktio_length_and_addrinfo_t *rktio_udp_recvfrom_in(rktio_t *rktio, rktio_fd_t *rfd,
+                                                                char *buffer, intptr_t start, intptr_t end);
+/* Like `rktio_udp_recvfrom`, but with starting and ending offsets. */
 
 RKTIO_EXTERN_ERR(RKTIO_PROP_ERROR) rktio_tri_t rktio_udp_get_multicast_loopback(rktio_t *rktio, rktio_fd_t *rfd);
 RKTIO_EXTERN rktio_ok_t rktio_udp_set_multicast_loopback(rktio_t *rktio, rktio_fd_t *rfd, rktio_bool_t on);
@@ -466,12 +475,13 @@ RKTIO_EXTERN char **rktio_listener_address(rktio_t *rktio, rktio_listener_t *lnr
    be deallocated): address and service. */
 
 RKTIO_EXTERN char *rktio_udp_multicast_interface(rktio_t *rktio, rktio_fd_t *rfd);
-RKTIO_EXTERN rktio_ok_t rktio_udp_set_multicast_interface(rktio_t *rktio, rktio_fd_t *rfd, rktio_addrinfo_t *addr);
+RKTIO_EXTERN rktio_ok_t rktio_udp_set_multicast_interface(rktio_t *rktio, rktio_fd_t *rfd,
+                                                          RKTIO_NULLABLE rktio_addrinfo_t *addr);
 /* The `addr` argument can be NULL to auto-select the interface. */
 
 RKTIO_EXTERN rktio_ok_t rktio_udp_change_multicast_group(rktio_t *rktio, rktio_fd_t *rfd,
                                                          rktio_addrinfo_t *group_addr,
-                                                         rktio_addrinfo_t *intf_addr,
+                                                         RKTIO_NULLABLE rktio_addrinfo_t *intf_addr,
                                                          int action);
 /* `action` values: */
 enum {

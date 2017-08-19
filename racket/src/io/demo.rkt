@@ -638,6 +638,19 @@
 
 ;; ----------------------------------------
 
+(define u1 (udp-open-socket))
+(test (void) (udp-bind! u1 #f 10768))
+
+(define u2 (udp-open-socket))
+(test (void) (udp-send-to u2 "localhost" 10768 #"hello"))
+(let* ([bstr (make-bytes 10)]
+       [l (call-with-values (lambda () (udp-receive! u1 bstr)) list)])
+  (test 5 (car l))
+  (test #"hello" (subbytes bstr 0 5)))
+(test '(#f #f #f) (call-with-values (lambda () (udp-receive!* u1 (make-bytes 1))) list))
+
+;; ----------------------------------------
+
 (time
  (let loop ([j 10])
    (unless (zero? j)

@@ -77,6 +77,7 @@
                          'semaphore-wait semaphore-wait
                          'semaphore-peek-evt semaphore-peek-evt
                          'wrap-evt wrap-evt
+                         'always-evt always-evt
                          'choice-evt (lambda (l) (apply choice-evt l))
                          'sync sync
                          'sync/timeout sync/timeout

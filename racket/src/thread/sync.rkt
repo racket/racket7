@@ -331,8 +331,16 @@
                                             (list values)
                                             ;; Allow handler in tail position:
                                             l))))
-          (set-syncer-evt! sr (wrap-evt-evt new-evt))
-          (lambda () (loop sr (add1 retries) polled-all-so-far?))]
+          (define inner-new-evt (wrap-evt-evt new-evt))
+          (set-syncer-evt! sr inner-new-evt)
+          ;; In support of the `poller` protocol, if the new evt is
+          ;; `always-evt`, then select it immediately
+          (cond
+            [(eq? inner-new-evt always-evt)
+             (syncing-done! s sr)
+             (make-result-thunk sr (list (void)) success-k)]
+            [else
+             (lambda () (loop sr (add1 retries) polled-all-so-far?))])]
          [(control-state-evt? new-evt)
           (set-syncer-interrupts! sr (cons-non-void (control-state-evt-interrupt-proc new-evt) (syncer-interrupts sr)))
           (set-syncer-abandons! sr (cons-non-void (control-state-evt-abandon-proc new-evt) (syncer-abandons sr)))
