@@ -365,7 +365,7 @@
 ;; thread, where the thunk returns `(void)`;
 (define (do-thread-deschedule! t timeout-at)
   (when (thread-descheduled? t)
-    (internal-error "tried to deschedule an descheduled thread"))
+    (internal-error "tried to deschedule a descheduled thread"))
   (set-thread-descheduled?! t #t)
   (thread-group-remove! (thread-parent t) t)
   (when timeout-at
@@ -374,6 +374,8 @@
     (thread-did-work!))
   (lambda ()
     (when (eq? t (current-thread))
+      (when (positive? (current-atomic))
+        (internal-error "attempt to deschedule the current thread in atomic mode"))
       (engine-block)
       (check-for-break))))
 

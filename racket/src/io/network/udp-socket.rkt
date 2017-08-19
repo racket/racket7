@@ -64,16 +64,17 @@
   (check who string? #:or-false hostname)
   (check who listen-port-number? port-no)
   (atomically
-   (check-udp-closed who u)
-   (when (udp-bound? u)
-     (raise-arguments-error who "udp socket is already bound"
-                            "socket" u))
    (call-with-resolved-address
     #:who who
     hostname port-no
     #:tcp? #f
     #:passive? #t
     (lambda (addr)
+      (check-udp-closed who u)
+      (when (udp-bound? u)
+        (end-atomic)
+        (raise-arguments-error who "udp socket is already bound"
+                               "socket" u))
       (define b (rktio_udp_bind rktio (udp-s u) addr reuse?))
       (when (rktio-error? b)
         (end-atomic)
@@ -93,9 +94,9 @@
                            "second argument" hostname
                            "third argument" port-no))
   (atomically
-   (check-udp-closed who u)
    (cond
      [(not hostname)
+      (check-udp-closed who u)
       (when (udp-connected? u)
         (define d (rktio_udp_disconnect rktio (udp-s u)))
         (when (rktio-error? d)
@@ -108,6 +109,7 @@
        hostname port-no
        #:tcp? #f
        (lambda (addr)
+         (check-udp-closed who u)
          (define c (rktio_udp_connect rktio (udp-s u) addr))
          (when (rktio-error? c)
            (end-atomic)

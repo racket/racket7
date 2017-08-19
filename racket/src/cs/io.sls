@@ -51,10 +51,16 @@
         [(_ id expr) (define id expr)]))
     
     (define-syntax (define-type stx)
-      (syntax-case stx (rktio_const_string_t)
+      (syntax-case stx (rktio_const_string_t rktio_ok_t rktio_bool_t)
         [(_ rktio_const_string_t old_type)
          ;; skip
          #'(begin)]
+        [(_ rktio_ok_t old_type)
+         (with-syntax ([(_ type _) stx])
+           #'(define-ftype type boolean))]
+        [(_ rktio_bool_t old_type)
+         (with-syntax ([(_ type _) stx])
+           #'(define-ftype type boolean))]
         [(_ type old-type)
          (with-syntax ([old-type (convert-type #'old-type)])
            #'(define-ftype type old-type))]))

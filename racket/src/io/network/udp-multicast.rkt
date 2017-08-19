@@ -67,7 +67,7 @@
 
 (define (raise-option-error who mode v)
   (end-atomic)
-  (raise-network-error who (string-append mode "sockopt failed") v))
+  (raise-network-error who v (string-append mode "sockopt failed")))
 
 ;; ----------------------------------------
 
@@ -105,13 +105,13 @@
 
 (define/who (udp-multicast-loopback? u)
   (check who udp? u)
-  (start-atomic)
-  (check-udp-closed who u)
-  (define v (rktio_udp_get_multicast_loopback rktio (udp-s u)))
-  (cond
-    [(rktio-error? v)
-     (raise-option-error who "get" v)]
-    [else (not (zero? v))]))
+  (atomically
+   (check-udp-closed who u)
+   (define v (rktio_udp_get_multicast_loopback rktio (udp-s u)))
+   (cond
+     [(rktio-error? v)
+      (raise-option-error who "get" v)]
+     [else (not (zero? v))])))
 
 (define/who (udp-multicast-set-loopback! u loopback?)
   (check who udp? u)
@@ -125,13 +125,13 @@
 
 (define/who (udp-multicast-ttl u)
   (check who udp? u)
-  (start-atomic)
-  (check-udp-closed who u)
-  (define v (rktio_udp_get_multicast_ttl rktio (udp-s u)))
-  (cond
-    [(rktio-error? v)
-     (raise-option-error who "get" v)]
-    [else v]))
+  (atomically
+   (check-udp-closed who u)
+   (define v (rktio_udp_get_multicast_ttl rktio (udp-s u)))
+   (cond
+     [(rktio-error? v)
+      (raise-option-error who "get" v)]
+     [else v])))
 
 (define/who (udp-multicast-set-ttl! u ttl)
   (check who udp? u)

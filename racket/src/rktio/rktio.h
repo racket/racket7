@@ -28,7 +28,7 @@ Return type conventions:
    information about a 0 result.
 
  - A return type `rktio_tri_t` (alias for `int`) means that 0 is
-   returned for an expected failuree, some `RKTIO_...` (alias for 1)
+   returned for an expected failure, some `RKTIO_...` (alias for 1)
    is returned for success, and `RKTIO_...ERROR` (alias for -2) is
    returned for some error. The function will be annotated with
    `RKTIO_EXTERN_ERR(...)` to indicate the error value. Use
