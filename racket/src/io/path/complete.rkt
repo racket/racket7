@@ -8,6 +8,8 @@
 
 (provide path->complete-path)
 
+;; If `wrt-given?` is #f, then `wrt` can be a thunk to get a path,
+;; so that any security checks associated with the thunk are delayed
 (define/who (path->complete-path p-in wrt #:wrt-given? [wrt-given? #t])
   (check-path-argument who p-in)
   (when wrt-given?
@@ -16,7 +18,9 @@
            #:contract "(and/c (or/c path-string? path-for-some-system?) complete-path?)"
            wrt))
   (unless (eq? (convention-of-path p-in)
-               (convention-of-path wrt))
+               (if (procedure? wrt)
+                   (system-path-convention-type)
+                   (convention-of-path wrt)))
     (if wrt-given?
         (raise-arguments-error who
                                "convention of first path incompatible with convention of second path"
@@ -29,7 +33,7 @@
   (cond
    [(complete-path? p) p]
    [(relative-path? p)
-    (build-path wrt p)]
+    (build-path (if (procedure? wrt) (wrt) wrt) p)]
    [else
     ;; FIXME
     (internal-error "non-complete absolute path on Windows")]))

@@ -14,22 +14,7 @@
          "identity.rkt"
          "error.rkt"
          (only-in "error.rkt"
-                  set-maybe-raise-missing-module!)
-         (only-in racket/base
-                  [make-directory host:make-directory]
-                  [delete-file host:delete-file]
-                  [delete-directory host:delete-directory]
-                  [rename-file-or-directory host:rename-file-or-directory]
-                  [file-or-directory-modify-seconds host:file-or-directory-modify-seconds]
-                  [file-or-directory-permissions host:file-or-directory-permissions]
-                  [file-or-directory-identity host:file-or-directory-identity]
-                  [file-size host:file-size]
-                  [copy-file host:copy-file]
-                  [make-file-or-directory-link host:make-file-or-directory-link]
-                  [resolve-path host:resolve-path]
-                  [filesystem-root-list host:filesystem-root-list])
-         (only-in '#%kernel
-                  [directory-list host:directory-list]))
+                  set-maybe-raise-missing-module!))
 
 (provide directory-exists?
          file-exists?
@@ -358,7 +343,11 @@
   (cond
     [(rktio-error? r)
      ;; Errors are not reported, but are treated like non-links
-     (host-> host-path)]
+     (define new-path (host-> host-path))
+     ;; If cleansing didn't change p, then return an `eq?`path
+     (cond
+       [(equal? new-path p) p]
+       [else new-path])]
     [else (host-> r)]))
 
 (define/who (expand-user-path p)

@@ -43,17 +43,18 @@
 (define (path->path-without-trailing-separator p)
   (define bstr (path-bytes p))
   (define orig-len (bytes-length bstr))
-  (define len
-    (let loop ([len orig-len])
-      (cond
-        [(zero? len) 0]
-        [else
-         (define c (bytes-ref bstr (sub1 len)))
-         (if (is-sep? c (path-convention p))
-             (loop (sub1 len))
-             len)])))
   (cond
-    [(< len orig-len) (path (subbytes bstr 0 len) (path-convention p))]
-    [else p]))
-
-    
+    [(= orig-len 1) p]
+    [else
+     (define len
+       (let loop ([len orig-len])
+         (cond
+           [(zero? len) 0]
+           [else
+            (define c (bytes-ref bstr (sub1 len)))
+            (if (is-sep? c (path-convention p))
+                (loop (sub1 len))
+                len)])))
+     (cond
+       [(< len orig-len) (path (subbytes bstr 0 len) (path-convention p))]
+       [else p])]))

@@ -18,7 +18,10 @@
 
 (define path->complete-path
   (case-lambda
-    [(p) (raw:path->complete-path p (raw:current-directory) #:wrt-given? #f)]
+    [(p)
+     ;; Supplying `current-directory` (as opposed to `raw:current-directory`)
+     ;; triggers an appropriate security-guard check if needed:
+     (raw:path->complete-path p current-directory #:wrt-given? #f)]
     [(p wrt) (raw:path->complete-path p wrt #:wrt-given? #t)]))
 
 (define/who (current-drive)
