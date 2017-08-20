@@ -468,12 +468,6 @@ RKTIO_EXTERN rktio_ok_t rktio_udp_set_multicast_ttl(rktio_t *rktio, rktio_fd_t *
 
 #define RKTIO_PROP_ERROR (-2)
 
-RKTIO_EXTERN char **rktio_socket_address(rktio_t *rktio, rktio_fd_t *rfd);
-RKTIO_EXTERN char **rktio_socket_peer_address(rktio_t *rktio, rktio_fd_t *rfd);
-RKTIO_EXTERN char **rktio_listener_address(rktio_t *rktio, rktio_listener_t *lnr);
-/* These return two strings in an array (where the array itself should
-   be deallocated): address and service. */
-
 RKTIO_EXTERN char *rktio_udp_multicast_interface(rktio_t *rktio, rktio_fd_t *rfd);
 RKTIO_EXTERN rktio_ok_t rktio_udp_set_multicast_interface(rktio_t *rktio, rktio_fd_t *rfd,
                                                           RKTIO_NULLABLE rktio_addrinfo_t *addr);
@@ -488,6 +482,12 @@ enum {
   RKTIO_ADD_MEMBERSHIP,
   RKTIO_DROP_MEMBERSHIP
 };
+
+RKTIO_EXTERN char **rktio_socket_address(rktio_t *rktio, rktio_fd_t *rfd);
+RKTIO_EXTERN char **rktio_socket_peer_address(rktio_t *rktio, rktio_fd_t *rfd);
+RKTIO_EXTERN char **rktio_listener_address(rktio_t *rktio, rktio_listener_t *lnr);
+/* These return two strings in an array (where the array itself should
+   be deallocated): address and service. */
 
 /*************************************************/
 /* Environment variables                         */
@@ -1116,6 +1116,38 @@ RKTIO_EXTERN char *rktio_system_language_country(rktio_t *rktio);
    format such as "en_US". */
 
 /*************************************************/
+/* Dynamically loaded libraries                  */
+
+typedef struct rktio_dll_t rktio_dll_t;
+
+RKTIO_EXTERN rktio_dll_t *rktio_dll_open(rktio_t *rktio, rktio_const_string_t name, rktio_bool_t as_global);
+/* Loads a DLL using system-provided functions and search rules, such
+   as dlopen() and its rules. If `as_global` is true, then the library
+   is loaded in "global" mode, which has implications for other
+   libraries trying to find bindings and for searching within the
+   specific library for a binding. The `name` argument can be NULL
+   to mean "the current executable".
+
+   Some system error-reporting protocols do not fit nicely into the
+   normal rktio error model. If the `RKTIO_ERROR_DLL` error is
+   reported, then rktio_dll_get_error() must be used before any other
+   `rktio_dll_...` call to get an error string.
+
+   Currently, there's no way to close and unload a DLL. Even when the
+   given `rktio` is closed with `rktio_destroy`, loaded libraries
+   remain in the process. */
+
+RKTIO_EXTERN void *rktio_dll_find_object(rktio_t *rktio, rktio_dll_t *dll, rktio_const_string_t name);
+/* Find an address within `dll` for the `name` export.
+
+   An error result can be `RKTIO_ERROR_DLL` as for `rktio_dll_open`. */
+
+RKTIO_EXTERN char *rktio_dll_get_error(rktio_t *rktio);
+/* Returns an error for a previous `rktio_dll_...` call, or NULL
+   if no error string is available or has already been returned.
+   See `rktio_dll_open` for more information. */
+
+/*************************************************/
 /* Errors                                        */
 
 RKTIO_EXTERN_NOERR int rktio_get_last_error_kind(rktio_t *rktio);
@@ -1163,6 +1195,7 @@ enum {
   RKTIO_ERROR_CONVERT_BAD_SEQUENCE,
   RKTIO_ERROR_CONVERT_PREMATURE_END,
   RKTIO_ERROR_CONVERT_OTHER,
+  RKTIO_ERROR_DLL, /* use `rktio_dll_get_error` atomically to get error */
 };
 
 RKTIO_EXTERN_NOERR int rktio_get_last_error_step(rktio_t *rktio);
@@ -1180,9 +1213,9 @@ RKTIO_EXTERN void rktio_remap_last_error(rktio_t *rktio);
 
 RKTIO_EXTERN_NOERR const char *rktio_get_last_error_string(rktio_t *rktio);
 RKTIO_EXTERN_NOERR const char *rktio_get_error_string(rktio_t *rktio, int kind, int errid);
-/* The returned strings for `rktio_...error_string` should not be
+/* The returned string for `rktio_...error_string` should not be
    deallocated, but it only lasts reliably until the next call to
-  either of the functions. */
+   either of the functions. */
 
 /*************************************************/
 

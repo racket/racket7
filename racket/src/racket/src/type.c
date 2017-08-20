@@ -304,6 +304,8 @@ scheme_init_type ()
   set_name(scheme_startup_env_type, "<startup-env>");
   set_name(scheme_ctype_type, "<ctype>");
 
+  set_name(scheme_unquoted_printing_string_type, "<unquoted-printing-string>");
+
 #ifdef MZ_PRECISE_GC
   set_name(scheme_rt_runstack, "<runstack>");
   set_name(scheme_rt_meta_cont, "<meta-continuation>");
@@ -732,6 +734,8 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_environment_variables_type, small_object);
 
   GC_REG_TRAV(scheme_plumber_handle_type, twoptr_obj);
+
+  GC_REG_TRAV(scheme_unquoted_printing_string_type, small_object);
 }
 
 END_XFORM_SKIP;

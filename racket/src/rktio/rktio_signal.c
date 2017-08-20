@@ -90,6 +90,7 @@ int rktio_poll_os_signal(rktio_t *rktio)
   return RKTIO_OS_SIGNAL_NONE;
 }
 
+#if defined(RKTIO_SYSTEM_UNIX)
 void rktio_set_signal_handler(int sig_id, void (*proc)(int))
 {
   struct sigaction sa;
@@ -98,3 +99,4 @@ void rktio_set_signal_handler(int sig_id, void (*proc)(int))
   sa.sa_handler = proc;
   sigaction(sig_id, &sa, NULL);
 }
+#endif

@@ -175,6 +175,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\rktio\rktio_dll.c"
+				>
+			</File>
+			<File
 				RelativePath="..\..\rktio\rktio_error.c"
 				>
 			</File>
