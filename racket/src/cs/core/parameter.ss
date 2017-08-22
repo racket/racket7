@@ -15,10 +15,10 @@
            (pair? (cdr args)))
       (let dloop ([p (car args)] [v (cadr args)])
         (cond
-         [(derived-parameter? p)
-          (dloop (derived-parameter-next p) ((parameter-guard p) v))]
          [(impersonator? p)
           (dloop (impersonator-val p) (impersonate-apply/parameter p #f (list v)))]
+         [(derived-parameter? p)
+          (dloop (derived-parameter-next p) ((parameter-guard p) v))]
          [else
           (let* ([guard (parameter-guard p)]
                  [v (if guard

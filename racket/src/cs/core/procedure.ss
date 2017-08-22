@@ -459,6 +459,8 @@
           (apply p args)]
          [(impersonator? p)
           (loop (impersonator-next p) args)]
+         [(not actually-call?)
+          (apply values args)]
          [else
           ;; If `p` is a structure whose `prop:procedure` value is an
           ;; integer `i`, then we should extract the field at position
@@ -469,8 +471,6 @@
             (cond
              [(integer? v)
               (apply (unsafe-struct-ref proc v) args)]
-             [(not actually-call?)
-              (apply values args)]
              [else
               (apply p args)]))]))])))
 
