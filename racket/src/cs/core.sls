@@ -508,13 +508,15 @@
           compiler-sizeof cpointer-gcable? cpointer-tag cpointer?
           ctype-alignof ctype-basetype ctype-c->scheme ctype-scheme->c ctype-sizeof ctype?
           end-stubborn-change extflvector->cpointer
-          ffi-call ffi-callback ffi-callback? ffi-lib ffi-lib-name ffi-lib? ffi-obj ffi-obj-lib
+          ffi-call ffi-callback ffi-callback? ffi-lib-name ffi-lib? ffi-obj ffi-obj-lib
           ffi-obj-name  ffi-obj? flvector->cpointer free free-immobile-cell lookup-errno
           make-array-type make-cstruct-type make-ctype make-late-weak-box make-late-weak-hasheq
           make-sized-byte-string make-stubborn-will-executor make-union-type malloc malloc-immobile-cell
           memcpy memmove memset offset-ptr? prop:cpointer ptr-add ptr-add! ptr-equal? ptr-offset ptr-ref
           ptr-set! saved-errno set-cpointer-tag! set-ptr-offset! vector->cpointer
           unsafe-register-process-global
+          (rename [ffi-lib* ffi-lib])
+          set-ffi-get-lib-and-obj! ; not exported to Racket
 
           unsafe-unbox
           unsafe-unbox*

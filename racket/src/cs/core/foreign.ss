@@ -91,16 +91,16 @@
 ;; ----------------------------------------
 
 ;; Hack: use `s_fxmul` as an identity function
-;; to corece a bytevector's start to an address:
-(define bytevector->addr
+;; to corece a bytevector's start to an address
+(define bytevector->addr ; call with GC disabled
   (foreign-procedure "(cs)fxmul"
     (u8* uptr)
     uptr))
-(define object->addr
+(define object->addr ; call with GC disabled
   (foreign-procedure "(cs)fxmul"
     (scheme-object uptr)
     uptr))
-(define addr->object
+(define addr->object ; call with GC disabled
   (foreign-procedure "(cs)fxmul"
     (uptr uptr)
     scheme-object))
@@ -116,7 +116,10 @@
 
 (define addr-scratch (foreign-alloc (foreign-sizeof 'void*)))
 
-(define (cpointer-address p)
+;; GC must be disabled while extracting an address,
+;; which might be the address of a byte string that
+;; could otherwise change due to a GC
+(define (cpointer-address p) ; call with GC disabled
   (cond
    [(not p) 0]
    [(bytes? p) (addr-address p)]
@@ -125,11 +128,9 @@
       (+ (addr-address addr) (cpointer+offset-offset p)))]
    [(authentic-cpointer? p)
     (addr-address (cpointer-addr p))]
-   [else
-    (let ([p (extract-cpointer p)])
-      (cpointer-address p))]))
+   [else (error 'internal-error "bad case extracting a cpointer address")]))
 
-(define (addr-address addr)
+(define (addr-address addr) ; call with GC disabled
   (cond
    [(integer? addr) addr]
    [(bytes? addr) (bytevector->addr addr 1)]
@@ -144,7 +145,8 @@
     (raise-argument-error 'ptr-equal? "cpointer?" p1))
   (unless (cpointer? p2)
     (raise-argument-error 'ptr-equal? "cpointer?" p2))
-  (= (cpointer-address p1) (cpointer-address p2)))
+  (with-interrupts-disabled ; disable GC while extracting addresses
+   (= (cpointer-address p1) (cpointer-address p2))))
 
 (define (ptr-offset p)
   (unless (cpointer? p)
@@ -215,13 +217,17 @@
 ;; ----------------------------------------
 
 (define-record-type (ctype create-ctype ctype?)
-  (fields s-exp root-basetype basetype scheme->c c->scheme))
+  (fields host-rep    ; host-Scheme representation description
+          our-rep     ; Racket representation description
+          basetype    ; parent ctype or the same as `our-rep`
+          scheme->c   ; converter of values to `basetype`
+          c->scheme)) ; converter of values from `basetype`
 
 (define (make-ctype type racket-to-c c-to-racket)
   (unless (ctype? type)
     (raise-argument-error 'make-ctype "ctype?" type))
-  (create-ctype (ctype-s-exp type)
-                (ctype-root-basetype type)
+  (create-ctype (ctype-host-rep type)
+                (ctype-our-rep type)
                 type
                 racket-to-c
                 c-to-racket))
@@ -250,12 +256,12 @@
 
 (define-syntax define-ctype
   (syntax-rules ()
-    [(_ id s-exp basetype)
-     (define id (create-ctype s-exp basetype basetype #f #f))]
-    [(_ id s-exp basetype s->c)
-     (define id (create-ctype s-exp basetype basetype s->c #f))]
-    [(_ id s-exp basetype s->c c->s)
-     (define id (create-ctype s-exp basetype basetype s->c c->s))]))
+    [(_ id host-rep basetype)
+     (define id (create-ctype host-rep basetype basetype #f #f))]
+    [(_ id host-rep basetype s->c)
+     (define id (create-ctype host-rep basetype basetype s->c #f))]
+    [(_ id host-rep basetype s->c c->s)
+     (define id (create-ctype host-rep basetype basetype s->c c->s))]))
 
 (define-ctype _bool 'boolean 'bool)
 (define-ctype _double 'double 'double)
@@ -336,22 +342,22 @@
   (lambda (x) (bad-ctype-value '_longdouble x)))
 
 (define-ctype _pointer 'void* 'pointer
-  (lambda (v) v) ; resolved to an address with the GC disabled
+  (lambda (v) v) ; resolved to an address later (with the GC disabled)
   (lambda (x) (cond
                [(zero? x) #f]
                [else (make-cpointer x #f)])))
 
-;; FIXME:
+;; Treated specially by `ptr-ref`
 (define-ctype _fpointer 'void* 'fpointer)
 
 (define-ctype _gcpointer 'void* 'gcpointer
-  (lambda (v) (cond
-               [(cpointer? v) (cpointer-addr v)]
-               [(not v) 0]
-               [(bytes? v) v]))
-  (lambda (x) (cond
-               [(zero? x) #f]
-               [else (make-cpointer x #f)])))
+  (lambda (v) v) ; like `_pointer`: resolved later
+  (lambda (x)
+    ;; FIXME: should raise an exception, but allow non-working
+    ;; code as a stopgap to let `raco setup` start up
+    x
+    #;
+    (raise-unsupported-error '_gcpointer "conversion from C not supported")))
 
 ;; FIXME:
 (define-ctype _stdbool 'integer-8 'stdbool
@@ -456,7 +462,7 @@
                                  sl)]))])))
 
 (define (ctype-malloc-mode c)
-  (let ([t (ctype-root-basetype c)])
+  (let ([t (ctype-our-rep c)])
     (if (or (eq? t 'gcpointer) (eq? t 'scheme))
         'nonatomic
         'atomic)))
@@ -464,7 +470,7 @@
 (define (ctype-sizeof c)
   (unless (ctype? c)
     (raise-argument-error 'ctype-sizeof "ctype?" c))
-  (case (ctype-s-exp c)
+  (case (ctype-host-rep c)
     [(void) 0]
     [(boolean int) 4]
     [(double) 8]
@@ -499,7 +505,7 @@
   (unless (ctype? c)
     (raise-argument-error 'ctype-alignof "ctype?" c))
   (cond
-   [(eq? 'struct (ctype-s-exp c))
+   [(eq? 'struct (ctype-host-rep c))
     (let ([next (ctype-basetype c)])
       (if (ctype? next)
           (ctype-alignof next)
@@ -513,21 +519,81 @@
   ;; FIXME:
   #f)
 
-(define (ffi-lib name . args)
-  #f)
+;; ----------------------------------------
 
-(define (ffi-lib? v)
-  #f)
+(define-record-type (ffi-lib make-ffi-lib ffi-lib?)
+  (fields handle name))
 
-(define (ffi-obj sym lib)
+;; Stub, since `raco setup` needs at least struct argument & return support
+(define ffi-lib* (lambda args #f))
+
+;; Real implementation, currently disabled:
+#;
+(define ffi-lib*
+  (case-lambda
+   [(name) (ffi-lib* name #f #f)]
+   [(name fail-as-false?) (ffi-lib* name fail-as-false? #f)]
+   [(name fail-as-false? as-global?)
+    (let ([name (if (string? name)
+                    (string->immutable-string name)
+                    name)])
+      (ffi-get-lib 'ffi-lib
+                   name
+                   as-global?
+                   fail-as-false?
+                   (lambda (h)
+                     (make-ffi-lib h name))))]))
+
+(define-record-type (cpointer/ffi-obj make-ffi-obj ffi-obj?)
+  (parent cpointer)
+  (fields lib name))
+
+;; Stub:
+(define/who (ffi-obj name lib)
   (raise
    (|#%app|
     exn:fail:filesystem
-    (format "ffi-obj: counld't get ~a" sym)
+    (format "ffi-obj: couldn't get ~a" name)
     (current-continuation-marks))))
 
-(define (ffi-obj? v)
-  #f)
+#;
+(define/who (ffi-obj name lib)
+  (check who bytes? name)
+  (check who ffi-lib? lib)
+  (let ([name (bytes->immutable-bytes name)])
+    (ffi-get-obj who
+                 (ffi-lib-handle lib)
+                 (ffi-lib-name lib)
+                 name
+                 (lambda (addr)
+                   (make-ffi-obj addr #f lib name)))))
+
+(define (ffi-obj-name obj)
+  (cpointer/ffi-obj-name obj))
+
+(define (ffi-obj-lib obj)
+  (cpointer/ffi-obj-lib obj))
+
+(define ffi-get-lib
+  ;; Placeholder implementation that either fails
+  ;; or returns a dummy value:
+  (lambda (who name as-global? fail-as-false? success-k)
+    (if fail-as-false?
+        #f
+        (success-k #f))))
+
+(define ffi-get-obj
+  ;; Placeholder implementation that always fails:
+  (lambda (who lib lib-name name success-k)
+    (raise
+     (|#%app|
+      exn:fail:filesystem
+      (format "~a: not yet ready\n  name: ~a" who name)
+      (current-continuation-marks)))))
+
+(define (set-ffi-get-lib-and-obj! do-ffi-get-lib do-ffi-get-obj)
+  (set! ffi-get-lib do-ffi-get-lib)
+  (set! ffi-get-obj do-ffi-get-obj))
 
 ;; ----------------------------------------
 
@@ -561,18 +627,25 @@
     (c->s type (foreign-ref* type p offset))]))
 
 (define (foreign-ref* type p offset)
-  (let ([s-exp (ctype-s-exp type)]
-        [p (extract-cpointer p)])
-    ;; Disable interrupts to avoid a GC:
-    (with-interrupts-disabled
-     (let ([v (foreign-ref (if (eq? s-exp 'scheme-object)
-                               'uptr
-                               s-exp)
-                           (cpointer-address p)
-                           offset)])
-       (if (eq? s-exp 'scheme-object)
-           (addr->object v 1)
-           v)))))
+  (cond
+   [(and (ffi-obj? p)
+         (eq? 'fpointer (ctype-our-rep type)))
+    ;; Special case for `ptr-ref` on a function-type ffi-object:
+    ;; cancel a level of indirection
+    (cpointer-addr p)]
+   [else
+    (let ([host-rep (ctype-host-rep type)]
+          [p (extract-cpointer p)])
+      ;; Disable interrupts to avoid a GC:
+      (with-interrupts-disabled
+       (let ([v (foreign-ref (if (eq? host-rep 'scheme-object)
+                                 'uptr
+                                 host-rep)
+                             (cpointer-address p)
+                             offset)])
+         (if (eq? host-rep 'scheme-object)
+             (addr->object v 1)
+             v))))]))
 
 (define ptr-set!
   (case-lambda
@@ -612,18 +685,18 @@
 
 (define (foreign-set!* type p offset v)
   (let ([v (s->c type v)]
-        [s-exp (ctype-s-exp type)]
+        [host-rep (ctype-host-rep type)]
         [p (extract-cpointer p)])
     ;; Disable interrupts to avoid a GC:
     (with-interrupts-disabled
-     (foreign-set! (if (eq? s-exp 'scheme-object)
+     (foreign-set! (if (eq? host-rep 'scheme-object)
                        'uptr
-                       s-exp)
+                       host-rep)
                    (cpointer-address p)
                    offset
                    (cond
-                    [(eq? 'scheme-object s-exp) (object->addr v 1)]
-                    [(eq? 'pointer s-exp) (cpointer-address v)]
+                    [(eq? 'scheme-object host-rep) (object->addr v 1)]
+                    [(eq? 'void* host-rep) (cpointer-address v)]
                     [else v])))))
 
 ;; ----------------------------------------
@@ -717,19 +790,11 @@
     (make-cpointer (foreign-alloc size) #f)]
    [(eq? mode 'atomic)
     (make-cpointer (make-bytevector size) #f)]
-   [(eq? mode 'atomic-interior)
-    (let* ([p (foreign-alloc size)]
-           [cp (make-cpointer p #f)])
-      (free-guard cp p)
-      cp)]
    [(eq? mode 'nonatomic)
     (make-cpointer (make-vector (quotient size 8)) #f)]
    [else
-    (raise
-     (|#%app|
-      exn:fail:unsupported
-      (format "malloc: '~a mode is not supported" mode)
-      (current-continuation-marks)))]))
+    (raise-unsupported-error 'malloc
+                             (format "'~a mode is not supported" mode))]))
 
 (define (free p)
   (foreign-free (cpointer-addr p)))
@@ -747,8 +812,6 @@
                      atomic-interior interior
                      stubborn uncollectable eternal)))
 
-(define free-guard (make-guardian))
-
 (define (end-stubborn-change p)
   (raise-unsupported-error 'end-stubborn-change))
 
@@ -763,6 +826,47 @@
 
 ;; ----------------------------------------
 
+(define/who ffi-call
+  (case-lambda
+   [(addr in-types out-type)
+    (ffi-call addr in-types out-type #f #f #f)]
+   [(addr in-types out-type abi)
+    (ffi-call addr in-types out-type abi #f #f)]
+   [(addr in-types out-type abi save-errno?)
+    (ffi-call addr in-types out-type abi save-errno? #f)]
+   [(addr in-types out-type abi save-errno? orig-place?)
+    (ffi-call addr in-types out-type abi save-errno? orig-place? #f)]
+   [(addr in-types out-type abi save-errno? orig-place? lock-name)
+    (check who exact-nonnegative-integer? addr)
+    (check who (lambda (l)
+                 (and (list? l)
+                      (andmap ctype? l)))
+           :contract "(listof ctype?)"
+           in-types)
+    (check who ctype? out-type)
+    (let* ([conv (case abi
+                   [(stdcall) '__stdcall]
+                   [(sysv) '__cdecl]
+                   [else #f])]
+           [foreign-proc (eval `(foreign-procedure ,conv
+                                                   ',addr
+                                                   ,(map ctype-host-rep in-types)
+                                                   ,(ctype-host-rep out-type)))])
+      (lambda args
+        (let* ([args (map (lambda (arg in-type)
+                            (s->c in-type arg))
+                          args in-types)]
+               [r (with-interrupts-disabled
+                   (apply foreign-proc
+                          (map (lambda (arg in-type)
+                                 (cond
+                                  [(eq? 'void* (ctype-host-rep in-type)) (cpointer-address arg)]
+                                  [else arg]))
+                               args in-types)))])
+          (c->s out-type r))))]))
+
+;; ----------------------------------------
+
 (define-syntax define-foreign-not-yet-available
   (syntax-rules ()
     [(_ id)
@@ -772,12 +876,8 @@
      (begin (define-foreign-not-yet-available id) ...)]))
 
 (define-foreign-not-yet-available
-  ffi-call
   ffi-callback
   ffi-callback?
-  ffi-lib-name
-  ffi-obj-lib
-  ffi-obj-name
   lookup-errno
   make-array-type
   make-sized-byte-string

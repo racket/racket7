@@ -10,7 +10,9 @@
 
          security-guard-check-file
          security-guard-check-file-link
-         security-guard-check-network)
+         security-guard-check-network
+
+         unsafe-make-security-guard-at-root)
 
 (struct security-guard (parent
                         file-guard
@@ -29,12 +31,20 @@
 (define/who (make-security-guard parent
                                  file-guard
                                  network-guard
-                                 [link-guard #f])
+                                 [link-guard void])
   (check who security-guard? parent)
   (check who (procedure-arity-includes/c 3) file-guard)
   (check who (procedure-arity-includes/c 4) network-guard)
   (check who #:or-false (procedure-arity-includes/c 3) link-guard)
-  (security-guard parent file-guard network-guard link-guard))
+  (security-guard parent file-guard network-guard (or link-guard void)))
+
+(define/who (unsafe-make-security-guard-at-root [file-guard void]
+                                                [network-guard void]
+                                                [link-guard void])
+  (check who (procedure-arity-includes/c 3) file-guard)
+  (check who (procedure-arity-includes/c 4) network-guard)
+  (check who (procedure-arity-includes/c 3) link-guard)
+  (security-guard #f file-guard network-guard link-guard))
 
 (define/who (security-guard-check-file check-who given-path guards)
   (check who symbol? check-who)

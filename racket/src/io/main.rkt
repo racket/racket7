@@ -12,7 +12,8 @@
          "file/main.rkt"
          "security/main.rkt"
          "envvar/main.rkt"
-         "network/main.rkt")
+         "network/main.rkt"
+         "foreign/main.rkt")
 
 (provide (all-from-out "port/main.rkt")
          (all-from-out "path/main.rkt")
@@ -26,6 +27,7 @@
          (all-from-out "file/main.rkt")
          (all-from-out "security/main.rkt")
          (all-from-out "envvar/main.rkt")
-         (all-from-out "network/main.rkt"))
+         (all-from-out "network/main.rkt")
+         (all-from-out "foreign/main.rkt"))
 
 (module main racket/base)

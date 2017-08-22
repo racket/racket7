@@ -349,12 +349,15 @@
 (define (raise-binding-result-arity-error expected-args args)
   (raise-result-arity-error "local-binding form" (length expected-args) args))
 
-(define (raise-unsupported-error id)
-  (raise
-   (|#%app|
-    exn:fail:unsupported
-    (string-append (symbol->string id) ": unsupported")
-    (current-continuation-marks))))
+(define raise-unsupported-error
+  (case-lambda
+   [(id msg)
+    (raise
+     (|#%app|
+      exn:fail:unsupported
+      (string-append (symbol->string id) ": " msg)
+      (current-continuation-marks)))]
+   [(id) (raise-unsupported-error id "unsupported")]))
 
 ;; ----------------------------------------
 

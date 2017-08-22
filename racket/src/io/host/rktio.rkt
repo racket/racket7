@@ -8,7 +8,7 @@
          rktio-errno
          rktio-errstep
          racket-error?)
-;; Move `provide`s added by macros
+;; More `provide`s added by macros below
 
 (define rktio-table
   (or (primitive-table '#%rktio)
