@@ -130,7 +130,8 @@ Files in this directory:
          rktio, so use `make rktio` if you change its implementation.
 
  primitive/*.scm - for "expander.sls", tables of bindings for
-         primitive linklet instances.
+         primitive linklet instances; see "From primitives to modules"
+         below for more information.
 
  convert.rkt - A linklet-to-library-body compiler, which is used to
          convert a ".rktl" file to a ".scm" file to inclusion in an
@@ -147,6 +148,21 @@ Files in this directory:
  other *.rkt - Racket scripts like "convert.rkt" or comparisions like
          "demo/regexp.rkt". For example, you can run "demo/regexp.rkt"
          and compare the reported timing to "demo/regexp.ss".
+
+
+From primitives to modules:
+
+The "expander" layer, as turned into a Chez Scheme library by
+"expander.sls", synthesizes primitive Racket modules such as
+`'#%kernel` and `'#%network`. The content of those primitive _modules_
+at the expander layer is based on primitve _instances_ (which are just
+hash tables) as populated by tables in the "primitive" directory. For
+example, "primitive/network.scm" defines the content of the
+`'#network` primitive instance, which is turned into the primitive
+`'#%network` module by the expander layer, which is reexported by the
+`racket/network` module that is implemented as plain Racket code. The
+Racket implementation in "../racket" provides those same primitive
+instances to the macro expander.
 
 
 Running "demo/expander.ss":
