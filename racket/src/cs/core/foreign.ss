@@ -171,22 +171,24 @@
       (raise-argument-error 'ptr-add "exact-integer?" n))
     (unless (ctype? type)
       (raise-argument-error 'ptr-add "ctype?" type))
-    (do-ptr-add p (* n (ctype-sizeof type)))]
+    (do-ptr-add p (* n (ctype-sizeof type)) #t)]
    [(p n)
     (unless (cpointer? p)
       (raise-argument-error 'ptr-add "cpointer?" p))
     (unless (exact-integer? n)
       (raise-argument-error 'ptr-add "exact-integer?" n))
-    (do-ptr-add p n)]))
+    (do-ptr-add p n #t)]))
 
-(define (do-ptr-add p n)
+(define (do-ptr-add p n save-tags?)
   (cond
    [(authentic-cpointer? p)
-    (make-cpointer+offset (cpointer-addr p) (cpointer-tag p) (+ n (if (cpointer+offset? p)
-                                                                      (cpointer+offset-offset p)
-                                                                      0)))]
+    (make-cpointer+offset (cpointer-addr p)
+                          (and save-tags? (cpointer-tag p))
+                          (+ n (if (cpointer+offset? p)
+                                   (cpointer+offset-offset p)
+                                   0)))]
    [(has-cpointer-property? p)
-    (do-ptr-add (extract-cpointer p) n)]
+    (do-ptr-add (extract-cpointer p) n save-tags?)]
    [else
     (make-cpointer+offset p #f n)]))
 
@@ -223,14 +225,31 @@
           scheme->c   ; converter of values to `basetype`
           c->scheme)) ; converter of values from `basetype`
 
+(define-record-type (compound-ctype create-compound-ctype compound-ctype?)
+  (parent ctype)
+  (fields get-decls
+          size
+          alignment))
+
 (define (make-ctype type racket-to-c c-to-racket)
   (unless (ctype? type)
     (raise-argument-error 'make-ctype "ctype?" type))
-  (create-ctype (ctype-host-rep type)
-                (ctype-our-rep type)
-                type
-                racket-to-c
-                c-to-racket))
+  (cond
+   [(compound-ctype? type)
+    (create-compound-ctype (ctype-host-rep type)
+                           (ctype-our-rep type)
+                           type
+                           racket-to-c
+                           c-to-racket
+                           (compound-ctype-get-decls type)
+                           (compound-ctype-size type)
+                           (compound-ctype-alignment type))]
+   [else
+    (create-ctype (ctype-host-rep type)
+                  (ctype-our-rep type)
+                  type
+                  racket-to-c
+                  c-to-racket)]))
 
 (define (s->c type v)
   (let* ([racket-to-c (ctype-scheme->c type)]
@@ -238,15 +257,15 @@
                 (racket-to-c v)
                 v)]
          [next (ctype-basetype type)])
-    (if (symbol? next)
-        v
-        (s->c next v))))
+    (if (ctype? next)
+        (s->c next v)
+        v)))
 
 (define (c->s type v)
   (let* ([next (ctype-basetype type)]
-         [v (if (symbol? next)
-                v
-                (c->s next v))]
+         [v (if (ctype? next)
+                (c->s next v)
+                v)]
          [c-to-racket (ctype-c->scheme type)])
     (if c-to-racket
         (c-to-racket v)
@@ -369,11 +388,65 @@
    [(types) (make-cstruct-type types #f #f)]
    [(types abi) (make-cstruct-type types abi #f)]
    [(types abi alignment)
-    (create-ctype 'struct
-                  'struct
-                  types
-                  (lambda (s) (raise-unsupported-error 'struct-s->c))
-                  (lambda (c) (raise-unsupported-error 'struct-c->s)))]))
+    (let ([make-decls
+           (lambda (id)
+             (let-values ([(reps decls) (types->reps types)])
+               (append decls
+                       `((define-ftype ,id
+                           (struct ,@(map (lambda (rep)
+                                            `[,(gensym) ,rep])
+                                          reps)))))))])
+      (let-values ([(size alignment) (ctypes-sizeof+alignof types alignment)])
+        (create-compound-ctype 'struct
+                               'struct
+                               types
+                               (lambda (s) s) ; like `_pointer`: resolved later
+                               (lambda (c) c)
+                               make-decls
+                               size
+                               alignment)))]))
+
+(define/who (make-union-type . types)
+  (for-each (lambda (type) (check who ctype? type))
+            types)
+  (let ([make-decls
+         (lambda (id)
+           (let-values ([(reps decls) (types->reps types)])
+             (append decls
+                     `((define-ftype ,id
+                         (union ,@(map (lambda (rep)
+                                         `[,(gensym) ,rep])
+                                       reps)))))))]
+        [size (apply max (map ctype-sizeof types))]
+        [alignment (apply max (map ctype-alignof types))])
+    (create-compound-ctype 'union
+                           'union
+                           types
+                           (lambda (s) s) ; like `_pointer`: resolved later
+                           (lambda (c) c)
+                           make-decls
+                           size
+                           alignment)))
+
+(define/who (make-array-type type count)
+  (check who ctype? type)
+  (check who exact-nonnegative-integer? count)
+  (let ([make-decls
+         (lambda (id)
+           (let-values ([(reps decls) (types->reps (list type))])
+             (append decls
+                     `((define-ftype ,id
+                         (array ,count ,(car reps)))))))]
+        [size (* count (ctype-sizeof type))]
+        [alignment (ctype-alignof type)])
+    (create-compound-ctype 'array
+                           'array
+                           'array ; type
+                           (lambda (s) s) ; like `_pointer`: resolved later
+                           (lambda (c) (make-cpointer c #f)) ; was atomically converted to a bytestring
+                           make-decls
+                           size
+                           alignment)))
 
 (define (compiler-sizeof sl)
   (define (rest sl) (if (pair? sl) (cdr sl) '()))
@@ -479,37 +552,35 @@
     [(integer-16 unsigned-16) 2]
     [(integer-32 unsigned-32) 4]
     [(integer-64 unsigned-64) 8]
-    [(struct)
-     (let ([base (ctype-basetype c)])
-       (if (ctype? base)
-           (ctype-sizeof base)
-           (let ([align (lambda (size algn)
-                          (let ([amt (modulo size algn)])
-                            (if (zero? amt)
-                                size
-                                (+ size (- algn amt)))))])
-             (let loop ([types base] [size 0] [max-align 1])
-               (cond
-                [(null? types) (align size max-align)]
-                [else (let ([sz (ctype-sizeof (car types))]
-                            [algn (ctype-alignof (car types))])
-                        (loop (cdr types)
-                              (+ (align size algn)
-                                 sz)
-                              (max algn max-align)))])))))]
     [else
-     ;; Everything else is pointer-sized:
-     (foreign-sizeof 'void*)]))
+     (if (compound-ctype? c)
+         (compound-ctype-size c)
+         ;; Everything else is pointer-sized:
+         (foreign-sizeof 'void*))]))
+
+(define (ctypes-sizeof+alignof base alignment)
+  (let ([align (lambda (size algn)
+                 (let ([amt (modulo size (or alignment algn))])
+                   (if (zero? amt)
+                       size
+                       (+ size (- algn amt)))))])
+    (let loop ([types base] [size 0] [max-align 1])
+      (cond
+       [(null? types) (values (align size max-align)
+                              max-align)]
+       [else (let ([sz (ctype-sizeof (car types))]
+                   [algn (ctype-alignof (car types))])
+               (loop (cdr types)
+                     (+ (align size algn)
+                        sz)
+                     (max algn max-align)))]))))
 
 (define (ctype-alignof c)
   (unless (ctype? c)
     (raise-argument-error 'ctype-alignof "ctype?" c))
   (cond
-   [(eq? 'struct (ctype-host-rep c))
-    (let ([next (ctype-basetype c)])
-      (if (ctype? next)
-          (ctype-alignof next)
-          (apply max (map ctype-alignof next))))]
+   [(compound-ctype? c)
+    (compound-ctype-alignment c)]
    [else
     (ctype-sizeof c)]))
 
@@ -524,11 +595,6 @@
 (define-record-type (ffi-lib make-ffi-lib ffi-lib?)
   (fields handle name))
 
-;; Stub, since `raco setup` needs at least struct argument & return support
-(define ffi-lib* (lambda args #f))
-
-;; Real implementation, currently disabled:
-#;
 (define ffi-lib*
   (case-lambda
    [(name) (ffi-lib* name #f #f)]
@@ -548,15 +614,6 @@
   (parent cpointer)
   (fields lib name))
 
-;; Stub:
-(define/who (ffi-obj name lib)
-  (raise
-   (|#%app|
-    exn:fail:filesystem
-    (format "ffi-obj: couldn't get ~a" name)
-    (current-continuation-marks))))
-
-#;
 (define/who (ffi-obj name lib)
   (check who bytes? name)
   (check who ffi-lib? lib)
@@ -634,18 +691,23 @@
     ;; cancel a level of indirection
     (cpointer-addr p)]
    [else
-    (let ([host-rep (ctype-host-rep type)]
-          [p (extract-cpointer p)])
-      ;; Disable interrupts to avoid a GC:
-      (with-interrupts-disabled
-       (let ([v (foreign-ref (if (eq? host-rep 'scheme-object)
-                                 'uptr
-                                 host-rep)
-                             (cpointer-address p)
-                             offset)])
-         (if (eq? host-rep 'scheme-object)
-             (addr->object v 1)
-             v))))]))
+    (cond
+     [(compound-ctype? type)
+      ;; Instead of copying, get a pointer within `p`:
+      (do-ptr-add p offset #f)]
+     [else
+      (let ([p (extract-cpointer p)]
+            [host-rep (ctype-host-rep type)])
+        ;; Disable interrupts to avoid a GC:
+        (with-interrupts-disabled
+         (let ([v (foreign-ref (if (eq? host-rep 'scheme-object)
+                                   'uptr
+                                   host-rep)
+                               (cpointer-address p)
+                               offset)])
+           (if (eq? host-rep 'scheme-object)
+               (addr->object v 1)
+               v))))])]))
 
 (define ptr-set!
   (case-lambda
@@ -684,20 +746,52 @@
                    v)]))
 
 (define (foreign-set!* type p offset v)
-  (let ([v (s->c type v)]
-        [host-rep (ctype-host-rep type)]
-        [p (extract-cpointer p)])
-    ;; Disable interrupts to avoid a GC:
-    (with-interrupts-disabled
-     (foreign-set! (if (eq? host-rep 'scheme-object)
-                       'uptr
-                       host-rep)
-                   (cpointer-address p)
-                   offset
-                   (cond
-                    [(eq? 'scheme-object host-rep) (object->addr v 1)]
-                    [(eq? 'void* host-rep) (cpointer-address v)]
-                    [else v])))))
+  (let ([p (extract-cpointer p)])
+    (cond
+     [(compound-ctype? type)
+      ;; Corresponds to a copy, since `v` is represented by a pointer
+      (memcpy (if (zero? offset) p (ptr-add p offset type))
+              (s->c type v)
+              (compound-ctype-size type))]
+     [else
+      (let ([host-rep (ctype-host-rep type)]
+            [v (s->c type v)])
+        ;; Disable interrupts to avoid a GC:
+        (with-interrupts-disabled
+         (foreign-set! (if (eq? host-rep 'scheme-object)
+                           'uptr
+                           host-rep)
+                       (cpointer-address p)
+                       offset
+                       (cond
+                        [(eq? 'scheme-object host-rep) (object->addr v 1)]
+                        [(eq? 'void* host-rep) (cpointer-address v)]
+                        [else v]))))])))
+
+(define (memcpy to from len)
+  (with-interrupts-disabled
+   (let ()
+     (let loop ([to (cpointer-address to)]
+                [from (cpointer-address from)]
+                [len len])
+       (unless (fx= len 0)
+         (cond
+          [(fx>= len 8)
+           (foreign-set! 'integer-64 to 0
+                         (foreign-ref 'integer-64 from 0))
+           (loop (fx+ to 8) (fx+ from 8) (fx- len 8))]
+          [(fx>= len 4)
+           (foreign-set! 'integer-32 to 0
+                         (foreign-ref 'integer-32 from 0))
+           (loop (fx+ to 4) (fx+ from 4) (fx- len 4))]
+          [(fx>= len 2)
+           (foreign-set! 'integer-16 to 0
+                         (foreign-ref 'integer-16 from 0))
+           (loop (fx+ to 2) (fx+ from 2) (fx- len 2))]
+          [else
+           (foreign-set! 'integer-8 to 0
+                         (foreign-ref 'integer-8 from 0))
+           (loop (fx+ to 1) (fx+ from 1) (fx- len 1))]))))))
 
 ;; ----------------------------------------
 
@@ -726,10 +820,10 @@
     (cond
      [(and (nonnegative-fixnum? arg1)
            (ctype? arg2))
-      (normalized-malloc (* arg1 (ctype-sizeof arg2)) (ctype-malloc-mode arg1))]
+      (normalized-malloc (* arg1 (ctype-sizeof arg2)) (ctype-malloc-mode arg2))]
      [(and (ctype? arg1)
            (nonnegative-fixnum? arg2))
-      (normalized-malloc (* arg2 (ctype-sizeof arg1)) (ctype-malloc-mode arg2))]
+      (normalized-malloc (* arg2 (ctype-sizeof arg1)) (ctype-malloc-mode arg1))]
      [(and (nonnegative-fixnum? arg1)
            (malloc-mode? arg2))
       (normalized-malloc arg1 arg2)]
@@ -786,6 +880,7 @@
 
 (define (normalized-malloc size mode)
   (cond
+   [(eqv? size 0) #f]
    [(eq? mode 'raw)
     (make-cpointer (foreign-alloc size) #f)]
    [(eq? mode 'atomic)
@@ -848,23 +943,98 @@
                    [(stdcall) '__stdcall]
                    [(sysv) '__cdecl]
                    [else #f])]
-           [foreign-proc (eval `(foreign-procedure ,conv
-                                                   ',addr
-                                                   ,(map ctype-host-rep in-types)
-                                                   ,(ctype-host-rep out-type)))])
+           [by-value? (lambda (type)
+                        ;; An 'array rep is compound, but should be passed
+                        ;; as a pointer
+                        (chez:memq (ctype-host-rep type) '(struct union)))]
+           [array-rep-to-pointer-rep (lambda (host-rep)
+                                       (if (eq? host-rep 'array)
+                                           'void*
+                                           host-rep))]
+           [ids (map (lambda (in-type)
+                       (and (by-value? (car in-types))
+                            (gensym)))
+                     in-types)]
+           [ret-id (and (by-value? out-type)
+                        (gensym))]
+           [decls (let loop ([in-types in-types] [id ids] [decls '()])
+                    (cond
+                     [(null? in-types) decls]
+                     [(car ids)
+                      (let ([id-decls ((compound-ctype-get-decls (car in-types)) (car ids))])
+                        (loop (cdr in-types) (cdr ids) (append decls id-decls)))]
+                     [else
+                      (loop (cdr in-types) (cdr ids) decls)]))]
+           [ret-decls (if ret-id
+                          ((compound-ctype-get-decls out-type) ret-id)
+                          '())]
+           [ret-size (and ret-id (ctype-sizeof out-type))]
+           [foreign-proc+makers
+            (eval `(let ()
+                     ,@decls
+                     ,@ret-decls
+                     (list
+                      (foreign-procedure ,conv
+                                         ',addr
+                                         ,(map (lambda (in-type id)
+                                                 (if id
+                                                     `(& ,id)
+                                                     (array-rep-to-pointer-rep
+                                                      (ctype-host-rep in-type))))
+                                               in-types ids)
+                                         ,(if ret-id
+                                              `(& ,ret-id)
+                                              (array-rep-to-pointer-rep
+                                               (ctype-host-rep out-type))))
+                      ,@(map (lambda (id)
+                               (and id
+                                    `(lambda (p)
+                                       (make-ftype-pointer ,id p))))
+                             ids))))]
+           [foreign-proc (car foreign-proc+makers)]
+           [makers (cdr foreign-proc+makers)])
       (lambda args
         (let* ([args (map (lambda (arg in-type)
-                            (s->c in-type arg))
+                            (let ([arg (s->c in-type arg)])
+                              (if (cpointer? arg)
+                                  (extract-cpointer arg)
+                                  arg)))
                           args in-types)]
                [r (with-interrupts-disabled
-                   (apply foreign-proc
-                          (map (lambda (arg in-type)
-                                 (cond
-                                  [(eq? 'void* (ctype-host-rep in-type)) (cpointer-address arg)]
-                                  [else arg]))
-                               args in-types)))])
+                   (let ([r (apply foreign-proc
+                                   (map (lambda (arg in-type maker)
+                                          (let ([host-rep (array-rep-to-pointer-rep
+                                                           (ctype-host-rep in-type))])
+                                            (case host-rep
+                                              [(void*) (cpointer-address arg)]
+                                              [(struct union)
+                                               (maker (cpointer-address arg))]
+                                              [else arg])))
+                                        args in-types makers))])
+                     
+                     (cond
+                      [ret-id
+                       ;; result a struct type; we want to copy and free before re-enabling interrupts
+                       (let ([bstr (make-bytevector ret-size)]
+                             [addr (ftype-pointer-address r)])
+                         (memcpy bstr (make-cpointer addr #f) ret-size)
+                         (foreign-free addr)
+                         (make-cpointer bstr #f))]
+                      [else r])))])
           (c->s out-type r))))]))
 
+(define (types->reps types)
+  (let loop ([types types] [reps '()] [decls '()])
+    (cond
+     [(null? types) (values (reverse reps) decls)]
+     [else
+      (let ([type (car types)])
+        (if (compound-ctype? type)
+            (let* ([id (gensym)]
+                   [id-decls ((compound-ctype-get-decls type) id)])
+              (loop (cdr types) (cons id reps) (append id-decls decls)))
+            (loop (cdr types) (cons (ctype-host-rep type) reps) decls)))])))
+ 
 ;; ----------------------------------------
 
 (define-syntax define-foreign-not-yet-available
@@ -879,10 +1049,7 @@
   ffi-callback
   ffi-callback?
   lookup-errno
-  make-array-type
   make-sized-byte-string
-  make-union-type
-  memcpy
   memmove
   memset
   saved-errno)
