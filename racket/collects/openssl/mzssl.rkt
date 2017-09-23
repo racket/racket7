@@ -513,14 +513,6 @@ TO DO:
                           server?)
   #:mutable)
 
-(define (make-immobile-bytes n)
-  (if 3m?
-      ;; Allocate the byte string via malloc:
-      (let ([p (malloc 'atomic-interior n)])
-        (make-sized-byte-string p n))
-      ;; Normal byte string is immobile:
-      (make-bytes n)))
-
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Errors
 
@@ -1020,7 +1012,7 @@ TO DO:
   ;;  call to SSL_read must use the same arguments.
   ;; Use xfer-buffer so we have a consistent buffer to use with
   ;;  SSL_read across calls to the port's write function.
-  (let-values ([(xfer-buffer) (make-immobile-bytes BUFFER-SIZE)]
+  (let-values ([(xfer-buffer) (make-bytes BUFFER-SIZE)]
          [(got-r got-w) (make-pipe)]
          [(must-read-len) #f])
     (make-input-port/read-to-peek
@@ -1156,7 +1148,7 @@ TO DO:
   ;;  call to SSL_write must use the same arguments.
   ;; Use xfer-buffer so we have a consistent buffer to use with
   ;;  SSL_write across calls to the port's write function.
-  (let ([xfer-buffer (make-immobile-bytes BUFFER-SIZE)]
+  (let ([xfer-buffer (make-bytes BUFFER-SIZE)]
         [buffer-mode (or (file-stream-buffer-mode (mzssl-o mzssl)) 'bloack)]
         [flush-ch (make-channel)]
         [must-write-len #f])
