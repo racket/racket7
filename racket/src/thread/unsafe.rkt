@@ -14,7 +14,7 @@
   (start-atomic))
 
 (define (unsafe-end-breakable-atomic)
-  (start-atomic))
+  (end-atomic))
 
 (define (unsafe-start-atomic)
   (start-atomic)
