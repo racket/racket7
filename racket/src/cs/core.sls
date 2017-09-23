@@ -503,7 +503,7 @@
           dynamic-place place-wait place-pumper-threads place-shared?
 
           _bool _bytes _short_bytes _double _double* _fixint _fixnum _float _fpointer _gcpointer
-          _int16 _int32 _int64 _int8 _longdouble _path _pointer _scheme _stdbool _void
+          _int16 _int32 _int64 _int8 _longdouble _pointer _scheme _stdbool _void
           _string/ucs-4 _string/utf-16 _symbol _ufixint _ufixnum _uint16 _uint32 _uint64 _uint8
           compiler-sizeof cpointer-gcable? cpointer-tag cpointer?
           ctype-alignof ctype-basetype ctype-c->scheme ctype-scheme->c ctype-sizeof ctype?

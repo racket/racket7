@@ -11,7 +11,8 @@
          "simplify.rkt"
          "directory-path.rkt"
          "system.rkt"
-         "api.rkt")
+         "api.rkt"
+         "ffi.rkt")
 
 (provide (rename-out [is-path? path?])
          path-for-some-system?
@@ -52,7 +53,9 @@
 
          find-system-path
          set-exec-file!
-         set-run-file!)
+         set-run-file!
+
+         _path)
 
 (define/who (string->path s)
   (check who string? s)

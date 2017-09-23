@@ -354,9 +354,6 @@
                   (bad-ctype-value '_symbol x)))
   (lambda (s) (string->symbol s)))
 
-;; FIXME:
-(define-ctype _path 'string 'path)
-
 (define-ctype _longdouble 'double 'double
   (lambda (x) (bad-ctype-value '_longdouble x)))
 

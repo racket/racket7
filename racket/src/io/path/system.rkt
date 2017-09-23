@@ -17,7 +17,7 @@
                        (string->path "/usr/local/bin/racket"))]
       [(run-file) (or run-file
                       (find-system-path 'exec-file))]
-      [(config-dir host-config-dir) (string->path "../config")]
+      [(config-dir host-config-dir) (string->path "../etc")]
       [(collects-dir host-collects-dir) (string->path "../collects")]
       [(orig-dir) (string->path (|#%app| current-directory))]
       [(temp-dir) (rktio-system-path who RKTIO_PATH_TEMP_DIR)]

@@ -45,7 +45,7 @@
              (eqv? ch (as-char #\return)))
         (cond
          [(and crlf?
-               (char=? (peek-char in) (as-char #\linefeed)))
+               (eqv? (peek-char in) (as-char #\linefeed)))
           (read-char in)
           (substring str 0 pos)]
          [cr?
