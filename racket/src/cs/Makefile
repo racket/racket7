@@ -36,13 +36,13 @@ all:
 expander-demo: expander.so demo/expander.ss
 	$(SCHEME) $(EXPANDER_DEPS) expander.so demo/expander.ss
 
-run: main.so
+run: main.so ../../bin/racket
 	${SCHEME} --script main.so ../../bin/racket $(ARGS)
 
 setup:
 	$(MAKE) run ARGS="-W 'info@compiler/cm error' -l- setup $(ARGS)"
 
-run-wpo: racket.so
+run-wpo: racket.so ../../bin/racket
 	${SCHEME} --script racket.so ../../bin/racket $(ARGS)
 
 racket.so: main.so
@@ -59,6 +59,11 @@ rktl:
 	$(MAKE) io-rktl
 	$(MAKE) regexp-rktl
 	$(MAKE) expander-rktl
+
+# For running without an enclosing build of the traditional Racket VM:
+../../bin/racket:
+	mkdir -p ../../bin
+	touch ../../bin/racket
 
 PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm \
                     primitive/paramz.scm primitive/extfl.scm primitive/network.scm \
