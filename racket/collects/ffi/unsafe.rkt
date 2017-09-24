@@ -2,7 +2,9 @@
 
 ;; Foreign Racket interface
 (require '#%foreign setup/dirs racket/unsafe/ops racket/private/for
-         (only-in '#%unsafe unsafe-thread-at-root)
+         (only-in '#%unsafe
+                  unsafe-thread-at-root
+                  unsafe-make-security-guard-at-root)
          (for-syntax racket/base racket/list syntax/stx racket/syntax
                      racket/struct-info))
 
@@ -20,7 +22,8 @@
          _bool _stdbool _pointer _gcpointer _scheme (rename-out [_scheme _racket]) _fpointer function-ptr
          memcpy memmove memset
          malloc-immobile-cell free-immobile-cell
-         make-late-weak-box make-late-weak-hasheq)
+         make-late-weak-box make-late-weak-hasheq
+         void/reference-sink)
 
 (define-syntax define*
   (syntax-rules ()
@@ -163,9 +166,9 @@
        (ormap ffi-lib* names)    ; try good names first
        (ffi-lib* name0)          ; try original
        (ormap (lambda (name)     ; try relative paths
-		(and (file-exists? name) (ffi-lib* (fullpath name))))
+		(and (file-exists?/insecure name) (ffi-lib* (fullpath name))))
 	      names)
-       (and (file-exists? name0) ; relative with original
+       (and (file-exists?/insecure name0) ; relative with original
 	    (ffi-lib* (fullpath name0)))
        ;; give up: by default, call ffi-lib so it will raise an error
        (if fail
@@ -266,6 +269,14 @@
 ;; This table keeps references to values that are set in foreign libraries, to
 ;; avoid them being GCed.  See set-ffi-obj! above.
 (define ffi-objects-ref-table (make-hasheq))
+
+;; Like `file-exists?`, but avoid security-guard checks on the grounds
+;; that it's being called from an already-allowed unsafe operation ---
+;; so a sandbox doesn't have to make additional allowances for the
+;; check.
+(define (file-exists?/insecure path)
+  (parameterize ([current-security-guard (unsafe-make-security-guard-at-root)])
+    (file-exists? path)))
 
 ;; ----------------------------------------------------------------------------
 ;; Compile-time support for fun-expanders
@@ -1401,10 +1412,14 @@
 ;; ----------------------------------------------------------------------------
 ;; Struct wrappers
 
-(define (compute-offsets types alignment declared)
-  (let ([alignment (if (memq alignment '(#f 1 2 4 8 16))
-                       alignment
-                       #f)])
+(define* (compute-offsets types [alignment #f] [declared '()])
+  (unless (and (list? types) (map ctype? types))
+    (raise-argument-error 'compute-offsets "(listof ctype?)" types))
+  (unless (memq alignment '(#f 1 2 4 8 16))
+    (raise-argument-error 'compute-offsets "(or/c #f 1 2 4 8 16)" alignment))
+  (unless (and (list? declared) (map (λ (v) (or (not v) (exact-integer? v))) declared))
+    (raise-argument-error 'compute-offsets "(listof (or/c exact-integer? #f))" declared))
+  (let ([declared (append declared (build-list (- (length types) (length declared)) (λ (n) #f)))])
     (let loop ([ts types] [ds declared] [cur 0] [r '()])
       (if (null? ts)
           (reverse r)
@@ -1975,3 +1990,13 @@
                            (let loop () (will-execute killer-executor) (loop))))))
                      (retry-loop)))))))
       (will-register killer-executor obj finalizer))))
+
+;; The same as `void`, but written so that the compiler cannot
+;; optimize away the call or arguments, so that calling
+;; `void/reference-sink` ensures that arguments are retained.
+(define* void/reference-sink
+  (let ([proc void])
+    (case-lambda
+      [(v) (proc v)]
+      [(v1 v2) (proc v1 v2)]
+      [args (set! proc (lambda args (void))) (proc args)])))

@@ -14,7 +14,9 @@
 ;; where the corresponding document is generated, this is a hack.)
 (define links
   `((start   "Racket Documentation" user "index.html")
-    (search  "Search Manuals"   user "search/index.html")
+    ;; XXX I want this to say Global vs Local but I don't think this
+    ;; can be something overrided by css/js with doc-site
+    (search  "Search Manuals"       user "search/index.html")
     ---
     (license "License"          plt  "license/index.html")
     (acks    "Acknowledgements" plt  "acks/index.html")

@@ -302,20 +302,25 @@ undefined.}
  Unlike @racket[namespace-require], 
  @racket[namespace-attach-module] does not
  @tech{instantiate} the module, but copies the module
- instance from the source namesapce to the target namespace.
+ instance from the source namespace to the target namespace.
 
 @examples[
  (module food racket/base
    (provide apple)
-   (define apple "pie"))
+   (define apple (list "pie")))
  (namespace-require ''food)
+ (define ns (current-namespace))
  (eval:error
   (parameterize ([current-namespace (make-base-namespace)])
     (namespace-require ''food)))
- (define ns (current-namespace))
  (parameterize ([current-namespace (make-base-namespace)])
    (namespace-attach-module ns ''food)
-   apple)]}
+   (namespace-require ''food)
+   (eq? (eval 'apple) apple))
+ (parameterize ([current-namespace (make-base-namespace)])
+   (namespace-attach-module-declaration ns ''food)
+   (namespace-require ''food)
+   (eq? (eval 'apple) apple))]}
 
 @defproc[(namespace-attach-module-declaration [src-namespace namespace?]
                                               [modname module-path?]
