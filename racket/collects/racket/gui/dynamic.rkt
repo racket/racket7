@@ -10,7 +10,7 @@
    ;; Never available in non-0 phases:
    (zero? (variable-reference->phase (#%variable-reference)))
    ;; Must be instantiated:
-   (register-process-global "GRacket-support-initialized" #f)
+   (register-process-global #"GRacket-support-initialized" #f)
    (with-handlers ([exn:fail? (lambda (exn) #f)])
      ;; Fails if `mred/private/dynamic' is not declared
      ;;  (without loading it if not):
