@@ -34,7 +34,8 @@
       (collect gen)
       (garbage-collect-notify gen
                               pre-allocated pre-allocated+overhead pre-time pre-cpu-time
-                              (bytes-allocated)  (current-memory-bytes) (real-time) (cpu-time)))))
+                              (bytes-allocated)  (current-memory-bytes) (real-time) (cpu-time))
+      (poll-foreign-guardian))))
   
 (define collect-garbage
   (case-lambda
