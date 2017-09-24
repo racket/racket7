@@ -147,6 +147,9 @@
     (+ (object->addr addr 1)
        vector-content-offset)]))
 
+(define (addr->gcpointer-addr v)  ; call with GC disabled
+  (addr->object (- v vector-content-offset) 1))
+
 ;; ----------------------------------------
 
 (define (ptr-equal? p1 p2)
@@ -371,11 +374,9 @@
 (define-ctype _gcpointer 'void* 'gcpointer
   (lambda (v) v) ; like `_pointer`: resolved later
   (lambda (x)
-    ;; FIXME: should raise an exception, but allow non-working
-    ;; code as a stopgap to let `raco setup` start up
-    (addr->cpointer x)
-    #;
-    (raise-unsupported-error '_gcpointer "conversion from C not supported")))
+    ;; Must have been converted to a bytevector or vector before the
+    ;; GC was re-enabled
+    (addr->cpointer x)))
 
 ;; FIXME:
 (define-ctype _stdbool 'integer-8 'stdbool
@@ -708,7 +709,10 @@
                                offset)])
            (case host-rep
              [(scheme-object) (addr->object v 1)]
-             [else v]))))])]))
+             [else
+              (case (ctype-our-rep type)
+                [(gcpointer) (addr->gcpointer-addr v)]
+                [else v])]))))])]))
 
 (define ptr-set!
   (case-lambda
@@ -1050,12 +1054,14 @@
                                           args in-types arg-makers))])
                        (cond
                         [ret-id
-                         ;; result a struct type; we want to copy and free before re-enabling interrupts
+                         ;; result is a struct type; we want to copy and free before re-enabling interrupts
                          (let ([bstr (make-bytevector ret-size)]
                                [addr (ftype-pointer-address r)])
                            (memcpy bstr (make-cpointer addr #f) ret-size)
                            (foreign-free addr)
                            (make-cpointer bstr #f))]
+                        [(eq? (ctype-our-rep out-type) 'gcpointer)
+                         (addr->gcpointer-addr r)]
                         [else r])))])
             (c->s out-type r))))]
      [else ; callable
@@ -1078,7 +1084,11 @@
                                                               (memcpy bstr (make-cpointer addr #f) size)
                                                               (foreign-free addr)
                                                               (make-cpointer bstr #f))]
-                                                           [else arg]))])
+                                                           [else
+                                                            (cond
+                                                             [(eq? (ctype-our-rep type) 'gcpointer)
+                                                              (addr->gcpointer-addr arg)]
+                                                             [else arg])]))])
                                          (cons arg (loop (cdr args) (cdr in-types))))]))))])
                     (if ret-maker
                         (ret-maker (let* ([size (compound-ctype-size out-type)]

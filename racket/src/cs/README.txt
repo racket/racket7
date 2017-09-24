@@ -184,6 +184,32 @@ Development mode:
  `[CORE_]UNSAFE_COMP` in the makefile.
 
 
+FFI differences:
+
+ * The `make-sized-byte-string` function always raises an exception,
+   because a foreign address cannot be turned into a byte string whose
+   content is stored in the foreign address. The options are to copy
+   the foreign content to/from a byte string or use `ptr-ref` and
+   `ptr-set!` to read and write at the address.
+
+ * The 'atomic-interior allocation mode returns memory that is allowed
+   to move after the cpointer returned yb allocation becomes
+   unreachable.
+
+ * A `_gcpointer` can only refer to the start of an allocated object,
+   and never the interior of an 'atomic-interior allocation. Like
+   traditional Racket, `_gcpointer` is equivalent to `_pointer` for
+   sending values to a foreign procedure, return values from a
+   callback that is called from foreign code, or for `ptr-set!`. For
+   the other direction (receiving a foreign result, `ptr-ref`, and
+   receiving values in a callback), the received pointer must
+   correspond to the content of a byte string or vector.
+
+ * Calling a foreign function implicitly uses atomic mode and also
+   disables GC. If the foreign function calls back to Racket, the
+   callback runs in atomic mode with the GC still disabled.
+
+
 Status and thoughts on various Racket subsystems:
 
  * Applicable structs work by adding an indirection to each function
@@ -202,9 +228,6 @@ Status and thoughts on various Racket subsystems:
    shared library and loadied into Chez Scheme, and then Racket's I/O
    API is implemented in Racket by calling rktio as a kind of foreign
    library.
-
- * The Racket FFI looks a lot like the Chez Scheme FFI, so I expect
-   that to mostly work, although there may be allocation issues.
 
  * The Racket and Chez Scheme numeric systems likely differ in some
    ways, and I don't know how much work that will be.
