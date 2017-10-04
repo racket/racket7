@@ -91,7 +91,7 @@
    (let loop ()
      (check 'ok (sync (nack-guard-evt (lambda (n) (set! nack n) (make-semaphore))) ok-evt))
      (unless nack (loop)))
-   (check nack (sync/timeout 0 nack))
+   (check (void) (sync/timeout 0 nack))
    
    (semaphore-post s)
    (check #f (sync/timeout 0 ch (channel-put-evt ch 'oops)))
