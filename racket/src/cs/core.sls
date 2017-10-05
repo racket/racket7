@@ -588,12 +588,10 @@
                 record-field-accessor
                 record-field-mutator))
 
-  (define (version) "6.9.1.5")
-  (define (banner) (string-append "Welcome to Racket " (version) "\n"))
-
   (define none (chez:gensym "none"))
   (define none2 (chez:gensym "none2"))
 
+  (include "core/version.ss")
   (include "core/syntax-rule.ss")
   (include "core/thread-parameter.ss")
   (include "core/check.ss")

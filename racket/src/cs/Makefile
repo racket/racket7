@@ -250,7 +250,9 @@ CORE_SRCS = core/check.ss \
             core/future.ss \
             core/fsemaphore.ss \
             core/queue.ss \
-            core/future-scheduler.ss
+            core/future-scheduler.ss \
+            core/version.ss \
+            ../racket/src/schvers.h
 
 core.so: chezpart.so core.sls $(CORE_SRCS)
 	$(COMP) $(CORE_UNSAFE_COMP) '(compile-file "core.sls")' | $(SCHEME) -q

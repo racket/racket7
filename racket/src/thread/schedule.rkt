@@ -53,8 +53,9 @@
      TICKS
      (lambda ()
        (check-for-break)
-       (when (positive? (current-atomic))
-         (atomic-timeout-callback)))
+       (when atomic-timeout-callback
+         (when (positive? (current-atomic))
+           (atomic-timeout-callback))))
      (lambda args
        (accum-cpu-time! t start)
        (current-thread #f)
@@ -143,7 +144,9 @@
 
 ;; ----------------------------------------
 
-(define atomic-timeout-callback void)
+(define atomic-timeout-callback #f)
 
 (define (set-atomic-timeout-callback! cb)
-  (set! atomic-timeout-callback (or cb void)))
+  (begin0
+    atomic-timeout-callback
+    (set! atomic-timeout-callback cb)))

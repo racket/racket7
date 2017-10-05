@@ -813,10 +813,12 @@
     (memcpy* cptr offset src-cptr 0 count)]
    [(cptr offset src-cptr src-offset/count count/type)
     (if (ctype? count/type)
-        (memcpy* cptr offset src-cptr 0 (* src-offset/count (ctype-sizeof count/type)))
+        (let ([sz (ctype-sizeof count/type)])
+          (memcpy* cptr (* sz offset) src-cptr 0 (* src-offset/count sz)))
         (memcpy* cptr offset src-cptr src-offset/count count/type))]
    [(cptr offset src-cptr src-offset count type)
-    (memcpy* cptr offset src-cptr src-offset (* count (ctype-sizeof type)))]))
+    (let ([sz (ctype-sizeof type)])
+      (memcpy* cptr (* offset sz) src-cptr (* src-offset sz) (* count sz)))]))
 
 ;; ----------------------------------------
 

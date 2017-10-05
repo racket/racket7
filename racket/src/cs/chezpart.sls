@@ -9,7 +9,7 @@
                            sort
                            force delay identifier?
                            output-port-buffer-mode
-                           read-char peek-char char-ready?
+                           peek-char char-ready?
                            make-input-port make-output-port
                            close-input-port close-output-port
                            list? input-port? output-port?
@@ -18,7 +18,7 @@
                            open-input-string open-output-string get-output-string
                            open-input-output-file
                            with-input-from-file with-output-to-file
-                           call-with-input-file call-with-output-file
+                           call-with-output-file
                            file-position
                            write display newline port-name port-closed? write-char
                            print-graph print-vector-length
@@ -70,4 +70,6 @@
                    [exit-handler chez:exit-handler]
                    [exit chez:exit]
                    [vector-sort! chez:vector-sort!]
-                   [vector-sort chez:vector-sort]))))
+                   [vector-sort chez:vector-sort]
+                   [call-with-input-file chez:call-with-input-file]
+                   [read-char chez:read-char]))))
