@@ -11,7 +11,7 @@
 ;; An identifier registered in `lifts` is one of
 ;;
 ;;  * `liftable` - a function binding that is (so far) only referenced
-;;                 in an application position with a correct number fo
+;;                 in an application position with a correct number of
 ;;                 arguments, so each call can supply the free
 ;;                 variables of the function and the closure
 ;;                 allocation (if any) can be lifted to the top level
@@ -33,6 +33,10 @@
 ;; There's nothing analogous to `mutator` and `var-ref` for
 ;; synthesized accessors, because they're relevant only for the second
 ;; pass and recorded in an `indirected`.
+;;
+;; An identifier registered in `locals` maps to either 'ready or 'early,
+;; where 'early is used during the right-hand side of a letrec that is
+;; not all `lambda`s.
 
 (struct liftable (expr ; a `lambda` or `case-lambda` RHS of the binding
                   [frees #:mutable] ; set of variables free in `expr`, plus any lifted bindings
@@ -278,9 +282,11 @@
          (for/fold ([frees+binds frees+binds]) ([ids (in-list idss)])
            (remove-frees/add-binds ids frees+binds lifts)))]
       [`(letrec-values ([,idss ,rhss] ...) . ,body)
-       (let* ([locals (for/fold ([locals locals]) ([ids (in-list idss)])
+       (let* ([rhs-locals (for/fold ([locals locals]) ([ids (in-list idss)])
+                            (add-args ids locals 'early))]
+              [frees+binds (compute-seq-lifts! rhss frees+binds lifts rhs-locals)]
+              [locals (for/fold ([locals locals]) ([ids (in-list idss)])
                         (add-args ids locals))]
-              [frees+binds (compute-seq-lifts! rhss frees+binds lifts locals)]
               [frees+binds (compute-seq-lifts! body frees+binds lifts locals)])
          (for/fold ([frees+binds frees+binds]) ([ids (in-list idss)])
            (remove-frees/add-binds ids frees+binds lifts)))]
@@ -361,9 +367,16 @@
           (let ([proc (hash-ref lifts x #f)])
             (when (liftable? proc)
               (hash-remove! lifts x)))
-          (if (hash-ref locals x #f)
-              (add-free frees+binds x)
-              frees+binds)])]))
+          (let ([loc-status (hash-ref locals x #f)])
+            (cond
+              [loc-status
+               (let ([frees+binds (add-free frees+binds x)])
+                 (cond
+                   [(eq? loc-status 'early)
+                    (define ind (lookup-indirected-variable lifts x))
+                    (add-free frees+binds (indirected-mutator ind))]
+                   [else frees+binds]))]
+              [else frees+binds]))])]))
 
   ;; Like `compute-lifts!`, but for a sequence of expressions
   (define (compute-seq-lifts! vs frees+binds lifts locals)
@@ -388,16 +401,21 @@
   (define (compute-letrec-lifts! v frees+binds lifts locals)
     (match v
       [`(,_ ([,ids ,rhss] ...) . ,body)
-       (let ([locals (add-args ids locals)])
-         (when (for/and ([rhs (in-list rhss)])
-                 (lambda? rhs))
-           ;; Each RHS is a candidate for lifting
-           (for ([id (in-list ids)]
-                 [rhs (in-list rhss)])
-             (hash-set! lifts (unwrap id) (liftable rhs #f #f))))
-         (let* ([frees+binds (compute-rhs-lifts! ids rhss frees+binds lifts locals)]
-                [frees+binds (compute-seq-lifts! body frees+binds lifts locals)])
-           (remove-frees/add-binds ids frees+binds lifts)))]))
+       (define all-lambda?
+         (for/and ([rhs (in-list rhss)])
+           (lambda? rhs)))
+       (when all-lambda?
+         ;; Each RHS is a candidate for lifting
+         (for ([id (in-list ids)]
+               [rhs (in-list rhss)])
+           (hash-set! lifts (unwrap id) (liftable rhs #f #f))))
+       (let* ([rhs-locals (add-args ids locals (if all-lambda? 'ready 'early))]
+              [frees+binds (compute-rhs-lifts! ids rhss frees+binds lifts rhs-locals)]
+              [locals (if all-lambda?
+                          rhs-locals
+                          (add-args ids locals))]
+              [frees+binds (compute-seq-lifts! body frees+binds lifts locals)])
+         (remove-frees/add-binds ids frees+binds lifts))]))
 
   ;; ----------------------------------------
   ;; Bridge between pass 1 and 2: transitive closure of free variables
@@ -567,22 +585,54 @@
   (define (convert-lifted-calls-in-let v lifts frees)
     (match v
       [`(,let-id ([,ids ,rhss] ...) . ,body)
+       (define bindings
+         (for/list ([id (in-list ids)]
+                    [rhs (in-list rhss)]
+                    #:unless (liftable? (hash-ref lifts id #f)))
+           `[,id ,(convert-lifted-calls-in-expr rhs lifts frees)]))
+       (define new-bindings+body
+         (convert-lifted-calls-in-seq/add-mutators*
+          body ids lifts frees
+          (lambda (bindings new-bindings+body)
+            (cons (append bindings (car new-bindings+body))
+                  (cdr new-bindings+body)))
+          (lambda (vs lifts free)
+            (cons '() (convert-lifted-calls-in-seq vs lifts frees)))))
+       (define new-bindings (car new-bindings+body))
+       (define new-body (cdr new-bindings+body))
        (reannotate
         v
-        `(,let-id ,(for/list ([id (in-list ids)]
-                              [rhs (in-list rhss)]
-                              #:unless (liftable? (hash-ref lifts id #f)))
-                     `[,id ,(convert-lifted-calls-in-expr rhs lifts frees)])
-                  . ,(convert-lifted-calls-in-seq/add-mutators body ids lifts frees)))]))
+        (cond
+          [(null? new-bindings) `(,let-id ,bindings . ,new-body)]
+          [else
+           (case (unwrap let-id)
+             [(letrec letrec*)
+              `(,let-id ,(append new-bindings bindings) . ,new-body)]
+             [(letrec-values)
+              (define new*-bindings
+                (for/list ([binding (in-list new-bindings)])
+                  (cons (list (car binding)) (cdr binding))))
+              `(,let-id ,(append new*-bindings bindings) . ,new-body)]
+             [else
+              `(,let-id ,bindings (let ,new-bindings . ,new-body))])]))]))
+
+  (define (convert-lifted-calls-in-seq/add-mutators vs ids lifts frees)
+    (convert-lifted-calls-in-seq/add-mutators*
+     vs ids lifts frees
+     (lambda (bindings body)
+       `((let ,bindings . ,body)))
+     (lambda (vs lifts free)
+       (convert-lifted-calls-in-seq vs lifts frees))))
 
   ;; For any `id` in `ids` that needs a mutator or variable-reference
   ;; binding to pass to a lifted function (as indicated by an
   ;; `indirected` mapping in `lifts`), add the binding. The `ids` can
   ;; be any tree of annotated symbols.
-  (define (convert-lifted-calls-in-seq/add-mutators vs ids lifts frees)
+  (define (convert-lifted-calls-in-seq/add-mutators* vs ids lifts frees
+                                                     add-bindings finish)
     (let loop ([ids ids])
       (cond
-        [(null? ids) (convert-lifted-calls-in-seq vs lifts frees)]
+        [(null? ids) (finish vs lifts frees)]
         [(wrap-pair? ids)
          (let ([a (wrap-car ids)])
            (cond
@@ -596,21 +646,22 @@
               (cond
                 [(indirected? ind)
                  ;; Add a binding for a mutator and/or variable reference
-                 `((let ,(append
-                          (if (indirected-accessor ind)
-                              `([,(indirected-accessor ind)
-                                 (lambda () ,v)])
-                              '())
-                          (if (indirected-mutator ind)
-                              `([,(indirected-mutator ind)
-                                 ,(let ([val-var (gensym 'v)])
-                                    `(lambda (,val-var) (set! ,v ,val-var)))])
-                              '())
-                          (if (indirected-variable-reference ind)
-                              `([,(indirected-variable-reference ind)
-                                 (#%variable-reference ,v)])
-                              '()))
-                     . ,(loop (wrap-cdr ids))))]
+                 (add-bindings
+                  (append
+                   (if (indirected-accessor ind)
+                       `([,(indirected-accessor ind)
+                          (lambda () ,v)])
+                       '())
+                   (if (indirected-mutator ind)
+                       `([,(indirected-mutator ind)
+                          ,(let ([val-var (gensym 'v)])
+                             `(lambda (,val-var) (set! ,v ,val-var)))])
+                       '())
+                   (if (indirected-variable-reference ind)
+                       `([,(indirected-variable-reference ind)
+                          (#%variable-reference ,v)])
+                       '()))
+                  (loop (wrap-cdr ids)))]
                 [else (loop (wrap-cdr ids))])]))]
         [else
          ;; `rest` arg:
@@ -684,14 +735,14 @@
           ind)))
 
   ;; Add a group of arguments (a list or improper list) to a set
-  (define (add-args args s)
+  (define (add-args args s [mode 'ready])
     (let loop ([args args] [s s])
       (cond
         [(wrap-null? args) s]
         [(wrap-pair? args)
          (loop (wrap-cdr args)
-               (hash-set s (unwrap (wrap-car args)) #t))]
-        [else (hash-set s (unwrap args) #t)])))
+               (hash-set s (unwrap (wrap-car args)) mode))]
+        [else (hash-set s (unwrap args) mode)])))
 
   ;; Add a free variable
   (define (add-free frees+binds var)
