@@ -625,12 +625,12 @@
     (check who symbol? :or-false name)
     (let ([rtd (position-based-mutator-rtd pbm)])
       (check-accessor-or-mutator-index who rtd pos)
-      (let* ([p (record-field-mutator rtd
-                                      (+ pos (position-based-mutator-offset pbm)))]
+      (let* ([abs-pos (+ pos (position-based-mutator-offset pbm))]
+             [p (record-field-mutator rtd abs-pos)]
              [wrap-p
               (lambda (v a)
                 (if (impersonator? v)
-                    (impersonate-set! p rtd pos v a)
+                    (impersonate-set! p rtd pos abs-pos v a)
                     (p v a)))])
         (register-struct-field-mutator! wrap-p rtd pos)
         wrap-p))]
@@ -921,7 +921,7 @@
       (let loop ([rtd* (record-rtd (impersonator-val s))])
         (let* ([pos (- i (struct-type-parent-total*-count rtd*))])
           (if (fx>= pos 0)
-              (impersonate-set! (record-field-mutator rtd* i) rtd* pos s v)
+              (impersonate-set! (record-field-mutator rtd* i) rtd* pos i s v)
               (loop (record-type-parent rtd*)))))
       (unsafe-struct*-set! s i v)))
 

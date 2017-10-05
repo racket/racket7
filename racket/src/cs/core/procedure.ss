@@ -651,12 +651,14 @@
                                  (fixnum? p)
                                  (fx>= p 0)
                                  (< p (position-based-mutator-field-count pbm)))
-                            (impersonate-set! (lambda (s v)
-                                                (unsafe-struct-set! s (+ p (position-based-mutator-offset pbm)) v))
-                                              (position-based-mutator-rtd pbm)
-                                              p
-                                              s
-                                              v)]
+                            (let ([abs-pos (+ p (position-based-mutator-offset pbm))])
+                              (impersonate-set! (lambda (s v)
+                                                  (unsafe-struct-set! s abs-pos v))
+                                                (position-based-mutator-rtd pbm)
+                                                p
+                                                abs-pos
+                                                s
+                                                v))]
                            [else
                             (error 'struct-set! "bad assignment")])))
 

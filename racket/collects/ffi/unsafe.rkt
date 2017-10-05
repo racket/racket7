@@ -763,16 +763,25 @@
 ;; utf-16 type
 (provide _string/ucs-4 _string/utf-16)
 
+(define _bytes+nul
+  (make-ctype _bytes
+              (lambda (x)
+                (and x (let* ([len (bytes-length x)]
+                              [s (make-bytes (add1 len))])
+                         (bytes-copy! s 0 x 0 len)
+                         s)))
+              (lambda (x) x)))
+
 ;; 8-bit string encodings, #f is NULL
 (define ((false-or-op op) x) (and x (op x)))
 (define* _string/utf-8
-  (make-ctype _bytes
+  (make-ctype _bytes+nul
     (false-or-op string->bytes/utf-8) (false-or-op bytes->string/utf-8)))
 (define* _string/locale
-  (make-ctype _bytes
+  (make-ctype _bytes+nul
     (false-or-op string->bytes/locale) (false-or-op bytes->string/locale)))
 (define* _string/latin-1
-  (make-ctype _bytes
+  (make-ctype _bytes+nul
     (false-or-op string->bytes/latin-1) (false-or-op bytes->string/latin-1)))
 
 ;; 8-bit string encodings, #f is NULL, can also use bytes and paths
@@ -782,13 +791,13 @@
         [(path?  x) (path->bytes x)]
         [else (op x)]))
 (define* _string*/utf-8
-  (make-ctype _bytes
+  (make-ctype _bytes+nul
     (any-string-op string->bytes/utf-8) (false-or-op bytes->string/utf-8)))
 (define* _string*/locale
-  (make-ctype _bytes
+  (make-ctype _bytes+nul
     (any-string-op string->bytes/locale) (false-or-op bytes->string/locale)))
 (define* _string*/latin-1
-  (make-ctype _bytes
+  (make-ctype _bytes+nul
     (any-string-op string->bytes/latin-1) (false-or-op bytes->string/latin-1)))
 
 ;; A generic _string type that usually does the right thing via a parameter

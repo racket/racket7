@@ -65,7 +65,7 @@
     ;; Let accessor report the error:
     (|#%app| acc orig)]))
 
-(define (impersonate-set! set rtd pos orig a)
+(define (impersonate-set! set rtd pos abs-pos orig a)
   (cond
    [(and (impersonator? orig)
          (record? (impersonator-val orig) rtd))
@@ -92,7 +92,7 @@
              [else
               (loop (impersonator-next v) a)]))]
          [(struct-undefined-chaperone? v)
-          (when (eq? (unsafe-struct*-ref (impersonator-val v) pos) unsafe-undefined)
+          (when (eq? (unsafe-struct*-ref (impersonator-val v) abs-pos) unsafe-undefined)
             (unless (eq? (continuation-mark-set-first #f prop:chaperone-unsafe-undefined)
                          unsafe-undefined)
               (raise-unsafe-undefined 'struct-set! "assignment disallowed" "assign" set (impersonator-val v) pos)))

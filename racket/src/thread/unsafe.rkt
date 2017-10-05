@@ -1,7 +1,8 @@
 #lang racket/base
 (require "atomic.rkt"
          "thread.rkt"
-         "schedule.rkt")
+         "schedule.rkt"
+         "evt.rkt")
 
 (provide unsafe-start-atomic
          unsafe-end-atomic

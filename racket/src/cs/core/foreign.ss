@@ -139,6 +139,11 @@
    [else
     (error 'internal-error "bad case extracting a cpointer address")]))
 
+(define (cpointer*-address p)
+  (if (number? p)
+      p
+      (cpointer-address p)))
+
 (define (addr-address addr) ; call with GC disabled
   (cond
    [(integer? addr) addr]
@@ -323,7 +328,7 @@
   (lambda (x) (let loop ([i 0])
                 (if (fx= 0 (foreign-ref 'unsigned-8 x i))
                     (let ([bstr (make-bytes i)])
-                      (memcpy bstr (make-cpointer x #f) i)
+                      (memcpy* bstr 0 x 0 i)
                       bstr)
                     (loop (add1 i))))))
 
@@ -332,7 +337,7 @@
   (lambda (x) (let loop ([i 0])
                 (if (fx= 0 (foreign-ref 'unsigned-16 x i))
                     (let ([bstr (make-bytes i)])
-                      (memcpy bstr (make-cpointer x #f) i)
+                      (memcpy* bstr 0 x 0 i)
                       bstr)
                     (loop (+ i 2))))))
 
@@ -755,9 +760,9 @@
     (cond
      [(compound-ctype? type)
       ;; Corresponds to a copy, since `v` is represented by a pointer
-      (memcpy (if (zero? offset) p (ptr-add p offset type))
-              (s->c type v)
-              (compound-ctype-size type))]
+      (memcpy* p offset
+               (s->c type v) 0
+               (compound-ctype-size type))]
      [else
       (let ([host-rep (ctype-host-rep type)]
             [v (s->c type v)])
@@ -775,11 +780,11 @@
                          [(void*) (cpointer-address v)]
                          [else v]))))])))
 
-(define (memcpy to from len)
+(define (memcpy* to to-offset from from-offset len)
   (with-interrupts-disabled
    (let ()
-     (let loop ([to (cpointer-address to)]
-                [from (cpointer-address from)]
+     (let loop ([to (+ (cpointer*-address to) to-offset)]
+                [from (+ (cpointer*-address from) from-offset)]
                 [len len])
        (unless (fx= len 0)
          (cond
@@ -799,6 +804,19 @@
            (foreign-set! 'integer-8 to 0
                          (foreign-ref 'integer-8 from 0))
            (loop (fx+ to 1) (fx+ from 1) (fx- len 1))]))))))
+
+(define memcpy
+  (case-lambda
+   [(cptr src-cptr count)
+    (memcpy* cptr 0 src-cptr 0 count)]
+   [(cptr offset src-cptr count)
+    (memcpy* cptr offset src-cptr 0 count)]
+   [(cptr offset src-cptr src-offset/count count/type)
+    (if (ctype? count/type)
+        (memcpy* cptr offset src-cptr 0 (* src-offset/count (ctype-sizeof count/type)))
+        (memcpy* cptr offset src-cptr src-offset/count count/type))]
+   [(cptr offset src-cptr src-offset count type)
+    (memcpy* cptr offset src-cptr src-offset (* count (ctype-sizeof type)))]))
 
 ;; ----------------------------------------
 
@@ -853,7 +871,7 @@
              [p (normalized-malloc len
                                    (or mode (if type (ctype-malloc-mode type) 'atomic)))])
         (when copy-from
-          (memcpy p copy-from len))
+          (memcpy* p 0 copy-from 0 len))
         p)]
      [(nonnegative-fixnum? (car args))
       (if count
@@ -981,12 +999,12 @@
                                          'void*
                                          host-rep))]
          [ids (map (lambda (in-type)
-                     (and (by-value? (car in-types))
+                     (and (by-value? in-type)
                           (gensym)))
                    in-types)]
          [ret-id (and (by-value? out-type)
                       (gensym))]
-         [decls (let loop ([in-types in-types] [id ids] [decls '()])
+         [decls (let loop ([in-types in-types] [ids ids] [decls '()])
                   (cond
                    [(null? in-types) decls]
                    [(car ids)
@@ -1057,7 +1075,7 @@
                          ;; result is a struct type; we want to copy and free before re-enabling interrupts
                          (let ([bstr (make-bytevector ret-size)]
                                [addr (ftype-pointer-address r)])
-                           (memcpy bstr (make-cpointer addr #f) ret-size)
+                           (memcpy* bstr 0 addr 0 ret-size)
                            (foreign-free addr)
                            (make-cpointer bstr #f))]
                         [(eq? (ctype-our-rep out-type) 'gcpointer)
@@ -1081,7 +1099,7 @@
                                                             (let* ([size (compound-ctype-size type)]
                                                                    [addr (ftype-pointer-address arg)]
                                                                    [bstr (make-bytevector size)])
-                                                              (memcpy bstr (make-cpointer addr #f) size)
+                                                              (memcpy* bstr 0 addr 0 size)
                                                               (foreign-free addr)
                                                               (make-cpointer bstr #f))]
                                                            [else
@@ -1093,9 +1111,11 @@
                     (if ret-maker
                         (ret-maker (let* ([size (compound-ctype-size out-type)]
                                           [addr (foreign-alloc size)])
-                                     (memcpy (make-cpointer addr #f) v size)
+                                     (memcpy* addr 0 v 0 size)
                                      (ret-maker addr)))
-                        v))))])))
+                        (case (ctype-host-rep out-type)
+                          [(void*) (cpointer-address v)]
+                          [else v])))))])))
 
 (define (types->reps types)
   (let loop ([types types] [reps '()] [decls '()])

@@ -16,7 +16,9 @@
 ;; connect events to semaphores through a long-term poll set...
 
 (provide sandman-add-poll-set-adder
-         sandman-poll-ctx-add-poll-set-adder!)
+         sandman-poll-ctx-add-poll-set-adder!
+         sandman-poll-ctx-merge-timeout
+         sandman-set-background-sleep!)
 
 (struct exts (timeout-at fd-adders))
 
@@ -31,6 +33,23 @@
                                 (sandman-add-poll-set-adder
                                  (schedule-info-current-exts sched-info)
                                  adder))))
+
+(define (sandman-poll-ctx-merge-timeout poll-ctx timeout)
+  (define sched-info (poll-ctx-sched-info poll-ctx))
+  (when sched-info
+    (schedule-info-current-exts sched-info
+                                ((sandman-do-merge-timeout (current-sandman))
+                                 (schedule-info-current-exts sched-info)
+                                 timeout))))
+
+
+(define background-sleep #f)
+(define background-sleep-fd #f)
+
+(define (sandman-set-background-sleep! sleep fd)
+  (set! background-sleep sleep)
+  (set! background-sleep-fd fd))
+
 (void
  (current-sandman
   (let ([timeout-sandman (current-sandman)])
@@ -51,10 +70,16 @@
        (define sleep-secs (and timeout-at
                                (/ (- timeout-at (current-inexact-milliseconds)) 1000.0)))
        (unless (and sleep-secs (sleep-secs . <= . 0.0))
-         (rktio_sleep rktio
-                      (or sleep-secs 0.0)
-                      ps
-                      rktio_NULL))
+         (cond
+           [background-sleep
+            (rktio_start_sleep rktio (or sleep-secs 0.0) ps rktio_NULL background-sleep-fd)
+            (background-sleep)
+            (rktio_end_sleep rktio)]
+           [else
+            (rktio_sleep rktio
+                         (or sleep-secs 0.0)
+                         ps
+                         rktio_NULL)]))
        (rktio_poll_set_forget rktio ps))
      
      ;; poll

@@ -1,6 +1,7 @@
 (top-level-program
  (import (except (chezpart)
-                 eval)
+                 eval
+                 read)
          (core)
          (only (expander)
                boot
@@ -13,6 +14,7 @@
                executable-yield-handler
                load-on-demand-enabled
                eval
+               read
                load
                dynamic-require
                namespace-require
@@ -127,7 +129,7 @@
              (set! loads
                    (cons
                     (lambda ()
-                      (dynamic-require `(lib ,lib-name) #f))
+                      (namespace-require `(lib ,lib-name)))
                     loads))
              (no-init! saw)
              (flags-loop rest-args (see saw 'non-config 'lib)))]
@@ -136,7 +138,7 @@
              (set! loads
                    (cons
                     (lambda ()
-                      (dynamic-require `(file ,file-name) #f))
+                      (namespace-require `(file ,file-name)))
                     loads))
              (no-init! saw)
              (flags-loop rest-args (see saw 'non-config 'lib)))]
@@ -145,7 +147,7 @@
              (set! loads
                    (cons
                     (lambda ()
-                      (dynamic-require `(file ,file-name) #f))
+                      (namespace-require `(file ,file-name)))
                     loads))
              (no-init! saw)
              (flags-loop rest-args (see saw 'non-config 'lib)))]
@@ -156,6 +158,15 @@
                     (lambda ()
                       (load file-name))
                     loads))
+             (flags-loop rest-args (see saw 'non-config)))]
+          [("-e" "--eval")
+           (let-values ([(expr rest-args) (next-arg "expression" arg within-arg args)])
+             (set! loads
+                   (cons
+                    (lambda ()
+                      (eval (read (open-input-string expr))))
+                    loads))
+             (no-init! saw)
              (flags-loop rest-args (see saw 'non-config)))]
           [("-i" "--repl") 
            (set! repl? #t)

@@ -186,4 +186,11 @@
    unsafe-make-security-guard-at-root
 
    unsafe-abort-current-continuation/no-wind
-   unsafe-call-with-composable-continuation/no-wind))
+   unsafe-call-with-composable-continuation/no-wind
+
+   unsafe-poller
+   unsafe-poll-ctx-fd-wakeup
+   unsafe-poll-ctx-eventmask-wakeup
+   unsafe-poll-ctx-milliseconds-wakeup
+   unsafe-signal-received
+   unsafe-set-sleep-in-thread!))
