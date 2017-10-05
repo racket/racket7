@@ -93,6 +93,12 @@
 (struct exn:break:hang-up/non-engine exn:break/non-engine ())
 (struct exn:break:terminate/non-engine exn:break/non-engine ())
 
+(define (internal-make-thread-parameter v)
+  (define x v)
+  (case-lambda
+    [() x]
+    [(v) (set! x v)]))
+
 (primitive-table '#%engine
                  (hash 
                   'make-engine
@@ -117,4 +123,47 @@
                   'exn:break:hang-up/non-engine
                   exn:break:hang-up/non-engine
                   'exn:break:terminate/non-engine
-                  exn:break:terminate/non-engine))
+                  exn:break:terminate/non-engine
+                  'internal-make-thread-parameter
+                  internal-make-thread-parameter
+                  'fork-pthread
+                  (lambda args
+                    (error "fork-pthread: not ready"))
+                  'pthread?
+                  (lambda args
+                    (error "thread?: not ready"))
+                  'get-thread-id
+                  (lambda args
+                    (error "get-thread-id: not ready"))
+                  'make-condition
+                  (lambda args
+                    (error "make-condition: not ready"))
+                  'condition-wait
+                  (lambda args
+                    (error "condition-wait: not ready"))
+                  'condition-signal 
+                  (lambda args
+                    (error "condition-signal: not ready"))
+                  'condition-broadcast
+                  (lambda args
+                    (error "condition-broadcast: not ready"))
+                  'threaded?
+                  (lambda args
+                    (error "threaded?: not ready"))
+                  'current-engine-state
+                  (lambda args
+                    (error "current-engine state: not ready"))
+                  'make-mutex
+                  (lambda args
+                    (error "make-mutex: not ready"))
+                  'mutex-acquire
+                  (lambda args
+                    (error "mutex-acquire: not ready"))
+                  'mutex-release
+                  (lambda args
+                    (error "mutex-release: not ready"))
+                  ))
+
+;; add dummy definitions that implement pthreads and conditions etc.
+;; dummy definitions that error
+

@@ -107,8 +107,6 @@
 ;; `end-uninterrupted` functions bracket such regions dynamically. See
 ;; also "core-engine.ss" and "core-interrupt.ss"
 
-;; ----------------------------------------
-
 (define current-metacontinuation (internal-make-thread-parameter '()))
 
 (define current-empty-k (internal-make-thread-parameter #f))
@@ -172,6 +170,27 @@
             #t]
            [else (loop (cdr mc))])))))
 
+(define/who (maybe-future-barricade tag)
+  (when (future? (current-future)) ;; running in a future
+    (check who continuation-prompt-tag? tag)
+    (let ([fp (strip-impersonator (current-future-prompt))]
+          [tag (strip-impersonator tag)])
+      (cond
+       [(eq? tag the-root-continuation-prompt-tag)
+        (block)]
+       [else
+        (let loop ([mc (current-metacontinuation)])
+          (cond
+           [(null? mc) ;; I don't think this should ever happen.
+            (block)] ;; not sure
+           [(eq? tag (metacontinuation-frame-tag (car mc))) ;; found tag
+            (void)]
+           [(eq? (metacontinuation-frame-tag (car mc)) fp) ;; tag must be above future prompt.
+            (block)]
+           [else
+            (loop (cdr mc))]))]))))
+
+;; Should this need to ever block? Does it use the "current-continuation"? doesnt seem to.
 (define/who call-with-continuation-prompt
   (case-lambda
     [(proc) (call-with-continuation-prompt proc the-default-continuation-prompt-tag #f)]
@@ -268,7 +287,7 @@
                                                                                (current-empty-k)
                                                                                (current-mark-stack)
                                                                                #f
-									       #f
+                                                                               #f
                                                                                (current-cc-guard))])
                                           (current-empty-k empty-k)
                                           (current-mark-stack #f)
@@ -346,6 +365,7 @@
 
 (define/who (abort-current-continuation tag . args)
   (check who continuation-prompt-tag? tag)
+  (maybe-future-barricade tag)
   (check-prompt-tag-available 'abort-current-continuation (strip-impersonator tag))
   (start-uninterrupted 'abort)
   (let ([args (apply-impersonator-abort-wrapper tag args)]
@@ -401,6 +421,7 @@
     [(proc tag)
      (check who (procedure-arity-includes/c 1) proc)
      (check who continuation-prompt-tag? tag)
+     (maybe-future-barricade tag)
      (call-with-end-uninterrupted
       (lambda ()
         (call/cc
@@ -420,6 +441,7 @@
     [(p tag)
      (check who (procedure-arity-includes/c 1) p)
      (check who continuation-prompt-tag? tag)
+     (maybe-future-barricade tag)
      (call-with-composable-continuation* p tag #t)]))
 
 (define (call-with-composable-continuation* p tag wind?)
@@ -840,11 +862,12 @@
     [(marks key none-v prompt-tag)
      (check who continuation-mark-set? :or-false marks)
      (check who continuation-prompt-tag? prompt-tag)
+     (maybe-future-barricade prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
        (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set-first key)])
          (let ([v (marks-search (or (and marks
                                          (continuation-mark-set-mark-chain marks))
-                                    (current-mark-chain))
+                                    (current-mark-chain)) ;; because of this.
                                 key
                                 ;; elem-stop?:
                                 (lambda (mcf)
@@ -954,6 +977,7 @@
     [(marks key prompt-tag)
      (check who continuation-mark-set? :or-false marks)
      (check who continuation-prompt-tag? prompt-tag)
+     (maybe-future-barricade prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
        (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list key)])
          (let chain-loop ([mark-chain (or (and marks
@@ -986,6 +1010,7 @@
      (check who continuation-mark-set? :or-false marks)
      (check who list? keys)
      (check who continuation-prompt-tag? prompt-tag)
+     (maybe-future-barricade prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
        (let-values ([(keys wrappers) (map/2-values (lambda (k)
                                                      (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list* k))
@@ -1036,6 +1061,7 @@
     [() (current-continuation-marks the-default-continuation-prompt-tag)]
     [(tag)
      (check who continuation-prompt-tag? tag)
+     (maybe-future-barricade tag)
      (call/cc
       (lambda (k)
         (make-continuation-mark-set (prune-mark-chain-suffix (strip-impersonator tag) (current-mark-chain))
@@ -1048,6 +1074,7 @@
     [(k tag)
      (check who continuation? :or-false k)
      (check who continuation-prompt-tag? tag)
+     (maybe-future-barricade tag)
      (let ([tag (strip-impersonator tag)])
        (cond
         [(full-continuation? k)

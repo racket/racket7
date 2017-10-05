@@ -9,7 +9,9 @@
          queue-remove-all!
          queue-add!
          queue-add-front!
-         queue-remove-node!)
+         queue-remove-node!
+         queue-length
+         queue-remove-end!)
 
 (struct queue (start end) #:mutable)
 (struct node (elem
@@ -87,3 +89,22 @@
   (if (node-next n)
       (set-node-prev! (node-next n) (node-prev n))
       (set-queue-end! q (node-prev n))))
+
+(define (queue-remove-end! q)
+  (define e (queue-end q))
+  (cond
+    [(not e)
+     #f]
+    [else
+     (let ([n (node-prev e)])
+       (set-node-next! n #f)
+       (set-queue-end! q n)
+       (node-elem e))]))
+
+(define (queue-length q)
+  (let loop ([qs (queue-start q)])
+    (cond
+      [qs
+       (+ 1 (loop (node-next qs)))]
+      [else
+       0])))

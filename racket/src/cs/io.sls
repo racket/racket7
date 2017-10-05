@@ -14,7 +14,6 @@
                   [flush-output-port flush-output])
           (core)
           (thread))
-
   ;; ----------------------------------------
   ;; Tie knots:
 

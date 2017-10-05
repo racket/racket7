@@ -202,7 +202,6 @@ engine-test: core.so
 
 CORE_SRCS = core/check.ss \
 	    core/syntax-rule.ss \
-	    core/thread-parameter.ss \
             core/constant.ss \
             core/hash-code.ss \
             core/struct.ss \
@@ -218,6 +217,7 @@ CORE_SRCS = core/check.ss \
             core/thread-cell.ss \
             core/parameter.ss \
             core/begin0.ss \
+            core/pthread.ss \
             core/control.ss \
             core/interrupt.ss \
             core/engine.ss \
@@ -248,9 +248,6 @@ CORE_SRCS = core/check.ss \
             core/place.ss \
             core/foreign.ss \
             core/future.ss \
-            core/fsemaphore.ss \
-            core/queue.ss \
-            core/future-scheduler.ss \
             core/version.ss \
             ../racket/src/schvers.h
 

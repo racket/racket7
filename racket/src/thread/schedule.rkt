@@ -36,11 +36,11 @@
           (process-sleep)))
     (define child (thread-group-next! g))
     (cond
-     [(not child) (none-k)]
-     [(thread? child)
-      (swap-in-thread child)]
-     [else
-      (loop child (lambda () (loop g none-k)))])))
+      [(not child) (none-k)]
+      [(thread? child)
+       (swap-in-thread child)]
+      [else
+       (loop child (lambda () (loop g none-k)))])))
 
 (define (swap-in-thread t)
   (define e (thread-engine t))
@@ -80,8 +80,9 @@
 
 (define (maybe-done)
   (cond
-   [(and (not (sandman-any-sleepers?))
-         (not (any-idle-waiters?)))
+    [(and (not (sandman-any-sleepers?))
+          (not (sandman-any-waiters?))
+          (not (any-idle-waiters?)))
     ;; all threads done or blocked
     (cond
       [(thread-running? root-thread)
@@ -104,6 +105,10 @@
                 (lambda (t)
                   (thread-reschedule! t)
                   (set! did? #t)))
+  (sandman-condition-poll mode
+                          (lambda (t)
+                            (thread-reschedule! t)
+                            (set! did? #t)))
   (when did?
     (thread-did-work!))
   did?)
