@@ -220,7 +220,8 @@
 
      #:byte-ready
      (lambda (work-done!)
-       (not (zero? (content-length))))
+       (or output-closed?
+           (not (zero? (content-length)))))
 
      #:close
      (lambda ()

@@ -53,7 +53,7 @@
                 (cond
                  [(or (b . >= . 64)
                       (and (>= next-b (char->integer #\0))
-                           (<= next-b (char->integer #\9))))
+                           (<= next-b (char->integer #\7))))
                   (let* ([max-length (write-bytes/max #"\\" o max-length)]
                          [max-length (write-bytes/max (digit (arithmetic-shift b -6)) o max-length)]
                          [max-length (write-bytes/max (digit (bitwise-and 7 (arithmetic-shift b -3))) o max-length)]

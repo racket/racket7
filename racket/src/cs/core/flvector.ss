@@ -50,7 +50,7 @@
   (bitwise-arithmetic-shift-right (bytevector-length (flvector-bstr flvec)) 3))
 
 (define (unsafe-flvector-length flvec)
-  (#3%fxsll (#3%bytevector-length (flvector-bstr flvec)) 3))
+  (#3%fxsrl (#3%bytevector-length (flvector-bstr flvec)) 3))
 
 (define/who (flvector-ref flvec pos)
   (check who flvector? flvec)

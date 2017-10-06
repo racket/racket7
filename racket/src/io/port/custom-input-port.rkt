@@ -185,7 +185,7 @@
     (cond
       [input-pipe
        (cond
-         [((pipe-content-length input-pipe) . < . skip-k)
+         [((pipe-content-length input-pipe) . <= . skip-k)
           (set! input-pipe #f)
           (peek-in dest-bstr dest-start dest-end skip-k progress-evt copy?)]
          [else

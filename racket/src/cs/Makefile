@@ -5,7 +5,7 @@ SCHEME = scheme
 UNSAFE_COMP = # '(optimize-level 3)'
 
 # Controls whether core is built as unsafe:
-CORE_UNSAFE_COMP = # '(optimize-level 3)'
+CORE_UNSAFE_COMP = '(optimize-level 3)'
 
 BASE_COMP = '(load "compile-config.ss")'
 COMP = echo $(UNSAFE_COMP) $(BASE_COMP)

@@ -1,5 +1,7 @@
 #lang racket/base
-(require "../common/check.rkt"
+(require racket/flonum
+         racket/fixnum
+         "../common/check.rkt"
          "../port/output-port.rkt"
          "../port/string-output.rkt"
          "../port/bytes-output.rkt"
@@ -217,6 +219,12 @@
      (print-list p who v mode o max-length graph config #f #f)]
     [(vector? v)
      (print-list p who (vector->list v) mode o max-length graph config "#(" "(vector")]
+    [(flvector? v)
+     (define l (for/list ([e (in-flvector v)]) e))
+     (print-list p who l mode o max-length graph config "#fl(" "(flvector")]
+    [(fxvector? v)
+     (define l (for/list ([e (in-fxvector v)]) e))
+     (print-list p who l mode o max-length graph config "#fx(" "(fxvector")]
     [(box? v)
      (if (config-get config print-box)
          (p who (unbox v) mode o (write-string/max "#&" o max-length) graph config)
