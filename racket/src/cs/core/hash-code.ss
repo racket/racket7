@@ -61,7 +61,7 @@
 ;; to generate the same hash code as the unwrapped value.
 (define (equal-hash-code x)
   (call-with-values (lambda () (equal-hash-loop x 0 0))
-    (lambda (hc burn) hc)))
+    (lambda (hc burn) (logand hc (most-positive-fixnum)))))
 
 (define MAX-HASH-BURN 128)
 

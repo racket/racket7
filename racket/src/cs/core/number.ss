@@ -33,9 +33,10 @@
 (define (system-big-endian?)
   (eq? (native-endianness) (endianness big)))
 
-(define integer->integer-bytes
+(define/who integer->integer-bytes
   (case-lambda
    [(num size signed? big-endian? bstr start)
+    (check who bytes? bstr)
     (case size
       [(2)
        (if signed?
@@ -116,9 +117,10 @@
    [(bstr signed? big-endian? start)
     (integer-bytes->integer bstr signed? big-endian? start (and (bytes? bstr) (bytes-length bstr)))]))
 
-(define real->floating-point-bytes
+(define/who real->floating-point-bytes
   (case-lambda
    [(num size big-endian? bstr start)
+    (check who bytes? bstr)
     (case size
       [(4)
        (bytevector-ieee-single-set! bstr start num (if big-endian?
@@ -130,7 +132,8 @@
                                                        (endianness little)))]
       [else
        (raise-argument-error 'real->floating-point-bytes
-                             "(or/c 4 8)" size)])]
+                             "(or/c 4 8)" size)])
+    bstr]
    [(num size)
     (real->floating-point-bytes num size (system-big-endian?)
                                 (and (exact-integer? size) (<= 2 size 8) (make-bytevector size)) 0)]
