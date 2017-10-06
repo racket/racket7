@@ -156,7 +156,9 @@
         (define binding-syms (parsed-define-syntaxes-syms body))
         (define next-header (find-or-create-header! (add1 phase)))
         (define gen-syms (for/list ([binding-sym (in-list binding-syms)])
-                           (select-fresh binding-sym next-header)))
+                           (define gen-sym (select-fresh binding-sym next-header))
+                           (register-as-defined! next-header gen-sym)
+                           gen-sym))
         (define rhs (compile (parsed-define-syntaxes-rhs body)
                              (struct-copy compile-context cctx
                                           [phase (add1 phase)]
