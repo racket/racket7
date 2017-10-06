@@ -74,9 +74,12 @@
    [(num size signed? big-endian? bstr)
     (integer->integer-bytes num size signed? big-endian? bstr 0)]))
 
-(define integer-bytes->integer
+(define/who integer-bytes->integer
   (case-lambda
    [(bstr signed? big-endian? start end)
+    (check who bytes? bstr)
+    (check who exact-nonnegative-integer? start)
+    (check who exact-nonnegative-integer? end)
     (case (- end start)
       [(2)
        (if signed?
@@ -128,18 +131,21 @@
       [else
        (raise-argument-error 'real->floating-point-bytes
                              "(or/c 4 8)" size)])]
-   [(num size signed?)
+   [(num size)
     (real->floating-point-bytes num size (system-big-endian?)
                                 (and (exact-integer? size) (<= 2 size 8) (make-bytevector size)) 0)]
-   [(num size signed? big-endian?)
+   [(num size big-endian?)
     (real->floating-point-bytes num size big-endian?
                                 (and (exact-integer? size) (<= 2 size 8) (make-bytevector size)) 0)]
    [(num size big-endian? bstr)
     (real->floating-point-bytes num size big-endian? bstr 0)]))
 
-(define floating-point-bytes->real
+(define/who floating-point-bytes->real
   (case-lambda
    [(bstr big-endian? start end)
+    (check who bytes? bstr)
+    (check who exact-nonnegative-integer? start)
+    (check who exact-nonnegative-integer? end)
     (case (- end start)
       [(4)
        (bytevector-ieee-single-ref bstr start (if big-endian?

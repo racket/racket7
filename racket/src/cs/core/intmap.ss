@@ -250,7 +250,7 @@
 
 (define ($fail default)
   (if (procedure? default)
-      (default)
+      (|#%app| default)
       default))
 
 ;; iteration
@@ -352,10 +352,10 @@
       nil])))
 
 (define (intmap-for-each t proc)
-  (intmap-fold t (void) (lambda (k v _) (proc k v) (void))))
+  (intmap-fold t (void) (lambda (k v _) (|#%app| proc k v) (void))))
 
 (define (intmap-map t proc)
-  (intmap-fold t '() (lambda (k v xs) (cons (proc k v) xs))))
+  (intmap-fold t '() (lambda (k v xs) (cons (|#%app| proc k v) xs))))
 
 ;; equality
 (define (intmap=? a b eql?)
