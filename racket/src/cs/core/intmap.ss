@@ -132,10 +132,11 @@
     (make-Lf h key val)]))
 
 (define (join p0 t0 p1 t1)
-  (let ([m (branching-bit p0 p1)])
+  (let* ([m (branching-bit p0 p1)]
+         [p (mask p0 m)])
     (if (fx<= p0 p1)
-        (br (mask p0 m) m t0 t1)
-        (br (mask p0 m) m t1 t0))))
+        (br p m t0 t1)
+        (br p m t1 t0))))
 
 (define (intmap-remove t key)
   (let ([et (intmap-eqtype t)])
@@ -237,16 +238,14 @@
       l))
 
 (define-syntax-rule (key=? et k1 k2)
-  (case et
-    [(eq) (eq? k1 k2)]
-    [(eqv) (eqv? k1 k2)]
-    [else (key-equal? k1 k2)]))
+  (cond [(eq? et 'eq)  (eq? k1 k2)]
+        [(eq? et 'eqv) (eqv? k1 k2)]
+        [else          (equal? k1 k2)]))
 
 (define-syntax-rule (hash-code et k)
-  (case et
-    [(eq) (eq-hash-code k)]
-    [(eqv) (eqv-hash-code k)]
-    [else (key-equal-hash-code k)]))
+  (cond [(eq? et 'eq)  (eq-hash-code k)]
+        [(eq? et 'eqv) (eqv-hash-code k)]
+        [else          (key-equal-hash-code k)]))
 
 (define ($fail default)
   (if (procedure? default)
@@ -363,30 +362,33 @@
        ($intmap=? (intmap-eqtype a) (intmap-root a) (intmap-root b) eql?)))
 
 (define ($intmap=? et a b eql?)
-  (cond
-   [(Br? a)
-    (and (Br? b)
-         (fx= (Br-count a) (Br-count b))
-         (fx= (Br-prefix a) (Br-prefix b))
-         (fx= (Br-mask a) (Br-mask b))
-         ($intmap=? et (Br-left a) (Br-left b) eql?)
-         ($intmap=? et (Br-right a) (Br-right b) eql?))]
+  (or
+   (eq? a b)
 
-   [(Lf? a)
-    (and (Lf? b)
-         (key=? et (Lf-key a) (Lf-key b))
-         (eql? (Lf-value a) (Lf-value b)))]
+   (cond
+    [(Br? a)
+     (and (Br? b)
+          (fx= (Br-count a) (Br-count b))
+          (fx= (Br-prefix a) (Br-prefix b))
+          (fx= (Br-mask a) (Br-mask b))
+          ($intmap=? et (Br-left a) (Br-left b) eql?)
+          ($intmap=? et (Br-right a) (Br-right b) eql?))]
 
-   [(Co? a)
-    (and (Co? b)
-         (let ([xs (Co-pairs a)])
-           (and (fx= (length xs) (length (Co-pairs b)))
-                (let loop ([xs xs])
-                  (cond [(null? xs) #t]
-                        [($collision-has-key? et b (caar xs)) (loop (cdr xs))]
-                        [else #f])))))]
+    [(Lf? a)
+     (and (Lf? b)
+          (key=? et (Lf-key a) (Lf-key b))
+          (eql? (Lf-value a) (Lf-value b)))]
 
-   [else (and (not a) (not b))]))
+    [(Co? a)
+     (and (Co? b)
+          (let ([xs (Co-pairs a)])
+            (and (fx= (length xs) (length (Co-pairs b)))
+                 (let loop ([xs xs])
+                   (cond [(null? xs) #t]
+                         [($collision-has-key? et b (caar xs)) (loop (cdr xs))]
+                         [else #f])))))]
+
+    [else (and (not a) (not b))])))
 
 ;; hash code
 (define (intmap-hash-code t hash)
@@ -428,35 +430,40 @@
   ($intmap-keys-subset? (intmap-eqtype a) (intmap-root a) (intmap-root b)))
 
 (define ($intmap-keys-subset? et a b)
-  (cond
-   [(Br? a)
-    (and
-     (Br? b)
+  (or
+   (eq? a b)
 
-     (let ([p1 (Br-prefix a)]
-           [m1 (Br-mask a)]
-           [p2 (Br-prefix b)]
-           [m2 (Br-mask b)])
-       (cond
-        [(fx> m1 m2) #f]
-        [(fx> m2 m1)
-         (and (match-prefix? p1 p2 m2)
-              (if (fx<= p1 p2)
-                  ($intmap-keys-subset? et a (Br-left b))
-                  ($intmap-keys-subset? et a (Br-right b))))]
-        [else
-         (and (fx= p1 p2)
-              ($intmap-keys-subset? et (Br-left a) (Br-left b))
-              ($intmap-keys-subset? et (Br-right a) (Br-right b)))])))]
+   (cond
+    [(Br? a)
+     (and
+      (Br? b)
 
-   [(Lf? a)
-    ($intmap-has-key? et b (Lf-hash a) (Lf-key a))]
+      (let ([p1 (Br-prefix a)]
+            [m1 (Br-mask a)]
+            [p2 (Br-prefix b)]
+            [m2 (Br-mask b)])
+        (cond
+         [(fx> m1 m2) #f]
+         [(fx> m2 m1)
+          (and (match-prefix? p1 p2 m2)
+               (if (fx<= p1 p2)
+                   ($intmap-keys-subset? et a (Br-left b))
+                   ($intmap-keys-subset? et a (Br-right b))))]
+         [else
+          (and (fx= p1 p2)
+               ($intmap-keys-subset? et (Br-left a) (Br-left b))
+               ($intmap-keys-subset? et (Br-right a) (Br-right b)))])))]
 
-   [(Co? a)
-    (let loop ([xs (Co-pairs a)])
-      (cond [(null? xs) #t]
-            [($intmap-has-key? et b (Co-hash a) (caar xs)) (loop (cdr xs))]
-            [else #f]))]
+    [(Lf? a)
+     (if (Lf? b)
+         (key=? et (Lf-key a) (Lf-key b))
+         ($intmap-has-key? et b (Lf-hash a) (Lf-key a)))]
 
-   [else
-    #t]))
+    [(Co? a)
+     (let loop ([xs (Co-pairs a)])
+       (cond [(null? xs) #t]
+             [($intmap-has-key? et b (Co-hash a) (caar xs)) (loop (cdr xs))]
+             [else #f]))]
+
+    [else
+     #t])))
