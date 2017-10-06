@@ -54,6 +54,14 @@
      (with-syntax ([n-args (length #'(rand ...))])
        #'((extract-procedure rator n-args) rand ...))]))
 
+(define (|#%call-with-values| generator receiver)
+  (call-with-values (if (chez:procedure? generator)
+                        generator
+                        (lambda () (|#%app| generator)))
+    (if (chez:procedure? receiver)
+        receiver
+        (lambda args (apply receiver args)))))
+
 (define (extract-procedure f n-args)
   (cond
    [(chez:procedure? f) f]

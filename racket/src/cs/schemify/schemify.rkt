@@ -433,6 +433,16 @@
                                   (list exp1 exp2)
                                   #t
                                   unannotate prim-knowns knowns imports mutated)]))]
+         [`(call-with-values ,generator ,receiver)
+          (cond
+            [(and (lambda? generator)
+                  (lambda? receiver))
+             `(call-with-values ,(schemify generator) ,(schemify receiver))]
+            [else
+             (left-to-right/app '#%call-with-values
+                                (list (schemify generator) (schemify receiver))
+                                #t
+                                unannotate prim-knowns knowns imports mutated)])]
          [`(,rator ,exps ...)
           (let ([s-rator (schemify rator)]
                 [args (map schemify exps)]

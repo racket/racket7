@@ -835,7 +835,7 @@
      (check who (procedure-arity-includes/c 1) proc)
      (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'call-with-immediate-continuation-mark key)])
        (cond
-        [(not (current-mark-stack)) (proc default-v)]
+        [(not (current-mark-stack)) (|#%app| proc default-v)]
         [else
          (call/cc (lambda (k)
                     (if (eq? k (mark-stack-frame-k (current-mark-stack)))

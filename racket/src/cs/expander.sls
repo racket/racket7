@@ -129,7 +129,8 @@
       (install-table internal-table)))
 
   (when compile-as-independent?
-    ;; Copied of macros provided by `core`
+    ;; Copies of macros provided by `core`, plus
+    ;; other bindings assumed by schemify:
     (eval '(define-syntax with-continuation-mark
              (syntax-rules ()
                [(_ key val body)
@@ -152,7 +153,8 @@
                [(_ rator rand ...)
                 (with-syntax ([n-args (length #'(rand ...))])
                   #'((extract-procedure rator n-args) rand ...))])))
-    (eval `(define raise-binding-result-arity-error ',raise-binding-result-arity-error)))
+    (eval `(define raise-binding-result-arity-error ',raise-binding-result-arity-error))
+    (eval `(define |#%call-with-values| ',|#%call-with-values|)))
 
   ;; ----------------------------------------
 

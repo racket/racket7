@@ -57,4 +57,5 @@
             make-instance-variable-reference
             annotation?
             annotation-expression
-            #%app))
+            #%app
+            #%call-with-values))

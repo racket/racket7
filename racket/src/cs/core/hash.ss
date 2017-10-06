@@ -258,7 +258,7 @@
          (lock-release (mutable-hash-lock ht))
          (if (eq? v none)
              (if (procedure? fail)
-                 (fail)
+                 (|#%app| fail)
                  fail)
              v))]
       [(intmap? ht) (intmap-ref ht k fail)]
@@ -268,7 +268,7 @@
        (let ([v (impersonate-hash-ref ht k)])
          (if (eq? v none)
              (if (procedure? fail)
-                 (fail)
+                 (|#%app| fail)
                  fail)
              v))]
       [else (raise-argument-error 'hash-ref "hash?" ht)])]))
@@ -682,13 +682,13 @@
        [(null? keys)
         ;; Not in the table:
         (if (procedure? fail)
-            (fail)
+            (|#%app| fail)
             fail)]
        [(key-equal? (car keys) key)
         (let ([v (hashtable-ref (weak-equal-hash-vals-ht t) (car keys) none)])
           (if (eq? v none)
               (if (procedure? fail)
-                  (fail)
+                  (|#%app| fail)
                   fail)
               v))]
        [else (loop (cdr keys))]))))
