@@ -252,7 +252,8 @@
     (make-init-offset+file-position user-init-position))
 
   (define buffer-mode
-    (make-buffer-mode user-buffer-mode))
+    (and user-buffer-mode
+         (make-buffer-mode user-buffer-mode)))
 
   (cond
    [user-peek-in
