@@ -17,11 +17,15 @@
          would-be-future
          touch
          future-block
+         future-wait
          current-future-prompt
          future:condition-broadcast
          future:condition-signal
          future:condition-wait
-         future:make-condition)
+         future:make-condition
+	 halt-workers
+         resume-workers
+         signal-future)
 
 ;; not sure of order here...
 (define (get-caller)
@@ -118,7 +122,7 @@
      ((future*-thunk f))
      (future*-result f)]
     [(lock-acquire (future*-lock f) (get-caller) #f) ;; got lock
-     (when (or (not (future*-blocked? f))
+     (when (or (and (not (future*-blocked? f)) (not (future*-done? f)))
                (and (future*-blocked? f) (not (future*-cont f))))
        (future:condition-wait (future*-cond f) (future*-lock f)))
      (future-awoken f)]
@@ -146,6 +150,13 @@
     (with-lock ((future*-lock f) f)
       (set-future*-blocked?! f #t))
     (engine-block)))
+
+;; called from chez layer.
+;; this should never be called from outside a future.
+(define (future-wait)
+  (define f (current-future))
+  (with-lock ((future*-lock f) f)
+    (future:condition-wait (future*-cond f) (future*-lock f))))
 
 ;; futures and conditions
 
@@ -177,6 +188,9 @@
             (thread-condition-wait (lambda () (lock-release m caller))))
         (lock-acquire m (get-caller))) ;; reaquire lock
       (internal-error "Caller does not hold lock\n")))
+
+(define (signal-future f)
+  (future:condition-signal (future*-cond f)))
 
 (define (future:condition-signal c)
   (with-lock ((future-condition*-lock c) (get-caller))
@@ -212,7 +226,8 @@
 
 (struct worker (id lock mutex cond
                    [queue #:mutable] [idle? #:mutable] 
-                   [pthread #:mutable #:auto] [die? #:mutable #:auto])
+                   [pthread #:mutable #:auto] [die? #:mutable #:auto]
+                   [halt? #:mutable #:auto])
   #:auto-value #f)
 
 (struct scheduler ([workers #:mutable #:auto])
@@ -233,6 +248,29 @@
                 (with-lock ((worker-lock w) (get-caller))
                   (set-worker-die?! w #t)))
               (scheduler-workers global-scheduler))))
+
+(define halt-cond (chez:make-condition))
+(define halt-mutex (chez:make-mutex))
+
+(define (halt-workers)
+  (when global-scheduler
+    (for-each (lambda (w)
+    	        (with-lock ((worker-lock w) (get-caller))
+		  (set-worker-halt?! w #t)))
+	      (scheduler-workers global-scheduler))
+    (let f ()
+      (when (> (chez:active-threads) 1) ;; block until all workers have halted
+        (f)))))
+
+(define (resume-workers)
+  (when global-scheduler
+    (for-each (lambda (w)
+                (with-lock ((worker-lock w) (get-caller))
+                  (chez:mutex-acquire (worker-mutex w))
+                  (set-worker-halt?! w #f)
+                  (chez:mutex-release (worker-mutex w))))
+              (scheduler-workers global-scheduler))
+    (chez:condition-broadcast halt-cond)))
 
 (define (create-workers)
   (let loop ([id 1])
@@ -303,6 +341,12 @@
       (cond
         [(worker-die? worker) ;; worker was killed
          (lock-release (worker-lock worker) (get-pthread-id))]
+	[(worker-halt? worker) ;; worker is halting for gc
+	 (lock-release (worker-lock worker) (get-pthread-id))
+	 (chez:mutex-acquire halt-mutex)
+	 (chez:condition-wait halt-cond halt-mutex)
+	 (chez:mutex-release halt-mutex)
+	 (loop)]
         [(queue-empty? (worker-queue worker)) ;; have lock. no work
          (lock-release (worker-lock worker) (get-pthread-id))
          (cond

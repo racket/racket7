@@ -29,6 +29,9 @@
          chez:make-mutex
          chez:mutex-acquire
          chez:mutex-release
+         chez:active-threads
+         chez:collect-garbage-pending-major?
+         chez:collect-garbage-pending-minor?
          threaded?)
 
 (define-values (make-engine engine-block engine-return current-engine-state
@@ -51,6 +54,9 @@
                             chez:make-mutex
                             chez:mutex-acquire
                             chez:mutex-release
+                            chez:active-threads
+                            chez:collect-garbage-pending-major?
+                            chez:collect-garbage-pending-minor?
                             threaded?)
   (let ([ht (primitive-table '#%engine)])
     (unless ht
@@ -79,4 +85,7 @@
      (hash-ref ht 'make-mutex)
      (hash-ref ht 'mutex-acquire)
      (hash-ref ht 'mutex-release)
+     (hash-ref ht 'active-pthreads)
+     (hash-ref ht 'collect-garbage-pending-major?)
+     (hash-ref ht 'collect-garbage-pending-minor?)
      (hash-ref ht 'threaded?))))

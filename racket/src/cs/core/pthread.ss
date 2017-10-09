@@ -26,3 +26,5 @@
      [(m) (void)]))
   (define (mutex-release m) (void))
   ])
+
+(define (active-pthreads) #%$active-threads)
