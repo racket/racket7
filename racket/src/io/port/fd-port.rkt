@@ -259,8 +259,8 @@
      (define ppos (rktio_get_file_position rktio fd))
      (cond
        [(rktio-error? ppos)
-        (end-atomic)
-        (check-rktio-error* ppos "error getting stream position")]
+        ;; #f => not supported, so use port's own counter, instead
+        #f]
        [else
         (define pos (rktio_filesize_ref ppos))
         (rktio_free ppos)

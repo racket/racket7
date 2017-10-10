@@ -59,8 +59,8 @@
        (end-atomic)
        (do-simple-file-position who file-position fail-k)]
       [else
-       (define pos (if file-position
-                       (file-position)
+       (define pos (or (and file-position
+                            (file-position))
                        (core-port-offset p)))
        (end-atomic)
        (or pos (fail-k))])))

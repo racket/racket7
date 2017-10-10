@@ -79,7 +79,7 @@
              [flags (if (eq? stderr 'exact)
                         (bitwise-ior flags RKTIO_PROCESS_WINDOWS_EXACT_CMDLINE)
                         flags)]
-             [flags (if cust-mode
+             [flags (if (subprocess-group-enabled)
                         (bitwise-ior flags RKTIO_PROCESS_NEW_GROUP)
                         flags)]
              [flags (if (and (eq? cust-mode 'kill)
@@ -100,9 +100,12 @@
         (define send-args (rktio_from_bytes_list
                            (cons command-bstr
                                  (for/list ([arg (in-list args)])
-                                   (if (string? arg)
-                                       (string->bytes/locale arg (char->integer #\?))
-                                       arg)))))
+                                   (cond
+                                     [(string? arg)
+                                      (string->bytes/locale arg (char->integer #\?))]
+                                     [(path? arg)
+                                      (path-bytes arg)]
+                                     [else arg])))))
 
         (define r (rktio_process rktio command-bstr (add1 (length args)) send-args
                                  (and stdout (fd-port-fd stdout))
@@ -199,7 +202,7 @@
                  sp
                  (lambda (sp)
                    (when (subprocess-process sp)
-                     (rktio_process_forget (subprocess-process sp))
+                     (rktio_process_forget rktio (subprocess-process sp))
                      (set-subprocess-process! sp #f))
                    (when (subprocess-cust-ref sp)
                      (unsafe-custodian-unregister sp (subprocess-cust-ref sp))
