@@ -26,7 +26,8 @@
          shell-execute)
 
 (struct subprocess ([process #:mutable]
-                    [cust-ref #:mutable])
+                    [cust-ref #:mutable]
+                    is-group?)
   #:constructor-name make-subprocess
   #:property
   prop:evt
@@ -38,7 +39,7 @@
 
 (define do-subprocess
   (let ()
-    (define/who (subprocess stdout stdin stderr command . args)
+    (define/who (subprocess stdout stdin stderr group/command . command/args)
       (check who
              (lambda (p) (or (not p) (and (output-port? p) (file-stream-port? p))))
              #:contract "(or/c (and/c output-port? file-stream-port?) #f)"
@@ -51,24 +52,37 @@
              (lambda (p) (or (not p) (eq? p 'stdout) (and (output-port? p) (file-stream-port? p))))
              #:contract "(or/c (and/c output-port? file-stream-port?) #f 'stdout)"
              stderr)
-      (cond
-        [(and (eq? command 'exact)
-              (pair? args)
-              (null? (cdr args)))
-         (check who string-no-nuls? (car args))
-         (unless (positive? (bitwise-and (rktio_process_allowed_flags rktio)
-                                         RKTIO_PROCESS_WINDOWS_EXACT_CMDLINE))
-           (raise-arguments-error who
-                                  "exact command line not supported on this platform"
-                                  "exact command" (car args)))]
-        [(path-string? command)
-         (for ([arg (in-list args)])
-           (check who
-                  (lambda (p) (or (path? p) (string-no-nuls? p) (bytes-no-nuls? p)))
-                  #:contract "(or/c path? string-no-nuls? bytes-no-nuls?)"
-                  arg))]
-        [else
-         (raise-argument-error who (if (= 1 (length args)) "(or/c path-string? 'exact)" "path-string?") command)])
+      (define-values (group command exact/args)
+        (cond
+          [(path-string? group/command)
+           (values (and (subprocess-group-enabled) 'new) group/command command/args)]
+          [(null? command/args)
+           (raise-argument-error who "path-string?" command)]
+          [(or (not group/command)
+               (eq? group/command 'new)
+               (subprocess? group/command))
+           (define command (cadr command/args))
+           (check who path-string? command)
+           (values group/command command (cdr command/args))]
+          [else
+           (raise-argument-error who "(or/c path-string? #f 'new subprocess?)" group/command)]))
+      (define-values (exact? args)
+        (cond
+          [(and (pair? exact/args)
+                (eq? 'exact (car exact/args)))
+           (values #t (cdr exact/args))]
+          [else
+           (values #f exact/args)]))
+      (for ([arg (in-list args)]
+            [i (in-naturals)])
+        (check who
+               (lambda (p) (or (path? p) (string-no-nuls? p) (bytes-no-nuls? p)))
+               #:contract (if (and (not exact?)
+                                   (= i 0)
+                                   (= (length args) 2))
+                              "(or/c path? string-no-nuls? bytes-no-nuls? 'exact)"
+                              "(or/c path? string-no-nuls? bytes-no-nuls?)")
+               arg))
 
       (define cust-mode (current-subprocess-custodian-mode))
       (define env-vars (current-environment-variables))
@@ -76,10 +90,10 @@
       (let* ([flags (if (eq? stderr 'stdout)
                         RKTIO_PROCESS_STDOUT_AS_STDERR
                         0)]
-             [flags (if (eq? stderr 'exact)
+             [flags (if exact?
                         (bitwise-ior flags RKTIO_PROCESS_WINDOWS_EXACT_CMDLINE)
                         flags)]
-             [flags (if (subprocess-group-enabled)
+             [flags (if (eq? group 'new)
                         (bitwise-ior flags RKTIO_PROCESS_NEW_GROUP)
                         flags)]
              [flags (if (and (eq? cust-mode 'kill)
@@ -129,7 +143,8 @@
         (define err (let ([fd (rktio_process_result_stderr_fd r)])
                       (and fd (open-input-fd fd 'subprocess-stderr))))
         (define sp (make-subprocess (rktio_process_result_process r)
-                                    #f))
+                                    #f
+                                    (eq? group 'new)))
 
         (register-subprocess-finalizer sp)
         (when cust-mode
