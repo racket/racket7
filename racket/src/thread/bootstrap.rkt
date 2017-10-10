@@ -136,8 +136,7 @@
                   (lambda args
                     (error "get-thread-id: not ready"))
                   'make-condition
-                  (lambda args
-                    (error "make-condition: not ready"))
+                  (lambda () 'condition)
                   'condition-wait
                   (lambda args
                     (error "condition-wait: not ready"))
@@ -154,15 +153,19 @@
                   (lambda args
                     (error "current-engine state: not ready"))
                   'make-mutex
-                  (lambda args
-                    (error "make-mutex: not ready"))
+                  (lambda () 'mutex)
                   'mutex-acquire
                   (lambda args
                     (error "mutex-acquire: not ready"))
                   'mutex-release
                   (lambda args
                     (error "mutex-release: not ready"))
-                  ))
+                  'active-pthreads
+                  (lambda () 0)
+                  'collect-garbage-pending-major?
+                  (box '())
+                  'collect-garbage-pending-minor?
+                  (box '())))
 
 ;; add dummy definitions that implement pthreads and conditions etc.
 ;; dummy definitions that error

@@ -8,7 +8,8 @@
          "schedule-info.rkt"
          (submod "thread.rkt" scheduling)
          "system-idle-evt.rkt"
-         "exit.rkt")
+         "exit.rkt"
+         "future.rkt")
 
 ;; Many scheduler details are implemented in "thread.rkt", but this
 ;; module handles the thread selection, thread swapping, and
@@ -28,6 +29,7 @@
 
 (define (select-thread!)
   (let loop ([g root-thread-group] [none-k maybe-done])
+    (check-garbage-collection)
     (check-external-events 'fast)
     (when (and (all-threads-poll-done?)
                (maybe-future-work?))
@@ -112,6 +114,29 @@
   (when did?
     (thread-did-work!))
   did?)
+
+;; Check if main thread should collect garbage
+(define (check-garbage-collection)
+  (define gc-major-box chez:collect-garbage-pending-major?)
+  (define gc-minor-box chez:collect-garbage-pending-minor?)
+  (define (set-empty box) ;; returns a list of the futures waiting & sets box content to '()
+    (let ([old (unbox box)])
+      (if (box-cas! box
+                    old
+                    '())
+          old
+          (set-empty box))))
+  (cond
+    [(not (null? (unbox gc-major-box))) ;; do a major gc
+     (let ([fs1 (set-empty gc-major-box)]
+           [fs2 (set-empty gc-minor-box)])
+       (collect-garbage 'major)
+       (for-each signal-future fs1)
+       (for-each signal-future fs2))]
+    [(not (null? (unbox gc-minor-box))) ;; do a minor gc
+     (let ([fs1 (set-empty gc-minor-box)])
+       (collect-garbage 'minor)
+       (for-each signal-future fs1))]))
 
 ;; ----------------------------------------
 

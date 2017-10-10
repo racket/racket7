@@ -63,6 +63,9 @@
                      'make-mutex core:make-mutex
                      'mutex-acquire core:mutex-acquire
                      'mutex-release core:mutex-release
+                     'active-pthreads active-pthreads
+                     'collect-garbage-pending-major? collect-garbage-pending-major?
+                     'collect-garbage-pending-minor? collect-garbage-pending-minor?
                      'threaded? core:threaded?
                      )]
       [else #f]))
@@ -83,4 +86,5 @@
                                  1/semaphore-post)
 
   (set-future-callbacks! 1/future? 1/current-future
-                         future-block current-future-prompt))
+                         future-block future-wait current-future-prompt
+			 halt-workers resume-workers))

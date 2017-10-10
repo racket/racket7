@@ -10,9 +10,12 @@
                post-allocated post-allocated+overhead post-time post-cpu-time)
     (void)))
 
-;; Replicate the counting that `(collect)` would do for
-;; minor collections, but trigger major collections by
-;; an algorithm more like Racket's
+(define collect-garbage-pending-major? (box '()))
+(define collect-garbage-pending-minor? (box '()))
+
+;; Replicate the counting that `(collect)` would do
+;; so that we can report a generation to the notification
+;; callback
 (define gc-counter 1)
 (define log-collect-generation-radix 2)
 (define collect-generation-radix-mask (sub1 (bitwise-arithmetic-shift 1 log-collect-generation-radix)))
@@ -52,16 +55,38 @@
   (case-lambda
    [() (collect-garbage 'major)]
    [(request)
-    (case request
-      [(incremental) (void)]
-      [(minor)
-       (collect/report 0)]
-      [(major)
-       (collect/report (collect-maximum-generation))]
-      [else
-       (raise-argument-error 'collect-garbage
-                             "(or/c 'major 'minor 'incremental)"
-                             request)])]))
+    (cond
+     [(eq? request 'incremental) ;; don't want to halt for void.
+      (void)]
+     [(= 0 (get-thread-id))
+      (halt-workers)
+      (case request
+        [(minor)
+         (collect/report 0)]
+        [(major)
+         (collect/report (collect-maximum-generation))]
+        [else
+         (raise-argument-error 'collect-garbage
+                               "(or/c 'major 'minor 'incremental)"
+                               request)])
+      (resume-workers)]
+     [else
+      (let ([rq-box (case request
+                      [(minor)
+                       collect-garbage-pending-minor?]
+                      [(major)
+                       collect-garbage-pending-major?]
+                      [else
+                       (raise-argument-error 'collect-garbage
+                               "(or/c 'major 'minor 'incremental)"
+                               request)])])
+        (let add-request ()
+          (let ([old-val (unbox rq-box)])
+            (unless (box-cas! rq-box
+                              old-val
+                              (cons (current-future) old-val))
+                    (add-request)))))
+      (future-wait)])]))
 
 (define current-memory-use
   (case-lambda

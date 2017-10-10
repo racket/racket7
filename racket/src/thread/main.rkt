@@ -145,7 +145,10 @@
          would-be-future
          current-future
          future-block
+         future-wait
          current-future-prompt
+         halt-workers
+         resume-workers
 
          #%thread-instance)
 

@@ -573,6 +573,9 @@
           fork-pthread
           pthread?
           get-thread-id
+          active-pthreads
+          collect-garbage-pending-major?
+          collect-garbage-pending-minor?
           make-condition
           condition-wait
           condition-signal
