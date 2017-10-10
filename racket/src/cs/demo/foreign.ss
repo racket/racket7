@@ -63,8 +63,8 @@
 (let loop ()
   (unless s/done?
     (collect (collect-maximum-generation))
-    (will-try-execute we)
     (will-try-execute we/s)
+    (will-try-execute we)
     (loop)))
 (collect (collect-maximum-generation))
 (unless (not (weak-box-value wb))

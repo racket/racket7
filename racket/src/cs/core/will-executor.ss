@@ -18,7 +18,7 @@
 ;; doesn't need to make any guarantees about order for multiple
 ;; registrations, so use a fresh guardian each time.
 (define (make-stubborn-will-executor)
-  (create-will-executor (make-guardian #f) (make-weak-eq-hashtable) '()))
+  (create-will-executor (make-guardian #t) (make-weak-eq-hashtable) '()))
 
 (define/who (will-register executor v proc)
   (check who will-executor? executor)
