@@ -651,6 +651,42 @@
 
 ;; ----------------------------------------
 
+(let ()
+  (define-values (sp o i e)
+    (subprocess (current-output-port)
+                (current-input-port)
+                (current-error-port)
+                "/bin/cat"))
+  (sleep 0.1)
+  (subprocess-kill sp #f)
+  (test sp (sync sp))
+  (test #t (positive? (subprocess-status sp))))
+
+(let ()
+  (define-values (sp o i e)
+    (subprocess (current-output-port)
+                (current-input-port)
+                (current-error-port)
+                "/bin/ls"))
+  (test sp (sync sp))
+  (test #t (zero? (subprocess-status sp))))
+
+(let ()
+  (define-values (sp o i e)
+    (subprocess #f
+                #f
+                (current-error-port)
+                "/bin/cat"))
+  (display "hello\n" i)
+  (flush-output i)
+  (test "hello" (read-line o))
+  (close-output-port i)
+  (test eof (read-line o))
+  (test (void) (subprocess-wait sp))
+  (test #t (zero? (subprocess-status sp))))
+
+;; ----------------------------------------
+
 (time
  (let loop ([j 10])
    (unless (zero? j)

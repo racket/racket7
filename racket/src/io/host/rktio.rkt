@@ -52,6 +52,14 @@
 (define-function #f rktio_NULL)
 (define-function #f rktio_do_install_os_signal_handler)
 (define-function #f rktio_get_ctl_c_handler)
+(define-function #f rktio_from_bytes_list)
+(define-function #f rktio_free_bytes_list)
+(define-function #f rktio_process_result_stdin_fd)
+(define-function #f rktio_process_result_stdout_fd)
+(define-function #f rktio_process_result_stderr_fd)
+(define-function #f rktio_process_result_process)
+(define-function #f rktio_status_running)
+(define-function #f rktio_status_result)
 
 ;; Error results are represented as vectors:
 (define rktio-error? vector?)

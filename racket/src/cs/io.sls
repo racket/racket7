@@ -32,6 +32,7 @@
     (meta define (convert-type t)
           (syntax-case t (ref *ref rktio_bool_t rktio_const_string_t)
             [(ref . _) #'uptr]
+            [(*ref rktio_const_string_t) #'uptr]
             [(*ref . _) #'u8*]
             [rktio_bool_t #'boolean]
             [rktio_const_string_t #'u8*]
@@ -148,9 +149,9 @@
     (include "../io/compiled/rktio.rktl")
 
     (define (rktio_filesize_ref fs)
-      (ftype-ref rktio_filesize_t () (make-ftype-pointer rktio_filesize_t fs) 0))
+      (ftype-ref rktio_filesize_t () (make-ftype-pointer rktio_filesize_t fs)))
     (define (rktio_timestamp_ref fs)
-      (ftype-ref rktio_timestamp_t () (make-ftype-pointer rktio_timestamp_t fs) 0))
+      (ftype-ref rktio_timestamp_t () (make-ftype-pointer rktio_timestamp_t fs)))
     (define (rktio_is_timestamp v)
       (let ([radix (arithmetic-shift 1 (sub1 (* 8 (ftype-sizeof rktio_timestamp_t))))])
         (<= (- radix) v (sub1 radix))))
@@ -164,20 +165,19 @@
     (define (rktio_identity_to_vector p)
       (let ([p (make-ftype-pointer rktio_identity_t p)])
         (vector
-         (ftype-ref rktio_identity_t (a) p 0)
-         (ftype-ref rktio_identity_t (b) p 0)
-         (ftype-ref rktio_identity_t (c) p 0)
-         (ftype-ref rktio_identity_t (a_bits) p 0)
-         (ftype-ref rktio_identity_t (b_bits) p 0)
-         (ftype-ref rktio_identity_t (c_bits) p 0))))
+         (ftype-ref rktio_identity_t (a) p)
+         (ftype-ref rktio_identity_t (b) p)
+         (ftype-ref rktio_identity_t (c) p)
+         (ftype-ref rktio_identity_t (a_bits) p)
+         (ftype-ref rktio_identity_t (b_bits) p)
+         (ftype-ref rktio_identity_t (c_bits) p))))
     
     (define (rktio_convert_result_to_vector p)
       (let ([p (make-ftype-pointer rktio_convert_result_t p)])
         (vector
-         (ftype-ref rktio_convert_result_t (in_consumed) p 0)
-         (ftype-ref rktio_convert_result_t (out_produced) p 0)
-         (ftype-ref rktio_convert_result_t (converted) p 0))))
-
+         (ftype-ref rktio_convert_result_t (in_consumed) p)
+         (ftype-ref rktio_convert_result_t (out_produced) p)
+         (ftype-ref rktio_convert_result_t (converted) p))))
       (define (cast v from to)
         (let ([p (malloc from)])
           (ptr-set! p from v)
@@ -208,6 +208,47 @@
                          (loop (add1 i)))
                    '()))]))
          (rktio_free lls))]))
+
+    ;; Allocates pointers that must be released via `rktio_free_bytes_list`:
+    (define (rktio_from_bytes_list bstrs)
+      (let ([p (foreign-alloc (fx* (length bstrs) (foreign-sizeof 'uptr)))])
+        (let loop ([bstrs bstrs] [i 0])
+          (cond
+           [(null? bstrs) p]
+           [else
+            (let* ([bstr (car bstrs)]
+                   [len (bytes-length bstr)]
+                   [s (foreign-alloc (fx+ len 1))])
+              (let loop ([j 0])
+                (cond
+                 [(= j len)
+                  (foreign-set! 'unsigned-8 s j 0)]
+                 [else
+                  (foreign-set! 'unsigned-8 s j (bytes-ref bstr j))
+                  (loop (fx+ 1 j))]))
+              (foreign-set! 'uptr p (fx* i (foreign-sizeof'uptr)) s)
+              (loop (cdr bstrs) (fx+ 1 i)))]))
+        p))
+
+    (define (rktio_free_bytes_list lls len)
+      (rktio_to_bytes_list lls len)
+      (void))
+
+    (define (null-to-false v) (if (eqv? v 0) #f v))
+
+    (define (rktio_process_result_stdin_fd r)
+      (null-to-false (ftype-ref rktio_process_result_t (stdin_fd) (make-ftype-pointer rktio_process_result_t r))))
+    (define (rktio_process_result_stdout_fd r)
+      (null-to-false (ftype-ref rktio_process_result_t (stdout_fd) (make-ftype-pointer rktio_process_result_t r))))
+    (define (rktio_process_result_stderr_fd r)
+      (null-to-false (ftype-ref rktio_process_result_t (stderr_fd) (make-ftype-pointer rktio_process_result_t r))))
+    (define (rktio_process_result_process r)
+      (ftype-ref rktio_process_result_t (process) (make-ftype-pointer rktio_process_result_t r)))
+
+    (define (rktio_status_running r)
+      (ftype-ref rktio_status_t (running) (make-ftype-pointer rktio_status_t r)))
+    (define (rktio_status_result r)
+      (ftype-ref rktio_status_t (result) (make-ftype-pointer rktio_status_t r)))
 
     (define (rktio_do_install_os_signal_handler rktio)
       (rktio_install_os_signal_handler rktio))
@@ -252,6 +293,16 @@
                                  'rktio_to_bytes rktio_to_bytes
                                  'rktio_to_bytes_list rktio_to_bytes_list
                                  'rktio_to_shorts rktio_to_shorts
+                                 'rktio_from_bytes_list rktio_from_bytes_list
+                                 'rktio_free_bytes_list rktio_free_bytes_list
+                                 'rktio_from_bytes_list rktio_from_bytes_list
+                                 'rktio_free_bytes_list rktio_free_bytes_list
+                                 'rktio_process_result_stdin_fd rktio_process_result_stdin_fd
+                                 'rktio_process_result_stdout_fd rktio_process_result_stdout_fd
+                                 'rktio_process_result_stderr_fd rktio_process_result_stderr_fd
+                                 'rktio_process_result_process rktio_process_result_process
+                                 'rktio_status_running rktio_status_running
+                                 'rktio_status_result rktio_status_result
                                  'rktio_do_install_os_signal_handler rktio_do_install_os_signal_handler
                                  'rktio_get_ctl_c_handler rktio_get_ctl_c_handler]
                                 form ...)]))

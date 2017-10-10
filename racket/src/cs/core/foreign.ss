@@ -755,6 +755,9 @@
                    offset
                    v)]))
 
+(define ptr-size-in-bytes (foreign-sizeof 'void*))
+(define log-ptr-size-in-bytes (- (integer-length ptr-size-in-bytes) 4))
+
 (define (foreign-set!* type p offset v)
   (let ([p (extract-cpointer p)])
     (cond
@@ -766,19 +769,33 @@
      [else
       (let ([host-rep (ctype-host-rep type)]
             [v (s->c type v)])
-        ;; Disable interrupts to avoid a GC:
-        (with-interrupts-disabled
-         ;; Special treatment is needed for 'scheme-object, since
-         ;; Chez rejects the use of 'scheme-object here
-         (foreign-set! (if (eq? host-rep 'scheme-object)
-                           'uptr
-                           host-rep)
-                       (cpointer-address p)
-                       offset
-                       (case host-rep
-                         [(scheme-object) (object->addr v 1)]
-                         [(void*) (cpointer-address v)]
-                         [else v]))))])))
+        (cond
+         [(and (authentic-cpointer? p)
+               (vector? (cpointer-addr p))
+               (zero? (fxand offset (fx- ptr-size-in-bytes 1))))
+          ;; For writing into a vector, use `vector-set!`
+          ;; to trigger the write barrier
+          (let ([host-rep (ctype-host-rep type)]
+                [i (fxsrl offset log-ptr-size-in-bytes)])
+            (vector-set! (cpointer-addr p)
+                         i
+                         (if (eq? host-rep 'scheme-object)
+                             v
+                             (cpointer-address v))))]
+         [else
+          ;; Disable interrupts to avoid a GC:
+          (with-interrupts-disabled
+           ;; Special treatment is needed for 'scheme-object, since
+           ;; Chez rejects the use of 'scheme-object here
+           (foreign-set! (if (eq? host-rep 'scheme-object)
+                             'uptr
+                             host-rep)
+                         (cpointer-address p)
+                         offset
+                         (case host-rep
+                           [(scheme-object) (object->addr v 1)]
+                           [(void*) (cpointer-address v)]
+                           [else v])))]))])))
 
 (define (memcpy* to to-offset from from-offset len)
   (with-interrupts-disabled

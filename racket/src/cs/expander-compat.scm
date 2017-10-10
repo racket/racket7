@@ -43,24 +43,6 @@
 
 (define (system-path-convention-type) 'unix)
 
-(define (subprocess? v) #f)
-(define (subprocess . args) #f)
-(define subprocess-group-enabled
-  (make-parameter #f (lambda (v) (and v #t))))
-(define (subprocess-kill p force?) (void))
-(define (subprocess-pid p) 0)
-(define (subprocess-status p) 'something)
-(define (subprocess-wait p) (void))
-(define current-subprocess-custodian-mode
-  (make-parameter #f
-                  (lambda (v)
-                    (unless (or (not v) (eq? v 'kill) (eq? v 'interrupt))
-                      (raise-argument-error 'current-subprocess-custodian-mode
-                                            "(or/c #f 'kill 'interrupt)"))
-                    v)))
-
-(define (shell-execute . args) (error "shell-execute"))
-
 (define (reparameterize . args) (void))
 
 (define executable-yield-handler

@@ -7,6 +7,7 @@
          is-path?
          path-for-some-system?
          path-string?
+         string-no-nuls?
          string->path
          ->path)
 
@@ -41,8 +42,12 @@
   (or (is-path? p)
       (and (string? p)
            (positive? (string-length p))
-           (for/and ([c (in-string p)])
-             (not (char=? c #\nul))))))
+           (string-no-nuls? p))))
+
+(define (string-no-nuls? s)
+  (and (string? s)
+       (for/and ([c (in-string s)])
+         (not (char=? c #\nul)))))
 
 (define (string->path s)
   (path (string->bytes/locale s (char->integer #\?))

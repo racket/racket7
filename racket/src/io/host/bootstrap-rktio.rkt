@@ -143,6 +143,26 @@
              null)]))
     (rktio_free lls)))
 
+(define (rktio_from_bytes_list bstrs)
+  (cast bstrs (_list i _bytes) _gcpointer))
+
+(define (rktio_free_bytes_list lls len)
+  (racket:void))
+
+(define (rktio_process_result_stdin_fd r)
+  (Rrktio_process_result_t-stdin_fd (cast r _pointer _Rrktio_process_result_t-pointer)))
+(define (rktio_process_result_stdout_fd r)
+  (Rrktio_process_result_t-stdout_fd (cast r _pointer _Rrktio_process_result_t-pointer)))
+(define (rktio_process_result_stderr_fd r)
+  (Rrktio_process_result_t-stderr_fd (cast r _pointer _Rrktio_process_result_t-pointer)))
+(define (rktio_process_result_process r)
+  (Rrktio_process_result_t-process (cast r _pointer _Rrktio_process_result_t-pointer)))
+
+(define (rktio_status_running r)
+  (Rrktio_status_t-running (cast r _pointer _Rrktio_status_t-pointer)))
+(define (rktio_status_result r)
+  (Rrktio_status_t-result (cast r _pointer _Rrktio_status_t-pointer)))
+
 (define (rktio_do_install_os_signal_handler rktio)
   (racket:void))
 (define (rktio_get_ctl_c_handler)
@@ -184,6 +204,14 @@
                                          'rktio_to_bytes rktio_to_bytes
                                          'rktio_to_bytes_list rktio_to_bytes_list
                                          'rktio_to_shorts rktio_to_shorts
+                                         'rktio_from_bytes_list rktio_from_bytes_list
+                                         'rktio_free_bytes_list rktio_free_bytes_list
+                                         'rktio_process_result_stdin_fd rktio_process_result_stdin_fd
+                                         'rktio_process_result_stdout_fd rktio_process_result_stdout_fd
+                                         'rktio_process_result_stderr_fd rktio_process_result_stderr_fd
+                                         'rktio_process_result_process rktio_process_result_process
+                                         'rktio_status_running rktio_status_running
+                                         'rktio_status_result rktio_status_result
                                          'rktio_do_install_os_signal_handler rktio_do_install_os_signal_handler
                                          'rktio_get_ctl_c_handler rktio_get_ctl_c_handler]
                                         form ...))

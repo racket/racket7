@@ -1,14 +1,10 @@
 #lang racket/base
-(require "../host/rktio.rkt")
+(require "../common/bytes-no-nuls.rkt"
+         "../host/rktio.rkt")
 
 (provide bytes-no-nuls?
          bytes-environment-variable-name?
          normalize-key)
-
-(define (bytes-no-nuls? s)
-  (and (bytes? s)
-       (not (for/or ([c (in-bytes s)])
-              (= c 0)))))
 
 (define (bytes-environment-variable-name? k)
   (and (bytes-no-nuls? k)
