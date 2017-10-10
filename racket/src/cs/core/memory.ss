@@ -10,12 +10,13 @@
                post-allocated post-allocated+overhead post-time post-cpu-time)
     (void)))
 
-;; Replicate the counting that `(collect)` would do
-;; so that we can report a generation to the notification
-;; callback
+;; Replicate the counting that `(collect)` would do for
+;; minor collections, but trigger major collections by
+;; an algorithm more like Racket's
 (define gc-counter 1)
 (define log-collect-generation-radix 2)
 (define collect-generation-radix-mask (sub1 (bitwise-arithmetic-shift 1 log-collect-generation-radix)))
+(define allocated-after-major (* 32 1024 1024))
 
 (define (collect/report g)
   (let ([this-counter (if g (bitwise-arithmetic-shift-left 1 (* log-collect-generation-radix g)) gc-counter)]
@@ -23,18 +24,28 @@
         [pre-allocated+overhead (current-memory-bytes)]
         [pre-time (real-time)] 
         [pre-cpu-time (cpu-time)])
-    (if (> (add1 this-counter) (bitwise-arithmetic-shift-left 1 (* log-collect-generation-radix (collect-maximum-generation))))
+    (if (> (add1 this-counter) (bitwise-arithmetic-shift-left 1 (* log-collect-generation-radix (sub1 (collect-maximum-generation)))))
         (set! gc-counter 1)
         (set! gc-counter (add1 this-counter)))
-    (let ([gen (let loop ([c this-counter] [gen 0])
-                 (cond
-                  [(zero? (bitwise-and c collect-generation-radix-mask))
-                   (loop (bitwise-arithmetic-shift-right c log-collect-generation-radix) (add1 gen))]
-                  [else gen]))])
+    (let ([gen (cond
+                [(and (not g)
+                      (>= pre-allocated (* 2 allocated-after-major)))
+                 ;; Force a major collection if memory use has doubled
+                 (collect-maximum-generation)]
+                [else
+                 ;; Find the minor generation implied by the counter
+                 (let loop ([c this-counter] [gen 0])
+                   (cond
+                    [(zero? (bitwise-and c collect-generation-radix-mask))
+                     (loop (bitwise-arithmetic-shift-right c log-collect-generation-radix) (add1 gen))]
+                    [else gen]))])])
       (collect gen)
-      (garbage-collect-notify gen
-                              pre-allocated pre-allocated+overhead pre-time pre-cpu-time
-                              (bytes-allocated)  (current-memory-bytes) (real-time) (cpu-time))
+      (let ([post-allocated (bytes-allocated)])
+        (when (= gen (collect-maximum-generation))
+          (set! allocated-after-major post-allocated))
+        (garbage-collect-notify gen
+                                pre-allocated pre-allocated+overhead pre-time pre-cpu-time
+                                post-allocated  (current-memory-bytes) (real-time) (cpu-time)))
       (poll-foreign-guardian))))
   
 (define collect-garbage
