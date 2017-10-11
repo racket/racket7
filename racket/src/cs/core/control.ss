@@ -240,6 +240,7 @@
   ;; frame on `*metacontinuations*`; if the tag is #f and the
   ;; current metacontinuation frame is already empty, don't push more
   (assert-in-uninterrupted)
+  (assert-not-in-system-wind)
   (call/cc
    (lambda (k)
      (cond
@@ -516,6 +517,7 @@
    [(escape-continuation? c)
     (let ([tag (escape-continuation-tag c)])
       (unless (continuation-prompt-available? tag)
+        (end-uninterrupted 'escape-fail)
         (raise-continuation-error '|continuation application|
                                   "attempt to jump into an escape continuation"))
       (do-abort-current-continuation tag args #t))]))
@@ -1456,13 +1458,56 @@
 ;; this operation makes sense for thread or engine context
 ;; switches
 (define (swap-metacontinuation saved proc)
-  (call-in-empty-metacontinuation-frame
-   #f
-   fail-abort-to-delimit-continuation
-   (lambda ()
-     (let ([now-saved (make-saved-metacontinuation
-                       (current-metacontinuation)
-                       (current-exception-state))])
-       (current-metacontinuation (saved-metacontinuation-mc saved))
-       (current-exception-state (saved-metacontinuation-exn-state saved))
-       (proc now-saved)))))
+  (cond
+   [(current-system-wind-start-k)
+    => (lambda (k) (swap-metacontinuation-with-system-wind saved proc k))]
+   [else
+    (call-in-empty-metacontinuation-frame
+     #f
+     fail-abort-to-delimit-continuation
+     (lambda ()
+       (let ([now-saved (make-saved-metacontinuation
+                         (current-metacontinuation)
+                         (current-exception-state))])
+         (current-metacontinuation (saved-metacontinuation-mc saved))
+         (current-exception-state (saved-metacontinuation-exn-state saved))
+         (proc now-saved))))]))
+
+;; ----------------------------------------
+
+;; In "system-wind" mode for the current metacontinuation frame, run
+;; the frame's winders when jumping out of the frame or back in,
+;; because the frame uses host-Scheme parameters and/or `fluid-let`.
+;; For example, jumping out/in the host compiler needs to save/restore
+;; compiler state.
+(define current-system-wind-start-k (internal-make-thread-parameter #f))
+
+;; During `call-with-syntem-wind`, the current metacontinuation frame
+;; must remain as the most recent one, so that `swap-metacontinuation`
+;; can capture the system-wind part
+(define (call-with-system-wind proc)
+  ((call/cc
+    (lambda (k)
+      (current-system-wind-start-k k)
+      (call-with-values
+          proc
+        (lambda args
+          (lambda ()
+            (current-system-wind-start-k #f)
+            (apply values args))))))))
+
+(define (swap-metacontinuation-with-system-wind saved proc start-k)
+  (current-system-wind-start-k #f)
+  (call/cc
+   (lambda (system-wind-k) ; continuation with system `dynamic-wind` behavior
+     ;; escape to starting point, running winders, before
+     ;; capturing the rest of the metacontinuation:
+     (start-k (lambda ()
+                (swap-metacontinuation saved proc)
+                (current-system-wind-start-k start-k)
+                (system-wind-k void))))))
+
+(define (assert-not-in-system-wind)
+  (CHECK-uninterrupted
+   (when (current-system-wind-start-k)
+     (internal-error 'not-in-system-wind "assertion failed"))))

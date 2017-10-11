@@ -133,7 +133,7 @@
                                     reannotate
                                     unannotate))
       ;; Create the linklet:
-      (let ([lk (make-linklet (call-with-eval-lock
+      (let ([lk (make-linklet (call-with-system-wind
                                (lambda ()
                                  ((if serializable? compile-to-bytevector compile)
                                   (show "schemified" impl-lam/lifts))))

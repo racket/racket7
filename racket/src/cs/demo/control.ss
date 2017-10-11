@@ -1,4 +1,6 @@
-(import (core))
+(import (core)
+        (rename (only (chezscheme) dynamic-wind)
+                (dynamic-wind chez:dynamic-wind)))
 
 (define-syntax check
   (syntax-rules ()
@@ -597,6 +599,35 @@
           (lambda (arg) 'oops))
          (list 'cc-use (list 'cc-guard 'jump)))
   (void))
+
+;; ----------------------------------------
+;; call-with-system-wind
+
+(define e-sw (make-engine (let ([pre 0]
+                                [post 0])
+                            (lambda ()
+                              (call-with-system-wind
+                               (lambda ()
+                                 (chez:dynamic-wind
+                                  (lambda ()
+                                    (set! pre (add1 pre)))
+                                  (lambda ()
+                                    (let loop ([n 1000])
+                                      (if (zero? n)
+                                          (list pre post)
+                                          (loop (sub1 n)))))
+                                  (lambda ()
+                                    (set! post (add1 post))))))))
+                          #f #f))
+
+(check (let loop ([e e-sw] [i 0])
+           (e 100
+              void
+              (lambda (remain v) (list (> i 2)
+                                       (- (car v) i)
+                                       (- (cadr v) i)))
+              (lambda (e) (loop e (add1 i)))))
+       '(#t 1 0))
 
 ;; ----------------------------------------
 

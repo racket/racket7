@@ -41,7 +41,8 @@
           continuation-mark-key?
           impersonate-continuation-mark-key
           chaperone-continuation-mark-key
-          $current-mark-stack
+          $current-mark-stack ; not exported to Racket
+          call-with-system-wind ; not exported to Racket
 
           make-engine
           engine-block
@@ -51,7 +52,6 @@
           get-ctl-c-handler  ; not exported to Racket
           set-scheduler-lock-callbacks! ; not exported to Racket
           set-engine-exit-handler! ; not exported to Racket
-          call-with-eval-lock ; not exported to Racket
 
           make-thread-cell
           thread-cell?

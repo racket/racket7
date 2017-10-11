@@ -85,15 +85,3 @@
       (mutex-release lock)]
      [else
       (scheduler-lock-release lock)]))])
-
-;; ----------------------------------------
-
-;; The host Scheme's `compile` function is non-reentrant, so don't
-;; allow an engine swap while using `eval`, `compile`, etc. We
-;; don't use `with-interrupts-disabled` because we don't want
-;; to disallow garbage collection or Ctl-C.
-(define (call-with-eval-lock thunk)
-  (start-uninterrupted 'eval-lock)
-  (begin0
-   (thunk)
-   (end-uninterrupted 'eval-lock)))

@@ -1088,7 +1088,7 @@
                                                (make-ftype-pointer ,id p))))
                                      ids)
                                 '())))])
-            (call-with-eval-lock (lambda () (eval expr))))]
+            (call-with-system-wind (lambda () (eval expr))))]
          [gen-proc (car gen-proc+ret-maker+arg-makers)]
          [ret-maker (cadr gen-proc+ret-maker+arg-makers)]
          [arg-makers (cddr gen-proc+ret-maker+arg-makers)])
