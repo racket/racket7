@@ -401,7 +401,10 @@
 ;; Treated specially by `ptr-ref`
 (define-ctype _fpointer 'void* 'fpointer
   (lambda (v) v) ; resolved to an address later (with the GC disabled)
-  (lambda (x) (memory->cpointer x)))
+  (lambda (x)
+    (if (ffi-obj? x) ; check for `ptr-ref` special case on `ffi-obj`s
+        x
+        (memory->cpointer x))))
 
 (define-ctype _gcpointer 'void* 'gcpointer
   (lambda (v) v) ; like `_pointer`: resolved later
@@ -710,8 +713,9 @@
    [(and (ffi-obj? p)
          (eq? 'fpointer (ctype-our-rep type)))
     ;; Special case for `ptr-ref` on a function-type ffi-object:
-    ;; cancel a level of indirection
-    (cpointer-memory p)]
+    ;; cancel a level of indirection and preserve `ffi-obj`ness
+    ;; to keep its name
+    p]
    [else
     (cond
      [(compound-ctype? type)
@@ -1055,41 +1059,42 @@
                         '())]
          [ret-size (and ret-id (ctype-sizeof out-type))]
          [gen-proc+ret-maker+arg-makers
-          (eval `(let ()
-                   ,@decls
-                   ,@ret-decls
-                   (list
-                    (lambda (to-wrap)
-                      (,(if call? 'foreign-procedure 'foreign-callable)
-                       ,conv
-                       to-wrap
-                       ,(map (lambda (in-type id)
-                               (if id
-                                   `(& ,id)
-                                   (array-rep-to-pointer-rep
-                                    (ctype-host-rep in-type))))
-                             in-types ids)
-                       ,(if ret-id
-                            `(& ,ret-id)
-                            (array-rep-to-pointer-rep
-                             (ctype-host-rep out-type)))))
-                    ,(and (not call?)
-                          ret-id
-                          `(lambda (p)
-                             (make-ftype-pointer ,ret-id p)))
-                    ,@(if call?
-                          (map (lambda (id)
-                                 (and id
-                                      `(lambda (p)
-                                         (make-ftype-pointer ,id p))))
-                               ids)
-                          '()))))]
+          (let ([expr `(let ()
+                         ,@decls
+                         ,@ret-decls
+                         (list
+                          (lambda (to-wrap)
+                            (,(if call? 'foreign-procedure 'foreign-callable)
+                             ,conv
+                             to-wrap
+                             ,(map (lambda (in-type id)
+                                     (if id
+                                         `(& ,id)
+                                         (array-rep-to-pointer-rep
+                                          (ctype-host-rep in-type))))
+                                   in-types ids)
+                             ,(if ret-id
+                                  `(& ,ret-id)
+                                  (array-rep-to-pointer-rep
+                                   (ctype-host-rep out-type)))))
+                          ,(and (not call?)
+                                ret-id
+                                `(lambda (p)
+                                   (make-ftype-pointer ,ret-id p)))
+                          ,@(if call?
+                                (map (lambda (id)
+                                       (and id
+                                            `(lambda (p)
+                                               (make-ftype-pointer ,id p))))
+                                     ids)
+                                '())))])
+            (call-with-eval-lock (lambda () (eval expr))))]
          [gen-proc (car gen-proc+ret-maker+arg-makers)]
          [ret-maker (cadr gen-proc+ret-maker+arg-makers)]
          [arg-makers (cddr gen-proc+ret-maker+arg-makers)])
     (cond
      [call?
-      (let ([proc-p (unwrap-cpointer to-wrap)])
+      (let* ([proc-p (unwrap-cpointer to-wrap)])
         (lambda args
           (let* ([args (map (lambda (arg in-type)
                               (let ([arg (s->c in-type arg)])

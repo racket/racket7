@@ -51,6 +51,7 @@
           get-ctl-c-handler  ; not exported to Racket
           set-scheduler-lock-callbacks! ; not exported to Racket
           set-engine-exit-handler! ; not exported to Racket
+          call-with-eval-lock ; not exported to Racket
 
           make-thread-cell
           thread-cell?

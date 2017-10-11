@@ -133,8 +133,10 @@
                                     reannotate
                                     unannotate))
       ;; Create the linklet:
-      (let ([lk (make-linklet ((if serializable? compile-to-bytevector compile)
-                               (show "schemified" impl-lam/lifts))
+      (let ([lk (make-linklet (call-with-eval-lock
+                               (lambda ()
+                                 ((if serializable? compile-to-bytevector compile)
+                                  (show "schemified" impl-lam/lifts))))
                               (if serializable? 'faslable 'callable)
                               importss-abi
                               exports-info
