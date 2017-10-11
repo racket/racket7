@@ -1482,7 +1482,7 @@
 ;; compiler state.
 (define current-system-wind-start-k (internal-make-thread-parameter #f))
 
-;; During `call-with-syntem-wind`, the current metacontinuation frame
+;; During `call-with-system-wind`, the current metacontinuation frame
 ;; must remain as the most recent one, so that `swap-metacontinuation`
 ;; can capture the system-wind part
 (define (call-with-system-wind proc)
@@ -1503,9 +1503,9 @@
      ;; escape to starting point, running winders, before
      ;; capturing the rest of the metacontinuation:
      (start-k (lambda ()
-                (swap-metacontinuation saved proc)
-                (current-system-wind-start-k start-k)
-                (system-wind-k void))))))
+                (let ([prefix (swap-metacontinuation saved proc)])
+                  (current-system-wind-start-k start-k)
+                  (system-wind-k prefix)))))))
 
 (define (assert-not-in-system-wind)
   (CHECK-uninterrupted

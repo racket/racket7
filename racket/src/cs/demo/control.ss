@@ -620,14 +620,16 @@
                                     (set! post (add1 post))))))))
                           #f #f))
 
-(check (let loop ([e e-sw] [i 0])
+(check (let ([prefixes 0])
+         (let loop ([e e-sw] [i 0])
            (e 100
-              void
+              (lambda () (set! prefixes (add1 prefixes)))
               (lambda (remain v) (list (> i 2)
+                                       (= prefixes (add1 i))
                                        (- (car v) i)
                                        (- (cadr v) i)))
-              (lambda (e) (loop e (add1 i)))))
-       '(#t 1 0))
+              (lambda (e) (loop e (add1 i))))))
+       '(#t #t 1 0))
 
 ;; ----------------------------------------
 
