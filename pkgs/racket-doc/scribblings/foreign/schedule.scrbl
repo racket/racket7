@@ -8,7 +8,7 @@
 @racketmodname[ffi/unsafe/schedule] library provides functions for
 cooperating with the thread scheduler and manipulating it.}
 
-@history[#:added "6.10.1.3"]
+@history[#:added "6.11.0.1"]
 
 @defproc[(unsafe-poller [poll (evt? (or/c #f any/c) . -> . (values (or/c #f list?) evt?))])
          any/c]{

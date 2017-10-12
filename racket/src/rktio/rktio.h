@@ -549,6 +549,7 @@ RKTIO_EXTERN rktio_process_result_t *rktio_process(rktio_t *rktio,
                                                    RKTIO_NULLABLE rktio_fd_t *stdout_fd,
                                                    RKTIO_NULLABLE rktio_fd_t *stdin_fd,
                                                    RKTIO_NULLABLE rktio_fd_t *stderr_fd,
+                                                   RKTIO_NULLABLE rktio_process_t *group_proc,
                                                    rktio_const_string_t current_directory,
                                                    rktio_envvars_t *envvars,
                                                    int flags);

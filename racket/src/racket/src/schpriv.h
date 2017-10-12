@@ -608,6 +608,8 @@ extern Scheme_Object *scheme_system_type_proc;
 
 extern Scheme_Object *scheme_unsafe_poller_proc;
 
+extern Scheme_Object *scheme_unsafe_poller_proc;
+
 THREAD_LOCAL_DECL(extern Scheme_Object *scheme_orig_stdout_port);
 THREAD_LOCAL_DECL(extern Scheme_Object *scheme_orig_stdin_port);
 THREAD_LOCAL_DECL(extern Scheme_Object *scheme_orig_stderr_port);

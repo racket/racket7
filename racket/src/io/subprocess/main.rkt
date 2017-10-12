@@ -125,6 +125,7 @@
                                  (and stdout (fd-port-fd stdout))
                                  (and stdin (fd-port-fd stdin))
                                  (and stderr (not (eq? stderr 'stdout)) (fd-port-fd stderr))
+                                 (and group (subprocess-process group))
                                  (->host (current-directory) #f null)
                                  envvars flags))
 
