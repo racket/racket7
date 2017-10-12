@@ -7,6 +7,33 @@
 ;; `compile-linklet`, which is an S-expression with source locations
 ;; and properties (but no scopes).
 
+;; For historical reasons, the names here can be a bit confusing.  The
+;; host layer provides functions named `syntax?`, `datum->syntax`,
+;; etc., but these are wrapped here by functions with the names
+;; `correlated?`, `datum->correlated`, etc. Additionally,
+;; `racket/linklet` obtains the names `syntax?` etc directly from the
+;; `#%kernel` primitive table, and provides them under the name
+;; `correlated?` etc. This expander defines other functions with the
+;; names `syntax?` etc (see "../syntax/syntax.rkt") which are the
+;; syntax objects used by this expander.
+
+;; When the expander is run as a regular Racket program, the host
+;; notion of syntax is a full Racket syntax object, but the expander
+;; ignores all but the contained datum, the properties, and the source
+;; location.
+
+;; When the expander is used as the expander for Racket on the older,
+;; C-based runtime, it uses a C-level implementation of syntax
+;; objects, Scheme_Stx, which contains only the features needed
+;; here. In that implementation, the names implemented are `syntax?`,
+;; etc.
+
+;; When the expander is run as the Racket expander on the Chez
+;; Scheme-based runtime, it uses a record named `correlated` which
+;; provides only the features needed here. There, the implemented
+;; operations are named `correlated?`, etc, but are provided to this
+;; expander as `syntax?`, etc.
+
 (provide correlate
          correlated?
          datum->correlated
