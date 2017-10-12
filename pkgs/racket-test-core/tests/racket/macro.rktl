@@ -1813,5 +1813,34 @@
              (lambda (exn) (regexp-match? #rx"incompatible ellipsis" (exn-message exn))))
 
 ;; ----------------------------------------
+;; Check `local-expand` for a `#%module-begin` that
+;; routes `require`s through a macro (which involves use-site
+;; scopes)
+
+(module module-begin-check/mb racket/base
+  (require (for-syntax racket/base))
+  
+  (provide (except-out (all-from-out racket/base)
+                       #%module-begin)
+           (rename-out [mb #%module-begin]))
+  
+  (define-syntax (mb stx)
+    (syntax-case stx ()
+      [(_ f ... last)
+       (local-expand #'(#%module-begin f ... last)
+                     'module-begin 
+                     (list #'module*))])))
+
+(module module-begin-check/y racket/base
+  (provide y)
+  (define y 'y))
+
+(module x 'module-begin-check/mb
+  (define-syntax-rule (req mod ...)
+    (require mod ...))
+  (req 'module-begin-check/y)
+  (void y))
+
+;; ----------------------------------------
 
 (report-errs)

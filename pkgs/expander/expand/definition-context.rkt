@@ -206,6 +206,7 @@
                 [use-site-scopes
                  #:parent root-expand-context
                  (and (or (eq? context 'module)
+                          (eq? context 'module-begin)
                           (list? context))
                       (or (root-expand-context-use-site-scopes ctx)
                           (box null)))]
