@@ -90,11 +90,12 @@
    [(box? x) (equal-hash-loop (unbox x) (fx+ burn 1) (+/fx hc 1))]
    [(pair? x)
     (let-values ([(hc0 burn) (equal-hash-loop (car x) (fx+ burn 2) 0)])
-      (let ([hc (+/fx (mix1 hc) hc0)])
-        (if (list? x)
-            ;; If it's a list, don't count cdr direction as burn:
-            (equal-hash-loop (cdr x) (fx- burn 2) hc)
-            (equal-hash-loop (cdr x) burn hc))))]
+      (let ([hc (+/fx (mix1 hc) hc0)]
+            [r (cdr x)])
+        (if (and (pair? r) (list? r))
+            ;; If it continues as a list, don't count cdr direction as burn:
+            (equal-hash-loop r (fx- burn 2) hc)
+            (equal-hash-loop r burn hc))))]
    [(vector? x)
     (let ([len (vector-length x)])
       (cond
