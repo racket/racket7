@@ -60,6 +60,7 @@
              (check-access b mi id in-s "provided binding"))
            (define next-b (loop next-id (or in-s id)))
            (cond
+            [(not next-b) b]
             [(and (module-binding? next-b)
                   (not (module-binding-extra-inspector next-b))
                   (syntax-inspector id))

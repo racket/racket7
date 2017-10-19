@@ -2104,5 +2104,14 @@ case of module-leve bindings; it doesn't cover local bindings.
     (eval '(m) ns)))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure a module can exports syntax bound to a rename transformer
+;; to an unbound identifier
+
+(module provides-rename-transformer-to-nowhere '#%kernel
+  (#%require (for-syntax '#%kernel))
+  (#%provide x)
+  (define-syntaxes (x) (make-rename-transformer (quote-syntax y))))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)
