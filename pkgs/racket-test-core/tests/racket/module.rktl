@@ -2107,10 +2107,15 @@ case of module-leve bindings; it doesn't cover local bindings.
 ;; Make sure a module can exports syntax bound to a rename transformer
 ;; to an unbound identifier
 
-(module provides-rename-transformer-to-nowhere '#%kernel
-  (#%require (for-syntax '#%kernel))
-  (#%provide x)
-  (define-syntaxes (x) (make-rename-transformer (quote-syntax y))))
+(let ([decl
+       '(module provides-rename-transformer-to-nowhere '#%kernel
+          (#%require (for-syntax '#%kernel))
+          (#%provide x)
+          (define-syntaxes (x) (make-rename-transformer (quote-syntax y))))])
+  (define o (open-output-bytes))
+  (write (compile decl) o)
+  (eval (parameterize ([read-accept-compiled #t])
+          (read (open-input-bytes (get-output-bytes o))))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

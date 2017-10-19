@@ -26,7 +26,7 @@
 ;; unmarshaled, and also leaving the binding information in the
 ;; providing moduling instead of the requiring module. Keeping the
 ;; information with the providing module should be ok, because
-;; resolving a chain of module mports should ensure that the relevant
+;; resolving a chain of module imports should ensure that the relevant
 ;; module is loaded before a syntax object with a bulk binding is used.
 ;; Still, we have to communicate information from the loading process
 ;; down the binding-resolving process.

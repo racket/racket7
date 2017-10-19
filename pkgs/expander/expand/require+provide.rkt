@@ -407,9 +407,16 @@
                   (define b (provided-as-binding b/p))
                   (cond
                    [(not b)
+                    ;; Record this binding, but first strip away any `free-identifier=?`
+                    ;; identifier that remains, which means that it doesn't have a binding.
+                    ;; The serializer and deserializer won't be able to handle that, and
+                    ;; it's not relevant to further comparisons.
+                    (define plain-binding (if (binding-free=id binding)
+                                              (module-binding-update binding #:free=id #f)
+                                              binding))
                     (hash-set at-phase sym (if (or as-protected? as-transformer?)
-                                               (provided binding as-protected? as-transformer?)
-                                               binding))]
+                                               (provided plain-binding as-protected? as-transformer?)
+                                               plain-binding))]
                    [(same-binding? b binding)
                     at-phase]
                    [else
