@@ -18,8 +18,7 @@
          local-expand/capture-lifts
          local-transformer-expand
          local-transformer-expand/capture-lifts
-         syntax-local-expand-expression
-         syntax-local-expand-expression/extend-environment)
+         syntax-local-expand-expression)
 
 (define (local-expand s context stop-ids [intdefs #f])
   (do-local-expand 'local-expand s context stop-ids intdefs))
@@ -39,13 +38,9 @@
                    #:capture-lifts? #t
                    #:lift-key lift-key))
 
-(define (do-syntax-local-expand-expression who s
-                                           #:local-keys [local-keys null]
-                                           #:local-values [local-values null])
-  (define exp-s (do-local-expand who s 'expression null #f
-                                 #:skip-log-exit? #t
-                                 #:local-keys local-keys
-                                 #:local-values local-values))
+(define (syntax-local-expand-expression s)
+  (define exp-s (do-local-expand 'syntax-local-expand-expression s 'expression null #f
+                                 #:skip-log-exit? #t))
   (define ctx (get-current-expand-context))
   ;; Move introduction scope from the already-expanded syntax object to
   ;; its wrapper. The expander will later check that the wrapper ends up
@@ -58,14 +53,6 @@
   (log-expand ctx 'exit-local exp-s)
   (values exp-s (flip-introduction-scopes (datum->syntax #f ae) ctx)))
 
-(define (syntax-local-expand-expression s)
-  (do-syntax-local-expand-expression 'syntax-local-expand-expression s))
-
-(define (syntax-local-expand-expression/extend-environment s keys values)
-  (do-syntax-local-expand-expression 'syntax-local-expand-expression/extend-environment s
-                                     #:local-keys keys
-                                     #:local-values values))
-
 ;; ----------------------------------------
 
 (define (do-local-expand who s context stop-ids [intdefs #f]
@@ -74,9 +61,7 @@
                          #:lift-key [lift-key (and (or capture-lifts?
                                                        as-transformer?)
                                                    (generate-lift-key))]
-                         #:skip-log-exit? [skip-log-exit? #f]
-                         #:local-keys [local-keys null]
-                         #:local-values [local-values null])
+                         #:skip-log-exit? [skip-log-exit? #f])
   (performance-region
    ['expand 'local-expand]
    
@@ -101,31 +86,16 @@
      (raise-argument-error who
                            "(or/c #f internal-definitionc-context? (listof internal-definitionc-context?))" 
                            intdefs))
-   
-   (unless (list? local-keys)
-     (raise-argument-error who "list?" local-keys))
-   (unless (list? local-values)
-     (raise-argument-error who "list?" local-values))
-   (unless (= (length local-keys) (length local-values))
-     (raise-arguments-error who
-                            "different lengths for list of keys and values for extending the environment"
-                            "keys" local-keys
-                            "values" local-values))
 
    (define ctx (get-current-expand-context who))
    (define phase (if as-transformer?
                      (add1 (expand-context-phase ctx))
                      (expand-context-phase ctx)))
-   (define base-local-ctx (make-local-expand-context ctx
+   (define local-ctx (make-local-expand-context ctx
                                                      #:context context
                                                      #:phase phase
                                                      #:intdefs intdefs
                                                      #:stop-ids stop-ids))
-   (define local-ctx (struct*-copy expand-context base-local-ctx
-                                   [user-env (let ([user-env (expand-context-user-env base-local-ctx)])
-                                               (for/fold ([user-env user-env]) ([key (in-list local-keys)]
-                                                                                [value (in-list local-values)])
-                                                 (hash-set user-env key value)))]))
 
    (define input-s (add-intdef-scopes (flip-introduction-scopes s ctx) intdefs))
 

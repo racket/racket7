@@ -65,10 +65,7 @@
     (define id (hash-ref
                 (current-parameter-environment)
                 key
-                (lambda ()
-                  (syntax-local-environment-ref
-                   key
-                   (lambda () #f)))))
+                (lambda () #f)))
     (let loop ([id (or id default-id)])
       (define-values (val next-id) (syntax-local-value/immediate id (lambda () (values #f #f))))
       (cond

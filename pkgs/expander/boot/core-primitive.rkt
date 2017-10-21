@@ -143,9 +143,6 @@
                       local-transformer-expand/capture-lifts
                       syntax-local-expand-expression
 
-                      syntax-local-expand-expression/extend-environment
-                      syntax-local-environment-ref
-
                       internal-definition-context?
                       syntax-local-make-definition-context
                       syntax-local-bind-syntaxes

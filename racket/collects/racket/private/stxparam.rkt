@@ -4,6 +4,7 @@
              (for-syntax '#%kernel 
                          "stx.rkt" "stxcase-scheme.rkt" 
                          "small-scheme.rkt" 
+                         "more-scheme.rkt"
                          "stxloc.rkt" "stxparamkey.rkt"))
 
   (#%provide (for-syntax do-syntax-parameterize)
@@ -59,10 +60,12 @@
         (let-values ([(expr opaque-expr)
                       (syntax-case stx ()
                         [(_ ([local-key id] ...) body ...)
-                         (syntax-local-expand-expression/extend-environment
-                          #'(let-values () body ...)
-                          (syntax->datum #'(local-key ...))
-                          (syntax->list #'(id ...)))])])
+                         (parameterize ([current-parameter-environment
+                                          (extend-parameter-environment
+                                            (current-parameter-environment)
+                                            #'([local-key id] ...))])
+                           (syntax-local-expand-expression
+                             #'(let-values () body ...)))])])
           opaque-expr)
         (with-syntax ([stx stx])
           #'(#%expression stx)))))
