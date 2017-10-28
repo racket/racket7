@@ -57,7 +57,6 @@
          syntax-local-module-exports
          syntax-local-submodules
          
-         syntax-local-environment-ref
          syntax-local-get-shadower)
 
 ;; ----------------------------------------
@@ -412,10 +411,6 @@
     name))
 
 ;; ----------------------------------------
-
-(define (syntax-local-environment-ref key [default #f])
-  (define ctx (get-current-expand-context 'syntax-local-environment-ref))
-  (hash-ref (expand-context-user-env ctx) key default))
 
 ;; Works well enough for some backward compatibility:
 (define (syntax-local-get-shadower id [only-generated? #f])

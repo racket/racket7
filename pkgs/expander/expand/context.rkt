@@ -42,7 +42,6 @@
           phase      ; current expansion phase; must match phase of `namespace`
           namespace  ; namespace for modules and evaluation
           * env        ; environment for local bindings
-          user-env   ; for `syntax-local-environment-ref`
           * post-expansion-scope-action ; function to apply with `post-expansion-scope`
           * scopes     ; list of scopes that should be pruned by `quote-syntax`
           * def-ctx-scopes ; #f or box of list of scopes; transformer-created def-ctxes
@@ -85,7 +84,6 @@
                   (namespace-phase ns)
                   ns
                   empty-env
-                  #hasheq() ; user-env
                   push-scope ; post-expansion-scope-action
                   null ; scopes
                   #f   ; def-ctx-scopes
