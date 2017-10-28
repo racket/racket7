@@ -459,6 +459,10 @@
          disarmed-s
          ;; otherwise, use the initial require
          all-scopes-s))
+
+   ;; Need to accumulate definition contexts created during
+   ;; expansion to `#%module-begin`:
+   (define mb-def-ctx-scopes (box null))
    
    ;; Add `#%module-begin` around the body if it's not already present;
    ;; also logs 'rename-one
@@ -468,13 +472,14 @@
                           #:scopes-s mb-scopes-s
                           #:m-ns m-ns
                           #:ctx mb-ctx
+                          #:def-ctx-scopes mb-def-ctx-scopes
                           #:phase phase
                           #:s s))
    
    ;; Expand the body
    (define expanded-mb (performance-region
                         ['expand 'module-begin]
-                        (expand mb mb-ctx)))
+                        (expand mb (accumulate-def-ctx-scopes mb-ctx mb-def-ctx-scopes))))
 
    ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    ;; Assemble the `module` result
@@ -536,18 +541,21 @@
 
 ;; ----------------------------------------
 
-;; Add `#%module-begin` to `bodys`, if needed
+;; Add `#%module-begin` to `bodys`, if needed, and otherwise
+;; expand to a core `#%module-begin` form
 (define (ensure-module-begin bodys
                              #:module-name-sym module-name-sym
                              #:scopes-s scopes-s
                              #:m-ns m-ns
-                             #:ctx ctx 
+                             #:ctx ctx
+                             #:def-ctx-scopes def-ctx-scopes
                              #:phase phase
                              #:s s)
   (define (make-mb-ctx)
     (struct*-copy expand-context ctx
                   [context 'module-begin]
-                  [only-immediate? #t]))
+                  [only-immediate? #t]
+                  [def-ctx-scopes def-ctx-scopes]))
   (define mb
     (cond
      [(= 1 (length bodys))
