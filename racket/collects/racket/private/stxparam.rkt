@@ -10,7 +10,7 @@
   (#%provide (for-syntax do-syntax-parameterize)
              let-local-keys)
 
-  (define-for-syntax (do-syntax-parameterize stx letrec-syntaxes-id empty-body-ok?)
+  (define-for-syntax (do-syntax-parameterize stx letrec-syntaxes-id empty-body-ok? keep-ids?)
     (syntax-case stx ()
       [(-syntax-parameterize ([id val] ...) body ...)
        (let ([ids (syntax->list #'(id ...))])
@@ -48,10 +48,14 @@
                 #f
                 "missing body expression(s)"
                 stx)))
-           (with-syntax ([letrec-syntaxes letrec-syntaxes-id])
+           (with-syntax ([letrec-syntaxes letrec-syntaxes-id]
+                         [(kept-id ...) (if keep-ids?
+                                            #'(id ...)
+                                            '())])
              (syntax/loc stx
                (letrec-syntaxes ([(gen-id) (wrap-parameter-value 'who/must-be-renamer val)]
                                  ...)
+                 kept-id ...
                  (let-local-keys ([local-key gen-id] ...)
                    body ...))))))]))
   

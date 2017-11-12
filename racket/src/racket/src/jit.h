@@ -266,6 +266,9 @@ typedef struct Apply_LWC_Args {
 typedef Scheme_Object *(*Continuation_Apply_Indirect)(Apply_LWC_Args *, intptr_t);
 typedef Scheme_Object *(*Continuation_Apply_Finish)(Apply_LWC_Args *args, void *stack, void *frame);
 
+#define JIT_MAX_VECTOR_INLINE_SIZE 256
+#define JIT_MAX_STRUCT_FIELD_INLINE_COUNT 256
+
 #ifdef MZ_LONG_DOUBLE
 # define JIT_NUM_FL_KINDS 2
 #else
@@ -307,6 +310,7 @@ struct scheme_jit_common_record {
   void *imag_part_code, *real_part_code, *make_rectangular_code;
   void *bad_flimag_part_code, *bad_flreal_part_code, *bad_make_flrectangular_code;
   void *unbox_code, *set_box_code, *box_cas_fail_code;
+  void *vector_cas_fail_code;
   void *bad_vector_length_code;
   void *bad_flvector_length_code;
   void *bad_fxvector_length_code;

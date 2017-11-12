@@ -306,6 +306,9 @@ void scheme_init_finalization(void);
 void scheme_init_portable_case(void);
 void scheme_init_stack_check(void);
 void scheme_init_overflow(void);
+#ifdef MZ_USE_JIT
+void scheme_init_jit(void);
+#endif
 #ifdef MZ_PRECISE_GC
 void scheme_register_traversers(void);
 void scheme_init_hash_key_procs(void);
@@ -1070,6 +1073,9 @@ typedef struct Scheme_Structure
   Scheme_Struct_Type *stype;
   Scheme_Object *slots[mzFLEX_ARRAY_DECL];
 } Scheme_Structure;
+
+#define MAX_STRUCT_FIELD_COUNT 32768
+#define MAX_STRUCT_FIELD_COUNT_STR "32768"
 
 #ifdef MZ_USE_PLACES
 typedef struct Scheme_Serialized_Structure
@@ -3628,6 +3634,7 @@ Scheme_Object *scheme_checked_set_mcar (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_set_mcdr (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_vector_ref(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_checked_vector_set(int argc, Scheme_Object **argv);
+Scheme_Object *scheme_checked_vector_cas(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_string_length(Scheme_Object *v);
 Scheme_Object *scheme_string_eq_2(Scheme_Object *str1, Scheme_Object *str2);
 Scheme_Object *scheme_checked_string_ref(int argc, Scheme_Object *argv[]);

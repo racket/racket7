@@ -31,6 +31,19 @@
          [else (loop (hash-set ht (car keys) (car ids))
                      (cdr keys)
                      (cdr ids))]))))
+
+  ;; Used to propagate to a submodule, where the parameter
+  ;; will get a frash key as the submodule compilation starts
+  (define (update-parameter-keys ids binds)
+    (let loop ([ids (syntax->list ids)]
+               [binds (syntax->list binds)])
+      (cond
+        [(null? ids) null]
+        [else
+         (with-syntax ([(key rhs) (car binds)]
+                       [new-key (syntax-parameter-key (syntax-local-value (car ids)))])
+           (cons #'[new-key rhs]
+                 (loop (cdr ids) (cdr binds))))])))
   
   (define (apply-syntax-parameter sp stx)
     (let ([v (syntax-parameter-key-value (syntax-parameter-key sp)
@@ -124,6 +137,7 @@
   (#%provide wrap-parameter-value
              current-parameter-environment
              extend-parameter-environment
+             update-parameter-keys
              apply-transformer
              syntax-parameter?
              make-syntax-parameter

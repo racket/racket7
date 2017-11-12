@@ -287,23 +287,23 @@
 (define-syntax (splicing-syntax-parameterize stx)
   (if (eq? 'expression (syntax-local-context))
       ;; Splicing is no help in an expression context:
-      (do-syntax-parameterize stx #'let-syntaxes #f)
+      (do-syntax-parameterize stx #'let-syntaxes #f #f)
       ;; Let `syntax-parameterize' check syntax, then continue
-      (do-syntax-parameterize stx #'ssp-let-syntaxes #t)))
+      (do-syntax-parameterize stx #'ssp-let-syntaxes #t #t)))
 
 (define-syntax (ssp-let-syntaxes stx)
   (syntax-case stx ()
-    [(_ ([(id) rhs] ...) (llk binds body ...))
+    [(_ ([(id) rhs] ...) orig-id ... (llk binds body ...))
      #'(begin
          ;; Evaluate each RHS only once:
          (define-syntax id rhs) ...
          ;; Partially expand `body' to push down `let-syntax':
-         (expand-ssp-body binds body)
+         (expand-ssp-body binds [orig-id ...] body)
          ...)]))
 
 (define-syntax (expand-ssp-body stx)
   (syntax-case stx ()
-    [(_ binds body)
+    [(_ binds orig-ids body)
      (let ([ctx (syntax-local-make-definition-context #f #f)])
        (let ([body (parameterize ([current-parameter-environment
                                    (extend-parameter-environment (current-parameter-environment) #'binds)])
@@ -326,7 +326,7 @@
                                #%declare )
               [(begin expr ...)
                (syntax/loc/props body
-                 (begin (expand-ssp-body binds expr) ...))]
+                 (begin (expand-ssp-body binds orig-ids expr) ...))]
               [(define-values (id ...) rhs)
                (syntax/loc/props body
                  (define-values (id ...)
@@ -338,12 +338,46 @@
                (syntax/loc/props body
                  (begin-for-syntax (wrap-param-et e binds) ...))]
               [(module . _) body]
+              [(module* name #f form ...)
+               (datum->syntax body
+                              (list #'module* #'name #f
+                                    #`(expand-ssp-module-begin
+                                       binds orig-ids
+                                       #,body name form ...))
+                              body)]
               [(module* . _) body]
               [(#%require . _) body]
               [(#%provide . _) body]
               [(#%declare . _) body]
               [expr (syntax/loc body
                       (let-local-keys binds expr))]))))]))
+
+(define-syntax (expand-ssp-module-begin stx)
+  (syntax-case stx ()
+    [(_ binds orig-ids mod-form mod-name-id body-form ...)
+     (unless (eq? (syntax-local-context) 'module-begin)
+       (raise-syntax-error #f "only allowed in module-begin context" stx))
+     (with-syntax ([new-binds (update-parameter-keys #'orig-ids #'binds)])
+       (parameterize ([current-parameter-environment
+                       (extend-parameter-environment (current-parameter-environment)
+                                                     #'new-binds)])
+         (let* ([forms (syntax->list #'(body-form ...))]
+                ;; emulate how the macroexpander expands module bodies and introduces #%module-begin
+                [body (if (= (length forms) 1)
+                          (let ([body (local-expand (car forms) 'module-begin #f)])
+                            (syntax-case body (#%plain-module-begin)
+                              [(#%plain-module-begin . _) body]
+                              [_ (datum->syntax #'mod-form (list '#%module-begin body) #'mod-form)]))
+                          (datum->syntax #'mod-form (list* '#%module-begin forms) #'mod-form))]
+                [body (syntax-property body 'enclosing-module-name (syntax-e #'mod-name-id))]
+                [body (local-expand body 'module-begin #f)])
+           (syntax-case body (#%plain-module-begin)
+             [(#%plain-module-begin form ...)
+              (syntax/loc/props body
+                (#%plain-module-begin
+                 (expand-ssp-body new-binds orig-ids form) ...))]
+             [_ (raise-syntax-error
+                 #f "expansion of #%module-begin is not a #%plain-module-begin form" body)]))))]))
 
 (define-syntax (letrec-syntaxes/trans stx)
   (syntax-case stx ()
@@ -396,6 +430,12 @@
                  (syntax/loc/props e
                    (define-values ids (wrap-param-et rhs binds)))]
                 [(module . _) e]
+                [(module* n #f form ...)
+                 (datum->syntax
+                  e
+                  (syntax-e #'(module* n #f (wrap-param-et form binds) ...))
+                  e
+                  e)]
                 [(module* . _) e]
                 [(#%require . _) e]
                 [(#%provide . _) e]

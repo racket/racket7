@@ -1641,14 +1641,23 @@ void evt_struct_needs_wakeup(Scheme_Object *o, void *fds)
   
   v = scheme_struct_type_property_ref(evt_property, o);
   if (SCHEME_POLLERP(v)) {
-    Scheme_Object *a[2], *e;
+    Scheme_Object *a[2], *e, *r;
     
     scheme_start_in_scheduler();
     a[0] = o;
     e = scheme_make_cptr(fds, scheme_false);
     a[1] = e;
-    _scheme_apply_multi(SCHEME_POLLER_PROC(v), 2, a);
+    r = _scheme_apply_multi(SCHEME_POLLER_PROC(v), 2, a);
     scheme_end_in_scheduler();
+
+    /* If event claims to be ready, then cancel the sleep: */
+    if (r == SCHEME_MULTIPLE_VALUES) {
+      Scheme_Thread *p = scheme_current_thread;
+      if (p->ku.multiple.count == 2) {
+        if (SCHEME_TRUEP(p->ku.multiple.array[0]))
+          scheme_cancel_sleep();
+      }
+    }
   }
 }
 
@@ -2515,7 +2524,7 @@ static int parse_pos(const char *who, Scheme_Object *prim, Scheme_Object **args,
 
   if (!SCHEME_INTP(args[1]) || (SCHEME_INT_VAL(args[1]) < 0)) {
     if (SCHEME_BIGNUMP(args[1]) && SCHEME_BIGPOS(args[1])) {
-      pos = 32769; /* greater than max field count */
+      pos = (MAX_STRUCT_FIELD_COUNT + 1);
     } else {
       if (!who)
 	who = extract_field_proc_name(prim);
@@ -3157,9 +3166,6 @@ static Scheme_Object *make_prefab_struct(int argc, Scheme_Object *argv[])
 
   return scheme_make_prefab_struct_instance(stype, vec);
 }
-
-#define MAX_STRUCT_FIELD_COUNT 32768
-#define MAX_STRUCT_FIELD_COUNT_STR "32768"
 
 static Scheme_Object *prefab_key_struct_type(int argc, Scheme_Object *argv[])
 {

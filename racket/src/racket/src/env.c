@@ -186,6 +186,9 @@ Scheme_Env *scheme_basic_env()
   scheme_init_resolve();
   scheme_init_sfs();
   scheme_init_validate();
+#ifdef MZ_USE_JIT
+  scheme_init_jit();
+#endif
 
   scheme_init_process_globals();
 
@@ -433,7 +436,7 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
 
   scheme_init_stack_check();
   scheme_init_overflow();
-
+  
   scheme_init_thread_lwc();
 
   scheme_init_compenv_places();

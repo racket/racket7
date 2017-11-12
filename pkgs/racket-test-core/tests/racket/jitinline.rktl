@@ -894,6 +894,21 @@
             (lambda () v) 0 "other"
             (lambda () (test 77 unbox v))))
 
+    (let ([v (vector 1 0)])
+      (check-error-message 'vector-cas! (eval `(lambda (x) (vector-cas! x 10 11 12))))
+      (tri0 #t
+            '(lambda (v i nv) (vector-cas! v i (vector-ref v i) nv))
+            (lambda () v) 1 "other"
+            (lambda ()
+              (test 1 vector-ref v 0)
+              (test "other" vector-ref v 1)))
+      (tri0 #f
+            '(lambda (v i nv) (vector-cas! v i (gensym) nv))
+            (lambda () v) 1 "next"
+            (lambda ()
+              (test 1 vector-ref v 0)
+              (test "other" vector-ref v 1))))
+
     (bin-exact #t 'procedure-arity-includes? cons 2 #t)
     (bin-exact #f 'procedure-arity-includes? cons 1)
     (bin-exact #f 'procedure-arity-includes? cons 3)
@@ -913,6 +928,23 @@
     (bin0 99 'thing-ref 10 99)
 
     ))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure that the JIT doesn't try to inline
+;; a vector allocation that is too large
+
+(parameterize ([current-namespace (make-base-namespace)])
+  (for ([tail? '(#t #f)])
+    (let loop ([i 10])
+      ((eval `(lambda (f x)
+                ,(let ([e `(vector x ,@(for/list ([j (in-range i)])
+                                         j))])
+                   (if tail?
+                       e
+                       `(f ,e)))))
+       values i)
+      (when (i . < . 10000)
+        (loop (floor (* i #e1.25)))))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
