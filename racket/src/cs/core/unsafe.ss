@@ -61,9 +61,11 @@
 (define unsafe-vector*-length #3%vector-length)
 (define unsafe-vector*-ref #3%vector-ref)
 (define unsafe-vector*-set! #3%vector-set!)
+(define unsafe-vector*-cas! #3%vector-cas!)
 
 (define unsafe-unbox* #3%unbox)
 (define unsafe-set-box*! #3%set-box!)
+(define unsafe-box*-cas! #3%box-cas!)
 
 (define unsafe-bytes-length #3%bytevector-length)
 (define unsafe-bytes-ref #3%bytevector-u8-ref)

@@ -307,7 +307,6 @@
           unsafe-chaperone-vector
 
           box? unbox set-box!
-          box-cas!
           make-weak-box weak-box? weak-box-value
           impersonate-box
           chaperone-box
@@ -536,6 +535,7 @@
           unsafe-vector-set!
           unsafe-vector*-ref
           unsafe-vector*-set!
+          unsafe-vector*-cas!
           unsafe-vector-length
           unsafe-vector*-length
 

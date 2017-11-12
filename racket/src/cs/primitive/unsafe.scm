@@ -107,6 +107,7 @@
    unsafe-vector-set!
    unsafe-vector*-ref
    unsafe-vector*-set!
+   unsafe-vector*-cas!
    unsafe-vector-length
    unsafe-vector*-length
    

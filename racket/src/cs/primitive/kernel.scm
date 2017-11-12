@@ -770,6 +770,7 @@
    vector->pseudo-random-generator
    vector->pseudo-random-generator!
    vector->values
+   vector-cas!
    vector-copy!
    vector-fill!
    vector-immutable

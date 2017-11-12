@@ -1,17 +1,3 @@
-(define/who (box-cas! b v1 v2)
-  (check who mutable-box? :contract "(and/c box? (not/c immutable?))" b)
-  (unsafe-box*-cas! b v1 v2))
-
-(define global-lock (make-mutex))
-
-(define (unsafe-box*-cas! b v1 v2)
-  (mutex-acquire global-lock)
-  (begin0
-   (with-interrupts-disabled
-    (and (eq? v1 (#3%unbox b))
-         (#3%set-box! b v2)
-         #t))
-   (mutex-release global-lock)))
 
 (define (unsafe-box*-cas+! b delta)
   (let ([v (unsafe-unbox* b)])
