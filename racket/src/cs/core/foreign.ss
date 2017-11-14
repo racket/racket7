@@ -375,12 +375,12 @@
                   x
                   (bad-ctype-value x '_ufixnum))))
 
-(define-ctype _fixint 'integer 'fixint
+(define-ctype _fixint 'integer-32 'fixint
   (lambda (x) (if (fixnum? x)
                   x
                   (bad-ctype-value x '_fixint))))
 
-(define-ctype _ufixint 'unsigned 'ufixint
+(define-ctype _ufixint 'unsigned-32 'ufixint
   (lambda (x) (if (fixnum? x)
                   x
                   (bad-ctype-value x '_ufixint))))
@@ -1077,7 +1077,7 @@
                                   `(& ,ret-id)
                                   (array-rep-to-pointer-rep
                                    (ctype-host-rep out-type)))))
-                          ,(and (not call?)
+                          ,(and call?
                                 ret-id
                                 `(lambda (p)
                                    (make-ftype-pointer ,ret-id p)))
@@ -1102,35 +1102,37 @@
                                     (unwrap-cpointer arg)
                                     arg)))
                             args in-types)]
-                 [r (with-interrupts-disabled
-                     (let ([r (apply (gen-proc (cpointer-address proc-p))
-                                     (map (lambda (arg in-type maker)
-                                            (let ([host-rep (array-rep-to-pointer-rep
-                                                             (ctype-host-rep in-type))])
-                                              (case host-rep
-                                                [(void*) (cpointer-address arg)]
-                                                [(struct union)
-                                                 (maker (cpointer-address arg))]
-                                                [else arg])))
-                                          args in-types arg-makers))])
+                 [r (let ([ret-ptr (and ret-id
+                                        ;; result is a struct type; need to allocate space for it
+                                        (make-bytevector ret-size))])
+                      (with-interrupts-disabled
+                       (let ([r (apply (gen-proc (cpointer-address proc-p))
+                                       (append
+                                        (if ret-ptr
+                                            (list (ret-maker (memory-address ret-ptr)))
+                                            '())
+                                        (map (lambda (arg in-type maker)
+                                               (let ([host-rep (array-rep-to-pointer-rep
+                                                                (ctype-host-rep in-type))])
+                                                 (case host-rep
+                                                   [(void*) (cpointer-address arg)]
+                                                   [(struct union)
+                                                    (maker (cpointer-address arg))]
+                                                   [else arg])))
+                                             args in-types arg-makers)))])
                        (cond
-                        [ret-id
-                         ;; result is a struct type; we want to copy and free before re-enabling interrupts
-                         (let ([bstr (make-bytevector ret-size)]
-                               [addr (ftype-pointer-address r)])
-                           (memcpy* bstr 0 addr 0 ret-size)
-                           (foreign-free addr)
-                           (make-cpointer bstr #f))]
+                        [ret-ptr
+                         (make-cpointer ret-ptr #f)]
                         [(eq? (ctype-our-rep out-type) 'gcpointer)
                          (addr->gcpointer-memory r)]
-                        [else r])))])
+                        [else r]))))])
             (c->s out-type r))))]
      [else ; callable
-      (gen-proc (lambda args
+      (gen-proc (lambda args ; if ret-id, includes an extra initial argument to receive the result
                   (let ([v (s->c
                             out-type
                             (apply to-wrap
-                                   (let loop ([args args] [in-types in-types])
+                                   (let loop ([args (if ret-id (cdr args) args)] [in-types in-types])
                                      (cond
                                       [(null? args) '()]
                                       [else
@@ -1143,7 +1145,6 @@
                                                                    [addr (ftype-pointer-address arg)]
                                                                    [bstr (make-bytevector size)])
                                                               (memcpy* bstr 0 addr 0 size)
-                                                              (foreign-free addr)
                                                               (make-cpointer bstr #f))]
                                                            [else
                                                             (cond
@@ -1151,11 +1152,10 @@
                                                               (addr->gcpointer-memory arg)]
                                                              [else arg])]))])
                                          (cons arg (loop (cdr args) (cdr in-types))))]))))])
-                    (if ret-maker
-                        (ret-maker (let* ([size (compound-ctype-size out-type)]
-                                          [addr (foreign-alloc size)])
-                                     (memcpy* addr 0 v 0 size)
-                                     (ret-maker addr)))
+                    (if ret-id
+                        (let* ([size (compound-ctype-size out-type)]
+                               [addr (ftype-pointer-address (car args))])
+                          (memcpy* addr 0 v 0 size))
                         (case (ctype-host-rep out-type)
                           [(void*) (cpointer-address v)]
                           [else v])))))])))
