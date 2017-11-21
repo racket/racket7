@@ -166,7 +166,6 @@
                     (lambda ()
                       (eval (read (open-input-string expr))))
                     loads))
-             (no-init! saw)
              (flags-loop rest-args (see saw 'non-config)))]
           [("-i" "--repl") 
            (set! repl? #t)
