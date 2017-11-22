@@ -764,6 +764,10 @@ static void connect_cleanup(Connect_Progress_Data *pd)
     rktio_addrinfo_lookup_stop(scheme_rktio, pd->lookup);
     pd->lookup = NULL;
   }
+  if (pd->trying_s) {
+    (void)scheme_rktio_fd_to_semaphore(pd->trying_s, MZFD_REMOVE);
+    pd->trying_s = NULL;
+  }
   if (pd->connect) {
     rktio_connect_stop(scheme_rktio, pd->connect);
     pd->connect = NULL;
@@ -775,10 +779,6 @@ static void connect_cleanup(Connect_Progress_Data *pd)
   if (pd->src_addr) {
     rktio_addrinfo_free(scheme_rktio, pd->src_addr);
     pd->src_addr = NULL;
-  }
-  if (pd->trying_s) {
-    (void)scheme_rktio_fd_to_semaphore(pd->trying_s, MZFD_REMOVE);
-    pd->trying_s = NULL;
   }
   if (pd->s) {
     (void)scheme_rktio_fd_to_semaphore(pd->s, MZFD_REMOVE);
@@ -888,7 +888,7 @@ static int tcp_check_connect(Connect_Progress_Data *pd, Scheme_Schedule_Info *si
     s = rktio_connect_trying(scheme_rktio, pd->connect);
     pd->trying_s = s;
   }
-  
+
   if (!sinfo || !sinfo->is_poll) {
     if (pd->trying_s)
       if (!check_fd_sema(pd->trying_s, MZFD_CHECK_WRITE, sinfo, NULL))
@@ -1012,8 +1012,10 @@ static Scheme_Object *tcp_connect(int argc, Scheme_Object *argv[])
       END_ESCAPEABLE();  
     }
 
-    if (pd->trying_s)
+    if (pd->trying_s) {
       (void)scheme_rktio_fd_to_semaphore(pd->trying_s, MZFD_REMOVE);
+      pd->trying_s = NULL;
+    }
 
     s = rktio_connect_finish(scheme_rktio, connect);
     
@@ -1026,7 +1028,7 @@ static Scheme_Object *tcp_connect(int argc, Scheme_Object *argv[])
   pd->connect = NULL;
 
   if (!s)
-    connect_failed(pd, NULL, address, id);    
+    connect_failed(pd, NULL, address, id);
 
   connect_cleanup(pd);
 
