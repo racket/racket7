@@ -1,9 +1,9 @@
 
-RACKET = ../../racket/bin/racket
-RACO = ../../racket/bin/raco
+RACKET = ../../bin/racket
+RACO = $(RACKET) -N raco -l- raco
 
 # Tree for collections:
-TREE = ../../racket
+TREE = ../..
 
 # See "boot/read-primitive.rkt" for more info:
 KNOT = ++knot read read/api.rkt \

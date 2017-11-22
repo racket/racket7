@@ -73,9 +73,8 @@ rest builds up in layers, each of which is implemented in Racket:
    regexp
    expander
 
-Each but the last of those layers is implemented in a sibling
-directory of this one. The "expander" layer's implementation is in
-"../../../pkgs" (because it's useful as a standalone Racket package).
+Each of those layers is implemented in a sibling directory of this
+one.
 
 Although the "thread" layer is implemented in Racket, in its fully
 expanded form it must not refer to any functionality of "io",

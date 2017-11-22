@@ -1,6 +1,6 @@
 
 RACKET = ../../bin/racket
-RACO = ../../bin/raco
+RACO = $(RACKET) -N raco -l- raco
 
 # Ignoring functions from `#%read` works beause they won't appear in
 # the simplified expansion, and declaring "collect.rkt" pure works
@@ -9,11 +9,11 @@ IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
 
 io-src: compiled/rktio.rktl
 	$(RACO) make main.rkt
-	$(RACO) make ../../../pkgs/expander/bootstrap-run.rkt
+	$(RACO) make ../expander/bootstrap-run.rkt
 	$(MAKE) compiled/io.rktl
 
-compiled/io.rktl: compiled/main_rkt.zo ../../../pkgs/expander/compiled/bootstrap-run_rkt.zo
-	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t main.rkt --submod main -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/io.rktl
+compiled/io.rktl: compiled/main_rkt.zo ../expander/compiled/bootstrap-run_rkt.zo
+	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt --submod main -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/io.rktl
 
 demo: compiled/rktio.rktl
 	$(RACO) make demo.rkt

@@ -73,14 +73,14 @@ PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.
 expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS)
 	$(COMP) '(compile-file "expander.sls")' | $(SCHEME) -q $(EXPANDER_DEPS)
 
-compiled/expander.scm: ../../../pkgs/expander/compiled/expander.rktl $(CONVERT_DEPS)
-	$(CONVERT) ../../../pkgs/expander/compiled/expander.rktl compiled/expander.scm
+compiled/expander.scm: ../expander/compiled/expander.rktl $(CONVERT_DEPS)
+	$(CONVERT) ../expander/compiled/expander.rktl compiled/expander.scm
 
-../../../pkgs/expander/compiled/expander.rktl:
+..expander/compiled/expander.rktl:
 	$(MAKE) expander-rktl
 
 expander-rktl:
-	$(MAKE) bounce BOUNCE_DIR=../../../pkgs/expander BOUNCE_TARGET=expander-src
+	$(MAKE) bounce BOUNCE_DIR=../expander BOUNCE_TARGET=expander-src
 
 linklet-demo: linklet.so
 	$(SCHEME) $(LINKLET_DEPS) linklet.so demo/linklet.ss
@@ -101,8 +101,8 @@ compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
 IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
 
 compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
-	$(RACKET) -N raco -l- raco make ../../../pkgs/expander/bootstrap-run.rkt
-	$(RACKET) ../../../pkgs/expander/bootstrap-run.rkt -t schemify/main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/schemify.rktl
+	$(RACKET) -N raco -l- raco make ../expander/bootstrap-run.rkt
+	$(RACKET) ../expander/bootstrap-run.rkt -t schemify/main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/schemify.rktl
 
 
 known-primitive.so: known-primitive.sls
