@@ -60,7 +60,8 @@
 ;; An import ABI is a list of list of booleans, parallel to the
 ;; linklet imports, where #t to means that a value is expected, and #f
 ;; means that a variable (which boxes a value) is expected
-(define (schemify-linklet lk serializable? annotate unannotate prim-knowns get-import-knowns)
+(define (schemify-linklet lk serializable? immediate-variable?
+                          annotate unannotate prim-knowns get-import-knowns)
   (define (im-int-id id) (unwrap (if (pair? id) (cadr id) id)))
   (define (im-ext-id id) (unwrap (if (pair? id) (car id) id)))
   (define (ex-int-id id) (unwrap (if (pair? id) (car id) id)))
@@ -89,7 +90,8 @@
            (values bodys null)))
      ;; Schemify the body, collecting information about defined names:
      (define-values (new-body defn-info mutated)
-       (schemify-body* bodys/constants-lifted annotate unannotate prim-knowns imports exports))
+       (schemify-body* bodys/constants-lifted annotate unannotate prim-knowns imports exports
+                       immediate-variable?))
      (values
       ;; Build `lambda` with schemified body:
       (make-let*
@@ -124,10 +126,10 @@
 
 (define (schemify-body l annotate unannotate prim-knowns imports exports)
   (define-values (new-body defn-info mutated)
-    (schemify-body* l annotate unannotate prim-knowns imports exports))
+    (schemify-body* l annotate unannotate prim-knowns imports exports #f))
   new-body)
 
-(define (schemify-body* l annotate unannotate prim-knowns imports exports)
+(define (schemify-body* l annotate unannotate prim-knowns imports exports immediate-variable?)
   ;; Various conversion steps need information about mutated variables,
   ;; where "mutated" here includes visible implicit mutation, such as
   ;; a variable that might be used before it is defined:
@@ -170,7 +172,8 @@
              (let id-loop ([ids ids] [accum-exprs null] [accum-ids accum-ids])
                (cond
                 [(wrap-null? ids) (loop (wrap-cdr l) accum-exprs accum-ids)]
-                [(via-variable-mutated-state? (hash-ref mutated (unwrap (wrap-car ids)) #f))
+                [(or immediate-variable?
+                     (via-variable-mutated-state? (hash-ref mutated (unwrap (wrap-car ids)) #f)))
                  (define id (unwrap (wrap-car ids)))
                  (cond
                   [(hash-ref exports id #f)
@@ -275,7 +278,7 @@
                                      `(struct-type-constructor-add-guards ,ctr ,struct:s ',(struct-type-info-name sti)))))
               (define ,raw-s? (record-predicate ,struct:s))
               ,@(if can-impersonate?
-                    `((define ,s? (lambda (v) (or (,raw-s? v) (pariah (and (impersonator? v) (,raw-s? (impersonator-val v))))))))
+                    `((define ,s? (lambda (v) (if (,raw-s? v) #t (pariah (if (impersonator? v) (,raw-s? (impersonator-val v)) #f))))))
                     null)
               ,@(for/list ([acc/mut (in-list acc/muts)]
                            [make-acc/mut (in-list make-acc/muts)])

@@ -55,7 +55,7 @@
 (define empty-frees+binds (cons #hasheq() #hasheq()))
 
 (define (lift-in-schemified-linklet v reannotate strip-annotations)
-  ;; Match outer shape of a linklet produced by `schemuify-linklet`
+  ;; Match outer shape of a linklet produced by `schemify-linklet`
   ;; and lift in the linklet body:
   (let loop ([v v])
     (match v

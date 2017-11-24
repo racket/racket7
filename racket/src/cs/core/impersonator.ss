@@ -521,7 +521,7 @@
 (define (extract-impersonator-of who a)
   (and (impersonator-of-redirect? a)
        (let* ([tag+ref (impersonator-of-ref a)]
-              [a2 ((cdr tag+ref) a)])
+              [a2 (|#%app| (cdr tag+ref) a)])
          (cond
           [(not a2)
            ;; `prop:impersonator-of` function can report #f to mean

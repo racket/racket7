@@ -141,6 +141,7 @@
           procedure-arity?
           prop:checked-procedure
           checked-procedure-check-and-extract
+          make-jit-procedure ; not exported to racket
 
           equal?
           equal?/recur
@@ -285,6 +286,10 @@
 
           list?
           list-pair?
+          (rename [|#%map| map]
+                  [|#%for-each| for-each]
+                  [|#%andmap| andmap]
+                  [|#%ormap| ormap])
 
           vector?
           mutable-vector?
@@ -596,7 +601,8 @@
                 format
                 fprintf
                 current-error-port
-                error)
+                error
+                map for-each andmap ormap)
           (only (chezscheme csv7)
                 record-field-accessor
                 record-field-mutator))

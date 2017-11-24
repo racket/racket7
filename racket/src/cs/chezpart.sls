@@ -35,7 +35,8 @@
                            random random-seed
                            box? unbox set-box!
 			   get-thread-id
-			   threaded?)
+			   threaded?
+                           map for-each andmap ormap)
                    [make-parameter chez:make-parameter]
                    [void chez:void]
                    [date-second chez:date-second]

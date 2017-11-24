@@ -1405,15 +1405,15 @@
      (#%dynamic-wind
       (lambda ()
         (with-saved-mark-stack/non-break 'dw-pre
-          (pre)))
+          (|#%app| pre)))
       (lambda ()
         (end-uninterrupted/call-hook 'dw-body)
         (begin0
-         (thunk)
+         (|#%app| thunk)
          (start-uninterrupted 'dw-body)))
       (lambda ()
         (with-saved-mark-stack/non-break 'dw-post
-          (post))))
+          (|#%app| post))))
      (end-uninterrupted/call-hook 'dw))))
 
 ;; ----------------------------------------

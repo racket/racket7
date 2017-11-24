@@ -294,7 +294,7 @@
 (define (s->c type v)
   (let* ([racket-to-c (ctype-scheme->c type)]
          [v (if racket-to-c
-                (racket-to-c v)
+                (|#%app| racket-to-c v)
                 v)]
          [next (ctype-basetype type)])
     (if (ctype? next)
@@ -309,7 +309,7 @@
                 v)]
          [c-to-racket (ctype-c->scheme type)])
     (if c-to-racket
-        (c-to-racket v)
+        (|#%app| c-to-racket v)
         v)))
 
 ;; ----------------------------------------

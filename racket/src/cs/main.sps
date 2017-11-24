@@ -22,14 +22,18 @@
                exit)
          (regexp)
          (io)
-         (thread))
+         (thread)
+         (only (linklet)
+               jit-mode?))
 
  (unless (pair? (command-line-arguments))
    (error 'racket "expected a `self` executable path to start"))
  (set-exec-file! (path->complete-path (car (command-line-arguments))))
 
  (|#%app| use-compiled-file-paths
-  (list (string->path (string-append "compiled/" (symbol->string (machine-type))))))
+  (list (string->path (string-append "compiled/" (if jit-mode?
+                                                     "cs"
+                                                     (symbol->string (machine-type)))))))
 
  (define (see saw . args)
    (let loop ([saw saw] [args args])

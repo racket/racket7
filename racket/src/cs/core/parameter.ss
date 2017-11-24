@@ -18,11 +18,11 @@
          [(impersonator? p)
           (dloop (impersonator-val p) (impersonate-apply/parameter p #f (list v)))]
          [(derived-parameter? p)
-          (dloop (derived-parameter-next p) ((parameter-guard p) v))]
+          (dloop (derived-parameter-next p) (|#%app| (parameter-guard p) v))]
          [else
           (let* ([guard (parameter-guard p)]
                  [v (if guard
-                        (guard v)
+                        (|#%app| guard v)
                         v)])
             (loop (intmap-set ht p (make-thread-cell v #t))
                   (cddr args)))]))]

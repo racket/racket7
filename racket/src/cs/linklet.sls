@@ -30,7 +30,19 @@
           
           variable-reference?
           variable-reference->instance
-          variable-reference-constant?)
+          variable-reference-constant?
+
+          jit-mode? ; not exported to racket
+
+          ;; schemify glue:
+          variable-set!
+          variable-ref
+          variable-ref/no-check
+          make-instance-variable-reference
+          unbox/check-undefined
+          set-box!/check-undefined
+          jit-apply
+          schemify-table)
   (import (chezpart)
           (only (chezscheme) printf)
           (core)
@@ -50,11 +62,20 @@
           (regexp)
           (schemify))
 
+  (define jit-mode?
+    (cond
+     [(getenv "PLT_CS_JIT") #t]
+     [(getenv "PLT_CS_MACH") #f]
+     [else #f]))
+
   (define (primitive->compiled-position prim) #f)
   (define (compiled-position->primitive pos) #f)
 
-  (define show-on? (getenv "PLT_LINKLET_SHOW"))
   (define gensym-on? (getenv "PLT_LINKLET_SHOW_GENSYM"))
+  (define pre-jit-on? (getenv "PLT_LINKLET_SHOW_PRE_JIT"))
+  (define show-on? (or gensym-on?
+                       pre-jit-on?
+                       (getenv "PLT_LINKLET_SHOW")))
   (define (show what v)
     (when show-on?
       (printf ";; ~a ---------------------\n" what)
@@ -65,18 +86,54 @@
                         (convert-to-annotation #f v))))))
     v)
 
+  (define (outer-eval s)
+    (if jit-mode?
+        (interpret s)
+        (compile s)))
+
   (define (compile-to-bytevector s)
     (let-values ([(o get) (open-bytevector-output-port)])
-      (compile-to-port (list `(lambda () ,s)) o)
+      (cond
+       [jit-mode? (fasl-write s o)]
+       [else (compile-to-port (list `(lambda () ,s)) o)])
       (bytevector-compress (get))))
 
   (define (eval-from-bytevector c-bv)
-    (let ([bv (bytevector-uncompress c-bv)])
-      ;; HACK: This probably always works for the `lambda` or
-      ;; `let`+`lambda` forms that we compile as linklets, but we need a
-      ;; better function from the host Scheme:
-      (let ([v (fasl-read (open-bytevector-input-port bv))])
-        (((cdr (if (vector? v) (vector-ref v 1) v)))))))
+    (let* ([bv (bytevector-uncompress c-bv)]
+           [i (open-bytevector-input-port bv)])
+      (cond
+       [jit-mode?
+        (outer-eval (fasl-read i))]
+       [else
+        ;; HACK: This probably always works for the `lambda` or
+        ;; `let`+`lambda` forms that we compile as linklets, but we need a
+        ;; better function from the host Scheme:
+        (let ([v (fasl-read i)])
+          (((cdr (if (vector? v) (vector-ref v 1) v)))))])))
+
+  (define-record-type wrapped-annotation
+    (fields (mutable content)
+            arity-mask
+            name)
+    (nongenerative #{wrapped-annotation p6o2m72rgmi36pm8vy559b-0}))
+
+  (define (jit-apply wa free-vars)
+    (let ([f (wrapped-annotation-content wa)])
+      (if (procedure? f)
+          ;; previously JITted, so no need for a wrapper
+          (apply f free-vars)
+          ;; make a wrapper that has the right arity and name
+          ;; and that compiles when called:
+          (make-jit-procedure (lambda ()
+                                (apply (let ([f (wrapped-annotation-content wa)])
+                                         (if (procedure? f)
+                                             f
+                                             (let ([f (compile (wrapped-annotation-content wa))])
+                                               (wrapped-annotation-content-set! wa f)
+                                               f)))
+                                       free-vars))
+                              (wrapped-annotation-arity-mask wa)
+                              (wrapped-annotation-name wa)))))
 
   ;; A linklet is implemented as a procedure that takes an argument
   ;; for each import plus an `variable` for each export, and calling
@@ -121,6 +178,7 @@
       (define-values (impl-lam importss-abi exports-info)
         (schemify-linklet (show "linklet" c)
                           serializable?
+                          jit-mode? ; immediate installation of variables needed for jitify
                           convert-to-annotation
                           unannotate
                           prim-knowns
@@ -132,11 +190,21 @@
         (lift-in-schemified-linklet (remove-annotation-boundary impl-lam)
                                     reannotate
                                     unannotate))
+      (define impl-lam/jitified
+        (if jit-mode?
+            (jitify-schemified-linklet impl-lam/lifts
+                                       prim-knowns
+                                       (lambda (expr arity-mask name)
+                                         (make-wrapped-annotation expr arity-mask name))
+                                       reannotate
+                                       unannotate)
+            impl-lam/lifts))
+      (when pre-jit-on? (show "pre-JIT" impl-lam/lifts))
       ;; Create the linklet:
       (let ([lk (make-linklet (call-with-system-wind
                                (lambda ()
-                                 ((if serializable? compile-to-bytevector compile)
-                                  (show "schemified" impl-lam/lifts))))
+                                 ((if serializable? compile-to-bytevector outer-eval)
+                                  (show "schemified" impl-lam/jitified))))
                               (if serializable? 'faslable 'callable)
                               importss-abi
                               exports-info
@@ -855,13 +923,32 @@
 
   ;; --------------------------------------------------
 
-  (install-linklet-bundle-write!)
+  (define (unbox/check-undefined b name)
+    (check-not-unsafe-undefined (#3%unbox b) name))
 
-  ;; Intentionally indirect, so that the compiler doesn't
-  ;; spend effort inlining:
-  (eval `(define variable-set! ',variable-set!))
-  (eval `(define variable-ref ',variable-ref))
-  (eval `(define variable-ref/no-check ',variable-ref/no-check))
-  (eval `(define make-instance-variable-reference ',make-instance-variable-reference))
+  (define (set-box!/check-undefined b v name)
+    (check-not-unsafe-undefined/assign (unbox b) name)
+    (#3%set-box! b v))
 
-  (void))
+  ;; --------------------------------------------------
+
+  (define-syntax primitive-table
+    (syntax-rules ()
+      [(_ id ...)
+       (let ([ht (make-hasheq)])
+         (hash-set! ht 'id id) ...
+         ht)]))
+
+  (define schemify-table
+    (primitive-table
+     variable-set!
+     variable-ref
+     variable-ref/no-check
+     make-instance-variable-reference
+     unbox/check-undefined
+     set-box!/check-undefined
+     jit-apply))
+
+  ;; --------------------------------------------------
+  
+  (install-linklet-bundle-write!))

@@ -75,7 +75,7 @@
        [(pair? l)
         (will-executor-ready-set! executor (cdr l))
         (enable-interrupts)
-        ((cdar l) (caar l))]
+        (|#%app| (cdar l) (caar l))]
        [else
         (enable-interrupts)
         default]))]))

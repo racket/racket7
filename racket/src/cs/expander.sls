@@ -126,7 +126,8 @@
       (install-table place-table)
       (install-table foreign-table)
       (install-table linklet-table)
-      (install-table internal-table)))
+      (install-table internal-table)
+      (install-table schemify-table)))
 
   (when compile-as-independent?
     ;; Copies of macros provided by `core`, plus

@@ -1,6 +1,7 @@
 (library (schemify)
   (export schemify-linklet
           lift-in-schemified-linklet
+          jitify-schemified-linklet
           prim-knowns
           a-known-procedure
           a-known-constant)

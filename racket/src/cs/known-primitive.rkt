@@ -1,8 +1,5 @@
 #lang racket/base
-
-;; The information gathered here from Racket needs to be done in a
-;; different way in the long run. Most of the same information is
-;; in "kernel-primitives.scm", etc.
+(require racket/include)
 
 (provide known-procedures
          known-constructors
@@ -22,6 +19,33 @@
     [list any]
     [vector any]))
 
+(define-syntax-rule (make-primitive-table id ...)
+  '(id ...))
+
+(include "primitive/kernel.scm")
+(include "primitive/unsafe.scm")
+(include "primitive/flfxnum.scm")
+(include "primitive/paramz.scm")
+(include "primitive/extfl.scm")
+(include "primitive/network.scm")
+(include "primitive/futures.scm")
+(include "primitive/place.scm")
+(include "primitive/foreign.scm")
+(include "primitive/linklet.scm")
+(include "primitive/internal.scm")
+
+(define all-primitives
+  (append kernel-table
+          unsafe-table
+          flfxnum-table
+          paramz-table
+          extfl-table
+          network-table
+          futures-table
+          place-table
+          linklet-table
+          internal-table))
+
 (define-values (known-procedures known-constants)
   ;; Register primitives
   (let ([ns (make-base-namespace)])
@@ -29,7 +53,7 @@
       (namespace-require 'racket/unsafe/ops)
       (namespace-require 'racket/flonum)
       (namespace-require 'racket/fixnum))
-    (for/fold ([known-procedures null] [known-constants null]) ([s (in-list (namespace-mapped-symbols ns))])
+    (for/fold ([known-procedures null] [known-constants null]) ([s (in-list all-primitives)])
       (with-handlers ([exn:fail? (lambda (x) (values known-procedures known-constants))])
         (let ([v (eval s ns)])
           (cond

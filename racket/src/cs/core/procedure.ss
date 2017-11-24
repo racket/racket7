@@ -285,6 +285,18 @@
 
 ;; ----------------------------------------
 
+(define (make-jit-procedure force mask name)
+  (letrec ([p (make-reduced-arity-procedure
+               (lambda args
+                 (let ([f (force)])
+                   (set-reduced-arity-procedure-proc! p f)
+                   (apply f args)))
+               mask
+               name)])
+    p))
+
+;; ----------------------------------------
+
 (define-record procedure-impersonator impersonator (wrapper))
 (define-record procedure-chaperone chaperone (wrapper))
 

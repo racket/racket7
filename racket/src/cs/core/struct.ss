@@ -319,15 +319,21 @@
                              "duplicate property binding"
                              "property" prop))
     (when (eq? prop prop:equal+hash)
-      (record-type-equal-procedure rtd (cadr guarded-val))
-      (record-type-hash-procedure rtd (caddr guarded-val)))
+      (record-type-equal-procedure rtd (let ([p (cadr guarded-val)])
+                                         (if (#%procedure? p)
+                                             p
+                                             (lambda (v1 v2 e?) (|#%app| p v1 v2 e?)))))
+      (record-type-hash-procedure rtd (let ([p (caddr guarded-val)])
+                                        (if (#%procedure? p)
+                                            p
+                                            (lambda (v h) (|#%app| p v h))))))
     (struct-property-set! prop rtd guarded-val)
     (values (hash-set ht prop check-val)
             (append
              (if (eq? old-v none)
                  (map (lambda (super)
                         (cons (car super)
-                              ((cdr super) guarded-val)))
+                              (|#%app| (cdr super) guarded-val)))
                       (struct-type-prop-supers prop))
                  ;; skip supers, because property is already added
                  null)

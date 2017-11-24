@@ -270,6 +270,9 @@
    current-subprocess-custodian-mode
    shell-execute
 
+   current-command-line-arguments
+   executable-yield-handler
+
    reparameterize
    read-accept-bar-quote
 
