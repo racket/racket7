@@ -790,11 +790,10 @@
           ;; to trigger the write barrier
           (let ([host-rep (ctype-host-rep type)]
                 [i (fxsrl offset log-ptr-size-in-bytes)])
-            (vector-set! (cpointer-memory p)
-                         i
-                         (if (eq? host-rep 'scheme-object)
-                             v
-                             (cpointer-address v))))]
+            (if (eq? host-rep 'scheme-object)
+                (vector-set! (cpointer-memory p) i v)
+                (with-interrupts-disabled
+                 (vector-set! (cpointer-memory p) i (cpointer-address v)))))]
          [(and (authentic-cpointer? p)
                (vector? (cpointer-memory p)))
           (raise-unsupported-error 'ptr-set! "unsupported non-atomic memory update")]

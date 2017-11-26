@@ -86,10 +86,18 @@
                         (convert-to-annotation #f v))))))
     v)
 
+  ;; `compile` and `interpret` have `dynamic-wind`-based state
+  ;; that need to be managed correctly when swapping Racket
+  ;; engines/threads.
+  (define (compile* e)
+    (call-with-system-wind (lambda () (compile e))))
+  (define (interpret* e)
+    (call-with-system-wind (lambda () (interpret e))))
+
   (define (outer-eval s)
     (if jit-mode?
-        (interpret s)
-        (compile s)))
+        (interpret* s)
+        (compile* s)))
 
   (define (compile-to-bytevector s)
     (let-values ([(o get) (open-bytevector-output-port)])
@@ -128,7 +136,7 @@
                                 (apply (let ([f (wrapped-annotation-content wa)])
                                          (if (procedure? f)
                                              f
-                                             (let ([f (compile (wrapped-annotation-content wa))])
+                                             (let ([f (compile* (wrapped-annotation-content wa))])
                                                (wrapped-annotation-content-set! wa f)
                                                f)))
                                        free-vars))
