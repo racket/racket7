@@ -45,7 +45,7 @@
                    [new-r (cond
                            [(pair? wrapper)
                             (|#%app| (cdr wrapper) orig r)]
-                           [else (wrapper orig r)])])
+                           [else (|#%app| wrapper orig r)])])
               (when (struct-chaperone? v)
                 (unless (chaperone-of? new-r r)
                   (raise-chaperone-error 'struct-ref "value" r new-r)))

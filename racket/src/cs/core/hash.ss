@@ -284,7 +284,7 @@
       (let loop ([i (hash-iterate-first ht)])
         (when i
           (let-values ([(key val) (hash-iterate-key+value ht i)])
-            (proc key val))
+            (|#%app| proc key val))
           (loop (hash-iterate-next ht i))))]
      [(intmap? ht) (intmap-for-each ht proc)]
      [(weak-equal-hash? ht) (weak-hash-for-each ht proc)]
@@ -293,7 +293,7 @@
       (let loop ([i (hash-iterate-first ht)])
         (when i
           (let-values ([(key val) (hash-iterate-key+value ht i)])
-            (proc key val)
+            (|#%app| proc key val)
             (loop (hash-iterate-next ht i)))))])]))
 
 (define/who hash-map
@@ -308,7 +308,7 @@
             '()
             (cons
              (let-values ([(key val) (hash-iterate-key+value ht i)])
-               (proc key val))
+               (|#%app| proc key val))
              (loop (hash-iterate-next ht i)))))]
      [(intmap? ht) (intmap-map ht proc)]
      [(weak-equal-hash? ht) (weak-hash-map ht proc)]
@@ -319,7 +319,7 @@
          [(not i) '()]
          [else
           (let-values ([(key val) (hash-iterate-key+value ht i)])
-            (cons (proc key val)
+            (cons (|#%app| proc key val)
                   (loop (hash-iterate-next ht i))))]))])]
    [(ht proc try-order?)
     (hash-map ht proc)]))
@@ -770,7 +770,7 @@
     (let loop ([i 0])
       (unless (fx= i len)
         (let ([key (#%vector-ref keys i)])
-          (proc key (hashtable-ref ht key #f)))
+          (|#%app| proc key (hashtable-ref ht key #f)))
         (loop (fx1+ i))))))
 
 (define (weak-hash-map t proc)
@@ -782,7 +782,7 @@
        [(fx= i len) '()]
        [else
         (let ([key (#%vector-ref keys i)])
-          (cons (proc key (hashtable-ref ht key #f))
+          (cons (|#%app| proc key (hashtable-ref ht key #f))
                 (loop (fx1+ i))))]))))
 
 (define (weak-hash-count t)

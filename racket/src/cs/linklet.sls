@@ -41,7 +41,8 @@
           make-instance-variable-reference
           unbox/check-undefined
           set-box!/check-undefined
-          jit-apply
+          jit-extract-closed
+          jit-extract
           schemify-table)
   (import (chezpart)
           (only (chezscheme) printf)
@@ -73,6 +74,7 @@
 
   (define gensym-on? (getenv "PLT_LINKLET_SHOW_GENSYM"))
   (define pre-jit-on? (getenv "PLT_LINKLET_SHOW_PRE_JIT"))
+  (define jit-demand-on? (getenv "PLT_LINKLET_SHOW_JIT_DEMAND"))
   (define show-on? (or gensym-on?
                        pre-jit-on?
                        (getenv "PLT_LINKLET_SHOW")))
@@ -125,23 +127,43 @@
             name)
     (nongenerative #{wrapped-annotation p6o2m72rgmi36pm8vy559b-0}))
 
-  (define (jit-apply wa free-vars)
+  (define (force-wrapped-annotation wa)
     (let ([f (wrapped-annotation-content wa)])
       (if (procedure? f)
+          f
+          (let* ([start (and jit-demand-on? (current-inexact-milliseconds))]
+                 [f (compile* (wrapped-annotation-content wa))])
+            (when jit-demand-on?
+              (let ([end (current-inexact-milliseconds)])
+                (show "JIT demand" (strip-nested-annotations (wrapped-annotation-content wa)))
+                (chez:printf ";; compile time: ~a\n" (- end start))))
+            (wrapped-annotation-content-set! wa f)
+            f))))
+
+  (define (jit-extract-closed wa)
+    (let ([f (wrapped-annotation-content wa)])
+      (if (#2%procedure? f)
           ;; previously JITted, so no need for a wrapper
-          (apply f free-vars)
+          f
           ;; make a wrapper that has the right arity and name
           ;; and that compiles when called:
-          (make-jit-procedure (lambda ()
-                                (apply (let ([f (wrapped-annotation-content wa)])
-                                         (if (procedure? f)
-                                             f
-                                             (let ([f (compile* (wrapped-annotation-content wa))])
-                                               (wrapped-annotation-content-set! wa f)
-                                               f)))
-                                       free-vars))
+          (make-jit-procedure (lambda () (force-wrapped-annotation wa))
                               (wrapped-annotation-arity-mask wa)
                               (wrapped-annotation-name wa)))))
+
+  (define (jit-extract wa)
+    (let ([f (wrapped-annotation-content wa)])
+      (if (#2%procedure? f)
+          ;; previously JITted, so no need for a wrapper
+          f
+          ;; make a wrapper that has the right arity and name
+          ;; and that compiles when called:
+          (lambda free-vars
+            (make-jit-procedure (lambda ()
+                                  (apply (force-wrapped-annotation wa)
+                                         free-vars))
+                                (wrapped-annotation-arity-mask wa)
+                                (wrapped-annotation-name wa))))))
 
   ;; A linklet is implemented as a procedure that takes an argument
   ;; for each import plus an `variable` for each export, and calling
@@ -955,7 +977,8 @@
      make-instance-variable-reference
      unbox/check-undefined
      set-box!/check-undefined
-     jit-apply))
+     jit-extract
+     jit-extract-closed))
 
   ;; --------------------------------------------------
   

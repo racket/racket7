@@ -99,7 +99,7 @@
 (define compile-allow-set!-undefined
   (make-parameter #f))
 
-(define (cache-configuration id proc) (proc))
+(define (cache-configuration id proc) (|#%app| proc))
 
 (define-values (prop:exn:srclocs exn:srclocs? exn:srclocs-accessor)
   (make-struct-type-property 'exn:srclocs))
