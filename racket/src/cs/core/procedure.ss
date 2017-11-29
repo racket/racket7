@@ -286,14 +286,25 @@
 ;; ----------------------------------------
 
 (define (make-jit-procedure force mask name)
-  (letrec ([p (make-reduced-arity-procedure
-               (lambda args
-                 (let ([f (force)])
-                   (set-reduced-arity-procedure-proc! p f)
-                   (apply f args)))
-               mask
-               name)])
-    p))
+  (define p (make-arity-wrapper-procedure
+             (lambda args
+               (let ([f (force)])
+                 (with-interrupts-disabled
+                  ;; atomic with respect to Racket threads,
+                  (let ([name (arity-wrapper-procedure-data p)])
+                    (unless (#%box? name)
+                      (set-arity-wrapper-procedure! p f)
+                      (set-arity-wrapper-procedure-data! p (box name)))))
+                 (apply p args)))
+             mask
+             name))
+  p)
+
+(define (extract-jit-procedure-name p)
+  (let ([name (arity-wrapper-procedure-data p)])
+    (if (#%box? name)
+        (#%unbox name)
+        name)))
 
 ;; ----------------------------------------
 
@@ -433,7 +444,7 @@
                                    args
                                    new-args)))]
                     [continue
-                     ;; To continue iretaing through wrappers:
+                     ;; To continue iterating through wrappers:
                      (lambda (new-args)
                        (if mark-pair
                            (with-continuation-mark (car mark-pair) (cdr mark-pair)

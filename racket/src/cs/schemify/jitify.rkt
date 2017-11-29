@@ -229,10 +229,7 @@
          [`,x
           (define-values (new-vs new-free)
             (jitify-body v env mutables free #f #f in-name))
-          (values (reannotate v (if (and (symbol? u)
-                                         (known-procedure? (hash-ref prim-knowns u #f)))
-                                    new-vs
-                                    `(#%app . ,new-vs)))
+          (values (reannotate v new-vs)
                   new-free)])]
       [`,var
        (cond

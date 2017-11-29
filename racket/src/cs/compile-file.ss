@@ -11,3 +11,6 @@
        (make-source-object sfd bfp efp line col)]))))
 
 (generate-wpo-files #t)
+
+;; Exit with failure on compile error:
+(reset-handler (lambda () (exit 1)))

@@ -34,9 +34,13 @@
        [else
         (n v)]))]
    [(#%procedure? v)
-    (let ([name (((inspect/object v) 'code) 'name)])
-      (and name
-           (string->symbol name)))]
+    (cond
+     [(arity-wrapper-procedure? v)
+      (extract-jit-procedure-name v)]
+     [else
+      (let ([name (((inspect/object v) 'code) 'name)])
+        (and name
+             (string->symbol name)))])]
    [(impersonator? v)
     (object-name (impersonator-val v))]
    [(procedure? v)

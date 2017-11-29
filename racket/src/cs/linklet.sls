@@ -33,7 +33,9 @@
           variable-reference-constant?
 
           jit-mode? ; not exported to racket
-
+          linklet-performance-init!   ; not exported to racket
+          linklet-performance-report! ; not exported to racket
+          
           ;; schemify glue:
           variable-set!
           variable-ref
@@ -72,11 +74,15 @@
   (define (primitive->compiled-position prim) #f)
   (define (compiled-position->primitive pos) #f)
 
+  (define measure-performance? (getenv "PLT_LINKLET_TIMES"))
+  (define omit-debugging? (getenv "PLT_LINKLET_NO_DEBUG"))
+  
   (define gensym-on? (getenv "PLT_LINKLET_SHOW_GENSYM"))
   (define pre-jit-on? (getenv "PLT_LINKLET_SHOW_PRE_JIT"))
   (define jit-demand-on? (getenv "PLT_LINKLET_SHOW_JIT_DEMAND"))
   (define show-on? (or gensym-on?
                        pre-jit-on?
+                       jit-demand-on?
                        (getenv "PLT_LINKLET_SHOW")))
   (define (show what v)
     (when show-on?
@@ -87,6 +93,63 @@
                        (remove-annotation-boundary
                         (convert-to-annotation #f v))))))
     v)
+
+  (define region-times (make-eq-hashtable))
+  (define region-counts (make-eq-hashtable))
+  (define region-memories (make-eq-hashtable))
+  (define current-start-time 0)
+  (define-syntax performance-region
+    (syntax-rules ()
+      [(_ label e ...) (measure-performance-region label (lambda () e ...))]))
+  (define (measure-performance-region label thunk)
+    (cond
+     [measure-performance?
+      (let ([old-start current-start-time])
+        (set! current-start-time (current-inexact-milliseconds))
+        (begin0
+         (thunk)
+         (let ([delta (- (current-inexact-milliseconds) current-start-time)])
+           (hashtable-update! region-times label (lambda (v) (+ v delta)) 0)
+           (hashtable-update! region-counts label add1 0)
+           (set! current-start-time (+ old-start delta)))))]
+     [else (thunk)]))
+  (define (add-performance-memory! label delta)
+    (when measure-performance?
+      (hashtable-update! region-memories label (lambda (v) (+ v delta)) 0)))
+  (define (linklet-performance-init!)
+    (hashtable-set! region-times 'boot
+                    (let ([t (sstats-cpu (statistics))])
+                      (+ (* 1000.0 (time-second t))
+                         (/ (time-nanosecond t) 1000000.0)))))
+  (define (linklet-performance-report!)
+    (when measure-performance?
+      (let ([total 0])
+        (define (report label n units extra)
+          (define (pad v w)
+            (let ([s (chez:format "~a" v)])
+              (string-append (make-string (max 0 (- w (string-length s))) #\space)
+                             s)))
+          (chez:printf ";; ~a: ~a ~a~a\n"
+                       (pad label 15)
+                       (pad (round (inexact->exact n)) 5)
+                       units
+                       extra))
+        (define (ht->sorted-list ht)
+          (list-sort (lambda (a b) (< (cdr a) (cdr b)))
+                     (hash-table-map ht cons)))
+        (for-each (lambda (p)
+                    (let ([label (car p)]
+                          [n (cdr p)])
+                      (set! total (+ total n))
+                      (report label n 'ms (let ([c (hashtable-ref region-counts label 0)])
+                                            (if (zero? c)
+                                                ""
+                                                (chez:format " ; ~a times" c))))))
+                  (ht->sorted-list region-times))
+        (report 'total total 'ms "")
+        (chez:printf ";;\n")
+        (for-each (lambda (p) (report (car p) (/ (cdr p) 1024 1024) 'MB ""))
+                  (ht->sorted-list region-memories)))))
 
   ;; `compile` and `interpret` have `dynamic-wind`-based state
   ;; that need to be managed correctly when swapping Racket
@@ -105,21 +168,35 @@
     (let-values ([(o get) (open-bytevector-output-port)])
       (cond
        [jit-mode? (fasl-write s o)]
-       [else (compile-to-port (list `(lambda () ,s)) o)])
+       [else (parameterize ([generate-inspector-information (not omit-debugging?)])
+               (compile-to-port (list `(lambda () ,s)) o))])
       (bytevector-compress (get))))
 
   (define (eval-from-bytevector c-bv)
-    (let* ([bv (bytevector-uncompress c-bv)]
+    (add-performance-memory! 'uncompress (bytevector-length c-bv))
+    (let* ([bv (performance-region
+                'uncompress
+                (bytevector-uncompress c-bv))]
            [i (open-bytevector-input-port bv)])
+      (add-performance-memory! 'faslin (bytevector-length bv))
       (cond
        [jit-mode?
-        (outer-eval (fasl-read i))]
+        (let ([r (performance-region
+                  'faslin
+                  (fasl-read i))])
+          (performance-region
+           'outer
+           (outer-eval r)))]
        [else
         ;; HACK: This probably always works for the `lambda` or
         ;; `let`+`lambda` forms that we compile as linklets, but we need a
         ;; better function from the host Scheme:
-        (let ([v (fasl-read i)])
-          (((cdr (if (vector? v) (vector-ref v 1) v)))))])))
+        (let ([v (performance-region
+                  'faslin
+                  (fasl-read i))])
+          (performance-region
+           'outer
+           (((cdr (if (vector? v) (vector-ref v 1) v))))))])))
 
   (define-record-type wrapped-annotation
     (fields (mutable content)
@@ -131,14 +208,13 @@
     (let ([f (wrapped-annotation-content wa)])
       (if (procedure? f)
           f
-          (let* ([start (and jit-demand-on? (current-inexact-milliseconds))]
-                 [f (compile* (wrapped-annotation-content wa))])
-            (when jit-demand-on?
-              (let ([end (current-inexact-milliseconds)])
-                (show "JIT demand" (strip-nested-annotations (wrapped-annotation-content wa)))
-                (chez:printf ";; compile time: ~a\n" (- end start))))
-            (wrapped-annotation-content-set! wa f)
-            f))))
+          (performance-region
+           'on-demand
+           (let* ([f (compile* (wrapped-annotation-content wa))])
+             (when jit-demand-on?
+               (show "JIT demand" (strip-nested-annotations (wrapped-annotation-content wa))))
+             (wrapped-annotation-content-set! wa f)
+             f)))))
 
   (define (jit-extract-closed wa)
     (let ([f (wrapped-annotation-content wa)])
@@ -164,7 +240,7 @@
                                          free-vars))
                                 (wrapped-annotation-arity-mask wa)
                                 (wrapped-annotation-name wa))))))
-
+  
   ;; A linklet is implemented as a procedure that takes an argument
   ;; for each import plus an `variable` for each export, and calling
   ;; the procedure runs the linklet body.
@@ -204,55 +280,57 @@
      [(c name import-keys) (compile-linklet c name import-keys (lambda (key) (values #f #f)) #t)]
      [(c name import-keys get-import) (compile-linklet c name import-keys get-import #t)]
      [(c name import-keys get-import serializable?)
-      ;; Convert the linklet S-expression to a `lambda` S-expression:
-      (define-values (impl-lam importss-abi exports-info)
-        (schemify-linklet (show "linklet" c)
-                          serializable?
-                          jit-mode? ; immediate installation of variables needed for jitify
-                          convert-to-annotation
-                          unannotate
-                          prim-knowns
-                          ;; Callback to get a specific linklet for a
-                          ;; given import:
-                          (lambda (index)
-                            (lookup-linklet-or-instance get-import import-keys index))))
-      (define impl-lam/lifts
-        (lift-in-schemified-linklet (remove-annotation-boundary impl-lam)
-                                    reannotate
-                                    unannotate))
-      (define impl-lam/jitified
-        (if jit-mode?
-            (jitify-schemified-linklet impl-lam/lifts
-                                       prim-knowns
-                                       (lambda (expr arity-mask name)
-                                         (make-wrapped-annotation expr arity-mask name))
-                                       reannotate
-                                       unannotate)
-            impl-lam/lifts))
-      (when pre-jit-on? (show "pre-JIT" impl-lam/lifts))
-      ;; Create the linklet:
-      (let ([lk (make-linklet (call-with-system-wind
-                               (lambda ()
-                                 ((if serializable? compile-to-bytevector outer-eval)
-                                  (show "schemified" impl-lam/jitified))))
-                              (if serializable? 'faslable 'callable)
-                              importss-abi
-                              exports-info
-                              name
-                              (map (lambda (ps)
-                                     (map (lambda (p) (if (pair? p) (car p) p))
-                                          ps))
-                                   (cadr c))
-                              (map (lambda (p) (if (pair? p) (cadr p) p))
-                                   (caddr c)))])
-        (show "compiled" 'done)
-        ;; In general, `compile-linklet` is allowed to extend the set
-        ;; of linklet imports if `import-keys` is provided (e.g., for
-        ;; cross-linklet optimization where inlining needs a new
-        ;; direct import) - but we don't do that, currently
-        (if import-keys
-            (values lk import-keys)
-            lk))]))
+      (performance-region
+       'compile
+       ;; Convert the linklet S-expression to a `lambda` S-expression:
+       (define-values (impl-lam importss-abi exports-info)
+         (schemify-linklet (show "linklet" c)
+                           serializable?
+                           jit-mode? ; immediate installation of variables needed for jitify
+                           convert-to-annotation
+                           unannotate
+                           prim-knowns
+                           ;; Callback to get a specific linklet for a
+                           ;; given import:
+                           (lambda (index)
+                             (lookup-linklet-or-instance get-import import-keys index))))
+       (define impl-lam/lifts
+         (lift-in-schemified-linklet (remove-annotation-boundary impl-lam)
+                                     reannotate
+                                     unannotate))
+       (define impl-lam/jitified
+         (if jit-mode?
+             (jitify-schemified-linklet impl-lam/lifts
+                                        prim-knowns
+                                        (lambda (expr arity-mask name)
+                                          (make-wrapped-annotation expr arity-mask name))
+                                        reannotate
+                                        unannotate)
+             impl-lam/lifts))
+       (when pre-jit-on? (show "pre-JIT" impl-lam/lifts))
+       ;; Create the linklet:
+       (let ([lk (make-linklet (call-with-system-wind
+                                (lambda ()
+                                  ((if serializable? compile-to-bytevector outer-eval)
+                                   (show "schemified" impl-lam/jitified))))
+                               (if serializable? 'faslable 'callable)
+                               importss-abi
+                               exports-info
+                               name
+                               (map (lambda (ps)
+                                      (map (lambda (p) (if (pair? p) (car p) p))
+                                           ps))
+                                    (cadr c))
+                               (map (lambda (p) (if (pair? p) (cadr p) p))
+                                    (caddr c)))])
+         (show "compiled" 'done)
+         ;; In general, `compile-linklet` is allowed to extend the set
+         ;; of linklet imports if `import-keys` is provided (e.g., for
+         ;; cross-linklet optimization where inlining needs a new
+         ;; direct import) - but we don't do that, currently
+         (if import-keys
+             (values lk import-keys)
+             lk)))]))
 
   (define (lookup-linklet-or-instance get-import import-keys index)
     ;; Use the provided callback to get an linklet for the
@@ -309,18 +387,20 @@
                   (linklet-code-set! linklet code)
                   (linklet-format-set! linklet 'callable)))))
            ;; Call the linklet:
-           (apply
-            (if (eq? 'callable (linklet-format linklet))
-                (linklet-code linklet)
-                (eval-from-bytevector (linklet-code linklet)))
-            (make-variable-reference target-instance #f)
-            (append (apply append
-                           (map extract-variables
-                                import-instances
-                                (linklet-importss linklet)
-                                (linklet-importss-abi linklet)))
-                    (create-variables target-instance
-                                      (linklet-exports linklet))))))]
+           (performance-region
+            'instantiate
+            (apply
+             (if (eq? 'callable (linklet-format linklet))
+                 (linklet-code linklet)
+                 (eval-from-bytevector (linklet-code linklet)))
+             (make-variable-reference target-instance #f)
+             (append (apply append
+                            (map extract-variables
+                                 import-instances
+                                 (linklet-importss linklet)
+                                 (linklet-importss-abi linklet)))
+                     (create-variables target-instance
+                                       (linklet-exports linklet)))))))]
        [else
         ;; Make a fresh instance, recur, and return the instance
         (let ([i (make-instance (linklet-name linklet))])

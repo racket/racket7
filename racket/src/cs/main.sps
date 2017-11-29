@@ -24,16 +24,27 @@
          (io)
          (thread)
          (only (linklet)
-               jit-mode?))
+               jit-mode?
+               linklet-performance-init!
+               linklet-performance-report!))
+
+ (linklet-performance-init!)
 
  (unless (pair? (command-line-arguments))
    (error 'racket "expected a `self` executable path to start"))
  (set-exec-file! (path->complete-path (car (command-line-arguments))))
 
  (|#%app| use-compiled-file-paths
-  (list (string->path (string-append "compiled/" (if jit-mode?
-                                                     "cs"
-                                                     (symbol->string (machine-type)))))))
+  (list (string->path (string-append "compiled/"
+                                     (cond
+                                      [(getenv "PLT_ZO_PATH")
+                                       => (lambda (s)
+                                            (unless (and (not (equal? s ""))
+                                                         (relative-path? s))
+                                              (error 'racket "PLT_ZO_PATH environment variable is not a valid path"))
+                                            s)]
+                                      [jit-mode? "cs"]
+                                      [else (symbol->string (machine-type))])))))
 
  (define (see saw . args)
    (let loop ([saw saw] [args args])
@@ -298,6 +309,7 @@
                                     (+ (* (time-second t) 1000)
                                        (quotient (time-nanosecond t) 1000000))))
                      #f))
+      (linklet-performance-report!)
       (|#%app| orig v))))
 
  (define stderr-logging
