@@ -61,7 +61,8 @@
                          (unless (and (vector? v)
                                       (andmap string? l))
                            (raise-argument-error 'current-command-line-arguments
-                                                 "(vectorof string?)"))
+                                                 "(vectorof string?)"
+                                                 l))
                          (list->vector (map string->immutable-string l)))))
 
 (define current-code-inspector

@@ -1061,5 +1061,5 @@
      jit-extract-closed))
 
   ;; --------------------------------------------------
-  
+
   (install-linklet-bundle-write!))

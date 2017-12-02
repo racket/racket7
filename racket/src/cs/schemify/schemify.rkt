@@ -296,13 +296,15 @@
                          raw-def)]
                     [`(make-struct-field-mutator ,(? (lambda (v) (wrap-eq? v -set!))) ,pos ,_)
                      (define raw-def `(define ,raw-acc/mut (record-mutator ,struct:s ,pos)))
+                     (define abs-pos (+ pos (- (struct-type-info-field-count sti)
+                                               (struct-type-info-immediate-field-count sti))))
                      (if can-impersonate?
                          `(begin
                             ,raw-def
                             (define ,acc/mut
                               (lambda (s v) (if (,raw-s? s)
                                                 (,raw-acc/mut s v)
-                                                (pariah (impersonate-set! ,raw-acc/mut ,struct:s ,pos s v))))))
+                                                (pariah (impersonate-set! ,raw-acc/mut ,struct:s ,pos ,abs-pos s v))))))
                          raw-def)]
                     [`,_ (error "oops")]))
               (define ,(gensym)

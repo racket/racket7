@@ -96,10 +96,10 @@
       [(and (procedure? r) (procedure-arity-includes? r 4))
        (unless user-peek-in
          (end-atomic)
-         (raise-result-error who
-                             (string-append "the port has no specific peek procedure, so"
-                                            " a special read result is not allowed")
-                             "special result" r))]
+         (raise-arguments-error who
+                                (string-append "the port has no specific peek procedure, so"
+                                               " a special read result is not allowed")
+                                "special result" r))]
       [(pipe-input-port? r)
        (set! input-pipe r)]
       [(evt? r) r]

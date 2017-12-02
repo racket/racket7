@@ -2,13 +2,13 @@ RACKET = ../../bin/racket
 SCHEME = scheme
 
 # Controls whether base layers are built as unsafe:
-UNSAFE_COMP = # '(optimize-level 3)'
+UNSAFE_COMP = # --unsafe
 
 # Controls whether core is built as unsafe:
-CORE_UNSAFE_COMP = '(optimize-level 3)'
+CORE_UNSAFE_COMP = --unsafe
 
-BASE_COMP = '(load "compile-config.ss")'
-COMP = echo $(UNSAFE_COMP) $(BASE_COMP)
+COMPILE_FILE = $(SCHEME) --script compile-file.ss
+COMPILE_FILE_DEPS = compile-file.ss
 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
@@ -37,19 +37,19 @@ expander-demo: expander.so demo/expander.ss
 	$(SCHEME) $(EXPANDER_DEPS) expander.so demo/expander.ss
 
 run: main.so ../../bin/racket
-	${SCHEME} --script main.so ../../bin/racket $(ARGS)
+	$(SCHEME) --script main.so ../../bin/racket $(ARGS)
 
 setup:
 	$(MAKE) run ARGS="-W 'info@compiler/cm error' -l- setup $(ARGS)"
 
 run-wpo: racket.so ../../bin/racket
-	${SCHEME} --script racket.so ../../bin/racket $(ARGS)
+	$(SCHEME) --script racket.so ../../bin/racket $(ARGS)
 
-racket.so: main.so
-	$(COMP) '(compile-whole-program "main.wpo" "racket.so" #t)' | $(SCHEME) -q
+racket.so: main.so $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) --whole-program racket.so main.wpo
 
-main.so: $(MAIN_DEPS) main.sps
-	$(COMP) '(compile-file "main.sps")' | $(SCHEME) -q $(MAIN_DEPS)
+main.so: $(MAIN_DEPS) main.sps $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) main.sps $(MAIN_DEPS)
 
 strip:
 	${SCHEME} --script strip.ss $(MAIN_DEPS) racket.so
@@ -70,8 +70,8 @@ PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.
                     primitive/futures.scm primitive/foreign.scm primitive/place.scm \
                     primitive/linklet.scm primitive/internal.scm
 
-expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS)
-	$(COMP) '(compile-file "expander.sls")' | $(SCHEME) -q $(EXPANDER_DEPS)
+expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS) $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) expander.sls $(EXPANDER_DEPS)
 
 compiled/expander.scm: ../expander/compiled/expander.rktl $(CONVERT_DEPS)
 	$(CONVERT) ../expander/compiled/expander.rktl compiled/expander.scm
@@ -85,12 +85,12 @@ expander-rktl:
 linklet-demo: linklet.so
 	$(SCHEME) $(LINKLET_DEPS) linklet.so demo/linklet.ss
 
-linklet.so: linklet.sls $(LINKLET_DEPS)
-	$(COMP) '(compile-file "linklet.sls")' | $(SCHEME) -q $(LINKLET_DEPS)
+linklet.so: linklet.sls $(LINKLET_DEPS) $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) linklet.sls $(LINKLET_DEPS)
 
 
-schemify.so: schemify.sls compiled/schemify.scm $(SCHEMIFY_DEPS)
-	$(COMP) '(compile-file "schemify.sls")' | $(SCHEME) -q $(SCHEMIFY_DEPS)
+schemify.so: schemify.sls compiled/schemify.scm $(SCHEMIFY_DEPS) $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) schemify.sls $(SCHEMIFY_DEPS)
 
 compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
 	$(CONVERT) --skip-export compiled/schemify.rktl compiled/schemify.scm
@@ -105,8 +105,8 @@ compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
 	$(RACKET) ../expander/bootstrap-run.rkt -t schemify/main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/schemify.rktl
 
 
-known-primitive.so: known-primitive.sls
-	$(COMP) '(compile-file "known-primitive.sls")' | $(SCHEME) -q
+known-primitive.so: known-primitive.sls $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) known-primitive.sls
 
 known-primitive.sls: known-primitive.rkt
 	$(RACKET) known-primitive.rkt
@@ -115,8 +115,8 @@ known-primitive.sls: known-primitive.rkt
 regexp-demo: regexp.so
 	$(SCHEME) $(REGEXP_DEPS) regexp.so demo/regexp.ss
 
-regexp.so: compiled/regexp.scm regexp.sls $(REGEXP_DEPS)
-	$(COMP) '(compile-file "regexp.sls")' | $(SCHEME) -q $(REGEXP_DEPS)
+regexp.so: compiled/regexp.scm regexp.sls $(REGEXP_DEPS) $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) regexp.sls $(REGEXP_DEPS)
 
 compiled/regexp.scm: ../regexp/compiled/regexp.rktl $(CONVERT_DEPS)
 	$(CONVERT) ../regexp/compiled/regexp.rktl compiled/regexp.scm
@@ -131,8 +131,8 @@ regexp-rktl:
 io-demo: io.so
 	$(SCHEME) $(IO_DEPS) io.so demo/io.ss
 
-io.so: compiled/io.scm io.sls $(IO_DEPS) ../io/compiled/rktio.rktl
-	$(COMP) '(compile-file "io.sls")' | $(SCHEME) -q $(IO_DEPS)
+io.so: compiled/io.scm io.sls $(IO_DEPS) ../io/compiled/rktio.rktl $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) io.sls $(IO_DEPS)
 
 compiled/io.scm: ../io/compiled/io.rktl $(CONVERT_DEPS)
 	$(CONVERT) ../io/compiled/io.rktl compiled/io.scm
@@ -153,8 +153,8 @@ rktio:
 thread-demo: thread.so
 	$(SCHEME) $(THREAD_DEPS) thread.so demo/thread.ss
 
-thread.so: compiled/thread.scm thread.sls $(THREAD_DEPS)
-	$(COMP) '(compile-file "thread.sls")' | $(SCHEME) -q $(THREAD_DEPS)
+thread.so: compiled/thread.scm thread.sls $(THREAD_DEPS) $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) thread.sls $(THREAD_DEPS)
 
 compiled/thread.scm: ../thread/compiled/thread.rktl $(CONVERT_DEPS)
 	$(CONVERT) ../thread/compiled/thread.rktl compiled/thread.scm
@@ -251,11 +251,11 @@ CORE_SRCS = core/check.ss \
             core/version.ss \
             ../racket/src/schvers.h
 
-core.so: chezpart.so core.sls $(CORE_SRCS)
-	$(COMP) $(CORE_UNSAFE_COMP) '(compile-file "core.sls")' | $(SCHEME) -q
+core.so: chezpart.so core.sls $(CORE_SRCS) $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) $(CORE_UNSAFE_COMP) core.sls
 
-chezpart.so: chezpart.sls
-	$(COMP) '(compile-file "chezpart.sls")' | $(SCHEME) -q
+chezpart.so: chezpart.sls $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) chezpart.sls
 
 clean:
 	rm -f chezpart.so core.so regexp.so io.so immutable-hash.so linklet.so known-primitive.so linklet.so expander.so schemify.so

@@ -1,6 +1,18 @@
 
-(reset-handler abort)
-(keyboard-interrupt-handler abort)
+;; Check to make we're using a build of Chez Scheme
+;; that has all the features we need.
+
+(define (check-defined sym)
+  (unless (guard (x [else #f]) (eval sym))
+    (error 'compile-file
+           (format
+            "missing definition of `~a`; probably you need a newer Chez Scheme"
+            sym))))
+
+(check-defined 'box-cas!)
+(check-defined 'make-arity-wrapper-procedure)
+
+;; ----------------------------------------
 
 (current-make-source-object
  (lambda (sfd bfp efp)
@@ -12,5 +24,38 @@
 
 (generate-wpo-files #t)
 
-;; Exit with failure on compile error:
-(reset-handler (lambda () (exit 1)))
+(define (get-opt args flag arg-count)
+  (cond
+   [(null? args) #f]
+   [(equal? (car args) flag)
+    (unless (> (length args) arg-count)
+      (error 'compile-file "missing argument for ~a" flag))
+    (cdr args)]
+   [else #f]))
+
+(define whole-program? #f)
+
+(define-values (src deps)
+  (let loop ([args (command-line-arguments)])
+    (cond
+     [(get-opt args "--unsafe" 0)
+      => (lambda (args)
+           (optimize-level 3)
+           (loop args))]
+     [(get-opt args "--whole-program" 0)
+      => (lambda (args)
+           (set! whole-program? #t)
+           (loop args))]
+     [(null? args)
+      (error 'compile-file "missing source file")]
+     [else
+      (values (car args) (cdr args))])))
+
+(cond
+ [whole-program?
+  (unless (= 1 (length deps))
+    (error 'compile-file "expected a single dependency for whole-program compilation"))
+  (compile-whole-program (car deps) src #t)]
+ [else
+  (for-each load deps)
+  (compile-file src)])
