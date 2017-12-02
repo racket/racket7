@@ -1,4 +1,4 @@
-;; locking code for core-hash.ss
+;; locking code for hash.ss
 
 (define make-scheduler-lock (lambda () #f))
 (define scheduler-lock-acquire (lambda (l) (void)))

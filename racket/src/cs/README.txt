@@ -1,4 +1,4 @@
-Work-in-progress for running Racket on Chez Scheme.
+Work-in-progress Racket on Chez Scheme.
 
 
 Requirements
@@ -85,47 +85,56 @@ Structure
 ---------
 
 The reimplementation on Chez Scheme is meant to export the same
-interface as the traditional Racket virtual machine (in "../racket").
-The most primitive pieces of the bridge are implemented in the
-"core.sls" library, which is implemented directly in Chez Scheme. The
-rest builds up in layers, each of which is implemented in Racket:
+interface as the traditional Racket virtual machine in "../racket":
+the macro expander and primitive modules such as `#%kernel` and
+`#%network`.
+
+The implementation is in layers. The immediate layer over Chez Scheme
+is called "Rumble", and it implements delimited continuations,
+structures, chaperones and imperaontors, engines (for threads), and
+similar base functionality. The Rumble layer is implemeneted in Chez
+Scheme.
+
+The rest of the layers are implemented in Racket:
 
    thread
    io
    regexp
    expander
+   schemify
 
 Each of those layers is implemented in a sibling directory of this
-one.
+one, except that "schemify" is a subdirectory of this one. Each layer
+is expanded (using "expander", of course) and then compiled to Chez
+Scheme (using "schemify") to implement Racket.
 
-Although the "thread" layer is implemented in Racket, in its fully
-expanded form it must not refer to any functionality of "io",
-"regexp", or "expander", while the expanded form of "io" must not
-refer to "regexp" or "expander" functionality, and so on. Each layer
-can use `racket/base` functionality, but beware that code from
-`racket/base` will be duplicated in each layer.
+The fully expanded form of each layer must not refer to any
+functionality of previous layers. For example, the expander "thread"
+must not refer to functionality implemented by "io", "regexp", or
+"expander", while the expanded form of "io" must not refer to "regexp"
+or "expander" functionality. Each layer can use `racket/base`
+functionality, but beware that code from `racket/base` will be
+duplicated in each layer.
 
 The "io" layer relies on a shared library, rktio, to provide a uniform
 interface to OS resources. The rktio source is in a "rktio" sibling
-directory.
+directory to this one.
 
 Files in this directory:
 
  *.sls - Chez Scheme libraries that provide implementations of Racket
          primitives, building up to the Racket expander. The
-         "core.sls" library is implemented directly in Chez Scheme.
+         "rumble.sls" library is implemented directly in Chez Scheme.
          For most other cases, a corresponding "compiled/*.scm" file
          contains the implementation extracted from from expanded and
          flattened Racket code. Each "*.sls" file is built to "*.so".
 
- core/*.ss - Part of "core.sls" (via `include`) to implement core data
-         structures, immutable hash tables, structs, etc.
+ rumble/*.ss - Parts of "rumble.sls" (via `include`) to implement data
+         structures, immutable hash tables, structs, delimited
+         continuations, engines, impersonators, etc.
 
  *.scm - a temporary compatibility layer to be `include`d into an
          ".sls" library.
-
- compiled/*.scm (generated) - A conversion from a ".rktl" file to be
-         `included`d into an ".sls" library.
 
  ../*/compiled/*.rktl (generated) - A Racket library (e.g., to
          implement regexps) that has been fully macro expanded and
@@ -141,6 +150,9 @@ Files in this directory:
          target. Run `make rktl` if you change any of those
          implementations when using a target other than the default.
 
+ compiled/*.scm (generated) - A conversion from a ".rktl" file to be
+         `included`d into an ".sls" library.
+
  ../build/so-rktio/rktio.rktl (generated) and
  ../../lib/librktio.{so,dylib,dll} (generated) - Created when building
          the "io" layer, the "rktio.rktl" file contains FFI descriptions
@@ -150,13 +162,13 @@ Files in this directory:
          CAUTION: The makefile here doesn't track dependencies for
          rktio, so use `make rktio` if you change its implementation.
 
- primitive/*.scm - for "expander.sls", tables of bindings for
+ primitive/*.ss - for "expander.sls", tables of bindings for
          primitive linklet instances; see "From primitives to modules"
          below for more information.
 
- convert.rkt - A linklet-to-library-body compiler, which is used to
-         convert a ".rktl" file to a ".scm" file to inclusion in an
-         ".sls" library.
+ convert.rkt - A "schemify"-based linklet-to-library-body compiler,
+         which is used to convert a ".rktl" file to a ".scm" file to
+         inclusion in an ".sls" library.
 
  demo/*.ss - Chez Scheme scripts to check that a library basically
          works. For example "demo/regexp.ss" runs the regexp matcher
@@ -214,8 +226,8 @@ pre-conversion form.
 Development Mode
 ----------------
 
- If you make changes to file in "core", you should turn off
- `[CORE_]UNSAFE_COMP` in the makefile.
+ If you make changes to file in "rumble", you should turn off
+ `[RUMBLE_]UNSAFE_COMP` in the makefile.
 
 
 FFI Differences
@@ -255,8 +267,8 @@ Status and Thoughts on Various Racket Subsystems
    when it is needed.
 
  * Racket's delimited continuations, continuation marks, threads, and
-   events are mostly in place (see "core/control.ss",
-   "core/engine.ss", and the source for "thread.rktl").
+   events are mostly in place (see "rumble/control.ss",
+   "rumble/engine.ss", and the source for "thread.rktl").
 
  * The "rktio" library fills the gap between Racket and Chez Scheme's
    native I/O. The "rktio" library provides a minimal, non-blocking,
@@ -293,23 +305,24 @@ Performance Notes
 
 The best-case scenario for performance is
 
- * `UNSAFE_COMP` is enabled in "Makefile" --- not on by default, because
-   the core and base layers are not yet good enough.
+ * `UNSAFE_COMP` is enabled in "Makefile" --- not on by default,
+   because the Rumble and other layers are not yet good enough.
 
-   Effectiveness: Matters the most for "core.so", which has its own
-   setting, but otherwise affects a from-source `racket/base` expansion
-   by about 5%.
+   Effectiveness: Matters the most for "rumble.so", which has its own
+   setting, but otherwise affects a from-source `racket/base`
+   expansion by about 5%.
 
- * `CORE_UNSAFE_COMP` is enabled in "Makefile" --- applies to "core.so"
-   even if `UNSAFE_COMP` is disabled.
+ * `RUMBLE_UNSAFE_COMP` is enabled in "Makefile" --- applies to
+   "rumble.so" even if `UNSAFE_COMP` is disabled.
 
    Effectiveness: Can mean a 10-20% improvement in loading
-   `racket/base` from source.
+   `racket/base` from source. Since the Rumble implementation is in
+   pretty good shape, `RUMBLE_UNSAFE_COMP` is enabled by default.
 
  * `compile-as-independent?` is #f in "expander.sls" --- not set to #f
    currently. In machine-code mode, it causes compiled files for
    Racket modules to be incompatible with any change or rebuilding of
-   the core and base layers.
+   the Rumble and other layers.
 
    Effectiveness: Little effect on tasks like loading `racket/base`
    from source, but substantial effects on programs where the Chez
@@ -317,8 +330,15 @@ The best-case scenario for performance is
    microbenchmarks).
 
  * `make strip` run --- strips away inspector information to make the
-   core and base layers load more quickly, but with the loss of
+   Rumble and other layers load more quickly, but with the loss of
    backtrace information.
 
-   Effectivess: Cuts the load time for the core and base layers by
+   Effectivess: Cuts the load time for the Rumble and other layers by
    30-50%.
+
+ * `PLT_LINKLET_NO_DEBUG` --- an environment variable that, if set,
+   disables Chez Scheme inspector information in code compiled by
+   Racket-on-Chez.
+
+   Effectivess: Cuts load time and memory use for Racket programs by
+   as much as 50%, but removes source informaton from stack traces.

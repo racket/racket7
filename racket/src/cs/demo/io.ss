@@ -1,4 +1,4 @@
-(import (core)
+(import (rumble)
         (io)
         (thread))
 

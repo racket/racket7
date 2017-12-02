@@ -12,7 +12,7 @@
                   [input-port? chez:input-port?]
                   [output-port? chez:output-port?]
                   [flush-output-port flush-output])
-          (core)
+          (rumble)
           (thread))
   ;; ----------------------------------------
   ;; Tie knots:

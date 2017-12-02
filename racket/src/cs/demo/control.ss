@@ -1,4 +1,4 @@
-(import (core)
+(import (rumble)
         (rename (only (chezscheme) dynamic-wind)
                 (dynamic-wind chez:dynamic-wind)))
 

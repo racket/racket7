@@ -6,20 +6,20 @@
           version
           exit)
   (import (chezpart)
-          (rename (core)
-                  ;; These names are not public primitives, so "expander.scm"
+          (rename (rumble)
+                  ;; These names are not public primitives, so "expander.ss"
                   ;; can define them:
-                  [correlated? core:correlated?]
-                  [correlated-source core:correlated-source]
-                  [correlated-line core:correlated-line]
-                  [correlated-column core:correlated-column]
-                  [correlated-position core:correlated-position]
-                  [correlated-span core:correlated-span]
-                  [correlated-e core:correlated-e]
-                  [correlated->datum core:correlated->datum]
-                  [datum->correlated core:datum->correlated]
-                  [correlated-property core:correlated-property]
-                  [correlated-property-symbol-keys core:correlated-property-symbol-keys])
+                  [correlated? rumble:correlated?]
+                  [correlated-source rumble:correlated-source]
+                  [correlated-line rumble:correlated-line]
+                  [correlated-column rumble:correlated-column]
+                  [correlated-position rumble:correlated-position]
+                  [correlated-span rumble:correlated-span]
+                  [correlated-e rumble:correlated-e]
+                  [correlated->datum rumble:correlated->datum]
+                  [datum->correlated rumble:datum->correlated]
+                  [correlated-property rumble:correlated-property]
+                  [correlated-property-symbol-keys rumble:correlated-property-symbol-keys])
           (thread)
           (regexp)
           (io)
@@ -60,19 +60,19 @@
       [(_ ht [local prim]) (hash-set! ht 'prim local)]
       [(_ ht prim) (hash-set! ht 'prim prim)]))
 
-  (include "expander-compat.scm")
+  (include "expander-compat.ss")
 
-  (include "primitive/kernel.scm")
-  (include "primitive/unsafe.scm")
-  (include "primitive/flfxnum.scm")
-  (include "primitive/paramz.scm")
-  (include "primitive/extfl.scm")
-  (include "primitive/network.scm")
-  (include "primitive/futures.scm")
-  (include "primitive/place.scm")
-  (include "primitive/foreign.scm")
-  (include "primitive/linklet.scm")
-  (include "primitive/internal.scm")
+  (include "primitive/kernel.ss")
+  (include "primitive/unsafe.ss")
+  (include "primitive/flfxnum.ss")
+  (include "primitive/paramz.ss")
+  (include "primitive/extfl.ss")
+  (include "primitive/network.ss")
+  (include "primitive/futures.ss")
+  (include "primitive/place.ss")
+  (include "primitive/foreign.ss")
+  (include "primitive/linklet.ss")
+  (include "primitive/internal.ss")
 
   ;; ----------------------------------------
 
@@ -84,7 +84,7 @@
   ;; need to be there imported (prefered) or defined (less efficient,
   ;; but less tied to library implementations)
   (unless compile-as-independent?
-    (eval `(import (rename (core)
+    (eval `(import (rename (rumble)
                            [correlated? syntax?]
                            [correlated-source syntax-source]
                            [correlated-line syntax-line]
@@ -130,7 +130,7 @@
       (install-table schemify-table)))
 
   (when compile-as-independent?
-    ;; Copies of macros provided by `core`, plus
+    ;; Copies of macros provided by `rumble`, plus
     ;; other bindings assumed by schemify:
     (eval '(define-syntax with-continuation-mark
              (syntax-rules ()

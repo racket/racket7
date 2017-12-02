@@ -1,4 +1,4 @@
-(import (core)
+(import (rumble)
         (thread))
 
 (define-syntax declare

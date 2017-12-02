@@ -1,4 +1,4 @@
-(import (core))
+(import (rumble))
 
 (define-syntax time
   (syntax-rules ()

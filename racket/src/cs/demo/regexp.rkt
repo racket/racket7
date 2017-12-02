@@ -4,7 +4,7 @@
 
 ;; Run using the built-in C implementation:
 '|C -----------------|
-(include "regexp.scm")
+(include "regexp.rktl")
 
 ;; Run the Racket implementation:
 '|Racket -----------------|
@@ -15,7 +15,7 @@
       (let ()
         body ...
         (set! ext-id int-id) ...)))
-  (include "../linklet/regexp.rktl")
+  (include "../../regexp/compiled/regexp.rktl")
 
   ;; Run using the Racket implementation:
-  (include "regexp.scm"))
+  (include "regexp.rktl"))

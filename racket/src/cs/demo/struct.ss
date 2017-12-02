@@ -1,4 +1,4 @@
-(import (core))
+(import (rumble))
 
 (define (show v) (printf "~s\n" v) v)
 

@@ -1075,7 +1075,7 @@
                (loop (fx1+ i)))))))
 
 ;; ----------------------------------------
-;; Convenience for core:
+;; Convenience for Rumble implementation:
 
 (define-syntax struct
   (lambda (stx)

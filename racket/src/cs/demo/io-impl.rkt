@@ -1,10 +1,17 @@
 #lang racket/base
 (require racket/include
          racket/unsafe/ops
+         racket/flonum
+         racket/fixnum
+         '#%foreign
          (only-in '#%kernel open-input-file)
          (only-in '#%paramz
                   parameterization-key
-                  extend-parameterization))
+                  extend-parameterization
+                  break-enabled-key
+                  check-for-break)
+         (only-in '#%linklet
+                  primitive-table))
 
 (provide (rename-out
           (1/build-path/convention-type build-path/convention-type)

@@ -1,6 +1,6 @@
 (library (regexp)
   (export)
   (import (chezpart)
-          (core)
+          (rumble)
           (io))
   (include "compiled/regexp.scm"))

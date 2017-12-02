@@ -1,5 +1,5 @@
 ;; Like Chez's engine API, but
-;;   - works with delimited-continuations extensions in "core-control.ss"
+;;   - works with delimited-continuations extensions in "control.ss"
 ;;   - doesn't run winders when suspending or resuming an engine
 ;;   - accepts an extra "prefix" argument to run code within an engine
 ;;     just before resuming the engine's continuation

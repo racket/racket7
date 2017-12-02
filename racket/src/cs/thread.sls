@@ -5,28 +5,28 @@
                         sleep
                         printf)
                   [sleep chez:sleep])
-          (rename (core)
-                  [core:break-enabled-key break-enabled-key]
+          (rename (rumble)
+                  [rumble:break-enabled-key break-enabled-key]
                   ;; These are extracted via `#%linklet`:
-                  [make-engine core:make-engine]
-                  [engine-block core:engine-block]
-                  [engine-return core:engine-return]
-                  [current-engine-state core:current-engine-state]
-                  [make-condition core:make-condition]
-                  [condition-wait core:condition-wait]
-                  [condition-signal core:condition-signal]
-                  [condition-broadcast core:condition-broadcast]
-                  [make-mutex core:make-mutex]
-                  [mutex-acquire core:mutex-acquire]
-                  [mutex-release core:mutex-release]
-                  [pthread? core:thread?]
-                  [fork-pthread core:fork-thread]
-                  [threaded? core:threaded?]
-                  [get-thread-id core:get-thread-id]
-                  [internal-make-thread-parameter core:make-thread-parameter]
-                  [set-ctl-c-handler! core:set-ctl-c-handler!]
-                  [root-continuation-prompt-tag core:root-continuation-prompt-tag]
-                  [set-break-enabled-transition-hook! core:set-break-enabled-transition-hook!]))
+                  [make-engine rumble:make-engine]
+                  [engine-block rumble:engine-block]
+                  [engine-return rumble:engine-return]
+                  [current-engine-state rumble:current-engine-state]
+                  [make-condition rumble:make-condition]
+                  [condition-wait rumble:condition-wait]
+                  [condition-signal rumble:condition-signal]
+                  [condition-broadcast rumble:condition-broadcast]
+                  [make-mutex rumble:make-mutex]
+                  [mutex-acquire rumble:mutex-acquire]
+                  [mutex-release rumble:mutex-release]
+                  [pthread? rumble:thread?]
+                  [fork-pthread rumble:fork-thread]
+                  [threaded? rumble:threaded?]
+                  [get-thread-id rumble:get-thread-id]
+                  [internal-make-thread-parameter rumble:make-thread-parameter]
+                  [set-ctl-c-handler! rumble:set-ctl-c-handler!]
+                  [root-continuation-prompt-tag rumble:root-continuation-prompt-tag]
+                  [set-break-enabled-transition-hook! rumble:set-break-enabled-transition-hook!]))
 
   (define (exit n)
     (chez:exit n))
@@ -40,33 +40,33 @@
   (define (primitive-table key)
     (case key
       [(|#%engine|) (hash
-                     'make-engine core:make-engine
-                     'engine-block core:engine-block
-                     'engine-return core:engine-return
-                     'current-engine-state core:current-engine-state
-                     'set-ctl-c-handler! core:set-ctl-c-handler!
-                     'root-continuation-prompt-tag core:root-continuation-prompt-tag
+                     'make-engine rumble:make-engine
+                     'engine-block rumble:engine-block
+                     'engine-return rumble:engine-return
+                     'current-engine-state rumble:current-engine-state
+                     'set-ctl-c-handler! rumble:set-ctl-c-handler!
+                     'root-continuation-prompt-tag rumble:root-continuation-prompt-tag
                      'break-enabled-key break-enabled-key
-                     'set-break-enabled-transition-hook! core:set-break-enabled-transition-hook!
+                     'set-break-enabled-transition-hook! rumble:set-break-enabled-transition-hook!
                      'exn:break/non-engine exn:break
                      'exn:break:hang-up/non-engine exn:break:hang-up
                      'exn:break:terminate/non-engine exn:break:terminate
                      'current-process-milliseconds cpu-time
-                     'internal-make-thread-parameter core:make-thread-parameter
-                     'fork-pthread core:fork-thread
-                     'pthread? core:thread?
-                     'get-thread-id core:get-thread-id
-                     'make-condition core:make-condition
-                     'condition-wait core:condition-wait
-                     'condition-signal core:condition-signal
-                     'condition-broadcast core:condition-broadcast
-                     'make-mutex core:make-mutex
-                     'mutex-acquire core:mutex-acquire
-                     'mutex-release core:mutex-release
+                     'internal-make-thread-parameter rumble:make-thread-parameter
+                     'fork-pthread rumble:fork-thread
+                     'pthread? rumble:thread?
+                     'get-thread-id rumble:get-thread-id
+                     'make-condition rumble:make-condition
+                     'condition-wait rumble:condition-wait
+                     'condition-signal rumble:condition-signal
+                     'condition-broadcast rumble:condition-broadcast
+                     'make-mutex rumble:make-mutex
+                     'mutex-acquire rumble:mutex-acquire
+                     'mutex-release rumble:mutex-release
                      'active-pthreads active-pthreads
                      'collect-garbage-pending-major? collect-garbage-pending-major?
                      'collect-garbage-pending-minor? collect-garbage-pending-minor?
-                     'threaded? core:threaded?
+                     'threaded? rumble:threaded?
                      )]
       [else #f]))
 

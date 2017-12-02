@@ -4,8 +4,8 @@ SCHEME = scheme
 # Controls whether base layers are built as unsafe:
 UNSAFE_COMP = # --unsafe
 
-# Controls whether core is built as unsafe:
-CORE_UNSAFE_COMP = --unsafe
+# Controls whether rumble is built as unsafe:
+RUMBLE_UNSAFE_COMP = --unsafe
 
 COMPILE_FILE = $(SCHEME) --script compile-file.ss
 COMPILE_FILE_DEPS = compile-file.ss
@@ -20,7 +20,7 @@ CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS) known-primitive.rkt
 
 CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt
 
-THREAD_DEPS = chezpart.so core.so
+THREAD_DEPS = chezpart.so rumble.so
 IO_DEPS = $(THREAD_DEPS) thread.so
 REGEXP_DEPS = $(IO_DEPS) io.so
 SCHEMIFY_DEPS = $(REGEXP_DEPS) regexp.so known-primitive.so
@@ -65,12 +65,12 @@ rktl:
 	mkdir -p ../../bin
 	touch ../../bin/racket
 
-PRIMITIVES_TABLES = primitive/kernel.scm primitive/unsafe.scm primitive/flfxnum.scm \
-                    primitive/paramz.scm primitive/extfl.scm primitive/network.scm \
-                    primitive/futures.scm primitive/foreign.scm primitive/place.scm \
-                    primitive/linklet.scm primitive/internal.scm
+PRIMITIVES_TABLES = primitive/kernel.ss primitive/unsafe.ss primitive/flfxnum.ss \
+                    primitive/paramz.ss primitive/extfl.ss primitive/network.ss \
+                    primitive/futures.ss primitive/foreign.ss primitive/place.ss \
+                    primitive/linklet.ss primitive/internal.ss
 
-expander.so: expander.sls compiled/expander.scm expander-compat.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS) $(COMPILE_FILE_DEPS)
+expander.so: expander.sls compiled/expander.scm expander-compat.ss $(PRIMITIVES_TABLES) $(EXPANDER_DEPS) $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) expander.sls $(EXPANDER_DEPS)
 
 compiled/expander.scm: ../expander/compiled/expander.rktl $(CONVERT_DEPS)
@@ -173,90 +173,87 @@ bounce-go:
 	cd $(BOUNCE_DIR); $(MAKE) RACO="$(RACKET) -N raco -l- raco" $(BOUNCE_TARGET)
 
 
-chaperone-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/chaperone.ss
+chaperone-demo: rumble.so
+	$(SCHEME) chezpart.so rumble.so demo/chaperone.ss
 
-hash-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/hash.ss
+hash-demo: rumble.so
+	$(SCHEME) chezpart.so rumble.so demo/hash.ss
 
-struct-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/struct.ss
+struct-demo: rumble.so
+	$(SCHEME) chezpart.so rumble.so demo/struct.ss
 
-control-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/control.ss
+control-demo: rumble.so
+	$(SCHEME) chezpart.so rumble.so demo/control.ss
 
-foreign-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/foreign.ss
+foreign-demo: rumble.so
+	$(SCHEME) chezpart.so rumble.so demo/foreign.ss
 
-will-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/will.ss
+will-demo: rumble.so
+	$(SCHEME) chezpart.so rumble.so demo/will.ss
 
-future-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/future.ss
+future-demo: rumble.so
+	$(SCHEME) chezpart.so rumble.so demo/future.ss
 
-future2-demo: core.so
-	$(SCHEME) chezpart.so core.so demo/future2.ss
+future2-demo: rumble.so
+	$(SCHEME) chezpart.so rumble.so demo/future2.ss
 
-engine-test: core.so
-	$(SCHEME) chezpart.so core.so demo/engine-test.ss
+RUMBLE_SRCS = rumble/check.ss \
+	      rumble/syntax-rule.ss \
+              rumble/constant.ss \
+              rumble/hash-code.ss \
+              rumble/struct.ss \
+              rumble/prefab.ss \
+              rumble/procedure.ss \
+              rumble/impersonator.ss \
+              rumble/equal.ss \
+              rumble/object-name.ss \
+              rumble/arity.ss \
+              rumble/intmap.ss \
+              rumble/hash.ss \
+	      rumble/lock.ss \
+              rumble/thread-cell.ss \
+              rumble/parameter.ss \
+              rumble/begin0.ss \
+              rumble/pthread.ss \
+              rumble/control.ss \
+              rumble/interrupt.ss \
+              rumble/engine.ss \
+              rumble/error.ss \
+              rumble/srcloc.ss \
+              rumble/bytes.ss \
+              rumble/string.ss \
+              rumble/char.ss \
+              rumble/symbol.ss \
+              rumble/list.ss \
+              rumble/vector.ss \
+              rumble/box.ss \
+              rumble/immutable.ss \
+              rumble/keyword.ss \
+              rumble/mpair.ss \
+              rumble/number.ss \
+              rumble/random.ss \
+              rumble/flvector.ss \
+              rumble/correlated.ss \
+              rumble/graph.ss \
+              rumble/time.ss \
+              rumble/memory.ss \
+              rumble/ephemeron.ss \
+              rumble/will-executor.ss \
+              rumble/system.ss \
+              rumble/unsafe.ss \
+              rumble/extfl.ss \
+              rumble/place.ss \
+              rumble/foreign.ss \
+              rumble/future.ss \
+              rumble/version.ss \
+              ../racket/src/schvers.h
 
-CORE_SRCS = core/check.ss \
-	    core/syntax-rule.ss \
-            core/constant.ss \
-            core/hash-code.ss \
-            core/struct.ss \
-            core/prefab.ss \
-            core/procedure.ss \
-            core/impersonator.ss \
-            core/equal.ss \
-            core/object-name.ss \
-            core/arity.ss \
-            core/intmap.ss \
-            core/hash.ss \
-	    core/lock.ss \
-            core/thread-cell.ss \
-            core/parameter.ss \
-            core/begin0.ss \
-            core/pthread.ss \
-            core/control.ss \
-            core/interrupt.ss \
-            core/engine.ss \
-            core/error.ss \
-            core/srcloc.ss \
-            core/bytes.ss \
-            core/string.ss \
-            core/char.ss \
-            core/symbol.ss \
-            core/list.ss \
-            core/vector.ss \
-            core/box.ss \
-            core/immutable.ss \
-            core/keyword.ss \
-            core/mpair.ss \
-            core/number.ss \
-            core/random.ss \
-            core/flvector.ss \
-            core/correlated.ss \
-            core/graph.ss \
-            core/time.ss \
-            core/memory.ss \
-            core/ephemeron.ss \
-            core/will-executor.ss \
-            core/system.ss \
-            core/unsafe.ss \
-            core/extfl.ss \
-            core/place.ss \
-            core/foreign.ss \
-            core/future.ss \
-            core/version.ss \
-            ../racket/src/schvers.h
-
-core.so: chezpart.so core.sls $(CORE_SRCS) $(COMPILE_FILE_DEPS)
-	$(COMPILE_FILE) $(CORE_UNSAFE_COMP) core.sls
+rumble.so: chezpart.so rumble.sls $(RUMBLE_SRCS) $(COMPILE_FILE_DEPS)
+	$(COMPILE_FILE) $(RUMBLE_UNSAFE_COMP) rumble.sls
 
 chezpart.so: chezpart.sls $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) chezpart.sls
 
 clean:
-	rm -f chezpart.so core.so regexp.so io.so immutable-hash.so linklet.so known-primitive.so linklet.so expander.so schemify.so
+	rm -f chezpart.so rumble.so regexp.so io.so linklet.so known-primitive.so expander.so schemify.so
 	rm -rf compiled

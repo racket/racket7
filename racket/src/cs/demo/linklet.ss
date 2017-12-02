@@ -1,6 +1,5 @@
-(import (linklet))
-
-(eval '(import (core)))
+(import (rumble)
+        (linklet))
 
 (define l1 (compile-linklet
             '(linklet 

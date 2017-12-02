@@ -48,7 +48,7 @@
           schemify-table)
   (import (chezpart)
           (only (chezscheme) printf)
-          (core)
+          (rumble)
           (only (io)
                 path?
                 complete-path?

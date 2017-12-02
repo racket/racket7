@@ -1,6 +1,4 @@
-;; A "thread cell" is actually an "engine cell" at the core level
-
-;; FIXME: need emphemerons for weak mapping in engine thread cells
+;; A "thread cell" is actually an "engine cell" at the Rumble level
 
 (define-record-type (thread-cell create-thread-cell thread-cell?)
   (fields default-value preserved?))

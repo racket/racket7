@@ -1,5 +1,5 @@
-(import (core)
+(import (rumble)
         (regexp)
         (io))
 
-(include "demo/regexp.scm")
+(include "demo/regexp.rktl")

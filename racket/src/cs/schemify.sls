@@ -6,9 +6,9 @@
           a-known-procedure
           a-known-constant)
   (import (chezpart)
-          (rename (core)
-                  [correlated? core:correlated?]
-                  [correlated-e core:correlated-e])
+          (rename (rumble)
+                  [correlated? rumble:correlated?]
+                  [correlated-e rumble:correlated-e])
           (regexp)
           (io)
           (known-primitive))
@@ -18,8 +18,8 @@
   (define (primitive-table name)
     (case name
       [(|#%kernel|)
-       (hash 'syntax? core:correlated?
-             'syntax-e core:correlated-e)]
+       (hash 'syntax? rumble:correlated?
+             'syntax-e rumble:correlated-e)]
       [(|#%annotation|)
        (hash 'annotation? annotation?
              'annotation-expression annotation-expression)]

@@ -2,7 +2,7 @@
  (import (except (chezpart)
                  eval
                  read)
-         (core)
+         (rumble)
          (only (expander)
                boot
                current-command-line-arguments

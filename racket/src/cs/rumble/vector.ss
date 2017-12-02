@@ -300,7 +300,7 @@
                   (loop i)))))))]))
 
 ;; Like `vector-copy!`, but doesn't work on impersonators, and doesn't
-;; add its own tests on the vector or range (so unsafe if the core is
+;; add its own tests on the vector or range (so unsafe if Rumble is
 ;; compiled as unsafe)
 (define/who vector*-copy!
   (case-lambda

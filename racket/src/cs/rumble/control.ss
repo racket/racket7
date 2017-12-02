@@ -4,7 +4,7 @@
 ;; a composable continuation is applied, the composition boundary
 ;; is also a metacontinuation boundary.
 
-;; "Continuation" as exported from the core is "metacontinuation"
+;; "Continuation" as exported from Rumble is "metacontinuation"
 ;; here. So, `call-with-current-continuation` defined here and
 ;; exported captures the current metacontinuation (up to a prompt).
 ;; The `call/cc` function is the host's notion of continuation, which
@@ -105,7 +105,7 @@
 ;; manipulating the continuation representation. A bad time for a swap
 ;; is an "interrupted" region. The `begin-uninterrupted` and
 ;; `end-uninterrupted` functions bracket such regions dynamically. See
-;; also "core-engine.ss" and "core-interrupt.ss"
+;; also "rumble/engine.ss" and "rumble/interrupt.ss"
 
 (define current-metacontinuation (internal-make-thread-parameter '()))
 
