@@ -32,6 +32,12 @@
           variable-reference->instance
           variable-reference-constant?
 
+          compile-enforce-module-constants
+          compile-context-preservation-enabled
+          compile-allow-set!-undefined
+          eval-jit-enabled
+          load-on-demand-enabled
+
           jit-mode? ; not exported to racket
           linklet-performance-init!   ; not exported to racket
           linklet-performance-report! ; not exported to racket
@@ -1039,6 +1045,23 @@
   (define (set-box!/check-undefined b v name)
     (check-not-unsafe-undefined/assign (unbox b) name)
     (#3%set-box! b v))
+  
+  ;; --------------------------------------------------
+  
+  (define compile-enforce-module-constants
+    (make-parameter #t (lambda (v) (and v #t))))
+
+  (define compile-context-preservation-enabled
+    (make-parameter #f (lambda (v) (and v #t))))
+
+  (define compile-allow-set!-undefined
+    (make-parameter #f (lambda (v) (and v #t))))
+
+  (define eval-jit-enabled
+    (make-parameter #t (lambda (v) (and v #t))))
+  
+  (define load-on-demand-enabled
+    (make-parameter #t (lambda (v) (and v #t))))
 
   ;; --------------------------------------------------
 

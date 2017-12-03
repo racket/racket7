@@ -4,7 +4,8 @@
          "../format/printf.rkt")
 
 (provide error
-         raise-user-error)
+         raise-user-error
+         error-print-source-location)
 
 (define (error init . args)
   (do-error 'error exn:fail init args))
@@ -44,6 +45,9 @@
       (current-continuation-marks)))]
    [else
     (raise-argument-error who "(or/c symbol? string?)" init)]))
+
+(define error-print-source-location
+  (make-parameter #t (lambda (v) (and v #t))))
 
 ;; Install the default error-value->string handler,
 ;; replacing the non-working primitive placeholder

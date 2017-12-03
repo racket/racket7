@@ -22,17 +22,17 @@
 (define-syntax-rule (make-primitive-table id ...)
   '(id ...))
 
-(include "primitive/kernel.scm")
-(include "primitive/unsafe.scm")
-(include "primitive/flfxnum.scm")
-(include "primitive/paramz.scm")
-(include "primitive/extfl.scm")
-(include "primitive/network.scm")
-(include "primitive/futures.scm")
-(include "primitive/place.scm")
-(include "primitive/foreign.scm")
-(include "primitive/linklet.scm")
-(include "primitive/internal.scm")
+(include "primitive/kernel.ss")
+(include "primitive/unsafe.ss")
+(include "primitive/flfxnum.ss")
+(include "primitive/paramz.ss")
+(include "primitive/extfl.ss")
+(include "primitive/network.ss")
+(include "primitive/futures.ss")
+(include "primitive/place.ss")
+(include "primitive/foreign.ss")
+(include "primitive/linklet.ss")
+(include "primitive/internal.ss")
 
 (define all-primitives
   (append kernel-table

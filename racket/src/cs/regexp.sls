@@ -3,4 +3,5 @@
   (import (chezpart)
           (rumble)
           (io))
-  (include "compiled/regexp.scm"))
+  (include "compiled/regexp.scm")
+  (set-intern-regexp?! 1/regexp?))

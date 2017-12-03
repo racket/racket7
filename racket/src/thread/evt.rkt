@@ -23,7 +23,14 @@
          (struct-out delayed-poll)
 
          prop:secondary-evt
-         poller-evt)
+         poller-evt
+
+         evt-impersonator?)
+
+(module+ for-chaperone
+  (provide primary-evt? primary-evt-ref
+           secondary-evt? secondary-evt-ref
+           impersonator-prop:evt))
 
 (define-values (prop:evt primary-evt? primary-evt-ref)
   (make-struct-type-property 'evt
@@ -134,6 +141,9 @@
   #:property prop:evt (poller (lambda (self poll-ctx) (values #f self)))
   #:reflection-name 'evt)
 
+(define-values (impersonator-prop:evt evt-impersonator? evt-impersonator-ref)
+  (make-impersonator-property 'evt-impersonator))
+
 ;; Called in atomic mode
 ;; Checks whether an event is ready; returns the same results
 ;; as a poller. If getting an event requires going out of atomic mode
@@ -141,6 +151,7 @@
 ;; struct.
 (define (evt-poll evt poll-ctx)
   (let* ([v (cond
+              [(evt-impersonator? evt) (evt-impersonator-ref evt)]
               [(primary-evt? evt)
                (primary-evt-ref evt)]
               [else

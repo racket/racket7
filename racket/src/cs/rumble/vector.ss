@@ -365,3 +365,6 @@
         v)]
    [else
     (raise-argument-error who "vector?" v)]))
+
+(define shared-fxvector fxvector)
+(define make-shared-fxvector make-fxvector)

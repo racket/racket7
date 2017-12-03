@@ -4,7 +4,8 @@
          "complete.rkt")
 
 (provide current-directory
-         current-directory-for-user)
+         current-directory-for-user
+         current-load-relative-directory)
 
 ;; Note: the publicly available versions of these functions are
 ;; wrapped to include security-guard checks.
@@ -18,6 +19,14 @@
   (make-parameter (current-directory)
                   (lambda (v)
                     (check-directory-path who v))))
+
+
+(define/who current-load-relative-directory
+  (make-parameter #f
+                  (lambda (v)
+                    (check who path-string? #:or-false v)
+                    (and v
+                         (path->complete-path v (current-directory))))))
 
 (define (check-directory-path who v)
   (check who path-string? v)

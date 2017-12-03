@@ -5,6 +5,7 @@
          "atomic.rkt"
          "semaphore.rkt"
          "channel.rkt"
+         (submod "channel.rkt" for-sync)
          "thread.rkt"
          (only-in (submod "thread.rkt" scheduling)
                   current-break-enabled-cell
@@ -161,6 +162,9 @@
 
 (define (sync/timeout/enable-break timeout . args)
   (do-sync 'sync/timeout/enable-break timeout args #:enable-break? #t))
+
+;; Resolve mutual dependency:
+(void (set-sync-on-channel! sync))
 
 ;; ----------------------------------------
 

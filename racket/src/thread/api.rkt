@@ -8,8 +8,6 @@
                     [handle-evt? raw:handle-evt?]
                     [poll-guard-evt raw:poll-guard-evt]
                     [choice-evt raw:choice-evt])
-         (rename-in "channel.rkt"
-                    [channel-put-evt raw:channel-put-evt])
          (only-in "sync.rkt"
                   sync/enable-break))
 
@@ -20,7 +18,6 @@
          poll-guard-evt
          nack-guard-evt
          choice-evt
-         channel-put-evt
          semaphore-peek-evt
          semaphore-wait/enable-break
          call-with-semaphore
@@ -75,10 +72,6 @@
       void
       (lambda () (semaphore-post s))
       void))))
-
-(define/who (channel-put-evt ch v)
-  (check who channel? ch)
-  (raw:channel-put-evt ch v))
 
 (define/who (semaphore-peek-evt s)
   (check who semaphore? s)

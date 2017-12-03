@@ -1,6 +1,9 @@
 (define-values (prop:method-arity-error method-arity-error? method-arity-error-ref)
   (make-struct-type-property 'method-arity-error))
 
+(define-values (prop:arity-string arity-string? arity-string-ref)
+  (make-struct-type-property 'arity-string))
+
 (define-values (prop:procedure procedure-struct? procedure-struct-ref)
   (make-struct-type-property 'procedure (lambda (v info)
                                           ;; We don't have to check whether `v` is valid here,
@@ -636,6 +639,21 @@
            (|#%app| (unsafe-struct*-ref v 0) v1 v2))
       (unsafe-struct*-ref v 1)
       (|#%app| alt-proc v v1 v2)))
+
+;; ----------------------------------------
+
+(define (primitive? v)
+  (or (eq? v make-struct-type-property)
+      (eq? v make-struct-type)))
+
+(define (primitive-closure? v) #f)
+
+(define (primitive-result-arity prim)
+  (cond
+   [(eq? prim make-struct-type-property) 3]
+   [(eq? prim make-struct-type) 5]
+   [else
+    (raise-argument-error 'primitive-result-arity "primitive?" prim)]))
 
 ;; ----------------------------------------
 

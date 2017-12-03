@@ -133,9 +133,6 @@ Files in this directory:
          structures, immutable hash tables, structs, delimited
          continuations, engines, impersonators, etc.
 
- *.scm - a temporary compatibility layer to be `include`d into an
-         ".sls" library.
-
  ../*/compiled/*.rktl (generated) - A Racket library (e.g., to
          implement regexps) that has been fully macro expanded and
          flattened into a linklet from its source in "../*". A

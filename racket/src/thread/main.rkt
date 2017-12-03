@@ -5,10 +5,10 @@
                   evt? prop:evt
                   always-evt
                   never-evt)
+         "impersonator.rkt"
          (except-in "semaphore.rkt"
                     semaphore-peek-evt)
-         (except-in "channel.rkt"
-                    channel-put-evt)
+         "channel.rkt"
          "sync.rkt"
          "system-idle-evt.rkt"
          "schedule.rkt"
@@ -22,7 +22,10 @@
          "unsafe.rkt"
          "instance.rkt"
          "time.rkt"
-         "future.rkt")
+         "stats.rkt"
+         "stack-size.rkt"
+         "future.rkt"
+         "fsemaphore.rkt")
 
 (provide call-in-main-thread
          
@@ -91,6 +94,10 @@
          choice-evt
          replace-evt
 
+         chaperone-evt
+         chaperone-channel
+         impersonate-channel
+
          system-idle-evt
          alarm-evt
 
@@ -120,6 +127,9 @@
          plumber-flush-handle-remove!
 
          current-process-milliseconds
+         vector-set-performance-stats!
+
+         current-thread-initial-stack-size
 
          break-enabled
          check-for-break
@@ -149,6 +159,15 @@
          current-future-prompt
          halt-workers
          resume-workers
+         reset-future-logs-for-tracing!
+         mark-future-trace-end!
+
+         fsemaphore?
+         make-fsemaphore
+         fsemaphore-post
+         fsemaphore-wait
+         fsemaphore-try-wait?
+         fsemaphore-count
 
          #%thread-instance)
 

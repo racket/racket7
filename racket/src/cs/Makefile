@@ -70,7 +70,7 @@ PRIMITIVES_TABLES = primitive/kernel.ss primitive/unsafe.ss primitive/flfxnum.ss
                     primitive/futures.ss primitive/foreign.ss primitive/place.ss \
                     primitive/linklet.ss primitive/internal.ss
 
-expander.so: expander.sls compiled/expander.scm expander-compat.ss $(PRIMITIVES_TABLES) $(EXPANDER_DEPS) $(COMPILE_FILE_DEPS)
+expander.so: expander.sls compiled/expander.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS) $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) expander.sls $(EXPANDER_DEPS)
 
 compiled/expander.scm: ../expander/compiled/expander.rktl $(CONVERT_DEPS)
@@ -210,6 +210,7 @@ RUMBLE_SRCS = rumble/check.ss \
               rumble/arity.ss \
               rumble/intmap.ss \
               rumble/hash.ss \
+              rumble/datum.ss \
 	      rumble/lock.ss \
               rumble/thread-cell.ss \
               rumble/parameter.ss \
@@ -220,6 +221,7 @@ RUMBLE_SRCS = rumble/check.ss \
               rumble/engine.ss \
               rumble/error.ss \
               rumble/srcloc.ss \
+              rumble/boolean.ss \
               rumble/bytes.ss \
               rumble/string.ss \
               rumble/char.ss \

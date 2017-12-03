@@ -14,7 +14,8 @@
          current-drive
 
          current-directory
-         current-directory-for-user)
+         current-directory-for-user
+         current-load-relative-directory)
 
 (define path->complete-path
   (case-lambda
@@ -38,7 +39,8 @@
      (security-guard-check-file who #f '(exists))
      (values)]
     [(path)
-     (->host path who '(exists))
+     (when (path-string? path)
+       (->host path who '(exists)))
      path]))
 
 (define/who current-directory
@@ -46,3 +48,6 @@
 
 (define/who current-directory-for-user
   (chaperone-procedure raw:current-directory-for-user (make-guard-paths who)))
+
+(define/who current-load-relative-directory
+  (chaperone-procedure raw:current-load-relative-directory (make-guard-paths who)))

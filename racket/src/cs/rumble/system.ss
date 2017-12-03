@@ -29,3 +29,29 @@
                                  "(or/c 'os 'word 'vm 'gc 'link 'machine\n"
                                  "      'so-suffix 'so-mode 'fs-change 'cross)")
                                 mode)]))
+
+(define (system-path-convention-type)
+  (case (machine-type)
+    [(a6nt ta6nt i3nt ti3nt) 'windows]
+    [else 'unix]))
+
+(define system-library-subpath-string
+  (case (machine-type)
+    [(a6nt ta6nt) "win32\\x86_64"]
+    [(i3nt ti3nt) "win32\\i386"]
+    [(a6osx ta6osx) "x86_64-macosx"]
+    [(i3osx ti3osx) "i386-macosx"]
+    [(a6le ta6le) "x86_64-linux"]
+    [(i3le ti3le) "i386-linux"]
+    [(arm32le tarm32le) "arm-linux"]
+    [(ppc32le tppc32le) "ppc-linux"]
+    [(i3ob ti3ob) "i386-openbsd"]
+    [(a6ob ta6ob) "x86_64-openbsd"]
+    [(i3ob ti3ob) "i386-openbsd"]
+    [(a6fb ta6fb) "x86_64-freebsd"]
+    [(i3fb ti3fb) "i386-freebsd"]
+    [(a6nb ta6nb) "x86_64-netbsd"]
+    [(i3nb ti3nb) "i386-netbsd"]
+    [(a6s2 ta6s2) "x86_64-solaris"]
+    [(i3s2 ti3s2) "i386-solaris"]
+    [else "unix"]))

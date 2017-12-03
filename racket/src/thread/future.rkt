@@ -25,7 +25,9 @@
          future:make-condition
 	 halt-workers
          resume-workers
-         signal-future)
+         signal-future
+         reset-future-logs-for-tracing!
+         mark-future-trace-end!)
 
 ;; not sure of order here...
 (define (get-caller)
@@ -438,10 +440,10 @@
 	    (loop (cdr q))]))]
        [else (loop (cdr q))])))
 
-          
+;; ----------------------------------------
 
-  
+(define (reset-future-logs-for-tracing!)
+  (void))
 
-
-
-  
+(define (mark-future-trace-end!)
+  (void))

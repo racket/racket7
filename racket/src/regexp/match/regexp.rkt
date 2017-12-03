@@ -32,7 +32,14 @@
                                                         #"#rx")
                                                     port)
                                        (write (rx:regexp-source rx) port))
-        #:property prop:object-name (struct-field-index source))
+        #:property prop:object-name (struct-field-index source)
+        #:property prop:equal+hash (list
+                                    (lambda (a b eql?)
+                                      (equal? (rx:regexp-source a) (rx:regexp-source b)))
+                                    (lambda (a hc)
+                                      (hc (rx:regexp-source a)))
+                                    (lambda (a hc)
+                                      (hc (rx:regexp-source a)))))
 
 (define (make-regexp who orig-p px? as-bytes? handler)
   (call-with-continuation-prompt

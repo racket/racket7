@@ -63,6 +63,22 @@
   (call-with-values (lambda () (equal-hash-loop x 0 0))
     (lambda (hc burn) (logand hc (most-positive-fixnum)))))
 
+(define (equal-secondary-hash-code x)
+  (cond
+   [(boolean? x) 1]
+   [(null? x) 2]
+   [(number? x) 3]
+   [(char? x) 4]
+   [(symbol? x) 5]
+   [(string? x) 6]
+   [(bytevector? x) 7]
+   [(box? x) 8]
+   [(pair? x) 9]
+   [(vector? x) (vector-length x)]
+   [(#%$record? x) (eq-hash-code (record-rtd x))]
+   [(impersonator? x) (equal-secondary-hash-code (impersonator-val x))]
+   [else 100]))
+
 (define MAX-HASH-BURN 128)
 
 (define (equal-hash-loop x burn hc)

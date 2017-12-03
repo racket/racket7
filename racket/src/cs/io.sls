@@ -334,7 +334,22 @@
 
   ;; ----------------------------------------
 
-  (define (system-path-convention-type) 'unix)
+  (export system-library-subpath)
+  (define system-library-subpath
+    (case-lambda
+     [() (system-library-subpath (system-type 'gc))]
+     [(mode)
+      (1/string->path
+       (string-append
+        system-library-subpath-string
+        (cond
+         [(eq? mode '3m) (if (eq? 'windows (system-path-convention-type))
+                             "\\3m"
+                             "/3m")]
+         [(or (eq? mode 'cgc) (not mode)) ""]
+         [else (raise-argument-error 'system-library-subpath
+                                     "(or/c '3m 'cgc #f)"
+                                     mode)])))]))
 
   (define (primitive-table key)
     (case key

@@ -30,6 +30,47 @@
   (let ([m (integer-sqrt n)])
     (values m (- n (* m m)))))
 
+(define fx->fl fixnum->flonum)
+(define fxrshift fxarithmetic-shift-right)
+(define fxlshift fxarithmetic-shift-left)
+
+(define fl->fx flonum->fixnum)
+(define ->fl real->flonum)
+(define/who (fl->exact-integer fl)
+  (check who flonum? fl)
+  (inexact->exact (flfloor fl)))
+
+(define/who (flreal-part a)
+  (or (and
+       (complex? a)
+       (not (real? a)) ; => complex imaginary part
+       (let ([r (real-part a)])
+         (and (flonum? r) r)))
+      (check who (lambda (a) #f)
+             :contract (string-append
+                        "(and/c complex?\n"
+                        "       (lambda (c) (flonum? (real-part c)))\n"
+                        "       (lambda (c) (flonum? (imag-part c))))")
+             a)))
+
+(define/who (flimag-part a)
+  (or (and
+       (complex? a)
+       (let ([r (imag-part a)])
+         (and (flonum? r) ; => complex real part
+              r)))
+      (check who (lambda (a) #f)
+             :contract (string-append
+                        "(and/c complex?\n"
+                        "       (lambda (c) (flonum? (real-part c)))\n"
+                        "       (lambda (c) (flonum? (imag-part c))))")
+             a)))
+
+(define/who (make-flrectangular a b)
+  (check who flonum? a)
+  (check who flonum? b)
+  (make-rectangular a b))
+
 (define (system-big-endian?)
   (eq? (native-endianness) (endianness big)))
 

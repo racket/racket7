@@ -9,7 +9,8 @@
          "../locale/string.rkt")
 
 (provide ffi-get-lib
-         ffi-get-obj)
+         ffi-get-obj
+         current-load-extension)
 
 ;; The FFI is mostly implemented in "cs/core/foreign.ss"
 ;; and `ffi/unsafe`, but rktio provides the implementation
@@ -73,3 +74,19 @@
               (begin0
                 (rktio_to_bytes p)
                 (rktio_free p))))))
+
+; ----------------------------------------
+
+(define/who (default-load-extension path sym)
+  (check who path-string? path)
+  (check who symbol? sym)
+  (raise (exn:fail:unsupported
+          "default-load-extension: extensions are not supported"
+          (current-continuation-marks))))
+
+
+(define/who current-load-extension
+  (make-parameter default-load-extension
+                  (lambda (p)
+                    (check who (procedure-arity-includes/c 2) p)
+                    p)))

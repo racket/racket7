@@ -27,4 +27,9 @@
   (check who char? x)
   (chez:memq (char-general-category x) '(Sm Sc Sk So)))
 
+(define (interned-char? v)
+  (and (char? v) (< (char->integer v) 256)))
 
+;; FIXME
+(define (make-known-char-range-list)
+  '((0 255 #f)))

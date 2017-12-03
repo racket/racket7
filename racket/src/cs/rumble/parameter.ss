@@ -102,9 +102,19 @@
   (check who parameter? b)
   (eq? (strip-impersonator a) (strip-impersonator b)))
 
+(define/who (reparameterize p)
+  (check who parameterization? p)
+  p)
+
 ;; ----------------------------------------
 
 (define/who current-inspector
+  (make-parameter root-inspector
+                  (lambda (v)
+                    (check who inspector? v)
+                    v)))
+
+(define/who current-code-inspector
   (make-parameter root-inspector
                   (lambda (v)
                     (check who inspector? v)

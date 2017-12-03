@@ -67,6 +67,7 @@
           extend-parameterization
           parameterization?
           parameter-procedure=?
+          reparameterize
 
           raise
           error-print-width
@@ -83,6 +84,7 @@
           current-inspector
           make-inspector
           make-sibling-inspector
+          current-code-inspector
 
           struct:exn exn exn? exn-message exn-continuation-marks
           struct:exn:break exn:break exn:break? exn:break-continuation
@@ -110,6 +112,7 @@
 
           struct:srcloc srcloc srcloc?
           srcloc-source srcloc-line srcloc-column srcloc-position srcloc-span
+          prop:exn:srclocs exn:srclocs? exn:srclocs-accessor
 
           struct:date date? date make-date
           date-second date-minute date-hour date-day date-month date-year
@@ -124,6 +127,7 @@
           prop:procedure
           prop:incomplete-arity
           prop:method-arity-error
+          prop:arity-string
           apply
           procedure?
           procedure-specialize
@@ -141,6 +145,9 @@
           procedure-arity?
           prop:checked-procedure
           checked-procedure-check-and-extract
+          primitive?
+          primitive-closure?
+          primitive-result-arity
           make-jit-procedure ; not exported to racket
 
           equal?
@@ -227,6 +234,7 @@
           eq-hash-code
           eqv-hash-code
           equal-hash-code
+          equal-secondary-hash-code
 
           hash hasheqv hasheq
           make-hash make-hasheqv make-hasheq
@@ -250,11 +258,14 @@
           hash? hash-eq? hash-equal? hash-eqv? hash-weak? immutable-hash?
           hash-count
           hash-keys-subset?
-          ;; For intern tables:
-          weak-hash-ref-key
+
+          datum-intern-literal
+          set-intern-regexp?!  ; not exported to racket
 
           impersonate-hash
           chaperone-hash
+
+          true-object?
 
           bytes shared-bytes
           bytes?
@@ -276,6 +287,8 @@
           char-punctuation?
           char-graphic?
           char-symbolic?
+          interned-char?
+          make-known-char-range-list
 
           gensym
           symbol-interned?
@@ -346,6 +359,15 @@
           system-big-endian?
           string->number
           quotient/remainder
+          fx->fl
+          fxrshift
+          fxlshift
+          fl->fx
+          ->fl
+          fl->exact-integer
+          flreal-part
+          flimag-part
+          make-flrectangular
 
           random
           random-seed
@@ -371,6 +393,9 @@
           unsafe-flvector-length
           unsafe-flvector-set!
           unsafe-flvector-ref
+
+          shared-fxvector
+          make-shared-fxvector
 
           correlated?
           correlated-source
@@ -419,6 +444,8 @@
           ephemeron-value
 
           system-type
+          system-path-convention-type
+          system-library-subpath-string ; not exported to racket
 
           unsafe-car
           unsafe-cdr
@@ -484,6 +511,8 @@
           unsafe-flexp
           unsafe-flsqrt
           unsafe-flexpt
+
+          unsafe-flrandom
 
           extfl* extfl+ extfl- ->extfl
           extfl->exact extfl->exact-integer
@@ -626,6 +655,7 @@
   (include "rumble/arity.ss")
   (include "rumble/intmap.ss")
   (include "rumble/hash.ss")
+  (include "rumble/datum.ss")
   (include "rumble/thread-cell.ss")
   (include "rumble/begin0.ss")
   (include "rumble/pthread.ss")
@@ -635,6 +665,7 @@
   (include "rumble/engine.ss")
   (include "rumble/error.ss")
   (include "rumble/srcloc.ss")
+  (include "rumble/boolean.ss")
   (include "rumble/bytes.ss")
   (include "rumble/string.ss")
   (include "rumble/char.ss")
@@ -659,7 +690,7 @@
   (include "rumble/foreign.ss")
   (include "rumble/lock.ss")
   (include "rumble/future.ss")
-  
+
   (set-no-locate-source!)
   ;; Note: if there's a bug in `rumble` that causes exception handling to error,
   ;; the the following line will cause the error to loop with another error, etc.,

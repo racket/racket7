@@ -58,6 +58,8 @@
 (define unsafe-flsqrt #3%flsqrt)
 (define unsafe-flexpt #3%flexpt)
 
+(define (unsafe-flrandom gen) (random gen))
+
 (define unsafe-vector*-length #3%vector-length)
 (define unsafe-vector*-ref #3%vector-ref)
 (define unsafe-vector*-set! #3%vector-set!)

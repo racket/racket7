@@ -43,6 +43,7 @@
 
          current-directory
          current-directory-for-user
+         current-load-relative-directory
          current-drive
 
          path->complete-path

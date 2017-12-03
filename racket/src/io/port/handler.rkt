@@ -13,7 +13,10 @@
          global-port-print-handler
          default-global-port-print-handler
 
-         install-reader!)
+         install-reader!
+         installed-read-syntax
+         installed-read-accept-reader
+         installed-read-accept-lang)
 
 (define/who port-read-handler
   (case-lambda
@@ -46,10 +49,14 @@
 
 (define installed-read #f)
 (define installed-read-syntax #f)
+(define installed-read-accept-reader #f)
+(define installed-read-accept-lang #f)
 
-(define (install-reader! read read-syntax)
+(define (install-reader! read read-syntax read-accept-reader read-accept-lang)
   (set! installed-read read)
-  (set! installed-read-syntax read-syntax))
+  (set! installed-read-syntax read-syntax)
+  (set! installed-read-accept-reader installed-read-accept-reader)
+  (set! installed-read-accept-lang read-accept-lang))
 
 ;; ----------------------------------------
 

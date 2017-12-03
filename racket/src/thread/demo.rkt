@@ -107,6 +107,47 @@
                                 (choice-evt (make-semaphore) (make-semaphore))))))
      (check (void) (sync/timeout 0 v)))
 
+   ;; evt chaperone
+   (define e1 (make-semaphore 1))
+   (check #t (chaperone-of? (chaperone-evt e1 void) e1))
+   (check #f (chaperone-of? e1 (chaperone-evt e1 void)))
+   (let ([hit #f])
+     (check e1 (sync (chaperone-evt e1 (lambda (e)
+                                         (set! hit e)
+                                         (values e values)))))
+     (check e1 hit))
+   (check #t (semaphore? (chaperone-evt e1 void)))
+
+   (check #t (chaperone-of? (chaperone-evt ch void) ch))
+   (check #t (channel? (chaperone-evt ch void)))
+   (check #t (channel? (chaperone-channel ch void void)))
+   (let ([proc (lambda (arg) arg)])
+     (thread (lambda () (channel-put ch proc)))
+     (let ([proc2 (channel-get (chaperone-evt ch (lambda (ch)
+                                                   (values ch
+                                                           (lambda (proc)
+                                                             (chaperone-procedure proc void))))))])
+       (check #f (eq? proc2 proc))
+       (check #t (chaperone-of? proc2 proc))))
+   (let ([got #f])
+     (define th (thread (lambda () (set! got (channel-get ch)))))
+     (channel-put (chaperone-evt ch void) 'ok)
+     (check th (sync th))
+     (check got 'ok))
+   (define (check-chaperone-channel channel-put)
+     (let ([proc (lambda (arg) arg)]
+           [got #f])
+       (define th (thread (lambda () (set! got (channel-get ch)))))
+       (channel-put (chaperone-channel ch
+                                       (lambda (ch) (values ch values))
+                                       (lambda (ch proc)
+                                         (chaperone-procedure proc void)))
+                    proc)
+       (check #f (eq? got proc))
+       (check #t (chaperone-of? got proc))))
+   (check-chaperone-channel channel-put)
+   (check-chaperone-channel (lambda (ch v) (sync (channel-put-evt ch v))))
+
    ;; Check sleeping in main thread
    (define now1 (current-inexact-milliseconds))
    (sleep 0.1)

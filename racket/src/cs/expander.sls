@@ -60,8 +60,6 @@
       [(_ ht [local prim]) (hash-set! ht 'prim local)]
       [(_ ht prim) (hash-set! ht 'prim prim)]))
 
-  (include "expander-compat.ss")
-
   (include "primitive/kernel.ss")
   (include "primitive/unsafe.ss")
   (include "primitive/flfxnum.ss")
@@ -114,7 +112,6 @@
                                               eq?
                                               values call-with-values))
                               (eval `(define ,k ',v))))))])
-    (install-table compat-table)
     (when compile-as-independent?
       (install-table kernel-table)
       (install-table unsafe-table)
@@ -161,7 +158,7 @@
 
   ;; `install-reader!` is from the `io` library, where the
   ;; given functions are used by the default port read handler
-  (install-reader! 1/read 1/read-syntax)
+  (install-reader! 1/read 1/read-syntax 1/read-accept-reader 1/read-accept-lang)
 
   ;; `set-string->number?!` is also from the `io` library, where
   ;; the printer needs to check whether a string parses as a number
