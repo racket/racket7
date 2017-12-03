@@ -258,4 +258,6 @@ chezpart.so: chezpart.sls $(COMPILE_FILE_DEPS)
 
 clean:
 	rm -f chezpart.so rumble.so regexp.so io.so linklet.so known-primitive.so expander.so schemify.so
+	rm -f chezpart.wpo rumble.wpo regexp.wpo io.wpo linklet.wpo known-primitive.wpo expander.wpo schemify.wpo
+	rm -f thread.so thread.wpo main.wpo main.so
 	rm -rf compiled
