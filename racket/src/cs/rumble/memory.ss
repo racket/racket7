@@ -108,20 +108,83 @@
                                     (cxr c)
                                     0)))]
          [get-count (lambda (static?) (lambda (e) (apply + (map (extract static? cadr) (cdr e)))))]
-         [get-bytes (lambda (static?) (lambda (e) (apply + (map (extract static? cddr) (cdr e)))))])
+         [get-bytes (lambda (static?) (lambda (e) (apply + (map (extract static? cddr) (cdr e)))))]
+         [pad (lambda (s n)
+                (string-append (make-string (max 0 (- n (string-length s))) #\space) s))]
+         [pad-right (lambda (s n)
+                      (string-append s (make-string (max 0 (- n (string-length s))) #\space)))]
+         [commas (lambda (n)
+                   (let* ([l (string->list (number->string n))]
+                          [len (length l)])
+                     (list->string
+                      (cons #\space
+                            (let loop ([l l] [len len])
+                              (cond
+                               [(<= len 3) l]
+                               [else
+                                (let ([m (modulo len 3)])
+                                  (case m
+                                    [(0) (list* (car l)
+                                                (cadr l)
+                                                (caddr l)
+                                                #\,
+                                                (loop (cdddr l) (- len 3)))]
+                                    [(2) (list* (car l)
+                                                (cadr l)
+                                                #\,
+                                                (loop (cddr l) (- len 2)))]
+                                    [else  (list* (car l)
+                                                  #\,
+                                                  (loop (cdr l) (- len 1)))]))]))))))]
+         [count-width 11]
+         [size-width 13]
+         [trim-type (lambda (s)
+                      (let ([len (string-length s)])
+                        (cond
+                         [(and (> len 14)
+                               (string=? (substring s 2 14) "record type "))
+                          (string-append "#<" (substring s 14 len))]
+                         [else s])))]
+         [layout (lambda args
+                   (let loop ([args args] [actual-col 0] [want-col 0])
+                     (cond
+                      [(null? args) "\n"]
+                      [(< actual-col want-col)
+                       (string-append (make-string (- want-col actual-col) #\space)
+                                      (loop args want-col want-col))]
+                      [(integer? (car args))
+                       (loop (cons (pad (commas (car args))
+                                        (- (+ want-col (sub1 (cadr args)))
+                                           actual-col))
+                                   (cdr args))
+                             actual-col
+                             want-col)]
+                      [else
+                       (string-append (car args)
+                                      (loop (cddr args)
+                                            (+ actual-col (string-length (car args)))
+                                            (+ want-col (cadr args))))])))]
+         [layout-line (lambda (label c1 s1 c2 s2)
+                        (layout " " 1
+                                (trim-type label) 22
+                                c1 count-width
+                                s1 size-width
+                                " | " 3
+                                c2 count-width
+                                s2 size-width))])
     (enable-object-counts #f)
     (chez:fprintf (current-error-port) "Current memory use: ~a\n" (bytes-allocated))
     (for-each (lambda (e)
-                (chez:fprintf (current-error-port) " ~a   ~a ~a | ~a ~a\n"
-                              (car e)
-                              ((get-count #f) e) ((get-bytes #f) e)
-                              ((get-count #t) e) ((get-bytes #t) e)))
+                (chez:fprintf (current-error-port)
+                              (layout-line (chez:format "~a" (car e))
+                                           ((get-count #f) e) ((get-bytes #f) e)
+                                           ((get-count #t) e) ((get-bytes #t) e))))
               (list-sort (lambda (a b) (< ((get-bytes #f) a) ((get-bytes #f) b))) counts))
-    (chez:fprintf (current-error-port) " total  ~a ~a | ~a ~a\n"
-                  (apply + (map (get-count #f) counts))
-                  (apply + (map (get-bytes #f) counts))
-                  (apply + (map (get-count #t) counts))
-                  (apply + (map (get-bytes #t) counts)))))
+    (chez:fprintf (current-error-port) (layout-line "total"
+                                                    (apply + (map (get-count #f) counts))
+                                                    (apply + (map (get-bytes #f) counts))
+                                                    (apply + (map (get-count #t) counts))
+                                                    (apply + (map (get-bytes #t) counts))))))
 
 ;; ----------------------------------------
 

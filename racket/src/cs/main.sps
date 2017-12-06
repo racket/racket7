@@ -280,19 +280,23 @@
             (set! minor-gcs (add1 minor-gcs))
             (set! major-gcs (add1 major-gcs)))
         (set! peak-mem (max peak-mem pre-allocated))
-        (when (log-level? root-logger 'debug 'GC)
-          (let ([delta (- pre-allocated post-allocated)])
-            (log-message root-logger 'debug 'GC
-                         (chez:format "0:~a~a @ ~a(~a); free ~a(~a) ~ams @ ~a"
-                                      (if minor? "min" "MAJ") gen
-                                      (K "" pre-allocated) (K "+" (- pre-allocated+overhead pre-allocated))
-                                      (K "" delta) (K "+" (- (- pre-allocated+overhead post-allocated+overhead)
-                                                             delta))
-                                      (- post-cpu-time pre-cpu-time) pre-cpu-time)
-                         (make-gc-info (if minor? 'minor 'major) pre-allocated pre-allocated+overhead 0
-                                       post-allocated post-allocated+overhead
-                                       pre-cpu-time post-cpu-time
-                                       pre-time post-time))))))))
+        (let ([debug-GC? (log-level? root-logger 'debug 'GC)])
+          (when (or debug-GC?
+                    (and (not minor?)
+                         (log-level? root-logger 'debug 'GC:major)))
+            (let ([delta (- pre-allocated post-allocated)])
+              (log-message root-logger 'debug (if debug-GC? 'GC 'GC:major)
+                           (chez:format "GC: 0:~a~a @ ~a(~a); free ~a(~a) ~ams @ ~a"
+                                        (if minor? "min" "MAJ") gen
+                                        (K "" pre-allocated) (K "+" (- pre-allocated+overhead pre-allocated))
+                                        (K "" delta) (K "+" (- (- pre-allocated+overhead post-allocated+overhead)
+                                                               delta))
+                                        (- post-cpu-time pre-cpu-time) pre-cpu-time)
+                           (make-gc-info (if minor? 'minor 'major) pre-allocated pre-allocated+overhead 0
+                                         post-allocated post-allocated+overhead
+                                         pre-cpu-time post-cpu-time
+                                         pre-time post-time)
+                           #f))))))))
  (|#%app| exit-handler
   (let ([orig (|#%app| exit-handler)]
         [root-logger (|#%app| current-logger)])
@@ -318,6 +322,13 @@
              (parse-logging-spec spec "in PLTSTDERR environment variable" #f)
              '(error)))))
 
+ (when (getenv "PLT_STATS_ON_BREAK")
+   (keyboard-interrupt-handler
+    (let ([orig (keyboard-interrupt-handler)])
+      (lambda args
+        (dump-memory-stats)
+        (apply orig args)))))
+
  (when version?
    (printf "Welcome to Racket v~a [cs]\n" (version)))
  (call-in-main-thread
@@ -339,7 +350,8 @@
              (reverse loads))
 
    (when repl?
-     (|#%app| (dynamic-require 'racket/base 'read-eval-print-loop)))
+     (|#%app| (dynamic-require 'racket/base 'read-eval-print-loop))
+     (newline))
 
    (|#%app| (|#%app| executable-yield-handler) 0)
    

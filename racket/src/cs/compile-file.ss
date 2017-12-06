@@ -11,6 +11,7 @@
 
 (check-defined 'box-cas!)
 (check-defined 'make-arity-wrapper-procedure)
+(check-defined 'generate-procedure-source-information)
 
 ;; ----------------------------------------
 
@@ -34,10 +35,16 @@
    [else #f]))
 
 (define whole-program? #f)
+(generate-inspector-information #f)
+(generate-procedure-source-information #t)
 
 (define-values (src deps)
   (let loop ([args (command-line-arguments)])
     (cond
+     [(get-opt args "--debug" 0)
+      => (lambda (args)
+           (generate-inspector-information #t)
+           (loop args))]
      [(get-opt args "--unsafe" 0)
       => (lambda (args)
            (optimize-level 3)

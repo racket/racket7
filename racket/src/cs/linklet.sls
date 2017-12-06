@@ -80,9 +80,9 @@
   (define (primitive->compiled-position prim) #f)
   (define (compiled-position->primitive pos) #f)
 
+  (define omit-debugging? (not (getenv "PLT_CS_DEBUG")))
   (define measure-performance? (getenv "PLT_LINKLET_TIMES"))
-  (define omit-debugging? (getenv "PLT_LINKLET_NO_DEBUG"))
-  
+
   (define gensym-on? (getenv "PLT_LINKLET_SHOW_GENSYM"))
   (define pre-jit-on? (getenv "PLT_LINKLET_SHOW_PRE_JIT"))
   (define jit-demand-on? (getenv "PLT_LINKLET_SHOW_JIT_DEMAND"))
@@ -93,11 +93,13 @@
   (define (show what v)
     (when show-on?
       (printf ";; ~a ---------------------\n" what)
-      (parameterize ([print-gensym gensym-on?]
-                     [print-extended-identifiers #t])
-        (pretty-print (strip-nested-annotations
-                       (remove-annotation-boundary
-                        (convert-to-annotation #f v))))))
+      (call-with-system-wind
+       (lambda ()
+         (parameterize ([print-gensym gensym-on?]
+                        [print-extended-identifiers #t])
+           (pretty-print (strip-nested-annotations
+                          (remove-annotation-boundary
+                           (convert-to-annotation #f v))))))))
     v)
 
   (define region-times (make-eq-hashtable))
@@ -157,13 +159,17 @@
         (for-each (lambda (p) (report (car p) (/ (cdr p) 1024 1024) 'MB ""))
                   (ht->sorted-list region-memories)))))
 
-  ;; `compile` and `interpret` have `dynamic-wind`-based state
+  ;; `compile`, `interpret`, etc. have `dynamic-wind`-based state
   ;; that need to be managed correctly when swapping Racket
   ;; engines/threads.
   (define (compile* e)
     (call-with-system-wind (lambda () (compile e))))
   (define (interpret* e)
     (call-with-system-wind (lambda () (interpret e))))
+  (define (fasl-write* s o)
+    (call-with-system-wind (lambda () (fasl-write s o))))
+  (define (compile-to-port* s o)
+    (call-with-system-wind (lambda () (compile-to-port s o))))
 
   (define (outer-eval s)
     (if jit-mode?
@@ -173,9 +179,8 @@
   (define (compile-to-bytevector s)
     (let-values ([(o get) (open-bytevector-output-port)])
       (cond
-       [jit-mode? (fasl-write s o)]
-       [else (parameterize ([generate-inspector-information (not omit-debugging?)])
-               (compile-to-port (list `(lambda () ,s)) o))])
+       [jit-mode? (fasl-write* s o)]
+       [else (compile-to-port* (list `(lambda () ,s)) o)])
       (bytevector-compress (get))))
 
   (define (eval-from-bytevector c-bv)
@@ -609,7 +614,7 @@
     (write-bytes (make-bytes 20 0) port)
     ;; The rest is whatever we want. We'll simply fasl the bundle.
     (let-values ([(o get) (open-bytevector-output-port)])
-      (fasl-write b o)
+      (fasl-write* b o)
       (let ([bstr (get)])
         (write-int (bytes-length bstr) port)
         (write-bytes bstr port))))
@@ -1084,5 +1089,9 @@
      jit-extract-closed))
 
   ;; --------------------------------------------------
+
+  (when omit-debugging?
+    (generate-inspector-information (not omit-debugging?))
+    (generate-procedure-source-information #t))
 
   (install-linklet-bundle-write!))

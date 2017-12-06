@@ -461,7 +461,11 @@
                                        [n (c 'name)])
                                   n))]
                       [desc
-                       (let* ([src (i 'source-object)])
+                       (let* ([src (or
+                                    ;; when per-expression inspector info is available:
+                                    (i 'source-object)
+                                    ;; when only per-function source location is available:
+                                    ((i 'code) 'source-object))])
                          (and (or name src)
                               (cons name src)))])
                  (call-with-values

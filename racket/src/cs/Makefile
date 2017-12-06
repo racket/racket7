@@ -4,10 +4,13 @@ SCHEME = scheme
 # Controls whether base layers are built as unsafe:
 UNSAFE_COMP = # --unsafe
 
+# Controls whether base layers are built as unsafe:
+DEBUG_COMP = # --debug
+
 # Controls whether rumble is built as unsafe:
 RUMBLE_UNSAFE_COMP = --unsafe
 
-COMPILE_FILE = $(SCHEME) --script compile-file.ss
+COMPILE_FILE = $(SCHEME) --script compile-file.ss $(UNSAFE_COMP) $(DEBUG_COMP)
 COMPILE_FILE_DEPS = compile-file.ss
 
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
@@ -40,7 +43,10 @@ run: main.so ../../bin/racket
 	$(SCHEME) --script main.so ../../bin/racket $(ARGS)
 
 setup:
-	$(MAKE) run ARGS="-W 'info@compiler/cm error' -l- setup $(ARGS)"
+	$(MAKE) run ARGS="-l- setup $(ARGS)"
+
+setup-v:
+	$(MAKE) run ARGS="-W 'info@compiler/cm debug@GC:major error' -l- setup $(ARGS)"
 
 run-wpo: racket.so ../../bin/racket
 	$(SCHEME) --script racket.so ../../bin/racket $(ARGS)
