@@ -1,5 +1,7 @@
 #lang racket/base
 (require "../port/string-output.rkt"
+         (only-in "../path/path.rkt" path?)
+         (only-in "../path/string.rkt" path->string)
          "write-with-max.rkt"
          "symbol.rkt")
 
@@ -8,11 +10,18 @@
 (define (print-named what v mode o max-length)
   (define name (object-name v))
   (let* ([max-length (write-string/max "#<" o max-length)]
-         [max-length (write-string/max what o max-length)])
+         [max-length (write-string/max what o max-length)]
+         [name-str
+          (cond
+            [(symbol? name)
+             (symbol->print-string name #:for-type? #t)]
+            [(path? name) ; especially for input & output ports
+             (path->string name)]
+            [else #f])])
     (cond
-      [(symbol? name)
+      [name-str
        (let* ([max-length (write-string/max ":" o max-length)]
-              [max-length (write-string/max (symbol->print-string name #:for-type? #t) o max-length)])
+              [max-length (write-string/max name-str o max-length)])
          (write-string/max ">" o max-length))]
       [else
        (write-string/max ">" o max-length)])))

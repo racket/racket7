@@ -5,6 +5,7 @@
          "check.rkt"
          "sep.rkt"
          "build.rkt"
+         "string.rkt"
          "split.rkt"
          "relativity.rkt"
          "cleanse.rkt"
@@ -58,14 +59,6 @@
 
          _path)
 
-(define/who (string->path s)
-  (check who string? s)
-  (check-path-string who s)
-  (raw:string->path s))
-
-(define/who (path->string p)
-  (check who is-path? #:contract "path?" p)
-  (bytes->string/locale (path-bytes p) #\?))
 
 (define/who (bytes->path bstr [convention (system-path-convention-type)])
   (check who bytes? bstr)

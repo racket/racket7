@@ -3,6 +3,7 @@
          racket/fixnum
          "../common/check.rkt"
          "../port/output-port.rkt"
+         "../port/input-port.rkt"
          "../port/string-output.rkt"
          "../port/bytes-output.rkt"
          "../port/bytes-port.rkt"
@@ -265,6 +266,10 @@
      (print-named "struct-type-property" v mode o max-length)]
     [(eof-object? v)
      (write-string/max "#<eof>" o max-length)]
+    [(core-input-port? v)
+     (print-named "input-port" v mode o max-length)]
+    [(core-output-port? v)
+     (print-named "output-port" v mode o max-length)]
     [else
      ;; As a last resort, fall back to the host `format`:
      (write-string/max (format "~s" v) o max-length)]))

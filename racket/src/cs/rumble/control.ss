@@ -1489,12 +1489,15 @@
   ((call/cc
     (lambda (k)
       (current-system-wind-start-k k)
-      (call-with-values
-          proc
-        (lambda args
-          (lambda ()
-            (current-system-wind-start-k #f)
-            (apply values args))))))))
+      (#%dynamic-wind
+       void
+       (lambda ()
+         (call-with-values
+             proc
+           (lambda args
+             (lambda ()
+               (apply values args)))))
+       (lambda () (current-system-wind-start-k #f)))))))
 
 (define (swap-metacontinuation-with-system-wind saved proc start-k)
   (current-system-wind-start-k #f)
