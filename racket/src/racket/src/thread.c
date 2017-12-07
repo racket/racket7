@@ -574,7 +574,7 @@ void scheme_init_thread(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("make-will-executor", make_will_executor, 0, 0, env);
   ADD_PRIM_W_ARITY("will-executor?"    , will_executor_p   , 1, 1, env);
   ADD_PRIM_W_ARITY("will-register"     , register_will     , 3, 3, env);
-  ADD_PRIM_W_ARITY("will-try-execute"  , will_executor_try , 1, 1, env);
+  ADD_PRIM_W_ARITY("will-try-execute"  , will_executor_try , 1, 2, env);
   ADD_PRIM_W_ARITY("will-execute"      , will_executor_go  , 1, 1, env);
   
   scheme_add_evt_through_sema(scheme_will_executor_type, will_executor_sema, NULL);
@@ -8558,6 +8558,8 @@ static Scheme_Object *will_executor_try(int argc, Scheme_Object **argv)
 
   if (scheme_wait_sema(w->sema, 1))
     return do_next_will(w);
+  else if (argc > 1)
+    return argv[1];
   else
     return scheme_false;
 }

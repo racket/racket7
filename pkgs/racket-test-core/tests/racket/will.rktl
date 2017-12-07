@@ -16,6 +16,9 @@
 
 (define we (make-will-executor))
 
+(test #f will-try-execute we)
+(test 'no will-try-execute we 'no)
+
 ;; Never GC this one:
 (test (void) will-register we test (lambda (x) (error 'bad-will-call)))
 
