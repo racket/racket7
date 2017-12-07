@@ -28,5 +28,5 @@
 (define (post-idle)
   (and (semaphore-any-waiters? idle-sema)
        (begin
-         (semaphore-post idle-sema)
+         (semaphore-post/atomic idle-sema)
          #t)))

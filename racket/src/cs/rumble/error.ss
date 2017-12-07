@@ -27,7 +27,8 @@
                     (cond
                      [(or (number? v)
                           (boolean? v)
-                          (string? v))
+                          (string? v)
+                          (symbol? v))
                       (chez:format "~s" v)]
                      [else
                       "[?error-value->string-handler not ready?]"]))

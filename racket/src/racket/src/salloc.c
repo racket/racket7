@@ -2025,7 +2025,8 @@ static int record_traced(void *p)
                     : 512);
     if (!traced_buffer) REGISTER_SO(traced_buffer);
     b2 = scheme_malloc(sizeof(void*) * new_size);
-    memcpy(b2, traced_buffer, sizeof(void*)*traced_buffer_size);
+    if (traced_buffer)
+      memcpy(b2, traced_buffer, sizeof(void*)*traced_buffer_size);
     traced_buffer = b2;
     traced_buffer_size = new_size;
   }

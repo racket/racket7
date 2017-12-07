@@ -293,6 +293,14 @@
      [(c name import-keys get-import serializable?)
       (performance-region
        'compile
+       (define importss
+         (map (lambda (ps)
+                (map (lambda (p) (if (pair? p) (car p) p))
+                     ps))
+              (cadr c)))
+       (define exports
+         (map (lambda (p) (if (pair? p) (cadr p) p))
+              (caddr c)))
        ;; Convert the linklet S-expression to a `lambda` S-expression:
        (define-values (impl-lam importss-abi exports-info)
          (schemify-linklet (show "linklet" c)
@@ -328,12 +336,8 @@
                                importss-abi
                                exports-info
                                name
-                               (map (lambda (ps)
-                                      (map (lambda (p) (if (pair? p) (car p) p))
-                                           ps))
-                                    (cadr c))
-                               (map (lambda (p) (if (pair? p) (cadr p) p))
-                                    (caddr c)))])
+                               importss
+                               exports)])
          (show "compiled" 'done)
          ;; In general, `compile-linklet` is allowed to extend the set
          ;; of linklet imports if `import-keys` is provided (e.g., for

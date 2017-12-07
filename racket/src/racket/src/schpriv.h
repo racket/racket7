@@ -496,6 +496,8 @@ int scheme_is_place_main_os_thread();
 
 Scheme_Object *scheme_get_startup_export(const char *s);
 
+extern int scheme_init_load_on_demand;
+
 /*========================================================================*/
 /*                                constants                               */
 /*========================================================================*/

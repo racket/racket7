@@ -434,10 +434,14 @@
           set-phantom-bytes!
           set-garbage-collect-notify! ; not exported to Racket
 
-          make-will-executor
-          will-executor?
-          will-register
-          will-try-execute
+          ;; not the same as Racket will executors:
+          (rename
+           [make-will-executor rumble:make-will-executor]
+           [make-stubborn-will-executor rumble:make-stubborn-will-executor]
+           [will-executor? rumble:will-executor?]
+           [will-register rumble:will-register]
+           [will-try-execute rumble:will-try-execute])
+          poll-will-executors
 
           make-ephemeron
           ephemeron?
@@ -445,7 +449,7 @@
 
           system-type
           system-path-convention-type
-          system-library-subpath-string ; not exported to racket
+          system-library-subpath-string ; not exported to Racket
 
           unsafe-car
           unsafe-cdr
@@ -547,7 +551,7 @@
           ffi-call ffi-callback ffi-callback? ffi-lib-name ffi-lib? ffi-obj ffi-obj-lib
           ffi-obj-name  ffi-obj? flvector->cpointer free free-immobile-cell lookup-errno
           make-array-type make-cstruct-type make-ctype make-late-weak-box make-late-weak-hasheq
-          make-sized-byte-string make-stubborn-will-executor make-union-type malloc malloc-immobile-cell
+          make-sized-byte-string make-union-type malloc malloc-immobile-cell
           memcpy memmove memset offset-ptr? prop:cpointer ptr-add ptr-add! ptr-equal? ptr-offset ptr-ref
           ptr-set! saved-errno set-cpointer-tag! set-ptr-offset! vector->cpointer
           unsafe-register-process-global

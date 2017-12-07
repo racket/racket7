@@ -16,7 +16,7 @@
          "alarm.rkt"
          "nested-thread.rkt"
          "api.rkt"
-         "will-execute.rkt"
+         "will-executor.rkt"
          "exit.rkt"
          "plumber.rkt"
          "unsafe.rkt"
@@ -113,6 +113,11 @@
          custodian-require-memory
          custodian-limit-memory
 
+         make-will-executor
+         make-stubborn-will-executor
+         will-executor?
+         will-register
+         will-try-execute
          will-execute
 
          exit

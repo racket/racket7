@@ -30,6 +30,7 @@
 (define (select-thread!)
   (let loop ([g root-thread-group] [none-k maybe-done])
     (check-garbage-collection)
+    (host:poll-will-executors)
     (check-external-events 'fast)
     (when (and (all-threads-poll-done?)
                (maybe-future-work?))

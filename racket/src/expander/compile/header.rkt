@@ -123,8 +123,8 @@
                                ,self-id
                                ,inspector-id)])
                   (begin
-                    (vector-set! ,syntax-literals-id pos stx)
-                    stx)))))))))
+                    (vector-cas! ,syntax-literals-id pos #f stx)
+                    (vector-ref ,syntax-literals-id pos))))))))))
 
 ;; Generate on-demand deserialization (shared across instances); the
 ;; result defines `deserialize-syntax-id`
@@ -159,7 +159,7 @@
 (define (generate-lazy-syntax-literal-lookup pos)
   `(,get-syntax-literal!-id ,pos))
 
-;; Generate immediate deserializartion and shifting of a set of syntax
+;; Generate immediate deserialization and shifting of a set of syntax
 ;; objects across multiple phases; the result is an expression for a
 ;; vector (indexed by syntax-literal position).
 (define (generate-eager-syntax-literals! sl mpis base-phase self ns)

@@ -89,6 +89,8 @@ extern int scheme_jit_malloced;
 # define scheme_jit_malloced 0
 #endif
 
+SHARED_OK int scheme_init_load_on_demand = 1;
+
 /*========================================================================*/
 /*                    local variables and prototypes                      */
 /*========================================================================*/
@@ -130,8 +132,6 @@ THREAD_LOCAL_DECL(static intptr_t max_gc_pre_used_bytes);
 THREAD_LOCAL_DECL(static int num_major_garbage_collections);
 THREAD_LOCAL_DECL(static int num_minor_garbage_collections);
 #endif
-
-SHARED_OK static int init_load_on_demand = 1;
 
 #ifdef RUNSTACK_IS_GLOBAL
 THREAD_LOCAL_DECL(Scheme_Object **scheme_current_runstack_start);
@@ -7782,7 +7782,7 @@ static void make_initial_config(Scheme_Thread *p)
   init_param(cells, paramz, MZCONFIG_CASE_SENS, (scheme_case_sensitive ? scheme_true : scheme_false));
   init_param(cells, paramz, MZCONFIG_CAN_READ_PIPE_QUOTE, scheme_true);
   
-  init_param(cells, paramz, MZCONFIG_LOAD_DELAY_ENABLED, init_load_on_demand ? scheme_true : scheme_false);
+  init_param(cells, paramz, MZCONFIG_LOAD_DELAY_ENABLED, scheme_init_load_on_demand ? scheme_true : scheme_false);
   init_param(cells, paramz, MZCONFIG_DELAY_LOAD_INFO, scheme_false);
 
   init_param(cells, paramz, MZCONFIG_PRINT_GRAPH, scheme_false);
@@ -7955,7 +7955,7 @@ Scheme_Config *scheme_minimal_config(void)
 
 void scheme_set_startup_load_on_demand(int on)
 {
-  init_load_on_demand = on;
+  scheme_init_load_on_demand = on;
 }
 
 Scheme_Object *scheme_register_parameter(Scheme_Prim *function, char *name, int which)

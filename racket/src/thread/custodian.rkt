@@ -1,7 +1,9 @@
 #lang racket/base
 (require "check.rkt"
          "atomic.rkt"
-         (only-in '#%foreign make-stubborn-will-executor))
+         "engine.rkt"
+         "evt.rkt"
+         "semaphore.rkt")
 
 (provide current-custodian
          make-custodian
@@ -27,11 +29,14 @@
 
 (struct custodian (children     ; weakly maps maps object to callback
                    [shut-down? #:mutable]
+                   [shutdown-sema #:mutable]
                    [parent-reference #:mutable])
   #:authentic)
 
-(struct custodian-box ([v #:mutable])
-  #:authentic)
+(struct custodian-box ([v #:mutable] sema)
+  #:authentic
+  #:property prop:evt (lambda (cb)
+                        (wrap-evt (custodian-box-sema cb) (lambda (v) cb))))
 
 (struct willed-callback (proc will)
   #:property prop:procedure (struct-field-index proc)
@@ -49,7 +54,8 @@
 
 (define (create-custodian)
   (custodian (make-weak-hasheq)
-             #f
+             #f ; shut-down?
+             #f ; shutdown semaphore
              #f))
   
 (define root-custodian (create-custodian))
@@ -82,7 +88,7 @@
      [(custodian-shut-down? cust) #f]
      [else
       (define we (and (not weak?)
-                      (make-stubborn-will-executor)))
+                      (host:make-stubborn-will-executor void)))
       (hash-set! (custodian-children cust)
                  obj
                  (cond
@@ -93,7 +99,7 @@
         ;; Registering with a will executor that we never poll has the
         ;; effect of turning a weak reference into a strong one when
         ;; there are no other references:
-        (will-register we obj void))
+        (host:will-register we obj void))
       (custodian-reference cust)])))
 
 (define (unsafe-custodian-unregister obj cref)
@@ -122,7 +128,19 @@
       (if (procedure-arity-includes? callback 2)
           (callback child c)
           (callback child)))
-    (hash-clear! (custodian-children c))))
+    (hash-clear! (custodian-children c))
+    (let ([sema (custodian-shutdown-sema c)])
+      (when sema
+        (semaphore-post-all sema)))))
+
+(define (custodian-get-shutdown-sema c)
+  (atomically
+   (or (custodian-shutdown-sema c)
+       (let ([sema (make-semaphore)])
+         (set-custodian-shutdown-sema! c sema)
+         (when (custodian-shut-down? c)
+           (semaphore-post-all sema))
+         sema))))
 
 (define (custodian-subordinate? c super-c)
   (let loop ([p-cref (custodian-parent-reference c)])
@@ -172,7 +190,7 @@
 
 (define/who (make-custodian-box c v)
   (check who custodian? c)
-  (define b (custodian-box v))
+  (define b (custodian-box v (custodian-get-shutdown-sema c)))
   (unless (unsafe-custodian-register c b (lambda (b) (set-custodian-box-v! b #f)) #f #t)
     (raise-custodian-is-shut-down who c))
   b)

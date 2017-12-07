@@ -173,7 +173,9 @@
                                 c2 count-width
                                 s2 size-width))])
     (enable-object-counts #f)
+    (chez:fprintf (current-error-port) "Begin Dump\n")
     (chez:fprintf (current-error-port) "Current memory use: ~a\n" (bytes-allocated))
+    (chez:fprintf (current-error-port) "Begin RacketCS\n")
     (for-each (lambda (e)
                 (chez:fprintf (current-error-port)
                               (layout-line (chez:format "~a" (car e))
@@ -184,7 +186,9 @@
                                                     (apply + (map (get-count #f) counts))
                                                     (apply + (map (get-bytes #f) counts))
                                                     (apply + (map (get-count #t) counts))
-                                                    (apply + (map (get-bytes #t) counts))))))
+                                                    (apply + (map (get-bytes #t) counts))))
+    (chez:fprintf (current-error-port) "End RacketCS\n")
+    (chez:fprintf (current-error-port) "End Dump\n")))
 
 ;; ----------------------------------------
 

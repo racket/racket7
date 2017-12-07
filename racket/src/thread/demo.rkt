@@ -487,7 +487,19 @@
    (check #t (thread-running? t/r2))
    (kill-thread t/r1)
    (kill-thread t/r2)
-   
+
+   ;; Check will executors
+   (define we (make-will-executor))
+   (check #t (will-executor? we))
+   (check #f (will-try-execute we))
+   (check (void) (will-register we (gensym) (lambda (s) s)))
+   (collect-garbage)
+   (check #t (symbol? (will-try-execute we)))
+   (check #f (will-try-execute we))
+   (check (void) (will-register we (gensym) (lambda (s) s)))
+   (thread (lambda () (sync (system-idle-evt)) (collect-garbage)))
+   (check #t (symbol? (will-execute we)))
+
    (set! done? #t)))
 
 (unless done?

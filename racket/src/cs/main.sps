@@ -241,7 +241,7 @@
    (let* ([s (number->string (quotient (abs n) 1000))]
           [len (string-length s)]
           [len2 (+ len
-                   (quotient len 3)
+                   (quotient (sub1 len) 3)
                    (if (or (< n 0)
                            (not (eq? "" plus)))
                        1

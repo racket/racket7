@@ -1,6 +1,7 @@
 #lang racket/base
 (require "check.rkt"
          "../common/queue.rkt"
+         "internal-error.rkt"
          "atomic.rkt"
          "parameter.rkt"
          "waiter.rkt"
@@ -16,7 +17,10 @@
          semaphore-peek-evt
          semaphore-peek-evt?
          
-         semaphore-any-waiters?)
+         semaphore-any-waiters?
+
+         semaphore-post/atomic
+         semaphore-wait/atomic)
 
 (struct semaphore ([count #:mutable]
                    queue)
@@ -44,17 +48,19 @@
 
 (define/who (semaphore-post s)
   (check who semaphore? s)
-  (atomically
-   (let loop ()
-     (define w (queue-remove! (semaphore-queue s)))
-     (cond
+  (atomically (semaphore-post/atomic s)))
+
+(define (semaphore-post/atomic s)
+  (let loop ()
+    (define w (queue-remove! (semaphore-queue s)))
+    (cond
       [(not w)
        (set-semaphore-count! s (add1 (semaphore-count s)))]
       [else
        (waiter-resume! w s)
        (when (semaphore-peek-select-waiter? w)
          ;; Don't consume a post for a peek waiter
-         (loop))]))))      
+         (loop))])))
 
 (define (semaphore-post-all s)
   (atomically
@@ -141,3 +147,12 @@
                                     (set! n (queue-add! q w))
                                     (values #f #f)])))
              (lambda (v) result)))]))
+
+;; Called only when it should immediately succeed:
+(define (semaphore-wait/atomic s)
+  (define c (semaphore-count s))
+  (cond
+    [(positive? c)
+     (set-semaphore-count! s (sub1 c))]
+    [else
+     (internal-error "semaphore-wait/atomic: cannot decrement semaphore")]))

@@ -61,7 +61,7 @@
 (arity-test will-executor? 1 1)
 (arity-test will-register 3 3)
 (arity-test will-execute 1 1)
-(arity-test will-try-execute 1 1)
+(arity-test will-try-execute 1 2)
 
 ;; ----------------------------------------
 ;; Test custodian boxes

@@ -46,6 +46,12 @@
                      'current-engine-state rumble:current-engine-state
                      'set-ctl-c-handler! rumble:set-ctl-c-handler!
                      'root-continuation-prompt-tag rumble:root-continuation-prompt-tag
+                     'poll-will-executors poll-will-executors
+                     'make-will-executor rumble:make-will-executor
+                     'make-stubborn-will-executor rumble:make-stubborn-will-executor
+                     'will-executor? rumble:will-executor?
+                     'will-register rumble:will-register
+                     'will-try-execute rumble:will-try-execute
                      'break-enabled-key break-enabled-key
                      'set-break-enabled-transition-hook! rumble:set-break-enabled-transition-hook!
                      'exn:break/non-engine exn:break
