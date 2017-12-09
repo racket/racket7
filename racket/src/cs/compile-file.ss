@@ -12,6 +12,7 @@
 (check-defined 'box-cas!)
 (check-defined 'make-arity-wrapper-procedure)
 (check-defined 'generate-procedure-source-information)
+(check-defined 'object-backreferences)
 
 ;; ----------------------------------------
 

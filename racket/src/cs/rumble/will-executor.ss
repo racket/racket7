@@ -6,7 +6,7 @@
 (define the-stubborn-will-guardian (make-guardian #t))
 
 ;; Guardian callbacks are called fifo, but will executors are called
-;; lifo. The `will-stacks` function maps a finalized value to a list
+;; lifo. The `will-stacks` tables map a finalized value to a list
 ;; of finalizers, where each finalizer is an ephemeron pairing a will
 ;; executor with a will function (so that the function is not retained
 ;; if the will executor is dropped)
