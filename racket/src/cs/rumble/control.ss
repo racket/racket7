@@ -127,7 +127,7 @@
 
 ;; Messages to `resume-k[/no-wind]`:
 (define-record appending (resume))  ; composing the frame, so run "in" winders
-(define-record aborting (tag args wind?)) ; aborting, so run "out" winders --- unless not `wind?`
+(define-record aborting (who tag args wind?)) ; aborting, so run "out" winders --- unless not `wind?`
 (define-record applying (c args))   ; applying a non-composable continuation
 
 (define-record-type (continuation-prompt-tag create-continuation-prompt-tag authentic-continuation-prompt-tag?)
@@ -323,8 +323,10 @@
             [else
              ;; Aborting to an enclosing prompt, so keep going:
              (pop-metacontinuation-frame)
-             (do-abort-current-continuation (aborting-tag r)
+             (do-abort-current-continuation (aborting-who r)
+                                            (aborting-tag r)
                                             (aborting-args r)
+                                            (aborting-wind? r)
                                             (aborting-wind? r))])]
           [(applying? r)
            ;; We're applying a non-composable continuation --- past
@@ -371,16 +373,18 @@
   (start-uninterrupted 'abort)
   (let ([args (apply-impersonator-abort-wrapper tag args)]
         [tag (strip-impersonator tag)])
-    (do-abort-current-continuation tag args #t)))
+    (do-abort-current-continuation who tag args #t #f)))
 
-(define (unsafe-abort-current-continuation/no-wind tag arg)
+(define/who (unsafe-abort-current-continuation/no-wind tag arg)
   (start-uninterrupted 'abort)
   (let ([args (apply-impersonator-abort-wrapper tag (list arg))]
         [tag (strip-impersonator tag)])
-    (do-abort-current-continuation tag args #f)))
+    (do-abort-current-continuation who tag args #f #f)))
 
-(define (do-abort-current-continuation tag args wind?)
+(define (do-abort-current-continuation who tag args wind? check?)
   (assert-in-uninterrupted)
+  (when check?
+    (check-prompt-still-available who tag))
   (cond
    [(null? (current-metacontinuation))
     ;; A reset handler must end the uninterrupted region:
@@ -391,7 +395,21 @@
       ((metacontinuation-frame-resume-k/no-wind mf)
        ;; An `aborting` record tells the metacontinuation's continuation
        ;; to handle to continue jumping:
-       (make-aborting tag args wind?)))]))
+       (make-aborting who tag args wind?)))]))
+
+(define (check-prompt-still-available who tag)
+  (unless (continuation-prompt-available? tag)
+    (end-uninterrupted 'escape-fail)
+    (raise-continuation-error who
+                              (string-append
+                               "lost target;\n"
+                               (if (eq? who 'abort-current-continuation)
+                                   (string-append
+                                    " abort in progress, but the current continuation includes no prompt with\n"
+                                    " the given tag after a `dynamic-wind' post-thunk return")
+                                   (string-append
+                                    " jump to escape continuation in progress, and the target is not in the\n"
+                                    " current continuation after a `dynamic-wind' post-thunk return"))))))
 
 ;; ----------------------------------------
 
@@ -520,7 +538,7 @@
         (end-uninterrupted 'escape-fail)
         (raise-continuation-error '|continuation application|
                                   "attempt to jump into an escape continuation"))
-      (do-abort-current-continuation tag args #t))]))
+      (do-abort-current-continuation '|continuation application| tag args #t #f))]))
 
 ;; Apply a continuation within the current metacontinuation frame:
 (define (apply-immediate-continuation c rmc args)
@@ -562,9 +580,10 @@
        [(null? current-mc)
         (unless (or (eq? tag the-default-continuation-prompt-tag)
                     (eq? tag the-root-continuation-prompt-tag))
-          (raise-arguments-error 'apply-continuation
-                                 "continuation includes no prompt with the given tag"
-                                 "tag" tag))
+          (do-raise-arguments-error 'apply-continuation
+                                    "continuation includes no prompt with the given tag"
+                                    exn:fail:contract:continuation
+                                    (list "tag" tag)))
         (values accum null)]
        [(eq? tag (metacontinuation-frame-tag (car current-mc)))
         (values accum current-mc)]
@@ -641,8 +660,9 @@
      [(null? mc)
       (unless (or (eq? tag the-root-continuation-prompt-tag)
                   (eq? tag the-default-continuation-prompt-tag))
-        (raise-arguments-error who "continuation includes no prompt with the given tag"
-                               "tag" tag))
+        (do-raise-arguments-error who "continuation includes no prompt with the given tag"
+                                  exn:fail:contract:continuation
+                                  (list "tag" tag)))
       (check-barrier-ok saw-barrier?)
       '()]
      [else
@@ -658,8 +678,9 @@
 
 (define (check-prompt-tag-available who tag)
   (unless (continuation-prompt-available? tag)
-    (raise-arguments-error who "continuation includes no prompt with the given tag"
-                           "tag" tag)))
+    (do-raise-arguments-error who "continuation includes no prompt with the given tag"
+                              exn:fail:contract:continuation
+                              (list "tag" tag))))
 
 (define (call-with-appended-metacontinuation rmc proc)
   ;; Assumes that the current metacontinuation frame is ready to be
@@ -1088,8 +1109,8 @@
           k)]
         [(escape-continuation? k)
          (unless (continuation-prompt-available? (escape-continuation-tag k))
-           (raise-arguments-error '|continuation application|
-                                  "escape continuation not in the current continuation"))
+           (raise-continuation-error '|continuation application|
+                                     "escape continuation not in the current continuation"))
          (make-continuation-mark-set
           (prune-mark-chain-suffix
            tag
@@ -1373,7 +1394,7 @@
 ;; Wrap `dynamic-wind` for three tasks:
 
 ;; 1. set the mark stack on entry and exit to the saved mark stack.
-;;    The saved mark stack is confined to the current continuation
+;;    The saved mark stack is confined to the current metacontinuation
 ;;    frame, so it's ok to use it if the current continuation is later
 ;;    applied to a different metacontinuation.
 

@@ -93,6 +93,9 @@
     (raise-argument-error 'raise-arguments-error "symbol?" who))
   (unless (string? what)
     (raise-argument-error 'raise-arguments-error "string?" what))
+  (do-raise-arguments-error who what exn:fail:contract more))
+  
+(define (do-raise-arguments-error who what exn:fail:contract more)
   (raise
    (|#%app|
     exn:fail:contract
