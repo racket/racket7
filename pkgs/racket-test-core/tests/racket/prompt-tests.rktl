@@ -794,7 +794,6 @@
                 p2))
              (lambda () (out 'post1))))
        p1))
-    (printf "here ~a\n" count)
     (set! count (add1 count))
     (unless (= count 3)
       (call-with-continuation-prompt

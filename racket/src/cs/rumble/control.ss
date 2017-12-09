@@ -364,6 +364,26 @@
                                #f
                                (metacontinuation-frame-cc-guard current-mf)))
 
+;; Create a winderless continuation whose job is to
+;; resume the current metacontinuation frame after
+;; escape winders are done. This indirection is needed
+;; because the target metacontinuation may change while
+;; winders are being run.
+(define handle-in-current-metacontinuation-k
+  (let ([winders (#%$current-winders)])
+    (#%$current-winders '())
+    (begin0
+     (call/cc
+      (lambda (esc) ; to receive the continuation that we're constructing
+        ;; prune continuation to capture:
+        (#%$current-stack-link #%$null-continuation)
+        (let ([msg (call/cc
+                    (lambda (handle-k)
+                      (esc handle-k)))])
+          ((metacontinuation-frame-resume-k/no-wind (car (current-metacontinuation)))
+           msg))))
+     (#%$current-winders winders))))
+
 ;; ----------------------------------------
 
 (define/who (abort-current-continuation tag . args)
@@ -392,10 +412,9 @@
    [else
     (unless wind? (#%$current-winders '()))
     (let ([mf (car (current-metacontinuation))])
-      ((metacontinuation-frame-resume-k/no-wind mf)
-       ;; An `aborting` record tells the metacontinuation's continuation
-       ;; to handle to continue jumping:
-       (make-aborting who tag args wind?)))]))
+      ;; An `aborting` record tells the metacontinuation's continuation
+      ;; to continue jumping:
+      (handle-in-current-metacontinuation-k (make-aborting who tag args wind?)))]))
 
 (define (check-prompt-still-available who tag)
   (unless (continuation-prompt-available? tag)
@@ -527,11 +546,10 @@
          [else
           ;; Jump back to the nearest prompt, then continue jumping
           ;; as needed from there:
-          (let ([mf (car (current-metacontinuation))])
-            ((metacontinuation-frame-resume-k/no-wind mf)
-             ;; An `applying` record tells the metacontinuation's continuation
-             ;; to continue jumping:
-             (make-applying c args)))])))]
+          (handle-in-current-metacontinuation-k
+           ;; An `applying` record tells the metacontinuation's continuation
+           ;; to continue jumping:
+           (make-applying c args))])))]
    [(escape-continuation? c)
     (let ([tag (escape-continuation-tag c)])
       (unless (continuation-prompt-available? tag)
