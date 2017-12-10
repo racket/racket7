@@ -14,17 +14,20 @@
 
 ;;                   [root empty continuation]
 ;;                    --- empty-k
+;;                    --- splice-k
 ;; metacontinuation  |
 ;;     frame         |
 ;;                   |--- resume-k & resume/no-wind
 ;;                   |<-- tag represents this point
 ;;                    --- empty-k
+;;                    --- splice-k
 ;; metacontinuation  |
 ;;     frame         |
 ;;                   |
 ;;                   |--- resume-k & resume/no-wind
 ;;                   |<-- tag represents this point
 ;;                    --- empty-k
+;;                    --- splice-k
 ;;   current host    |
 ;;   continuation    |
 ;;                   v
@@ -33,7 +36,8 @@
 ;; plus the frames in the list `(current-metacontinuation)`, where the
 ;; shallowest (= lowest in the picture above) frame is first in the
 ;; list. The `empty-k` value of the current host continuation is
-;; in `current-empty-k`.
+;; in `current-empty-k`, and the `splice-k` value is similarly in
+;; `current-splice-k`.
 
 ;; The host Scheme implementation takes care of winders from
 ;; `dynamic-wind`, which means that things generally work if host
@@ -60,6 +64,13 @@
 ;; calling a composable continuation doesn't need to add a new
 ;; metacontinuation frame, and the application gets the right "tail"
 ;; behavior.
+
+;; The shallowest metacontinuation frame's `splice-k` continuation
+;; indicates which continuation's marks (if any) should be spliced
+;; into a new context when captured in a composable continuation.
+;; Under a prompt, `splice-k` is slightly shallower than `empty-k`,
+;; while `splice-k` and `empty-k` are the same for a metacontinuation
+;; created to be extended by a composable continuation.
 
 ;; A metacontinuation frame's `resume-k/no-wind` is called when
 ;; control returns or needs to escape through the frame:
@@ -110,6 +121,7 @@
 (define current-metacontinuation (internal-make-thread-parameter '()))
 
 (define current-empty-k (internal-make-thread-parameter #f))
+(define current-splice-k (internal-make-thread-parameter #f))
 
 ;; The value of `current-cc-guard` is a callback installed by the
 ;; application of a non-composable continuation with an impersonated
@@ -120,6 +132,7 @@
                                        resume-k     ; delivers values to the prompt
                                        resume-k/no-wind ; same, but doesn't run winders jumping in
                                        empty-k      ; deepest end of this frame
+                                       splice-k     ; close to empty-k, but frames whose marks that could splice
                                        mark-stack   ; mark stack to restore
                                        mark-chain   ; #f or a cached list of mark-chain-frame or elem+cache
                                        traces       ; #f or a cached list of traces
@@ -205,10 +218,14 @@
       (wrap-handler-for-impersonator
        tag
        (or handler (make-default-abort-handler tag)))
+      #f ; not a tail call
       (lambda ()
         (end-uninterrupted 'prompt)
         (compose-cc-guard-for-impersonator! tag)
-        (call-with-values (lambda () (apply proc args))
+        (call-with-values (lambda ()
+                            (call-with-splice-k
+                             (lambda ()
+                               (apply proc args))))
           (lambda results
             (apply (current-cc-guard) results)))))]))
 
@@ -232,9 +249,10 @@
   (let ([mf (car (current-metacontinuation))])
     (current-metacontinuation (cdr (current-metacontinuation)))
     (current-mark-stack (metacontinuation-frame-mark-stack mf))
-    (current-empty-k (metacontinuation-frame-empty-k mf))))
+    (current-empty-k (metacontinuation-frame-empty-k mf))
+    (current-splice-k (metacontinuation-frame-splice-k mf))))
 
-(define (call-in-empty-metacontinuation-frame tag handler proc)
+(define (call-in-empty-metacontinuation-frame tag handler tail? proc)
   ;; Call `proc` in an empty metacontinuation frame, reifying the
   ;; current metacontinuation as needed (i.e., if non-empty) as a new
   ;; frame on `*metacontinuations*`; if the tag is #f and the
@@ -242,13 +260,13 @@
   (assert-in-uninterrupted)
   (assert-not-in-system-wind)
   (call/cc
-   (lambda (k)
+   (lambda (tail-k)
      (cond
       [(and (not tag)
             (pair? (current-metacontinuation))
             (let ([current-mf (car (current-metacontinuation))])
               (and (eq? tag (metacontinuation-frame-tag current-mf))
-                   (eq? k (current-empty-k))
+                   (eq? tail-k (current-empty-k))
                    current-mf)))
        =>
        (lambda (current-mf)
@@ -286,12 +304,17 @@
                                                                                k
                                                                                k/no-wind
                                                                                (current-empty-k)
-                                                                               (current-mark-stack)
+                                                                               (current-splice-k)
+                                                                               (if tail?
+                                                                                   (prune-immediate-frame (current-mark-stack) tail-k)
+                                                                                   (current-mark-stack))
                                                                                #f
                                                                                #f
                                                                                (current-cc-guard))])
                                           (current-empty-k empty-k)
-                                          (current-mark-stack #f)
+                                          (current-splice-k empty-k)
+                                          (current-mark-stack (and tail?
+                                                                   (keep-immediate-frame (current-mark-stack) tail-k empty-k)))
                                           (current-cc-guard values)
                                           ;; push the metacontinuation:
                                           (current-metacontinuation (cons mf (current-metacontinuation)))
@@ -358,6 +381,7 @@
                                (metacontinuation-frame-resume-k current-mf)
                                (metacontinuation-frame-resume-k/no-wind current-mf)
                                (metacontinuation-frame-empty-k current-mf)
+                               (metacontinuation-frame-splice-k current-mf)
                                (mark-stack-append mark-stack
                                                   (metacontinuation-frame-mark-stack current-mf))
                                #f
@@ -438,6 +462,7 @@
   (call-in-empty-metacontinuation-frame
    the-barrier-prompt-tag ; <- recognized as a barrier by continuation capture or call
    #f
+   #f ; not a tail call
    (lambda ()
      (end-uninterrupted 'barrier)
      (|#%app| p))))
@@ -446,7 +471,7 @@
 ;; Capturing and applying continuations
 
 (define-record continuation ())
-(define-record full-continuation continuation (k mark-stack empty-k mc))
+(define-record full-continuation continuation (k mark-stack empty-k splice-k mc))
 (define-record composable-continuation full-continuation ())
 (define-record composable-continuation/no-wind composable-continuation ())
 (define-record non-composable-continuation full-continuation (tag))
@@ -470,6 +495,7 @@
              k
              (current-mark-stack)
              (current-empty-k)
+             (current-splice-k)
              (extract-metacontinuation 'call-with-current-continuation (strip-impersonator tag) #t)
              tag))))))]))
 
@@ -495,6 +521,7 @@
           k
           (current-mark-stack)
           (current-empty-k)
+          (current-splice-k)
           (extract-metacontinuation 'call-with-composable-continuation (strip-impersonator tag) #f))))))))
 
 (define (unsafe-call-with-composable-continuation/no-wind p tag)
@@ -519,6 +546,7 @@
     (call-in-empty-metacontinuation-frame
      #f
      fail-abort-to-delimit-continuation
+     #t ; a tail call
      (lambda ()
        ;; The current metacontinuation frame has an
        ;; empty continuation, so we can "replace" that
@@ -563,9 +591,16 @@
   (call-with-appended-metacontinuation
    rmc
    (lambda ()
-     (current-mark-stack (full-continuation-mark-stack c))
-     (current-empty-k (full-continuation-empty-k c))
-     (apply (full-continuation-k c) args))))
+     (let ([splice-k (full-continuation-splice-k c)]
+           [mark-stack (full-continuation-mark-stack c)])
+       (current-mark-stack (if (null? rmc)
+                               (mark-stack-append-tail mark-stack
+                                                       (current-mark-stack)
+                                                       splice-k)
+                               mark-stack))
+       (current-empty-k (full-continuation-empty-k c))
+       (current-splice-k splice-k)
+       (apply (full-continuation-k c) args)))))
 
 ;; Like `apply-immediate-continuation`, but don't run metacontinuation
 ;; winders; the `(full-continuation-k c)` part should be a non-winding
@@ -576,6 +611,7 @@
                              (current-metacontinuation)))
   (current-mark-stack (full-continuation-mark-stack c))
   (current-empty-k (full-continuation-empty-k c))
+  (current-splice-k (full-continuation-splice-k c))
   (apply (full-continuation-k c) args))
 
 ;; Used as a "handler" for a prompt without a tag, which is used for
@@ -653,6 +689,15 @@
   ;; keeping the illusion that `thunk` is called in tail position.
   (call/cm none #f thunk))
 
+;; Update `splice-k` to be the "inside" of a continuation prompt.
+(define (call-with-splice-k thunk)
+  (call-with-end-uninterrupted
+   (lambda ()
+     (call/cc
+      (lambda (k)
+        (current-splice-k k)
+        (thunk))))))
+
 (define (set-continuation-applicables!)
   (let ([add (lambda (rtd)
                (struct-property-set! prop:procedure
@@ -702,7 +747,7 @@
 
 (define (call-with-appended-metacontinuation rmc proc)
   ;; Assumes that the current metacontinuation frame is ready to be
-  ;; replaced with `mc` plus `proc`.
+  ;; replaced with `mc` (reversed as `rmc`) plus `proc`.
   ;; In the simple case of no winders and an empty frame immediate
   ;;  metacontinuation fame, we could just
   ;;  (current-metacontinuation (append mc (current-metacontinuation)))
@@ -776,22 +821,25 @@
 (define (call/cm key val proc)
   (call/cc
    (lambda (k)
-     (if (and (current-mark-stack)
-              (eq? k (mark-stack-frame-k (current-mark-stack))))
-         (begin
-           (unless (eq? key none)
-             (set-mark-stack-frame-table! (current-mark-stack)
-                                          (intmap-set/cm-key (mark-stack-frame-table (current-mark-stack))
-                                                             key
-                                                             val))
-             (set-mark-stack-frame-flat! (current-mark-stack) #f))
-           (proc))
+     (let ([mark-stack (current-mark-stack)])
+       (cond
+        [(and mark-stack
+              (eq? k (mark-stack-frame-k mark-stack)))
+         (unless (eq? key none)
+           (current-mark-stack (make-mark-stack-frame (mark-stack-frame-prev mark-stack)
+                                                      k
+                                                      (intmap-set/cm-key (mark-stack-frame-table mark-stack)
+                                                                         key
+                                                                         val)
+                                                      #f)))
+         (proc)]
+        [else
          (begin0
           (call/cc
-           (lambda (k)
+           (lambda (new-k)
              (current-mark-stack
-              (make-mark-stack-frame (current-mark-stack)
-                                     k
+              (make-mark-stack-frame mark-stack
+                                     new-k
                                      (if (eq? key none)
                                          empty-hasheq
                                          (intmap-set/cm-key empty-hasheq key val))
@@ -801,7 +849,7 @@
           ;; To support exiting an uninterrupted region on resumption of
           ;; a continuation (see `call-with-end-uninterrupted`):
           (when (current-in-uninterrupted)
-            (pariah (end-uninterrupted/call-hook 'cm))))))))
+            (pariah (end-uninterrupted/call-hook 'cm))))])))))
 
 ;; For internal use, such as `dynamic-wind` pre thunks:
 (define (call/cm/nontail key val proc)
@@ -857,6 +905,30 @@
           mark-chain
           (cons (car mark-chain)
                 rest-mark-chain)))]))
+
+(define (mark-stack-starts-with? mark-stack k)
+  (and mark-stack
+       (eq? k (mark-stack-frame-k mark-stack))))
+
+;; Drop any marks on the immediate frame --- used when
+;; moving a frame across a metacontinuation boundary
+(define (prune-immediate-frame mark-stack k)
+  (cond
+   [(mark-stack-starts-with? mark-stack k)
+    (make-mark-stack-frame (mark-stack-frame-prev mark-stack)
+                           (mark-stack-frame-k mark-stack)
+                           empty-hasheq
+                           #f)]
+   [else mark-stack]))
+
+(define (keep-immediate-frame mark-stack k empty-k)
+  (cond
+   [(mark-stack-starts-with? mark-stack k)
+    (make-mark-stack-frame #f
+                           empty-k
+                           (mark-stack-frame-table mark-stack)
+                           #f)]
+   [else #f]))
 
 ;; ----------------------------------------
 ;; Continuation-mark caching
@@ -1146,6 +1218,43 @@
                            (mark-stack-frame-k a)
                            (mark-stack-frame-table a)
                            #f)]))
+
+;; The mark stack `b` is empty or has a single frame
+(define (mark-stack-append-tail a b splice-k)
+  (cond
+   [(not a) b]
+   [(not b) a]
+   [(not (mark-stack-frame-prev a))
+    (cond
+     [(eq? (mark-stack-frame-k a) splice-k)
+      ;; splice final frame
+      (make-mark-stack-frame #f
+                             splice-k
+                             (merge-mark-table (mark-stack-frame-table a)
+                                               (mark-stack-frame-table b))
+                             #f)]
+     [else
+      (make-mark-stack-frame b
+                             (mark-stack-frame-k a)
+                             (mark-stack-frame-table a)
+                             #f)])]
+   [else
+    (make-mark-stack-frame (mark-stack-append-tail (mark-stack-frame-prev a) b splice-k)
+                           (mark-stack-frame-k a)
+                           (mark-stack-frame-table a)
+                           #f)]))
+
+(define (merge-mark-table a b)
+  (cond
+   [(eq? empty-hasheq a) b]
+   [(eq? empty-hasheq b) a]
+   [else
+    (let loop ([b b] [i (hash-iterate-first a)])
+      (cond
+       [(not i) b]
+       [else (let-values ([(key val) (hash-iterate-key+value a i)])
+               (loop (hash-set b key val)
+                     (hash-iterate-next a i)))]))]))
 
 (define (get-metacontinuation-traces mc)
   (cond
@@ -1504,6 +1613,7 @@
     (call-in-empty-metacontinuation-frame
      #f
      fail-abort-to-delimit-continuation
+     #f ; don't try to shift continuaton marks
      (lambda ()
        (let ([now-saved (make-saved-metacontinuation
                          (current-metacontinuation)
