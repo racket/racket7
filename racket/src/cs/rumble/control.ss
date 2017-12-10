@@ -70,7 +70,8 @@
 ;; into a new context when captured in a composable continuation.
 ;; Under a prompt, `splice-k` is slightly shallower than `empty-k`,
 ;; while `splice-k` and `empty-k` are the same for a metacontinuation
-;; created to be extended by a composable continuation.
+;; created to be extended by a composable continuation. See also
+;; `current-mark-splice` below.
 
 ;; A metacontinuation frame's `resume-k/no-wind` is called when
 ;; control returns or needs to escape through the frame:
@@ -101,6 +102,13 @@
 ;; `current-mark-stack` value and `current-mark-stack` is set back to
 ;; empty. To keep winders and the mark stack in sync, `dynamic-wind`
 ;; is wrapped to reset the mark stack on entry to a pre or post thunk.
+
+;; When a composable continuation is applied in a continuation frame
+;; that has marks, then the marks are moved into `current-mark-splice`,
+;; which is conceptually merged into the tai of `current-mark-stack`.
+;; Having a separate `current-mark-splice` enables `dynamic-wind`
+;; pre and post thunks adapt correctly to the splicing while jumping
+;; into or out of the continuation.
 
 ;; A metacontinuation frame has an extra cache slot to contain a list
 ;; of mark-stack lists down to the root continuation. When a delimited
@@ -134,6 +142,7 @@
                                        empty-k      ; deepest end of this frame
                                        splice-k     ; close to empty-k, but frames whose marks that could splice
                                        mark-stack   ; mark stack to restore
+                                       mark-splice  ; extra part of mark stack to restore
                                        mark-chain   ; #f or a cached list of mark-chain-frame or elem+cache
                                        traces       ; #f or a cached list of traces
                                        cc-guard))   ; cc-guard to restore
@@ -249,6 +258,7 @@
   (let ([mf (car (current-metacontinuation))])
     (current-metacontinuation (cdr (current-metacontinuation)))
     (current-mark-stack (metacontinuation-frame-mark-stack mf))
+    (current-mark-splice (metacontinuation-frame-mark-splice mf))
     (current-empty-k (metacontinuation-frame-empty-k mf))
     (current-splice-k (metacontinuation-frame-splice-k mf))))
 
@@ -275,10 +285,15 @@
          ;; current one if metadata hasn't changed; we assume that
          ;; there are no new winders and the handler is the same,
          ;; otherwise the continuation would be bigger
-         (when (current-mark-stack)
+         (unless (and (eq? (current-mark-stack)
+                           (metacontinuation-frame-mark-stack current-mf))
+                      (eq? (current-mark-splice)
+                           (metacontinuation-frame-mark-splice current-mf)))
            ;; update metacontinuation for new mark-stack elements:
            (current-metacontinuation
-            (cons (metacontinuation-frame-merge current-mf (current-mark-stack))
+            (cons (metacontinuation-frame-update current-mf
+                                                 (current-mark-stack)
+                                                 (current-mark-splice))
                   (cdr (current-metacontinuation)))))
          (proc))]
       [else
@@ -308,13 +323,15 @@
                                                                                (if tail?
                                                                                    (prune-immediate-frame (current-mark-stack) tail-k)
                                                                                    (current-mark-stack))
+                                                                               (current-mark-splice)
                                                                                #f
                                                                                #f
                                                                                (current-cc-guard))])
                                           (current-empty-k empty-k)
                                           (current-splice-k empty-k)
-                                          (current-mark-stack (and tail?
-                                                                   (keep-immediate-frame (current-mark-stack) tail-k empty-k)))
+                                          (current-mark-splice (and tail?
+                                                                    (keep-immediate-frame (current-mark-stack) tail-k empty-k)))
+                                          (current-mark-stack #f)
                                           (current-cc-guard values)
                                           ;; push the metacontinuation:
                                           (current-metacontinuation (cons mf (current-metacontinuation)))
@@ -375,15 +392,14 @@
   (proc)
   '(error 'call-as-non-tail "shouldn't get to frame that was meant to be discarded"))
 
-;; Make a frame like `current-mf`, but with more of a mark stack appended
-(define (metacontinuation-frame-merge current-mf mark-stack)
+(define (metacontinuation-frame-update current-mf mark-stack mark-splice)
   (make-metacontinuation-frame (metacontinuation-frame-tag current-mf)
                                (metacontinuation-frame-resume-k current-mf)
                                (metacontinuation-frame-resume-k/no-wind current-mf)
                                (metacontinuation-frame-empty-k current-mf)
                                (metacontinuation-frame-splice-k current-mf)
-                               (mark-stack-append mark-stack
-                                                  (metacontinuation-frame-mark-stack current-mf))
+                               mark-stack
+                               mark-splice
                                #f
                                #f
                                (metacontinuation-frame-cc-guard current-mf)))
@@ -471,7 +487,7 @@
 ;; Capturing and applying continuations
 
 (define-record continuation ())
-(define-record full-continuation continuation (k mark-stack empty-k splice-k mc))
+(define-record full-continuation continuation (k mark-stack mark-splice empty-k splice-k mc))
 (define-record composable-continuation full-continuation ())
 (define-record composable-continuation/no-wind composable-continuation ())
 (define-record non-composable-continuation full-continuation (tag))
@@ -494,6 +510,7 @@
             (make-non-composable-continuation
              k
              (current-mark-stack)
+             (current-mark-splice)
              (current-empty-k)
              (current-splice-k)
              (extract-metacontinuation 'call-with-current-continuation (strip-impersonator tag) #t)
@@ -520,6 +537,7 @@
               make-composable-continuation/no-wind)
           k
           (current-mark-stack)
+          (current-mark-splice)
           (current-empty-k)
           (current-splice-k)
           (extract-metacontinuation 'call-with-composable-continuation (strip-impersonator tag) #f))))))))
@@ -553,7 +571,7 @@
        ;; with the composable one:
        (if (composable-continuation/no-wind? c)
            (apply-immediate-continuation/no-wind c args)
-           (apply-immediate-continuation c (reverse (full-continuation-mc c)) args))))]
+           (apply-immediate-continuation #t c (reverse (full-continuation-mc c)) args))))]
    [(non-composable-continuation? c)
     (let* ([tag (non-composable-continuation-tag c)])
       (let-values ([(common-mc   ; shared part of the current metacontinuation
@@ -570,7 +588,7 @@
           ;; Replace the current metacontinuation frame's continuation
           ;; with the saved one; this replacement will take care of any
           ;; shared winders within the frame.
-          (apply-immediate-continuation c rmc-append args)]
+          (apply-immediate-continuation #f c rmc-append args)]
          [else
           ;; Jump back to the nearest prompt, then continue jumping
           ;; as needed from there:
@@ -587,17 +605,20 @@
       (do-abort-current-continuation '|continuation application| tag args #t #f))]))
 
 ;; Apply a continuation within the current metacontinuation frame:
-(define (apply-immediate-continuation c rmc args)
+(define (apply-immediate-continuation splice? c rmc args)
   (call-with-appended-metacontinuation
    rmc
+   splice?
    (lambda ()
-     (let ([splice-k (full-continuation-splice-k c)]
-           [mark-stack (full-continuation-mark-stack c)])
-       (current-mark-stack (if (null? rmc)
-                               (mark-stack-append-tail mark-stack
-                                                       (current-mark-stack)
-                                                       splice-k)
-                               mark-stack))
+     (let ([mark-stack (full-continuation-mark-stack c)]
+           [splice-k (full-continuation-splice-k c)])
+       (current-mark-splice (let ([mark-splice (full-continuation-mark-splice c)])
+                              (if splice?
+                                  (prune-mark-splice (merge-mark-splice mark-splice (current-mark-splice))
+                                                     mark-stack
+                                                     splice-k)
+                                  mark-splice)))
+       (current-mark-stack mark-stack)
        (current-empty-k (full-continuation-empty-k c))
        (current-splice-k splice-k)
        (apply (full-continuation-k c) args)))))
@@ -610,6 +631,7 @@
                              (map metacontinuation-frame-clear-cache (full-continuation-mc c))
                              (current-metacontinuation)))
   (current-mark-stack (full-continuation-mark-stack c))
+  (current-mark-splice (full-continuation-mark-splice c))
   (current-empty-k (full-continuation-empty-k c))
   (current-splice-k (full-continuation-splice-k c))
   (apply (full-continuation-k c) args))
@@ -745,7 +767,7 @@
                               exn:fail:contract:continuation
                               (list "tag" tag))))
 
-(define (call-with-appended-metacontinuation rmc proc)
+(define (call-with-appended-metacontinuation rmc splice? proc)
   ;; Assumes that the current metacontinuation frame is ready to be
   ;; replaced with `mc` (reversed as `rmc`) plus `proc`.
   ;; In the simple case of no winders and an empty frame immediate
@@ -757,7 +779,8 @@
     (cond
      [(null? rmc) (proc)]
      [else
-      (let ([mf (metacontinuation-frame-clear-cache (car rmc))]
+      (let ([mf (maybe-merge-splice splice?
+                                    (metacontinuation-frame-clear-cache (car rmc)))]
             [rmc (cdr rmc)])
         (cond
          [(eq? (metacontinuation-frame-resume-k mf)
@@ -766,6 +789,9 @@
           (current-metacontinuation (cons mf (current-metacontinuation)))
           (loop rmc)]
          [else
+          ;; Set splice before jumping so can be used by winders
+          (current-mark-splice (metacontinuation-frame-mark-splice mf))
+          ;; Run "in" winders for the metacontinuation
           ((metacontinuation-frame-resume-k mf)
            (make-appending (lambda ()
                              ;; resuming appended winders, but we'll keep
@@ -773,11 +799,15 @@
                              (#%$current-winders '())
                              ;; add frame:
                              (current-metacontinuation (cons mf (current-metacontinuation)))
+                             ;; clear splicing, if any
+                             (current-mark-splice #f)
                              ;; next...
                              (loop rmc))))]))])))
 
 (define (metacontinuation-frame-clear-cache mf)
-  (metacontinuation-frame-merge mf #f))
+  (metacontinuation-frame-update mf
+                                 (metacontinuation-frame-mark-stack mf)
+                                 (metacontinuation-frame-mark-splice mf)))
 
 ;; Get/cache a converted list of marks for a metacontinuation
 (define (metacontinuation-marks mc)
@@ -786,13 +816,35 @@
    [else (let ([mf (car mc)])
            (or (metacontinuation-frame-mark-chain mf)
                (let* ([r (metacontinuation-marks (cdr mc))]
+                      [m (let ([mark-splice (metacontinuation-frame-mark-splice mf)])
+                           (if mark-splice
+                               (cons (make-mark-chain-frame
+                                      (metacontinuation-frame-tag mf)
+                                      ;; maybe splicing:
+                                      (mark-stack-tail-matches? (metacontinuation-frame-mark-stack mf)
+                                                                (mark-stack-frame-k mark-splice))
+                                      (mark-stack-to-marks mark-splice))
+                                     r)
+                               r))]
                       [l (cons (make-mark-chain-frame
                                 (metacontinuation-frame-tag mf)
+                                #t ; not splicing
                                 (mark-stack-to-marks
                                  (metacontinuation-frame-mark-stack mf)))
-                               r)])
+                               m)])
                  (set-metacontinuation-frame-mark-chain! mf l)
                  l)))]))
+
+(define (maybe-merge-splice splice? mf)
+  (cond
+   [(and splice? (current-mark-splice))
+    => (lambda (mark-splice)
+         (current-mark-splice #f)
+         (metacontinuation-frame-update mf
+                                        (metacontinuation-frame-mark-stack mf)
+                                        (merge-mark-splice (metacontinuation-frame-mark-splice mf)
+                                                           mark-splice)))]
+   [else mf]))
 
 ;; ----------------------------------------
 ;; Continuation marks
@@ -805,6 +857,15 @@
 
 ;; A mark stack is made of marks-stack frames:
 (define current-mark-stack (internal-make-thread-parameter #f))
+
+;; An extra mark stack of size 0 or 1 that is conceptually appended to
+;; the end of `current-mark-stack`, mainly to support composable
+;; continuations and `dynamic-wind`. If the last frame of
+;; `current-mark-stack` has the same `k` as a frame in
+;; `current-mark-stack-splice`, then then frames are conceptually
+;; merged, so no key should be inthe mark-splice frame if it's in the
+;; mark-stack frame.
+(define current-mark-splice (internal-make-thread-parameter #f))
 
 (define ($current-mark-stack) (current-mark-stack))
 
@@ -821,6 +882,10 @@
 (define (call/cm key val proc)
   (call/cc
    (lambda (k)
+     (when (eq? k (current-splice-k))
+       ;; Need to merge the main stack and splice, if both are active
+       (when (current-mark-splice)
+         (merge-mark-splice!)))
      (let ([mark-stack (current-mark-stack)])
        (cond
         [(and mark-stack
@@ -866,7 +931,7 @@
     (current-mark-stack (mark-stack-frame-prev (current-mark-stack)))))
 
 (define (current-mark-chain)
-  (get-current-mark-chain (current-mark-stack) (current-metacontinuation)))
+  (get-current-mark-chain (current-mark-stack) (current-mark-splice) (current-metacontinuation)))
 
 (define (mark-stack-to-marks mark-stack)
   (let loop ([mark-stack mark-stack])
@@ -879,13 +944,29 @@
         (set-mark-stack-frame-flat! mark-stack l)
         l)])))
 
-(define-record mark-chain-frame (tag marks))
+(define-record mark-chain-frame (tag splice? marks))
 
-(define (get-current-mark-chain mark-stack mc)
-  (cons (make-mark-chain-frame
-         #f ; no tag
-         (mark-stack-to-marks mark-stack))
-        (metacontinuation-marks mc)))
+(define (get-current-mark-chain mark-stack mark-splice mc)
+  (let ([hd (make-mark-chain-frame
+             #f ; no tag
+             #f ; not a splice
+             (mark-stack-to-marks mark-stack))]
+        [mid (and mark-splice
+                  (make-mark-chain-frame
+                   #f ; no tag
+                   (mark-stack-tail-matches? mark-stack (mark-stack-frame-k mark-splice)) ; maybe splicing
+                   (mark-stack-to-marks mark-splice)))]
+        [tl (metacontinuation-marks mc)])
+    (if mid
+        (cons hd (cons mid tl))
+        (cons hd tl))))
+
+(define (mark-stack-tail-matches? mark-stack k)
+  (and mark-stack
+       (let ([prev (mark-stack-frame-prev mark-stack)])
+         (or (and (not prev)
+                  (eq? (mark-stack-frame-k mark-stack) k))
+             (mark-stack-tail-matches? prev k)))))
 
 (define (prune-mark-chain-prefix tag mark-chain)
   (cond
@@ -905,6 +986,84 @@
           mark-chain
           (cons (car mark-chain)
                 rest-mark-chain)))]))
+
+;; Used by `continuation-mark-set->list*` to determine when to splice
+(define (splice-next? mark-chain)
+  (and (pair? mark-chain)
+       (pair? (cdr mark-chain))
+       (mark-chain-frame-splice? (elem+cache-strip (cadr mark-chain)))))
+
+;; Called when the curent continuation is `(current-splice-k)`,
+;; merge anything in `(current-mark-splice)` into `(current-mark-stack)`
+(define (merge-mark-splice!)
+  (let ([mark-splice (current-mark-splice)])
+    (when mark-splice
+      (current-mark-stack (merge-mark-splice (current-mark-stack)
+                                             mark-splice))
+      (current-mark-splice #f))))
+
+;; Merge immediate frame of `mark-splice` into immediate frame of
+;; `mark-stack`, where `mark-stack` takes precedence. We expect that
+;; each argument is a stack of length 0 or 1, since that's when
+;; merging makes sense.
+(define (merge-mark-splice mark-stack mark-splice)
+  (cond
+   [(not mark-stack) mark-splice]
+   [(not mark-splice) mark-stack]
+   [else
+    (make-mark-stack-frame #f
+                           (mark-stack-frame-k mark-stack)
+                           (merge-mark-table (mark-stack-frame-table mark-stack)
+                                             (mark-stack-frame-table mark-splice))
+                           #f)]))
+
+(define (merge-mark-table a b)
+  (cond
+   [(eq? empty-hasheq a) b]
+   [(eq? empty-hasheq b) a]
+   [else
+    (let loop ([b b] [i (hash-iterate-first a)])
+      (cond
+       [(not i) b]
+       [else (let-values ([(key val) (hash-iterate-key+value a i)])
+               (loop (hash-set b key val)
+                     (hash-iterate-next a i)))]))]))
+
+;; If `mark-stack` ends with a frame that is conceptually
+;; merged with one in `mark-splice`, then discard any keys
+;; in `mark-splice` that are in the `mark-stack` frame.
+;; Also, update `mark-splice` to use `splice-k`.
+(define (prune-mark-splice mark-splice mark-stack splice-k)
+  (cond
+   [(not mark-splice) #f]
+   [else
+    (let loop ([mark-stack mark-stack])
+      (cond
+       [(not mark-stack) (make-mark-stack-frame #f
+                                                splice-k
+                                                (mark-stack-frame-table mark-splice)
+                                                #f)]
+       [else
+        (let ([prev (mark-stack-frame-prev mark-stack)])
+          (cond
+           [(and (not prev) (eq? (mark-stack-frame-k mark-stack) splice-k))
+            (make-mark-stack-frame #f
+                                   splice-k
+                                   (prune-mark-table (mark-stack-frame-table mark-stack)
+                                                     (mark-stack-frame-table mark-splice))
+                                   #f)]
+           [else (loop prev)]))]))]))
+
+(define (prune-mark-table a b)
+  (cond
+   [(eq? empty-hasheq a) b]
+   [(eq? empty-hasheq b) a]
+   [else
+    (let loop ([b b] [i (hash-iterate-first a)])
+      (cond
+       [(not i) b]
+       [else (loop (hash-remove b (hash-iterate-key a i))
+                   (hash-iterate-next a i))]))]))
 
 (define (mark-stack-starts-with? mark-stack k)
   (and mark-stack
@@ -930,6 +1089,16 @@
                            #f)]
    [else #f]))
 
+(define (mark-stack-append a b)
+  (cond
+   [(not a) b]
+   [(not b) a]
+   [else
+    (make-mark-stack-frame (mark-stack-append (mark-stack-frame-prev a) b)
+                           (mark-stack-frame-k a)
+                           (mark-stack-frame-table a)
+                           #f)]))
+
 ;; ----------------------------------------
 ;; Continuation-mark caching
 
@@ -951,6 +1120,7 @@
         [(not (current-mark-stack)) (|#%app| proc default-v)]
         [else
          (call/cc (lambda (k)
+                    (when (eq? k (current-splice-k)) (merge-mark-splice!))
                     (if (eq? k (mark-stack-frame-k (current-mark-stack)))
                         (|#%app| proc (let ([v (intmap-ref (mark-stack-frame-table (current-mark-stack))
                                                            key
@@ -980,7 +1150,7 @@
        (let-values ([(key wrapper) (extract-continuation-mark-key-and-wrapper 'continuation-mark-set-first key)])
          (let ([v (marks-search (or (and marks
                                          (continuation-mark-set-mark-chain marks))
-                                    (current-mark-chain)) ;; because of this.
+                                    (current-mark-chain))
                                 key
                                 ;; elem-stop?:
                                 (lambda (mcf)
@@ -1142,10 +1312,18 @@
                   [(eq? (mark-chain-frame-tag mcf) prompt-tag)
                    null]
                   [else
-                   (let loop ([marks (mark-chain-frame-marks mcf)])
+                   (let loop ([marks (let ([marks (mark-chain-frame-marks mcf)])
+                                       (if (splice-next? mark-chain)
+                                           ;; handle splicing (created by applying a composable
+                                           ;; continuation to a context that had marks already)
+                                           (append marks
+                                                   (mark-chain-frame-marks (elem+cache-strip (cadr mark-chain))))
+                                           marks))])
                      (cond
                       [(null? marks)
-                       (chain-loop (cdr mark-chain))]
+                       (chain-loop (if (splice-next? mark-chain)
+                                       (cddr mark-chain)
+                                       (cdr mark-chain)))]
                       [else
                        (let ([t (elem+cache-strip (car marks))])
                          (let key-loop ([keys keys] [wrappers wrappers] [i 0] [found? #f])
@@ -1195,6 +1373,7 @@
           (prune-mark-chain-suffix
            tag
            (get-current-mark-chain (full-continuation-mark-stack k)
+                                   (full-continuation-mark-splice k)
                                    (full-continuation-mc k)))
           k)]
         [(escape-continuation? k)
@@ -1208,53 +1387,6 @@
           k)]
         [else
          (make-continuation-mark-set null #f)]))]))
-
-(define (mark-stack-append a b)
-  (cond
-   [(not a) b]
-   [(not b) a]
-   [else
-    (make-mark-stack-frame (mark-stack-append (mark-stack-frame-prev a) b)
-                           (mark-stack-frame-k a)
-                           (mark-stack-frame-table a)
-                           #f)]))
-
-;; The mark stack `b` is empty or has a single frame
-(define (mark-stack-append-tail a b splice-k)
-  (cond
-   [(not a) b]
-   [(not b) a]
-   [(not (mark-stack-frame-prev a))
-    (cond
-     [(eq? (mark-stack-frame-k a) splice-k)
-      ;; splice final frame
-      (make-mark-stack-frame #f
-                             splice-k
-                             (merge-mark-table (mark-stack-frame-table a)
-                                               (mark-stack-frame-table b))
-                             #f)]
-     [else
-      (make-mark-stack-frame b
-                             (mark-stack-frame-k a)
-                             (mark-stack-frame-table a)
-                             #f)])]
-   [else
-    (make-mark-stack-frame (mark-stack-append-tail (mark-stack-frame-prev a) b splice-k)
-                           (mark-stack-frame-k a)
-                           (mark-stack-frame-table a)
-                           #f)]))
-
-(define (merge-mark-table a b)
-  (cond
-   [(eq? empty-hasheq a) b]
-   [(eq? empty-hasheq b) a]
-   [else
-    (let loop ([b b] [i (hash-iterate-first a)])
-      (cond
-       [(not i) b]
-       [else (let-values ([(key val) (hash-iterate-key+value a i)])
-               (loop (hash-set b key val)
-                     (hash-iterate-next a i)))]))]))
 
 (define (get-metacontinuation-traces mc)
   (cond
