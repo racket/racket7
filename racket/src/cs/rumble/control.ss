@@ -179,18 +179,28 @@
 (define break-enabled-key (gensym 'break-enabled))
 
 ;; FIXME: add caching to avoid full traversal
-(define/who (continuation-prompt-available? tag)
-  (check who continuation-prompt-tag? tag)
-  (let ([tag (strip-impersonator tag)])
-    (or (eq? tag the-default-continuation-prompt-tag)
-        (eq? tag the-root-continuation-prompt-tag)
-        (let loop ([mc (current-metacontinuation)])
-          (cond
-           [(null? mc)
-            #f]
-           [(eq? tag (metacontinuation-frame-tag (car mc)))
-            #t]
-           [else (loop (cdr mc))])))))
+(define/who continuation-prompt-available?
+  (case-lambda
+   [(tag) (continuation-prompt-available? tag void)]
+   [(tag on-barrier)
+    (check who continuation-prompt-tag? tag)
+    (let ([tag (strip-impersonator tag)])
+      (or (and (eq? tag the-default-continuation-prompt-tag)
+               (eq? on-barrier void))
+          (eq? tag the-root-continuation-prompt-tag)
+          (let loop ([mc (current-metacontinuation)])
+            (cond
+             [(null? mc)
+              (eq? tag the-default-continuation-prompt-tag)]
+             [else
+              (let ([frame-tag (metacontinuation-frame-tag (car mc))])
+                (cond
+                 [(eq? tag frame-tag)
+                  #t]
+                 [else
+                  (when (eq? the-barrier-prompt-tag frame-tag)
+                    (on-barrier))
+                  (loop (cdr mc))]))]))))]))
 
 (define/who (maybe-future-barricade tag)
   (when (future? (current-future)) ;; running in a future
@@ -350,9 +360,11 @@
                (apply values r))]
           [(appending? r)
            ;; We applied this metacontinuation frame just to run its "in" winders
+           (current-target-prompt-tag #f)
            ((appending-resume r))]
           [(aborting? r)
            ;; We're aborting to a given tag
+           (current-target-prompt-tag #f)
            (cond
             [(eq? tag (aborting-tag r))
              ;; Found the right tag. Remove the prompt as we call the handler:
@@ -372,6 +384,7 @@
            ;; We're applying a non-composable continuation --- past
            ;; this prompt, or else we would have stopped.
            ;; Continue escaping to an enclosing prompt:
+           (current-target-prompt-tag #f)
            (pop-metacontinuation-frame)
            (apply-continuation (applying-c r)
                                (applying-args r))]))]))))
@@ -429,7 +442,7 @@
 (define/who (abort-current-continuation tag . args)
   (check who continuation-prompt-tag? tag)
   (maybe-future-barricade tag)
-  (check-prompt-tag-available 'abort-current-continuation (strip-impersonator tag))
+  (check-prompt-tag-available who (strip-impersonator tag))
   (start-uninterrupted 'abort)
   (let ([args (apply-impersonator-abort-wrapper tag args)]
         [tag (strip-impersonator tag)])
@@ -444,7 +457,7 @@
 (define (do-abort-current-continuation who tag args wind? check?)
   (assert-in-uninterrupted)
   (when check?
-    (check-prompt-still-available who tag))
+    (check-prompt-still-available who tag void))
   (cond
    [(null? (current-metacontinuation))
     ;; A reset handler must end the uninterrupted region:
@@ -452,12 +465,13 @@
    [else
     (unless wind? (#%$current-winders '()))
     (let ([mf (car (current-metacontinuation))])
+      (when wind? (current-target-prompt-tag tag)) ; communicate to winders; unset at destination
       ;; An `aborting` record tells the metacontinuation's continuation
       ;; to continue jumping:
       (handle-in-current-metacontinuation-k (make-aborting who tag args wind?)))]))
 
-(define (check-prompt-still-available who tag)
-  (unless (continuation-prompt-available? tag)
+(define (check-prompt-still-available who tag on-barrier)
+  (unless (continuation-prompt-available? tag on-barrier)
     (end-uninterrupted 'escape-fail)
     (raise-continuation-error who
                               (string-append
@@ -571,7 +585,7 @@
        ;; with the composable one:
        (if (composable-continuation/no-wind? c)
            (apply-immediate-continuation/no-wind c args)
-           (apply-immediate-continuation #t c (reverse (full-continuation-mc c)) args))))]
+           (apply-immediate-continuation c (reverse (full-continuation-mc c)) args))))]
    [(non-composable-continuation? c)
     (let* ([tag (non-composable-continuation-tag c)])
       (let-values ([(common-mc   ; shared part of the current metacontinuation
@@ -588,10 +602,11 @@
           ;; Replace the current metacontinuation frame's continuation
           ;; with the saved one; this replacement will take care of any
           ;; shared winders within the frame.
-          (apply-immediate-continuation #f c rmc-append args)]
+          (apply-immediate-continuation c rmc-append args)]
          [else
           ;; Jump back to the nearest prompt, then continue jumping
           ;; as needed from there:
+          (current-target-prompt-tag (make-tag-and-not-barrier tag)) ; communicate to winders; unset at destination
           (handle-in-current-metacontinuation-k
            ;; An `applying` record tells the metacontinuation's continuation
            ;; to continue jumping:
@@ -605,15 +620,15 @@
       (do-abort-current-continuation '|continuation application| tag args #t #f))]))
 
 ;; Apply a continuation within the current metacontinuation frame:
-(define (apply-immediate-continuation splice? c rmc args)
+(define (apply-immediate-continuation c rmc args)
   (call-with-appended-metacontinuation
    rmc
-   splice?
+   c
    (lambda ()
      (let ([mark-stack (full-continuation-mark-stack c)]
            [splice-k (full-continuation-splice-k c)])
        (current-mark-splice (let ([mark-splice (full-continuation-mark-splice c)])
-                              (if splice?
+                              (if (composable-continuation? c)
                                   (prune-mark-splice (merge-mark-splice mark-splice (current-mark-splice))
                                                      mark-stack
                                                      splice-k)
@@ -621,6 +636,10 @@
        (current-mark-stack mark-stack)
        (current-empty-k (full-continuation-empty-k c))
        (current-splice-k splice-k)
+       (when (non-composable-continuation? c)
+         ;; Communicate to winders; unset at destination
+         ;; due to the stub inserted by `call-with-end-uninterrupted`
+         (current-target-prompt-tag (make-tag-and-not-barrier (non-composable-continuation-tag c))))
        (apply (full-continuation-k c) args)))))
 
 ;; Like `apply-immediate-continuation`, but don't run metacontinuation
@@ -700,10 +719,13 @@
     (unless (null? rev-mc)
       (when (eq? (metacontinuation-frame-tag (car rev-mc))
                  the-barrier-prompt-tag)
-        (end-uninterrupted 'hit-barrier)
-        (raise-continuation-error '|continuation application|
-                                  "attempt to cross a continuation barrier"))
+        (raise-barrier-error))
       (loop (cdr rev-mc)))))
+
+(define (raise-barrier-error)
+  (end-uninterrupted 'hit-barrier)
+  (raise-continuation-error '|continuation application|
+                            "attempt to cross a continuation barrier"))
 
 (define (call-with-end-uninterrupted thunk)
   ;; Using `call/cm` with a key of `none` ensures that we have an
@@ -767,7 +789,7 @@
                               exn:fail:contract:continuation
                               (list "tag" tag))))
 
-(define (call-with-appended-metacontinuation rmc splice? proc)
+(define (call-with-appended-metacontinuation rmc dest-c proc)
   ;; Assumes that the current metacontinuation frame is ready to be
   ;; replaced with `mc` (reversed as `rmc`) plus `proc`.
   ;; In the simple case of no winders and an empty frame immediate
@@ -779,7 +801,7 @@
     (cond
      [(null? rmc) (proc)]
      [else
-      (let ([mf (maybe-merge-splice splice?
+      (let ([mf (maybe-merge-splice (composable-continuation? dest-c)
                                     (metacontinuation-frame-clear-cache (car rmc)))]
             [rmc (cdr rmc)])
         (cond
@@ -791,6 +813,9 @@
          [else
           ;; Set splice before jumping so can be used by winders
           (current-mark-splice (metacontinuation-frame-mark-splice mf))
+          (when (non-composable-continuation? dest-c)
+            ;; Communicate to winders
+            (current-target-prompt-tag (make-tag-and-not-barrier (non-composable-continuation-tag dest-c))))
           ;; Run "in" winders for the metacontinuation
           ((metacontinuation-frame-resume-k mf)
            (make-appending (lambda ()
@@ -914,7 +939,9 @@
           ;; To support exiting an uninterrupted region on resumption of
           ;; a continuation (see `call-with-end-uninterrupted`):
           (when (current-in-uninterrupted)
-            (pariah (end-uninterrupted/call-hook 'cm))))])))))
+            (pariah (begin
+                      (current-target-prompt-tag #f)
+                      (end-uninterrupted/call-hook 'cm)))))])))))
 
 ;; For internal use, such as `dynamic-wind` pre thunks:
 (define (call/cm/nontail key val proc)
@@ -1671,14 +1698,18 @@
     (define-syntax with-saved-mark-stack/non-break
       (syntax-rules ()
         [(_ who e ...)
-         (let ([dest-mark-stack (current-mark-stack)])
+         (let ([dest-mark-stack (current-mark-stack)]
+               [target-prompt-tag (current-target-prompt-tag)])
            (current-mark-stack saved-mark-stack)
+           (current-target-prompt-tag #f)
            (call/cm/nontail
             break-enabled-key (make-thread-cell #f #t)
             (lambda ()
               (end-uninterrupted who)
               e ...
               (start-uninterrupted who)))
+           (check-target-prompt-tag-available target-prompt-tag)
+           (current-target-prompt-tag target-prompt-tag)
            (current-mark-stack dest-mark-stack))]))
     (start-uninterrupted 'dw)
     (begin0
@@ -1695,6 +1726,23 @@
         (with-saved-mark-stack/non-break 'dw-post
           (|#%app| post))))
      (end-uninterrupted/call-hook 'dw))))
+
+;; For checking that the destination of a non-composable continuation
+;; application doesn't get lost during winders. The value is either a
+;; tag or a tag-and-not-barrier value.
+(define current-target-prompt-tag (internal-make-thread-parameter #f))
+
+(define-record tag-and-not-barrier (tag))
+
+(define (check-target-prompt-tag-available target-prompt-tag)
+  (when target-prompt-tag
+    (check-prompt-still-available '|continuation application|
+                                  (if (tag-and-not-barrier? target-prompt-tag)
+                                      (tag-and-not-barrier-tag target-prompt-tag)
+                                      target-prompt-tag)
+                                  (if (tag-and-not-barrier? target-prompt-tag)
+                                      raise-barrier-error
+                                      void))))
 
 ;; ----------------------------------------
 
