@@ -238,7 +238,7 @@
     (let ([struct-name (cadar args)])
       (lambda (o)
         (and (#%$record? o)
-             (eq? (record-type-name (record-rtd o)) struct-name))))]
+             (eq? (record-type-name (#%$record-type-descriptor o)) struct-name))))]
    [(symbol? (car args))
     (let ([type (car args)])
       (lambda (o)

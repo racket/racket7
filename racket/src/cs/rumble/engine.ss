@@ -43,20 +43,20 @@
 (define (create-engine to-saves proc thread-cell-values init-break-enabled-cell)
   (lambda (ticks prefix complete expire)
     (start-implicit-uninterrupted 'create)
-    (swap-metacontinuation
-     to-saves
-     (lambda (saves)
-       (current-engine-state (make-engine-state saves complete expire thread-cell-values
-                                                init-break-enabled-cell (reset-handler)))
-       (reset-handler (lambda ()
-                        (end-uninterrupted 'reset)
-                        (if (current-engine-state)
-                            (engine-return (void))
-                            (chez:exit))))
-       (timer-interrupt-handler engine-block-via-timer)
-       (end-implicit-uninterrupted 'create)
-       (set-timer ticks)
-       (proc prefix)))))
+    ((swap-metacontinuation
+      to-saves
+      (lambda (saves)
+        (current-engine-state (make-engine-state saves complete expire thread-cell-values
+                                                 init-break-enabled-cell (reset-handler)))
+        (reset-handler (lambda ()
+                         (end-uninterrupted 'reset)
+                         (if (current-engine-state)
+                             (engine-return (void))
+                             (chez:exit))))
+        (timer-interrupt-handler engine-block-via-timer)
+        (end-implicit-uninterrupted 'create)
+        (set-timer ticks)
+        (proc prefix))))))
 
 (define (engine-block-via-timer)
   (cond
@@ -80,12 +80,13 @@
       (lambda (saves)
         (end-implicit-uninterrupted 'block)
         (current-engine-state #f)
-        ((engine-state-expire es)
-         (create-engine
-          saves
-          (lambda (prefix) prefix) ; returns `prefix` to the above "(("
-          (engine-state-thread-cell-values es)
-          (engine-state-init-break-enabled-cell es))))))))
+        (lambda () ; returned to the `swap-continuation` in `create-engine`
+          ((engine-state-expire es)
+           (create-engine
+            saves
+            (lambda (prefix) prefix) ; returns `prefix` to the above "(("
+            (engine-state-thread-cell-values es)
+            (engine-state-init-break-enabled-cell es)))))))))
 
 (define (engine-return . args)
   (assert-not-in-uninterrupted)
@@ -101,7 +102,8 @@
        (lambda (saves)
          (current-engine-state #f)
          (end-implicit-uninterrupted 'return)
-         (apply (engine-state-complete es) remain-ticks args))))))
+         (lambda () ; returned to the `swap-continuation` in `create-engine`
+           (apply (engine-state-complete es) remain-ticks args)))))))
 
 (define (make-empty-thread-cell-values)
   (make-ephemeron-eq-hashtable))

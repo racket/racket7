@@ -234,22 +234,18 @@
   ;; frame on `*metacontinuations*`; if the tag is #f and the
   ;; current metacontinuation frame is already empty, don't push more
   (assert-in-uninterrupted)
+  (assert-not-in-system-wind)
   (call/cc
    (lambda (tail-k)
      (cond
       [(and (eq? tag the-compose-prompt-tag)
-            (pair? (current-metacontinuation))
-            (let ([current-mf (car (current-metacontinuation))])
-              (and (eq? tail-k (current-empty-k))
-                   current-mf)))
-       =>
-       (lambda (current-mf)
-         ;; empty continuation in the current frame; don't push a new
-         ;; metacontinuation frame; if the mark stack is non-empty,
-         ;; merge it into the mark splice
-         (current-mark-splice (merge-mark-splice (current-mark-stack) (current-mark-splice)))
-         (current-mark-stack '())
-         (proc))]
+            (eq? tail-k (current-empty-k)))
+       ;; empty continuation in the current frame; don't push a new
+       ;; metacontinuation frame; if the mark stack is non-empty,
+       ;; merge it into the mark splice
+       (current-mark-splice (merge-mark-splice (current-mark-stack) (current-mark-splice)))
+       (current-mark-stack '())
+       (proc)]
       [else
        (let ([r ; a list of results, or a non-list for special handling
               (call/cc
@@ -1792,6 +1788,8 @@
          (current-metacontinuation (saved-metacontinuation-mc saved))
          (#%$current-winders (saved-metacontinuation-system-winders saved))
          (current-exception-state (saved-metacontinuation-exn-state saved))
+         (current-empty-k #f)
+         (set! saved #f) ; break link for space safety
          (proc now-saved))))]))
 
 ;; ----------------------------------------
