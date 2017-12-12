@@ -633,15 +633,14 @@
       ;; check for barriers that we'd have to reintroduce
       (check-for-barriers rev-mc)
       ;; Return the shared part plus the unshared-to-append part
-      (values (cdar rev-current) rev-mc)])))
+      (values (cdr (cdar rev-current)) rev-mc)])))
 
 (define (check-for-barriers rev-mc)
-  (let loop ([rev-mc rev-mc])
-    (unless (null? rev-mc)
-      (when (eq? (strip-impersonator (metacontinuation-frame-tag (car rev-mc)))
-                 the-barrier-prompt-tag)
-        (raise-barrier-error))
-      (loop (cdr rev-mc)))))
+  (unless (null? rev-mc)
+    (when (eq? (metacontinuation-frame-tag (car rev-mc))
+               the-barrier-prompt-tag)
+      (raise-barrier-error))
+    (check-for-barriers (cdr rev-mc))))
 
 (define (raise-barrier-error)
   (end-uninterrupted 'hit-barrier)
