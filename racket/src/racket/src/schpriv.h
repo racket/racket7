@@ -380,6 +380,7 @@ void scheme_init_exn(Scheme_Startup_Env *env);
 #endif
 void scheme_init_debug(Scheme_Startup_Env *env);
 void scheme_init_thread(Scheme_Startup_Env *env);
+void scheme_init_unsafe_port(Scheme_Startup_Env *env);
 void scheme_init_unsafe_thread(Scheme_Startup_Env *env);
 void scheme_init_read(Scheme_Startup_Env *env);
 void scheme_init_print(Scheme_Startup_Env *env);

@@ -190,7 +190,7 @@ call.  If no will is ready for immediate execution,
 @racket[will-execute] blocks until one is ready.}
 
 
-@defproc[(will-try-execute [executor any/c] [v any/c #f]) any]{
+@defproc[(will-try-execute [executor any/c]) any]{
 
 Like @racket[will-execute] if a will is ready for immediate
 execution. Otherwise, @racket[v] is returned.

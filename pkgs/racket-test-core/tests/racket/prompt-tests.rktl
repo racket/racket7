@@ -1128,6 +1128,55 @@
                (test #t continuation-mark-set-first #f 'n)
                (loop (sub1 n)))))))))
 
+(let ()
+  (define (check call-with-ignored-composable-continuation)
+    ;; Caputured replacing installed with nested metacontinuations
+    (let ([k (call-with-continuation-prompt
+              (lambda ()
+                (with-continuation-mark
+                 'x
+                 71
+                 (call-with-ignored-composable-continuation
+                  (lambda (k2)
+                    (non-tail
+                     (with-continuation-mark
+                      'x
+                      72
+                      ((call-with-composable-continuation
+                        (lambda (k)
+                          (lambda () k)))))))))))])
+      (test '(72 71)
+            'nested-mc
+            (with-continuation-mark
+             'x 81
+             (k (lambda ()
+                  (continuation-mark-set->list (current-continuation-marks) 'x))))))
+
+    ;; Captured not replacing
+    (let ([k (call-with-continuation-prompt
+              (lambda ()
+                (non-tail
+                 (with-continuation-mark
+                  'x
+                  71
+                  (call-with-ignored-composable-continuation
+                   (lambda (k2)
+                     (non-tail
+                      (with-continuation-mark
+                       'x
+                       72
+                       ((call-with-composable-continuation
+                         (lambda (k)
+                           (lambda () k))))))))))))])
+      (test '(72 71 81)
+            'nested-mc
+            (with-continuation-mark
+             'x 81
+             (k (lambda ()
+                  (continuation-mark-set->list (current-continuation-marks) 'x)))))))
+  (check call-with-composable-continuation)
+  (check (lambda (proc) (proc #f))))
+
 ;; ----------------------------------------
 ;; Olivier Danvy's traversal
 
@@ -1425,10 +1474,12 @@
       [exit-k #f])
   (let ([go
          (lambda (launch)
-           (let ([k (let/cc esc
-                      (call-with-continuation-prompt
-                       (lambda ()
-                         (dynamic-wind
+           (let ([k (call-with-continuation-barrier
+                     (lambda ()
+                       (let/cc esc
+                         (call-with-continuation-prompt
+                          (lambda ()
+                            (dynamic-wind
                              (lambda () (void))
                              (lambda ()
                                (with-handlers ([void (lambda (exn)
@@ -1441,13 +1492,11 @@
                                    (lambda () 10))
                                  p1))
                                (set! output (cons 'post output)))))
-                       p1))])
-             (call-with-continuation-barrier
+                       p1))))])
+             (call-with-continuation-prompt
               (lambda ()
-                (call-with-continuation-prompt
-                 (lambda ()
-                   (exit-k (lambda () 'hi)))
-                 p1)))))])
+                (exit-k (lambda () 'hi)))
+              p1)))])
     (err/rt-test
      (go (lambda (esc) (esc 'middle)))
      exn:fail:contract:continuation?)
@@ -1463,48 +1512,53 @@
        exn:fail:contract:continuation?))
     (test '(post post post post) values output)))
 
-;; Similar, but more checking of dropped d-ws:
+;; Similar, but not a barrier error, because the jump
+;; just escapes past a barrier instead of jumping into
+;; one
 (let ([p1 (make-continuation-prompt-tag 'p1)]
       [output null]
       [exit-k #f]
-      [done? #f])
-  ;; Capture a continuation w.r.t. the default prompt tag:
-  (call/cc
-   (lambda (esc)
-     (dynamic-wind
-         (lambda () (void))
-         (lambda () 
-           ;; Set a prompt for tag p1:
-           (call-with-continuation-prompt
-            (lambda ()
-              (dynamic-wind
-                  (lambda () (void))
-                  ;; inside d-w, jump out:
-                  (lambda () (esc 'done))
-                  (lambda ()
-                    ;; As we jump out, capture a continuation 
-                    ;; w.r.t. p1:
-                    ((call/cc
-                      (lambda (k) 
-                        (set! exit-k k)
-                        (lambda () 10))
-                      p1))
-                    (set! output (cons 'inner output)))))
-            p1))
-         (lambda ()
-           ;; This post thunk is not in the
-           ;;  delimited continuation captured
-           ;; via tag p1:
-           (set! output (cons 'outer output))))))
-  (unless done?
-    (set! done? #t)
-    ;; Now invoke the delimited continuation, which must
-    ;; somehow continue the jump to `esc':
-    (call-with-continuation-prompt
-     (lambda ()
-       (exit-k (lambda () 10)))
-     p1))
-  (test '(inner outer inner) values output))
+      [count 3])
+  (let ([go
+         (lambda (launch)
+           (let ([k (let/cc esc
+                      (call-with-continuation-prompt
+                       (lambda ()
+                         (dynamic-wind
+                          (lambda () (void))
+                          (lambda ()
+                            (with-handlers ([void (lambda (exn)
+                                                    (test #f "should not be used!" #t))])
+                              (launch esc)))
+                          (lambda ()
+                            ((call/cc
+                              (lambda (k) 
+                                (set! exit-k k)
+                                (lambda () 10))
+                              p1))
+                            (set! output (cons 'post output)))))
+                       p1))])
+             (cond
+               [(zero? count) 'three]
+               [else
+                (set! count (sub1 count))
+                (call-with-continuation-barrier
+                 (lambda ()
+                   (call-with-continuation-prompt
+                    (lambda ()
+                      (exit-k (lambda () 'hi)))
+                    p1)))])))])
+    (test 'three go (lambda (esc) (esc 'middle)))
+    (test '(post post post post) values output)
+    (let ([meta (call-with-continuation-prompt
+                 (lambda ()
+                   ((call-with-composable-continuation
+                     (lambda (k) (lambda () k))))))])
+      (test 'three
+            go (lambda (esc)
+                 (meta
+                  (lambda () (esc 'ok))))))
+    (test '(post post post post post) values output)))
 
 ;; Again, more checking of output
 (let ([p1 (make-continuation-prompt-tag 'p1)]
@@ -1964,14 +2018,24 @@
       (k (lambda () 17)))
     (test #t procedure? once-k)
     (test k values 17)
-    (err/rt-test (call-with-continuation-barrier
-                   (lambda ()
-                     (once-k 18)))
-                 exn:fail:contract:continuation?))
+    (err/rt-test (call-with-continuation-prompt
+                  (lambda ()
+                    (call-with-continuation-barrier
+                     (lambda ()
+                       (once-k 18)))))
+                 (lambda (x)
+                   (and (exn:fail:contract? x)
+                        (not (exn:fail:contract:continuation? x))))))
+  (printf "Trying long chain under barrier...\n")
+  (let ([k (call-with-continuation-barrier
+            (lambda ()
+              (long-loop (lambda ()
+                           ((let/cc k (lambda () k)))))))])
+    (err/rt-test (k 18) exn:fail:contract:continuation?))
   (printf "Trying long chain again...\n")
   (let ([k (call-with-continuation-prompt
             (lambda ()
-              (long-loop (lambda () 
+              (long-loop (lambda ()
                            ((call-with-composable-continuation
                              (lambda (k)
                                (lambda () k))))))))])
