@@ -1,4 +1,6 @@
 #lang racket/base
-(require "schedule.rkt")
+(require "schedule.rkt"
+         "port.rkt")
 
-(provide (all-from-out "schedule.rkt"))
+(provide (all-from-out "schedule.rkt")
+         (all-from-out "port.rkt"))

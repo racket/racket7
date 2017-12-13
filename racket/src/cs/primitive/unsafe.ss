@@ -189,6 +189,13 @@
    unsafe-abort-current-continuation/no-wind
    unsafe-call-with-composable-continuation/no-wind
 
+   unsafe-file-descriptor->port
+   unsafe-port->file-descriptor
+   unsafe-file-descriptor->semaphore
+   unsafe-socket->port
+   unsafe-port->socket
+   unsafe-socket->semaphore
+
    unsafe-poller
    unsafe-poll-ctx-fd-wakeup
    unsafe-poll-ctx-eventmask-wakeup

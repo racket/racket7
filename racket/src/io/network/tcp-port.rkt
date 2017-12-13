@@ -14,8 +14,8 @@
   #:mutable
   #:authentic)
 
-(define (open-input-output-tcp fd name)
-  (define refcount (box 2))
+(define (open-input-output-tcp fd name #:close? [close? #t])
+  (define refcount (box (if close? 2 3)))
   (define extra-data (tcp-data #f #f))
   (values
    (open-input-fd fd name
