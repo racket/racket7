@@ -41,7 +41,6 @@
           continuation-mark-key?
           impersonate-continuation-mark-key
           chaperone-continuation-mark-key
-          $current-mark-stack ; not exported to Racket
           call-with-system-wind ; not exported to Racket
 
           make-engine

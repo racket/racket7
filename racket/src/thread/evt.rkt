@@ -113,7 +113,7 @@
   #:reflection-name 'evt)
 (struct handle-evt wrap-evt ())
 
-;; A `control-state-evt` enabled (unsafe) cooperation with the
+;; A `control-state-evt` enables (unsafe) cooperation with the
 ;; scheduler, normally produced by a `poller` callback. The `evt` is
 ;; typically a wrapper on `async-evt`. If the event is not selected,
 ;; the `interrupt-proc` plus `abandon-proc` will be called. If a

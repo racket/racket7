@@ -803,8 +803,6 @@
 ;; mark-stack frame.
 (define current-mark-splice (internal-make-thread-parameter #f))
 
-(define ($current-mark-stack) (current-mark-stack))
-
 ;; See copy in "expander.sls"
 (define-syntax with-continuation-mark
   (syntax-rules ()
@@ -1108,7 +1106,7 @@
                                                   (lambda (v old) v))))
                                 ;; fail-k:
                                 (lambda () none)
-                                ;; strip & combine --- cache results at the metafunction
+                                ;; strip & combine --- cache results at the metacontinuation
                                 ;; level should depend on the prompt tag, so make the cache
                                 ;; value another table level mapping the prompt tag to the value:
                                 (lambda (v) (hash-ref v prompt-tag none2))
@@ -1129,12 +1127,12 @@
 ;; N elements to get an answer, then cache the answer at N/2 elements.
 (define (marks-search elems key elem-stop? elem-ref fail-k
                       strip-cache-result combine-cache-result)
-  (let loop ([elems elems] [elems/cache-pos elems] [cache-step? #f])
+  (let loop ([elems elems] [elems/cache-pos elems] [cache-step? #f] [depth 0])
     (cond
      [(or (null? elems)
           (elem-stop? (elem+cache-strip (car elems))))
       ;; Not found
-      (cache-result! elems elems/cache-pos key none combine-cache-result)
+      (cache-result! elems elems/cache-pos depth key none combine-cache-result)
       (fail-k)]
      [else
       (let ([t (car elems)])
@@ -1145,10 +1143,11 @@
               ;; Not found at this point; keep looking
               (loop (cdr elems)
                     (if cache-step? (cdr elems/cache-pos) elems/cache-pos)
-                    (not cache-step?))]
+                    (not cache-step?)
+                    (fx+ 1 depth))]
              [else
               ;; Found it
-              (cache-result! elems elems/cache-pos key v combine-cache-result)
+              (cache-result! elems elems/cache-pos depth key v combine-cache-result)
               v])))
         (cond
          [(elem+cache? t)
@@ -1165,11 +1164,11 @@
                   (check-elem (elem+cache-elem t))]
                  [(eq? v none)
                   ;; The cache records that it's not in the rest:
-                  (cache-result! elems elems/cache-pos key none combine-cache-result)
+                  (cache-result! elems elems/cache-pos depth key none combine-cache-result)
                   (fail-k)]
                  [else
                   ;; The cache provides a value from the rest:
-                  (cache-result! elems elems/cache-pos key v combine-cache-result)
+                  (cache-result! elems elems/cache-pos depth key v combine-cache-result)
                   v]))]))]
          [else
           ;; Try the element:
@@ -1177,8 +1176,8 @@
 
 ;; To make `continuation-mark-set-first` constant-time, cache
 ;; a key--value mapping at a point that's half-way in
-(define (cache-result! marks marks/cache-pos key v combine-cache-result)
-  (unless (eq? marks marks/cache-pos)
+(define (cache-result! marks marks/cache-pos depth key v combine-cache-result)
+  (unless (< depth 16)
     (let* ([t (car marks/cache-pos)]
            [new-t (if (elem+cache? t)
                       t
