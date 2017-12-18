@@ -112,6 +112,7 @@
          custodian-memory-accounting-available?
          custodian-require-memory
          custodian-limit-memory
+         custodian-shut-down?
 
          make-will-executor
          make-stubborn-will-executor

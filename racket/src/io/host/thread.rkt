@@ -45,7 +45,6 @@
         start-atomic
         end-atomic
         current-custodian
-        custodian-shut-down?
         unsafe-custodian-register
         unsafe-custodian-unregister
         thread-push-kill-callback!

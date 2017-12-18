@@ -41,7 +41,6 @@
           'start-atomic start-atomic
           'end-atomic end-atomic
           'current-custodian current-custodian
-          'custodian-shut-down? custodian-shut-down?
           'unsafe-custodian-register unsafe-custodian-register
           'unsafe-custodian-unregister unsafe-custodian-unregister
           'thread-push-kill-callback! thread-push-kill-callback!

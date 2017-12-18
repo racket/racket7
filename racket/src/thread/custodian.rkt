@@ -16,8 +16,8 @@
          custodian-memory-accounting-available?
          custodian-require-memory
          custodian-limit-memory
-
          custodian-shut-down?
+
          custodian-subordinate?
          custodian-manages-reference?
          custodian-reference->custodian

@@ -217,6 +217,7 @@
    custodian-memory-accounting-available?
    custodian-require-memory
    custodian-shutdown-all
+   custodian-shut-down?
    custom-print-quotable?
    custom-print-quotable-accessor
    custom-write?
