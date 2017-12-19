@@ -665,8 +665,9 @@
   (procedure-struct? v))
 
 (define (struct? v)
-  (and (record? v)
-       (struct-type-any-transparent? (record-rtd v))))
+  (let ([v (strip-impersonator v)])
+    (and (record? v)
+         (struct-type-any-transparent? (record-rtd v)))))
 
 (define (struct-info v)
   (cond
@@ -1014,8 +1015,8 @@
 (define struct->vector
   (case-lambda
    [(s dots)
-    (if (record? s)
-        (let ([rtd (record-rtd s)])
+    (if (record? (strip-impersonator s))
+        (let ([rtd (record-rtd (strip-impersonator s))])
           ;; Create that vector that has '... for opaque ranges and each field
           ;; value otherwise
           (let-values ([(vec-len rec-len)
@@ -1050,7 +1051,7 @@
                           (cond
                            [(= n len) (loop vec-pos rec-pos (record-type-parent rtd) #f)]
                            [else
-                            (vector-set! vec (+ vec-pos n) (unsafe-struct*-ref s (+ rec-pos n)))
+                            (vector-set! vec (+ vec-pos n) (unsafe-struct-ref s (+ rec-pos n)))
                             (floop (add1 n))])))]
                      [dots-already?
                       ;; Skip another opaque region

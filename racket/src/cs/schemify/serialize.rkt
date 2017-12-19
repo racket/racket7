@@ -112,6 +112,7 @@
 ;; Check whether a quoted value needs any lifts
 (define (lift-quoted? q)
   (cond
+    [(impersonator? q) #t] ; i.e., strip impersonators when serializaing
     [(path? q) #t]
     [(regexp? q) #t]
     [(byte-regexp? q) #t]
@@ -170,12 +171,14 @@
                       `(cons ,a ,d))))]
            [(vector? q)
             (let ([args (map make-construct (vector->list q))])
-              (if (andmap quote? args)
+              (if (and (andmap quote? args)
+                       (not (impersonator? q)))
                   `(quote ,q)
                   `(vector ,@args)))]
            [(box? q)
             (let ([arg (make-construct (unbox q))])
-              (if (quote? arg)
+              (if (and (quote? arg)
+                       (not (impersonator? q)))
                   `(quote ,q)
                   `(box ,arg)))]
            [(prefab-struct-key q)

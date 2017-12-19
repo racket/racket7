@@ -2,9 +2,10 @@
 (define prefabs #f)
 
 (define (prefab-struct-key v)
-  (and (record? v)
-       (let ([p (getprop (record-type-uid (record-rtd v)) 'prefab-key+count #f)])
-         (and p (car p)))))
+  (let ([v (strip-impersonator v)])
+    (and (record? v)
+         (let ([p (getprop (record-type-uid (record-rtd v)) 'prefab-key+count #f)])
+           (and p (car p))))))
 
 (define/who (prefab-key->struct-type key field-count)
   (prefab-key+count->rtd
