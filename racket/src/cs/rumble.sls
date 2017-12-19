@@ -357,6 +357,7 @@
           floating-point-bytes->real
           system-big-endian?
           string->number
+          number->string
           quotient/remainder
           fx->fl
           fxrshift

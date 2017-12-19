@@ -20,7 +20,12 @@
 
 (define (eq-hash-code x)
   (cond
-   [(symbol? x) (symbol-fast-hash x)]
+   [(and (symbol? x)
+         ;; Avoid forcing the universal name of a gensym,
+         ;; which is more expensive than registering in
+         ;; the `codes` table.
+         (not (gensym? x)))
+    (symbol-hash x)]
    [(number? x) (number-hash x)]
    [(char? x) (char->integer x)]
    [else
@@ -29,16 +34,6 @@
           (set! counter c)
           (eq-hashtable-set! codes x counter)
           c))]))
-
-(define (symbol-fast-hash sym)
-  ;; Avoid forcing the universal name of a gensym when hashing
-  (if (gensym? sym)
-      (or (getprop sym 'racket-gensym-hash-code)
-          (let ([c (fx1+ counter)])
-            (set! counter c)
-            (putprop sym 'racket-gensym-hash-code c)
-            c))
-      (symbol-hash sym)))
 
 ;; Mostly copied from Chez Scheme's "newhash.ss":
 (define number-hash

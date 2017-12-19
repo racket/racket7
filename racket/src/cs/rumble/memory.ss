@@ -50,7 +50,7 @@
                                 pre-allocated pre-allocated+overhead pre-time pre-cpu-time
                                 post-allocated  (current-memory-bytes) (real-time) (cpu-time)))
       (poll-foreign-guardian))))
-  
+
 (define collect-garbage
   (case-lambda
    [() (collect-garbage 'major)]
@@ -99,8 +99,10 @@
       ;; must be a custodian...
       (bytes-allocated)])]))
 
+(define prev-stats-objects #f)
+
 (define (dump-memory-stats . args)
-  (let ([backtrace-predicate (parse-dump-memory-stats-arguments args)])
+  (let-values ([(backtrace-predicate use-prev? max-path-length) (parse-dump-memory-stats-arguments args)])
     (enable-object-counts #t)
     (enable-object-backreferences (and backtrace-predicate #t))
     (collect (collect-maximum-generation))
@@ -193,6 +195,8 @@
                                                       (apply + (map (get-bytes #t) counts))))
       (chez:fprintf (current-error-port) "End RacketCS\n")
       (when backtrace-predicate
+        (when (and use-prev? (not prev-stats-objects))
+          (set! prev-stats-objects (make-weak-eq-hashtable)))
         (let ([backreference-ht (make-eq-hashtable)])
           (for-each (lambda (l)
                       (for-each (lambda (p)
@@ -204,46 +208,66 @@
             (for-each (lambda (l)
                         (for-each (lambda (p)
                                     (when (backtrace-predicate (car p))
-                                      (chez:printf "*== ~a" (object->backreference-string (car p)))
-                                      (let loop ([prev (car p)] [o (cdr p)] [accum '()])
-                                        (cond
-                                         [(not o) (set! prev-trace (reverse accum))]
-                                         [(chez:memq o prev-trace)
-                                          => (lambda (l)
-                                               (chez:printf " <- DITTO\n")
-                                               (set! prev-trace (append (reverse accum) l)))]
-                                         [else
-                                          (chez:printf " <- ~a" (object->backreference-string
-                                                                 (cond
-                                                                  [(and (pair? o)
-                                                                        (eq? prev (car o)))
-                                                                   (cons 'PREV (cdr o))]
-                                                                  [(and (pair? o)
-                                                                        (eq? prev (cdr o)))
-                                                                   (cons (car o) 'PREV)]
-                                                                  [else o])))
-                                          (loop o (hashtable-ref backreference-ht o #f) (cons o accum))]))))
+                                      (unless (and use-prev?
+                                                   (hashtable-ref prev-stats-objects (car p) #f))
+                                        (when use-prev?
+                                          (hashtable-set! prev-stats-objects (car p) #t))
+                                        (chez:printf "*== ~a" (object->backreference-string (car p)))
+                                        (let loop ([prev (car p)] [o (cdr p)] [accum '()] [len (or max-path-length +inf.0)])
+                                          (cond
+                                           [(zero? len) (void)]
+                                           [(not o) (set! prev-trace (reverse accum))]
+                                           [(chez:memq o prev-trace)
+                                            => (lambda (l)
+                                                 (chez:printf " <- DITTO\n")
+                                                 (set! prev-trace (append (reverse accum) l)))]
+                                           [else
+                                            (chez:printf " <- ~a" (object->backreference-string
+                                                                   (cond
+                                                                    [(and (pair? o)
+                                                                          (eq? prev (car o)))
+                                                                     (cons 'PREV (cdr o))]
+                                                                    [(and (pair? o)
+                                                                          (eq? prev (cdr o)))
+                                                                     (cons (car o) 'PREV)]
+                                                                    [else o])))
+                                            (loop o (hashtable-ref backreference-ht o #f) (cons o accum) (sub1 len))])))))
                                   l))
                       backreferences))
           (chez:fprintf (current-error-port) "End Traces\n")))
       (chez:fprintf (current-error-port) "End Dump\n"))))
 
 (define (parse-dump-memory-stats-arguments args)
-  (cond
-   [(null? args) #f]
-   [(and (list? (car args))
-         (= 2 (length (car args)))
-         (eq? (caar args) 'struct)
-         (symbol? (cadar args)))
-    (let ([struct-name (cadar args)])
-      (lambda (o)
-        (and (#%$record? o)
-             (eq? (record-type-name (#%$record-type-descriptor o)) struct-name))))]
-   [(symbol? (car args))
-    (let ([type (car args)])
-      (lambda (o)
-        (eq? ((inspect/object o) 'type) type)))]
-   [else #f]))
+  (values
+   ;; backtrace predicate:
+   (cond
+    [(null? args) #f]
+    [(eq? (car args) 'struct) #f]
+    [(and (list? (car args))
+          (= 2 (length (car args)))
+          (eq? (caar args) 'struct)
+          (symbol? (cadar args)))
+     (let ([struct-name (cadar args)])
+       (lambda (o)
+         (and (#%$record? o)
+              (eq? (record-type-name (#%$record-type-descriptor o)) struct-name))))]
+    [(symbol? (car args))
+     (let ([type (car args)])
+       (lambda (o)
+         (eq? ((inspect/object o) 'type) type)))]
+    [else #f])
+   ;; 'new mode for backtrace?
+   (and (pair? args)
+        (pair? (cdr args))
+        (eq? 'new (cadr args)))
+   ;; max path length
+   (and (pair? args)
+        (pair? (cdr args))
+        (or (and (exact-nonnegative-integer? (cadr args))
+                 (cadr args))
+            (and (pair? (cddr args))
+                 (exact-nonnegative-integer? (caddr args))
+                  (caddr args))))))
 
 (define (object->backreference-string o)
   (parameterize ([print-level 3])

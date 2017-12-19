@@ -711,7 +711,8 @@
         [i (in-naturals)])
     (if (char=? c #\#)
         (string-set! new-s i #\0)
-        (string-set! new-s i c))))
+        (string-set! new-s i c)))
+  new-s)
 
 (define (maybe-substring s start end)
   (if (and (= 0 start)

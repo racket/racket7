@@ -60,6 +60,7 @@
                    [format chez:format]
                    [current-error-port chez:current-error-port]
                    [string->number chez:string->number]
+                   [number->string chez:number->string]
                    [file-exists? chez:file-exists?]
                    [directory-list chez:directory-list]
                    [delete-file chez:delete-file]

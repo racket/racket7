@@ -222,6 +222,21 @@
         ;; The argument is constrained to fixnum, bignum, and flonum forms
         (chez:string->number s radix))]))
 
+(define/who number->string
+  (case-lambda
+   [(n) (number->string n 10)]
+   [(n radix)
+    (check who number? n)
+    (cond
+     [(eq? radix 16)
+      ;; Host generates uppercase letters, Racket generates lowercase
+      (string-downcase (chez:number->string n 16))]
+     [else
+      (check who (lambda (radix) (or (eq? radix 2) (eq? radix 8) (eq? radix 10) (eq? radix 16)))
+             :contract "(or/c 2 8 10 16)"
+             radix)
+      (chez:number->string n radix)])]))
+
 (define/who (quotient/remainder n m)
   (check who integer? n)
   (check who integer? m)

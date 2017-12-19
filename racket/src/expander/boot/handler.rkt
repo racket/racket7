@@ -66,10 +66,7 @@
                        (andmap symbol? (cdr expect-module))))
         (raise-argument-error 'load/use-compiled "(or/c #f symbol? (cons/c (or/c #f symbol?) (non-empty-listof symbol?)))" path))
       (define name (and expect-module (current-module-declare-name)))
-      (define ns-hts (and name
-                          (hash-ref -module-hash-table-table
-                                    (namespace-module-registry (current-namespace))
-                                    #f)))
+      (define ns-hts (and name (registry-table-ref (namespace-module-registry (current-namespace)))))
       (define use-path/src (and ns-hts (hash-ref (cdr ns-hts) name #f)))
       (if use-path/src
           ;; Use previous decision of .zo vs. source:
@@ -181,6 +178,17 @@
 (define -module-hash-table-table
   (make-weak-hasheq))
 
+(define (registry-table-ref reg)
+  (define e (hash-ref -module-hash-table-table
+                      reg
+                      #f))
+  (and e (ephemeron-value e)))
+
+(define (registry-table-set! reg v)
+  (hash-set! -module-hash-table-table
+             reg
+             (make-ephemeron reg v)))
+
 ;; weak map from `lib' path + corrent-library-paths to symbols:
 ;;  We'd like to use a weak `equal?'-based hash table here,
 ;;  but that's not kill-safe. Instead, we use a non-thread-safe
@@ -258,13 +266,10 @@
            ;; Let planet resolver register, too:
            (planet-resolver s))
          ;; Register s as loaded:
-         (let ([hts (or (hash-ref -module-hash-table-table
-                                  (namespace-module-registry (current-namespace))
-                                  #f)
+         (let ([hts (or (registry-table-ref (namespace-module-registry (current-namespace)))
                         (let ([hts (cons (make-hasheq) (make-hasheq))])
-                          (hash-set! -module-hash-table-table
-                                     (namespace-module-registry (current-namespace))
-                                     hts)
+                          (registry-table-set! (namespace-module-registry (current-namespace))
+                                               hts)
                           hts))])
            (hash-set! (car hts) s 'declared)
            ;; If attach from another namespace, copy over source-file path, if any:
@@ -272,9 +277,7 @@
              (let ([root-name (if (pair? (resolved-module-path-name s))
                                   (make-resolved-module-path (car (resolved-module-path-name s)))
                                   s)]
-                   [from-hts (hash-ref -module-hash-table-table
-                                       (namespace-module-registry from-namespace)
-                                       #f)])
+                   [from-hts (registry-table-ref (namespace-module-registry from-namespace))])
                (when from-hts
                  (let ([use-path/src (hash-ref (cdr from-hts) root-name #f)])
                    (when use-path/src
@@ -538,13 +541,10 @@
                      (let* ([root-modname (if (vector? s-parsed)
                                               (vector-ref s-parsed 4)
                                               (make-resolved-module-path filename))]
-                            [hts (or (hash-ref -module-hash-table-table
-                                               (get-reg)
-                                               #f)
+                            [hts (or (registry-table-ref (get-reg))
                                      (let ([hts (cons (make-hasheq) (make-hasheq))])
-                                       (hash-set! -module-hash-table-table
-                                                  (get-reg)
-                                                  hts)
+                                       (registry-table-set! (get-reg)
+                                                            hts)
                                        hts))]
                             [modname (if subm-path
                                          (make-resolved-module-path 
