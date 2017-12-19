@@ -678,13 +678,13 @@
              [rhs (liftable-expr proc)])
         `[,f ,(match rhs
                 [`(lambda ,args . ,body)
-                 (let ([body (convert-lifted-calls-in-seq body lifts frees)])
+                 (let ([body (convert-lifted-calls-in-seq/add-mutators body args lifts frees)])
                    (reannotate rhs `(lambda ,(append new-args args) . ,body)))]
                 [`(case-lambda [,argss . ,bodys] ...)
                  (reannotate rhs `(case-lambda
                                     ,@(for/list ([args (in-list argss)]
                                                  [body (in-list bodys)])
-                                        (let ([body (convert-lifted-calls-in-seq body lifts frees)])
+                                        (let ([body (convert-lifted-calls-in-seq/add-mutators body args lifts frees)])
                                           `[,(append new-args args) . ,body]))))])])))
 
   ;; ----------------------------------------

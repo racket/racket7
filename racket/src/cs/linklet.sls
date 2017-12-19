@@ -84,23 +84,28 @@
   (define measure-performance? (getenv "PLT_LINKLET_TIMES"))
 
   (define gensym-on? (getenv "PLT_LINKLET_SHOW_GENSYM"))
+  (define pre-lift-on? (getenv "PLT_LINKLET_SHOW_PRE_LIFT"))
   (define pre-jit-on? (getenv "PLT_LINKLET_SHOW_PRE_JIT"))
   (define jit-demand-on? (getenv "PLT_LINKLET_SHOW_JIT_DEMAND"))
   (define show-on? (or gensym-on?
                        pre-jit-on?
+                       pre-lift-on?
                        jit-demand-on?
                        (getenv "PLT_LINKLET_SHOW")))
-  (define (show what v)
-    (when show-on?
-      (printf ";; ~a ---------------------\n" what)
-      (call-with-system-wind
-       (lambda ()
-         (parameterize ([print-gensym gensym-on?]
-                        [print-extended-identifiers #t])
-           (pretty-print (strip-nested-annotations
-                          (remove-annotation-boundary
-                           (convert-to-annotation #f v))))))))
-    v)
+  (define show
+    (case-lambda
+     [(what v) (show show-on? what v)]
+     [(on? what v)
+      (when on?
+        (printf ";; ~a ---------------------\n" what)
+        (call-with-system-wind
+         (lambda ()
+           (parameterize ([print-gensym gensym-on?]
+                          [print-extended-identifiers #t])
+             (pretty-print (strip-nested-annotations
+                            (remove-annotation-boundary
+                             (convert-to-annotation #f v))))))))
+      v]))
 
   (define region-times (make-eq-hashtable))
   (define region-counts (make-eq-hashtable))
@@ -314,19 +319,18 @@
                            (lambda (index)
                              (lookup-linklet-or-instance get-import import-keys index))))
        (define impl-lam/lifts
-         (lift-in-schemified-linklet (remove-annotation-boundary impl-lam)
+         (lift-in-schemified-linklet (show pre-lift-on? "pre-lift" (remove-annotation-boundary impl-lam))
                                      reannotate
                                      unannotate))
        (define impl-lam/jitified
          (if jit-mode?
-             (jitify-schemified-linklet impl-lam/lifts
+             (jitify-schemified-linklet (show pre-jit-on? "pre-JIT" impl-lam/lifts)
                                         prim-knowns
                                         (lambda (expr arity-mask name)
                                           (make-wrapped-annotation expr arity-mask name))
                                         reannotate
                                         unannotate)
              impl-lam/lifts))
-       (when pre-jit-on? (show "pre-JIT" impl-lam/lifts))
        ;; Create the linklet:
        (let ([lk (make-linklet (call-with-system-wind
                                 (lambda ()
