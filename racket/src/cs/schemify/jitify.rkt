@@ -39,7 +39,8 @@
     (define captures (for/list ([id (in-list ids)])
                        (extract-id (hash-ref env id) id)))
     (define jitted-proc
-      (or (match (and (hash-ref free-vars (unwrap name) #f)
+      (or (match (and name
+                      (hash-ref free-vars (unwrap name) #f)
                       (hash-ref env (unwrap name) #f))
             [`(self ,m ,orig-name)
              (cond
@@ -50,9 +51,19 @@
                      ,name))]
                [else #f])]
             [`,_ #f])
+          (match (and name
+                      (hash-ref env (unwrap name) #f))
+            [`(self . ,_)
+             ;; Might have a direct self-call, so use `letrec`:
+             `(letrec ([,name ,v])
+                ,name)]
+            [`,_ #f])
           (cond
-            [name `(letrec ([,name ,v])
-                     ,name)]
+            [name
+             ;; No direct self-reference, but encourage the compiler
+             ;; to name the procedure:
+             `(let ([,name ,v])
+                ,name)]
             [else v])))
     (define arity-mask (argss->arity-mask argss))
     (cond
@@ -125,6 +136,13 @@
     (define-values (new-v free) (jitify-expr v env mutables #hasheq() #f name #f))
     new-v)
 
+  ;; The `name` argument is a name to be given to the expresison `v`
+  ;;  if it's a function. It also corresponds to a name that can be
+  ;;  called directly, as long as it's mapped in `env` to a '(self ...)
+  ;;  value.
+  ;; The `in-name` argument is the current self `name` that is in effect
+  ;;  for the current expression. It might be mapped to '(self ...)
+  ;;  and need to be unmapped for a more nested function.
   (define (jitify-expr v env mutables free called? name in-name)
     (match v
       [`(lambda ,args . ,body)
@@ -186,14 +204,17 @@
       [`(quote ,_) (values v free)]
       [`(set! ,var ,rhs)
        (define-values (new-rhs new-free) (jitify-expr rhs env mutables free #f var in-name))
+       (define id (unwrap var))
+       (define dest (hash-ref env id #f))
        (cond
-         [(not in-name)
+         [(and (not in-name)
+               (match dest
+                 [`(variable-ref ,_) #t]
+                 [`,_ #f]))
           ;; Not under lambda: don't rewrite references to definitions
           (values `(set! ,var ,new-rhs)
                   new-free)]
          [else
-          (define id (unwrap var))
-          (define dest (hash-ref env id #f))
           (define newer-free (if dest
                                  (hash-set new-free id dest)
                                  new-free))
@@ -232,13 +253,16 @@
           (values (reannotate v new-vs)
                   new-free)])]
       [`,var
+       (define id (unwrap var))
+       (define dest (hash-ref env id #f))
        (cond
-         [(not in-name)
+         [(and (not in-name)
+               (match dest
+                 [`(variable-ref ,_) #t]
+                 [`,_ #f]))
           ;; Not under lambda: don't rewrite references to definitions
           (values var free)]
          [else
-          (define id (unwrap var))
-          (define dest (hash-ref env id #f))
           (define new-var
             (match dest
               [`#f var]
@@ -324,6 +348,8 @@
                   `(let (,(cond
                             [(hash-ref rhs-free (unwrap id) #f)
                              `[,(gensym 'ignored) (set-box! ,id ,new-rhs)]]
+                            [(hash-ref mutables (unwrap id) #f)
+                             `[,id (box ,new-rhs)]]
                             [else `[,id ,new-rhs]]))
                      ,body)))]))
        (values (reannotate v new-v)

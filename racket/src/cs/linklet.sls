@@ -102,9 +102,10 @@
          (lambda ()
            (parameterize ([print-gensym gensym-on?]
                           [print-extended-identifiers #t])
-             (pretty-print (strip-nested-annotations
-                            (remove-annotation-boundary
-                             (convert-to-annotation #f v))))))))
+             (pretty-print (strip-jit-wrapper
+                            (strip-nested-annotations
+                             (remove-annotation-boundary
+                              (convert-to-annotation #f v)))))))))
       v]))
 
   (define region-times (make-eq-hashtable))
@@ -256,6 +257,16 @@
                                          free-vars))
                                 (wrapped-annotation-arity-mask wa)
                                 (wrapped-annotation-name wa))))))
+
+  (define (strip-jit-wrapper p)
+    (cond
+     [(wrapped-annotation? p)
+      (vector (strip-jit-wrapper (strip-nested-annotations (wrapped-annotation-content p)))
+              (wrapped-annotation-arity-mask p)
+              (wrapped-annotation-name p))]
+     [(pair? p)
+      (cons (strip-jit-wrapper (car p)) (strip-jit-wrapper (cdr p)))]
+     [else p]))
   
   ;; A linklet is implemented as a procedure that takes an argument
   ;; for each import plus an `variable` for each export, and calling
