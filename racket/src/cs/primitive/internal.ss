@@ -18,4 +18,12 @@
    register-struct-predicate!
    register-struct-field-accessor!
    register-struct-field-mutator!
-   struct-property-set!))
+   struct-property-set!   
+   |#%call-with-values|
+
+   make-record-type-descriptor
+   make-record-constructor-descriptor
+   record-constructor
+   record-predicate
+   record-accessor
+   record-mutator))

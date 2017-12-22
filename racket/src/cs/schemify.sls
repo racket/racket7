@@ -2,6 +2,8 @@
   (export schemify-linklet
           lift-in-schemified-linklet
           jitify-schemified-linklet
+          interpretable-jitified-linklet
+          interpret-linklet
           prim-knowns
           a-known-procedure
           a-known-constant)

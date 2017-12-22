@@ -18,7 +18,7 @@ SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt 
                     schemify/struct-type-info.rkt schemify/import.rkt schemify/mutated-state.rkt \
                     schemify/simple.rkt schemify/serialize.rkt schemify/let.rkt schemify/equal.rkt \
                     schemify/lift.rkt schemify/wrap-annotation.rkt schemify/match-annotation.rkt \
-                    schemify/jitify.rkt schemify/main.rkt
+                    schemify/jitify.rkt schemify/interpret.rkt schemify/main.rkt
 CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS) known-primitive.rkt
 
 CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt

@@ -2,7 +2,8 @@
 (require "schemify.rkt"
          "known.rkt"
          "lift.rkt"
-         "jitify.rkt")
+         "jitify.rkt"
+         "interpret.rkt")
 
 (provide schemify-linklet
          schemify-body
@@ -12,4 +13,7 @@
          lift-in-schemified-linklet
          lift-in-schemified-body
 
-         jitify-schemified-linklet)
+         jitify-schemified-linklet
+
+         interpretable-jitified-linklet
+         interpret-linklet)

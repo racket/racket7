@@ -100,7 +100,7 @@
                    (linklet))))
                          
   (eval `(define primitive-table ',primitive-table))
-  
+
   (let ([install-table
          (lambda (table)
            (hash-for-each table
@@ -151,9 +151,22 @@
                [(_ rator rand ...)
                 (with-syntax ([n-args (length #'(rand ...))])
                   #'((extract-procedure rator n-args) rand ...))])))
-    (eval `(define raise-binding-result-arity-error ',raise-binding-result-arity-error))
-    (eval `(define |#%call-with-values| ',|#%call-with-values|)))
+    (eval `(define raise-binding-result-arity-error ',raise-binding-result-arity-error)))
 
+  ;; For interpretation of the outer shell of a linklet:
+  (install-linklet-primitive-tables! kernel-table
+                                     unsafe-table
+                                     flfxnum-table
+                                     paramz-table
+                                     extfl-table
+                                     network-table
+                                     futures-table
+                                     place-table
+                                     foreign-table
+                                     linklet-table
+                                     internal-table
+                                     schemify-table)
+  
   ;; ----------------------------------------
 
   ;; `install-reader!` is from the `io` library, where the

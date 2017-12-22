@@ -1,8 +1,6 @@
 #lang racket/base
 (require "match-annotation.rkt"
-         "wrap-annotation.rkt"
-         "known.rkt")
-
+         "wrap-annotation.rkt")
 ;; Convert `lambda`s to make them JITted on demand.
 
 ;; JITted-on-demand code must be a constant across all invocations of
@@ -22,7 +20,7 @@
 
 (provide jitify-schemified-linklet)
 
-(define (jitify-schemified-linklet v prim-knowns jitable-annotation reannotate strip-annotations)
+(define (jitify-schemified-linklet v jitable-annotation reannotate strip-annotations)
 
   ;; Constucts a JIT stub:
   (define (make-jit-on-call free-vars argss v name env)
@@ -586,7 +584,6 @@
                                                           (outer y))])
                                                 (inner x)))])
                                     (outer 5))))
-                              (hasheq 'cons a-known-procedure)
                               vector
                               (lambda (v u) u)
                               values)))

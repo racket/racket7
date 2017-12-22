@@ -41,6 +41,8 @@
           jit-mode? ; not exported to racket
           linklet-performance-init!   ; not exported to racket
           linklet-performance-report! ; not exported to racket
+
+          install-linklet-primitive-tables!  ; not exported to racket
           
           ;; schemify glue:
           variable-set!
@@ -177,9 +179,16 @@
   (define (compile-to-port* s o)
     (call-with-system-wind (lambda () (compile-to-port s o))))
 
+  (define primitives (make-hasheq))
+  (define (install-linklet-primitive-tables! . tables)
+    (for-each
+     (lambda (table)
+       (hash-for-each table (lambda (k v) (hash-set! primitives k v))))
+     tables))
+  
   (define (outer-eval s)
     (if jit-mode?
-        (interpret* s)
+        (interpret-linklet s primitives variable-ref variable-ref/no-check variable-set!)
         (compile* s)))
 
   (define (compile-to-bytevector s)
@@ -336,17 +345,21 @@
        (define impl-lam/jitified
          (if jit-mode?
              (jitify-schemified-linklet (show pre-jit-on? "pre-JIT" impl-lam/lifts)
-                                        prim-knowns
                                         (lambda (expr arity-mask name)
                                           (make-wrapped-annotation expr arity-mask name))
                                         reannotate
                                         unannotate)
              impl-lam/lifts))
+       (define impl-lam/interpable
+         (let ([l (show "schemified" impl-lam/jitified)])
+           (if jit-mode?
+               (interpretable-jitified-linklet l unannotate)
+               l)))
        ;; Create the linklet:
        (let ([lk (make-linklet (call-with-system-wind
                                 (lambda ()
                                   ((if serializable? compile-to-bytevector outer-eval)
-                                   (show "schemified" impl-lam/jitified))))
+                                   impl-lam/interpable)))
                                (if serializable? 'faslable 'callable)
                                importss-abi
                                exports-info

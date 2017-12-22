@@ -60,7 +60,7 @@
 ;; An import ABI is a list of list of booleans, parallel to the
 ;; linklet imports, where #t to means that a value is expected, and #f
 ;; means that a variable (which boxes a value) is expected
-(define (schemify-linklet lk serializable? immediate-variable?
+(define (schemify-linklet lk serializable? for-jit?
                           annotate unannotate prim-knowns get-import-knowns)
   (define (im-int-id id) (unwrap (if (pair? id) (cadr id) id)))
   (define (im-ext-id id) (unwrap (if (pair? id) (car id) id)))
@@ -91,7 +91,7 @@
      ;; Schemify the body, collecting information about defined names:
      (define-values (new-body defn-info mutated)
        (schemify-body* bodys/constants-lifted annotate unannotate prim-knowns imports exports
-                       immediate-variable?))
+                       for-jit?))
      (values
       ;; Build `lambda` with schemified body:
       (make-let*
@@ -129,7 +129,7 @@
     (schemify-body* l annotate unannotate prim-knowns imports exports #f))
   new-body)
 
-(define (schemify-body* l annotate unannotate prim-knowns imports exports immediate-variable?)
+(define (schemify-body* l annotate unannotate prim-knowns imports exports for-jit?)
   ;; Various conversion steps need information about mutated variables,
   ;; where "mutated" here includes visible implicit mutation, such as
   ;; a variable that might be used before it is defined:
@@ -157,7 +157,7 @@
            [(null? accum-exprs) '((void))]
            [else (reverse accum-exprs)])]
          [else (append
-                (make-expr-defns accum-exprs)
+                accum-exprs
                 set-vars)])]
        [else
         (define form (car l))
@@ -166,13 +166,15 @@
         (match form
           [`(define-values ,ids ,_)
            (append
-            (make-expr-defns accum-exprs)
+            (if for-jit?
+                accum-exprs
+                (make-expr-defns accum-exprs))
             (cons
              schemified 
              (let id-loop ([ids ids] [accum-exprs null] [accum-ids accum-ids])
                (cond
                 [(wrap-null? ids) (loop (wrap-cdr l) accum-exprs accum-ids)]
-                [(or immediate-variable?
+                [(or for-jit?
                      (via-variable-mutated-state? (hash-ref mutated (unwrap (wrap-car ids)) #f)))
                  (define id (unwrap (wrap-car ids)))
                  (cond
