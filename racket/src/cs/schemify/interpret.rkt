@@ -97,9 +97,12 @@
                    [`(,e . ,rest)
                     (cons (compile-expr e env stack-depth)
                           (loop rest))])))
-    (if (and (pair? bs) (null? (cdr bs)))
-        (car bs)
-        (list->vector (cons 'begin bs))))
+    (cond
+      [(null? bs) '#(void)]
+      [(and (pair? bs) (null? (cdr bs)))
+       (car bs)]
+      [else
+       (list->vector (cons 'begin bs))]))
 
   (define (compile-body body env stack-depth)
     (match body
@@ -168,9 +171,11 @@
                          (gensym id)))
        (compile-expr `(call-with-values (lambda () ,rhs)
                         (lambda ,gen-ids
-                          ,@(for/list ([id (in-list ids)]
-                                       [gen-id (in-list gen-ids)])
-                              `(set! ,id ,gen-id))))
+                          ,@(if (null? ids)
+                                '((void))
+                                (for/list ([id (in-list ids)]
+                                           [gen-id (in-list gen-ids)])
+                                  `(set! ,id ,gen-id)))))
                      env
                      stack-depth)]
       [`(call-with-values ,proc1 (lambda ,ids . ,body))
@@ -188,12 +193,11 @@
                  (vector count
                          rest?
                          (compile-body body new-env (+ stack-depth count)))))]
-      [`(variable-set! ,dest-id ,src-id ',constance)
+      [`(variable-set! ,dest-id ,e ',constance)
        (define dest-var (hash-ref env (unwrap dest-id)))
-       (define src-var (hash-ref env (unwrap src-id)))
        (vector 'set-variable!
                (stack->pos stack-depth (indirect-stack dest-var)) (indirect-element dest-var)
-               (stack->pos stack-depth (indirect-stack src-var)) (indirect-element src-var)
+               (compile-expr e env stack-depth)
                constance)]
       [`(variable-ref ,id)
        (define var (hash-ref env (unwrap id)))
@@ -395,9 +399,9 @@
                   (if (matching-argument-count? count rest? len)
                       (interpret b (push-stack stack args count rest?))
                       (loop (add1 i)))])])))]
-        [#(set-variable! ,dest-s ,dest-e ,src-s ,src-e ,c)
-         (variable-set! (vector-ref (list-ref stack dest-s) dest-e)
-                        (vector-ref (list-ref stack src-s) src-e)
+        [#(set-variable! ,s ,e ,b ,c)
+         (variable-set! (vector-ref (list-ref stack s) e)
+                        (interpret b stack)
                         c)]
         [#(set!-indirect ,s ,e ,b)
          (unsafe-vector*-set! (list-ref stack s) e (interpret b stack))]

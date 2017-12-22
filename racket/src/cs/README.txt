@@ -70,6 +70,13 @@ Racket on Chez Scheme currently supports two modes:
 
     Select this mode by seting the `PLT_CS_JIT` environment variable.
 
+ * Lambda mode --- A kind of hybird, where individual `lambda`s are
+   isolated as for JIT mode, but compiled ahead-of-time. Compiled
+   ".zo" files are written to the same place as machine-code mode.
+
+   Select this mode by seting the `PLT_CS_LAMBDA` environment
+   variable.
+
 Set the `PLT_ZO_PATH` environment variable to override the path used
 for ".zo" files. For example, you may want to preserve a normal build
 while also building in machine-code mode with `PLT_CS_DEBUG` set, in

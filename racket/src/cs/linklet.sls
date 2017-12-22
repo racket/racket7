@@ -38,7 +38,7 @@
           eval-jit-enabled
           load-on-demand-enabled
 
-          jit-mode? ; not exported to racket
+          platform-independent-zo-mode? ; not exported to racket
           linklet-performance-init!   ; not exported to racket
           linklet-performance-report! ; not exported to racket
 
@@ -51,8 +51,8 @@
           make-instance-variable-reference
           unbox/check-undefined
           set-box!/check-undefined
-          jit-extract-closed
-          jit-extract
+          jitified-extract-closed
+          jitified-extract
           schemify-table)
   (import (chezpart)
           (only (chezscheme) printf)
@@ -73,11 +73,15 @@
           (regexp)
           (schemify))
 
-  (define jit-mode?
+  (define linklet-compilation-mode
     (cond
-     [(getenv "PLT_CS_JIT") #t]
-     [(getenv "PLT_CS_MACH") #f]
-     [else #f]))
+     [(getenv "PLT_CS_JIT") 'jit]
+     [(getenv "PLT_CS_MACH") 'mach]
+     [(getenv "PLT_CS_LAMBDA") 'lambda]
+     [else 'mach]))
+
+  (define platform-independent-zo-mode? (eq? linklet-compilation-mode 'jit))
+  (define jitify-mode? (not (eq? linklet-compilation-mode 'mach)))
 
   (define (primitive->compiled-position prim) #f)
   (define (compiled-position->primitive pos) #f)
@@ -88,10 +92,15 @@
   (define gensym-on? (getenv "PLT_LINKLET_SHOW_GENSYM"))
   (define pre-lift-on? (getenv "PLT_LINKLET_SHOW_PRE_LIFT"))
   (define pre-jit-on? (getenv "PLT_LINKLET_SHOW_PRE_JIT"))
+  (define lambda-on? (getenv "PLT_LINKLET_SHOW_LAMBDA"))
+  (define post-lambda-on? (getenv "PLT_LINKLET_SHOW_POST_LAMBDA"))
+  (define post-interp-on? (getenv "PLT_LINKLET_SHOW_POST_INTERP"))
   (define jit-demand-on? (getenv "PLT_LINKLET_SHOW_JIT_DEMAND"))
   (define show-on? (or gensym-on?
                        pre-jit-on?
                        pre-lift-on?
+                       post-lambda-on?
+                       post-interp-on?
                        jit-demand-on?
                        (getenv "PLT_LINKLET_SHOW")))
   (define show
@@ -187,92 +196,108 @@
      tables))
   
   (define (outer-eval s)
-    (if jit-mode?
+    (if jitify-mode?
         (interpret-linklet s primitives variable-ref variable-ref/no-check variable-set!)
         (compile* s)))
 
-  (define (compile-to-bytevector s)
+  (define (compile*-to-bytevector s)
     (let-values ([(o get) (open-bytevector-output-port)])
-      (cond
-       [jit-mode? (fasl-write* s o)]
-       [else (compile-to-port* (list `(lambda () ,s)) o)])
-      (bytevector-compress (get))))
+      (compile-to-port* (list `(lambda () ,s)) o)
+      (get)))
+
+  (define (compile-to-bytevector s)
+    (bytevector-compress
+     (cond
+      [jitify-mode?
+       (let-values ([(o get) (open-bytevector-output-port)])
+         (fasl-write* s o)
+         (get))]
+      [else (compile*-to-bytevector s)])))
 
   (define (eval-from-bytevector c-bv)
     (add-performance-memory! 'uncompress (bytevector-length c-bv))
     (let* ([bv (performance-region
                 'uncompress
-                (bytevector-uncompress c-bv))]
-           [i (open-bytevector-input-port bv)])
+                (bytevector-uncompress c-bv))])
       (add-performance-memory! 'faslin (bytevector-length bv))
       (cond
-       [jit-mode?
+       [jitify-mode?
         (let ([r (performance-region
                   'faslin
-                  (fasl-read i))])
+                  (fasl-read (open-bytevector-input-port bv)))])
           (performance-region
            'outer
            (outer-eval r)))]
        [else
-        ;; HACK: This probably always works for the `lambda` or
-        ;; `let`+`lambda` forms that we compile as linklets, but we need a
-        ;; better function from the host Scheme:
-        (let ([v (performance-region
-                  'faslin
-                  (fasl-read i))])
-          (performance-region
-           'outer
-           (((cdr (if (vector? v) (vector-ref v 1) v))))))])))
+        (performance-region
+         'faslin
+         (code-from-bytevector bv))])))
 
-  (define-record-type wrapped-annotation
-    (fields (mutable content)
+  (define (code-from-bytevector bv)
+    (let ([i (open-bytevector-input-port bv)])
+      ;; HACK: This probably always works for the `lambda` or
+      ;; `let`+`lambda` forms that we compile as linklets, but we need a
+      ;; better function from the host Scheme:
+      (let ([v (fasl-read i)])
+        (performance-region
+         'outer
+         (((cdr (if (vector? v) (vector-ref v 1) v))))))))
+
+  (define-record-type wrapped-code
+    (fields (mutable content) ; bytevector for 'lambda mode; annotation for 'jit mode
             arity-mask
             name)
-    (nongenerative #{wrapped-annotation p6o2m72rgmi36pm8vy559b-0}))
+    (nongenerative #{wrapped-code p6o2m72rgmi36pm8vy559b-0}))
 
-  (define (force-wrapped-annotation wa)
-    (let ([f (wrapped-annotation-content wa)])
+  (define (force-wrapped-code wc)
+    (let ([f (wrapped-code-content wc)])
       (if (procedure? f)
           f
           (performance-region
            'on-demand
-           (let* ([f (compile* (wrapped-annotation-content wa))])
-             (when jit-demand-on?
-               (show "JIT demand" (strip-nested-annotations (wrapped-annotation-content wa))))
-             (wrapped-annotation-content-set! wa f)
-             f)))))
+           (cond
+            [(bytevector? f)
+             (let* ([f (code-from-bytevector f)])
+               (wrapped-code-content-set! wc f)
+               f)]
+            [else
+             (let* ([f (compile* (wrapped-code-content wc))])
+               (when jit-demand-on?
+                 (show "JIT demand" (strip-nested-annotations (wrapped-code-content wc))))
+               (wrapped-code-content-set! wc f)
+               f)])))))
 
-  (define (jit-extract-closed wa)
-    (let ([f (wrapped-annotation-content wa)])
+  (define (jitified-extract-closed wc)
+    (let ([f (wrapped-code-content wc)])
       (if (#2%procedure? f)
-          ;; previously JITted, so no need for a wrapper
+          ;; previously forced, so no need for a wrapper
           f
           ;; make a wrapper that has the right arity and name
-          ;; and that compiles when called:
-          (make-jit-procedure (lambda () (force-wrapped-annotation wa))
-                              (wrapped-annotation-arity-mask wa)
-                              (wrapped-annotation-name wa)))))
+          ;; and that compiles/extracts when called:
+          (make-jit-procedure (lambda () (force-wrapped-code wc))
+                              (wrapped-code-arity-mask wc)
+                              (wrapped-code-name wc)))))
 
-  (define (jit-extract wa)
-    (let ([f (wrapped-annotation-content wa)])
+  (define (jitified-extract wc)
+    (let ([f (wrapped-code-content wc)])
       (if (#2%procedure? f)
-          ;; previously JITted, so no need for a wrapper
+          ;; previously forced, so no need for a wrapper
           f
           ;; make a wrapper that has the right arity and name
-          ;; and that compiles when called:
+          ;; and that compiles/extracts when called:
           (lambda free-vars
             (make-jit-procedure (lambda ()
-                                  (apply (force-wrapped-annotation wa)
+                                  (apply (force-wrapped-code wc)
                                          free-vars))
-                                (wrapped-annotation-arity-mask wa)
-                                (wrapped-annotation-name wa))))))
+                                (wrapped-code-arity-mask wc)
+                                (wrapped-code-name wc))))))
 
   (define (strip-jit-wrapper p)
     (cond
-     [(wrapped-annotation? p)
-      (vector (strip-jit-wrapper (strip-nested-annotations (wrapped-annotation-content p)))
-              (wrapped-annotation-arity-mask p)
-              (wrapped-annotation-name p))]
+     [(wrapped-code? p)
+      (vector (strip-jit-wrapper (strip-nested-annotations (wrapped-code-content p)))
+              (wrapped-code-arity-mask p)
+              (wrapped-code-name p))]
      [(pair? p)
       (cons (strip-jit-wrapper (car p)) (strip-jit-wrapper (cdr p)))]
      [else p]))
@@ -330,7 +355,7 @@
        (define-values (impl-lam importss-abi exports-info)
          (schemify-linklet (show "linklet" c)
                            serializable?
-                           jit-mode? ; immediate installation of variables needed for jitify
+                           jitify-mode?
                            convert-to-annotation
                            unannotate
                            prim-knowns
@@ -343,23 +368,40 @@
                                      reannotate
                                      unannotate))
        (define impl-lam/jitified
-         (if jit-mode?
-             (jitify-schemified-linklet (show pre-jit-on? "pre-JIT" impl-lam/lifts)
-                                        (lambda (expr arity-mask name)
-                                          (make-wrapped-annotation expr arity-mask name))
-                                        reannotate
-                                        unannotate)
-             impl-lam/lifts))
+         (cond
+           [(not jitify-mode?) impl-lam/lifts]
+           [else
+            (jitify-schemified-linklet (case linklet-compilation-mode
+                                         [(jit) (show pre-jit-on? "pre-jitified" impl-lam/lifts)]
+                                         [else (show "schemified" impl-lam/lifts)])
+                                       ;; don't need extract for non-serializable 'lambda mode
+                                       (or serializable? (eq? linklet-compilation-mode 'jit))
+                                       ;; annotation -> lambda
+                                       (case linklet-compilation-mode
+                                         [(jit)
+                                          (lambda (expr arity-mask name)
+                                            (make-wrapped-code expr arity-mask name))]
+                                         [else
+                                          (lambda (expr arity-mask name)
+                                            (let ([code ((if serializable? compile*-to-bytevector compile*)
+                                                         (show lambda-on? "lambda" expr))])
+                                              (if serializable?
+                                                  (make-wrapped-code code arity-mask name)
+                                                  code)))])
+                                       reannotate
+                                       unannotate)]))
        (define impl-lam/interpable
-         (let ([l (show "schemified" impl-lam/jitified)])
-           (if jit-mode?
-               (interpretable-jitified-linklet l unannotate)
-               l)))
+         (let ([impl-lam (case linklet-compilation-mode
+                           [(lambda) (show post-lambda-on? "post-lambda" impl-lam/jitified)]
+                           [else (show "schemified" impl-lam/jitified)])])
+           (if jitify-mode?
+               (interpretable-jitified-linklet impl-lam unannotate)
+               impl-lam)))
        ;; Create the linklet:
        (let ([lk (make-linklet (call-with-system-wind
                                 (lambda ()
                                   ((if serializable? compile-to-bytevector outer-eval)
-                                   impl-lam/interpable)))
+                                   (show (and jitify-mode? post-interp-on?) "post-interp" impl-lam/interpable))))
                                (if serializable? 'faslable 'callable)
                                importss-abi
                                exports-info
@@ -1117,8 +1159,8 @@
      make-instance-variable-reference
      unbox/check-undefined
      set-box!/check-undefined
-     jit-extract
-     jit-extract-closed))
+     jitified-extract
+     jitified-extract-closed))
 
   ;; --------------------------------------------------
 

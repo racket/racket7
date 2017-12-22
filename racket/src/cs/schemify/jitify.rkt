@@ -1,11 +1,13 @@
 #lang racket/base
 (require "match-annotation.rkt"
          "wrap-annotation.rkt")
-;; Convert `lambda`s to make them JITted on demand.
 
-;; JITted-on-demand code must be a constant across all invocations of
-;; the linklet. An environment maps a variables that needs to be passed
-;; into the JITted code:
+;; Convert `lambda`s to make them fully closed, which is compatible
+;; with JIT compilation of the `lambda` or separate ahead-of-time
+;; compilation (as opposed to compiling a whole linklet).
+
+;; An environment maps a variables that needs to be passed into the
+;; closed code:
 ;;
 ;;   * id -> '#:direct --- ready by the time it's needed and immutable
 ;;
@@ -20,9 +22,11 @@
 
 (provide jitify-schemified-linklet)
 
-(define (jitify-schemified-linklet v jitable-annotation reannotate strip-annotations)
+(define (jitify-schemified-linklet v need-extract? extractable-annotation reannotate strip-annotations)
 
-  ;; Constucts a JIT stub:
+  ;; Constucts a closed `lambda` form as wrapped with
+  ;; `extractable-annotaton` and generates an application of
+  ;; `extract[-closed]-id` to the wrapped form.
   (define (make-jit-on-call free-vars argss v name env)
     (define ids (for/list ([id (in-hash-keys free-vars)])
                   id))
@@ -34,8 +38,11 @@
         [`(self ,m ,orig-id) orig-id]
         [`(self ,m) (extract-id m id)]
         [`,_ id]))
-    (define captures (for/list ([id (in-list ids)])
-                       (extract-id (hash-ref env id) id)))
+    (define captures (hash-keys
+                      ;; `extract-id` for different `id`s can produce the
+                      ;; same `id`, so hash and then convert to a list
+                      (for/hash ([id (in-list ids)])
+                        (values (extract-id (hash-ref env id) id) #t))))
     (define jitted-proc
       (or (match (and name
                       (hash-ref free-vars (unwrap name) #f)
@@ -66,14 +73,18 @@
     (define arity-mask (argss->arity-mask argss))
     (cond
       [(null? captures)
-       `(jit-extract-closed ',(jitable-annotation jitted-proc
-                                                  arity-mask
-                                                  name))]
-      [`((jit-extract ',(jitable-annotation `(lambda ,captures
-                                               ,jitted-proc)
-                                            arity-mask
-                                            name))
-                   . ,captures)]))
+       (let ([e (extractable-annotation jitted-proc arity-mask name)])
+         (if need-extract?
+             `(jitified-extract-closed ',e)
+             `',e))]
+      [else
+       (let ([e (extractable-annotation `(lambda ,captures
+                                           ,jitted-proc)
+                                        arity-mask
+                                        name)])
+         (if need-extract?
+             `((jitified-extract ',e) . ,captures)
+             `(',e . ,captures)))]))
 
   ;; ----------------------------------------
 
@@ -584,6 +595,7 @@
                                                           (outer y))])
                                                 (inner x)))])
                                     (outer 5))))
+                              #t
                               vector
                               (lambda (v u) u)
                               values)))

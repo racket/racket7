@@ -24,7 +24,7 @@
          (io)
          (thread)
          (only (linklet)
-               jit-mode?
+               platform-independent-zo-mode?
                linklet-performance-init!
                linklet-performance-report!))
 
@@ -43,7 +43,7 @@
                                                          (relative-path? s))
                                               (error 'racket "PLT_ZO_PATH environment variable is not a valid path"))
                                             s)]
-                                      [jit-mode? "cs"]
+                                      [platform-independent-zo-mode? "cs"]
                                       [else (symbol->string (machine-type))])))))
 
  (define (see saw . args)
