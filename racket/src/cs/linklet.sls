@@ -69,7 +69,9 @@
                 read-bytes
                 open-output-bytes
                 get-output-bytes
-                file-position)
+                file-position
+                current-logger
+                log-message)
           (regexp)
           (schemify))
 
@@ -77,14 +79,24 @@
     (cond
      [(getenv "PLT_CS_JIT") 'jit]
      [(getenv "PLT_CS_MACH") 'mach]
-     [(getenv "PLT_CS_LAMBDA") 'lambda]
      [else 'mach]))
 
+  (define linklet-compilation-limit
+    (and (eq? linklet-compilation-mode 'mach)
+         (or (let ([s (getenv "PLT_CS_COMPILE_LIMIT")])
+               (and s
+                    (let ([n (string->number s)])
+                      (and (real? n)
+                           n))))
+             10000)))
+
+  ;; For "main.sps" to select the default ".zo" directory name:
   (define platform-independent-zo-mode? (eq? linklet-compilation-mode 'jit))
-  (define jitify-mode? (not (eq? linklet-compilation-mode 'mach)))
 
   (define (primitive->compiled-position prim) #f)
   (define (compiled-position->primitive pos) #f)
+
+  (define root-logger (|#%app| current-logger))
 
   (define omit-debugging? (not (getenv "PLT_CS_DEBUG")))
   (define measure-performance? (getenv "PLT_LINKLET_TIMES"))
@@ -195,9 +207,10 @@
        (hash-for-each table (lambda (k v) (hash-set! primitives k v))))
      tables))
   
-  (define (outer-eval s)
-    (if jitify-mode?
-        (interpret-linklet s primitives variable-ref variable-ref/no-check variable-set!)
+  (define (outer-eval s format)
+    (if (eq? format 'interpret)
+        (interpret-linklet s primitives variable-ref variable-ref/no-check variable-set!
+                           make-arity-wrapper-procedure)
         (compile* s)))
 
   (define (compile*-to-bytevector s)
@@ -205,29 +218,29 @@
       (compile-to-port* (list `(lambda () ,s)) o)
       (get)))
 
-  (define (compile-to-bytevector s)
+  (define (compile-to-bytevector s format)
     (bytevector-compress
      (cond
-      [jitify-mode?
+      [(eq? format 'interpret)
        (let-values ([(o get) (open-bytevector-output-port)])
          (fasl-write* s o)
          (get))]
       [else (compile*-to-bytevector s)])))
 
-  (define (eval-from-bytevector c-bv)
+  (define (eval-from-bytevector c-bv format)
     (add-performance-memory! 'uncompress (bytevector-length c-bv))
     (let* ([bv (performance-region
                 'uncompress
                 (bytevector-uncompress c-bv))])
       (add-performance-memory! 'faslin (bytevector-length bv))
       (cond
-       [jitify-mode?
+       [(eq? format 'interpret)
         (let ([r (performance-region
                   'faslin
                   (fasl-read (open-bytevector-input-port bv)))])
           (performance-region
            'outer
-           (outer-eval r)))]
+           (outer-eval r format)))]
        [else
         (performance-region
          'faslin
@@ -317,17 +330,19 @@
 
   (define-record-type linklet
     (fields (mutable code) ; the procedure
-            (mutable format) ; 'faslable, 'faslable-strict, 'callable, or 'lazy
+            format         ; 'compile or 'interpret (where the latter may have compiled internal parts)
+            (mutable preparation) ; 'faslable, 'faslable-strict, 'callable, or 'lazy
             importss-abi   ; ABI for each import, in parallel to `importss`
             exports-info   ; hash(sym -> known) for info about each export; see "known.rkt"
             name           ; name of the linklet (for debugging purposes)
             importss       ; list of list of import symbols
             exports)       ; list of export symbols
-    (nongenerative #{linklet cuquy0g9bh5vmeespyap4g-0}))
+    (nongenerative #{linklet Zuquy0g9bh5vmeespyap4g-0}))
 
-  (define (set-linklet-code linklet code format)
+  (define (set-linklet-code linklet code preparation)
     (make-linklet code
-                  format
+                  (linklet-format linklet)
+                  preparation
                   (linklet-importss-abi linklet)
                   (linklet-exports-info linklet)
                   (linklet-name linklet)
@@ -351,6 +366,12 @@
        (define exports
          (map (lambda (p) (if (pair? p) (cadr p) p))
               (caddr c)))
+       (define jitify-mode?
+         (or (eq? linklet-compilation-mode 'jit)
+             (and (linklet-bigger-than? c linklet-compilation-limit serializable?)
+                  (log-message root-logger 'info 'linklet "compiling only interior functions for large linklet" #f)
+                  #t)))
+       (define format (if jitify-mode? 'interpret 'compile))
        ;; Convert the linklet S-expression to a `lambda` S-expression:
        (define-values (impl-lam importss-abi exports-info)
          (schemify-linklet (show "linklet" c)
@@ -376,12 +397,17 @@
                                          [else (show "schemified" impl-lam/lifts)])
                                        ;; don't need extract for non-serializable 'lambda mode
                                        (or serializable? (eq? linklet-compilation-mode 'jit))
+                                       ;; compilation threshold for ahead-of-time mode:
+                                       (and (eq? linklet-compilation-mode 'mach)
+                                            linklet-compilation-limit)
                                        ;; annotation -> lambda
                                        (case linklet-compilation-mode
                                          [(jit)
+                                          ;; Preserve annotated `lambda` source for on-demand compilation:
                                           (lambda (expr arity-mask name)
                                             (make-wrapped-code expr arity-mask name))]
                                          [else
+                                          ;; Compile an individual `lambda`:
                                           (lambda (expr arity-mask name)
                                             (let ([code ((if serializable? compile*-to-bytevector compile*)
                                                          (show lambda-on? "lambda" expr))])
@@ -391,8 +417,9 @@
                                        reannotate
                                        unannotate)]))
        (define impl-lam/interpable
-         (let ([impl-lam (case linklet-compilation-mode
-                           [(lambda) (show post-lambda-on? "post-lambda" impl-lam/jitified)]
+         (let ([impl-lam (case (and jitify-mode?
+                                    linklet-compilation-mode)
+                           [(mach) (show post-lambda-on? "post-lambda" impl-lam/jitified)]
                            [else (show "schemified" impl-lam/jitified)])])
            (if jitify-mode?
                (interpretable-jitified-linklet impl-lam unannotate)
@@ -401,7 +428,9 @@
        (let ([lk (make-linklet (call-with-system-wind
                                 (lambda ()
                                   ((if serializable? compile-to-bytevector outer-eval)
-                                   (show (and jitify-mode? post-interp-on?) "post-interp" impl-lam/interpable))))
+                                   (show (and jitify-mode? post-interp-on?) "post-interp" impl-lam/interpable)
+                                   format)))
+                               format
                                (if serializable? 'faslable 'callable)
                                importss-abi
                                exports-info
@@ -442,11 +471,11 @@
   ;; Intended to speed up reuse of a linklet in exchange for not being
   ;; able to serialize anymore
   (define (eval-linklet linklet)
-    (case (linklet-format linklet)
+    (case (linklet-preparation linklet)
       [(faslable)
        (set-linklet-code linklet (linklet-code linklet) 'lazy)]
       [(faslable-strict)
-       (set-linklet-code linklet (eval-from-bytevector (linklet-code linklet)) 'callable)]
+       (set-linklet-code linklet (eval-from-bytevector (linklet-code linklet) (linklet-format linklet)) 'callable)]
       [else
        linklet]))
      
@@ -464,20 +493,20 @@
         (call/cc
          (lambda (k)
            (register-linklet-instantiate-continuation! k (instance-name target-instance))
-           (when (eq? 'lazy (linklet-format linklet))
+           (when (eq? 'lazy (linklet-preparation linklet))
              ;; Trigger lazy conversion of code from bytevector
-             (let ([code (eval-from-bytevector (linklet-code linklet))])
+             (let ([code (eval-from-bytevector (linklet-code linklet) (linklet-format linklet))])
                (with-interrupts-disabled
-                (when (eq? 'lazy (linklet-format linklet))
+                (when (eq? 'lazy (linklet-preparation linklet))
                   (linklet-code-set! linklet code)
-                  (linklet-format-set! linklet 'callable)))))
+                  (linklet-preparation-set! linklet 'callable)))))
            ;; Call the linklet:
            (performance-region
             'instantiate
             (apply
-             (if (eq? 'callable (linklet-format linklet))
+             (if (eq? 'callable (linklet-preparation linklet))
                  (linklet-code linklet)
-                 (eval-from-bytevector (linklet-code linklet)))
+                 (eval-from-bytevector (linklet-code linklet) (linklet-format linklet)))
              (make-variable-reference target-instance #f)
              (append (apply append
                             (map extract-variables

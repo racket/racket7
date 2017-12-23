@@ -4,6 +4,7 @@
           jitify-schemified-linklet
           interpretable-jitified-linklet
           interpret-linklet
+          linklet-bigger-than?
           prim-knowns
           a-known-procedure
           a-known-constant)

@@ -3,7 +3,8 @@
          "known.rkt"
          "lift.rkt"
          "jitify.rkt"
-         "interpret.rkt")
+         "interpret.rkt"
+         "size.rkt")
 
 (provide schemify-linklet
          schemify-body
@@ -16,4 +17,6 @@
          jitify-schemified-linklet
 
          interpretable-jitified-linklet
-         interpret-linklet)
+         interpret-linklet
+
+         linklet-bigger-than?)

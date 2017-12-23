@@ -118,12 +118,14 @@
       [`(lambda ,ids . ,body)
        (define-values (body-env count rest?)
          (args->env ids env stack-depth))
-       (vector 'lambda count rest? (compile-body body body-env (+ stack-depth count)))]
+       (vector 'lambda (count->mask count rest?) (compile-body body body-env (+ stack-depth count)))]
       [`(case-lambda [,idss . ,bodys] ...)
-       (list->vector
-        (cons 'case-lambda (for/list ([ids (in-list idss)]
-                                      [body (in-list bodys)])
-                             (compile-expr `(lambda ,ids . ,body) env stack-depth))))]
+       (define lams (for/list ([ids (in-list idss)]
+                               [body (in-list bodys)])
+                      (compile-expr `(lambda ,ids . ,body) env stack-depth)))
+       (define mask (for/fold ([mask 0]) ([lam (in-list lams)])
+                      (bitwise-ior mask (interp-match lam [#(lambda ,mask) mask]))))
+       (list->vector (list* 'case-lambda mask lams))]
       [`(let ([,ids ,rhss] ...) . ,body)
        (define len (length ids))
        (define body-env
@@ -190,8 +192,7 @@
                           [body (in-list bodys)])
                  (define-values (new-env count rest?)
                    (args->env ids env stack-depth))
-                 (vector count
-                         rest?
+                 (vector (count->mask count rest?)
                          (compile-body body new-env (+ stack-depth count)))))]
       [`(variable-set! ,dest-id ,e ',constance)
        (define dest-var (hash-ref env (unwrap dest-id)))
@@ -273,7 +274,8 @@
 
 ;; ----------------------------------------
 
-(define (interpret-linklet b primitives variable-ref variable-ref/no-check variable-set!)
+(define (interpret-linklet b primitives variable-ref variable-ref/no-check variable-set!
+                           make-arity-wrapper-procedure)
   (interp-match
    b
    [#(,consts ,num-body-vars ,b)
@@ -282,16 +284,18 @@
                          (define stack (list vec))
                          (for ([b (in-vector consts)]
                                [i (in-naturals)])
-                           (vector-set! vec i (interpret-expr b stack primitives void void void))
+                           (vector-set! vec i (interpret-expr b stack primitives void void void void))
                            vec)
                          vec))])
       (lambda args
         (define body-vec (make-vector num-body-vars unsafe-undefined))
         (define base-stack (if consts (list consts) null))
         (define stack (list* body-vec (list->vector args) base-stack))
-        (interpret-expr b stack primitives variable-ref variable-ref/no-check variable-set!)))]))
+        (interpret-expr b stack primitives variable-ref variable-ref/no-check variable-set!
+                         make-arity-wrapper-procedure)))]))
 
-(define (interpret-expr b stack primitives variable-ref variable-ref/no-check variable-set!)
+(define (interpret-expr b stack primitives variable-ref variable-ref/no-check variable-set!
+                        make-arity-wrapper-procedure)
   (define (interpret b stack)
     (cond
       [(integer? b) (list-ref stack b)]
@@ -376,29 +380,35 @@
              [else
               (interp-match
                (car clauses)
-               [#(,count ,rest? ,b)
-                (if (matching-argument-count? count rest? len)
-                    (interpret b (push-stack stack vs count rest?))
+               [#(,mask ,b)
+                (if (matching-argument-count? mask len)
+                    (interpret b (push-stack stack vs mask))
                     (loop (cdr clauses)))])]))]
-        [#(lambda ,count ,rest? ,b)
-         (lambda args
-           (if (matching-argument-count? count rest? (length args))
-               (interpret b (push-stack stack args count rest?))
-               (error "arity error")))]
-        [#(case-lambda)
-         (lambda args
-           (define len (length args))
-           (define n (vector-length b))
-           (let loop ([i 1])
-             (cond
-               [(= i n) (error "arity error")]
-               [else
-                (interp-match
-                 (unsafe-vector*-ref b i)
-                 [#(lambda ,count ,rest? ,b)
-                  (if (matching-argument-count? count rest? len)
-                      (interpret b (push-stack stack args count rest?))
-                      (loop (add1 i)))])])))]
+        [#(lambda ,mask ,b)
+         (make-arity-wrapper-procedure
+          (lambda args
+            (if (matching-argument-count? mask (length args))
+                (interpret b (push-stack stack args mask))
+                (error "arity error")))
+          mask
+          #f)]
+        [#(case-lambda ,mask)
+         (define n (vector-length b))
+         (make-arity-wrapper-procedure
+          (lambda args
+            (define len (length args))
+            (let loop ([i 2])
+              (cond
+                [(= i n) (error "arity error")]
+                [else
+                 (interp-match
+                  (unsafe-vector*-ref b i)
+                  [#(lambda ,mask ,b)
+                   (if (matching-argument-count? mask len)
+                       (interpret b (push-stack stack args mask))
+                       (loop (add1 i)))])])))
+          mask
+          #f)]
         [#(set-variable! ,s ,e ,b ,c)
          (variable-set! (vector-ref (list-ref stack s) e)
                         (interpret b stack)
@@ -412,20 +422,26 @@
          (unsafe-vector*-set! vec e v)])]
       [else b]))
 
-  (define (matching-argument-count? count rest? len)
-    (if rest?
-        (len . >= . (sub1 count))
-        (= len count)))
+  (define (matching-argument-count? mask len)
+    (bitwise-bit-set? mask len))
 
   (interpret b stack))
 
-(define (push-stack stack vals count rest?)
+;; mask has a single bit set or all bits above some bit
+(define (push-stack stack vals mask)
+  (define rest? (negative? mask))
+  (define count (if rest?
+                    (integer-length mask)
+                    (sub1 (integer-length mask))))
   (let loop ([stack stack] [vals vals] [count (if rest? (sub1 count) count)])
     (cond
       [(zero? count)
        (if rest? (cons vals stack) stack)]
       [else
        (loop (cons (car vals) stack) (cdr vals) (sub1 count))])))
+
+(define (count->mask count rest?)
+  (arithmetic-shift (if rest? -1 1) count))
 
 ;; ----------------------------------------
 
@@ -459,5 +475,6 @@
                                                   (continuation-mark-set-first #f 'x 'no))))))
                                     values))
   (define l (interpret-linklet b primitives unbox unbox (lambda (b v c)
-                                                          (set-box! b v))))
+                                                          (set-box! b v))
+                               (lambda (proc mask name) proc)))
   (l 'the-x (box #f)))
