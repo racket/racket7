@@ -3,13 +3,17 @@
   (fields symbol)
   (nongenerative #{keyword dhghafpy3v03qbye1a9lwf-0}))
 
+(define keywords (make-weak-eq-hashtable))
+
 (define/who (string->keyword s)
   (check who string? s)
   (let ([sym (string->symbol s)])
-    (or (getprop sym 'keyword #f)
-        (let ([kw (make-keyword sym)])
-          (putprop sym 'keyword kw)
-          kw))))
+    (let ([e (eq-hashtable-ref keywords sym #f)])
+      (or (and e
+               (ephemeron-value e))
+          (let ([kw (make-keyword sym)])
+            (eq-hashtable-set! keywords sym (make-ephemeron sym kw))
+            kw)))))
 
 (define/who (keyword->string kw)
   (check who keyword? kw)

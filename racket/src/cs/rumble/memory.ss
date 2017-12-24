@@ -212,26 +212,27 @@
                                                    (hashtable-ref prev-stats-objects (car p) #f))
                                         (when use-prev?
                                           (hashtable-set! prev-stats-objects (car p) #t))
-                                        (chez:printf "*== ~a" (object->backreference-string (car p)))
-                                        (let loop ([prev (car p)] [o (cdr p)] [accum '()] [len (or max-path-length +inf.0)])
-                                          (cond
-                                           [(zero? len) (void)]
-                                           [(not o) (set! prev-trace (reverse accum))]
-                                           [(chez:memq o prev-trace)
-                                            => (lambda (l)
-                                                 (chez:printf " <- DITTO\n")
-                                                 (set! prev-trace (append (reverse accum) l)))]
-                                           [else
-                                            (chez:printf " <- ~a" (object->backreference-string
-                                                                   (cond
-                                                                    [(and (pair? o)
-                                                                          (eq? prev (car o)))
-                                                                     (cons 'PREV (cdr o))]
-                                                                    [(and (pair? o)
-                                                                          (eq? prev (cdr o)))
-                                                                     (cons (car o) 'PREV)]
-                                                                    [else o])))
-                                            (loop o (hashtable-ref backreference-ht o #f) (cons o accum) (sub1 len))])))))
+                                        (unless (eqv? 0 max-path-length)
+                                          (chez:printf "*== ~a" (object->backreference-string (car p)))
+                                          (let loop ([prev (car p)] [o (cdr p)] [accum '()] [len (sub1 (or max-path-length +inf.0))])
+                                            (cond
+                                             [(zero? len) (void)]
+                                             [(not o) (set! prev-trace (reverse accum))]
+                                             [(chez:memq o prev-trace)
+                                              => (lambda (l)
+                                                   (chez:printf " <- DITTO\n")
+                                                   (set! prev-trace (append (reverse accum) l)))]
+                                             [else
+                                              (chez:printf " <- ~a" (object->backreference-string
+                                                                     (cond
+                                                                      [(and (pair? o)
+                                                                            (eq? prev (car o)))
+                                                                       (cons 'PREV (cdr o))]
+                                                                      [(and (pair? o)
+                                                                            (eq? prev (cdr o)))
+                                                                       (cons (car o) 'PREV)]
+                                                                      [else o])))
+                                              (loop o (hashtable-ref backreference-ht o #f) (cons o accum) (sub1 len))]))))))
                                   l))
                       backreferences))
           (chez:fprintf (current-error-port) "End Traces\n")))
@@ -251,6 +252,10 @@
        (lambda (o)
          (and (#%$record? o)
               (eq? (record-type-name (#%$record-type-descriptor o)) struct-name))))]
+    [(eq? 'code (car args))
+     #%$code?]
+    [(eq? 'ephemeron (car args))
+     ephemeron-pair?]
     [(symbol? (car args))
      (let ([type (car args)])
        (lambda (o)
