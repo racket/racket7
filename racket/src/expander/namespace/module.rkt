@@ -19,6 +19,7 @@
          namespace->module-namespace
          namespace-install-module-namespace!
          namespace-record-module-instance-attached!
+         module-force-bulk-binding!
          
          namespace->module-linklet-info
          (struct-out module-linklet-info)
@@ -64,6 +65,7 @@
                 min-phase-level ; phase-level
                 max-phase-level ; phase-level
                 phase-level-linklet-info-callback ; phase-level namespace -> module-linklet-info-or-#f
+                force-bulk-binding ; bulk-binding-registry -> any
                 prepare-instance  ; box namespace phase-shift bulk-binding-registry inspector -> any
                 instantiate-phase ; box namespace phase-shift phase-level bulk-binding-registry inspector -> any
                 primitive?      ; inline variable values in compiled code?
@@ -87,6 +89,7 @@
                      #:min-phase-level [min-phase-level 0]
                      #:max-phase-level [max-phase-level 0]
                      #:instantiate-phase-callback instantiate-phase
+                     #:force-bulk-binding-callback [force-bulk-binding void]
                      #:prepare-instance-callback [prepare-instance void]
                      #:phase-level-linklet-info-callback [phase-level-linklet-info-callback
                                                           (lambda (phase-level ns) #f)]
@@ -106,6 +109,7 @@
           language-info
           min-phase-level max-phase-level
           phase-level-linklet-info-callback
+          force-bulk-binding
           prepare-instance
           instantiate-phase
           primitive?
@@ -335,6 +339,12 @@
 (define (namespace-record-module-instance-attached! ns mod-name phase)
   (define mi (namespace->module-instance ns mod-name phase))
   (set-module-instance-attached?! mi #t))
+
+;; Before attaching amodule declaration to a new namespace, make sure
+;; that its syntax deserialization is associated with the original
+;; bulk-binding regsitry
+(define (module-force-bulk-binding! m ns)
+  ((module-force-bulk-binding m) (namespace-bulk-binding-registry ns)))
 
 ;; ----------------------------------------
 

@@ -136,6 +136,7 @@
   (for* ([(mod-name phases) (in-hash todo)]
          [(phase m-ns) (in-hash phases)])
     (define m (namespace->module src-namespace mod-name))
+    (module-force-bulk-binding! m src-namespace)
     (declare-module! dest-namespace m mod-name)
     (when m-ns
       (namespace-record-module-instance-attached! src-namespace mod-name phase)

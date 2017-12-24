@@ -136,6 +136,13 @@
                                 (module-linklet-info (hash-ref phases-h phase-level #f)
                                                      (hash-ref phase-to-link-modules phase-level #f)
                                                      original-self))
+                              #:force-bulk-binding-callback
+                              (lambda (bulk-binding-registry)
+                                ;; Avoids a leak of some namespace's bulk-binding registry into the
+                                ;; deserialized syntax of the module, but module caching can still allow
+                                ;; a namespace's bulk-binding registry to get saved by the module's
+                                ;; deserialized syntax.
+                                (force-syntax-deserialize syntax-literals-data-instance bulk-binding-registry))
                               #:prepare-instance-callback
                               (lambda (data-box ns phase-shift self bulk-binding-registry insp)
                                 (unless (unbox data-box)
