@@ -190,9 +190,9 @@
     (register-bulk-provide! (namespace-bulk-binding-registry ns)
                             mod-name
                             (module-self m)
-                            (module-provides m)))
-  ;; Tell resolver that the module is declared
-  ((current-module-name-resolver) mod-name #f)
+                            (module-provides m))
+    ;; Tell resolver that the module is declared
+    ((current-module-name-resolver) mod-name #f))
   ;; If this module is already instantiated, re-instantiate it
   (when prior-mi
     (define m-ns (module-instance-namespace prior-mi))
@@ -254,7 +254,7 @@
   (define m-ns (struct-copy namespace ns
                             [mpi (namespace-mpi existing-m-ns)]
                             [source-name (namespace-source-name existing-m-ns)]
-                            [root-expand-ctx (namespace-root-expand-ctx existing-m-ns)]
+                            [root-expand-ctx (box (unbox (namespace-root-expand-ctx existing-m-ns)))]
                             [phase (namespace-phase existing-m-ns)]
                             [0-phase (namespace-0-phase existing-m-ns)]
                             [phase-to-namespace (make-hasheqv)]
