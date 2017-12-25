@@ -656,8 +656,8 @@
                  (ffi-lib-handle lib)
                  (ffi-lib-name lib)
                  name
-                 (lambda (addr)
-                   (make-ffi-obj addr #f lib name)))))
+                 (lambda (ptr)
+                   (make-ffi-obj (ffi-ptr->address ptr) #f lib name)))))
 
 (define (ffi-obj-name obj)
   (cpointer/ffi-obj-name obj))
@@ -682,9 +682,14 @@
       (format "~a: not yet ready\n  name: ~a" who name)
       (current-continuation-marks)))))
 
-(define (set-ffi-get-lib-and-obj! do-ffi-get-lib do-ffi-get-obj)
+(define ffi-ptr->address
+  ;; Placeholder implementation
+  (lambda (p) p))
+
+(define (set-ffi-get-lib-and-obj! do-ffi-get-lib do-ffi-get-obj do-ffi-ptr->address)
   (set! ffi-get-lib do-ffi-get-lib)
-  (set! ffi-get-obj do-ffi-get-obj))
+  (set! ffi-get-obj do-ffi-get-obj)
+  (set! ffi-ptr->address do-ffi-ptr->address))
 
 ;; ----------------------------------------
 

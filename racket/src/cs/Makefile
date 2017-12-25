@@ -1,13 +1,13 @@
 RACKET = ../../bin/racket
 SCHEME = scheme
 
-# Controls whether base layers are built as unsafe:
+# Controls whether Racket layers are built as unsafe:
 UNSAFE_COMP = # --unsafe
 
-# Controls whether base layers are built as unsafe:
+# Controls whether Racket layers are built with expression-level debugging:
 DEBUG_COMP = # --debug
 
-# Controls whether rumble is built as unsafe:
+# Controls whether Rumble is built as unsafe:
 RUMBLE_UNSAFE_COMP = --unsafe
 
 COMPILE_FILE = $(SCHEME) --script compile-file.ss $(UNSAFE_COMP) $(DEBUG_COMP)

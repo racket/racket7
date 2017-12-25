@@ -28,7 +28,7 @@
 
   ;; ----------------------------------------
 
-  (module (|#%rktio-instance|)
+  (module (|#%rktio-instance| ptr->address)
     (meta define (convert-type t)
           (syntax-case t (ref *ref rktio_bool_t rktio_const_string_t)
             [(ref . _) #'uptr]
@@ -71,37 +71,54 @@
          (with-syntax ([(old-type ...) (map convert-type #'(old-type ...))])
            #'(define-ftype type (struct [field old-type] ...)))]))
 
-    (define-syntax (let-wrappers stx)
-      ;; When an argument has type `rktio_const_string_t`, add an
-      ;; explicit NUL terminator byte; when an argument has a
-      ;; `nullable` wrapper, then add a #f -> 0 conversion
+    ;; Wrap foreign-pointer addressed in a record so that
+    ;; the value can be finalized
+    (define-record ptr (address))
+    (define (ptr->address v) (if (eqv? v NULL) v (ptr-address v)))
+    (define (address->ptr v) (if (eqv? v NULL) v (make-ptr v)))
+
+    (define-syntax (let-unwrappers stx)
+      ;; Unpack plain pointers; when an argument has type
+      ;; `rktio_const_string_t`, add an explicit NUL terminator byte;
+      ;; when an argument has a `nullable` wrapper, then add a #f -> 0
+      ;; conversion
       (syntax-case stx (rktio_const_string_t ref nullable)
         [(_ () body) #'body]
         [(_ ([rktio_const_string_t arg-name] . args) body)
          #'(let ([arg-name (add-nul-terminator arg-name)])
-             (let-wrappers args body))]
-        [(_ ([(nullable type) arg-name] . args) body)
-         #'(let ([arg-name (or arg-name 0)])
-             (let-wrappers args body))]
+             (let-unwrappers args body))]
+        [(_ ([(ref (nullable type)) arg-name] . args) body)
+         #'(let ([arg-name (ptr->address (or arg-name NULL))])
+             (let-unwrappers args body))]
         [(_ ([(ref type) arg-name] . args) body)
-         #'(let-wrappers ([type arg-name] . args) body)]
+         #'(let ([arg-name (ptr->address arg-name)])
+             (let-unwrappers args body))]
+        [(_ ([(*ref rktio_const_string_t) arg-name] . args) body)
+         #'(let ([arg-name (ptr->address arg-name)])
+             (let-unwrappers args body))]
         [(_ (_ . args) body)
-         #'(let-wrappers args body)]))
+         #'(let-unwrappers args body)]))
+
     (define (add-nul-terminator bstr)
       (and bstr (bytes-append bstr '#vu8(0))))
 
+    (define-syntax (wrap-result stx)
+      (syntax-case stx (ref)
+        [(_ (ref _) v) #'(address->ptr v)]
+        [(_ _ v) #'v]))
+    
     (meta define (convert-function stx)
           (syntax-case stx ()
-            [(_ ret-type name ([orig-arg-type arg-name] ...))
-             (with-syntax ([ret-type (convert-type #'ret-type)]
+            [(_ orig-ret-type name ([orig-arg-type arg-name] ...))
+             (with-syntax ([ret-type (convert-type #'orig-ret-type)]
                            [(arg-type ...) (map convert-type #'(orig-arg-type ...))])
                #'(let ([proc (foreign-procedure (rktio-lookup 'name)
                                                 (arg-type ...)
                                                 ret-type)])
                    (lambda (arg-name ...)
-                     (let-wrappers
+                     (let-unwrappers
                       ([orig-arg-type arg-name] ...)
-                      (proc arg-name ...)))))]))
+                      (wrap-result orig-ret-type (proc arg-name ...))))))]))
 
     (define-syntax (define-function stx)
       (syntax-case stx ()
@@ -149,21 +166,21 @@
     (include "../io/compiled/rktio.rktl")
 
     (define (rktio_filesize_ref fs)
-      (ftype-ref rktio_filesize_t () (make-ftype-pointer rktio_filesize_t fs)))
+      (ftype-ref rktio_filesize_t () (make-ftype-pointer rktio_filesize_t (ptr->address fs))))
     (define (rktio_timestamp_ref fs)
-      (ftype-ref rktio_timestamp_t () (make-ftype-pointer rktio_timestamp_t fs)))
+      (ftype-ref rktio_timestamp_t () (make-ftype-pointer rktio_timestamp_t (ptr->address fs))))
     (define (rktio_is_timestamp v)
       (let ([radix (arithmetic-shift 1 (sub1 (* 8 (ftype-sizeof rktio_timestamp_t))))])
         (<= (- radix) v (sub1 radix))))
 
     (define (rktio_recv_length_ref fs)
-      (ftype-ref rktio_length_and_addrinfo_t (len) (make-ftype-pointer rktio_length_and_addrinfo_t fs) 0))
+      (ftype-ref rktio_length_and_addrinfo_t (len) (make-ftype-pointer rktio_length_and_addrinfo_t (ptr->address fs)) 0))
 
     (define (rktio_recv_address_ref fs)
-      (ftype-ref rktio_length_and_addrinfo_t (address) (make-ftype-pointer rktio_length_and_addrinfo_t fs) 0))
+      (ftype-ref rktio_length_and_addrinfo_t (address) (make-ftype-pointer rktio_length_and_addrinfo_t (ptr->address fs)) 0))
 
     (define (rktio_identity_to_vector p)
-      (let ([p (make-ftype-pointer rktio_identity_t p)])
+      (let ([p (make-ftype-pointer rktio_identity_t (ptr->address p))])
         (vector
          (ftype-ref rktio_identity_t (a) p)
          (ftype-ref rktio_identity_t (b) p)
@@ -173,7 +190,7 @@
          (ftype-ref rktio_identity_t (c_bits) p))))
     
     (define (rktio_convert_result_to_vector p)
-      (let ([p (make-ftype-pointer rktio_convert_result_t p)])
+      (let ([p (make-ftype-pointer rktio_convert_result_t (ptr->address p))])
         (vector
          (ftype-ref rktio_convert_result_t (in_consumed) p)
          (ftype-ref rktio_convert_result_t (out_produced) p)
@@ -184,10 +201,10 @@
           (ptr-ref p to)))
 
     (define (rktio_to_bytes fs)
-      (cast fs _uintptr _bytes))
+      (cast (ptr->address fs) _uintptr _bytes))
 
     (define (rktio_to_shorts fs)
-      (cast fs _uintptr _short_bytes))
+      (cast (ptr->address fs) _uintptr _short_bytes))
 
     ;; Unlike `rktio_to_bytes`, frees the array and strings
     (define rktio_to_bytes_list
@@ -200,11 +217,11 @@
             [(and len (fx= i len))
              '()]
             [else
-             (let ([bs (foreign-ref 'uptr lls (* i (foreign-sizeof 'uptr)))])
-               (if (not (eqv? 0 bs))
+             (let ([bs (foreign-ref 'uptr (ptr->address lls) (* i (foreign-sizeof 'uptr)))])
+               (if (not (eqv? NULL bs))
                    (cons (begin0
                           (cast bs _uintptr _bytes)
-                          (rktio_free bs))
+                          (rktio_free (make-ptr bs)))
                          (loop (add1 i)))
                    '()))]))
          (rktio_free lls))]))
@@ -226,29 +243,29 @@
                  [else
                   (foreign-set! 'unsigned-8 s j (bytes-ref bstr j))
                   (loop (fx+ 1 j))]))
-              (foreign-set! 'uptr p (fx* i (foreign-sizeof'uptr)) s)
+              (foreign-set! 'uptr p (fx* i (foreign-sizeof 'uptr)) s)
               (loop (cdr bstrs) (fx+ 1 i)))]))
-        p))
+        (address->ptr p)))
 
     (define (rktio_free_bytes_list lls len)
       (rktio_to_bytes_list lls len)
       (void))
 
-    (define (null-to-false v) (if (eqv? v 0) #f v))
+    (define (null-to-false v) (if (eqv? v NULL) #f v))
 
     (define (rktio_process_result_stdin_fd r)
-      (null-to-false (ftype-ref rktio_process_result_t (stdin_fd) (make-ftype-pointer rktio_process_result_t r))))
+      (null-to-false (address->ptr (ftype-ref rktio_process_result_t (stdin_fd) (make-ftype-pointer rktio_process_result_t (ptr->address r))))))
     (define (rktio_process_result_stdout_fd r)
-      (null-to-false (ftype-ref rktio_process_result_t (stdout_fd) (make-ftype-pointer rktio_process_result_t r))))
+      (null-to-false (address->ptr (ftype-ref rktio_process_result_t (stdout_fd) (make-ftype-pointer rktio_process_result_t (ptr->address r))))))
     (define (rktio_process_result_stderr_fd r)
-      (null-to-false (ftype-ref rktio_process_result_t (stderr_fd) (make-ftype-pointer rktio_process_result_t r))))
+      (null-to-false (address->ptr (ftype-ref rktio_process_result_t (stderr_fd) (make-ftype-pointer rktio_process_result_t (ptr->address r))))))
     (define (rktio_process_result_process r)
-      (ftype-ref rktio_process_result_t (process) (make-ftype-pointer rktio_process_result_t r)))
+      (address->ptr (ftype-ref rktio_process_result_t (process) (make-ftype-pointer rktio_process_result_t (ptr->address r)))))
 
     (define (rktio_status_running r)
-      (ftype-ref rktio_status_t (running) (make-ftype-pointer rktio_status_t r)))
+      (ftype-ref rktio_status_t (running) (make-ftype-pointer rktio_status_t (ptr->address r))))
     (define (rktio_status_result r)
-      (ftype-ref rktio_status_t (result) (make-ftype-pointer rktio_status_t r)))
+      (ftype-ref rktio_status_t (result) (make-ftype-pointer rktio_status_t (ptr->address r))))
 
     (define (rktio_do_install_os_signal_handler rktio)
       (rktio_install_os_signal_handler rktio))
@@ -366,4 +383,4 @@
                              (1/log-message (|#%app| 1/current-logger) level str #f)))
   (set-error-display-eprintf! (lambda (fmt . args)
                                 (apply 1/fprintf (|#%app| 1/current-error-port) fmt args)))
-  (set-ffi-get-lib-and-obj! ffi-get-lib ffi-get-obj))
+  (set-ffi-get-lib-and-obj! ffi-get-lib ffi-get-obj ptr->address))
