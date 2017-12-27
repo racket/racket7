@@ -65,6 +65,10 @@
                      (s-expr-leftover-size v size))]
       [(prefab-struct-key v)
        (s-expr-leftover-size (struct->vector v) size)]
+      [(hash? v)
+       (for/fold ([size (sub1 size)]) ([(k v) (in-hash v)]
+                                       #:break (size . <= . 0))
+         (s-expr-leftover-size v (s-expr-leftover-size k size)))]
       [else (sub1 size)]))
 
   (match e

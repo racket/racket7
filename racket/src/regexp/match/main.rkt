@@ -110,6 +110,7 @@
                             #:search-offset [search-offset orig-start-offset]
                             #:mode mode
                             #:in-port-ok? [in-port-ok? #t]
+                            #:in-path-ok? [in-path-ok? #t]
                             #:peek? [peek? #f] #:immediate-only? [immediate-only? #f]
                             #:progress-evt [progress-evt #f]
                             #:end-bytes? [end-bytes? #f]
@@ -120,7 +121,7 @@
               [(string? orig-rx) (make-regexp who orig-rx #f #f #f)]
               [(bytes? orig-rx) (make-regexp who orig-rx #f #t #f)]
               [else (raise-argument-error who "(or/c regexp? byte-regexp? string? bytes?)" orig-rx)]))
-  (define in (if (path? orig-in) (path->bytes orig-in) orig-in))
+  (define in (if (and in-path-ok? (path? orig-in)) (path->bytes orig-in) orig-in))
   (unless (or (and (bytes? in) (not peek?))
               (and (string? in) (not peek?))
               (and in-port-ok? (input-port? in)))
@@ -128,6 +129,7 @@
                           (cond
                            [peek? "input-port?"]
                            [in-port-ok? "(or/c bytes? string? input-port? path?)"]
+                           [in-path-ok? "(or/c bytes? string? path?)"]
                            [else "(or/c bytes? string?)"])
                           orig-in))
   

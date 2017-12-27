@@ -23,8 +23,8 @@
        [else
         (define sub (car subs))
         (check-build-path-arg who sub)
-        (loop  (argument->convention sub convention who #:first? #f)
-               (cdr subs))])))
+        (loop (argument->convention sub convention who #:first? #f)
+              (cdr subs))])))
   (path (append-path-parts convention who base subs)
         convention))
 
@@ -57,7 +57,7 @@
   (cond
    [(path? p) (check (path-convention p))]
    [(string? p) (check (system-path-convention-type))]
-   [else convention]))
+   [else (or convention (system-path-convention-type))]))
 
 ;; ----------------------------------------
 

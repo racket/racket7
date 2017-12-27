@@ -349,12 +349,15 @@
 ;; Unlike traditional Racket, copies when converting from C:
 (define-ctype _bytes 'void* 'bytes
   (lambda (x) x)
-  (lambda (x) (let loop ([i 0])
-                (if (fx= 0 (foreign-ref 'unsigned-8 x i))
-                    (let ([bstr (make-bytes i)])
-                      (memcpy* bstr 0 x 0 i)
-                      bstr)
-                    (loop (add1 i))))))
+  (lambda (x)
+    (if (eqv? x 0)
+        #f
+        (let loop ([i 0])
+          (if (fx= 0 (foreign-ref 'unsigned-8 x i))
+              (let ([bstr (make-bytes i)])
+                (memcpy* bstr 0 x 0 i)
+                bstr)
+              (loop (add1 i)))))))
 
 (define-ctype _short_bytes 'void* 'bytes
   (lambda (x) x)
@@ -960,7 +963,8 @@
    [(eq? mode 'atomic-interior)
     ;; This is not quite the same as traditional Racket, because
     ;; a finalizer is associated with the cpointer (as opposed to
-    ;; the address that is wrapped by the cpointer)
+    ;; the address that is wrapped by the cpointer). Also, interior
+    ;; pointers are not allowed as GCable pointers.
     (let* ([bstr (make-bytevector size)]
            [p (make-cpointer bstr #f)])
       (lock-object bstr)

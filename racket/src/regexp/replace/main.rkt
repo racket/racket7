@@ -49,6 +49,7 @@
     (define poss
       (drive-regexp-match who rx in 0 #:search-offset search-pos #f #f prefix
                           #:in-port-ok? #f
+                          #:in-path-ok? #f
                           #:mode 'positions))
     
     (define (recur)

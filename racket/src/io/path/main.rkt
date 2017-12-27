@@ -86,7 +86,7 @@
                               "explanation" "path can be split, is not relative, or names a special element"))]
     [(windows)
      (error who "fixme")])
-  (do-bytes->path-element (string->bytes/locale s #\?)
+  (do-bytes->path-element (string->bytes/locale s (char->integer #\?))
                           (system-path-convention-type)
                           who
                           s))
