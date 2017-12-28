@@ -241,3 +241,51 @@
   (check who integer? n)
   (check who integer? m)
   (values (quotient n m) (remainder n m)))
+
+(define/who gcd
+  (case-lambda
+   [(n)
+    (check who rational? n)
+    n]
+   [(n m)
+    (check who rational? n)
+    (check who rational? m)
+    (cond
+     [(and (integer? n)
+           (integer? m))
+      (chez:gcd n m)]
+     [else
+      (let ([n-n (numerator n)]
+            [n-d (denominator n)]
+            [m-n (numerator m)]
+            [m-d (denominator m)])
+        (/ (chez:gcd n-n m-n)
+           (chez:lcm n-d m-d)))])]
+   [(n . ms)
+    (check who rational? n)
+    (let loop ([n n] [ms ms])
+      (cond
+       [(null? ms) n]
+       [else (loop (gcd n (car ms)) (cdr ms))]))]))
+
+(define/who lcm
+  (case-lambda
+   [(n)
+    (check who rational? n)
+    n]
+   [(n m)
+    (check who rational? n)
+    (check who rational? m)
+    (cond
+     [(and (integer? n)
+           (integer? m))
+      (chez:lcm n m)]
+     [else
+      (let ([d (gcd n m)])
+        (* n (/ m d)))])]
+   [(n . ms)
+    (check who rational? n)
+    (let loop ([n n] [ms ms])
+      (cond
+       [(null? ms) n]
+       [else (loop (lcm n (car ms)) (cdr ms))]))]))

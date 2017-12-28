@@ -60,7 +60,7 @@
 ;; An import ABI is a list of list of booleans, parallel to the
 ;; linklet imports, where #t to means that a value is expected, and #f
 ;; means that a variable (which boxes a value) is expected
-(define (schemify-linklet lk serializable? for-jitify?
+(define (schemify-linklet lk serializable? for-jitify? allow-set!-undefined?
                           annotate unannotate prim-knowns get-import-knowns)
   (define (im-int-id id) (unwrap (if (pair? id) (cadr id) id)))
   (define (im-ext-id id) (unwrap (if (pair? id) (car id) id)))
@@ -91,7 +91,7 @@
      ;; Schemify the body, collecting information about defined names:
      (define-values (new-body defn-info mutated)
        (schemify-body* bodys/constants-lifted annotate unannotate prim-knowns imports exports
-                       for-jitify?))
+                       for-jitify? allow-set!-undefined?))
      (values
       ;; Build `lambda` with schemified body:
       (make-let*
@@ -126,10 +126,10 @@
 
 (define (schemify-body l annotate unannotate prim-knowns imports exports)
   (define-values (new-body defn-info mutated)
-    (schemify-body* l annotate unannotate prim-knowns imports exports #f))
+    (schemify-body* l annotate unannotate prim-knowns imports exports #f #f))
   new-body)
 
-(define (schemify-body* l annotate unannotate prim-knowns imports exports for-jitify?)
+(define (schemify-body* l annotate unannotate prim-knowns imports exports for-jitify? allow-set!-undefined?)
   ;; Various conversion steps need information about mutated variables,
   ;; where "mutated" here includes visible implicit mutation, such as
   ;; a variable that might be used before it is defined:
@@ -161,7 +161,8 @@
        [else
         (define form (car l))
         (define schemified (schemify form annotate unannotate
-                                     prim-knowns knowns mutated imports exports))
+                                     prim-knowns knowns mutated imports exports
+                                     allow-set!-undefined?))
         (match form
           [`(define-values ,ids ,_)
            (append
@@ -214,7 +215,7 @@
 
 ;; Schemify `let-values` to `let`, etc., and
 ;; reorganize struct bindings.
-(define (schemify v annotate unannotate prim-knowns knowns mutated imports exports)
+(define (schemify v annotate unannotate prim-knowns knowns mutated imports exports allow-set!-undefined?)
   (let schemify/knowns ([knowns knowns] [v v])
     (let schemify ([v v])
       (annotate
@@ -405,7 +406,7 @@
           (define int-id (unwrap id))
           (define ex-id (hash-ref exports int-id #f))
           (if ex-id
-              `(variable-set! ,ex-id ,(schemify rhs) '#f)
+              `(,(if allow-set!-undefined? 'variable-set! 'variable-set!/check-undefined) ,ex-id ,(schemify rhs) '#f)
               `(set! ,id ,(schemify rhs)))]
          [`(variable-reference-constant? (#%variable-reference ,id))
           (let ([id (unwrap id)])

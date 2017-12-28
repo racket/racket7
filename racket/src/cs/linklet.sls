@@ -46,6 +46,7 @@
           
           ;; schemify glue:
           variable-set!
+          variable-set!/check-undefined
           variable-ref
           variable-ref/no-check
           make-instance-variable-reference
@@ -377,6 +378,7 @@
          (schemify-linklet (show "linklet" c)
                            serializable?
                            jitify-mode?
+                           (|#%app| compile-allow-set!-undefined)
                            convert-to-annotation
                            unannotate
                            prim-knowns
@@ -553,16 +555,15 @@
       (when constance
         (set-variable-constance! var constance))]))
 
+  (define (variable-set!/check-undefined var val constance)
+    (when (eq? (variable-val var) unsafe-undefined)
+      (raise-undefined var #t))
+    (variable-set! var val constance))
+
   (define (variable-ref var)
     (define v (variable-val var))
     (if (eq? v unsafe-undefined)
-        (raise
-         (|#%app|
-          exn:fail:contract:variable
-          (string-append (symbol->string (variable-name var))
-                         ": undefined;\n cannot reference undefined identifier")
-          (current-continuation-marks)
-          (variable-name var)))
+        (raise-undefined var #f)
         v))
 
   (define (variable-ref/no-check var)
@@ -583,6 +584,21 @@
                  var)))
          syms
          imports-abi))
+
+  (define (raise-undefined var set?)
+    (raise
+     (|#%app|
+      exn:fail:contract:variable
+      (cond
+       [set?
+        (string-append "set!: assignment disallowed;\n"
+                       " cannot set variable before its definition\n"
+                       "  variable: " (symbol->string (variable-name var)))]
+       [else
+        (string-append (symbol->string (variable-name var))
+                       ": undefined;\n cannot reference undefined identifier")])
+      (current-continuation-marks)
+      (variable-name var))))
 
   ;; Create the variables needed for a linklet's exports
   (define (create-variables inst syms)
@@ -1183,6 +1199,7 @@
   (define schemify-table
     (primitive-table
      variable-set!
+     variable-set!/check-undefined
      variable-ref
      variable-ref/no-check
      make-instance-variable-reference

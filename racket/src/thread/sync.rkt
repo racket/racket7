@@ -342,7 +342,7 @@
           (cond
             [(eq? inner-new-evt always-evt)
              (syncing-done! s sr)
-             (make-result-thunk sr (list (void)) success-k)]
+             (make-result-thunk sr (list always-evt) success-k)]
             [else
              (lambda () (loop sr (add1 retries) polled-all-so-far?))])]
          [(control-state-evt? new-evt)

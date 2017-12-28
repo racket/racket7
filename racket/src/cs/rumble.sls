@@ -337,8 +337,6 @@
 
           symbol<?
 
-          even? odd?
-
           exact-integer?
           exact-nonnegative-integer?
           exact-positive-integer?
@@ -368,6 +366,8 @@
           flreal-part
           flimag-part
           make-flrectangular
+          gcd
+          lcm
 
           random
           random-seed

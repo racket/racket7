@@ -40,12 +40,12 @@
                 (unless (and (procedure? wrap)
                              (procedure-arity-includes? wrap 1))
                   (raise-result-error who "(procedure-arity-includes/c 1)" wrap))
-                (wrap-evt new-evt
-                          (lambda (r)
-                            (let ([new-r (wrap r)])
-                              (when chaperone?
-                                (check-chaperone-of what new-r r))
-                              new-r)))]
+                (handle-evt new-evt
+                            (lambda (r)
+                              (let ([new-r (wrap r)])
+                                (when chaperone?
+                                  (check-chaperone-of what new-r r))
+                                new-r)))]
                [args
                 (raise
                  (exn:fail:contract:arity

@@ -71,14 +71,18 @@
         (define c (rktio_converter_open rktio
                                         (encoding->bytes who to-str)
                                         (encoding->bytes who from-str)))
-        (when (rktio-error? c)
-          (end-atomic)
-          (raise-rktio-error who c "failed"))
-        (define converter (bytes-converter c #f))
-        (define cref (unsafe-custodian-register (current-custodian) converter close-converter #f #f))
-        (set-bytes-converter-custodian-reference! converter cref)
-        (end-atomic)
-        converter])]))
+        (cond
+          [(rktio-error? c)
+           (end-atomic)
+           #;
+           (raise-rktio-error who c "failed")
+           #f]
+          [else
+           (define converter (bytes-converter c #f))
+           (define cref (unsafe-custodian-register (current-custodian) converter close-converter #f #f))
+           (set-bytes-converter-custodian-reference! converter cref)
+           (end-atomic)
+           converter])])]))
 
 ;; ----------------------------------------
 

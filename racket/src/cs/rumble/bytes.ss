@@ -71,7 +71,26 @@
 
 (define bytes-copy #2%bytevector-copy)
 
-(define bytes=? bytevector=?)
+(define-syntax-rule (define-bytes-compare name do-name)
+  (define/who name
+    (case-lambda
+     [(a b)
+      (check who bytes? a)
+      (check who bytes? b)
+      (do-name a b)]
+     [(a b . l)
+      (check who bytes? a)
+      (check who bytes? b)
+      (and (bytevector=? a b)
+           (let loop ([a b] [l l])
+             (cond
+              [(null? l) #t]
+              [else (let ([b (car l)])
+                      (check who bytes? b)
+                      (and (do-name a b)
+                           (loop b (cdr l))))])))])))
+
+(define-bytes-compare bytes=? bytevector=?)
 
 (define (do-bytes<? a b)
   (define alen (bytes-length a))
@@ -105,25 +124,13 @@
          [(fx= va vb) (loop (fx1+ i))]
          [else #f]))])))
 
-(define/who (bytes<? a b)
-  (check who bytes? a)
-  (check who bytes? b)
-  (do-bytes<? a b))
+(define (do-bytes>=? a b) (not (do-bytes<? a b)))
+(define (do-bytes<=? a b) (not (do-bytes>? a b)))
 
-(define/who (bytes>? a b)
-  (check who bytes? a)
-  (check who bytes? b)
-  (do-bytes>? a b))
-
-(define/who (bytes>=? a b)
-  (check who bytes? a)
-  (check who bytes? b)
-  (not (do-bytes<? a b)))
-
-(define/who (bytes<=? a b)
-  (check who bytes? a)
-  (check who bytes? b)
-  (not (do-bytes>? a b)))
+(define-bytes-compare bytes<? do-bytes<?)
+(define-bytes-compare bytes<=? do-bytes<=?)
+(define-bytes-compare bytes>? do-bytes>?)
+(define-bytes-compare bytes>=? do-bytes>=?)
 
 (define/who bytes-append
   (case-lambda 

@@ -76,4 +76,6 @@
                    [vector-sort! chez:vector-sort!]
                    [vector-sort chez:vector-sort]
                    [call-with-input-file chez:call-with-input-file]
-                   [read-char chez:read-char]))))
+                   [read-char chez:read-char]
+                   [gcd chez:gcd]
+                   [lcm chez:lcm]))))

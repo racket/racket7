@@ -113,7 +113,8 @@
        ;; Field count must be <= total-field-count
        (>= total-field-count n)
        ;; Initial mutables vector (if any) must be in range
-       ;; for the target field count
+       ;; for the target field count; any later immutables vector
+       ;; has been checked already by `prefab-key?`
        (let* ([k (cdr k)]
               [auto (and (pair? (car k))
                          (car k))]
@@ -123,7 +124,6 @@
          (or (null? k)
              (not (vector? (car k)))
              (let* ([n (- total-field-count
-                          n
                           (if auto
                               (car auto)
                               0))]
