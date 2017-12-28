@@ -855,7 +855,7 @@
   (current-mark-stack
    (make-mark-stack-frame (current-mark-stack)
                           #f
-                          (hasheq key val)
+                          (intmap-set empty-hasheq key val)
                           #f))
   (proc)
   ;; If we're in an escape process, then `(current-mark-stack)` might not
@@ -1663,11 +1663,12 @@
               (lambda () (apply values args))))))))))
 
 (define (call-winder-thunk who thunk)
-  (end-uninterrupted who)
   (call/cm/nontail
    break-enabled-key (make-thread-cell #f #t)
-   thunk)
-  (start-uninterrupted who))
+   (lambda ()
+     (end-uninterrupted who)
+     (thunk)
+     (start-uninterrupted who))))
 
 (define (wind-in winders k)
   (do-wind 'dw-pre winders winder-pre k))

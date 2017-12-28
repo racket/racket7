@@ -1,7 +1,8 @@
 ;; A "thread cell" is actually an "engine cell" at the Rumble level
 
 (define-record-type (thread-cell create-thread-cell thread-cell?)
-  (fields default-value preserved?))
+  (fields (mutable default-value) ; declare mutable so allocated each time
+          preserved?))
 
 (define make-thread-cell
   (case-lambda
