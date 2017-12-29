@@ -44,24 +44,25 @@
       'full])]))
 
 (define (make-output-port/max o max-length)
-  (cond
-   [max-length
-    (make-core-output-port
-     #:name (object-name o)
-     #:data (lambda () max-length)
-     #:evt o
-     #:write-out
-     (lambda (src-bstr src-start src-end nonblock? enable-break? copy?)
-       (define len (- src-end src-start))
-       (unless (eq? max-length 'full)
-         (define write-len (min len max-length))
-         (define wrote-len (write-bytes src-bstr o src-start (+ src-start write-len)))
-         (if (= max-length wrote-len)
-             (set! max-length 'full)
-             (set! max-length (- max-length wrote-len))))
-       len)
-     #:close void)]
-   [else o]))
+  (make-core-output-port
+   #:name (object-name o)
+   #:data (lambda () max-length)
+   #:evt o
+   #:write-out
+   (lambda (src-bstr src-start src-end nonblock? enable-break? copy?)
+     (cond
+       [max-length
+        (define len (- src-end src-start))
+        (unless (eq? max-length 'full)
+          (define write-len (min len max-length))
+          (define wrote-len (write-bytes src-bstr o src-start (+ src-start write-len)))
+          (if (= max-length wrote-len)
+              (set! max-length 'full)
+              (set! max-length (- max-length wrote-len))))
+        len]
+       [else
+        (write-bytes src-bstr o src-start src-end)]))
+   #:close void))
 
 (define (output-port/max-max-length o max-length)
   (and max-length

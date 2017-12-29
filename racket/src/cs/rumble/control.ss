@@ -1384,25 +1384,27 @@
   (cond
    [(and (impersonator? k)
          (authentic-continuation-mark-key? (impersonator-val k)))
-    (let loop ([k k])
-      (cond
-       [(or (continuation-mark-key-impersonator? k)
-            (continuation-mark-key-chaperone? k))
-        (let ([get (if (continuation-mark-key-impersonator? k)
-                       (continuation-mark-key-impersonator-get k)
-                       (continuation-mark-key-chaperone-get k))]
-              [get-rest (loop (impersonator-next k))])
-          (lambda (v)
-            (let* ([v (get-rest v)]
-                   [new-v (|#%app| get v)])
-              (unless (or (continuation-mark-key-impersonator? k)
-                          (chaperone-of? new-v v))
-                (raise-chaperone-error who "value" v new-v))
-              new-v)))]
-       [(impersonator? k)
-        (loop (impersonator-next k))]
-       [else
-        (lambda (v) v)]))]
+    (values
+     (impersonator-val k)
+     (let loop ([k k])
+       (cond
+        [(or (continuation-mark-key-impersonator? k)
+             (continuation-mark-key-chaperone? k))
+         (let ([get (if (continuation-mark-key-impersonator? k)
+                        (continuation-mark-key-impersonator-get k)
+                        (continuation-mark-key-chaperone-get k))]
+               [get-rest (loop (impersonator-next k))])
+           (lambda (v)
+             (let* ([v (get-rest v)]
+                    [new-v (|#%app| get v)])
+               (unless (or (continuation-mark-key-impersonator? k)
+                           (chaperone-of? new-v v))
+                 (raise-chaperone-error who "value" v new-v))
+               new-v)))]
+        [(impersonator? k)
+         (loop (impersonator-next k))]
+        [else
+         (lambda (v) v)])))]
    [else
     (values k (lambda (v) v))]))
 

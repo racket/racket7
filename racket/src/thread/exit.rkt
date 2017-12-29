@@ -26,4 +26,4 @@
 
 (define (exit [v #t])
   ((exit-handler) v)
-  (force-exit v))
+  (void))
