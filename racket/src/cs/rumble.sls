@@ -35,7 +35,7 @@
           continuation-mark-set->list*
           continuation-mark-set->context
           current-continuation-marks
-          continuation-marks
+          (rename [continuation-marks rumble:continuation-marks]) ; wrapped at threads layer
           continuation-mark-set?
           make-continuation-mark-key
           continuation-mark-key?

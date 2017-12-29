@@ -156,6 +156,8 @@
                   break-enabled-key
                   'set-break-enabled-transition-hook!
                   void
+                  'continuation-marks
+                  continuation-marks ; doesn't work on engines
                   'poll-will-executors
                   poll-will-executors
                   'make-will-executor

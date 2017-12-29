@@ -279,11 +279,11 @@
             (lambda (k)
               (with-continuation-mark
                   'x 2
-                  (continuation-mark-set->list (continuation-marks k) 'x)))))
+                  (continuation-mark-set->list (rumble:continuation-marks k) 'x)))))
        '(1))
 
-(check-error (continuation-marks (call-with-escape-continuation
-                                  (lambda (k) k)))
+(check-error (rumble:continuation-marks (call-with-escape-continuation
+                                         (lambda (k) k)))
              "continuation application: escape continuation not in the current continuation")
 
 ;; ----------------------------------------

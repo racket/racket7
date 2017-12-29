@@ -30,6 +30,7 @@
         root-continuation-prompt-tag
         break-enabled-key
         set-break-enabled-transition-hook!
+        [continuation-marks host:continuation-marks]
 
         [poll-will-executors host:poll-will-executors]
         [make-will-executor host:make-will-executor]

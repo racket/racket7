@@ -33,7 +33,7 @@
     (host:poll-will-executors)
     (check-external-events 'fast)
     (when (and (all-threads-poll-done?)
-               (maybe-future-work?))
+               (waiting-on-external-or-idle?))
       (or (check-external-events 'slow)
           (post-idle)
           (process-sleep)))
@@ -74,7 +74,8 @@
          [(zero? (current-atomic))
           (accum-cpu-time! t start)
           (current-thread #f)
-          (set-thread-engine! t e)
+          (unless (eq? (thread-engine t) 'done)
+            (set-thread-engine! t e))
           (select-thread!)]
          [else
           ;; Swap out when the atomic region ends:
@@ -147,7 +148,7 @@
   (= (hash-count poll-done-threads)
      num-threads-in-groups))
 
-(define (maybe-future-work?)
+(define (waiting-on-external-or-idle?)
   (or (positive? num-threads-in-groups)
       (sandman-any-sleepers?)
       (any-idle-waiters?)))

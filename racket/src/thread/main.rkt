@@ -15,6 +15,7 @@
          "custodian.rkt"
          "alarm.rkt"
          "nested-thread.rkt"
+         "continuation-mark.rkt"
          "api.rkt"
          "will-executor.rkt"
          "exit.rkt"
@@ -56,7 +57,7 @@
          make-thread-group
          thread-group?
          current-thread-group
-         
+
          make-semaphore
          semaphore-post
          semaphore-wait
@@ -140,6 +141,8 @@
          break-enabled
          check-for-break
          break-enabled-key
+
+         continuation-marks
 
          unsafe-start-atomic
          unsafe-end-atomic

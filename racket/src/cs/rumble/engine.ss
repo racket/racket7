@@ -41,7 +41,11 @@
                    init-break-enabled-cell)))
 
 (define (create-engine to-saves proc thread-cell-values init-break-enabled-cell)
-  (lambda (ticks prefix complete expire)
+  (case-lambda
+   ;; For `continuation-marks`:
+   [() to-saves]
+   ;; Normal engine case:
+   [(ticks prefix complete expire)
     (start-implicit-uninterrupted 'create)
     ((swap-metacontinuation
       to-saves
@@ -56,7 +60,7 @@
         (timer-interrupt-handler engine-block-via-timer)
         (end-implicit-uninterrupted 'create)
         (set-timer ticks)
-        (proc prefix))))))
+        (proc prefix))))]))
 
 (define (engine-block-via-timer)
   (cond

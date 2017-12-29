@@ -144,8 +144,8 @@
                              break-enabled-default-cell
                              (current-break-enabled-cell))
                          at-root?))
-  (define t (thread #f ; node prev
-                    #f ; node next
+  (define t (thread 'none ; node prev
+                    'none ; node next
                     
                     (gensym)
                     e

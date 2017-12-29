@@ -32,7 +32,7 @@
                            [chain #:mutable] ; children remaining to be scheduled round-robin
                            [chain-end #:mutable]))
 
-(define root-thread-group (thread-group #f #f #f #f #f #f))
+(define root-thread-group (thread-group 'none 'none #f #f #f #f))
 
 (define num-threads-in-groups 0)
 
@@ -44,7 +44,7 @@
 
 (define/who (make-thread-group [parent (current-thread-group)])
   (check who thread-group? parent)
-  (define tg (thread-group #f #f parent #f #f #f))
+  (define tg (thread-group 'none 'none parent #f #f #f))
   tg)
 
 ;; Called atomically in scheduler:
@@ -70,6 +70,9 @@
      (define t (thread-group-chain-end parent))
      (define was-empty? (not t))
      (define n (child-node child))
+     (unless (and (eq? (node-prev n) 'none)
+                  (eq? (node-next n) 'none))
+       (internal-error "thread-group-add!: thread or group is added already"))
      (set-node-prev! n t)
      (set-node-next! n #f)
      (if t
@@ -88,12 +91,17 @@
   (atomically
    (let loop ([parent parent] [child child])
      (define n (child-node child))
+     (when (or (eq? (node-prev n) 'none)
+               (eq? (node-next n) 'none))
+       (internal-error "thread-group-remove!: thread or group is removed already"))
      (if (node-next n)
          (set-node-prev! (node-next n) (node-prev n))
          (set-thread-group-chain-end! parent (node-prev n)))
      (if (node-prev n)
          (set-node-next! (node-prev n) (node-next n))
          (set-thread-group-chain-start! parent (node-next n)))
+     (set-node-next! n 'none)
+     (set-node-prev! n 'none)
      (when (eq? n (thread-group-chain parent))
        (set-thread-group-chain! parent (node-next n)))
      (unless (thread-group? child)

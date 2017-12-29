@@ -54,6 +54,7 @@
                      'will-try-execute rumble:will-try-execute
                      'break-enabled-key break-enabled-key
                      'set-break-enabled-transition-hook! rumble:set-break-enabled-transition-hook!
+                     'continuation-marks rumble:continuation-marks
                      'exn:break/non-engine exn:break
                      'exn:break:hang-up/non-engine exn:break:hang-up
                      'exn:break:terminate/non-engine exn:break:terminate

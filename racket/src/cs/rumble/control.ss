@@ -1294,15 +1294,28 @@
                                     (cons (continuation->trace k)
                                           (get-metacontinuation-traces (current-metacontinuation))))))]))
 
+;; Wrapped a threads layer to handle thread arguments:
 (define/who continuation-marks
   (case-lambda
     [(k) (continuation-marks k (default-continuation-prompt-tag))]
     [(k tag)
-     (check who continuation? :or-false k)
+     ;; If `k` is a procedure, we assume that it's an engine
+     (check who (lambda (p) (or (not p)
+                                (continuation? p)
+                                (and (#%procedure? p) (procedure-arity-includes? p 0))))
+            :contract "(or/c continuation? engine-procedure? #f)"
+            k)
      (check who continuation-prompt-tag? tag)
      (maybe-future-barricade tag)
      (let ([tag (strip-impersonator tag)])
        (cond
+        [(#%procedure? k)
+         (let ([mc (saved-metacontinuation-mc (k))])
+           (make-continuation-mark-set
+            (prune-mark-chain-suffix
+             tag
+             (get-current-mark-chain #f #f mc))
+            (get-metacontinuation-traces mc)))]
         [(full-continuation? k)
          (make-continuation-mark-set
           (prune-mark-chain-suffix
@@ -1310,7 +1323,8 @@
            (get-current-mark-chain (full-continuation-mark-stack k)
                                    (full-continuation-mark-splice k)
                                    (full-continuation-mc k)))
-          k)]
+          (cons (continuation->trace (full-continuation-k k))
+                (get-metacontinuation-traces (full-continuation-mc k))))]
         [(escape-continuation? k)
          (unless (continuation-prompt-available? (escape-continuation-tag k))
            (raise-continuation-error '|continuation application|
@@ -1319,9 +1333,9 @@
           (prune-mark-chain-suffix
            tag
            (prune-mark-chain-prefix (escape-continuation-tag k) (current-mark-chain)))
-          k)]
+          null)]
         [else
-         (make-continuation-mark-set null #f)]))]))
+         (make-continuation-mark-set null null)]))]))
 
 (define (get-metacontinuation-traces mc)
   (cond
