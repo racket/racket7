@@ -9,6 +9,7 @@
          path-string?
          string-no-nuls?
          string->path
+         string->path-bytes
          ->path)
 
 (struct path (bytes convention)
@@ -50,8 +51,11 @@
          (not (char=? c #\nul)))))
 
 (define (string->path s)
-  (path (string->bytes/locale s (char->integer #\?))
+  (path (string->path-bytes s)
         (system-path-convention-type)))
+
+(define (string->path-bytes s)
+  (string->bytes/locale s (char->integer #\?)))
 
 (define (->path p)
   (if (string? p)

@@ -1,11 +1,11 @@
 #lang racket/base
 (require "../common/check.rkt"
-         "../common/internal-error.rkt"
          "path.rkt"
          "check-path.rkt"
          "sep.rkt"
-         "drive-letter.rkt"
-         "cleanse.rkt")
+         "cleanse.rkt"
+         "windows.rkt"
+         "protect.rkt")
 
 (provide split-path
          explode-path)
@@ -32,14 +32,15 @@
      [(and ((bytes-length bstr) . > . 2)
            (is-sep? (bytes-ref bstr 0) 'windows)
            (is-sep? (bytes-ref bstr 1) 'windows))
-      (define //?-drive-end (parse-//?-drive bstr))
+      (define-values (//?-kind //?-drive-end) (parse-//?-drive bstr))
       (cond
-       [//?-drive-end
+       [//?-kind
         (define allow-double-before //?-drive-end)
         (cond
-         [(eq? //?-drive-end 'reld)
+          [(or (eq? //?-kind 'rel)
+               (eq? //?-kind 'red))
           ;; `\\?\REL\` or `\\?\RED\` path. Handle it directly as a special case
-          (split-reld bstr //?-drive-end)]
+          (split-reld bstr)]
          [else
           (split-after-drive p
                              #:drive-end (cond
@@ -152,8 +153,12 @@
        [else
         (values base name is-dir?)])]
      [else
-      (define-values (exposed-bstr exposed-len)
-        (bytes->exposed-path-bytes bstr (add1 split-pos) convention #:already-protected? no-up?))
+      ;; Is it possible that by removing the last path element, we'll leave
+      ;; a directory path that needs conversion to \\?\ on Windows? I think
+      ;; not, because even if the remaining path ends in spaces and "."s, the
+      ;; path separator will stay in place to make the trailing spaces and
+      ;; "."s significant.
+      (define-values (exposed-bstr exposed-len) (values bstr (add1 split-pos)))
       (cond
        [explode?
         (cons name
@@ -209,16 +214,77 @@
             ends-sep?)]))
 
 ;; ----------------------------------------
-;; More work to do here for Windows paths
 
-(define (bytes->exposed-path-bytes bstr pos convention #:already-protected? already-protected?)
-  (values bstr pos))
+(define (parse-//?-drive bstr)
+  (define-values (kind drive-len orig-drive-len clean-start-pos add-sep-pos)
+    (parse-backslash-backslash-questionmark bstr))
+  (values kind drive-len))
 
-(define (protect-path-element new-bstr convention)
-  new-bstr)
+(define (parse-//-drive bstr)
+  (parse-unc bstr 0))
 
-;; ----------------------------------------
-
-(define (parse-//?-drive bstr) (internal-error "finish me"))
-(define (parse-//-drive bstr) (internal-error "finish-me"))
-(define (split-reld bstr drive-end) (internal-error "finish-me"))
+;; Splits a \\?\REL or \\?\RED path
+(define (split-reld bstr)
+  (define-values (len is-dir?)
+    (let ([len (bytes-length bstr)])
+      (cond
+        [(eqv? (bytes-ref bstr (sub1 len)) (char->integer #\\))
+         (values (sub1 len) #t)]
+        [else
+         (values len #f)])))
+  (define-values (dots-end literal-start)
+    (backslash-backslash-questionmark-dot-ups-end bstr len))
+  (cond
+    [(literal-start . < . len)
+     ;; There's at least one literal path
+     (let loop ([p (sub1 len)])
+       (cond
+         [(p . <= . (if dots-end (sub1 literal-start) literal-start))
+          ;; One one element and no dots
+          (cond
+            [(eqv? (bytes-ref bstr 6) (char->integer #\L))
+             ;; keep \\?\REL\ on path, and report 'relative as base */
+             (values 'relative
+                     (path (if is-dir? (subbytes bstr 0 len) bstr) 'windows)
+                     is-dir?)]
+            [else
+             ;; Switch "D" to "L", and simplify base to just "\\"
+             (values (path #"\\" 'windows)
+                     (path
+                      (bytes-append #"\\\\?\\REL\\"
+                                    (if (eqv? (bytes-ref bstr 8) (char->integer #\\))
+                                        #""
+                                        #"\\")
+                                    (subbytes bstr 8))
+                      'windows)
+                     is-dir?)])]
+         [(eqv? (bytes-ref bstr p) (char->integer #\\))
+          ;; Prefix path element with \\?\REL\\
+          (define elem-bstr
+            (bytes-append #"\\\\?\\REL\\\\"
+                          (subbytes bstr (add1 p) len)))
+          (define nsep
+            (cond
+              [(or (eqv? dots-end p) (eqv? dots-end (sub1 p)))
+               ;; stripping the only element: drop reundant separator(s) after ..
+               (if (eqv? dots-end p) 0 -1)]
+              [(eqv? (bytes-ref bstr 6) (char->integer #\L))
+               ;; preserve separator
+               1]
+              ;; preserve one separator, but not two
+              [(eqv? (bytes-ref bstr (sub1 p)) (char->integer #\\))
+               0]
+              [else 1]))
+          (values (path (subbytes bstr 0 (+ p nsep)) 'windows)
+                  (path elem-bstr 'windows)
+                  is-dir?)]
+         [else (loop (sub1 p))]))]
+    [else
+     ;; There are no literals --- just dots
+     (cond
+       [((- dots-end 3) . > . 8)
+        (values (path (subbytes bstr 0 (- dots-end 3)) 'windows)
+                'up
+                #t)]
+       [else
+        (values 'relative 'up #t)])]))

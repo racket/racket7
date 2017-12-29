@@ -4,7 +4,8 @@
          "check.rkt"
          "check-path.rkt"
          "relativity.rkt"
-         "build.rkt")
+         "build.rkt"
+         "windows.rkt")
 
 (provide path->complete-path)
 
@@ -35,8 +36,10 @@
    [(relative-path? p)
     (build-path (if (procedure? wrt) (wrt) wrt) p)]
    [else
-    ;; FIXME
-    (internal-error "non-complete absolute path on Windows")]))
+    ;; non-complete, non-relative path on Windows, so fill in the drive
+    (define wrt-path (->path (if (procedure? wrt) (wrt) wrt)))
+    (define drive (split-drive (path-bytes wrt-path)))
+    (build-path (path drive 'windows) p)]))
 
 (define (convention-of-path p)
   (if (path? p)

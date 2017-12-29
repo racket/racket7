@@ -7,6 +7,7 @@
          "build.rkt"
          "string.rkt"
          "split.rkt"
+         "protect.rkt"
          "relativity.rkt"
          "cleanse.rkt"
          "simplify.rkt"
@@ -71,26 +72,13 @@
   (bytes-copy (path-bytes p)))
 
 (define/who (string->path-element s)
-  (check who string? s)  
+  (check who string? s)
   (check-path-string who s)
-  (case (system-path-convention-type)
-    [(unix)
-     (check-path-string who s)
-     (when (or (equal? s "..")
-               (equal? s ".")
-               (for/or ([c (in-string s)])
-                 (eqv? c #\/)))
-       (raise-arguments-error who
-                              "cannot be converted to a path element"
-                              "path" s
-                              "explanation" "path can be split, is not relative, or names a special element"))]
-    [(windows)
-     (error who "fixme")])
-  (do-bytes->path-element (string->bytes/locale s (char->integer #\?))
+  (do-bytes->path-element (string->path-bytes s)
                           (system-path-convention-type)
                           who
                           s))
-                               
+
 (define/who (bytes->path-element bstr [convention (system-path-convention-type)])
   (check who bytes? bstr)
   (check-convention who convention)
@@ -104,23 +92,33 @@
     (define convention (path-convention p))
     (and
      ;; Quick pre-check: any separators?
-     (not (for/or ([c (in-bytes bstr)]
-                   [i (in-naturals)])
-            (and (is-sep? c convention)
-                 i)))
+     (or (not (eq? convention 'unix))
+         (not (for/or ([c (in-bytes bstr)]
+                       [i (in-naturals)])
+                (and (is-sep? c convention)
+                     i))))
      (let-values ([(base name dir?) (split-path p)])
        (and (symbol? base)
             (path? name))))]
    [else #f]))
 
 (define (do-bytes->path-element bstr convention who orig-arg)
-  (define len (bytes-length bstr))
-  (define p (path (bytes->immutable-bytes bstr) convention))
-  (unless (path-element? p)
+  (define (bad-element)
     (raise-arguments-error who
-                           (string-append "cannot be converted to a path element;\n"
-                                          " path can be split, is not relative, or names a special element")
-                           "argument" orig-arg))
+                           "cannot be converted to a path element"
+                           "path" orig-arg
+                           "explanation" "path can be split, is not relative, or names a special element"))
+  (when (eq? 'windows convention)
+    ;; Make sure we don't call `protect-path-element` on a
+    ;; byte string that contains a "\":
+    (when (for/or ([b (in-bytes bstr)])
+            (eqv? b (char->integer #\\)))
+      (bad-element)))
+  (define len (bytes-length bstr))
+  (define p (path (protect-path-element (bytes->immutable-bytes bstr) convention)
+                  convention))
+  (unless (path-element? p)
+    (bad-element))
   p)
 
 (define/who (path-element->string p)
