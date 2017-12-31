@@ -271,6 +271,8 @@
              (exn-message exn))))
 
    (err/rt-test (get1 v1) handler)
+   (test 'no get1 v1 'no)
+   (test 'no get1 v1 (lambda () 'no))
    (err/rt-test (get1 v2) handler)
    (err/rt-test (get1 v3) handler)
    (err/rt-test (get1 v4) handler)
@@ -279,7 +281,23 @@
    (err/rt-test (get1 v7) handler)
    (err/rt-test (get1 v8) handler)
    (err/rt-test (get1 v9) handler)
-   (err/rt-test (get1 v10) handler)))
+   (err/rt-test (get1 v10) handler)
+
+   ;; Make sure it works to have lots of impersontaors:
+   (let loop ([v v1] [i 100] [preds null] [sels null] [vals null])
+     (unless (zero? i)
+       (for ([pred (in-list preds)]
+             [sel (in-list sels)]
+             [val (in-list vals)])
+         (test #t pred v)
+         (test val sel v)
+         (test val sel v 'no))
+       (define-values (p has get) (make-impersonator-property 'p))
+       (loop (chaperone-vector v #f #f p i)
+             (sub1 i)
+             (cons has preds)
+             (cons get sels)
+             (cons i vals))))))
 
 
 ;; check property-only chaperones
@@ -3309,6 +3327,29 @@
                             s-x (lambda (s v) (collect-garbage 'minor) v)
                             s-y (lambda (s v) (collect-garbage 'minor) v)
                             s-z (lambda (s v) (collect-garbage 'minor) v))))
+
+
+;; ----------------------------------------
+;; Make sure that a JIT-inlined predicate is sensitive to `prop:impersonator-of`
+
+(let ()
+  (define-values (p:a a? a-ref) (make-impersonator-property 'a))
+
+  (struct posn (x y)
+    #:property prop:impersonator-of
+    (lambda (p) (posn-y p)))
+
+  (define p
+    (impersonate-struct (posn 1 #f) struct:posn
+                        p:a 17))
+
+  (define (f p)
+    (a? p))
+  (set! f f)
+
+  (test #t f p)
+  (test #t f (posn 0 p))
+  (test #f f (posn 0 #f)))
 
 ;; ----------------------------------------
 

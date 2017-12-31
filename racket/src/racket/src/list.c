@@ -1957,7 +1957,7 @@ static Scheme_Object *do_chaperone_box(const char *name, int is_impersonator, in
   Scheme_Chaperone *px;
   Scheme_Object *val = argv[0];
   Scheme_Object *redirects;
-  Scheme_Hash_Tree *props;
+  Scheme_Object *props;
 
   if (SCHEME_CHAPERONEP(val))
     val = SCHEME_CHAPERONE_VAL(val);
@@ -3153,7 +3153,7 @@ static Scheme_Object *do_chaperone_hash(const char *name, int is_impersonator, i
   Scheme_Chaperone *px;
   Scheme_Object *val = argv[0];
   Scheme_Object *redirects, *clear, *equal_key_wrap;
-  Scheme_Hash_Tree *props;
+  Scheme_Object *props;
   int start_props = 5;
 
   if (SCHEME_CHAPERONEP(val))
