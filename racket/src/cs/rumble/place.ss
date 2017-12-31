@@ -8,6 +8,11 @@
 (define (place-channel? v)
   #f)
 
+(define place-specific-table (make-hasheq))
+
+(define (unsafe-get-place-table)
+  place-specific-table)
+
 (define-syntax define-place-not-yet-available
   (syntax-rules ()
     [(_ id)

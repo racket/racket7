@@ -541,6 +541,7 @@
           place-channel-get place-channel-put place-sleep
           place-channel place-dead-evt place-kill place-message-allowed?
           dynamic-place place-wait place-pumper-threads place-shared?
+          unsafe-get-place-table
 
           _bool _bytes _short_bytes _double _double* _fixint _fixnum _float _fpointer _gcpointer
           _int16 _int32 _int64 _int8 _longdouble _pointer _scheme _stdbool _void
