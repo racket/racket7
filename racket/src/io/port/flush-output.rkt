@@ -2,7 +2,8 @@
 (require "../common/check.rkt"
          "../host/thread.rkt"
          "parameter.rkt"
-         "output-port.rkt")
+         "output-port.rkt"
+         "pipe.rkt")
 
 (provide flush-output
          maybe-flush-stdout)
@@ -13,10 +14,12 @@
     (let loop ()
       (define r (atomically
                  ((core-output-port-write-out p) #"" 0 0 #f #f #f)))
-      (cond
-        [(eq? r 0) (void)]
-        [(not r) (loop)]
-        [else (error 'flush-output "weird result")]))))
+      (let r-loop ([r r])
+        (cond
+          [(eq? r 0) (void)]
+          [(not r) (loop)]
+          [(evt? r) (r-loop (sync r))]
+          [else (error 'flush-output "weird result")])))))
 
 ;; ----------------------------------------
 

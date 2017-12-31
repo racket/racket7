@@ -310,6 +310,8 @@
                (min amt (- (+ limit peeked-amt) (content-length)))
                amt))
          (cond
+           [(= src-start src-end) ;; => flush
+            0]
            [write-pos ; set by `file-position` on a bytes port
             (define amt (apply-limit (min (- end write-pos)
                                           (- src-end src-start))))
