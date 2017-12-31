@@ -3,6 +3,7 @@
 
 (provide special-filename?
          drive-letter?
+         letter-drive-start?
          backslash-backslash-questionmark?
          backslash-backslash-questionmark-kind
          parse-backslash-backslash-questionmark
@@ -29,9 +30,7 @@
                   (let loop ([i+1 len])
                     (cond
                       [(zero? i+1)
-                       (if (and (len . >= . 2)
-                                (drive-letter? (bytes-ref in-bstr 0))
-                                (eqv? (bytes-ref in-bstr 1) (char->integer #\:)))
+                       (if (letter-drive-start? bstr len)
                            (subbytes in-bstr 2)
                            in-bstr)]
                       [else
@@ -64,6 +63,11 @@
   (or (<= (char->integer #\a) c (char->integer #\z))
       (<= (char->integer #\A) c (char->integer #\Z))))
 
+(define (letter-drive-start? bstr len)
+  (and (len . >= . 2)
+       (drive-letter? (bytes-ref bstr 0))
+       (eqv? (bytes-ref bstr 1) (char->integer #\:))))
+
 (define (backslash-backslash-questionmark? bstr)
   (define len (bytes-length bstr))
   (and (len . >= . 4)
@@ -78,7 +82,7 @@
     (parse-backslash-backslash-questionmark bstr))
   kind)
   
-;; Returns (values kind drive-len clean-start-pos sep-bstr)
+;; Returns (values kind drive-len orig-drive-len clean-start-pos sep-bstr)
 ;;  where `kind` is #f, 'rel, 'red, or 'abs
 ;;
 ;; For 'abs, then `drive-len` is set to the length of the root
@@ -134,7 +138,7 @@
         (values 'abs len len len
                 ;; If not already three \s, preserve this root when
                 ;; adding more:
-                (if (not (eqv? (bytes-ref (- len 3)) (char->integer #\\)))
+                (if (not (eqv? (bytes-ref bstr (- len 3)) (char->integer #\\)))
                     #"\\"
                     #""))]
        ;; If there are three backslashes in a row, count everything
@@ -201,7 +205,7 @@
                     'red)
                 #f
                 #f
-                'use-dot-ups-end
+                #f
                 #f)]
        ;; Otherwise, \\?\ is the (non-existent) drive
        [else

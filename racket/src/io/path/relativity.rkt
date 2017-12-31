@@ -49,10 +49,7 @@
       [(eq? bbq 'rel) #t]
       [bbq #f]
       [(is-sep? (bytes-ref p 0) 'windows) #f]
-      [(and ((bytes-length p) . >= . 2)
-            (drive-letter? (bytes-ref p 0))
-            (eqv? (bytes-ref p 1) (char->integer #\:)))
-       #f]
+      [(letter-drive-start? p (bytes-length p)) #f]
       [else #t])))
 
 (define-...-path? absolute-path?
@@ -75,6 +72,5 @@
          (and (not (eq? bbq 'red))
               (not (eq? bbq 'rel)))]
         [else
-         (and ((bytes-length p) . >= . 2)
-              (drive-letter? (bytes-ref p 0))
-              (eqv? (bytes-ref p 1) (char->integer #\:)))]))))
+         (or (letter-drive-start? p (bytes-length p))
+             (and (parse-unc p 0) #t))]))))

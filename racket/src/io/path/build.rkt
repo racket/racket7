@@ -207,11 +207,6 @@
    [(path? p) (path-bytes p)]
    [else (string->bytes/locale p (char->integer #\?))]))
 
-(define (letter-drive-start? bstr len)
-  (and (len . >= . 2)
-       (drive-letter? (bytes-ref bstr 0))
-       (eqv? (bytes-ref bstr 1) (char->integer #\:))))
-
 (define (just-separators-after? bstr drive-len)
   (for/and ([b (in-bytes bstr drive-len)])
     (is-sep? b 'windows)))
