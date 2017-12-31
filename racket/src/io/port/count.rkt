@@ -14,7 +14,10 @@
          set-port-next-location!
          
          port-count!
-         port-count-byte!)
+         port-count-byte!
+
+         port-count-all!
+         port-count-byte-all!)
 
 (define port-count-lines-enabled
   (make-parameter #f (lambda (v) (and v #t))))
@@ -167,6 +170,12 @@
           (loop (add1 i) (add1 span) line (and column (add1 column)) (and position (add1 position)) state #f)])]))))
 
 ;; in atomic mode
+(define (port-count-all! in extra-ins amt bstr start)
+  (port-count! in amt bstr start)
+  (for ([in (in-list extra-ins)])
+    (port-count! in amt bstr start)))
+
+;; in atomic mode
 ;; If `b` is not a byte, it is treated like
 ;; a non-whitespace byte.
 (define (port-count-byte! in b)
@@ -185,6 +194,12 @@
             [position (core-port-position in)])
         (when position (set-core-port-position! in (add1 position)))
         (when column (set-core-port-column! in (add1 column))))])))
+
+;; in atomic mode
+(define (port-count-byte-all! in extra-ins b)
+  (port-count-byte! in b)
+  (for ([in (in-list extra-ins)])
+    (port-count-byte! in b)))
 
 ;; in atomic mode
 (define (increment-offset! in amt)

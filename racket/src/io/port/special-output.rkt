@@ -17,7 +17,7 @@
 
 (define (do-write-special who v orig-o #:retry? retry?)
   (check who output-port? orig-o)
-  (let port-loop ([o orig-o])
+  (let port-loop ([o orig-o] [extra-count-os null])
     (let ([o (->core-output-port orig-o)])
       (define write-out-special (core-output-port-write-out-special o))
       (unless write-out-special
@@ -26,7 +26,7 @@
                                "port" orig-o))
       (cond
         [(output-port? write-out-special)
-         (port-loop write-out-special)]
+         (port-loop write-out-special (cons o extra-count-os))]
         [else
          (let loop ()
            (start-atomic)
@@ -43,7 +43,7 @@
                 (and retry?
                      (result-loop (sync r)))]
                [else
-                (port-count! o 1 #"x" 0)
+                (port-count-all! o extra-count-os 1 #"x" 0)
                 (end-atomic)
                 #t])))]))))
 

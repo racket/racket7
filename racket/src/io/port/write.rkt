@@ -13,7 +13,7 @@
                           #:buffer-ok? [buffer-ok? #f]
                           #:zero-ok? [zero-ok? #f]
                           #:enable-break? [enable-break? #f])
-  (let try-again ([out out])
+  (let try-again ([out out] [extra-count-outs null])
     (start-atomic)
     (check-not-closed who out)
     (cond
@@ -43,7 +43,7 @@
                   (start-atomic)
                   (result-loop new-v)])]
               [(exact-positive-integer? v)
-               (port-count! out v bstr start)
+               (port-count-all! out extra-count-outs v bstr start)
                (end-atomic)
                v]
               [else
@@ -51,4 +51,4 @@
                (internal-error (format "write-some-bytes: weird result ~s for ~s ~s ~s at ~s" v bstr start end out))]))]
          [else
           (end-atomic)
-          (try-again (->core-output-port write-out))])])))
+          (try-again (->core-output-port write-out) (cons out extra-count-outs))])])))

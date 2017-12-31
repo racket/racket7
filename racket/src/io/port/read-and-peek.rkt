@@ -39,7 +39,7 @@
                           ;; to 4 unless `read-byte-or-special`, etc.,
                           ;; need access to a 0-argument version
                           #:limit-special-arity? [limit-special-arity? #t])
-  (let loop ([in orig-in])
+  (let loop ([in orig-in] [extra-count-ins null])
     (start-atomic)
     (cond
       [(= start end) ; intentionally before the port-closed check
@@ -62,9 +62,9 @@
           (let result-loop ([v v])
             (cond
               [(and (integer? v) (not (eq? v 0)))
-               (port-count! orig-in v bstr start)]
+               (port-count-all! in extra-count-ins v bstr start)]
               [(procedure? v)
-               (port-count-byte! in #f)])
+               (port-count-byte-all! in extra-count-ins #f)])
             (end-atomic)
             (cond
               [(exact-nonnegative-integer? v)
@@ -72,7 +72,7 @@
                  [(zero? v)
                   (if zero-ok?
                       0
-                      (loop in))]
+                      (loop in extra-count-ins))]
                  [(v . <= . (- end start)) v]
                  [else
                   (raise-arguments-error who
@@ -101,7 +101,7 @@
                (internal-error (format "weird read-bytes result ~s" v))]))]
          [else
           (end-atomic)
-          (loop (->core-input-port read-in))])])))
+          (loop (->core-input-port read-in) (cons in extra-count-ins))])])))
 
 ;; Like `read-some-bytes!`, but merely peeks
 (define (peek-some-bytes! who orig-in bstr start end skip
