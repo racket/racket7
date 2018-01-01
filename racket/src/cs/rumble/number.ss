@@ -23,7 +23,11 @@
   (check who integer? n)
   (cond
    [(negative? n) (* (integer-sqrt (- n)) 0+1i)]
-   [(positive? n) (floor (sqrt n))]))
+   [(positive? n)
+    (let-values ([(s r) (exact-integer-sqrt (inexact->exact n))])
+      (if (inexact? n)
+          (exact->inexact s)
+          s))]))
 
 (define/who (integer-sqrt/remainder n)
   (check who integer? n)

@@ -18,7 +18,7 @@
 (define (do-write-special who v orig-o #:retry? retry?)
   (check who output-port? orig-o)
   (let port-loop ([o orig-o] [extra-count-os null])
-    (let ([o (->core-output-port orig-o)])
+    (let ([o (->core-output-port o)])
       (define write-out-special (core-output-port-write-out-special o))
       (unless write-out-special
         (raise-arguments-error who

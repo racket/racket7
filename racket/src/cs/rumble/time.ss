@@ -108,22 +108,29 @@
   (let ((t (current-time 'time-utc)))
     (time-second t)))
 
-(define/who (seconds->date s)
-  (check who real? s)
-  (let* ([s (inexact->exact s)]
-         [tm (make-time 'time-utc
-                        (floor (* (- s (floor s)) 1000000000))
-                        (floor s))]
-         [d (time-utc->date tm)])
-    (make-date*/direct (chez:date-second d)
-                       (chez:date-minute d)
-                       (chez:date-hour d)
-                       (chez:date-day d)
-                       (chez:date-month d)
-                       (chez:date-year d)
-                       (chez:date-week-day d)
-                       (chez:date-year-day d)
-                       (chez:date-dst? d)
-                       (date-zone-offset d)
-                       (date-nanosecond d)
-                       (date-zone-name d))))
+(define/who seconds->date
+  (case-lambda
+   [(s) (seconds->date s #t)]
+   [(s local?)
+    (check who real? s)
+    (let* ([s (inexact->exact s)]
+           [tm (make-time 'time-utc
+                          (floor (* (- s (floor s)) 1000000000))
+                          (floor s))]
+           [d (if local?
+                  (time-utc->date tm)
+                  (time-utc->date tm 0))])
+      (make-date*/direct (chez:date-second d)
+                         (chez:date-minute d)
+                         (chez:date-hour d)
+                         (chez:date-day d)
+                         (chez:date-month d)
+                         (chez:date-year d)
+                         (chez:date-week-day d)
+                         (chez:date-year-day d)
+                         (chez:date-dst? d)
+                         (date-zone-offset d)
+                         (date-nanosecond d)
+                         (or (date-zone-name d) utc-string)))]))
+
+(define utc-string (string->immutable-string "UTC"))
