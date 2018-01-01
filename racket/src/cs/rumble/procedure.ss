@@ -289,19 +289,19 @@
 ;; ----------------------------------------
 
 (define (make-jit-procedure force mask name)
-  (define p (make-arity-wrapper-procedure
-             (lambda args
-               (let ([f (force)])
-                 (with-interrupts-disabled
-                  ;; atomic with respect to Racket threads,
-                  (let ([name (arity-wrapper-procedure-data p)])
-                    (unless (#%box? name)
-                      (set-arity-wrapper-procedure! p f)
-                      (set-arity-wrapper-procedure-data! p (box name)))))
-                 (apply p args)))
-             mask
-             name))
-  p)
+  (letrec ([p (make-arity-wrapper-procedure
+               (lambda args
+                 (let ([f (force)])
+                   (with-interrupts-disabled
+                    ;; atomic with respect to Racket threads,
+                    (let ([name (arity-wrapper-procedure-data p)])
+                      (unless (#%box? name)
+                        (set-arity-wrapper-procedure! p f)
+                        (set-arity-wrapper-procedure-data! p (box name)))))
+                   (apply p args)))
+               mask
+               name)])
+    p))
 
 (define (extract-jit-procedure-name p)
   (let ([name (arity-wrapper-procedure-data p)])

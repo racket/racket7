@@ -427,13 +427,14 @@
    [(types abi) (make-cstruct-type types abi #f)]
    [(types abi alignment)
     (let ([make-decls
-           (lambda (id)
-             (let-values ([(reps decls) (types->reps types)])
-               (append decls
-                       `((define-ftype ,id
-                           (struct ,@(map (lambda (rep)
-                                            `[,(gensym) ,rep])
-                                          reps)))))))])
+           (escapes-ok
+             (lambda (id)
+               (let-values ([(reps decls) (types->reps types)])
+                 (append decls
+                         `((define-ftype ,id
+                             (struct ,@(map (lambda (rep)
+                                              `[,(gensym) ,rep])
+                                            reps))))))))])
       (let-values ([(size alignment) (ctypes-sizeof+alignof types alignment)])
         (create-compound-ctype 'struct
                                'struct
@@ -448,13 +449,14 @@
   (for-each (lambda (type) (check who ctype? type))
             types)
   (let ([make-decls
-         (lambda (id)
-           (let-values ([(reps decls) (types->reps types)])
-             (append decls
-                     `((define-ftype ,id
-                         (union ,@(map (lambda (rep)
-                                         `[,(gensym) ,rep])
-                                       reps)))))))]
+         (escapes-ok
+           (lambda (id)
+             (let-values ([(reps decls) (types->reps types)])
+               (append decls
+                       `((define-ftype ,id
+                           (union ,@(map (lambda (rep)
+                                           `[,(gensym) ,rep])
+                                         reps))))))))]
         [size (apply max (map ctype-sizeof types))]
         [alignment (apply max (map ctype-alignof types))])
     (create-compound-ctype 'union
@@ -470,11 +472,12 @@
   (check who ctype? type)
   (check who exact-nonnegative-integer? count)
   (let ([make-decls
-         (lambda (id)
-           (let-values ([(reps decls) (types->reps (list type))])
-             (append decls
-                     `((define-ftype ,id
-                         (array ,count ,(car reps)))))))]
+         (escapes-ok
+           (lambda (id)
+             (let-values ([(reps decls) (types->reps (list type))])
+               (append decls
+                       `((define-ftype ,id
+                           (array ,count ,(car reps))))))))]
         [size (* count (ctype-sizeof type))]
         [alignment (ctype-alignof type)])
     (create-compound-ctype 'array
@@ -487,90 +490,90 @@
                            alignment)))
 
 (define (compiler-sizeof sl)
-  (define (rest sl) (if (pair? sl) (cdr sl) '()))
-  (unless (or (symbol? sl)
-              (list? sl))
-    (raise-argument-error 'compiler-sizeof
-                          "(or/c ctype-symbol? (listof ctype-symbol?))"
-                          sl))
-  (let loop ([sl sl] [base-type #f] [star? #f] [size #f])
-    (cond
-     [(null? sl)
+  (let ([rest (lambda (sl) (if (pair? sl) (cdr sl) '()))])
+    (unless (or (symbol? sl)
+                (list? sl))
+      (raise-argument-error 'compiler-sizeof
+                            "(or/c ctype-symbol? (listof ctype-symbol?))"
+                            sl))
+    (let loop ([sl sl] [base-type #f] [star? #f] [size #f])
       (cond
-       [(eq? base-type 'void)
-        (when size
-          (raise-arguments-error 'compiler-sizeof "cannot qualify 'void"))
-        (if star?
-            (foreign-sizeof 'void*)
-            (raise-arguments-error 'compiler-sizeof "cannot use 'void without a '*"))]
-       [(or (not base-type)
-            (eq? base-type 'int))
-        (if star?
-            (foreign-sizeof 'void*)
-            (foreign-sizeof (or size 'int)))]
-       [(eq? base-type 'double)
-        (case size
-          [(long)
-           (if star?
-               (foreign-sizeof 'void*)
-               ;; FIXME:
-               (foreign-sizeof 'double))]
-          [(#f)
-           (if star?
-               (foreign-sizeof 'void*)
-               (foreign-sizeof 'double))]
-          [else
-           (raise-arguments-error 'compiler-sizeof "bad qualifiers for 'double")])]
-       [(eq? base-type 'float)
-        (case size
-          [(#f)
-           (if star?
-               (foreign-sizeof 'void*)
-               (foreign-sizeof 'float))]
-          [else
-           (raise-arguments-error 'compiler-sizeof "bad qualifiers for 'float")])]
-       [size
-        (raise-arguments-error 'compiler-sizeof (format "cannot qualify '~a" base-type))])]
-     [else
-      (let ([s (if (pair? sl) (car sl) sl)])
-        (case s
-          [(int char float double void)
-           (cond
-            [base-type
-             (raise-arguments-error 'compiler-sizeof
-                                    (format "extraneous type: '~a" s))]
+       [(null? sl)
+        (cond
+         [(eq? base-type 'void)
+          (when size
+            (raise-arguments-error 'compiler-sizeof "cannot qualify 'void"))
+          (if star?
+              (foreign-sizeof 'void*)
+              (raise-arguments-error 'compiler-sizeof "cannot use 'void without a '*"))]
+         [(or (not base-type)
+              (eq? base-type 'int))
+          (if star?
+              (foreign-sizeof 'void*)
+              (foreign-sizeof (or size 'int)))]
+         [(eq? base-type 'double)
+          (case size
+            [(long)
+             (if star?
+                 (foreign-sizeof 'void*)
+                 ;; FIXME:
+                 (foreign-sizeof 'double))]
+            [(#f)
+             (if star?
+                 (foreign-sizeof 'void*)
+                 (foreign-sizeof 'double))]
             [else
-             (loop (rest sl) s star? size)])]
-          [(short)
-           (case size
-             [(short)
-              (raise-arguments-error 'compiler-sizeof
-                                     "cannot handle more than one 'short")]
-             [(long)
-              (raise-arguments-error 'compiler-sizeof
-                                     "cannot use both 'short and 'long")]
-             [(#f) (loop (rest sl) base-type star? 'short)])]
-          [(long)
-           (case size
-             [(short)
-              (raise-arguments-error 'compiler-sizeof
-                                     "cannot use both 'short and 'long")]
-             [(long-long)
-              (raise-arguments-error 'compiler-sizeof
-                                     "cannot handle more than two 'long")]
-             [(long)
-              (loop (rest sl) base-type star? 'long-long)]
-             [(#f)
-              (loop (rest sl) base-type star? 'long)])]
-          [(*)
-           (if star?
+             (raise-arguments-error 'compiler-sizeof "bad qualifiers for 'double")])]
+         [(eq? base-type 'float)
+          (case size
+            [(#f)
+             (if star?
+                 (foreign-sizeof 'void*)
+                 (foreign-sizeof 'float))]
+            [else
+             (raise-arguments-error 'compiler-sizeof "bad qualifiers for 'float")])]
+         [size
+          (raise-arguments-error 'compiler-sizeof (format "cannot qualify '~a" base-type))])]
+       [else
+        (let ([s (if (pair? sl) (car sl) sl)])
+          (case s
+            [(int char float double void)
+             (cond
+              [base-type
                (raise-arguments-error 'compiler-sizeof
-                                      "cannot handle more than one '*")
-               (loop (rest sl) base-type #t size))]
-          [else
-           (raise-argument-error 'compiler-sizeof
-                                 "(or/c ctype-symbol? (listof ctype-symbol?))"
-                                 sl)]))])))
+                                      (format "extraneous type: '~a" s))]
+              [else
+               (loop (rest sl) s star? size)])]
+            [(short)
+             (case size
+               [(short)
+                (raise-arguments-error 'compiler-sizeof
+                                       "cannot handle more than one 'short")]
+               [(long)
+                (raise-arguments-error 'compiler-sizeof
+                                       "cannot use both 'short and 'long")]
+               [(#f) (loop (rest sl) base-type star? 'short)])]
+            [(long)
+             (case size
+               [(short)
+                (raise-arguments-error 'compiler-sizeof
+                                       "cannot use both 'short and 'long")]
+               [(long-long)
+                (raise-arguments-error 'compiler-sizeof
+                                       "cannot handle more than two 'long")]
+               [(long)
+                (loop (rest sl) base-type star? 'long-long)]
+               [(#f)
+                (loop (rest sl) base-type star? 'long)])]
+            [(*)
+             (if star?
+                 (raise-arguments-error 'compiler-sizeof
+                                        "cannot handle more than one '*")
+                 (loop (rest sl) base-type #t size))]
+            [else
+             (raise-argument-error 'compiler-sizeof
+                                   "(or/c ctype-symbol? (listof ctype-symbol?))"
+                                   sl)]))]))))
 
 (define (ctype-malloc-mode c)
   (let ([t (ctype-our-rep c)])
@@ -907,49 +910,50 @@
    [(arg1 arg2 arg3 arg4 arg5) (do-malloc (list arg1 arg2 arg3 arg4 arg5))]))
 
 (define (do-malloc args)
-  (define (duplicate-argument what a1 a2)
-    (raise-arguments-error 'malloc
-                           (string-append "mulitple " what " arguments")
-                           "first" a1
-                           "second" a2))
-  (let loop ([args args] [count #f] [type #f] [copy-from #f] [mode #f] [fail-mode #f])
-    (cond
-     [(null? args)
-      (let* ([len (* (or count 1) (if type (ctype-sizeof type) 1))]
-             [p (normalized-malloc len
-                                   (or mode (if type (ctype-malloc-mode type) 'atomic)))])
-        (when copy-from
-          (memcpy* p 0 copy-from 0 len))
-        p)]
-     [(nonnegative-fixnum? (car args))
-      (if count
-          (duplicate-argument "size" count (car args))
-          (loop (cdr args) (car args) type copy-from mode fail-mode))]
-     [(ctype? (car args))
-      (if type
-          (duplicate-argument "type" type (car args))
-          (loop (cdr args) count (car args) copy-from mode fail-mode))]
-     [(and (cpointer? (car args)) (car args))
-      (if copy-from
-          (duplicate-argument "source for copy" copy-from (car args))
-          (loop (cdr args) count type (car args) mode fail-mode))]
-     [(malloc-mode? (car args))
-      (if copy-from
-          (duplicate-argument "mode" mode (car args))
-          (loop (cdr args) count type copy-from (car args) fail-mode))]
-     [(eq? (car args) 'failok)
-      (if copy-from
-          (duplicate-argument "failure mode" fail-mode (car args))
-          (loop (cdr args) count type copy-from mode (car args)))]
-     [else
-      (raise-argument-error 'malloc
-                            (string-append "(or/c (and/c exact-nonnegative-integer? fixnum?)\n"
-                                           "      ctype? cpointer?\n"
-                                           "      (or/c 'raw 'atomic 'nonatomic 'tagged\n"
-                                           "            'atomic-interior 'interior\n"
-                                           "            'stubborn 'uncollectable 'eternal)\n"
-                                           "      'fail-ok)")
-                            (car args))])))
+  (let ([duplicate-argument
+         (lambda (what a1 a2)
+           (raise-arguments-error 'malloc
+                                  (string-append "mulitple " what " arguments")
+                                  "first" a1
+                                  "second" a2))])
+    (let loop ([args args] [count #f] [type #f] [copy-from #f] [mode #f] [fail-mode #f])
+      (cond
+       [(null? args)
+        (let* ([len (* (or count 1) (if type (ctype-sizeof type) 1))]
+               [p (normalized-malloc len
+                                     (or mode (if type (ctype-malloc-mode type) 'atomic)))])
+          (when copy-from
+            (memcpy* p 0 copy-from 0 len))
+          p)]
+       [(nonnegative-fixnum? (car args))
+        (if count
+            (duplicate-argument "size" count (car args))
+            (loop (cdr args) (car args) type copy-from mode fail-mode))]
+       [(ctype? (car args))
+        (if type
+            (duplicate-argument "type" type (car args))
+            (loop (cdr args) count (car args) copy-from mode fail-mode))]
+       [(and (cpointer? (car args)) (car args))
+        (if copy-from
+            (duplicate-argument "source for copy" copy-from (car args))
+            (loop (cdr args) count type (car args) mode fail-mode))]
+       [(malloc-mode? (car args))
+        (if copy-from
+            (duplicate-argument "mode" mode (car args))
+            (loop (cdr args) count type copy-from (car args) fail-mode))]
+       [(eq? (car args) 'failok)
+        (if copy-from
+            (duplicate-argument "failure mode" fail-mode (car args))
+            (loop (cdr args) count type copy-from mode (car args)))]
+       [else
+        (raise-argument-error 'malloc
+                              (string-append "(or/c (and/c exact-nonnegative-integer? fixnum?)\n"
+                                             "      ctype? cpointer?\n"
+                                             "      (or/c 'raw 'atomic 'nonatomic 'tagged\n"
+                                             "            'atomic-interior 'interior\n"
+                                             "            'stubborn 'uncollectable 'eternal)\n"
+                                             "      'fail-ok)")
+                              (car args))]))))
 
 (define (normalized-malloc size mode)
   (cond

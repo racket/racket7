@@ -799,7 +799,7 @@
                                   0))
                          (if i (* 2 i) 0))]
                [vec (make-vector len #f)]
-               [pos 0])
+               [pos (box 0)])
           (call/cc
            (lambda (esc)
              (intmap-for-each
@@ -812,9 +812,9 @@
                     ;; Add `l` even if the key is #!bwp,
                     ;; so that iteration works right if a key
                     ;; is removed
-                    (vector-set! vec pos l)
-                    (set! pos (add1 pos))
-                    (if (= pos len)
+                    (vector-set! vec (unbox pos) l)
+                    (set-box! pos (add1 (unbox pos)))
+                    (if (= (unbox pos) len)
                         ;; That's enough keys
                         (esc (void))
                         (loop (cdr l)))]))))))
@@ -866,8 +866,8 @@
   (do-weak-hash-iterate-key 'hash-iterate-key ht i))
 
 (define (weak-hash-iterate-value ht i)
-  (define key (do-weak-hash-iterate-key 'hash-iterate-value ht i))
-  (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
+  (let* ([key (do-weak-hash-iterate-key 'hash-iterate-value ht i)]
+         [val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
     (if (eq? val none)
         (raise-arguments-error
          'weak-hash-iterate-value "no element at index"
@@ -875,24 +875,24 @@
         val)))
 
 (define (weak-hash-iterate-key+value ht i)
-  (define key (do-weak-hash-iterate-key 'hash-iterate-key+value ht i))
-  (values key
+  (let ([key (do-weak-hash-iterate-key 'hash-iterate-key+value ht i)])
+    (values key
+            (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
+              (if (eq? val none)
+                  (raise-arguments-error
+                   'weak-hash-iterate-key+value "no element at index"
+                   "index" i)
+                  val)))))
+
+(define (weak-hash-iterate-pair ht i)
+  (let ([key (do-weak-hash-iterate-key 'hash-iterate-pair ht i)])
+    (cons key
           (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
             (if (eq? val none)
                 (raise-arguments-error
-                 'weak-hash-iterate-key+value "no element at index"
+                 'weak-hash-iterate-paur "no element at index"
                  "index" i)
-                val))))
-
-(define (weak-hash-iterate-pair ht i)
-  (define key (do-weak-hash-iterate-key 'hash-iterate-pair ht i))
-  (cons key
-        (let ([val (hashtable-ref (weak-equal-hash-vals-ht ht) key none)])
-          (if (eq? val none)
-              (raise-arguments-error
-               'weak-hash-iterate-paur "no element at index"
-               "index" i)
-              val))))
+                val)))))
 
 ;; Remove empty weak boxes from a table. Count the number
 ;; of remaining entries, and remember to prune again when

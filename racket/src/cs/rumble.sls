@@ -625,9 +625,10 @@
           mutex-release
           threaded?
           set-future-callbacks!)
-  (import (chezpart)
+  (import (rename (chezpart)
+                  [define define/no-lift])
 	  (rename (only (chezscheme) sleep)
-		  (sleep chez:sleep))
+		  [sleep chez:sleep])
 	  (only (chezscheme)
                 thread?
                 threaded?
@@ -641,9 +642,10 @@
                 record-field-accessor
                 record-field-mutator))
 
-  (define none (chez:gensym "none"))
-  (define none2 (chez:gensym "none2"))
+  (define/no-lift none (chez:gensym "none"))
+  (define/no-lift none2 (chez:gensym "none2"))
 
+  (include "rumble/define.ss")
   (include "rumble/version.ss")
   (include "rumble/syntax-rule.ss")
   (include "rumble/check.ss")

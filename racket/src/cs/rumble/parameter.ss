@@ -68,21 +68,21 @@
     [(v guard)
      (check who (procedure-arity-includes/c 1) :or-false guard)
      (let ([default-c (make-thread-cell v #t)])
-       (define self
-         (create-parameter
-          (case-lambda
-           [()
-            (let ([c (or (parameter-cell self)
-                         default-c)])
-              (thread-cell-ref c))]
-           [(v)
-            (let ([c (or (parameter-cell self)
-                         default-c)])
-              (thread-cell-set! c (if guard
-                                      (guard v)
-                                      v)))])
-          guard))
-       self)]))
+       (letrec ([self
+                 (create-parameter
+                  (case-lambda
+                   [()
+                    (let ([c (or (parameter-cell self)
+                                 default-c)])
+                      (thread-cell-ref c))]
+                   [(v)
+                    (let ([c (or (parameter-cell self)
+                                 default-c)])
+                      (thread-cell-set! c (if guard
+                                              (guard v)
+                                              v)))])
+                  guard)])
+         self))]))
 
 (define/who (make-derived-parameter p guard wrap)
   (check who authentic-parameter?

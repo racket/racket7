@@ -93,36 +93,36 @@
 (define-bytes-compare bytes=? bytevector=?)
 
 (define (do-bytes<? a b)
-  (define alen (bytes-length a))
-  (define blen (bytes-length b))
-  (let loop ([i 0])
-    (cond
-     [(= i alen) (if (= i blen)
-                     #f
-                     #t)]
-     [(= i blen) #f]
-     [else
-      (let ([va (bytes-ref a i)]
-            [vb (bytes-ref b i)])
-        (cond
-         [(fx< va vb) #t]
-         [(fx= va vb) (loop (fx1+ i))]
-         [else #f]))])))
+  (let ([alen (bytes-length a)]
+        [blen (bytes-length b)])
+    (let loop ([i 0])
+      (cond
+       [(= i alen) (if (= i blen)
+                       #f
+                       #t)]
+       [(= i blen) #f]
+       [else
+        (let ([va (bytes-ref a i)]
+              [vb (bytes-ref b i)])
+          (cond
+           [(fx< va vb) #t]
+           [(fx= va vb) (loop (fx1+ i))]
+           [else #f]))]))))
 
 (define (do-bytes>? a b)
-  (define alen (bytes-length a))
-  (define blen (bytes-length b))
-  (let loop ([i 0])
-    (cond
-     [(= i alen) #f]
-     [(= i blen) #t]
-     [else
-      (let ([va (bytes-ref a i)]
-            [vb (bytes-ref b i)])
-        (cond
-         [(fx> va vb) #t]
-         [(fx= va vb) (loop (fx1+ i))]
-         [else #f]))])))
+  (let ([alen (bytes-length a)]
+        [blen (bytes-length b)])
+    (let loop ([i 0])
+      (cond
+       [(= i alen) #f]
+       [(= i blen) #t]
+       [else
+        (let ([va (bytes-ref a i)]
+              [vb (bytes-ref b i)])
+          (cond
+           [(fx> va vb) #t]
+           [(fx= va vb) (loop (fx1+ i))]
+           [else #f]))]))))
 
 (define (do-bytes>=? a b) (not (do-bytes<? a b)))
 (define (do-bytes<=? a b) (not (do-bytes>? a b)))

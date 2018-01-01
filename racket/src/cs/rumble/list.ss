@@ -14,21 +14,21 @@
    [(not (pair? v)) #f]
    [else
     (let loop ([fast (cdr v)] [slow v] [slow-step? #f] [depth 0])
-      (define (return result)
-        (when (fx> depth 10)
-          (hashtable-set! lists slow result))
-        result)
-      (cond
-       [(null? fast) (return #t)]
-       [(not (pair? fast)) (return #f)]
-       [(eq? fast slow) (return #f)] ; cycle
-       [else
-        (let ([is-list? (hashtable-ref lists fast none)])
-          (cond
-           [(eq? is-list? none)
-            (loop (cdr fast) (if slow-step? (cdr slow) slow) (not slow-step?) (fx1+ depth))]
-           [else
-            (return is-list?)]))]))]))
+      (let ([return (lambda (result)
+                      (when (fx> depth 10)
+                        (hashtable-set! lists slow result))
+                      result)])
+        (cond
+         [(null? fast) (return #t)]
+         [(not (pair? fast)) (return #f)]
+         [(eq? fast slow) (return #f)] ; cycle
+         [else
+          (let ([is-list? (hashtable-ref lists fast none)])
+            (cond
+             [(eq? is-list? none)
+              (loop (cdr fast) (if slow-step? (cdr slow) slow) (not slow-step?) (fx1+ depth))]
+             [else
+              (return is-list?)]))])))]))
 
 (define (append-n l n l2)
   (cond
@@ -50,7 +50,7 @@
 ;; compatilation approach
 
 (define-syntax-rule (define-list-proc |#%name| name base combine)
-  (define |#%name|
+  (define/no-lift |#%name|
     (case-lambda
      [(f l)
       (if (list? l)
@@ -60,45 +60,45 @@
                 (let ([r (cdr l)])
                   (combine (|#%app| f (car l)) (loop r)))))
           (raise-argument-error 'name "list?" l))]
-   [(f l1 l2)
-    (cond
-     [(not (list? l1))
-      (raise-argument-error 'name "list?" l1)]
-     [(not (list? l2))
-      (raise-argument-error 'name "list?" l2)]
-     [(not (= (length l1) (length l2)))
-      (raise-arguments-error 'name "list lengths do not match"
-                             "first list" l1
-                             "second list" l2)]
-     [else
-      (let loop ([l1 l1] [l2 l2])
+     [(f l1 l2)
+      (cond
+       [(not (list? l1))
+        (raise-argument-error 'name "list?" l1)]
+       [(not (list? l2))
+        (raise-argument-error 'name "list?" l2)]
+       [(not (= (length l1) (length l2)))
+        (raise-arguments-error 'name "list lengths do not match"
+                               "first list" l1
+                               "second list" l2)]
+       [else
+        (let loop ([l1 l1] [l2 l2])
+          (if (null? l1)
+              base
+              (let ([r1 (cdr l1)]
+                    [r2 (cdr l2)])
+                (combine (|#%app| f (car l1) (car l2))
+                         (loop r1 r2)))))])]
+     [(f l1 . ls)
+      (when (not (list? l1))
+        (raise-argument-error 'name "list?" l1))
+      (let ([len (length l1)])
+        (let loop ([ls ls])
+          (unless (null? ls) 
+            (let ([l (car ls)])
+              (unless (list? l)
+                (raise-argument-error 'name "list?" l))
+              (unless (= (length l) len)
+                (raise-arguments-error 'name "list lengths do not match"
+                                       "first list" l1
+                                       "other list" l)))
+            (loop (cdr ls)))))
+      (let loop ([l1 l1] [ls ls])
         (if (null? l1)
             base
             (let ([r1 (cdr l1)]
-                  [r2 (cdr l2)])
-              (combine (|#%app| f (car l1) (car l2))
-                       (loop r1 r2)))))])]
-   [(f l1 . ls)
-    (when (not (list? l1))
-      (raise-argument-error 'name "list?" l1))
-    (let ([len (length l1)])
-      (let loop ([ls ls])
-        (unless (null? ls) 
-          (let ([l (car ls)])
-            (unless (list? l)
-              (raise-argument-error 'name "list?" l))
-            (unless (= (length l) len)
-              (raise-arguments-error 'name "list lengths do not match"
-                                     "first list" l1
-                                     "other list" l)))
-          (loop (cdr ls)))))
-    (let loop ([l1 l1] [ls ls])
-      (if (null? l1)
-          base
-          (let ([r1 (cdr l1)]
-                [r (map cdr ls)])
-            (combine (apply f (car l1) (map car ls))
-                     (loop r1 r)))))])))
+                  [r (map cdr ls)])
+              (combine (apply f (car l1) (map car ls))
+                       (loop r1 r)))))])))
 
 (define-list-proc |#%map| map '() cons) 
 (define-list-proc |#%for-each| for-each (void) begin)

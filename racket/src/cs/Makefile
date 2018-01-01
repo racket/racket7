@@ -203,7 +203,8 @@ future-demo: rumble.so
 future2-demo: rumble.so
 	$(SCHEME) chezpart.so rumble.so demo/future2.ss
 
-RUMBLE_SRCS = rumble/check.ss \
+RUMBLE_SRCS = rumble/define.ss \
+              rumble/check.ss \
 	      rumble/syntax-rule.ss \
               rumble/constant.ss \
               rumble/hash-code.ss \

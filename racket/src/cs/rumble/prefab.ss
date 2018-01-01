@@ -81,60 +81,63 @@
 ;; Assuming `(prefab-key? k)`, check that it's consistent with the
 ;; given total field count
 (define (prefab-key-compatible-count? k total-field-count)
-  (define (field-count-after-name+count k)
+  (letrec ([field-count-after-name+count
+            (lambda (k)
+              (cond
+               [(null? k) 0]
+               [(pair? (car k))
+                (+ (caar k)
+                   (field-count-after-name+count+auto (cdr k)))]
+               [else
+                (field-count-after-name+count+auto k)]))]
+           [field-count-after-name+count+auto
+            (lambda (k)
+              (cond
+               [(null? k) 0]
+               [(vector? (car k))
+                (if (null? (cdr k))
+                    0
+                    (field-count (cdr k)))]
+               [else (field-count k)]))]
+           [field-count
+            (lambda (k) ; k has symbol and count
+              (+ (cadr k)
+                 (field-count-after-name+count (cddr k))))])
     (cond
-     [(null? k) 0]
-     [(pair? (car k))
-      (+ (caar k)
-         (field-count-after-name+count+auto (cdr k)))]
+     [(symbol? k) #t]
+     [(null? (cdr k)) #t]
+     [(exact-integer? (cadr k))
+      ;; Info must match exactly
+      (= total-field-count
+         (+ (cadr k) (field-count-after-name+count (cddr k))))]
      [else
-      (field-count-after-name+count+auto k)]))
-  (define (field-count-after-name+count+auto k)
-    (cond
-     [(null? k) 0]
-     [(vector? (car k))
-      (if (null? (cdr k))
-          0
-          (field-count (cdr k)))]
-     [else (field-count k)]))
-  (define (field-count k) ; k has symbol and count
-    (+ (cadr k)
-       (field-count-after-name+count (cddr k))))
-  (cond
-   [(symbol? k) #t]
-   [(null? (cdr k)) #t]
-   [(exact-integer? (cadr k))
-    ;; Info must match exactly
-    (= total-field-count
-       (+ (cadr k) (field-count-after-name+count (cddr k))))]
-   [else
-    (let ([n (field-count-after-name+count (cdr k))])
-      (and
-       ;; Field count must be <= total-field-count
-       (>= total-field-count n)
-       ;; Initial mutables vector (if any) must be in range
-       ;; for the target field count; any later immutables vector
-       ;; has been checked already by `prefab-key?`
-       (let* ([k (cdr k)]
-              [auto (and (pair? (car k))
-                         (car k))]
-              [k (if auto
-                     (cdr k)
-                     k)])
-         (or (null? k)
-             (not (vector? (car k)))
-             (let* ([n (- total-field-count
-                          (if auto
-                              (car auto)
-                              0))]
-                    [vec (car k)]
-                    [len (vector-length vec)])
-               (let loop ([i 0])
-                 (or (= i len)
-                     (let ([m (vector-ref vec i)])
-                       (and (exact-nonnegative-integer? m) ; in case the vector is mutated
-                            (< m n)
-                            (loop (fx1+ i)))))))))))]))
+      (let ([n (field-count-after-name+count (cdr k))])
+        (and
+         ;; Field count must be <= total-field-count
+         (>= total-field-count n)
+         ;; Initial mutables vector (if any) must be in range
+         ;; for the target field count; any later immutables vector
+         ;; has been checked already by `prefab-key?`
+         (let* ([k (cdr k)]
+                [auto (and (pair? (car k))
+                           (car k))]
+                [k (if auto
+                       (cdr k)
+                       k)])
+           (or (null? k)
+               (not (vector? (car k)))
+               (let* ([n (- total-field-count
+                            (if auto
+                                (car auto)
+                                0))]
+                      [vec (car k)]
+                      [len (vector-length vec)])
+                 (let loop ([i 0])
+                   (or (= i len)
+                       (let ([m (vector-ref vec i)])
+                         (and (exact-nonnegative-integer? m) ; in case the vector is mutated
+                              (< m n)
+                              (loop (fx1+ i)))))))))))])))
 
 ;; Convert a prefab key to normalized, compact from
 (define (normalize-prefab-key k keep-count?)

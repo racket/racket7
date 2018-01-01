@@ -204,7 +204,7 @@
                                 l))
                     backreferences)
           (chez:fprintf (current-error-port) "Begin Traces\n")
-          (let ([prev-trace '()])
+          (let ([prev-trace (box '())])
             (for-each (lambda (l)
                         (for-each (lambda (p)
                                     (when (backtrace-predicate (car p))
@@ -217,11 +217,11 @@
                                           (let loop ([prev (car p)] [o (cdr p)] [accum '()] [len (sub1 (or max-path-length +inf.0))])
                                             (cond
                                              [(zero? len) (void)]
-                                             [(not o) (set! prev-trace (reverse accum))]
-                                             [(chez:memq o prev-trace)
+                                             [(not o) (set-box! prev-trace (reverse accum))]
+                                             [(chez:memq o (unbox prev-trace))
                                               => (lambda (l)
                                                    (chez:printf " <- DITTO\n")
-                                                   (set! prev-trace (append (reverse accum) l)))]
+                                                   (set-box! prev-trace (append (reverse accum) l)))]
                                              [else
                                               (chez:printf " <- ~a" (object->backreference-string
                                                                      (cond

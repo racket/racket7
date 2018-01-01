@@ -432,18 +432,18 @@
                                   (car args))]))))]))
 
 (define (check-accessors-paired-with-mutators who args v)
-  (define mutator-reps
+  (let ([mutator-reps
+         (let loop ([args args])
+           (cond
+            [(null? args) empty-hash]
+            [(struct-mutator-procedure? (car args))
+             (hash-set (loop (cddr args))
+                       (struct-mutator-procedure-rtd+pos (strip-impersonator (car args)))
+                       #t)]
+            [else
+             (loop (cddr args))]))])
     (let loop ([args args])
       (cond
-       [(null? args) empty-hash]
-       [(struct-mutator-procedure? (car args))
-        (hash-set (loop (cddr args))
-                  (struct-mutator-procedure-rtd+pos (strip-impersonator (car args)))
-                  #t)]
-       [else
-        (loop (cddr args))])))
-  (let loop ([args args])
-    (cond
        [(null? args) empty-hash]
        [(struct-accessor-procedure? (car args))
         (let ([rtd+pos (struct-accessor-procedure-rtd+pos (strip-impersonator (car args)))])
@@ -456,7 +456,7 @@
                                    "value to impersonate" v)))
         (loop (cddr args))]
        [else
-        (loop (cddr args))])))
+        (loop (cddr args))]))))
 
 ;; ----------------------------------------
 
@@ -565,11 +565,12 @@
 
 (define (set-impersonator-hash!)
   (let ([struct-impersonator-hash-code
-         (lambda (c hash-code)
-           ((record-type-hash-procedure
-             (record-rtd (impersonator-val c)))
-            c
-            hash-code))])
+         (escapes-ok
+           (lambda (c hash-code)
+             ((record-type-hash-procedure
+               (record-rtd (impersonator-val c)))
+              c
+              hash-code)))])
     (let ([add (lambda (rtd)
                  (record-type-hash-procedure rtd struct-impersonator-hash-code))])
       (add (record-type-descriptor struct-impersonator))

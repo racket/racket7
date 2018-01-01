@@ -162,19 +162,18 @@
    [else #f]))
 
 (define (union-find ht a)
-  (define av
-    (let loop ([a a])
-      (let ([next-a (hashtable-ref ht a #f)])
-        (if next-a
-            (loop next-a)
-            a))))
-  (unless (eq? av a)
-    (let loop ([a a])
-      (let ([next-a (hashtable-ref ht a #f)])
-        (unless (eq? next-a av)
-          (hashtable-set! ht a next-a)
-          (loop next-a)))))
-  av)
+  (let ([av (let loop ([a a])
+              (let ([next-a (hashtable-ref ht a #f)])
+                (if next-a
+                    (loop next-a)
+                    a)))])
+    (unless (eq? av a)
+      (let loop ([a a])
+        (let ([next-a (hashtable-ref ht a #f)])
+          (unless (eq? next-a av)
+            (hashtable-set! ht a next-a)
+            (loop next-a)))))
+    av))
 
 ;; ----------------------------------------
 

@@ -330,13 +330,14 @@
     (current-continuation-marks))))
   
 (define (expected-arity-string arity)
-  (define (expected s) (string-append "  expected: " s "\n"))
-  (cond
-   [(number? arity) (expected (number->string arity))]
-   [(arity-at-least? arity) (expected
-                             (string-append "at least "
-                                            (number->string (arity-at-least-value arity))))]
-   [else ""]))
+  (let ([expected
+         (lambda (s) (string-append "  expected: " s "\n"))])
+    (cond
+     [(number? arity) (expected (number->string arity))]
+     [(arity-at-least? arity) (expected
+                               (string-append "at least "
+                                              (number->string (arity-at-least-value arity))))]
+     [else ""])))
 
 (define (raise-result-arity-error where num-expected-args args)
   (raise
@@ -370,9 +371,10 @@
 
 (define make-unquoted-printing-string
   (let ([unquoted-printing-string
-         (lambda (s)
-           (check 'unquoted-printing-string string? s)
-           (new-unquoted-printing-string s))])
+         (escapes-ok
+           (lambda (s)
+             (check 'unquoted-printing-string string? s)
+             (new-unquoted-printing-string s)))])
     unquoted-printing-string))
 
 ;; ----------------------------------------

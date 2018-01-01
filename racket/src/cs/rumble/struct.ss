@@ -46,14 +46,15 @@
        (raise-argument-error who "(listof (cons/c struct-type-property? (procedure-arity-includes/c 1)))" supers))
      (let* ([can-impersonate? (and (or can-impersonate? (eq? guard 'can-impersonate)) #t)]
             [st (make-struct-type-prop name (and (not (eq? guard 'can-impersonate)) guard) supers)]
-            [pred (lambda (v)
-                    (let* ([v (strip-impersonator v)]
-                           [rtd (if (record-type-descriptor? v)
-                                    v
-                                    (and (record? v)
-                                         (record-rtd v)))])
-                      (and rtd
-                           (not (eq? none (struct-property-ref st rtd none))))))]
+            [pred (escapes-ok
+                    (lambda (v)
+                      (let* ([v (strip-impersonator v)]
+                             [rtd (if (record-type-descriptor? v)
+                                      v
+                                      (and (record? v)
+                                           (record-rtd v)))])
+                        (and rtd
+                             (not (eq? none (struct-property-ref st rtd none)))))))]
             [accessor-name (string->symbol (string-append
                                             (symbol->string name)
                                             "-ref"))]
@@ -62,10 +63,11 @@
                               (symbol->string name)
                               "?"))]
             [default-fail
-              (lambda (v)
-                (raise-argument-error accessor-name
-                                      (symbol->string predicate-name)
-                                      v))]
+              (escapes-ok
+                (lambda (v)
+                  (raise-argument-error accessor-name
+                                        (symbol->string predicate-name)
+                                        v)))]
             [do-fail (lambda (fail v)
                        (cond
                         [(eq? fail default-fail) (default-fail v)]
@@ -189,18 +191,19 @@
     (let ([props-ht
            ;; Check for duplicates and record property values
            (let ([get-struct-info
-                  (lambda ()
-                    (let ([parent-total*-count (if parent-rtd*
-                                                   (struct-type-total*-field-count parent-rtd*)
-                                                   0)])
-                      (list name
-                            init-count
-                            auto-count
-                            (make-position-based-accessor rtd parent-total*-count (+ init-count auto-count))
-                            (make-position-based-mutator rtd parent-total*-count (+ init-count auto-count))
-                            all-immutables
-                            parent-rtd
-                            #f)))])
+                  (escapes-ok
+                    (lambda ()
+                      (let ([parent-total*-count (if parent-rtd*
+                                                     (struct-type-total*-field-count parent-rtd*)
+                                                     0)])
+                        (list name
+                              init-count
+                              auto-count
+                              (make-position-based-accessor rtd parent-total*-count (+ init-count auto-count))
+                              (make-position-based-mutator rtd parent-total*-count (+ init-count auto-count))
+                              all-immutables
+                              parent-rtd
+                              #f))))])
              (let loop ([props props] [ht empty-hasheq])
                (cond
                 [(null? props)
@@ -456,10 +459,11 @@
                           (or constructor-name name))))
                    rtd
                    (or constructor-name name))]
-             [pred (lambda (v)
-                     (or (record? v rtd)
-                         (and (impersonator? v)
-                              (record? (impersonator-val v) rtd))))])
+             [pred (escapes-ok
+                     (lambda (v)
+                       (or (record? v rtd)
+                           (and (impersonator? v)
+                                (record? (impersonator-val v) rtd)))))])
          (register-struct-constructor! ctr)
          (register-struct-constructor! pred)
          (values rtd
@@ -612,10 +616,11 @@
       (let* ([p (record-field-accessor rtd
                                        (+ pos (position-based-accessor-offset pba)))]
              [wrap-p
-              (lambda (v)
-                (if (impersonator? v)
-                    (impersonate-ref p rtd pos v)
-                    (p v)))])
+              (escapes-ok
+                (lambda (v)
+                  (if (impersonator? v)
+                      (impersonate-ref p rtd pos v)
+                      (p v))))])
         (register-struct-field-accessor! wrap-p rtd pos)
         wrap-p))]
    [(pba pos)
@@ -634,10 +639,11 @@
       (let* ([abs-pos (+ pos (position-based-mutator-offset pbm))]
              [p (record-field-mutator rtd abs-pos)]
              [wrap-p
-              (lambda (v a)
-                (if (impersonator? v)
-                    (impersonate-set! p rtd pos abs-pos v a)
-                    (p v a)))])
+              (escapes-ok
+                (lambda (v a)
+                  (if (impersonator? v)
+                      (impersonate-set! p rtd pos abs-pos v a)
+                      (p v a))))])
         (register-struct-field-mutator! wrap-p rtd pos)
         wrap-p))]
    [(pbm pos)
@@ -705,20 +711,21 @@
                     (if parent-rtd*
                         (next-visible-struct-type parent-rtd*)
                         (values #f #f))])
-        (define (get-results)
-          (values (record-type-name rtd*)
-                  init-count
-                  auto-count
-                  (make-position-based-accessor rtd* parent-total*-count (+ init-count auto-count))
-                  (make-position-based-mutator rtd* parent-total*-count (+ init-count auto-count))
-                  (mutables->immutables (hashtable-ref rtd-mutables rtd* '#()) init-count)
-                  next-rtd*
-                  skipped?))
-        (cond
-         [(struct-type-chaperone? rtd)
-          (chaperone-struct-type-info rtd get-results)]
-         [else
-          (get-results)])))))
+        (letrec ([get-results
+                  (lambda ()
+                    (values (record-type-name rtd*)
+                            init-count
+                            auto-count
+                            (make-position-based-accessor rtd* parent-total*-count (+ init-count auto-count))
+                            (make-position-based-mutator rtd* parent-total*-count (+ init-count auto-count))
+                            (mutables->immutables (hashtable-ref rtd-mutables rtd* '#()) init-count)
+                            next-rtd*
+                            skipped?))])
+          (cond
+           [(struct-type-chaperone? rtd)
+            (chaperone-struct-type-info rtd get-results)]
+           [else
+            (get-results)]))))))
 
 (define (check-inspector-access who rtd)
   (unless (struct-type-immediate-transparent? rtd)
@@ -797,10 +804,11 @@
   (check who struct-type? rtd)
   (let ([rtd* (strip-impersonator rtd)])
     (check-inspector-access who rtd*)
-    (let ([pred (lambda (v)
-                  (or (record? v rtd*)
-                      (and (impersonator? v)
-                           (record? (impersonator-val v) rtd*))))])
+    (let ([pred (escapes-ok
+                  (lambda (v)
+                    (or (record? v rtd*)
+                        (and (impersonator? v)
+                             (record? (impersonator-val v) rtd*)))))])
       (register-struct-constructor! pred)
       pred)))
 

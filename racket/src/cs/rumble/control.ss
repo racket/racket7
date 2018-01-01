@@ -587,53 +587,53 @@
 ;; with the composable continuation's metacontinuation (so we
 ;; should not unwind and rewind those metacontinuation frames)
 (define (find-common-metacontinuation mc current-mc tag)
-  (define-values (rev-current ; (list (cons mf mc) ...)
-                  base-current-mc)
-    ;; Get the reversed prefix of `current-mc` that is to be
-    ;; replaced by `mc`:
-    (let loop ([current-mc current-mc] [accum null])
-      (cond
-       [(null? current-mc)
-        (unless (or (eq? tag the-default-continuation-prompt-tag)
-                    (eq? tag the-root-continuation-prompt-tag))
-          (do-raise-arguments-error '|continuation application|
-                                    "continuation includes no prompt with the given tag"
-                                    exn:fail:contract:continuation
-                                    (list "tag" tag)))
-        (values accum null)]
-       [(eq? tag (strip-impersonator (metacontinuation-frame-tag (car current-mc))))
-        (values accum current-mc)]
-       [else
-        (loop (cdr current-mc)
-              ;; Accumulate this frame plus the chain that
-              ;; we should keep if this frame is shared:
-              (cons (cons (car current-mc) current-mc)
-                    accum))])))
-  (define rev-mc (reverse mc))
-  ;; Work from the tail backwards (which is forward in the reverse
-  ;; lists): If the continuations are the same for the two frames,
-  ;; then the metacontinuation frame should not be unwound
-  (let loop ([rev-current rev-current]
-             [rev-mc rev-mc]
-             [base-current-mc base-current-mc])
-    (cond
-     [(null? rev-mc) (values base-current-mc '())]
-     [(null? rev-current)
-      (check-for-barriers rev-mc)
-      ;; Return the shared part plus the unshared-to-append part
-      (values base-current-mc rev-mc)]
-     [(eq? (metacontinuation-frame-resume-k (car rev-mc))
-           (metacontinuation-frame-resume-k (caar rev-current)))
-      ;; Matches, so update base and look shallower
-      (loop (cdr rev-current)
-            (cdr rev-mc)
-            (cdar rev-current))]
-     [else
-      ;; Doesn't match, so we've found the shared part;
-      ;; check for barriers that we'd have to reintroduce
-      (check-for-barriers rev-mc)
-      ;; Return the shared part plus the unshared-to-append part
-      (values (cdr (cdar rev-current)) rev-mc)])))
+  (let-values ([(rev-current ; (list (cons mf mc) ...)
+                 base-current-mc)
+                ;; Get the reversed prefix of `current-mc` that is to be
+                ;; replaced by `mc`:
+                (let loop ([current-mc current-mc] [accum null])
+                  (cond
+                   [(null? current-mc)
+                    (unless (or (eq? tag the-default-continuation-prompt-tag)
+                                (eq? tag the-root-continuation-prompt-tag))
+                      (do-raise-arguments-error '|continuation application|
+                                                "continuation includes no prompt with the given tag"
+                                                exn:fail:contract:continuation
+                                                (list "tag" tag)))
+                    (values accum null)]
+                   [(eq? tag (strip-impersonator (metacontinuation-frame-tag (car current-mc))))
+                    (values accum current-mc)]
+                   [else
+                    (loop (cdr current-mc)
+                          ;; Accumulate this frame plus the chain that
+                          ;; we should keep if this frame is shared:
+                          (cons (cons (car current-mc) current-mc)
+                                accum))]))])
+    (let ([rev-mc (reverse mc)])
+      ;; Work from the tail backwards (which is forward in the reverse
+      ;; lists): If the continuations are the same for the two frames,
+      ;; then the metacontinuation frame should not be unwound
+      (let loop ([rev-current rev-current]
+                 [rev-mc rev-mc]
+                 [base-current-mc base-current-mc])
+        (cond
+         [(null? rev-mc) (values base-current-mc '())]
+         [(null? rev-current)
+          (check-for-barriers rev-mc)
+          ;; Return the shared part plus the unshared-to-append part
+          (values base-current-mc rev-mc)]
+         [(eq? (metacontinuation-frame-resume-k (car rev-mc))
+               (metacontinuation-frame-resume-k (caar rev-current)))
+          ;; Matches, so update base and look shallower
+          (loop (cdr rev-current)
+                (cdr rev-mc)
+                (cdar rev-current))]
+         [else
+          ;; Doesn't match, so we've found the shared part;
+          ;; check for barriers that we'd have to reintroduce
+          (check-for-barriers rev-mc)
+          ;; Return the shared part plus the unshared-to-append part
+          (values (cdr (cdar rev-current)) rev-mc)])))))
 
 (define (check-for-barriers rev-mc)
   (unless (null? rev-mc)
@@ -678,29 +678,30 @@
 
 ;; Extract a prefix of `(current-metacontinuation)` up to `tag`
 (define (extract-metacontinuation who tag barrier-ok?)
-  (define (check-barrier-ok saw-barrier?)
-    (when (and saw-barrier? (not barrier-ok?))
-      (raise-continuation-error who "cannot capture past continuation barrier")))
-  (let loop ([mc (current-metacontinuation)] [saw-barrier? #f])
-    (cond
-     [(null? mc)
-      (unless (or (eq? tag the-root-continuation-prompt-tag)
-                  (eq? tag the-default-continuation-prompt-tag))
-        (do-raise-arguments-error who "continuation includes no prompt with the given tag"
-                                  exn:fail:contract:continuation
-                                  (list "tag" tag)))
-      (check-barrier-ok saw-barrier?)
-      '()]
-     [else
-      (let ([a-tag (strip-impersonator (metacontinuation-frame-tag (car mc)))])
-        (cond
-         [(eq? a-tag tag)
-          (check-barrier-ok saw-barrier?)
-          '()]
-         [else
-          (cons (metacontinuation-frame-clear-cache (car mc))
-                (loop (cdr mc) (or saw-barrier?
-                                   (eq? a-tag the-barrier-prompt-tag))))]))])))
+  (let ([check-barrier-ok
+         (lambda (saw-barrier?)
+           (when (and saw-barrier? (not barrier-ok?))
+             (raise-continuation-error who "cannot capture past continuation barrier")))])
+    (let loop ([mc (current-metacontinuation)] [saw-barrier? #f])
+      (cond
+       [(null? mc)
+        (unless (or (eq? tag the-root-continuation-prompt-tag)
+                    (eq? tag the-default-continuation-prompt-tag))
+          (do-raise-arguments-error who "continuation includes no prompt with the given tag"
+                                    exn:fail:contract:continuation
+                                    (list "tag" tag)))
+        (check-barrier-ok saw-barrier?)
+        '()]
+       [else
+        (let ([a-tag (strip-impersonator (metacontinuation-frame-tag (car mc)))])
+          (cond
+           [(eq? a-tag tag)
+            (check-barrier-ok saw-barrier?)
+            '()]
+           [else
+            (cons (metacontinuation-frame-clear-cache (car mc))
+                  (loop (cdr mc) (or saw-barrier?
+                                     (eq? a-tag the-barrier-prompt-tag))))]))]))))
 
 (define (check-prompt-tag-available who tag)
   (unless (continuation-prompt-available? tag)
@@ -1064,7 +1065,7 @@
                                             (wrapper v))))
                         (|#%app| proc default-v))))]))]))
 
-(define/who continuation-mark-set-first
+(define/no-lift/who continuation-mark-set-first
   (case-lambda
     [(marks key) (continuation-mark-set-first marks key #f)]
     [(marks key none-v)
@@ -1125,8 +1126,8 @@
 
 ;; To make `continuation-mark-set-first` constant-time, if we traverse
 ;; N elements to get an answer, then cache the answer at N/2 elements.
-(define (marks-search elems key elem-stop? elem-ref fail-k
-                      strip-cache-result combine-cache-result)
+(define/no-lift (marks-search elems key elem-stop? elem-ref fail-k
+                              strip-cache-result combine-cache-result)
   (let loop ([elems elems] [elems/cache-pos elems] [cache-step? #f] [depth 0])
     (cond
      [(or (null? elems)
@@ -1135,20 +1136,21 @@
       (cache-result! elems elems/cache-pos depth key none combine-cache-result)
       (fail-k)]
      [else
-      (let ([t (car elems)])
-        (define (check-elem t)
-          (let ([v (elem-ref t key none)])
-            (cond
-             [(eq? v none)
-              ;; Not found at this point; keep looking
-              (loop (cdr elems)
-                    (if cache-step? (cdr elems/cache-pos) elems/cache-pos)
-                    (not cache-step?)
-                    (fx+ 1 depth))]
-             [else
-              ;; Found it
-              (cache-result! elems elems/cache-pos depth key v combine-cache-result)
-              v])))
+      (let ([t (car elems)]
+            [check-elem
+             (lambda (t)
+               (let ([v (elem-ref t key none)])
+                 (cond
+                  [(eq? v none)
+                   ;; Not found at this point; keep looking
+                   (loop (cdr elems)
+                         (if cache-step? (cdr elems/cache-pos) elems/cache-pos)
+                         (not cache-step?)
+                         (fx+ 1 depth))]
+                  [else
+                   ;; Found it
+                   (cache-result! elems elems/cache-pos depth key v combine-cache-result)
+                   v])))])
         (cond
          [(elem+cache? t)
           (let ([v (intmap-ref (elem+cache-cache t) key none2)])
@@ -1485,6 +1487,7 @@
 (define (chaperone-prompt-tag tag handler abort . args)
   (do-impersonate-prompt-tag 'chaperone-prompt-tag tag handler abort args
                              make-continuation-prompt-tag-chaperone))
+
 
 (define (do-impersonate-prompt-tag who tag handler abort args
                                    make-continuation-prompt-tag-impersonator)
