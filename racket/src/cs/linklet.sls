@@ -968,7 +968,7 @@
                          (raise-arguments-error 'read-compiled-linklet
                                                 "expected a `#~` or `#f` for a bundle")])])
                   (loop (fx1- count)
-                        (cons (cons (decode-name name pos) bundle) accum)))))])))))
+                        (cons (cons (decode-name name 0) bundle) accum)))))])))))
 
   (define (decode-name bstr pos)
     (let ([blen (bytes-length bstr)]
