@@ -1686,7 +1686,7 @@ TO DO:
   ;; it.
   (begin
     (start-atomic)
-    (let* ([done (cast 1 _scheme _pointer)]
+    (let* ([done (ptr-add #f 1)]
            [v (register-process-global #"OpenSSL-support-initializing" done)])
       (if v
           ;; Some other place is initializing:

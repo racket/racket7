@@ -82,23 +82,27 @@
   (cpointer+offset? p))
 
 (define (set-cpointer-tag! p t)
-  (unless (authentic-cpointer? p)
-    (if (cpointer? p)
-        (raise-arguments-error 'set-cpointer-tag!
-                               "cannot set tag on given cpointer"
-                               "given" p
-                               "tag" t)
-        (raise-argument-error 'set-cpointer-tag! "cpointer?" p)))
-  (cpointer-tags-set! p t))
+  (if (authentic-cpointer? p)
+      (cpointer-tags-set! p t)
+      (if (cpointer? p)
+          (let ([q (unwrap-cpointer p)])
+            (if (authentic-cpointer? q)
+                (set-cpointer-tag! q t)
+                (raise-arguments-error 'set-cpointer-tag!
+                                       "cannot set tag on given cpointer"
+                                       "given" p
+                                       "tag" t)))
+          (raise-argument-error 'set-cpointer-tag! "cpointer?" p))))
 
 (define (cpointer-tag p)
-  (unless (authentic-cpointer? p)
-    (if (cpointer? p)
-        (raise-arguments-error 'cpointer-tag
-                               "cannot get tag from given cpointer"
-                               "given" p)
-        (raise-argument-error 'cpointer-tag "cpointer?" p)))
-  (cpointer-tags p))
+  (if (authentic-cpointer? p)
+      (cpointer-tags p)
+      (if (cpointer? p)
+          (let ([q (unwrap-cpointer p)])
+            (if (authentic-cpointer? q)
+                (cpointer-tag q)
+                #f))
+          (raise-argument-error 'cpointer-tag "cpointer?" p))))
 
 ;; Convert a `memory` --- typically a raw foreign address, but possibly
 ;; a byte string or vector --- to a cpointer, using #f for a NULL
@@ -107,6 +111,11 @@
   (cond
    [(eqv? x 0) #f]
    [else (make-cpointer x #f)]))
+
+;; Works on unwrapped cpointers:
+(define (cpointer-nonatomic? p)
+  (and (authentic-cpointer? p)
+       (#%vector? (cpointer-memory p))))
 
 ;; ----------------------------------------
 
@@ -151,7 +160,8 @@
    [(ffi-callback? p)
     (foreign-callable-entry-point (callback-code p))]
    [else
-    (error 'internal-error "bad case extracting a cpointer address")]))
+    (raise-arguments-error 'internal-error "bad case extracting a cpointer address"
+                           "value" p)]))
 
 ;; Like `cpointer-address`, but allows a raw foreign
 ;; address to pass through:
@@ -177,17 +187,40 @@
 
 ;; ----------------------------------------
 
+(define (cpointer-strip p)
+  (cond
+   [(not p) 0]
+   [(bytes? p) p]
+   [(and (authentic-cpointer? p)
+         (or (not (cpointer+offset? p))
+             (zero? (cpointer+offset-offset p))))
+    (cpointer-memory p)]
+   [else none]))
+
+(define (stripped-cpointer? v)
+  (or (eqv? v 0)
+      (bytes? v)
+      (vector? v)))
+
+;; ----------------------------------------
+
 (define (ptr-equal? p1 p2)
   (unless (cpointer? p1)
     (raise-argument-error 'ptr-equal? "cpointer?" p1))
   (unless (cpointer? p2)
     (raise-argument-error 'ptr-equal? "cpointer?" p2))
-  (with-interrupts-disabled ; disable GC while extracting addresses
-   (= (cpointer-address p1) (cpointer-address p2))))
+  (let ([p1 (unwrap-cpointer p1)]
+        [p2 (unwrap-cpointer p2)])
+    (with-interrupts-disabled ; disable GC while extracting addresses
+     (= (cpointer-address p1) (cpointer-address p2)))))
 
 (define (ptr-offset p)
   (unless (cpointer? p)
     (raise-argument-error 'ptr-offset "cpointer?" p))
+  (let ([p (unwrap-cpointer p)])
+    (ptr-offset* p)))
+
+(define (ptr-offset* p)
   (if (cpointer+offset? p)
       (cpointer+offset-offset p)
       0))
@@ -221,9 +254,7 @@
    [(authentic-cpointer? p)
     (make-cpointer+offset (cpointer-memory p)
                           (and save-tags? (cpointer-tag p))
-                          (+ n (if (cpointer+offset? p)
-                                   (cpointer+offset-offset p)
-                                   0)))]
+                          (+ n (ptr-offset* p)))]
    [(has-cpointer-property? p)
     (do-ptr-add (unwrap-cpointer p) n save-tags?)]
    [else
@@ -398,19 +429,19 @@
   (lambda (x) (bad-ctype-value '_longdouble x)))
 
 (define-ctype _pointer 'void* 'pointer
-  (lambda (v) v) ; resolved to an address later (with the GC disabled)
+  (lambda (v) (unwrap-cpointer v)) ; resolved to an address later (with the GC disabled)
   (lambda (x) (memory->cpointer x)))
 
 ;; Treated specially by `ptr-ref`
 (define-ctype _fpointer 'void* 'fpointer
-  (lambda (v) v) ; resolved to an address later (with the GC disabled)
+  (lambda (v) (unwrap-cpointer v)) ; resolved to an address later (with the GC disabled)
   (lambda (x)
     (if (ffi-obj? x) ; check for `ptr-ref` special case on `ffi-obj`s
         x
         (memory->cpointer x))))
 
 (define-ctype _gcpointer 'void* 'gcpointer
-  (lambda (v) v) ; like `_pointer`: resolved later
+  (lambda (v) (unwrap-cpointer v)) ; like `_pointer`: resolved later
   (lambda (x)
     ;; `x` must have been converted to a bytevector or vector before
     ;; the GC was re-enabled
@@ -625,10 +656,12 @@
 
 (define/who (cpointer-gcable? p)
   (check who cpointer? p)
-  (and (authentic-cpointer? p)
-       (let ([memory (cpointer-memory p)])
-         (or (bytes? memory)
-             (vector? memory)))))
+  (let ([p (unwrap-cpointer p)])
+    (or (bytes? p)
+        (and (authentic-cpointer? p)
+             (let ([memory (cpointer-memory p)])
+               (or (bytes? memory)
+                   (#%vector? memory)))))))
 
 ;; ----------------------------------------
 
@@ -719,38 +752,61 @@
     (check who exact-integer? offset)
     (c->s type (foreign-ref* type p offset))]))
 
-(define (foreign-ref* type p offset)
+(define (foreign-ref* type orig-p offset)
   (cond
-   [(and (ffi-obj? p)
+   [(and (ffi-obj? orig-p)
          (eq? 'fpointer (ctype-our-rep type)))
     ;; Special case for `ptr-ref` on a function-type ffi-object:
     ;; cancel a level of indirection and preserve `ffi-obj`ness
     ;; to keep its name
-    p]
+    orig-p]
    [else
     (cond
      [(compound-ctype? type)
       ;; Instead of copying, get a pointer within `p`:
-      (do-ptr-add p offset #f)]
+      (do-ptr-add orig-p offset #f)]
      [else
-      (let ([p (unwrap-cpointer p)]
+      (let ([p (unwrap-cpointer orig-p)]
             [host-rep (ctype-host-rep type)])
-        ;; Disable interrupts to avoid a GC:
-        (with-interrupts-disabled
-         ;; Special treatment is needed for 'scheme-object, since the
-         ;; host Scheme rejects the use of 'scheme-object with
-         ;; `foreign-ref`
-         (let ([v (foreign-ref (if (eq? host-rep 'scheme-object)
-                                   'uptr
-                                   host-rep)
-                               (cpointer-address p)
-                               offset)])
-           (case host-rep
-             [(scheme-object) (address->object v 1)]
+        (cond
+         [(cpointer-nonatomic? p)
+          (let ([offset (+ offset (ptr-offset* p))])
+            (cond
+             [(and (word-aligned? offset)
+                   (or (eq? 'void* host-rep)
+                       (eq? 'scheme-object host-rep)))
+              (let* ([i (fxsrl offset log-ptr-size-in-bytes)]
+                     [v (vector-ref (cpointer-memory p) i)])
+                (cond
+                 [(eq? 'scheme-object host-rep) v]
+                 [(stripped-cpointer? v) v]
+                 [else
+                  (raise-arguments-error 'ptr-ref
+                                         "cannot convert value to a cpointer"
+                                         "extracted value" v
+                                         "source" orig-p)]))]
              [else
-              (case (ctype-our-rep type)
-                [(gcpointer) (addr->gcpointer-memory v)]
-                [else v])]))))])]))
+              (raise-arguments-error 'ptr-ref "unsupported access into non-atomic memory"
+                                     "offset" offset
+                                     "representation" host-rep
+                                     "source" orig-p)]))]
+         [else
+          ;; Disable interrupts to avoid a GC:
+          (with-interrupts-disabled
+           ;; Special treatment is needed for 'scheme-object, since the
+           ;; host Scheme rejects the use of 'scheme-object with
+           ;; `foreign-ref`
+           (let ([v (foreign-ref (if (eq? host-rep 'scheme-object)
+                                     'uptr
+                                     host-rep)
+                                 (cpointer-address p)
+                                 offset)])
+             (case host-rep
+               [(scheme-object) (address->object v 1)]
+               [else
+                (case (ctype-our-rep type)
+                  [(gcpointer) (addr->gcpointer-memory v)]
+                  [else v])])))]))])]))
 
 (define/who ptr-set!
   (case-lambda
@@ -780,34 +836,50 @@
                    v)]))
 
 (define ptr-size-in-bytes (foreign-sizeof 'void*))
-(define log-ptr-size-in-bytes (- (integer-length ptr-size-in-bytes) 4))
+(define log-ptr-size-in-bytes (- (integer-length ptr-size-in-bytes) 1))
 
-(define (foreign-set!* type p offset v)
-  (let ([p (unwrap-cpointer p)])
+(define (word-aligned? offset)
+  (zero? (fxand offset (fx- ptr-size-in-bytes 1))))
+
+(define (foreign-set!* type orig-p offset orig-v)
+  (let ([p (unwrap-cpointer orig-p)])
     (cond
      [(compound-ctype? type)
       ;; Corresponds to a copy, since `v` is represented by a pointer
       (memcpy* p offset
-               (s->c type v) 0
+               (s->c type orig-v) 0
                (compound-ctype-size type))]
      [else
       (let ([host-rep (ctype-host-rep type)]
-            [v (s->c type v)])
+            [v (s->c type orig-v)])
         (cond
-         [(and (authentic-cpointer? p)
-               (vector? (cpointer-memory p))
-               (zero? (fxand offset (fx- ptr-size-in-bytes 1))))
-          ;; For writing into a vector, use `vector-set!`
-          ;; to trigger the write barrier
-          (let ([host-rep (ctype-host-rep type)]
-                [i (fxsrl offset log-ptr-size-in-bytes)])
-            (if (eq? host-rep 'scheme-object)
-                (vector-set! (cpointer-memory p) i v)
-                (with-interrupts-disabled
-                 (vector-set! (cpointer-memory p) i (cpointer-address v)))))]
-         [(and (authentic-cpointer? p)
-               (vector? (cpointer-memory p)))
-          (raise-unsupported-error 'ptr-set! "unsupported non-atomic memory update")]
+         [(cpointer-nonatomic? p)
+          (let ([offset (+ offset (ptr-offset* p))])
+            (cond
+             [(and (word-aligned? offset)
+                   (or (eq? 'void* host-rep)
+                       (eq? 'scheme-object host-rep)))
+              (let ([i (fxsrl offset log-ptr-size-in-bytes)])
+                (if (eq? host-rep 'scheme-object)
+                    (vector-set! (cpointer-memory p) i v)
+                    (let ([v (cpointer-strip v)])
+                      (if (eq? v none)
+                          (raise-arguments-error 'ptr-set!
+                                                 "cannot install value into non-atomic memory"
+                                                 "value" orig-v
+                                                 "destination" orig-p)
+                          (vector-set! (cpointer-memory p) i v)))))]
+             [else
+              (raise-arguments-error 'ptr-set! "unsupported access into non-atomic memory"
+                                     "offset" offset
+                                     "representation" host-rep
+                                     "value" orig-v
+                                     "destination" orig-p)]))]
+         [(cpointer-nonatomic? v)
+          (raise-arguments-error 'ptr-set!
+                                 "cannot install non-atomic pointer into atomic memory"
+                                 "non-atomic pointer" orig-v
+                                 "destination" orig-p)]
          [else
           ;; Disable interrupts to avoid a GC:
           (with-interrupts-disabled
@@ -827,39 +899,68 @@
 (define (memcpy* to to-offset from from-offset len)
   (let ([to (unwrap-cpointer* to)]
         [from (unwrap-cpointer* from)])
-    (when (and (authentic-cpointer? to)
-               (vector? (cpointer-memory to)))
-      (raise-unsupported-error 'memcpy "unsupported non-atomic memory update"))
-    (with-interrupts-disabled
-     (let ()
-       (let loop ([to (+ (cpointer*-address to) to-offset)]
-                  [from (+ (cpointer*-address from) from-offset)]
-                  [len len])
-         (unless (fx= len 0)
-           (cond
-            [(fx>= len 8)
-             (foreign-set! 'integer-64 to 0
-                           (foreign-ref 'integer-64 from 0))
-             (loop (fx+ to 8) (fx+ from 8) (fx- len 8))]
-            [(fx>= len 4)
-             (foreign-set! 'integer-32 to 0
-                           (foreign-ref 'integer-32 from 0))
-             (loop (fx+ to 4) (fx+ from 4) (fx- len 4))]
-            [(fx>= len 2)
-             (foreign-set! 'integer-16 to 0
-                           (foreign-ref 'integer-16 from 0))
-             (loop (fx+ to 2) (fx+ from 2) (fx- len 2))]
-            [else
-             (foreign-set! 'integer-8 to 0
-                           (foreign-ref 'integer-8 from 0))
-             (loop (fx+ to 1) (fx+ from 1) (fx- len 1))])))))))
+    (cond
+     [(or (cpointer-nonatomic? to)
+          (cpointer-nonatomic? from))
+      (cond
+       [(and (cpointer-nonatomic? to)
+             (cpointer-nonatomic? from))
+        (let ([to-offset (+ to-offset (ptr-offset* to))]
+              [from-offset (+ from-offset (ptr-offset* from))])
+          (cond
+           [(and (word-aligned? to-offset)
+                 (word-aligned? from-offset)
+                 (word-aligned? len))
+            (let ([to-i (fxsrl to-offset log-ptr-size-in-bytes)]
+                  [from-i (fxsrl from-offset log-ptr-size-in-bytes)]
+                  [n (fxsrl len log-ptr-size-in-bytes)])
+              (vector-copy! (cpointer-memory to) to-i
+                            (cpointer-memory from) from-i
+                            (+ from-i n)))]
+           [else
+            (raise-arguments-error 'memcpy "unaligned non-atomic memory transfer"
+                                   "destination" to
+                                   "source" from
+                                   "destination offset" to-offset
+                                   "source offset" from-offset
+                                   "count" len)]))]
+       [else
+        (raise-arguments-error 'memcpy "cannot copy non-atomic to/from atomic"
+                               "destination" to
+                               "source" from)])]
+     [else
+      (with-interrupts-disabled
+       (let ()
+         (let loop ([to (+ (cpointer*-address to) to-offset)]
+                    [from (+ (cpointer*-address from) from-offset)]
+                    [len len])
+           (unless (fx= len 0)
+             (cond
+              [(fx>= len 8)
+               (foreign-set! 'integer-64 to 0
+                             (foreign-ref 'integer-64 from 0))
+               (loop (fx+ to 8) (fx+ from 8) (fx- len 8))]
+              [(fx>= len 4)
+               (foreign-set! 'integer-32 to 0
+                             (foreign-ref 'integer-32 from 0))
+               (loop (fx+ to 4) (fx+ from 4) (fx- len 4))]
+              [(fx>= len 2)
+               (foreign-set! 'integer-16 to 0
+                             (foreign-ref 'integer-16 from 0))
+               (loop (fx+ to 2) (fx+ from 2) (fx- len 2))]
+              [else
+               (foreign-set! 'integer-8 to 0
+                             (foreign-ref 'integer-8 from 0))
+               (loop (fx+ to 1) (fx+ from 1) (fx- len 1))])))))])))
 
 (define memcpy
   (case-lambda
    [(cptr src-cptr count)
     (memcpy* cptr 0 src-cptr 0 count)]
-   [(cptr offset src-cptr count)
-    (memcpy* cptr offset src-cptr 0 count)]
+   [(cptr offset/src-cptr src-cptr/count count/type)
+    (if (ctype? count/type)
+        (memcpy* cptr 0 (unwrap-cpointer offset/src-cptr) 0 (* src-cptr/count (ctype-sizeof count/type)))
+        (memcpy* cptr offset/src-cptr src-cptr/count 0 count/type))]
    [(cptr offset src-cptr src-offset/count count/type)
     (if (ctype? count/type)
         (let ([sz (ctype-sizeof count/type)])
@@ -963,7 +1064,7 @@
    [(eq? mode 'atomic)
     (make-cpointer (make-bytevector size) #f)]
    [(eq? mode 'nonatomic)
-    (make-cpointer (make-vector (quotient size 8)) #f)]
+    (make-cpointer (make-vector (quotient size 8) 0) #f)]
    [(eq? mode 'atomic-interior)
     ;; This is not quite the same as traditional Racket, because
     ;; a finalizer is associated with the cpointer (as opposed to
@@ -1108,10 +1209,14 @@
      [call?
       (let* ([proc-p (unwrap-cpointer to-wrap)])
         (lambda args
-          (let* ([args (map (lambda (arg in-type)
-                              (let ([arg (s->c in-type arg)])
-                                (if (cpointer? arg)
-                                    (unwrap-cpointer arg)
+          (let* ([args (map (lambda (orig-arg in-type)
+                              (let ([arg (s->c in-type orig-arg)])
+                                (if (and (cpointer? arg)
+                                         (not (eq? 'scheme-object (ctype-host-rep in-type))))
+                                    (let ([p (unwrap-cpointer arg)])
+                                      (when (cpointer-nonatomic? p)
+                                        (disallow-nonatomic-pointer 'argument orig-arg))
+                                      p)
                                     arg)))
                             args in-types)]
                  [r (let ([ret-ptr (and ret-id
@@ -1184,6 +1289,10 @@
               (loop (cdr types) (cons id reps) (append id-decls decls)))
             (loop (cdr types) (cons (ctype-host-rep type) reps) decls)))])))
 
+(define (disallow-nonatomic-pointer what arg)
+  (raise-arguments-error 'foreign-call "cannot pass non-atomic pointer to a function"
+                         "pointer" arg))
+
 ;; ----------------------------------------
 
 (define-record-type (callback create-callback ffi-callback?)
@@ -1248,3 +1357,16 @@
                       [else old-val]))])])
      (mutex-release process-table-lock)
      result)))
+
+;; ----------------------------------------
+
+(define (set-cpointer-hash!)
+  (record-type-equal-procedure (record-type-descriptor cpointer)
+                               (lambda (a b eql?)
+                                 (ptr-equal? a b)))
+  (record-type-hash-procedure (record-type-descriptor cpointer)
+                              (lambda (a hc)
+                                (if (number? (cpointer-memory a))
+                                    (hc (+ (cpointer-memory a)
+                                           (ptr-offset* a)))
+                                    (eq-hash-code (cpointer-memory a))))))

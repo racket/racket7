@@ -36,7 +36,7 @@
                                (lambda (a b eql?)
                                  (and (eql? (mcar a) (mcar b))
                                       (eql? (mcdr a) (mcdr b)))))
-  (record-type-hash-procedure (record-type-descriptor flvector)
+  (record-type-hash-procedure (record-type-descriptor mpair)
                               (lambda (a hc)
                                 (hash-code-combine (hc (mcar a))
                                                    (hc (mcar a))))))

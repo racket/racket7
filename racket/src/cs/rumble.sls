@@ -693,9 +693,9 @@
   (include "rumble/system.ss")
   (include "rumble/unsafe.ss")
   (include "rumble/extfl.ss")
+  (include "rumble/lock.ss")
   (include "rumble/place.ss")
   (include "rumble/foreign.ss")
-  (include "rumble/lock.ss")
   (include "rumble/future.ss")
 
   (set-no-locate-source!)
@@ -713,4 +713,5 @@
   (set-impersonator-hash!)
   (set-procedure-impersonator-hash!)
   (set-vector-impersonator-hash!)
-  (set-box-impersonator-hash!))
+  (set-box-impersonator-hash!)
+  (set-cpointer-hash!))

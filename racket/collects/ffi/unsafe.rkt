@@ -1346,14 +1346,15 @@
    [(eq? t 'gcpointer) ctype]
    [(eq? t 'pointer)
     (let loop ([ctype ctype])
-      (if (eq? ctype 'pointer)
+      (if (or (eq? ctype _pointer)
+              (eq? ctype 'pointer))
           _gcpointer
           (make-ctype
            (loop (ctype-basetype ctype))
            (ctype-scheme->c ctype)
            (ctype-c->scheme ctype))))]
    [else
-    (raise-argument-error '_or-null "(and/c ctype? (lambda (ct) (memq (ctype-coretype ct) '(pointer gcpointer))))"
+    (raise-argument-error '_gcable "(and/c ctype? (lambda (ct) (memq (ctype-coretype ct) '(pointer gcpointer))))"
                           ctype)]))
 
 (define (ctype-coretype c)
