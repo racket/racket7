@@ -115,13 +115,19 @@
      (or (for/or ([root (in-list (if (null? (cdr roots)) null roots))])
            (define p (apply build-path (reroot-path* base root) args))
            (and (file-exists? p) p))
-       (apply build-path (reroot-path* base (car roots)) args))]))
+         (apply build-path (reroot-path* base (car roots)) args))]))
+
+(define (default-compiled-sub-path)
+  (let ([l (use-compiled-file-paths)])
+    (if (pair? l)
+        (car l)
+        "compiled")))
 
 (define (get-module-path
           path0-str
           #:roots [root-strs (current-compiled-file-roots)]
           #:submodule? [submodule? #f]
-          #:sub-path [sub-path/kw "compiled"]
+          #:sub-path [sub-path/kw (default-compiled-sub-path)]
           [sub-path sub-path/kw]
           #:choose [choose (lambda (src zo so) #f)]
           #:rkt-try-ss? [rkt-try-ss? #t])
@@ -226,7 +232,7 @@
           path0-str
           #:roots [root-strs (current-compiled-file-roots)]
           #:submodule-path [submodule-path '()]
-          #:sub-path [sub-path/kw "compiled"]
+          #:sub-path [sub-path/kw (default-compiled-sub-path)]
           [sub-path sub-path/kw]
           #:compile [compile/kw compile]
           [compiler compile/kw]

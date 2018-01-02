@@ -268,8 +268,8 @@
 
 (define/who (random-seed k)
   (check who
-         :test (and (exact-positive-integer? k)
+         :test (and (exact-nonnegative-integer? k)
                     (<= k (sub1 (expt 2 31))))
-         :contract "(integer-in 1 (sub1 (expt 2 31)))"
+         :contract "(integer-in 0 (sub1 (expt 2 31)))"
          k)
   (pseudo-random-generator-seed! (|#%app| current-pseudo-random-generator) k))

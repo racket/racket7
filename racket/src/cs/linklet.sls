@@ -971,17 +971,24 @@
                         (cons (cons (decode-name name pos) bundle) accum)))))])))))
 
   (define (decode-name bstr pos)
-    (cond
-     [(= pos (bytes-length bstr))
-      '()]
-     [else
-      (let ([len (bytes-ref bstr pos)])
-        (if (= len 255)
-            (let ([len (integer-bytes->integer bstr #f #f (fx1+ pos) (fx+ pos 5))])
-              (cons (string->symbol (bytes->string/utf-8 (subbytes bstr (fx+ pos 5) (+ pos 5 len)) #\?))
-                    (decode-name bstr (+ pos 5 len))))
-            (cons (string->symbol (bytes->string/utf-8 (subbytes bstr (fx1+ pos) (+ pos 1 len)) #\?))
-                  (decode-name bstr (+ pos 1 len)))))]))
+    (let ([blen (bytes-length bstr)]
+          [bad-bundle (lambda ()
+                        (raise-arguments-error 'read-compiled-linklet
+                                               "malformed bundle"))])
+      (cond
+       [(= pos blen)
+        '()]
+       [(> pos blen) (bad-bundle)]
+       [else
+        (let ([len (bytes-ref bstr pos)])
+          (when (> (+ pos len 1) blen) (bad-bundle))
+          (if (= len 255)
+              (let ([len (integer-bytes->integer bstr #f #f (fx1+ pos) (fx+ pos 5))])
+                (when (> (+ pos len 1) blen) (bad-bundle))
+                (cons (string->symbol (bytes->string/utf-8 (subbytes bstr (fx+ pos 5) (+ pos 5 len)) #\?))
+                      (decode-name bstr (+ pos 5 len))))
+              (cons (string->symbol (bytes->string/utf-8 (subbytes bstr (fx1+ pos) (+ pos 1 len)) #\?))
+                    (decode-name bstr (+ pos 1 len)))))])))
 
   ;; Convert a post-order list into a tree
   (define (list->bundle-directory l)
