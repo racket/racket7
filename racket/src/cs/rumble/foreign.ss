@@ -875,7 +875,8 @@
                                      "representation" host-rep
                                      "value" orig-v
                                      "destination" orig-p)]))]
-         [(cpointer-nonatomic? v)
+         [(and (cpointer-nonatomic? v)
+               (not (cpointer/cell? v)))
           (raise-arguments-error 'ptr-set!
                                  "cannot install non-atomic pointer into atomic memory"
                                  "non-atomic pointer" orig-v
@@ -1082,10 +1083,14 @@
 (define (free p)
   (foreign-free (cpointer-memory p)))
 
+(define-record-type (cpointer/cell make-cpointer/cell cpointer/cell?)
+  (parent cpointer)
+  (fields))
+
 (define (malloc-immobile-cell v)
   (let ([vec (vector v)])
     (lock-object vec)
-    (make-cpointer vec #f)))
+    (make-cpointer/cell vec #f)))
 
 (define (free-immobile-cell b)
   (unlock-object (cpointer-memory b)))
@@ -1214,8 +1219,9 @@
                                 (if (and (cpointer? arg)
                                          (not (eq? 'scheme-object (ctype-host-rep in-type))))
                                     (let ([p (unwrap-cpointer arg)])
-                                      (when (cpointer-nonatomic? p)
-                                        (disallow-nonatomic-pointer 'argument orig-arg))
+                                      (when (and (cpointer-nonatomic? p)
+                                                 (not (cpointer/cell? p)))
+                                        (disallow-nonatomic-pointer 'argument orig-arg proc-p))
                                       p)
                                     arg)))
                             args in-types)]
@@ -1289,9 +1295,12 @@
               (loop (cdr types) (cons id reps) (append id-decls decls)))
             (loop (cdr types) (cons (ctype-host-rep type) reps) decls)))])))
 
-(define (disallow-nonatomic-pointer what arg)
+(define (disallow-nonatomic-pointer what arg proc-p)
   (raise-arguments-error 'foreign-call "cannot pass non-atomic pointer to a function"
-                         "pointer" arg))
+                         "pointer" arg
+                         "function" (or (and (ffi-obj? proc-p)
+                                             (cpointer/ffi-obj-name proc-p))
+                                        'unknown)))
 
 ;; ----------------------------------------
 

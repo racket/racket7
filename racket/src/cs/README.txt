@@ -265,7 +265,7 @@ FFI Differences
    `ptr-set!` to read and write at the address.
 
  * The 'atomic-interior allocation mode returns memory that is allowed
-   to move after the cpointer returned yb allocation becomes
+   to move after the cpointer returned by allocation becomes
    unreachable.
 
  * A `_gcpointer` can only refer to the start of an allocated object,
@@ -280,6 +280,15 @@ FFI Differences
  * Calling a foreign function implicitly uses atomic mode and also
    disables GC. If the foreign function calls back to Racket, the
    callback runs in atomic mode with the GC still disabled.
+
+ * An immobile cell must be modified only through its original pointer
+   or a reconstructed `_gcpointer`. If it is cast or reconstructed as
+   a `_pointer`, setting the cell will not cooperate correctly with
+   the garbage collector.
+
+ * Memory allocated with 'nonatomic works only in limited ways. It
+   cannot be usefully passed to foreign functions, since the layout is
+   not actually an array of pointers.
 
 
 Status and Thoughts on Various Racket Subsystems
