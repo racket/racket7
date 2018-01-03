@@ -499,7 +499,8 @@
       [else
        (define old-c (custodian-reference->custodian (car crs)))
        (cond
-         [(custodian-subordinate? c old-c)
+         [(or (eq? c old-c)
+              (custodian-subordinate? c old-c))
           ;; no need to add new
           (void)]
          [(custodian-subordinate? old-c c)
