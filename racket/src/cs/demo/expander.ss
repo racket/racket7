@@ -2,6 +2,8 @@
         (expander)
         (io))
 
+(define time-compiler-passes? #f)
+
 (define (show v) (write v) (newline))
 
 (call-in-main-thread
@@ -36,10 +38,28 @@
     (find-library-collection-links))
    (|#%app| current-library-collection-paths
     (find-library-collection-paths))
+
+   (when time-compiler-passes?
+     (#%$enable-pass-timing #t))
      
    (time (eval '(|#%require| racket/base)))
    
    ;;(time (eval `(|#%require| "../regexp/demo.rkt")))
    ;;(time (eval `(|#%require| "../../../pkgs/expander/main.rkt")))
+
+   (when time-compiler-passes?
+     (let ([l (sort
+               (lambda (a b) (< (cdr a) (cdr b)))
+               (map (lambda (r) (cons (car r)
+                                      (let ([t (caddr r)])
+                                        (+ (* 1000. (time-second t))
+                                           (/ (time-nanosecond t) 1000000.)))))
+                    (#%$pass-stats)))])
+       (for-each (lambda (p) (printf "~a~a: ~s\n"
+                                     (car p)
+                                     (make-string (max 0 (- 25 (string-length (symbol->string (car p))))) #\space)
+                                     (cdr p)))
+                 (append l
+                         (list (cons 'total (apply + (map cdr l))))))))
 
    (void)))

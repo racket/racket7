@@ -561,10 +561,10 @@
     (variable-set! var val constance))
 
   (define (variable-ref var)
-    (define v (variable-val var))
-    (if (eq? v unsafe-undefined)
-        (raise-undefined var #f)
-        v))
+    (let ([v (variable-val var)])
+      (if (eq? v unsafe-undefined)
+          (raise-undefined var #f)
+          v)))
 
   (define (variable-ref/no-check var)
     (variable-val var))
@@ -572,18 +572,18 @@
   ;; Find variables or values needed from an instance for a linklet's
   ;; imports
   (define (extract-variables inst syms imports-abi)
-    (define ht (instance-hash inst))
-    (map (lambda (sym import-abi)
-           (let ([var (or (hash-ref ht sym #f)
-                          (raise-arguments-error 'instantiate-linklet
-                                                 "variable not found in imported instance"
-                                                 "instance" inst
-                                                 "name" sym))])
-             (if import-abi
-                 (variable-val var)
-                 var)))
-         syms
-         imports-abi))
+    (let ([ht (instance-hash inst)])
+      (map (lambda (sym import-abi)
+             (let ([var (or (hash-ref ht sym #f)
+                            (raise-arguments-error 'instantiate-linklet
+                                                   "variable not found in imported instance"
+                                                   "instance" inst
+                                                   "name" sym))])
+               (if import-abi
+                   (variable-val var)
+                   var)))
+           syms
+           imports-abi)))
 
   (define (raise-undefined var set?)
     (raise
@@ -602,13 +602,13 @@
 
   ;; Create the variables needed for a linklet's exports
   (define (create-variables inst syms)
-    (define ht (instance-hash inst))
-    (map (lambda (sym)
-           (or (hash-ref ht sym #f)
-               (let ([var (make-variable unsafe-undefined sym #f)])
-                 (hash-set! ht sym var)
-                 var)))
-         syms))
+    (let ([ht (instance-hash inst)])
+      (map (lambda (sym)
+             (or (hash-ref ht sym #f)
+                 (let ([var (make-variable unsafe-undefined sym #f)])
+                   (hash-set! ht sym var)
+                   var)))
+           syms)))
 
   (define (variable->known var)
     (let ([constance (variable-constance var)])
@@ -648,13 +648,13 @@
   (define instance-variable-value
     (case-lambda
      [(i sym fail-k)
-      (define var (hash-ref (instance-hash i) sym unsafe-undefined))
-      (define v (if (eq? var unsafe-undefined)
+      (let* ([var (hash-ref (instance-hash i) sym unsafe-undefined)]
+             [v (if (eq? var unsafe-undefined)
                     unsafe-undefined
-                    (variable-val var)))
-      (if (eq? v unsafe-undefined)
-          (fail-k)
-          v)]
+                    (variable-val var))])
+        (if (eq? v unsafe-undefined)
+            (fail-k)
+            v))]
      [(i sym)
       (instance-variable-value i
                                sym

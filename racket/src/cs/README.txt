@@ -358,21 +358,28 @@ The best-case scenario for performance is
    Racket modules to be incompatible with any change or rebuilding of
    the Rumble and other layers.
 
-   Effectiveness: Little effect on tasks like loading `racket/base`
-   from source, but substantial effects on programs where the Chez
-   Scheme optimizer needs to recognize uses of primitives (e.g.,
-   microbenchmarks).
+   Effectiveness: Without also enabling `UNSAFE_COMP`, slows down
+   tasks like loading `racket/base` from source, but substantially
+   improves programs where the Chez Scheme optimizer needs to
+   recognize uses of primitives (e.g., microbenchmarks). Combining
+   with `UNSAFE_COMP` speeds up loading `racket/base` from source,
+   too.
 
- * `make strip` run --- strips away inspector information to make the
-   Rumble and other layers load more quickly, but with the loss of
-   backtrace information.
+   The combination of `UNSAFE_COMP` and `compile-as-independent?`
+   works well because is enables inlining of unsafe function bodies.
+   For example, `variable-ref/no-check` inlines as lots of code in
+   safe mode and little code in unsafe mode; lots of code doesn't run
+   more slowly, but it compiles more slowly.
 
-   Effectivess: Cuts the load time for the Rumble and other layers by
-   30-50%.
+ * `DEBUG_COMP` not enabled --- or, if you enable it, run `make
+   strip`.
 
- * `PLT_LINKLET_NO_DEBUG` --- an environment variable that, if set,
-   disables Chez Scheme inspector information in code compiled by
-   Racket-on-Chez.
+   Effectivess: Avoids increasing the load time for the Rumble and
+   other layers by 30-50%.
 
-   Effectivess: Cuts load time and memory use for Racket programs by
-   as much as 50%, but removes source informaton from stack traces.
+ * `PLT_CS_DEBUG` not set --- an environment variable similar to
+   `DEBUG_COMP`, but applies to code compiled by Racket-on-Chez.
+
+   Effectivess: Avoids improvement to stack traces, but also avoids
+   increases load time and memory use of Racket programs by as much as
+   50%.
