@@ -346,12 +346,12 @@ Performance Notes
 
 The best-case scenario for performance is
 
- * `UNSAFE_COMP` is enabled in "Makefile" --- not on by default,
-   because the Rumble and other layers are not yet good enough.
+ * `UNSAFE_COMP` is enabled in "Makefile" --- currently on by default.
 
    Effectiveness: Matters the most for "rumble.so", which has its own
-   setting, but otherwise affects a from-source `racket/base`
-   expansion by about 5%.
+   setting, but otherwise by itself affects a from-source
+   `racket/base` expansion by about 5%. See also the interaction with
+   `compile-as-independent?`.
 
  * `RUMBLE_UNSAFE_COMP` is enabled in "Makefile" --- applies to
    "rumble.so" even if `UNSAFE_COMP` is disabled.
