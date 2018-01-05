@@ -2,7 +2,7 @@
         (expander)
         (io))
 
-(define time-compiler-passes? #f)
+(define time-compiler-passes? (getenv "PLT_COMPILER_TIMES"))
 
 (define (show v) (write v) (newline))
 
@@ -54,11 +54,18 @@
                                       (let ([t (caddr r)])
                                         (+ (* 1000. (time-second t))
                                            (/ (time-nanosecond t) 1000000.)))))
-                    (#%$pass-stats)))])
-       (for-each (lambda (p) (printf "~a~a: ~s\n"
-                                     (car p)
-                                     (make-string (max 0 (- 25 (string-length (symbol->string (car p))))) #\space)
-                                     (cdr p)))
+                    (#%$pass-stats)))]
+           [pad (lambda (s len)
+                  (let ([s (format "~a" s)])
+                    (string-append (make-string (max 0 (- len (string-length s))) #\space)
+                                   s)))]
+           [dec (lambda (s) (let ([s (format "~a" (/ (round (* s 100)) 100))])
+                              (if (char=? #\. (string-ref s (- (string-length s) 2)))
+                                  (string-append s "0")
+                                  s)))])
+       (for-each (lambda (p) (printf "~a: ~a\n"
+                                     (pad (car p) 30)
+                                     (pad (dec (cdr p)) 8)))
                  (append l
                          (list (cons 'total (apply + (map cdr l))))))))
 

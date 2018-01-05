@@ -358,7 +358,7 @@
      [(c name import-keys get-import) (compile-linklet c name import-keys get-import #t)]
      [(c name import-keys get-import serializable?)
       (performance-region
-       'compile
+       'schemify
        (define importss
          (map (lambda (ps)
                 (map (lambda (p) (if (pair? p) (car p) p))
@@ -426,27 +426,29 @@
            (if jitify-mode?
                (interpretable-jitified-linklet impl-lam unannotate)
                impl-lam)))
-       ;; Create the linklet:
-       (let ([lk (make-linklet (call-with-system-wind
-                                (lambda ()
-                                  ((if serializable? compile-to-bytevector outer-eval)
-                                   (show (and jitify-mode? post-interp-on?) "post-interp" impl-lam/interpable)
-                                   format)))
-                               format
-                               (if serializable? 'faslable 'callable)
-                               importss-abi
-                               exports-info
-                               name
-                               importss
-                               exports)])
-         (show "compiled" 'done)
-         ;; In general, `compile-linklet` is allowed to extend the set
-         ;; of linklet imports if `import-keys` is provided (e.g., for
-         ;; cross-linklet optimization where inlining needs a new
-         ;; direct import) - but we don't do that, currently
-         (if import-keys
-             (values lk import-keys)
-             lk)))]))
+       (performance-region
+        'compile
+        ;; Create the linklet:
+        (let ([lk (make-linklet (call-with-system-wind
+                                 (lambda ()
+                                   ((if serializable? compile-to-bytevector outer-eval)
+                                    (show (and jitify-mode? post-interp-on?) "post-interp" impl-lam/interpable)
+                                    format)))
+                                format
+                                (if serializable? 'faslable 'callable)
+                                importss-abi
+                                exports-info
+                                name
+                                importss
+                                exports)])
+          (show "compiled" 'done)
+          ;; In general, `compile-linklet` is allowed to extend the set
+          ;; of linklet imports if `import-keys` is provided (e.g., for
+          ;; cross-linklet optimization where inlining needs a new
+          ;; direct import) - but we don't do that, currently
+          (if import-keys
+              (values lk import-keys)
+              lk))))]))
 
   (define (lookup-linklet-or-instance get-import import-keys index)
     ;; Use the provided callback to get an linklet for the
@@ -1220,5 +1222,7 @@
   (when omit-debugging?
     (generate-inspector-information (not omit-debugging?))
     (generate-procedure-source-information #t))
+
+  (expand-omit-library-invocations #t)
 
   (install-linklet-bundle-write!))

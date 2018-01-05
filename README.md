@@ -2,7 +2,7 @@ This is a work-in-progress implementation of Racket with
 
  * the macro and module system implemented in Racket; see
 
-     pkgs/expander/README.txt
+     racket/src/expander/README.txt
 
  * reimplementation to run on top of Chez Scheme; see
 

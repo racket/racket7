@@ -13,6 +13,7 @@
 (check-defined 'make-arity-wrapper-procedure)
 (check-defined 'generate-procedure-source-information)
 (check-defined 'object-backreferences)
+(check-defined 'current-generate-id)
 
 ;; ----------------------------------------
 
@@ -66,4 +67,12 @@
   (compile-whole-program (car deps) src #t)]
  [else
   (for-each load deps)
-  (compile-file src)])
+  (parameterize ([current-generate-id
+                  (let ([counter-ht (make-eq-hashtable)])
+                    (lambda (sym)
+                      (let* ([n (eq-hashtable-ref counter-ht sym 0)]
+                             [s ((if (gensym? sym) gensym->unique-string symbol->string) sym)]
+                             [g (gensym (symbol->string sym) (format "rkt-~a-~a-~a" src s n))])
+                        (eq-hashtable-set! counter-ht sym (+ n 1))
+                        g)))])
+    (compile-file src))])

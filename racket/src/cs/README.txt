@@ -240,7 +240,7 @@ the "bytecode" form.
 Development Mode
 ----------------
 
-If you make changes to file in "rumble", you should turn off
+If you make changes to files in "rumble", you should turn off
 `[RUMBLE_]UNSAFE_COMP` in the makefile.
 
 You may want to turn on `DEBUG_COMP` in the makefile, so that
@@ -253,6 +253,13 @@ Turning on `DEBUG_COMP` affects only the Racket-on-Chez
 implementation. To preserve per-expression locations on compiled
 Racket code, set `PLT_CS_DEBUG`. See also "JIT versus Machine Code"
 for a suggestion on setting `PLT_ZO_PATH`.
+
+When you change "rumble" or other layers, you can continue to use
+Racket modules that were previously compiled to ".zo" form... usually,
+but inlining optimizations and similar compiler choices can break
+compatibility. Set `compile-as-independent?` to #t in "expander.sls"
+to make compiled Racket modules reliably compatible with changes to
+the layers here (at the expense of some performance).
 
 
 FFI Differences
@@ -353,23 +360,22 @@ The best-case scenario for performance is
    `racket/base` from source. Since the Rumble implementation is in
    pretty good shape, `RUMBLE_UNSAFE_COMP` is enabled by default.
 
- * `compile-as-independent?` is #f in "expander.sls" --- not set to #f
-   currently. In machine-code mode, it causes compiled files for
-   Racket modules to be incompatible with any change or rebuilding of
-   the Rumble and other layers.
+ * `compile-as-independent?` is #f in "expander.sls" --- currently set
+   to #f by default. See "Development Mode" above for more
+   information.
 
-   Effectiveness: Without also enabling `UNSAFE_COMP`, slows down
-   tasks like loading `racket/base` from source, but substantially
-   improves programs where the Chez Scheme optimizer needs to
-   recognize uses of primitives (e.g., microbenchmarks). Combining
-   with `UNSAFE_COMP` speeds up loading `racket/base` from source,
-   too.
+   Effectiveness: Without also enabling `UNSAFE_COMP`, setting
+   `compile-as-independent?` to #f slows down tasks like loading
+   `racket/base` from source, but substantially improves programs
+   where the Chez Scheme optimizer needs to recognize uses of
+   primitives (e.g., microbenchmarks). Combining with `UNSAFE_COMP`
+   speeds up loading `racket/base` from source, too.
 
    The combination of `UNSAFE_COMP` and `compile-as-independent?`
-   works well because is enables inlining of unsafe function bodies.
-   For example, `variable-ref/no-check` inlines as lots of code in
-   safe mode and little code in unsafe mode; lots of code doesn't run
-   more slowly, but it compiles more slowly.
+   enables inlining of unsafe function bodies. For example,
+   `variable-ref/no-check` inlines as lots of code in safe mode and
+   little code in unsafe mode; lots of code doesn't run more slowly,
+   but it compiles more slowly.
 
  * `DEBUG_COMP` not enabled --- or, if you enable it, run `make
    strip`.

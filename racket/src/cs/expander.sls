@@ -25,9 +25,10 @@
           (io)
           (linklet))
 
-  ;; Set to `#t` to make compiled code compatible with changes to
-  ;; primitive libraries
-  (define compile-as-independent? #t)
+  ;; Set to `#t` to make compiled code reliably compatible with
+  ;; changes to primitive libraries. Changing ths setting makes
+  ;; the build incompatible with previously generated ".zo" files.
+  (define compile-as-independent? #f)
 
   ;; The expander needs various tables to set up primitive modules, and
   ;; the `primitive-table` function is the bridge between worlds
@@ -82,23 +83,26 @@
   ;; need to be there imported (prefered) or defined (less efficient,
   ;; but less tied to library implementations)
   (unless compile-as-independent?
-    (eval `(import (rename (rumble)
-                           [correlated? syntax?]
-                           [correlated-source syntax-source]
-                           [correlated-line syntax-line]
-                           [correlated-column syntax-column]
-                           [correlated-position syntax-position]
-                           [correlated-span syntax-span]
-                           [correlated-e syntax-e]
-                           [correlated->datum syntax->datum]
-                           [datum->correlated datum->syntax]
-                           [correlated-property syntax-property]
-                           [correlated-property-symbol-keys syntax-property-symbol-keys])
-                   (thread)
-                   (io)
-                   (regexp)
-                   (linklet))))
-                         
+    (parameterize ([expand-omit-library-invocations #f])
+      (eval `(import (rename (rumble)
+                             [correlated? syntax?]
+                             [correlated-source syntax-source]
+                             [correlated-line syntax-line]
+                             [correlated-column syntax-column]
+                             [correlated-position syntax-position]
+                             [correlated-span syntax-span]
+                             [correlated-e syntax-e]
+                             [correlated->datum syntax->datum]
+                             [datum->correlated datum->syntax]
+                             [correlated-property syntax-property]
+                             [correlated-property-symbol-keys syntax-property-symbol-keys])
+                     (thread)
+                     (io)
+                     (regexp)
+                     (linklet)))
+      ;; Ensure that the library is visited, especially for a wpo build:
+      (eval 'variable-set!)))
+
   (eval `(define primitive-table ',primitive-table))
 
   (let ([install-table
