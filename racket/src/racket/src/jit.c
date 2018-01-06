@@ -2653,14 +2653,20 @@ int scheme_generate(Scheme_Object *obj, mz_jit_state *jitter, int is_tail, int w
 
         dummy = SCHEME_PTR2_VAL(obj);
         obj = SCHEME_PTR1_VAL(obj);
-      
-        /* Load global array: */
-        pos = mz_remap(SCHEME_TOPLEVEL_DEPTH(obj));
-        jit_ldxi_p(JIT_R2, JIT_RUNSTACK, WORDS_TO_BYTES(pos));
-        /* Load bucket: */
-        pos = SCHEME_TOPLEVEL_POS(obj);
-        jit_ldxi_p(JIT_R1, JIT_R2, &(((Scheme_Prefix *)0x0)->a[pos]));
-        CHECK_LIMIT();
+
+        if (!SCHEME_SYMBOLP(obj) && !SCHEME_FALSEP(obj)) {
+          /* Load global array: */
+          pos = mz_remap(SCHEME_TOPLEVEL_DEPTH(obj));
+          jit_ldxi_p(JIT_R2, JIT_RUNSTACK, WORDS_TO_BYTES(pos));
+          /* Load bucket: */
+          pos = SCHEME_TOPLEVEL_POS(obj);
+          jit_ldxi_p(JIT_R1, JIT_R2, &(((Scheme_Prefix *)0x0)->a[pos]));
+          CHECK_LIMIT();
+        } else {
+          scheme_mz_load_retained(jitter, JIT_R1, obj);
+          pos = mz_remap(SCHEME_TOPLEVEL_DEPTH(dummy));
+          jit_ldxi_p(JIT_R2, JIT_RUNSTACK, WORDS_TO_BYTES(pos));
+        }
 
         /* Load dummy bucket: */
         if (SCHEME_FALSEP(dummy)) {

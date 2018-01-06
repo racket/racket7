@@ -712,16 +712,16 @@ ref_resolve(Scheme_Object *data, Resolve_Info *rslv)
   SCHEME_PTR2_VAL(data) = v;
   
   v = SCHEME_PTR1_VAL(data);
-  if (SAME_OBJ(v, scheme_true)
-      || SAME_OBJ(v, scheme_false)) {
+  if (SCHEME_SYMBOLP(v) /* => primitive instance */
+      || SAME_OBJ(v, scheme_false) /* => anonymous variable */
+      || SAME_OBJ(v, scheme_true)) { /* simplified local */
     if (SCHEME_TRUEP(v))
       SCHEME_VARREF_FLAGS(data) |= 0x1; /* => constant */
-    v = SCHEME_PTR2_VAL(data);
   } else if (SAME_TYPE(SCHEME_TYPE(v), scheme_ir_local_type)) {
     v = resolve_expr(v, rslv);
     if (SAME_TYPE(SCHEME_TYPE(v), scheme_local_type))
       SCHEME_VARREF_FLAGS(data) |= 0x1; /* because mutable would be unbox */
-    v = SCHEME_PTR2_VAL(data);
+    v = scheme_true;
   } else
     v = resolve_expr(v, rslv);
   SCHEME_PTR1_VAL(data) = v;

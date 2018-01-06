@@ -42,7 +42,6 @@
                               #:extras [extras #hasheq()]
                               #:primitive? [primitive? #t]
                               #:protected? [protected? #f])
-  (define mod-name `',name)
   (define prims (primitive-table name))
   (for ([sym (in-hash-keys prims)])
     (register-built-in-symbol! sym))

@@ -662,14 +662,25 @@
                                     #:ambiguous-value 'ambiguous))
      (when (eq? binding 'ambiguous)
        (raise-ambiguous-error var-id ctx))
-     (unless binding
+     (unless (or binding
+                 (expand-context-allow-unbound? ctx))
        (raise-unbound-syntax-error #f "unbound identifier" s var-id null
                                    (syntax-debug-info-string var-id ctx)))
+     (define-values (t primitive? insp-of-t)
+       (if binding
+           (lookup binding ctx var-id
+                   #:in s
+                   #:out-of-context-as-variable? (expand-context-in-local-expand? ctx))
+           (values #f #f #f)))
+     (when (and t (not (variable? t)))
+       (raise-syntax-error #f "identifier does not refer to a variable" var-id s))
      (if (expand-context-to-parsed? ctx)
          (parsed-#%variable-reference (keep-properties-only~ s)
-                                      (if (top-m)
-                                          (parsed-top-id var-id binding #f)
-                                          (parsed-id var-id binding #f)))
+                                      ;; Intentionally not using `parsed-primitive-id`;
+                                      ;; see also `variable-reference->namespace`
+                                      (cond
+                                        [(top-m) (parsed-top-id var-id binding #f)]
+                                        [else (parsed-id var-id binding #f)]))
          s)]
     [else
      (if (expand-context-to-parsed? ctx)

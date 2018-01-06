@@ -2,7 +2,8 @@
 (require "namespace.rkt"
          "../common/contract.rkt"
          "../common/module-path.rkt"
-         "../host/linklet.rkt")
+         "../host/linklet.rkt"
+         "api-module.rkt")
 
 (provide variable-reference?          ; provided by linklet layer, along with `#%variable-reference`
          variable-reference-constant? ; provided by linklet layer
@@ -22,7 +23,21 @@
 
 (define (variable-reference->namespace vr)
   (check 'variable-reference->namespace variable-reference? vr)
-  (instance-data (variable-reference->instance vr)))
+  (define inst (variable-reference->instance vr))
+  (cond
+    [(symbol? inst)
+     ;; This case happens for `(#%variable-reference id)` where `id`
+     ;; refers directly to a primitive. The expander doesn't currently
+     ;; generate that, but just in case... We get a namespace for a
+     ;; primitive instance; that might not be the same module as
+     ;; reorted by `identifier-binding`, but close enough.
+     (module->namespace `',inst (instance-data (variable-reference->instance vr #t)))]
+    [(not inst)
+     ;; Anonymous variable reference; use the referencing namespace
+     (instance-data (variable-reference->instance vr #t))]
+    [else
+     ;; Get the defining namespace for the referenced variable
+     (instance-data inst)]))
 
 (define (variable-reference->module-path-index vr)
   (check 'variable-reference->module-path-index variable-reference? vr)
@@ -50,7 +65,11 @@
   (namespace-0-phase (variable-reference->namespace vr)))
 
 (define (variable-reference->module-declaration-inspector vr)
-  (check 'variable-reference->base-phase variable-reference? vr)
+  (check 'variable-reference->module-declaration-inspector variable-reference? vr)
+  (when (variable-reference->instance vr)
+    (raise-arguments-error 'variable-reference->module-declaration-inspector
+                           "variable reference does not refer to an anonymous module variable"
+                           "variable reference" vr))
   (or (namespace-declaration-inspector (variable-reference->namespace vr))
       (raise-arguments-error 'variable-reference->module-declaration-inspector
                              "given variable reference is not from a module")))

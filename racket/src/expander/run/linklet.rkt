@@ -127,8 +127,15 @@
 
 (struct variable-reference (instance primitive-varref))
 
-(define (variable-reference->instance vr)
-  (variable-reference-instance vr))
+(define (variable-reference->instance vr [ref-site? #f])
+  (and (or ref-site?
+           ;; It would be better to have a `variable-reference-anonymous?` predicate:
+           (with-handlers ([exn:fail? (lambda (exn) #f)])
+             (variable-reference->module-declaration-inspector
+              (variable-reference-primitive-varref vr))))
+       ;; Always returning ref-site instance; that's good enough to
+       ;; bootstrap:
+       (variable-reference-instance vr)))
 
 (define variable-reference-constant?*
   (let ([variable-reference-constant?

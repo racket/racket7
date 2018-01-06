@@ -425,8 +425,17 @@ scheme_compile_lookup(Scheme_Object *find_id, Scheme_Comp_Env *env, int flags)
   if (!v) {
     v = scheme_hash_get(scheme_startup_env->all_primitives_table, SCHEME_STX_SYM(find_id));
 
-    if (v && (flags & SCHEME_REFERENCING))
-      return scheme_true; /* => kernel primitive */
+    if (v && (flags & SCHEME_REFERENCING)) {
+      /* Which primitive table is it? */
+      int i;
+      for (i = 0; i < scheme_startup_env->primitive_tables->size; i++) {
+        if (scheme_startup_env->primitive_tables->vals[i]) {
+          if (scheme_hash_get((Scheme_Hash_Table *)scheme_startup_env->primitive_tables->vals[i], SCHEME_STX_SYM(find_id)))
+            return scheme_startup_env->primitive_tables->keys[i]; /* symbol => kernel primitive */
+        }
+      }
+      scheme_signal_error("internal error: could not find instance for a primitive");
+    }
   }
 
   if (!v) {

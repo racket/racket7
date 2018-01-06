@@ -1757,12 +1757,15 @@ static Scheme_Object *ref_execute (Scheme_Object *data)
   tl = SCHEME_PTR1_VAL(data);
   if (SCHEME_FALSEP(tl))
     var = NULL;
+  else if (SCHEME_SYMBOLP(tl) || SAME_OBJ(tl, scheme_true))
+    var = tl;
   else {
     toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(tl)];
     var = toplevels->a[SCHEME_TOPLEVEL_POS(tl)];
   }
 
   tl = SCHEME_PTR2_VAL(data);
+  toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(tl)];
   if (SCHEME_FALSEP(tl))
     home = NULL;
   else {

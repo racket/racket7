@@ -145,7 +145,7 @@ void scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_PRIM_W_ARITY("linklet-bundle->hash", linklet_bundle_to_hash, 1, 1, env);
 
   ADD_FOLDING_PRIM_UNARY_INLINED("variable-reference?", variable_p, 1, 1, 1, env);
-  ADD_IMMED_PRIM("variable-reference->instance", variable_instance, 1, 1, env);
+  ADD_IMMED_PRIM("variable-reference->instance", variable_instance, 1, 2, env);
 
   REGISTER_SO(scheme_varref_const_p_proc);
   scheme_varref_const_p_proc = scheme_make_prim_w_arity(variable_const_p, 
@@ -767,11 +767,27 @@ static Scheme_Object *variable_instance(int argc, Scheme_Object **argv)
   v = argv[0];
 
   if (!SAME_TYPE(SCHEME_TYPE(v), scheme_global_ref_type))
-    scheme_wrong_contract("variable-reference-instance", "variable-reference?", 0, argc, argv);
+    scheme_wrong_contract("variable-reference->instance", "variable-reference?", 0, argc, argv);
 
-  v = SCHEME_PTR2_VAL(argv[0]);
-
-  return v;
+  if ((argc < 2) || SCHEME_FALSEP(argv[1])) {
+    /* Definition instance might be a primitive-table symbol, or it might be #f for "anonymous": */
+    v = SCHEME_PTR1_VAL(argv[0]);
+    if (SCHEME_SYMBOLP(v) || SCHEME_FALSEP(v))
+      return v;
+    else if (SAME_OBJ(v, scheme_true))
+      return SCHEME_PTR2_VAL(argv[0]); /* same as use instance for a local */
+    else {
+      v = (Scheme_Object *)scheme_get_bucket_home((Scheme_Bucket *)v);
+      if (!v) {
+        /* The definition instance was GCed? Return the use-site instance */
+        return SCHEME_PTR2_VAL(argv[0]);
+      }
+      return v;
+    }
+  } else {
+    /* Get use instance: */
+    return SCHEME_PTR2_VAL(argv[0]);
+  }
 }
 
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
@@ -787,8 +803,11 @@ static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
     return scheme_true;
 
   v = SCHEME_PTR1_VAL(v);
-  if (((Scheme_Bucket_With_Flags *)v)->flags & GLOB_IS_IMMUTATED)
-    return scheme_true;
+  if (!SCHEME_FALSEP(v)) {
+    if (SCHEME_SYMBOLP(v)
+        || (((Scheme_Bucket_With_Flags *)v)->flags & GLOB_IS_IMMUTATED))
+      return scheme_true;
+  }
 
   return scheme_false;
 }

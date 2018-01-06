@@ -417,14 +417,17 @@
          [`(#%variable-reference)
           'instance-variable-reference]
          [`(#%variable-reference ,id)
-          (define e (hash-ref exports (unwrap id) #f))
-          (if e
+          (define u (unwrap id))
+          (define v (or (hash-ref exports u #f)
+                        (let ([i (hash-ref imports u #f)])
+                          (and i (import-id i)))))
+          (if v
               `(make-instance-variable-reference 
                 instance-variable-reference
-                ,e)
+                ,v)
               `(make-instance-variable-reference 
                 instance-variable-reference
-                ',(if (hash-ref mutated (unwrap id) #f)
+                ',(if (hash-ref mutated u #f)
                       'mutable
                       'immutable)))]
          [`(equal? ,exp1 ,exp2)

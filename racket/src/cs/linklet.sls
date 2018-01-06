@@ -540,7 +540,8 @@
     
   (define-record variable (val
                            name
-                           constance)) ; #f (mutable), 'constant, or 'consistent (always the same shape)
+                           constance  ; #f (mutable), 'constant, or 'consistent (always the same shape)
+                           inst-box)) ; weak pair with instance in `car`
 
   (define (variable-set! var val constance)
     (cond
@@ -587,6 +588,16 @@
            syms
            imports-abi)))
 
+  (define (identify-module var)
+    (let ([i (car (variable-inst-box var))])
+      (cond
+       [(eq? i #!bwp)
+        ""]
+       [(instance-name i)
+        => (lambda (name)
+             (#%format "\n  module: ~a" name))]
+       [else ""])))
+
   (define (raise-undefined var set?)
     (raise
      (|#%app|
@@ -595,19 +606,22 @@
        [set?
         (string-append "set!: assignment disallowed;\n"
                        " cannot set variable before its definition\n"
-                       "  variable: " (symbol->string (variable-name var)))]
+                       "  variable: " (symbol->string (variable-name var))
+                       (identify-module var))]
        [else
         (string-append (symbol->string (variable-name var))
-                       ": undefined;\n cannot reference undefined identifier")])
+                       ": undefined;\n cannot reference undefined identifier"
+                       (identify-module var))])
       (current-continuation-marks)
       (variable-name var))))
 
   ;; Create the variables needed for a linklet's exports
   (define (create-variables inst syms)
-    (let ([ht (instance-hash inst)])
+    (let ([ht (instance-hash inst)]
+          [inst-box (weak-cons inst #f)])
       (map (lambda (sym)
              (or (hash-ref ht sym #f)
-                 (let ([var (make-variable unsafe-undefined sym #f)])
+                 (let ([var (make-variable unsafe-undefined sym #f inst-box)])
                    (hash-set! ht sym var)
                    var)))
            syms)))
@@ -633,16 +647,18 @@
     (case-lambda
      [(name) (make-instance name #f)]
      [(name data . content)
-      (let ([ht (make-hasheq)])
+      (let* ([ht (make-hasheq)]
+             [inst (new-instance name data ht)]
+             [inst-box (weak-cons inst #f)])
         (let loop ([content content])
           (cond
            [(null? content) (void)]
            [(null? (cdr content))
             (raise-arguments-error 'make-instance "odd number of arguments")]
            [else
-            (hash-set! ht (car content) (make-variable (cadr content) (car content) #f))
+            (hash-set! ht (car content) (make-variable (cadr content) (car content) #f inst-box))
             (loop (cddr content))]))
-        (new-instance name data ht))]))
+        inst)]))
 
   (define (instance-variable-names i)
     (hash-map (instance-hash i) (lambda (k v) k)))
@@ -671,7 +687,7 @@
      [(i k v) (instance-set-variable-value! i k v #f)]
      [(i k v mode)
       (let ([var (or (hash-ref (instance-hash i) k #f)
-                     (let ([var (make-variable unsafe-undefined k #f)])
+                     (let ([var (make-variable unsafe-undefined k #f (weak-cons i #f))])
                        (hash-set! (instance-hash i) k var)
                        var))])
         (variable-set! var v mode))]))
@@ -707,10 +723,28 @@
   (define (linklet-bundle->hash b)
     (linklet-bundle-hash b))
 
-  (define-record variable-reference (instance var-or-info))
+  (define-record variable-reference (instance      ; the use-site instance
+                                     var-or-info)) ; the referenced variable
               
-  (define (variable-reference->instance vr)
-    (variable-reference-instance vr))
+  (define variable-reference->instance
+    (case-lambda
+     [(vr ref?)
+      (if ref?
+          (variable-reference-instance vr)
+          (variable-reference->instance vr))]
+     [(vr)
+      (let ([v (variable-reference-var-or-info vr)])
+        (cond
+         [(not v) ;; anonymous
+          #f]
+         [(variable? v)
+          (let ([i (car (variable-inst-box v))])
+            (if (eq? i #!bwp)
+                (variable-reference->instance vr #t)
+                i))]
+         [else
+          ;; Local variable, so same as use-site
+          (variable-reference->instance vr #t)]))]))
 
   (define (variable-reference-constant? vr)
     (eq? (variable-reference-var-or-info vr) 'constant))
