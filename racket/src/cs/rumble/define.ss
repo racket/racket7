@@ -14,6 +14,11 @@
 ;; To bind a `let`-bound function that is not used only in an
 ;; application position, wrap it with `escapes-ok`.
 
+;; If a function F includes a call to a function G, function G has a
+;; free variable X, and function F has an argument X, then the lifter
+;; doesn't work (and it reports an error). Help the lifter in that
+;; case by picking a different name for one of the Xs.
+
 ;; If a "loop" is a non-tail loop or if has many free variables, then
 ;; lifting may be counterproductive (by making a bad trade for less
 ;; allocation but slower GCs). Use `define/no-lift` in that case.
@@ -386,9 +391,11 @@
                                (not (chez:memq (syntax->datum #'id) did-ids)))
                           (loop (cdr binds)
                                 #t
-                                (append (chez:filter (lambda (free-var)
-                                                       (chez:memq (syntax->datum free-var) env))
-                                                     #'(free-var ...))
+                                (append (#%map (lambda (free-var)
+                                                 (if (chez:memq (syntax->datum free-var) env)
+                                                     free-var
+                                                     (syntax-error free-var "wrong variable at call site; lifter needs your help by renaming:")))
+                                               #'(free-var ...))
                                         free-vars)
                                 (append #'(called-var ...)
                                         called-vars)

@@ -1232,10 +1232,11 @@
      (check who continuation-prompt-tag? prompt-tag)
      (maybe-future-barricade prompt-tag)
      (let ([prompt-tag (strip-impersonator prompt-tag)])
-       (let-values ([(keys wrappers) (map/2-values (lambda (k)
-                                                     (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list* k))
-                                                   keys)])
-         (let* ([n (length keys)]
+       (let-values ([(all-keys all-wrappers)
+                     (map/2-values (lambda (k)
+                                     (extract-continuation-mark-key-and-wrapper 'continuation-mark-set->list* k))
+                                   keys)])
+         (let* ([n (length all-keys)]
                 [tmp (make-vector n)])
            (let chain-loop ([mark-chain (or (and marks
                                                  (continuation-mark-set-mark-chain marks))
@@ -1263,7 +1264,7 @@
                                        (cdr mark-chain)))]
                       [else
                        (let ([t (elem+cache-strip (car marks))])
-                         (let key-loop ([keys keys] [wrappers wrappers] [i 0] [found? #f])
+                         (let key-loop ([keys all-keys] [wrappers all-wrappers] [i 0] [found? #f])
                            (cond
                             [(null? keys)
                              (if found?
