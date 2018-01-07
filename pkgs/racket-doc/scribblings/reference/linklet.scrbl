@@ -367,13 +367,21 @@ variable. If a variable for @racket[name] exists as constant, the
 @exnraise[exn:fail:contract].}
 
 
-@defproc[(variable-reference->instance [varref variable-reference?])
-         instance?]{
+@defproc[(variable-reference->instance [varref variable-reference?]
+                                       [ref-site? any/c #f])
+         (if ref-site? (or/c instance? #f symbol?) instance?)]{
 
-Extracts the instance where @racket[varref] resides. This notion of
-@tech{variable reference} is the same as at the module level and can
-reflect the linklet instance that implements a particular phase of a
-module instance.}
+Extracts the instance where the variable of @racket[varref] is defined
+if @var[ref-site?] is @racket[#f], and returns the instance where
+@racket[varref] itself resides if @racket[ref-site?] is true. This
+notion of @tech{variable reference} is the same as at the module level
+and can reflect the linklet instance that implements a particular
+phase of a module instance.
+
+When @var[ref-site?] is @racket[#f], the result is @racket[#f] when
+@racket[varref] is from @racket[(#%variable-reference)] with no
+identifier. The result is a symbol if @racket[varref] refers to a
+primitive.}
 
 @deftogether[(
 @defproc[(correlated? [v any/c]) boolean?]
