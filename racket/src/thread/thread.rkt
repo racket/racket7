@@ -434,23 +434,26 @@
 ;; Returns a thunk to call to handle the case that
 ;; the current thread is suspended
 (define (do-thread-suspend t)
-  (unless (thread-suspended? t)
-    (set-thread-suspended?! t #t)
-    ;; Suspending a thread is similar to issuing a break;
-    ;; the thread should get out of any queues where it's
-    ;; waiting, etc.:
-    (run-interrupt-callback t)
-    (run-suspend/resume-callbacks t car)
-    (define suspended-evt (thread-suspended-evt t))
-    (when suspended-evt
-      (set-suspend-resume-evt-thread! suspended-evt t)
-      (semaphore-post-all (suspend-resume-evt-sema suspended-evt))
-      (set-thread-suspended-evt! t #f)))
   (cond
-    [(not (thread-descheduled? t))
-     (do-thread-deschedule! t #f)]
+    [(thread-dead? t) void]
     [else
-     void]))
+     (unless (thread-suspended? t)
+       (set-thread-suspended?! t #t)
+       ;; Suspending a thread is similar to issuing a break;
+       ;; the thread should get out of any queues where it's
+       ;; waiting, etc.:
+       (run-interrupt-callback t)
+       (run-suspend/resume-callbacks t car)
+       (define suspended-evt (thread-suspended-evt t))
+       (when suspended-evt
+         (set-suspend-resume-evt-thread! suspended-evt t)
+         (semaphore-post-all (suspend-resume-evt-sema suspended-evt))
+         (set-thread-suspended-evt! t #f)))
+     (cond
+       [(not (thread-descheduled? t))
+        (do-thread-deschedule! t #f)]
+       [else
+        void])]))
 
 (define/who (thread-resume t [benefactor #f])
   (check who thread? t)

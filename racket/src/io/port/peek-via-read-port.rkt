@@ -146,10 +146,10 @@
   ;; in atomic mode
   (define (progress!)
     ;; Relies on support for `0 #f #f` arguments in pipe implementation:
-    ((core-input-port-commit peek-pipe-i) 0 #f #f))
+    ((core-input-port-commit peek-pipe-i) 0 #f #f void))
 
-  (define (commit amt evt ext-evt)
-    ((core-input-port-commit peek-pipe-i) amt evt ext-evt))
+  (define (commit amt evt ext-evt finish)
+    ((core-input-port-commit peek-pipe-i) amt evt ext-evt finish))
 
   (define do-buffer-mode
     (case-lambda

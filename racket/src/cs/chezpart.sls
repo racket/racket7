@@ -6,7 +6,7 @@
   (import (chezscheme))
   (export (import
            (rename (except (chezscheme)
-	   	   	   remove
+                           remq remove
                            sort
                            force delay identifier?
                            output-port-buffer-mode

@@ -4,7 +4,8 @@
          "port.rkt"
          "input-port.rkt"
          "output-port.rkt"
-         "count.rkt")
+         "count.rkt"
+         "commit-manager.rkt")
 
 (provide make-pipe
          pipe-input-port?
@@ -120,6 +121,31 @@
       (semaphore-post progress-sema)
       (set! progress-sema #f)))
 
+  (define commit-manager #f)
+
+  ;; in atomic mode [can leave atomic mode temporarily]
+  ;; After this function returns, complete any commit-changing work
+  ;; before leaving atomic mode again.
+  (define (pause-waiting-commit)
+    (when commit-manager
+      (commit-manager-pause commit-manager)))
+
+  ;; in atomic mode [can leave atomic mode temporarily]
+  (define (wait-commit progress-evt ext-evt finish)
+    (cond
+      [(and (not commit-manager)
+            ;; Try shortcut:
+            (not (sync/timeout 0 progress-evt))
+            (sync/timeout 0 ext-evt))
+       (finish)
+       #t]
+      [else
+       ;; General case to support blocking and potentially multiple
+       ;; commiting threads:
+       (unless commit-manager
+         (set! commit-manager (make-commit-manager)))
+       (commit-manager-wait commit-manager progress-evt ext-evt finish)]))
+
   ;; input ----------------------------------------
   (define ip
     (make-core-input-port
@@ -128,6 +154,7 @@
      
      #:read-byte
      (lambda ()
+       (pause-waiting-commit)
        (cond
          [(input-empty?)
           (if output-closed?
@@ -147,6 +174,7 @@
 
      #:read-in
      (lambda (dest-bstr dest-start dest-end copy?)
+       (pause-waiting-commit)
        (cond
          [(input-empty?)
           (if output-closed?
@@ -175,6 +203,7 @@
 
      #:peek-byte
      (lambda ()
+       (pause-waiting-commit)
        (cond
          [(input-empty?)
           (if output-closed?
@@ -186,6 +215,7 @@
      
      #:peek-in
      (lambda (dest-bstr dest-start dest-end skip progress-evt copy?)
+       (pause-waiting-commit)
        (define content-amt (content-length))
        (cond
          [(and progress-evt
@@ -220,55 +250,62 @@
 
      #:byte-ready
      (lambda (work-done!)
+       (pause-waiting-commit)
        (or output-closed?
            (not (zero? (content-length)))))
 
      #:close
      (lambda ()
+       (pause-waiting-commit)
        (unless input-closed?
          (set! input-closed? #t)
          (progress!)))
 
      #:get-progress-evt
      (lambda ()
-       (cond
-         [input-closed? always-evt]
-         [else
-          (unless progress-sema
-            (set! progress-sema (make-semaphore)))
-          (semaphore-peek-evt progress-sema)]))
+       (atomically
+        (pause-waiting-commit)
+        (cond
+          [input-closed? always-evt]
+          [else
+           (unless progress-sema
+             (set! progress-sema (make-semaphore)))
+           (semaphore-peek-evt progress-sema)])))
 
      #:commit
      ;; Allows `amt` to be zero and #f for other arguments,
      ;; which is helpful for `open-input-peek-via-read`.
-     (lambda (amt progress-evt ext-evt)
+     (lambda (amt progress-evt ext-evt finish)
        ;; `progress-evt` is a `semepahore-peek-evt`, and `ext-evt`
-       ;; is constrained; both can work with `sync/timeout` in
-       ;; atomic mode.
+       ;; is constrained; we can send them over to different threads
        (cond
-         [(zero? amt) (progress!)]
+         [(zero? amt)
+          (pause-waiting-commit)
+          (progress!)]
          [else
-          (and (not (sync/timeout 0 progress-evt))
-               (sync/timeout 0 ext-evt)
-               (let ([amt (min amt (content-length))])
-                 (cond
-                   [(zero? amt)
-                    ;; There was nothing to commit; claim success for 0 bytes
-                    #""]
-                   [else
-                    (define dest-bstr (make-bytes amt))
-                    (cond
-                      [(start . < . end)
-                       (bytes-copy! dest-bstr 0 bstr start (+ start amt))]
-                      [else
-                       (define amt1 (min (- len start) amt))
-                       (bytes-copy! dest-bstr 0 bstr start (+ start amt1))
-                       (when (amt1 . < . amt)
-                         (bytes-copy! dest-bstr amt1 bstr 0 (- amt amt1)))])
-                    (set! start (modulo (+ start amt) len))
-                    (progress!)
-                    (check-input-blocking)
-                    dest-bstr])))]))))
+          (wait-commit
+           progress-evt ext-evt
+           ;; in atomic mode, maybe in a different thread:
+           (lambda ()
+             (let ([amt (min amt (content-length))])
+               (cond
+                 [(zero? amt)
+                  ;; There was nothing to commit; claim success for 0 bytes
+                  (finish #"")]
+                 [else
+                  (define dest-bstr (make-bytes amt))
+                  (cond
+                    [(start . < . end)
+                     (bytes-copy! dest-bstr 0 bstr start (+ start amt))]
+                    [else
+                     (define amt1 (min (- len start) amt))
+                     (bytes-copy! dest-bstr 0 bstr start (+ start amt1))
+                     (when (amt1 . < . amt)
+                       (bytes-copy! dest-bstr amt1 bstr 0 (- amt amt1)))])
+                  (set! start (modulo (+ start amt) len))
+                  (progress!)
+                  (check-input-blocking)
+                  (finish dest-bstr)]))))]))))
 
   ;; out ----------------------------------------
   (define op

@@ -40,7 +40,7 @@
          (chez:apply proc args)
          (chez:apply (extract-procedure proc (length args)) args))]
     [(proc)
-     (raise-arity-error 'apply (arity-at-least 2) proc)]
+     (raise-arity-error 'apply (|#%app| arity-at-least 2) proc)]
     [(proc . argss)
      (if (chez:procedure? proc)
          (chez:apply chez:apply proc argss)

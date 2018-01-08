@@ -605,7 +605,7 @@
               (string-append
                "\n  expected: "
                (cond
-                [(arity-at-least? arity) (string-append "at least " (number->string arity))]
+                [(arity-at-least? arity) (string-append "at least " (number->string (arity-at-least-value arity)))]
                 [else (number->string arity)]))]))
            (current-continuation-marks)))]
        [else

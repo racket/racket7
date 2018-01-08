@@ -31,7 +31,7 @@
                (end-atomic)
                (if zero-ok?
                    0
-                   (try-again out))]
+                   (try-again out extra-count-outs))]
               [(evt? v)
                (end-atomic)
                (cond

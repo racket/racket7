@@ -6,7 +6,8 @@
          "output-port.rkt"
          "pipe.rkt"
          "bytes-input.rkt"
-         "count.rkt")
+         "count.rkt"
+         "commit-manager.rkt")
 
 (provide open-input-bytes
          open-output-bytes
@@ -27,6 +28,30 @@
       (semaphore-post progress-sema)
       (set! progress-sema #f)))
 
+  (define commit-manager #f)
+
+  ;; in atomic mode [can leave atomic mode temporarily]
+  ;; After this function returns, complete any commit-changing work
+  ;; before leaving atomic mode again.
+  (define (pause-waiting-commit)
+    (when commit-manager
+      (commit-manager-pause commit-manager)))
+  ;; in atomic mode [can leave atomic mode temporarily]
+  (define (wait-commit progress-evt ext-evt finish)
+    (cond
+      [(and (not commit-manager)
+            ;; Try shortcut:
+            (not (sync/timeout 0 progress-evt))
+            (sync/timeout 0 ext-evt))
+       (finish)
+       #t]
+      [else
+       ;; General case to support blocking and potentially multiple
+       ;; commiting threads:
+       (unless commit-manager
+         (set! commit-manager (make-commit-manager)))
+       (commit-manager-wait commit-manager progress-evt ext-evt finish)]))
+
   (define p
     (make-core-input-port
      #:name name
@@ -34,6 +59,7 @@
      
      #:read-byte
      (lambda ()
+       (pause-waiting-commit)
        (let ([pos i])
          (if (pos . < . len)
              (begin
@@ -44,6 +70,7 @@
      
      #:read-in
      (lambda (dest-bstr start end copy?)
+       (pause-waiting-commit)
        (define pos i)
        (cond
          [(pos . < . len)
@@ -56,6 +83,7 @@
      
      #:peek-byte
      (lambda ()
+       (pause-waiting-commit)
        (let ([pos i])
          (if (pos . < . len)
              (bytes-ref bstr pos)
@@ -63,6 +91,7 @@
      
      #:peek-in
      (lambda (dest-bstr start end skip progress-evt copy?)
+       (pause-waiting-commit)
        (define pos (+ i skip))
        (cond
          [(and progress-evt (sync/timeout 0 progress-evt))
@@ -79,27 +108,32 @@
 
      #:close
      (lambda ()
+       (pause-waiting-commit)
        (progress!))
 
      #:get-progress-evt
      (lambda ()
        (atomically
+        (pause-waiting-commit)
         (unless progress-sema
           (set! progress-sema (make-semaphore)))
         (semaphore-peek-evt progress-sema)))
 
      #:commit
-     (lambda (amt progress-evt ext-evt)
-       ;; Very similar to the pipe implementation:
-       (atomically
-        (and (not (sync/timeout 0 progress-evt))
-             (sync/timeout 0 ext-evt)
-             (let ([amt (min amt (- len i))])
-               (define dest-bstr (make-bytes amt))
-               (bytes-copy! dest-bstr 0 bstr i (+ i amt))
-               (set! i (+ i amt))
-               (progress!)
-               dest-bstr))))
+     (lambda (amt progress-evt ext-evt finish)
+       (unless commit-manager
+         (set! commit-manager (make-commit-manager)))
+       (commit-manager-wait
+        commit-manager
+        progress-evt ext-evt
+        ;; in atomic mode, maybe in a different thread:
+        (lambda ()
+          (let ([amt (min amt (- len i))])
+            (define dest-bstr (make-bytes amt))
+            (bytes-copy! dest-bstr 0 bstr i (+ i amt))
+            (set! i (+ i amt))
+            (progress!)
+            (finish dest-bstr)))))
 
      #:file-position
      (case-lambda

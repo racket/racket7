@@ -101,13 +101,14 @@
    ;;           *Not* called in atomic mode.
    ;;           Optional support for progress events.
 
-   commit    ; (amt-k progress-evt? evt?) -> (or/c bytes? #f)
+   commit    ; (amt-k progress-evt? evt? (bytes? -> any) -> boolean)
    ;;          Called in atomic mode.
    ;;          Goes with `get-progress-evt`. The final `evt?`
    ;;          argument is constrained to a few kinds of events;
    ;;          see docs for `port-commit-peeked` for more information.
-   ;;          The result is the committed bytes on success, #f on
-   ;;          failure.
+   ;;          On success, a completion function is called in atomic mode,
+   ;;          but possibly in a different thread, with the committed bytes.
+   ;;          The result is a boolean indicating success or failure.
 
    [pending-eof? #:mutable]
    [read-handler #:mutable])

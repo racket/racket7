@@ -54,12 +54,10 @@
   (let ([in (->core-input-port in)])
     (define commit (core-input-port-commit in))
     (atomically
-     (define bstr (commit amt (progress-evt-evt progress-evt) evt))
-     (cond
-       [bstr
-        (port-count! in (bytes-length bstr) bstr 0)
-        #t]
-       [else #f]))))
+     (commit amt (progress-evt-evt progress-evt) evt
+             ;; in atomic mode (but maybe leaves atomic mode in between)
+             (lambda (bstr)
+               (port-count! in (bytes-length bstr) bstr 0))))))
 
 (define (check-progress-evt who progress-evt in)
   (unless (progress-evt?* progress-evt in)

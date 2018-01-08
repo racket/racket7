@@ -234,15 +234,15 @@
     r)
 
   ;; in atomic mode
-  (define (commit amt evt ext-evt)
+  (define (commit amt evt ext-evt finish)
     (define r
       (parameterize-break #f
         (non-atomically
          (user-commit amt evt ext-evt))))
     (cond
       [(not r) #f]
-      [(bytes? r) r]
-      [else (make-bytes amt (char->integer #\x))]))
+      [(bytes? r) (finish r) #t]
+      [else (finish (make-bytes amt (char->integer #\x))) #t]))
 
   (define get-location
     (and user-get-location

@@ -420,9 +420,9 @@
               (let remove-args ([env env] [args (syntax->datum args)])
                 (cond
                  [(null? args) env]
-                 [(pair? args) (remove-args (remq (car args) env)
+                 [(pair? args) (remove-args (#%remq (car args) env)
                                             (cdr args))]
-                 [else (remq args env)])))]
+                 [else (#%remq args env)])))]
 
            [unique-ids
             (lambda (l)
