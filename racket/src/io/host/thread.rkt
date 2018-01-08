@@ -48,7 +48,8 @@
         unsafe-custodian-register
         unsafe-custodian-unregister
         thread-push-kill-callback!
-        thread-pop-kill-callback!)
+        thread-pop-kill-callback!
+        set-get-subprocesses-time!)
 
 (define-syntax-rule (atomically e ...)
   (begin

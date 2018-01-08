@@ -270,3 +270,10 @@
                                  show_mode))
   (when (rktio-error? r) (raise-rktio-error 'who "failed" r))
   #f)
+
+;; ----------------------------------------
+
+(void
+ (set-get-subprocesses-time!
+  (lambda ()
+    (rktio_get_process_children_milliseconds rktio))))

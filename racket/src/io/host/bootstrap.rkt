@@ -108,4 +108,5 @@
                          'unsafe-custodian-register unsafe-custodian-register
                          'unsafe-custodian-unregister unsafe-custodian-unregister
                          'thread-push-kill-callback! thread-push-kill-callback!
-                         'thread-pop-kill-callback! thread-pop-kill-callback!))
+                         'thread-pop-kill-callback! thread-pop-kill-callback!
+                         'set-get-subprocesses-time! void))
