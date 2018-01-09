@@ -971,7 +971,7 @@
   (define b-s (compile-m b-expr (list a-s)))
 
   (define temp-dir (find-system-path 'temp-dir))
-  (define dir (build-path temp-dir "compiled"))
+  (define dir (build-path temp-dir (car (use-compiled-file-paths))))
   (define dir-existed? (directory-exists? dir))
   (unless dir-existed? (make-directory dir))
 
@@ -1303,8 +1303,8 @@ case of module-leve bindings; it doesn't cover local bindings.
                         (module s racket/base
                           (provide x)
                           (define x 1)))))
-  (make-directory* (build-path dir "compiled"))
-  (define zo-path (build-path dir "compiled" "tmx_rkt.zo"))
+  (make-directory* (build-path dir  (car (use-compiled-file-paths))))
+  (define zo-path (build-path dir  (car (use-compiled-file-paths)) "tmx_rkt.zo"))
 
   (define bstr
     (let ([b (open-output-bytes)])
@@ -1335,8 +1335,8 @@ case of module-leve bindings; it doesn't cover local bindings.
   (define e (compile '(module tmx2 racket/kernel
                         (#%provide x)
                         (define-values (x) 1))))
-  (make-directory* (build-path dir "compiled"))
-  (define zo-path (build-path dir "compiled" "tmx2_rkt.zo"))
+  (make-directory* (build-path dir (car (use-compiled-file-paths))))
+  (define zo-path (build-path dir (car (use-compiled-file-paths)) "tmx2_rkt.zo"))
 
   (define bstr
     (let ([b (open-output-bytes)])
@@ -1677,23 +1677,23 @@ case of module-leve bindings; it doesn't cover local bindings.
   (define tmp (make-temporary-file "~a-module-test" 'directory))
   (parameterize ([current-directory tmp]
                  [current-load-relative-directory tmp])
-    (make-directory "compiled")
+    (make-directory* (car (use-compiled-file-paths)))
     (call-with-output-file*
-     "compiled/a_rkt.zo"
+     (build-path (car (use-compiled-file-paths)) "a_rkt.zo")
      (lambda (o) (write (compile '(module a racket/base
-                              (provide (all-defined-out))
-                              (define a 1)
-                              (define b 2)
-                              (define c 3)))
-                   o)))
+                                    (provide (all-defined-out))
+                                    (define a 1)
+                                    (define b 2)
+                                    (define c 3)))
+                        o)))
     (call-with-output-file*
-     "compiled/b_rkt.zo"
+     (build-path (car (use-compiled-file-paths)) "b_rkt.zo")
      (lambda (o) (write (compile '(module b racket/base
-                              (require "a.rkt"
-                                       ;; Force saving of context, instead of
-                                       ;; reconstruction:
-                                       (only-in racket/base [car extra-car]))))
-                   o))))
+                                    (require "a.rkt"
+                                             ;; Force saving of context, instead of
+                                             ;; reconstruction:
+                                             (only-in racket/base [car extra-car]))))
+                        o))))
   (dynamic-require (build-path tmp "b.rkt") #f)
   (define ns (module->namespace (build-path tmp "b.rkt")))
   (test #t
