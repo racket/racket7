@@ -42,6 +42,13 @@
 
 (define/who (make-semaphore [init 0])
   (check who exact-nonnegative-integer? init)
+  (unless (fixnum? init)
+    (raise
+     (exn:fail (string-append
+                "make-semaphore: starting value "
+                (number->string init)
+                " is too large")
+               (current-continuation-marks))))
   (semaphore init (make-queue)))
 
 ;; ----------------------------------------
