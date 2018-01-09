@@ -22,6 +22,10 @@
   (define buffer-mode 'block)
 
   ;; in atomic mode
+  (define (prepare-change)
+    ((core-input-port-prepare-change peek-pipe-i)))
+
+  ;; in atomic mode
   (define (pull-some-bytes [amt (bytes-length buf)] #:keep-eof? [keep-eof? #t])
     (define v (read-in buf 0 amt #f))
     (cond
@@ -140,6 +144,7 @@
     (set!-values (peek-pipe-i peek-pipe-o) (make-pipe))
     (set! peeked-eof? #f))
 
+  ;; in atomic mode
   (define (get-progress-evt)
     ((core-input-port-get-progress-evt peek-pipe-i)))
 
@@ -159,6 +164,8 @@
   (values (make-core-input-port
            #:name name
            #:data data
+
+           #:prepare-change prepare-change
            
            #:read-byte read-byte
            #:read-in do-read-in

@@ -151,10 +151,13 @@
     (make-core-input-port
      #:name input-name
      #:data data
+
+     #:prepare-change
+     (lambda ()
+       (pause-waiting-commit))
      
      #:read-byte
      (lambda ()
-       (pause-waiting-commit)
        (cond
          [(input-empty?)
           (if output-closed?
@@ -174,7 +177,6 @@
 
      #:read-in
      (lambda (dest-bstr dest-start dest-end copy?)
-       (pause-waiting-commit)
        (cond
          [(input-empty?)
           (if output-closed?
@@ -203,7 +205,6 @@
 
      #:peek-byte
      (lambda ()
-       (pause-waiting-commit)
        (cond
          [(input-empty?)
           (if output-closed?
@@ -215,7 +216,6 @@
      
      #:peek-in
      (lambda (dest-bstr dest-start dest-end skip progress-evt copy?)
-       (pause-waiting-commit)
        (define content-amt (content-length))
        (cond
          [(and progress-evt
@@ -250,13 +250,11 @@
 
      #:byte-ready
      (lambda (work-done!)
-       (pause-waiting-commit)
        (or output-closed?
            (not (zero? (content-length)))))
 
      #:close
      (lambda ()
-       (pause-waiting-commit)
        (unless input-closed?
          (set! input-closed? #t)
          (progress!)))
@@ -264,7 +262,6 @@
      #:get-progress-evt
      (lambda ()
        (atomically
-        (pause-waiting-commit)
         (cond
           [input-closed? always-evt]
           [else
@@ -280,7 +277,6 @@
        ;; is constrained; we can send them over to different threads
        (cond
          [(zero? amt)
-          (pause-waiting-commit)
           (progress!)]
          [else
           (wait-commit

@@ -5,7 +5,8 @@
          "port.rkt"
          "input-port.rkt"
          "bytes-input.rkt"
-         "check.rkt")
+         "check.rkt"
+         "prepare-change.rkt")
 
 (provide byte-ready?
          char-ready?)
@@ -18,6 +19,7 @@
       [(input-port? byte-ready) (loop (->core-input-port byte-ready))]
       [else
        (start-atomic)
+       (prepare-change in)
        (check-not-closed who in)
        (define r (byte-ready void))
        (end-atomic)

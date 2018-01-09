@@ -248,6 +248,10 @@
     (and user-get-location
          (make-get-location user-get-location)))
 
+  (define count-lines!
+    (and user-count-lines!
+         (lambda () (end-atomic) (user-count-lines!) (start-atomic))))
+
   (define-values (init-offset file-position)
     (make-init-offset+file-position user-init-position))
 
@@ -275,7 +279,7 @@
      #:get-progress-evt (and user-get-progress-evt get-progress-evt)
      #:commit (and user-commit commit)
      #:get-location get-location
-     #:count-lines! user-count-lines!
+     #:count-lines! count-lines!
      #:init-offset init-offset
      #:file-position file-position
      #:buffer-mode buffer-mode)]
@@ -286,7 +290,7 @@
        #:read-in read-in
        #:close close
        #:get-location get-location
-       #:count-lines! user-count-lines!
+       #:count-lines! count-lines!
        #:init-offset init-offset
        #:file-position file-position
        #:alt-buffer-mode buffer-mode))

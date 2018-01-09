@@ -105,7 +105,9 @@
     (cond
       [output-pipe
        (cond
-         [(not (sync/timeout 0 output-pipe))
+         [(or non-block/buffer?
+              (= start end)
+              (not (sync/timeout 0 output-pipe)))
           (set! output-pipe #f)
           (write-out bstr start end non-block/buffer? enable-break? copy?)]
          [else
@@ -129,9 +131,11 @@
          [else r])]))
 
   (define (get-write-evt bstr start end)
+    (end-atomic)
     (define r (user-get-write-evt bstr start end))
     (unless (evt? r)
       (raise-result-error '|user port get-write-evt| "evt?" r))
+    (start-atomic)
     (wrap-check-write-evt-result '|user port write-evt| r start end #t))
 
   (define (write-out-special v non-block/buffer? enable-break?)
@@ -144,11 +148,16 @@
     (and user-get-location
          (make-get-location user-get-location)))
 
+  (define count-lines!
+    (and user-count-lines!
+         (lambda () (end-atomic) (user-count-lines!) (start-atomic))))
+
   (define-values (init-offset file-position)
     (make-init-offset+file-position user-init-position))
 
   (define buffer-mode
-    (make-buffer-mode user-buffer-mode #:output? #t))
+    (and user-buffer-mode
+         (make-buffer-mode user-buffer-mode #:output? #t)))
 
   ;; in atomic mode
   (define (close)
@@ -171,7 +180,7 @@
    #:get-write-evt (and user-get-write-evt get-write-evt)
    #:get-write-special-evt user-get-write-special-evt
    #:get-location get-location
-   #:count-lines! user-count-lines!
+   #:count-lines! count-lines!
    #:init-offset init-offset
    #:file-position file-position
    #:buffer-mode buffer-mode))

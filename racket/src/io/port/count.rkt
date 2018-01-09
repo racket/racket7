@@ -4,6 +4,8 @@
          "port.rkt"
          "input-port.rkt"
          "output-port.rkt"
+         "check.rkt"
+         "file-position.rkt"
          "../string/utf-8-decode.rkt")
 
 (provide port-count-lines-enabled
@@ -28,6 +30,7 @@
              [(output-port? p) (->core-output-port p)]
              [else (check who #:test #f #:contract "port?" p)])])
     (atomically
+     (check-not-closed who p)
      (unless (core-port-count? p)
        (set-core-port-count?! p #t)
        (set-core-port-line! p 1)
@@ -35,9 +38,7 @@
        (set-core-port-position! p (add1 (or (core-port-offset p) 0)))
        (define count-lines! (core-port-count-lines! p))
        (when count-lines!
-         (end-atomic)
-         (count-lines!)
-         (start-atomic))))))
+         (count-lines!))))))
 
 (define/who (port-counts-lines? p)
   (core-port-count?
@@ -55,18 +56,19 @@
               (check who #:test #f #:contract "port?" p)])])
     (cond
       [(core-port-count? p)
-       (define get-location (core-port-get-location p))
-       (cond
-         [get-location
-          (get-location)]
-         [else
-          (values (core-port-line p)
-                  (core-port-column p)
-                  (core-port-position p))])]
+       (atomically
+        (check-not-closed who p)
+        (define get-location (core-port-get-location p))
+        (cond
+          [get-location
+           (get-location)]
+          [else
+           (values (core-port-line p)
+                   (core-port-column p)
+                   (core-port-position p))]))]
       [(core-port-file-position p)
-       => (lambda (file-position)
-            (define offset (file-position))
-            (values #f #f (and offset (add1 offset))))]
+       (define offset (do-simple-file-position who p (lambda () #f)))
+       (values #f #f (and offset (add1 offset)))]
       [else
        (define offset (core-port-offset p))
        (values #f #f (and offset (add1 offset)))])))

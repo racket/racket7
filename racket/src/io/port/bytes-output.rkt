@@ -1,8 +1,10 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/thread.rkt"
          "output-port.rkt"
          "parameter.rkt"
-         "write.rkt")
+         "write.rkt"
+         "check.rkt")
 
 (provide write-byte
          write-bytes
@@ -71,12 +73,15 @@
   (check who exact-nonnegative-integer? end-pos)
   (check-range who start-pos end-pos (bytes-length bstr) bstr)
   (let ([out (->core-output-port out)])
-    (define get-write-evt (core-output-port-get-write-evt out))
-    (unless get-write-evt
-      (raise-arguments-error who
-                             "port does not support output events"
-                             "port" out))
-    (get-write-evt bstr start-pos end-pos)))
+    (atomically
+     (check-not-closed who out)
+     (define get-write-evt (core-output-port-get-write-evt out))
+     (unless get-write-evt
+       (end-atomic)
+       (raise-arguments-error who
+                              "port does not support output events"
+                              "port" out))
+     (get-write-evt bstr start-pos end-pos))))
 
 (define/who (port-writes-atomic? out)
   (check who output-port? out)

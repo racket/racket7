@@ -1,8 +1,10 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/thread.rkt"
          "port.rkt"
          "input-port.rkt"
-         "output-port.rkt")
+         "output-port.rkt"
+         "check.rkt")
 
 (provide file-stream-buffer-mode)
 
@@ -15,8 +17,10 @@
                 [else
                  (raise-argument-error 'file-stream-buffer-mode "port?" p)])])
        (define buffer-mode (core-port-buffer-mode p))
-       (and buffer-mode
-            (buffer-mode)))]
+       (atomically
+        (check-not-closed who p)
+        (and buffer-mode
+             (buffer-mode))))]
     [(p mode)
      (unless (or (input-port? p) (output-port? p))
        (raise-argument-error who "port?" p))
@@ -27,12 +31,14 @@
                               "'line buffering not supported for an input port"
                               "port" p))
      (define (set-buffer-mode p)
-       (define buffer-mode (core-port-buffer-mode p))
-       (cond
-         [buffer-mode
-          (buffer-mode mode)
-          #t]
-         [else #f]))
+       (atomically
+        (check-not-closed who p)
+        (define buffer-mode (core-port-buffer-mode p))
+        (cond
+          [buffer-mode
+           (buffer-mode mode)
+           #t]
+          [else #f])))
      (cond
        [(input-port? p)
         (or (set-buffer-mode (->core-input-port p))

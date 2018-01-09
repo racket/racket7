@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/check.rkt"
+         "../host/thread.rkt"
          "input-port.rkt"
          "output-port.rkt")
 
@@ -15,8 +16,10 @@
          make-buffer-mode)
 
 
+;; in atomic mode
 (define (make-get-location user-get-location)
   (lambda ()
+    (end-atomic)
     (call-with-values
      (lambda () (user-get-location))
      (case-lambda
@@ -27,6 +30,7 @@
           (raise-result-error '|user port get-location| "(or/c #f exact-nonnegative-integer?)" col))
         (unless (or (not line) (exact-positive-integer? pos))
           (raise-result-error '|user port get-location| "(or/c #f exact-positive-integer?)" pos))
+        (start-atomic)
         (values line col pos)]
        [args
         (apply raise-arity-error '|user port get-location return| 3 args)]))))
@@ -75,13 +79,18 @@
 (define (make-buffer-mode user-buffer-mode #:output? [output? #f])
   (case-lambda
     [()
+     (end-atomic)
      (define m (user-buffer-mode))
-     (if (or (not m) (eq? m 'block) (eq? m 'none) (and output? (eq? m 'line)))
-         m
-         (raise-result-error '|user port buffer-mode|
-                             (if output?
-                                 "(or/c 'block 'line 'none #f)"
-                                 "(or/c 'block 'none #f)")
-                             m))]
+     (cond
+       [(or (not m) (eq? m 'block) (eq? m 'none) (and output? (eq? m 'line)))
+        (start-atomic)
+        m]
+       [else
+        (raise-result-error '|user port buffer-mode|
+                            (if output?
+                                "(or/c 'block 'line 'none #f)"
+                                "(or/c 'block 'none #f)")
+                            m)])]
     [(m)
-     (user-buffer-mode m)]))
+     (non-atomically
+      (user-buffer-mode m))]))

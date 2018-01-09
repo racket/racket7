@@ -3,14 +3,16 @@
          "../host/thread.rkt"
          "parameter.rkt"
          "input-port.rkt"
-         "count.rkt")
+         "count.rkt"
+         "check.rkt")
 
 (provide (rename-out [progress-evt?* progress-evt?])
          port-provides-progress-evts?
          port-progress-evt
          port-commit-peeked
 
-         check-progress-evt)
+         check-progress-evt
+         unwrap-progress-evt)
 
 (struct progress-evt (port evt)
   #:property prop:evt (lambda (pe)
@@ -54,6 +56,8 @@
   (let ([in (->core-input-port in)])
     (define commit (core-input-port-commit in))
     (atomically
+     ;; We specially skip a check on whether the port is closed,
+     ;; since that's handled as the progress evt becoming ready
      (commit amt (progress-evt-evt progress-evt) evt
              ;; in atomic mode (but maybe leaves atomic mode in between)
              (lambda (bstr)
@@ -64,3 +68,7 @@
     (raise-arguments-error who "evt is not a progress evt for the given port"
                            "evt" progress-evt
                            "port" in)))
+
+(define (unwrap-progress-evt progress-evt)
+  (and progress-evt
+       (progress-evt-evt progress-evt)))

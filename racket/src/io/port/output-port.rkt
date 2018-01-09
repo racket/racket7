@@ -66,7 +66,7 @@
    ;;          Called in atomic mode.
 
    get-write-evt ; (bstr start-k end-k -> evt?)
-   ;;            *Not* called in atomic mode.
+   ;;            Called in atomic mode.
    ;;            The given bstr should not be exposed to untrusted code.
 
    get-write-special-evt ; (-> evt?)

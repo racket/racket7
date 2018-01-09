@@ -7,7 +7,9 @@
          "check.rkt")
 
 (provide file-position
-         file-position*)
+         file-position*
+
+         do-simple-file-position)
 
 (define/who file-position
   (case-lambda

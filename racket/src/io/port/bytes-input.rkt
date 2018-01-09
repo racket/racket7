@@ -178,7 +178,7 @@
   (maybe-flush-stdout in)
   (let ([in (->core-input-port in)])
     (peek-some-bytes! who in bstr start-pos end-pos skip-k
-                      #:progress-evt progress-evt                      
+                      #:progress-evt (unwrap-progress-evt progress-evt)
                       #:zero-ok? zero-ok?
                       #:enable-break? enable-break?)))
 

@@ -4,7 +4,8 @@
          "port.rkt"
          "input-port.rkt"
          "count.rkt"
-         "check.rkt")
+         "check.rkt"
+         "prepare-change.rkt")
 
 (provide read-some-bytes!
          peek-some-bytes!
@@ -41,6 +42,7 @@
                           #:limit-special-arity? [limit-special-arity? #t])
   (let loop ([in orig-in] [extra-count-ins null])
     (start-atomic)
+    (prepare-change in)
     (cond
       [(= start end) ; intentionally before the port-closed check
        (end-atomic)
@@ -113,6 +115,7 @@
                           #:limit-special-arity? [limit-special-arity? #t])
   (let loop ([in orig-in])
     (start-atomic)
+    (prepare-change in)
     (cond
       [(= start end)
        (end-atomic)
@@ -175,6 +178,7 @@
 (define (do-read-byte who read-byte in)
   (let loop ()
     (start-atomic)
+    (prepare-change in)
     (cond
       [(closed-state-closed? (core-port-closed in))
        (check-not-closed who in)]
@@ -208,6 +212,7 @@
 (define (do-peek-byte who peek-byte in orig-in)
   (let loop ()
     (start-atomic)
+    (prepare-change in)
     (check-not-closed who in)
     (define b (peek-byte))
     (end-atomic)

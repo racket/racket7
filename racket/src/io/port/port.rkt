@@ -11,10 +11,10 @@
                    close     ; -> (void)
                    ;;          Called in atomic mode.
 
-                   count-lines!  ; #f or procedure
-                   get-location  ; #f or procedure
+                   count-lines!  ; #f or procedure called in atomic mode
+                   get-location  ; #f or procedure called in atomic mode
                    file-position ; #f, port, or procedure called in atomic mode
-                   buffer-mode   ; #f or procedure
+                   buffer-mode   ; #f or procedure in atomic mode
 
                    closed        ; `closed-state`
 

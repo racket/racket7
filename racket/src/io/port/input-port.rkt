@@ -48,12 +48,25 @@
 
 (struct core-input-port core-port
   (
-   ;; Various functions below are called in atomic mode. The
-   ;; intent of atomic mode is to ensure that the completion and
-   ;; return of the function is atomic with respect to some further
-   ;; activity, such as position and line counting. Any of the
-   ;; functions is free to exit and re-enter atomic mode. Leave
-   ;; atomic mode explicitly before raising an exception.
+   ;; Various functions below are called in atomic mode. The intent of
+   ;; atomic mode is to ensure that the completion and return of the
+   ;; function is atomic with respect to some further activity, such
+   ;; as position and line counting. Also, a guard against operations
+   ;; on a closed port precedes most operations. Any of the functions
+   ;; is free to exit and re-enter atomic mode, but they may take on
+   ;; the burden of re-checking for a closed port. Leave atomic mode
+   ;; explicitly before raising an exception.
+
+   prepare-change ; #f or (-> void)
+   ;;               Called in atomic mode
+   ;;               May leave atomic mode temporarily, but on return,
+   ;;               ensures that other atomic operations are ok to
+   ;;               change the port. The main use of `prepare-change`
+   ;;               is to pause and `port-commit-peeked` attempts to
+   ;;               not succeed while a potential change is in
+   ;;               progress, where the commit attempts can resume after
+   ;;               atomic mode is left. The `close` operation
+   ;;               is *not* guarded by a call to `prepare-change`.
 
    read-byte ; #f or (-> (or/c byte? eof-object? evt?))
    ;;          Called in atomic mode.
@@ -99,7 +112,8 @@
 
    get-progress-evt ; #f or (-> evt?)
    ;;           *Not* called in atomic mode.
-   ;;           Optional support for progress events.
+   ;;           Optional support for progress events, and may be
+   ;;           called on a closed port.
 
    commit    ; (amt-k progress-evt? evt? (bytes? -> any) -> boolean)
    ;;          Called in atomic mode.
@@ -138,6 +152,7 @@
 
 (define (make-core-input-port #:name name
                               #:data [data #f]
+                              #:prepare-change [prepare-change #f]
                               #:read-byte [read-byte #f]
                               #:read-in read-in
                               #:peek-byte [peek-byte #f]
@@ -168,7 +183,8 @@
                    #f   ; line
                    #f   ; column
                    #f   ; position
-                   
+
+                   prepare-change
                    read-byte
                    read-in
                    peek-byte

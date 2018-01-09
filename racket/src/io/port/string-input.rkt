@@ -9,7 +9,8 @@
          "../string/utf-8-decode.rkt"
          "count.rkt"
          "flush-output.rkt"
-         "check.rkt")
+         "check.rkt"
+         "prepare-change.rkt")
 
 (provide read-char
          read-string
@@ -198,6 +199,7 @@
   (define b
     (let loop ()
       (start-atomic)
+      (prepare-change in)
       (check-not-closed who in)
       (define b (read-byte))
       (cond

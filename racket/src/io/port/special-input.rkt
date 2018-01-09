@@ -74,21 +74,21 @@
 (define (extract-special-value v in source-name delta special-wrap)
   (cond
     [(procedure? v)
-     (values ; make sure it's a single result
-      (cond
-        [(not source-name)
-         (cond
-           [(procedure-arity-includes? v 0)
-            (v)]
-           [else
-            (v #f #f #f #f)])]
-        [else
-         (define-values (line col pos) (port-next-location in))
-         (define special (v source-name
-                            line
-                            (and col (+ col delta))
-                            (and pos (+ pos delta))))
-         (if special-wrap
-             (special-wrap special)
-             special)]))]
+     (define special
+       (cond
+         [(not source-name)
+          (cond
+            [(procedure-arity-includes? v 0)
+             (v)]
+            [else
+             (v #f #f #f #f)])]
+         [else
+          (define-values (line col pos) (port-next-location in))
+          (v source-name
+             line
+             (and col (+ col delta))
+             (and pos (+ pos delta)))]))
+     (if special-wrap
+         (special-wrap special)
+         special)]
     [else v]))
