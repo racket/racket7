@@ -650,8 +650,10 @@
 
 (define l (tcp-listen 59078 5 #t))
 (test #t (tcp-listener? l))
+(test #t (evt? l))
 
 (define-values (ti to) (tcp-connect "localhost" 59078))
+(test l (sync l))
 (define-values (tai tao) (tcp-accept l))
 
 (test 6 (write-string "hello\n" to))

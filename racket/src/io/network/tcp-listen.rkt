@@ -3,6 +3,7 @@
          "../host/thread.rkt"
          "../host/rktio.rkt"
          "../security/main.rkt"
+         "../sandman/main.rkt"
          "port-number.rkt"
          "address.rkt"
          "error.rkt")
@@ -17,7 +18,8 @@
 (struct tcp-listener (lnr
                       closed ; boxed boolean
                       custodian-reference)
-  #:authentic)
+  #:authentic
+  #:property prop:evt (poller (lambda (l ctx) (poll-listener l ctx))))
 
 (define/who (tcp-listen port-no [max-allow-wait 4] [reuse? #f] [hostname #f])
   (check who listen-port-number?  port-no)
@@ -89,3 +91,20 @@
 ;; in atomic mode
 (define (tcp-listener-closed? listener)
   (unbox (tcp-listener-closed listener)))
+
+;; ----------------------------------------
+
+;; in atomic mode
+(define (poll-listener l ctx)
+  (cond
+    [(unbox (tcp-listener-closed l))
+     (values (list l) #f)]
+    [(eqv? (rktio_poll_accept_ready rktio (tcp-listener-lnr l))
+           RKTIO_POLL_READY)
+     (values (list l) #f)]
+    [else
+     (sandman-poll-ctx-add-poll-set-adder!
+      ctx
+      (lambda (ps)
+        (rktio_poll_add_accept rktio (tcp-listener-lnr l) ps)))
+     (values #f l)]))
