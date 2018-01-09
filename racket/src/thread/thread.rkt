@@ -753,6 +753,7 @@
          (set-thread-pending-break! t kind))
        (unless (thread-pending-break t)
          (set-thread-pending-break! t kind)
+         (thread-did-work!)
          (when (thread-descheduled? t)
            (unless (thread-suspended? t)
              (run-interrupt-callback t)
