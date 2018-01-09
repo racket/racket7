@@ -39,7 +39,15 @@
              ;; can only happen after here
              (set! result (call-with-continuation-barrier
                            (lambda ()
-                             (call-with-values thunk list))))
+                             (call-with-values (lambda ()
+                                                 (call-with-continuation-prompt
+                                                  thunk
+                                                  (default-continuation-prompt-tag)
+                                                  (lambda (thunk)
+                                                    (abort-current-continuation
+                                                     (default-continuation-prompt-tag)
+                                                     thunk))))
+                               list))))
              ;; Atomically decide that we have a value result and
              ;; terminate the thread, so that there's not a race between
              ;; detecting that the thread was killed versus deciding
