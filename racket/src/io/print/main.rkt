@@ -231,7 +231,8 @@
          (p who (unbox v) mode o (write-string/max "#&" o max-length) graph config)
          (write-string/max "#<box>" o max-length))]
     [(hash? v)
-     (if (config-get config print-hash-table)
+     (if (and (config-get config print-hash-table)
+              (not (hash-weak? v)))
          (print-hash v o max-length p who mode graph config)
          (write-string/max "#<hash>" o max-length))]
     [(mpair? v)

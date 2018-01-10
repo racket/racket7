@@ -40,6 +40,7 @@
        (and (not print-graph?)
             (quick-no-graph? (unbox v) (sub1 fuel)))]
       [(and (hash? v)
+            (not (hash-weak? v))
             (config-get config print-hash-table))
        (and (not print-graph?)
             (for/fold ([fuel (sub1 fuel)]) ([(k v) (in-hash v)]
@@ -144,6 +145,7 @@
        (define unquoted? (build-graph (unbox v) mode))
        (done! v unquoted?)]
       [(and (hash? v)
+            (not (hash-weak? v))
             (config-get config print-hash-table))
        (checking! v)
        (define unquoted?
