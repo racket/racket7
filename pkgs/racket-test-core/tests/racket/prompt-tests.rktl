@@ -1984,7 +1984,7 @@
              ;; the C stack. Eventually, the relevant segment wraps around,
              ;; with an overflow. Push a little deeper and then capture
              ;; that.
-             (let loop ([n 0][fuel #f])
+             (let loop ([n 0] [fuel (if (eq? (system-type 'vm) 'chez-scheme) 500 #f)])
                (vector-set-performance-stats! v)
                (cond
                 [(and (not fuel)

@@ -10,8 +10,12 @@
          #:contract "(or/c continuation? thread? #f)"
          k)
   (check who continuation-prompt-tag? prompt-tag)
-  (define e (thread-engine k))
   (cond
-    [(eq? e 'done) (host:continuation-marks #f prompt-tag)]
-    [(eq? e 'running) (current-continuation-marks)]
-    [else (host:continuation-marks e prompt-tag)]))
+    [(thread? k)
+     (define e (thread-engine k))
+     (cond
+       [(eq? e 'done) (host:continuation-marks #f prompt-tag)]
+       [(eq? e 'running) (current-continuation-marks)]
+       [else (host:continuation-marks e prompt-tag)])]
+    [else
+     (host:continuation-marks k prompt-tag)]))
