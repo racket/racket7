@@ -12,4 +12,3 @@
                              (lambda (v info)
                                (check 'guard-for-prop:exn:srclocs (procedure-arity-includes/c 1) v)
                                v)))
-

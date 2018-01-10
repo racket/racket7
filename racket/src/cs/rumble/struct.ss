@@ -1100,6 +1100,7 @@
                         (datum->syntax id
                                        (string->symbol (chez:apply format fmt args))))])
          (with-syntax ([struct:name (make-id #'name "struct:~a" (syntax->datum #'name))]
+                       [authentic-name? (make-id #'name "authentic-~a?" (syntax->datum #'name))]
                        [name? (make-id #'name "~a?" (syntax->datum #'name))]
                        [(name-field ...) (map (lambda (field)
                                                 (make-id field "~a-~a" (syntax->datum #'name) (syntax->datum field)))
@@ -1118,8 +1119,16 @@
              #'(begin
                  (define struct:name (make-record-type-descriptor 'name struct:parent #f #f #f '#((immutable field) ...)))
                  (define name ctr-expr)
-                 (define name? (record-predicate struct:name))
-                 (define name-field (record-accessor struct:name field-index))
+                 (define authentic-name? (record-predicate struct:name))
+                 (define name? (lambda (v) (or (authentic-name? v)
+                                               (and (impersonator? v)
+                                                    (authentic-name? (impersonator-val v))))))
+                 (define name-field
+                   (let ([name-field (record-accessor struct:name field-index)])
+                     (lambda (v)
+                       (if (authentic-name? v)
+                           (name-field v)
+                           (pariah (impersonate-ref name-field struct:name field-index v))))))
                  ...
                  (define dummy
                    (begin
