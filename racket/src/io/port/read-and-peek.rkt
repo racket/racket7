@@ -83,12 +83,16 @@
                                          "byte-string length" (- end start))])]
               [(eof-object? v) eof]
               [(evt? v)
+               ;; If `zero-ok?`, we should at least poll the event
+               (define timeout (if zero-ok? (lambda () 0) #f))
+               (define next-v (if enable-break?
+                                  (sync/timeout/enable-break timeout v)
+                                  (sync/timeout timeout v)))
                (cond
-                 [zero-ok? 0]
+                 [(and zero-ok? (evt? next-v))
+                  ;; Avoid looping on events
+                  0]
                  [else
-                  (define next-v (if enable-break?
-                                     (sync/enable-break v)
-                                     (sync v)))
                   (start-atomic)
                   (result-loop next-v)])]
               [(procedure? v)

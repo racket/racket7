@@ -43,8 +43,8 @@
        (sync (rktio-evt
               ;; in atomic mode
               (lambda ()
-                (not (or (tcp-listener-closed? listener)
-                         (accept-ready? listener))))
+                (or (tcp-listener-closed? listener)
+                    (accept-ready? listener)))
               ;; in atomic mode
               (lambda (ps)
                 (rktio_poll_add_accept rktio (tcp-listener-lnr listener) ps))))
