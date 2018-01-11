@@ -42,7 +42,7 @@
     ;; that information is correct, because it dynamically precedes
     ;; the `set!`
     (define-values (knowns info)
-      (find-definitions form prim-knowns prev-knowns imports mutated))
+      (find-definitions form prim-knowns prev-knowns imports mutated #f))
     (match form
       [`(define-values (,ids ...) ,rhs)
        (cond

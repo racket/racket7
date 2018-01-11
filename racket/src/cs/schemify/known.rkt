@@ -4,6 +4,7 @@
 ;; `struct-out` so that none of the exports are syntax bindings.
 
 (provide known-constant known-constant?
+         known-literal known-literal? known-literal-expr
          known-unknown known-unknown?
          known-procedure known-procedure?
          known-struct-type known-struct-type? known-struct-type-type
@@ -21,6 +22,7 @@
 
 (struct known-constant () #:prefab #:omit-define-syntaxes)
 (struct known-unknown () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
+(struct known-literal (expr) #:prefab #:omit-define-syntaxes #:super struct:known-constant)
 (struct known-procedure () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
 (struct known-struct-type (type field-count pure-constructor?) #:prefab #:omit-define-syntaxes)
 (struct known-constructor (type field-count) ; field count can be 'any

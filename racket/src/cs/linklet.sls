@@ -112,12 +112,14 @@
   (define post-lambda-on? (getenv "PLT_LINKLET_SHOW_POST_LAMBDA"))
   (define post-interp-on? (getenv "PLT_LINKLET_SHOW_POST_INTERP"))
   (define jit-demand-on? (getenv "PLT_LINKLET_SHOW_JIT_DEMAND"))
+  (define known-on? (getenv "PLT_LINKLET_SHOW_KNOWN"))
   (define show-on? (or gensym-on?
                        pre-jit-on?
                        pre-lift-on?
                        post-lambda-on?
                        post-interp-on?
                        jit-demand-on?
+                       known-on?
                        (getenv "PLT_LINKLET_SHOW")))
   (define show
     (case-lambda
@@ -431,6 +433,8 @@
            (if jitify-mode?
                (interpretable-jitified-linklet impl-lam unannotate)
                impl-lam)))
+       (when known-on?
+         (show "known" (hash-map exports-info (lambda (k v) (list k v)))))
        (performance-region
         'compile
         ;; Create the linklet:

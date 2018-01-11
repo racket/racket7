@@ -28,7 +28,9 @@
      ;; Note: auto-field count must be zero, because a non-zero count involves
      ;; an arity-reduced procedure
      (let ([u-name (unwrap name)]
-           [u-parent (unwrap parent)])
+           [u-parent (let ([u-parent (unwrap parent)])
+                       (or (extract-struct-typed-from-checked u-parent)
+                           u-parent))])
        (and (symbol? u-name)
             (or (not u-parent)
                 (known-struct-type? (hash-ref prim-knowns u-parent #f))
@@ -93,4 +95,26 @@
               (simple? val prim-knowns knowns imports mutated))))]
     [`null #t]
     [`'() #t]
+    [`,_ #f]))
+
+;; Recognide
+;;  (let ((<tmp> <id>))
+;;     (if (struct-type? <tmp?)
+;;         <tmp>
+;;         ....))
+;; and return <id>. This happens when `#:parent`
+;; is used in `struct` instead of specifying a parent
+;; name next to the struct name.
+(define (extract-struct-typed-from-checked e)
+  (match e
+    [`(let-values ([(,tmp1) ,id])
+        (if (struct-type? ,tmp2)
+            ,tmp3
+            ,_))
+     (define u-tmp1 (unwrap tmp1))
+     (and (eq? u-tmp1 (unwrap tmp2))
+          (eq? u-tmp1 (unwrap tmp3))
+          (let ([u (unwrap id)])
+            (and (symbol? u)
+                 u)))]
     [`,_ #f]))

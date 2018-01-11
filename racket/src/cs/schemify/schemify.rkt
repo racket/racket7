@@ -11,7 +11,8 @@
          "left-to-right.rkt"
          "serialize.rkt"
          "let.rkt"
-         "equal.rkt")
+         "equal.rkt"
+         "optimize.rkt")
 
 (provide schemify-linklet
          schemify-body)
@@ -138,7 +139,7 @@
   (define knowns
     (for/fold ([knowns (hasheq)]) ([form (in-list l)])
       (define-values (new-knowns info)
-        (find-definitions form prim-knowns knowns imports mutated))
+        (find-definitions form prim-knowns knowns imports mutated unannotate))
       new-knowns))
   ;; While schemifying, add calls to install exported values in to the
   ;; corresponding exported `variable` records, but delay those
@@ -218,269 +219,296 @@
 (define (schemify v annotate unannotate prim-knowns knowns mutated imports exports allow-set!-undefined?)
   (let schemify/knowns ([knowns knowns] [v v])
     (let schemify ([v v])
-      (annotate
-       v
-       (match v
-         [`(lambda ,formals ,body ...)
-          `(lambda ,formals ,@(map schemify body))]
-         [`(case-lambda [,formalss ,bodys ...] ...)
-          `(case-lambda ,@(for/list ([formals (in-list formalss)]
-                                [body (in-list bodys)])
-                       `[,formals ,@(map schemify body)]))]
-         [`(define-values (,struct:s ,make-s ,s? ,acc/muts ...)
-            (let-values (((,struct: ,make ,?1 ,-ref ,-set!) ,mk))
-              (values ,struct:2
-                      ,make2
-                      ,?2
-                      ,make-acc/muts ...)))
-          ;; Convert a `make-struct-type` binding into a 
-          ;; set of bindings that Chez's cp0 recognizes,
-          ;; and push the struct-specific extra work into
-          ;; `struct-type-install-properties!`
-          (define sti (and (wrap-eq? struct: struct:2)
-                           (wrap-eq? make make2)
-                           (wrap-eq? ?1 ?2)
-                           (make-struct-type-info mk prim-knowns knowns imports mutated)))
-          (cond
-           [(and sti
-                 ;; make sure `struct:` isn't used too early, since we're
-                 ;; reordering it's definition with respect to some arguments
-                 ;; of `make-struct-type`:
-                 (simple-mutated-state? (hash-ref mutated (unwrap struct:) #f)))
-            (define can-impersonate? (not (struct-type-info-authentic? sti)))
-            (define raw-s? (if can-impersonate? (gensym s?) s?))
-            `(begin
-              (define ,struct:s (make-record-type-descriptor ',(struct-type-info-name sti)
-                                                             ,(schemify (struct-type-info-parent sti))
-                                                             ,(if (not (struct-type-info-prefab-immutables sti))
-                                                                  #f
-                                                                  `(structure-type-lookup-prefab-uid
-                                                                    ',(struct-type-info-name sti)
-                                                                    ,(schemify (struct-type-info-parent sti))
-                                                                    ,(struct-type-info-immediate-field-count sti)
-                                                                    0 #f
-                                                                    ',(struct-type-info-prefab-immutables sti)))
-                                                             #f
-                                                             #f
-                                                             ',(for/vector ([i (in-range (struct-type-info-immediate-field-count sti))])
-                                                                 `(mutable ,(string->symbol (format "f~a" i))))))
-              ,@(if (null? (struct-type-info-rest sti))
-                    null
-                    `((define ,(gensym)
-                        (struct-type-install-properties! ,struct:s
-                                                         ',(struct-type-info-name sti)
-                                                         ,(struct-type-info-immediate-field-count sti)
-                                                         0
-                                                         ,(schemify (struct-type-info-parent sti))
-                                                         ,@(map schemify (struct-type-info-rest sti))))))
-              (define ,make-s ,(let ([ctr `(record-constructor
-                                            (make-record-constructor-descriptor ,struct:s #f #f))])
-                                 (if (struct-type-info-pure-constructor? sti)
-                                     ctr
-                                     `(struct-type-constructor-add-guards ,ctr ,struct:s ',(struct-type-info-name sti)))))
-              (define ,raw-s? (record-predicate ,struct:s))
-              ,@(if can-impersonate?
-                    `((define ,s? (lambda (v) (if (,raw-s? v) #t (pariah (if (impersonator? v) (,raw-s? (impersonator-val v)) #f))))))
-                    null)
-              ,@(for/list ([acc/mut (in-list acc/muts)]
-                           [make-acc/mut (in-list make-acc/muts)])
-                  (define raw-acc/mut (if can-impersonate? (gensym acc/mut) acc/mut))
-                  (match make-acc/mut
-                    [`(make-struct-field-accessor ,(? (lambda (v) (wrap-eq? v -ref))) ,pos ,_)
-                     (define raw-def `(define ,raw-acc/mut (record-accessor ,struct:s ,pos)))
-                     (if can-impersonate?
-                         `(begin
-                            ,raw-def
-                            (define ,acc/mut
-                              (lambda (s) (if (,raw-s? s)
-                                              (,raw-acc/mut s)
-                                              (pariah (impersonate-ref ,raw-acc/mut ,struct:s ,pos s))))))
-                         raw-def)]
-                    [`(make-struct-field-mutator ,(? (lambda (v) (wrap-eq? v -set!))) ,pos ,_)
-                     (define raw-def `(define ,raw-acc/mut (record-mutator ,struct:s ,pos)))
-                     (define abs-pos (+ pos (- (struct-type-info-field-count sti)
-                                               (struct-type-info-immediate-field-count sti))))
-                     (if can-impersonate?
-                         `(begin
-                            ,raw-def
-                            (define ,acc/mut
-                              (lambda (s v) (if (,raw-s? s)
-                                                (,raw-acc/mut s v)
-                                                (pariah (impersonate-set! ,raw-acc/mut ,struct:s ,pos ,abs-pos s v))))))
-                         raw-def)]
-                    [`,_ (error "oops")]))
-              (define ,(gensym)
-                (begin
-                  (register-struct-constructor! ,make-s)
-                  (register-struct-predicate! ,s?)
-                  ,@(for/list ([acc/mut (in-list acc/muts)]
-                               [make-acc/mut (in-list make-acc/muts)])
-                      (match make-acc/mut
-                        [`(make-struct-field-accessor ,_ ,pos ,_)
-                         `(register-struct-field-accessor! ,acc/mut ,struct:s ,pos)]
-                        [`(make-struct-field-mutator ,_ ,pos ,_)
-                         `(register-struct-field-mutator! ,acc/mut ,struct:s ,pos)]
-                        [`,_ (error "oops")]))
-                  (void))))]
-           [else
-            (match v
-              [`(,_ ,ids ,rhs)
-               `(define-values ,ids ,(schemify rhs))])])]
-         [`(define-values (,id) ,rhs)
-          `(define ,id ,(schemify rhs))]
-         [`(define-values ,ids ,rhs)
-          `(define-values ,ids ,(schemify rhs))]
-         [`(quote ,_) v]
-         [`(let-values () ,body)
-          (schemify body)]
-         [`(let-values () ,bodys ...)
-          `(begin ,@(map schemify bodys))]
-         [`(let-values ([(,ids) ,rhss] ...) ,bodys ...)
-          (define new-knowns
-            (for/fold ([knowns knowns]) ([id (in-list ids)]
-                                         [rhs (in-list rhss)])
-              (if (lambda? rhs)
-                  (hash-set knowns (unwrap id) a-known-procedure)
-                  knowns)))
-          (left-to-right/let ids
-                             (for/list ([rhs (in-list rhss)])
-                               (schemify rhs))
-                             (for/list ([body (in-list bodys)])
-                               (schemify/knowns new-knowns body))
-                             unannotate prim-knowns knowns imports mutated)]
-         [`(let-values ([() (begin ,rhss ... (values))]) ,bodys ...)
-          `(begin ,@(map schemify rhss) ,@(map schemify bodys))]
-         [`(let-values ([,idss ,rhss] ...) ,bodys ...)
-          (left-to-right/let-values idss
-                                    (for/list ([rhs (in-list rhss)])
-                                      (schemify rhs))
-                                    (map schemify bodys)
-                                    mutated)]
-         [`(letrec-values ([(,ids) ,rhss] ...) ,bodys ...)
-          (define new-knowns
-            (for/fold ([knowns knowns]) ([id (in-list ids)]
-                                         [rhs (in-list rhss)])
-              (if (lambda? rhs)
-                  (hash-set knowns (unwrap id) a-known-procedure)
-                  knowns)))
-          `(letrec* ,(for/list ([id (in-list ids)]
-                                [rhs (in-list rhss)])
-                       `[,id ,(schemify/knowns new-knowns rhs)])
-            ,@(for/list ([body (in-list bodys)])
-                (schemify/knowns new-knowns body)))]
-         [`(letrec-values ([,idss ,rhss] ...) ,bodys ...)
-          ;; Convert
-          ;;  (letrec*-values ([(id ...) rhs] ...) ....)
-          ;; to
-          ;;  (letrec* ([vec (call-with-values rhs vector)]
-          ;;            [id (vector-ref vec 0)]
-          ;;            ... ...)
-          ;;    ....)
-          `(letrec* ,(apply
-                      append
-                      (for/list ([ids (in-wrap-list idss)]
+      (define s-v
+        (match v
+          [`(lambda ,formals ,body ...)
+           `(lambda ,formals ,@(map schemify body))]
+          [`(case-lambda [,formalss ,bodys ...] ...)
+           `(case-lambda ,@(for/list ([formals (in-list formalss)]
+                                      [body (in-list bodys)])
+                             `[,formals ,@(map schemify body)]))]
+          [`(define-values (,struct:s ,make-s ,s? ,acc/muts ...)
+              (let-values (((,struct: ,make ,?1 ,-ref ,-set!) ,mk))
+                (values ,struct:2
+                        ,make2
+                        ,?2
+                        ,make-acc/muts ...)))
+           ;; Convert a `make-struct-type` binding into a 
+           ;; set of bindings that Chez's cp0 recognizes,
+           ;; and push the struct-specific extra work into
+           ;; `struct-type-install-properties!`
+           (define sti (and (wrap-eq? struct: struct:2)
+                            (wrap-eq? make make2)
+                            (wrap-eq? ?1 ?2)
+                            (make-struct-type-info mk prim-knowns knowns imports mutated)))
+           (cond
+             [(and sti
+                   ;; make sure `struct:` isn't used too early, since we're
+                   ;; reordering it's definition with respect to some arguments
+                   ;; of `make-struct-type`:
+                   (simple-mutated-state? (hash-ref mutated (unwrap struct:) #f)))
+              (define can-impersonate? (not (struct-type-info-authentic? sti)))
+              (define raw-s? (if can-impersonate? (gensym s?) s?))
+              `(begin
+                 (define ,struct:s (make-record-type-descriptor ',(struct-type-info-name sti)
+                                                                ,(schemify (struct-type-info-parent sti))
+                                                                ,(if (not (struct-type-info-prefab-immutables sti))
+                                                                     #f
+                                                                     `(structure-type-lookup-prefab-uid
+                                                                       ',(struct-type-info-name sti)
+                                                                       ,(schemify (struct-type-info-parent sti))
+                                                                       ,(struct-type-info-immediate-field-count sti)
+                                                                       0 #f
+                                                                       ',(struct-type-info-prefab-immutables sti)))
+                                                                #f
+                                                                #f
+                                                                ',(for/vector ([i (in-range (struct-type-info-immediate-field-count sti))])
+                                                                    `(mutable ,(string->symbol (format "f~a" i))))))
+                 ,@(if (null? (struct-type-info-rest sti))
+                       null
+                       `((define ,(gensym)
+                           (struct-type-install-properties! ,struct:s
+                                                            ',(struct-type-info-name sti)
+                                                            ,(struct-type-info-immediate-field-count sti)
+                                                            0
+                                                            ,(schemify (struct-type-info-parent sti))
+                                                            ,@(map schemify (struct-type-info-rest sti))))))
+                 (define ,make-s ,(let ([ctr `(record-constructor
+                                               (make-record-constructor-descriptor ,struct:s #f #f))])
+                                    (if (struct-type-info-pure-constructor? sti)
+                                        ctr
+                                        `(struct-type-constructor-add-guards ,ctr ,struct:s ',(struct-type-info-name sti)))))
+                 (define ,raw-s? (record-predicate ,struct:s))
+                 ,@(if can-impersonate?
+                       `((define ,s? (lambda (v) (if (,raw-s? v) #t (pariah (if (impersonator? v) (,raw-s? (impersonator-val v)) #f))))))
+                       null)
+                 ,@(for/list ([acc/mut (in-list acc/muts)]
+                              [make-acc/mut (in-list make-acc/muts)])
+                     (define raw-acc/mut (if can-impersonate? (gensym acc/mut) acc/mut))
+                     (match make-acc/mut
+                       [`(make-struct-field-accessor ,(? (lambda (v) (wrap-eq? v -ref))) ,pos ,_)
+                        (define raw-def `(define ,raw-acc/mut (record-accessor ,struct:s ,pos)))
+                        (if can-impersonate?
+                            `(begin
+                               ,raw-def
+                               (define ,acc/mut
+                                 (lambda (s) (if (,raw-s? s)
+                                                 (,raw-acc/mut s)
+                                                 (pariah (impersonate-ref ,raw-acc/mut ,struct:s ,pos s))))))
+                            raw-def)]
+                       [`(make-struct-field-mutator ,(? (lambda (v) (wrap-eq? v -set!))) ,pos ,_)
+                        (define raw-def `(define ,raw-acc/mut (record-mutator ,struct:s ,pos)))
+                        (define abs-pos (+ pos (- (struct-type-info-field-count sti)
+                                                  (struct-type-info-immediate-field-count sti))))
+                        (if can-impersonate?
+                            `(begin
+                               ,raw-def
+                               (define ,acc/mut
+                                 (lambda (s v) (if (,raw-s? s)
+                                                   (,raw-acc/mut s v)
+                                                   (pariah (impersonate-set! ,raw-acc/mut ,struct:s ,pos ,abs-pos s v))))))
+                            raw-def)]
+                       [`,_ (error "oops")]))
+                 (define ,(gensym)
+                   (begin
+                     (register-struct-constructor! ,make-s)
+                     (register-struct-predicate! ,s?)
+                     ,@(for/list ([acc/mut (in-list acc/muts)]
+                                  [make-acc/mut (in-list make-acc/muts)])
+                         (match make-acc/mut
+                           [`(make-struct-field-accessor ,_ ,pos ,_)
+                            `(register-struct-field-accessor! ,acc/mut ,struct:s ,pos)]
+                           [`(make-struct-field-mutator ,_ ,pos ,_)
+                            `(register-struct-field-mutator! ,acc/mut ,struct:s ,pos)]
+                           [`,_ (error "oops")]))
+                     (void))))]
+             [else
+              (match v
+                [`(,_ ,ids ,rhs)
+                 `(define-values ,ids ,(schemify rhs))])])]
+          [`(define-values (,id) ,rhs)
+           `(define ,id ,(schemify rhs))]
+          [`(define-values ,ids ,rhs)
+           `(define-values ,ids ,(schemify rhs))]
+          [`(quote ,_) v]
+          [`(let-values () ,body)
+           (schemify body)]
+          [`(let-values () ,bodys ...)
+           `(begin ,@(map schemify bodys))]
+          [`(let-values ([(,ids) ,rhss] ...) ,bodys ...)
+           (define new-knowns
+             (for/fold ([knowns knowns]) ([id (in-list ids)]
+                                          [rhs (in-list rhss)])
+               (if (lambda? rhs)
+                   (hash-set knowns (unwrap id) a-known-procedure)
+                   knowns)))
+           (left-to-right/let ids
+                              (for/list ([rhs (in-list rhss)])
+                                (schemify rhs))
+                              (for/list ([body (in-list bodys)])
+                                (schemify/knowns new-knowns body))
+                              unannotate prim-knowns knowns imports mutated)]
+          [`(let-values ([() (begin ,rhss ... (values))]) ,bodys ...)
+           `(begin ,@(map schemify rhss) ,@(map schemify bodys))]
+          [`(let-values ([,idss ,rhss] ...) ,bodys ...)
+           (left-to-right/let-values idss
+                                     (for/list ([rhs (in-list rhss)])
+                                       (schemify rhs))
+                                     (map schemify bodys)
+                                     mutated)]
+          [`(letrec-values ([(,ids) ,rhss] ...) ,bodys ...)
+           (define new-knowns
+             (for/fold ([knowns knowns]) ([id (in-list ids)]
+                                          [rhs (in-list rhss)])
+               (if (lambda? rhs)
+                   (hash-set knowns (unwrap id) a-known-procedure)
+                   knowns)))
+           `(letrec* ,(for/list ([id (in-list ids)]
                                  [rhs (in-list rhss)])
-                        (let ([rhs (schemify rhs)])
-                          (cond
-                           [(null? ids)
-                            `([,(gensym "lr")
-                               ,(make-let-values null rhs '(void))])]
-                           [(and (pair? ids) (null? (cdr ids)))
-                            `([,(car ids) ,rhs])]
+                        `[,id ,(schemify/knowns new-knowns rhs)])
+                     ,@(for/list ([body (in-list bodys)])
+                         (schemify/knowns new-knowns body)))]
+          [`(letrec-values ([,idss ,rhss] ...) ,bodys ...)
+           ;; Convert
+           ;;  (letrec*-values ([(id ...) rhs] ...) ....)
+           ;; to
+           ;;  (letrec* ([vec (call-with-values rhs vector)]
+           ;;            [id (vector-ref vec 0)]
+           ;;            ... ...)
+           ;;    ....)
+           `(letrec* ,(apply
+                       append
+                       (for/list ([ids (in-wrap-list idss)]
+                                  [rhs (in-list rhss)])
+                         (let ([rhs (schemify rhs)])
+                           (cond
+                             [(null? ids)
+                              `([,(gensym "lr")
+                                 ,(make-let-values null rhs '(void))])]
+                             [(and (pair? ids) (null? (cdr ids)))
+                              `([,(car ids) ,rhs])]
+                             [else
+                              (define lr (gensym "lr"))
+                              `([,lr ,(make-let-values ids rhs `(vector . ,ids))]
+                                ,@(for/list ([id (in-list ids)]
+                                             [pos (in-naturals)])
+                                    `[,id (vector-ref ,lr ,pos)]))]))))
+                     ,@(map schemify bodys))]
+          [`(if ,tst ,thn ,els)
+           `(if ,(schemify tst) ,(schemify thn) ,(schemify els))]
+          [`(with-continuation-mark ,key ,val ,body)
+           `(with-continuation-mark ,(schemify key) ,(schemify val) ,(schemify body))]
+          [`(begin ,exps ...)
+           `(begin . ,(map schemify exps))]
+          [`(begin0 ,exps ...)
+           `(begin0 . ,(map schemify exps))]
+          [`(set! ,id ,rhs)
+           (define int-id (unwrap id))
+           (define ex-id (hash-ref exports int-id #f))
+           (if ex-id
+               `(,(if allow-set!-undefined? 'variable-set! 'variable-set!/check-undefined) ,ex-id ,(schemify rhs) '#f)
+               `(set! ,id ,(schemify rhs)))]
+          [`(variable-reference-constant? (#%variable-reference ,id))
+           (let ([id (unwrap id)])
+             (and (not (hash-ref mutated id #f))
+                  (let ([im (hash-ref imports id #f)])
+                    (or (not im)
+                        (known-constant? (import-lookup im))))))]
+          [`(#%variable-reference)
+           'instance-variable-reference]
+          [`(#%variable-reference ,id)
+           (define u (unwrap id))
+           (define v (or (hash-ref exports u #f)
+                         (let ([i (hash-ref imports u #f)])
+                           (and i (import-id i)))))
+           (if v
+               `(make-instance-variable-reference 
+                 instance-variable-reference
+                 ,v)
+               `(make-instance-variable-reference 
+                 instance-variable-reference
+                 ',(if (hash-ref mutated u #f)
+                       'mutable
+                       'immutable)))]
+          [`(equal? ,exp1 ,exp2)
+           (let ([exp1 (schemify exp1)]
+                 [exp2 (schemify exp2)])
+             (cond
+               [(or (equal-implies-eq? exp1) (equal-implies-eq? exp2))
+                `(eq? ,exp1 ,exp2)]
+               [(or (equal-implies-eqv? exp1) (equal-implies-eqv? exp2))
+                `(eqv? ,exp1 ,exp2)]
+               [else
+                (left-to-right/app 'equal?
+                                   (list exp1 exp2)
+                                   #t
+                                   unannotate prim-knowns knowns imports mutated)]))]
+          [`(call-with-values ,generator ,receiver)
+           (cond
+             [(and (lambda? generator)
+                   (lambda? receiver))
+              `(call-with-values ,(schemify generator) ,(schemify receiver))]
+             [else
+              (left-to-right/app '#%call-with-values
+                                 (list (schemify generator) (schemify receiver))
+                                 #t
+                                 unannotate prim-knowns knowns imports mutated)])]
+          [`(,rator ,exps ...)
+           (define (left-left-lambda-convert)
+             (match rator
+               [`(lambda ,formal-args ,bodys ...)
+                ;; Try to line up `formal-args` with `exps`
+                (let loop ([formal-args formal-args] [args exps] [binds '()])
+                  (cond
+                    [(wrap-null? formal-args)
+                     (and (wrap-null? args)
+                          (schemify `(let-values ,(reverse binds) . ,bodys)))]
+                    [(null? args) #f]
+                    [(not (wrap-pair? formal-args)) #f]
+                    [else
+                     (loop (wrap-cdr formal-args)
+                           (wrap-cdr args)
+                           (cons (list (list (wrap-car formal-args))
+                                       (wrap-car args))
+                                 binds))]))]
+               [`,_ #f]))
+           (or (left-left-lambda-convert)
+               (let ([s-rator (schemify rator)]
+                     [args (map schemify exps)]
+                     [u-rator (unwrap rator)])
+                 (let ([plain-app?
+                        (or (and (known-procedure? (hash-ref-either knowns imports u-rator))
+                                 (not (hash-ref mutated u-rator #f)))
+                            (known-procedure? (hash-ref prim-knowns u-rator #f))
+                            (lambda? rator))])
+                   (left-to-right/app s-rator
+                                      args
+                                      plain-app?
+                                      unannotate prim-knowns knowns imports mutated))))]
+          [`,_
+           (let ([u-v (unwrap v)])
+             (cond
+               [(and (symbol? u-v)
+                     (via-variable-mutated-state? (hash-ref mutated u-v #f))
+                     (hash-ref exports u-v #f))
+                => (lambda (ex-id) `(variable-ref ,ex-id))]
+               [(and (symbol? u-v)
+                     (hash-ref imports u-v #f))
+                => (lambda (im)
+                     (define k (import-lookup im))
+                     (if (known-constant? k)
+                         ;; Not boxed:
+                         (cond
+                           [(known-literal? k)
+                            ;; We'd normally leave this to `optimize`, but
+                            ;; need to handle it here before generating a
+                            ;; reference to the renamed identifier
+                            (known-literal-expr k)]
                            [else
-                            (define lr (gensym "lr"))
-                            `([,lr ,(make-let-values ids rhs `(vector . ,ids))]
-                              ,@(for/list ([id (in-list ids)]
-                                           [pos (in-naturals)])
-                                  `[,id (vector-ref ,lr ,pos)]))]))))
-            ,@(map schemify bodys))]
-         [`(if ,tst ,thn ,els)
-          `(if ,(schemify tst) ,(schemify thn) ,(schemify els))]
-         [`(with-continuation-mark ,key ,val ,body)
-          `(with-continuation-mark ,(schemify key) ,(schemify val) ,(schemify body))]
-         [`(begin ,exps ...)
-          `(begin . ,(map schemify exps))]
-         [`(begin0 ,exps ...)
-          `(begin0 . ,(map schemify exps))]
-         [`(set! ,id ,rhs)
-          (define int-id (unwrap id))
-          (define ex-id (hash-ref exports int-id #f))
-          (if ex-id
-              `(,(if allow-set!-undefined? 'variable-set! 'variable-set!/check-undefined) ,ex-id ,(schemify rhs) '#f)
-              `(set! ,id ,(schemify rhs)))]
-         [`(variable-reference-constant? (#%variable-reference ,id))
-          (let ([id (unwrap id)])
-            (and (not (hash-ref mutated id #f))
-                 (let ([im (hash-ref imports id #f)])
-                   (or (not im)
-                       (known-constant? (import-lookup im))))))]
-         [`(#%variable-reference)
-          'instance-variable-reference]
-         [`(#%variable-reference ,id)
-          (define u (unwrap id))
-          (define v (or (hash-ref exports u #f)
-                        (let ([i (hash-ref imports u #f)])
-                          (and i (import-id i)))))
-          (if v
-              `(make-instance-variable-reference 
-                instance-variable-reference
-                ,v)
-              `(make-instance-variable-reference 
-                instance-variable-reference
-                ',(if (hash-ref mutated u #f)
-                      'mutable
-                      'immutable)))]
-         [`(equal? ,exp1 ,exp2)
-          (let ([exp1 (schemify exp1)]
-                [exp2 (schemify exp2)])
-            (cond
-              [(or (equal-implies-eq? exp1) (equal-implies-eq? exp2))
-               `(eq? ,exp1 ,exp2)]
-              [(or (equal-implies-eqv? exp1) (equal-implies-eqv? exp2))
-               `(eqv? ,exp1 ,exp2)]
-              [else
-               (left-to-right/app 'equal?
-                                  (list exp1 exp2)
-                                  #t
-                                  unannotate prim-knowns knowns imports mutated)]))]
-         [`(call-with-values ,generator ,receiver)
-          (cond
-            [(and (lambda? generator)
-                  (lambda? receiver))
-             `(call-with-values ,(schemify generator) ,(schemify receiver))]
-            [else
-             (left-to-right/app '#%call-with-values
-                                (list (schemify generator) (schemify receiver))
-                                #t
-                                unannotate prim-knowns knowns imports mutated)])]
-         [`(,rator ,exps ...)
-          (let ([s-rator (schemify rator)]
-                [args (map schemify exps)]
-                [u-rator (unwrap rator)])
-            (let ([plain-app?
-                   (or (and (known-procedure? (hash-ref-either knowns imports u-rator))
-                            (not (hash-ref mutated u-rator #f)))
-                       (known-procedure? (hash-ref prim-knowns u-rator #f))
-                       (lambda? rator))])
-              (left-to-right/app s-rator
-                                 args
-                                 plain-app?
-                                 unannotate prim-knowns knowns imports mutated)))]
-         [`,_
-          (let ([u-v (unwrap v)])
-            (cond
-             [(and (symbol? u-v)
-                   (via-variable-mutated-state? (hash-ref mutated u-v #f))
-                   (hash-ref exports u-v #f))
-              => (lambda (ex-id) `(variable-ref ,ex-id))]
-             [(and (symbol? u-v)
-                   (hash-ref imports u-v #f))
-              => (lambda (im)
-                   (if (known-constant? (import-lookup im))
-                       ;; Not boxed:
-                       (import-id im)
-                       ;; Will be boxed, but won't be undefined (because the
-                       ;; module system won't link to an instance whose
-                       ;; definitions didn't complete):
-                       `(variable-ref/no-check ,(import-id im))))]
-             [else v]))])))))
+                            (import-id im)])
+                         ;; Will be boxed, but won't be undefined (because the
+                         ;; module system won't link to an instance whose
+                         ;; definitions didn't complete):
+                         `(variable-ref/no-check ,(import-id im))))]
+               [else v]))]))
+      (annotate v (optimize s-v prim-knowns knowns imports mutated unannotate)))))

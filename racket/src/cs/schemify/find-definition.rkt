@@ -4,20 +4,28 @@
          "known.rkt"
          "import.rkt"
          "struct-type-info.rkt"
-         "simple.rkt")
+         "simple.rkt"
+         "literal.rkt"
+         "optimize.rkt")
 
 (provide find-definitions
          lambda?)
 
 ;; Record top-level functions and structure types, and returns
 ;;  (values knowns struct-type-info-or-#f)
-(define (find-definitions v prim-knowns knowns imports mutated)
+(define (find-definitions v prim-knowns knowns imports mutated unannotate)
   (match v
-    [`(define-values (,id) ,rhs)
+    [`(define-values (,id) ,orig-rhs)
+     (define rhs (if unannotate
+                     (optimize orig-rhs prim-knowns knowns imports mutated unannotate)
+                     orig-rhs))
      (values
       (cond
        [(lambda? rhs)
         (hash-set knowns (unwrap id) a-known-procedure)]
+       [(and (literal? rhs)
+             (not (hash-ref mutated (unwrap id) #f)))
+        (hash-set knowns (unwrap id) (known-literal (unwrap-literal rhs)))]
        [(and (symbol? (unwrap rhs))
              (hash-ref prim-knowns (unwrap rhs) #f))
         => (lambda (known)
