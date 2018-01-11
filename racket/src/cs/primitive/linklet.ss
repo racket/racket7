@@ -32,4 +32,7 @@
    variable-reference->instance
    variable-reference-constant?
 
+   primitive->compiled-position
+   compiled-position->primitive
+
    primitive-table))

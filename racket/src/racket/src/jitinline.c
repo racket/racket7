@@ -1709,7 +1709,7 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       (void)jit_calli(sjc.bad_syntax_e_code);
       __START_TINY_JUMPS__(1);
       mz_patch_branch(ref);
-      (void)mz_bnei_t(reffail, JIT_R0, scheme_primitive_syntax_type, JIT_R1);
+      (void)mz_bnei_t(reffail, JIT_R0, scheme_stx_type, JIT_R1);
       (void)jit_ldxi_p(dest, JIT_R0, &(SCHEME_STX_VAL((Scheme_Stx *)0x0)));
       VALIDATE_RESULT(dest);
       CHECK_LIMIT();

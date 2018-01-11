@@ -31,6 +31,10 @@
                  ;; redirect to there, or as 'ignored avoids both
                  ;; a knot and complaining
                  #:instance-knot-ties instance-knot-ties
+                 ;; Table of symbol -> string
+                 ;; to replace (hash-ref (or (primitive-table '<table>) ...) '<id> #f)
+                 ;; with a direct reference to <prefix><id>
+                 #:primitive-table-directs primitive-table-directs
                  ;; Override linklet compiler's simple inference
                  ;; of side-effects to remove a module from the
                  ;; flattened form if it's not otherwise referenced:
@@ -114,7 +118,8 @@
                 #:linklets-in-order linklets-in-order
                 #:needed needed
                 #:exports exports
-                #:instance-knot-ties instance-knot-ties))
+                #:instance-knot-ties instance-knot-ties
+                #:primitive-table-directs primitive-table-directs))
     
     (define simplified-expr
       (simplify-definitions flattened-linklet-expr))

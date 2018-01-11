@@ -1,24 +1,21 @@
 #lang racket/base
-(require (prefix-in host: '#%linklet)
+(require racket/private/primitive-table
          "../run/linklet-operation.rkt")
 
-;; We use only `primitive-table` directly, so that's the only function
-;; needed for bootstrapping --- and generally so we can replace the
-;; linklet implementation for bootstrapping. See also
-;; "../run/linklet.rkt".
-
-(define linklet-primitive-table (or
-                                 ;; As a hook for bootstrapping, check for a
-                                 ;; replacement of the primitive '#%linklet
-                                 ;; module:
-                                 (host:primitive-table '#%bootstrap-linklet)
-                                 (host:primitive-table '#%linklet)))
+;; The `racket/private/primitive-table` module uses only
+;; `primitive-table` directly, so that's the only function needed for
+;; bootstrapping --- and generally so we can replace the linklet
+;; implementation for bootstrapping. See also "../run/linklet.rkt".
 
 (define-syntax-rule (bounce id ...)
   (begin
     (provide id ...)
-    (define id (hash-ref linklet-primitive-table 'id #f))
-    ...))
+    (import-from-primitive-table
+     ;; As a hook for bootstrapping, first check for a replacement of
+     ;; the primitive '#%linklet module:
+     (#%bootstrap-linklet #%linklet)
+     id
+     ...)))
 
 (linklet-operations=> bounce)
 

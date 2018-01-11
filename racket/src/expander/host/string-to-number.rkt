@@ -1,5 +1,5 @@
 #lang racket/base
-(require "linklet.rkt")
+(require racket/private/primitive-table)
 
 ;; Get host implementation of `string->number` for very basic number
 ;; parsing. Going through `primitive-table` prevents the reference
@@ -8,4 +8,4 @@
 
 (provide string->number)
 
-(define string->number (hash-ref (primitive-table '#%kernel) 'string->number))
+(import-from-primitive-table #%kernel string->number)

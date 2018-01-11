@@ -6,6 +6,7 @@
          "linklet.rkt"
          "variable.rkt"
          "symbol.rkt"
+         "primitive-table.rkt"
          (prefix-in bootstrap: "../run/linklet.rkt"))
 
 (provide flatten!)
@@ -15,7 +16,8 @@
                   #:linklets-in-order linklets-in-order
                   #:needed needed
                   #:exports exports
-                  #:instance-knot-ties instance-knot-ties)
+                  #:instance-knot-ties instance-knot-ties
+                  #:primitive-table-directs primitive-table-directs)
   (log-status "Flattening to a single linklet...")
   (define needed-linklets-in-order
     (for/list ([lnk (in-list (unbox linklets-in-order))]
@@ -46,11 +48,13 @@
     ,@(apply
        append
        (for/list ([lnk (in-list (reverse needed-linklets-in-order))])
-         (body-with-substituted-variable-names lnk
-                                               (hash-ref linklets lnk)
-                                               variable-names
-                                               #:linklets linklets
-                                               #:instance-knot-ties instance-knot-ties)))))
+         (define body
+           (body-with-substituted-variable-names lnk
+                                                 (hash-ref linklets lnk)
+                                                 variable-names
+                                                 #:linklets linklets
+                                                 #:instance-knot-ties instance-knot-ties))
+         (substitute-primitive-table-access body primitive-table-directs)))))
 
 (define (pick-variable-names #:linklets linklets
                              #:needed-linklets-in-order needed-linklets-in-order

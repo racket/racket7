@@ -24,9 +24,15 @@
        (hash 'syntax? rumble:correlated?
              'syntax-e rumble:correlated-e)]
       [(|#%annotation|)
-       (hash 'annotation? annotation?
-             'annotation-expression annotation-expression)]
+       ;; Normally, schemify is schemified so that these are accessed
+       ;; directly as prefixed versions:
+       (hash 'syntax? annotation?
+             'syntax-e annotation-expression)]
       [else #f]))
+
+  ;; Prefiex names for direct access by schemified schemify:
+  (define annotation:syntax? annotation?)
+  (define annotation:syntax-e annotation-expression)
 
   (include "compiled/schemify.scm")
 

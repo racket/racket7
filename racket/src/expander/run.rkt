@@ -37,6 +37,7 @@
 (define extract-to-c? #f)
 (define extract-to-decompiled? #f)
 (define instance-knot-ties (make-hasheq))
+(define primitive-table-directs (make-hasheq))
 (define side-effect-free-modules (make-hash))
 (define quiet-load? #f)
 (define startup-module main.rkt)
@@ -91,6 +92,14 @@
                                    (path->complete-path path))
                                l))
                   null)]
+   [("++direct") primitive-table "Redirect imports from #%<primitive-table> to direct references"
+    (hash-set! primitive-table-directs
+               (string->symbol (string-append "#%" primitive-table))
+               "")]
+   [("++direct-prefixed") primitive-table "Like ++direct, but prefixes with <primitive-table>:"
+    (hash-set! primitive-table-directs
+               (string->symbol (string-append "#%" primitive-table))
+               (string-append primitive-table ":"))]
    [("++pure") path "Insist that <path> is a module without side-effects"
     (hash-set! side-effect-free-modules (simplify-path (path->complete-path path)) #t)]
    #:once-any
@@ -248,6 +257,7 @@
            #:as-c? extract-to-c?
            #:as-decompiled? extract-to-decompiled?
            #:instance-knot-ties instance-knot-ties
+           #:primitive-table-directs primitive-table-directs
            #:side-effect-free-modules side-effect-free-modules))
 
 (when load-file

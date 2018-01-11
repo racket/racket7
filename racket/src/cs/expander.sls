@@ -5,21 +5,21 @@
           call-in-main-thread
           version
           exit)
-  (import (chezpart)
+  (import (except (chezpart)
+                  syntax->datum
+                  datum->syntax)
           (rename (rumble)
-                  ;; These names are not public primitives, so "expander.ss"
-                  ;; can define them:
-                  [correlated? rumble:correlated?]
-                  [correlated-source rumble:correlated-source]
-                  [correlated-line rumble:correlated-line]
-                  [correlated-column rumble:correlated-column]
-                  [correlated-position rumble:correlated-position]
-                  [correlated-span rumble:correlated-span]
-                  [correlated-e rumble:correlated-e]
-                  [correlated->datum rumble:correlated->datum]
-                  [datum->correlated rumble:datum->correlated]
-                  [correlated-property rumble:correlated-property]
-                  [correlated-property-symbol-keys rumble:correlated-property-symbol-keys])
+                  [correlated? syntax?]
+                  [correlated-source syntax-source]
+                  [correlated-line syntax-line]
+                  [correlated-column syntax-column]
+                  [correlated-position syntax-position]
+                  [correlated-span syntax-span]
+                  [correlated-e syntax-e]
+                  [correlated->datum syntax->datum]
+                  [datum->correlated datum->syntax]
+                  [correlated-property syntax-property]
+                  [correlated-property-symbol-keys syntax-property-symbol-keys])
           (thread)
           (regexp)
           (io)

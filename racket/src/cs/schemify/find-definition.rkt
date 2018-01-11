@@ -18,6 +18,10 @@
       (cond
        [(lambda? rhs)
         (hash-set knowns (unwrap id) a-known-procedure)]
+       [(and (symbol? (unwrap rhs))
+             (hash-ref prim-knowns (unwrap rhs) #f))
+        => (lambda (known)
+             (hash-set knowns (unwrap id) known))]
        [(simple? rhs prim-knowns knowns imports mutated)
         (hash-set knowns (unwrap id) a-known-unknown)]
        [else knowns])

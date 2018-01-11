@@ -6,7 +6,7 @@
          substitute-symbols)
 
 ;; We only have to consider symbols and pairs, because we're looking
-;; of variables in a `linklet` form. Also, sinc ethere's no shadowing
+;; of variables in a `linklet` form. Also, since there's no shadowing
 ;; of primitives, we can be especially simplistic about "parsing" to
 ;; detect `quote`.
 (define (all-used-symbols s)

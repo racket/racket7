@@ -1,19 +1,16 @@
 #lang racket/base
-(require '#%linklet)
+(require racket/private/primitive-table)
 
 ;; Get host notion of syntax for `compile-linklet`.
 
-;; This module looks like "syntax.rkt", but it uses `primitive-table`
-;; from '#%linklet instead of from "linklet.rkt". When bootstrapping,
-;; the underlying values are different.
-
-(define kernel-primitive-table (primitive-table '#%kernel))
+;; This module uses `primitive-table` from '#%linklet instead of from
+;; "linklet.rkt". When bootstrapping, the underlying values are
+;; different.
 
 (define-syntax-rule (bounce id ...)
   (begin
     (provide id ...)
-    (define id (hash-ref kernel-primitive-table 'id))
-    ...))
+    (import-from-primitive-table #%kernel id ...)))
 
 (bounce datum->syntax syntax->datum syntax-property-symbol-keys
         syntax-property syntax-span syntax-position syntax-column

@@ -38,6 +38,9 @@
           eval-jit-enabled
           load-on-demand-enabled
 
+          primitive->compiled-position
+          compiled-position->primitive
+
           platform-independent-zo-mode? ; not exported to racket
           linklet-performance-init!   ; not exported to racket
           linklet-performance-report! ; not exported to racket

@@ -137,11 +137,13 @@
   (check who exact-nonnegative-integer? dest-start-pos)
   (check who #:or-false exact-nonnegative-integer? dest-end-pos)
   (check-dest-range who dest-bstr dest-start-pos dest-end-pos)
-  (do-convert who converter
-              #f 0 0
-              dest-bstr dest-start-pos dest-end-pos
-              ;; guess at needed length
-              6))
+  (define-values (bstr used status)
+    (do-convert who converter
+                #f 0 0
+                dest-bstr dest-start-pos dest-end-pos
+                ;; guess at needed length
+                6))
+  (values bstr status))
 
 (define (check-dest-range who dest-bstr dest-start-pos dest-end-pos)
   (cond

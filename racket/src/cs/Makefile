@@ -102,9 +102,10 @@ compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
 	$(CONVERT) --skip-export compiled/schemify.rktl compiled/schemify.scm
 
 # Ignoring functions from `#%read` works beause they won't appear in
-# the simplified expansion, and declaring "collect.rkt" pure works
-# around a limitation of the flattener:
-IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
+# the simplified expansion. Make annotation references direct to
+# improve performance. Declaring "collect.rkt" pure works around a
+# limitation of the flattener.
+IGNORE = ++knot read - ++direct-prefixed annotation ++pure ../../collects/racket/private/collect.rkt
 
 compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
 	$(RACKET) -N raco -l- raco make ../expander/bootstrap-run.rkt

@@ -46,6 +46,10 @@
           linklet-table
           internal-table))
 
+;; Small hack to improve schemify performance:
+(define extra-known-procedures
+  '(annotation:syntax? annotation:syntax-e))
+
 (define-values (known-procedures known-constants)
   ;; Register primitives
   (let ([ns (make-base-namespace)])
@@ -53,7 +57,7 @@
       (namespace-require 'racket/unsafe/ops)
       (namespace-require 'racket/flonum)
       (namespace-require 'racket/fixnum))
-    (for/fold ([known-procedures null] [known-constants null]) ([s (in-list all-primitives)])
+    (for/fold ([known-procedures extra-known-procedures] [known-constants null]) ([s (in-list all-primitives)])
       (with-handlers ([exn:fail? (lambda (x) (values known-procedures known-constants))])
         (let ([v (eval s ns)])
           (cond

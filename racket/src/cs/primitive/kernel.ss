@@ -873,14 +873,14 @@
    struct:arity-at-least arity-at-least arity-at-least?
    arity-at-least-value
 
-   [rumble:correlated? syntax?]
-   [rumble:correlated-source syntax-source]
-   [rumble:correlated-line syntax-line]
-   [rumble:correlated-column syntax-column]
-   [rumble:correlated-position syntax-position]
-   [rumble:correlated-span syntax-span]
-   [rumble:correlated-e syntax-e]
-   [rumble:correlated->datum syntax->datum]
-   [rumble:datum->correlated datum->syntax]
-   [rumble:correlated-property syntax-property]
-   [rumble:correlated-property-symbol-keys syntax-property-symbol-keys]))
+   syntax?
+   syntax-source
+   syntax-line
+   syntax-column
+   syntax-position
+   syntax-span
+   syntax-e
+   syntax->datum
+   datum->syntax
+   syntax-property
+   syntax-property-symbol-keys))
