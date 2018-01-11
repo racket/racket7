@@ -413,12 +413,14 @@
                                             (make-wrapped-code expr arity-mask name))]
                                          [else
                                           ;; Compile an individual `lambda`:
-                                          (lambda (expr arity-mask name)
-                                            (let ([code ((if serializable? compile*-to-bytevector compile*)
-                                                         (show lambda-on? "lambda" expr))])
-                                              (if serializable?
-                                                  (make-wrapped-code code arity-mask name)
-                                                  code)))])
+                                           (lambda (expr arity-mask name)
+                                             (performance-region
+                                              'compile
+                                              (let ([code ((if serializable? compile*-to-bytevector compile*)
+                                                           (show lambda-on? "lambda" expr))])
+                                                (if serializable?
+                                                    (make-wrapped-code code arity-mask name)
+                                                    code))))])
                                        reannotate
                                        unannotate)]))
        (define impl-lam/interpable
