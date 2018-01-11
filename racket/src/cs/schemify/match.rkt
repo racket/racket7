@@ -26,7 +26,12 @@
                             (extract-pattern-variables #'p2))]
          [else null]))
 
-     (define-for-syntax (check-one id pattern)
+     (define-for-syntax (check-one id pattern head-id)
+       (define (check-one/expr e pattern)
+         (syntax-case pattern (unquote)
+           [(unquote bind-id) #`#t]
+           [_ #`(let ([a #,e])
+                  #,(check-one #'a pattern #f))]))
        (syntax-case pattern (unquote ?)
          [(unquote (? pred?))
           #`(pred? #,id)]
@@ -40,16 +45,24 @@
               #`(wrap-list? #,id)
               #`(and (wrap-list? #,id)
                      (for/and ([v (in-wrap-list #,id)])
-                       #,(check-one #'v #'pat))))]
+                       #,(check-one #'v #'pat #f))))]
+         [(m-id . p2)
+          (and head-id (identifier? #'m-id))
+          #`(and (eq? 'm-id #,head-id)
+                 #,(check-one/expr #`(cdr (unwrap #,id)) #'p2))]
          [(p1 . p2)
           #`(let ([p (unwrap #,id)])
               (and (pair? p)
-                   (let ([a (car p)])
-                     #,(check-one #'a #'p1))
-                   (let ([d (cdr p)])
-                     #,(check-one #'d #'p2))))]
+                   #,(check-one/expr #'(car p) #'p1)
+                   #,(check-one/expr #'(cdr p) #'p2)))]
          [_
-          #`(wrap-equal? (quote #,pattern) #,id)]))
+          (if (or (identifier? pattern)
+                  (let ([v (syntax-e pattern)])
+                    (or (keyword? v)
+                        (boolean? v)
+                        (null? v))))
+              #`(wrap-eq? (quote #,pattern) #,id)
+              #`(wrap-equal? (quote #,pattern) #,id))]))
 
      (define-for-syntax (extract-one id pattern)
        (syntax-case pattern (unquote ?)
@@ -97,18 +110,29 @@
        (syntax-case stx (quasiquote)
          [(_ expr [`pattern body0 body ...] ...)
           #`(let ([v expr])
-              #,(let loop ([patterns (syntax->list #'(pattern ...))]
-                           [bodys (syntax->list #'((body0 body ...) ...))])
-                  (cond
-                    [(null? patterns)
-                     #'(error 'match "failed ~e" v)]
-                    [else
-                     (define ids (extract-pattern-variables (car patterns)))
-                     #`(if #,(check-one #'v (car patterns))
-                           (let-values ([#,ids #,(extract-one #'v (car patterns))])
-                             . #,(car bodys))
-                           #,(loop (cdr patterns) (cdr bodys)))])))])))))
-
+              #,(let ([patterns (syntax->list #'(pattern ...))])
+                  (define (build-matches head-id)
+                    (let loop ([patterns patterns]
+                               [bodys (syntax->list #'((body0 body ...) ...))])
+                      (cond
+                        [(null? patterns)
+                         #'(error 'match "failed ~e" v)]
+                        [else
+                         (define ids (extract-pattern-variables (car patterns)))
+                         #`(if #,(check-one #'v (car patterns) head-id)
+                               (let-values ([#,ids #,(extract-one #'v (car patterns))])
+                                 . #,(car bodys))
+                               #,(loop (cdr patterns) (cdr bodys)))])))
+                  ;; If the first pattern is `(<id> ....)`, then
+                  ;; extract the input head symbol, because we're
+                  ;; likely to want to check it for many pattern cases
+                  (syntax-case (and (pair? patterns) (car patterns)) ()
+                    [(id . _)
+                     (identifier? #'id)
+                     #`(let ([hd (let ([p (unwrap v)])
+                                   (and (pair? p) (unwrap (car p))))])
+                         #,(build-matches #'hd))]
+                    [_ (build-matches #f)])))])))))
 
 (define-match match
   unwrap unwrap-list
