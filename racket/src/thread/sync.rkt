@@ -83,73 +83,80 @@
                                  (lambda ()
                                    (thread-ignore-break-cell! t local-break-cell))))))
 
+  (define (go)
+    (dynamic-wind
+     (lambda ()
+       (atomically
+        (thread-push-kill-callback!
+         (lambda () (syncing-abandon! s)))
+        (thread-push-suspend+resume-callbacks!
+         (lambda () (syncing-interrupt! s))
+         (lambda () (syncing-queue-retry! s)))))
+     (lambda ()
+       (when enable-break? (check-for-break))
+       (cond
+         [(or (and (real? timeout) (zero? timeout))
+              (procedure? timeout))
+          (let poll-loop ()
+            (sync-poll s #:fail-k (lambda (sched-info polled-all?)
+                                    (cond
+                                      [(not polled-all?)
+                                       (poll-loop)]
+                                      [(procedure? timeout)
+                                       timeout]
+                                      [else
+                                       (lambda () #f)]))
+                       #:just-poll? #t))]
+         [else
+          ;; Loop to poll; if all events end up with asynchronous-select
+          ;; callbacks, then the loop can suspend the current thread
+          (define timeout-at
+            (and timeout
+                 (+ (* timeout 1000) (current-inexact-milliseconds))))
+          (let loop ([did-work? #t] [polled-all? #f])
+            (cond
+              [(and polled-all?
+                    timeout
+                    (timeout-at . <= . (current-inexact-milliseconds)))
+               (syncing-done! s none-syncer)
+               ;; Return result in a thunk:
+               (lambda () #f)]
+              [(and (all-asynchronous? s)
+                    (not (syncing-selected s)))
+               (suspend-syncing-thread s timeout-at)
+               (set-syncing-wakeup! s void)
+               (loop #f #t)]
+              [else
+               (sync-poll s
+                          #:did-work? did-work?
+                          #:fail-k (lambda (sched-info now-polled-all?)
+                                     (when timeout-at
+                                       (schedule-info-add-timeout-at! sched-info timeout-at))
+                                     (thread-yield sched-info)
+                                     (loop #f (or polled-all? now-polled-all?))))]))]))
+     (lambda ()
+       (atomically
+        (thread-pop-suspend+resume-callbacks!)
+        (thread-pop-kill-callback!)
+        (when local-break-cell
+          (thread-remove-ignored-break-cell! (current-thread) local-break-cell))
+        ;; On escape, post nacks, etc.:
+        (syncing-abandon! s)))))
+  
   ;; Result thunk is called in tail position:
-  ((begin0
-     (with-continuation-mark
-      break-enabled-key
-      (if enable-break?
-          local-break-cell
-          (current-break-enabled-cell))
-      (dynamic-wind
-       (lambda ()
-         (atomically
-          (thread-push-kill-callback!
-           (lambda () (syncing-abandon! s)))
-          (thread-push-suspend+resume-callbacks!
-           (lambda () (syncing-interrupt! s))
-           (lambda () (syncing-queue-retry! s)))))
-       (lambda ()
-         (when enable-break? (check-for-break))
-         (cond
-           [(or (and (real? timeout) (zero? timeout))
-                (procedure? timeout))
-            (let poll-loop ()
-              (sync-poll s #:fail-k (lambda (sched-info polled-all?)
-                                      (cond
-                                        [(not polled-all?)
-                                         (poll-loop)]
-                                        [(procedure? timeout)
-                                         timeout]
-                                        [else
-                                         (lambda () #f)]))
-                         #:just-poll? #t))]
-           [else
-            ;; Loop to poll; if all events end up with asynchronous-select
-            ;; callbacks, then the loop can suspend the current thread
-            (define timeout-at
-              (and timeout
-                   (+ (* timeout 1000) (current-inexact-milliseconds))))
-            (let loop ([did-work? #t] [polled-all? #f])
-              (cond
-                [(and polled-all?
-                      timeout
-                      (timeout-at . <= . (current-inexact-milliseconds)))
-                 (syncing-done! s none-syncer)
-                 ;; Return result in a thunk:
-                 (lambda () #f)]
-                [(and (all-asynchronous? s)
-                      (not (syncing-selected s)))
-                 (suspend-syncing-thread s timeout-at)
-                 (set-syncing-wakeup! s void)
-                 (loop #f #t)]
-                [else
-                 (sync-poll s
-                            #:did-work? did-work?
-                            #:fail-k (lambda (sched-info now-polled-all?)
-                                       (when timeout-at
-                                         (schedule-info-add-timeout-at! sched-info timeout-at))
-                                       (thread-yield sched-info)
-                                       (loop #f (or polled-all? now-polled-all?))))]))]))
-       (lambda ()
-         (atomically
-          (thread-pop-suspend+resume-callbacks!)
-          (thread-pop-kill-callback!)
-          (when local-break-cell
-            (thread-remove-ignored-break-cell! (current-thread) local-break-cell))
-          ;; On escape, post nacks, etc.:
-          (syncing-abandon! s)))))
-     ;; In case old break cell was meanwhile enabled:
-     (check-for-break))))
+  ((cond
+     [enable-break?
+      ;; Install a new break cell, and check for breaks at the end:
+      (begin0
+        (with-continuation-mark
+         break-enabled-key
+         local-break-cell
+         (go))
+        ;; In case old break cell was meanwhile enabled:
+        (check-for-break))]
+     [else
+      ;; Just `go`:
+      (go)])))
 
 (define (sync . args)
   (do-sync 'sync #f args))
