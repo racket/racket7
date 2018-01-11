@@ -288,6 +288,7 @@
           char-symbolic?
           interned-char?
           make-known-char-range-list
+          char-general-category
 
           gensym
           symbol-interned?

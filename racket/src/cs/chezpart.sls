@@ -36,7 +36,8 @@
                            box? unbox set-box!
 			   get-thread-id
 			   threaded?
-                           map for-each andmap ormap)
+                           map for-each andmap ormap
+                           char-general-category)
                    [make-parameter chez:make-parameter]
                    [void chez:void]
                    [date-second chez:date-second]
