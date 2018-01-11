@@ -13,11 +13,11 @@
 
 ;; Record top-level functions and structure types, and returns
 ;;  (values knowns struct-type-info-or-#f)
-(define (find-definitions v prim-knowns knowns imports mutated unannotate)
+(define (find-definitions v prim-knowns knowns imports mutated optimize?)
   (match v
     [`(define-values (,id) ,orig-rhs)
-     (define rhs (if unannotate
-                     (optimize orig-rhs prim-knowns knowns imports mutated unannotate)
+     (define rhs (if optimize?
+                     (optimize orig-rhs prim-knowns knowns imports mutated)
                      orig-rhs))
      (values
       (cond

@@ -14,7 +14,7 @@
 ;; expressions that have no shadowing (and introduce
 ;; shadowing here)
 (define (left-to-right/let ids rhss bodys
-                           unannotate prim-knowns knowns imports mutated)
+                           prim-knowns knowns imports mutated)
   (cond
    [(null? (cdr ids))
     `(let ([,(car ids) ,(car rhss)]) . ,bodys)]
@@ -25,7 +25,7 @@
          (define id (car ids))
          (define rhs (car rhss))
          (if (and all-simple?
-                  (simple? (unannotate rhs) prim-knowns knowns imports mutated))
+                  (simple? rhs prim-knowns knowns imports mutated))
              `(let ([,id ,rhs])
                 . ,bodys)
              `(let ([,id ,rhs])
@@ -38,7 +38,7 @@
            ,(loop (cdr ids)
                   (cdr rhss)
                   (and all-simple?
-                       (simple? (unannotate rhs) prim-knowns knowns imports mutated))
+                       (simple? rhs prim-knowns knowns imports mutated))
                   (cons `[,id ,id] binds)))]))]))
 
 ;; Convert a `let-values` to nested `let-values`es to
@@ -67,7 +67,7 @@
 ;; Convert an application to enforce left-to-right
 ;; evaluation order
 (define (left-to-right/app rator rands plain-app?
-                           unannotate prim-knowns knowns imports mutated)
+                           prim-knowns knowns imports mutated)
   (let loop ([l (cons rator rands)] [accum null] [pending-non-simple #f] [pending-id #f])
     (cond
      [(null? l)
@@ -87,7 +87,7 @@
         (if plain-app?
             app
             `(|#%app| . ,app)))]
-     [(simple? (unannotate (car l)) prim-knowns knowns imports mutated)
+     [(simple? (car l) prim-knowns knowns imports mutated)
       (loop (cdr l) (cons (car l) accum) pending-non-simple pending-id)]
      [pending-non-simple
       `(let ([,pending-id ,pending-non-simple])

@@ -133,8 +133,7 @@
                           [print-extended-identifiers #t])
              (pretty-print (strip-jit-wrapper
                             (strip-nested-annotations
-                             (remove-annotation-boundary
-                              (convert-to-annotation #f v)))))))))
+                             v)))))))
       v]))
 
   (define region-times (make-eq-hashtable))
@@ -380,21 +379,19 @@
        (define format (if jitify-mode? 'interpret 'compile))
        ;; Convert the linklet S-expression to a `lambda` S-expression:
        (define-values (impl-lam importss-abi exports-info)
-         (schemify-linklet (show "linklet" c)
+         (schemify-linklet (show "linklet" (correlated->annotation c))
                            serializable?
                            jitify-mode?
                            (|#%app| compile-allow-set!-undefined)
-                           convert-to-annotation
-                           unannotate
+                           reannotate
                            prim-knowns
                            ;; Callback to get a specific linklet for a
                            ;; given import:
                            (lambda (index)
                              (lookup-linklet-or-instance get-import import-keys index))))
        (define impl-lam/lifts
-         (lift-in-schemified-linklet (show pre-lift-on? "pre-lift" (remove-annotation-boundary impl-lam))
-                                     reannotate
-                                     unannotate))
+         (lift-in-schemified-linklet (show pre-lift-on? "pre-lift" impl-lam)
+                                     reannotate))
        (define impl-lam/jitified
          (cond
            [(not jitify-mode?) impl-lam/lifts]
@@ -423,15 +420,14 @@
                                                 (if serializable?
                                                     (make-wrapped-code code arity-mask name)
                                                     code))))])
-                                       reannotate
-                                       unannotate)]))
+                                       reannotate)]))
        (define impl-lam/interpable
          (let ([impl-lam (case (and jitify-mode?
                                     linklet-compilation-mode)
                            [(mach) (show post-lambda-on? "post-lambda" impl-lam/jitified)]
                            [else (show "schemified" impl-lam/jitified)])])
            (if jitify-mode?
-               (interpretable-jitified-linklet impl-lam unannotate)
+               (interpretable-jitified-linklet impl-lam strip-nested-annotations)
                impl-lam)))
        (when known-on?
          (show "known" (hash-map exports-info (lambda (k v) (list k v)))))
@@ -1124,44 +1120,26 @@
                       (if (|#%app| read-on-demand-source)
                           'faslable
                           'faslable-strict)))
-  
+
   ;; --------------------------------------------------
 
-  ;; Used to wrap a term that isn't annotated, but also doesn't have
-  ;; correlated objects or nested annotations:
-  (define-record boundary (e stripped-e))
-  
-  (define (convert-to-annotation old-term new-term)
-    (let-values ([(e stripped-e) (remove-annotation-boundary* new-term)])
-      (make-boundary (if (correlated? old-term)
-                         (transfer-srcloc old-term e stripped-e)
-                         e)
-                     stripped-e)))
-
-  (define (remove-annotation-boundary term)
-    (let-values ([(e stripped-e) (remove-annotation-boundary* term)])
+  (define (correlated->annotation v)
+    (let-values ([(e stripped-e) (correlated->annotation* v)])
       e))
 
-  (define (unannotate term)
-    (let-values ([(e stripped-e) (remove-annotation-boundary* term)])
-      stripped-e))
-
-  (define (remove-annotation-boundary* v)
+  (define (correlated->annotation* v)
     (cond
-     [(boundary? v) (values (boundary-e v)
-                            (boundary-stripped-e v))]
-     [(pair? v) (let-values ([(a stripped-a) (remove-annotation-boundary* (car v))]
-                             [(d stripped-d) (remove-annotation-boundary* (cdr v))])
+     [(pair? v) (let-values ([(a stripped-a) (correlated->annotation* (car v))]
+                             [(d stripped-d) (correlated->annotation* (cdr v))])
                   (if (and (eq? a (car v))
                            (eq? d (cdr v)))
                       (values v v)
                       (values (cons a d)
                               (cons stripped-a stripped-d))))]
-     [(correlated? v) (let-values ([(e stripped-e) (remove-annotation-boundary* (correlated-e v))])
+     [(correlated? v) (let-values ([(e stripped-e) (correlated->annotation* (correlated-e v))])
                         (values (transfer-srcloc v e stripped-e)
                                 stripped-e))]
-     ;; correlated or boundary will be nested only in pairs
-     ;; with current expander and schemifier
+     ;; correlated will be nested only in pairs with current expander
      [else (values v v)]))
 
   (define (transfer-srcloc v e stripped-e)
@@ -1196,11 +1174,13 @@
   ;; --------------------------------------------------
   
   (define (reannotate old-term new-term)
-    (if (annotation? old-term)
-        (make-annotation new-term
-                         (annotation-source old-term)
-                         (strip-nested-annotations new-term))
-        new-term))
+    (cond
+     [(annotation? new-term) new-term]
+     [(annotation? old-term)
+      (make-annotation new-term
+                       (annotation-source old-term)
+                       (strip-nested-annotations new-term))]
+     [else new-term]))
 
   (define (strip-nested-annotations s)
     (cond

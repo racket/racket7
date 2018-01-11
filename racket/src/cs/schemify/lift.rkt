@@ -1,6 +1,6 @@
 #lang racket/base
-(require "match-annotation.rkt"
-         "wrap-annotation.rkt")
+(require "match.rkt"
+         "wrap.rkt")
 
 ;; Reduces closure allocation by lifting bindings that are only used
 ;; in calls that have the right number of arguments.
@@ -54,13 +54,13 @@
 ;; bound-variable sets
 (define empty-frees+binds (cons #hasheq() #hasheq()))
 
-(define (lift-in-schemified-linklet v reannotate strip-annotations)
+(define (lift-in-schemified-linklet v reannotate)
   ;; Match outer shape of a linklet produced by `schemify-linklet`
   ;; and lift in the linklet body:
   (let loop ([v v])
     (match v
       [`(lambda ,args . ,body)
-       (define new-body (lift-in-schemified-body body reannotate strip-annotations))
+       (define new-body (lift-in-schemified-body body reannotate))
        (if (for/and ([old (in-list body)]
                      [new (in-list new-body)])
              (eq? old new))
@@ -72,11 +72,11 @@
            v
            `(let* ,bindings ,new-body))])))
 
-(define (lift-in-schemified-body body reannotate strip-annotations)
+(define (lift-in-schemified-body body reannotate)
   (for/list ([v (in-list body)])
-    (lift-in-schemified v reannotate strip-annotations)))
+    (lift-in-schemified v reannotate)))
 
-(define (lift-in-schemified v reannotate strip-annotations)
+(define (lift-in-schemified v reannotate)
   ;; Quick pre-check: do any lifts appear to be possible?
   (define (lift-in? v)
     (match v
@@ -360,7 +360,7 @@
           (unless (symbol? x)
             (error 'lift-in-schemified
                    "unrecognized expression form: ~e"
-                   (strip-annotations v)))
+                   v))
           ;; If this identifier is mapped to a liftable, then
           ;; the function is not liftable after all, since
           ;; the reference isn't in an application position

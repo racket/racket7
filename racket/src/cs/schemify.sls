@@ -20,9 +20,6 @@
   ;; and "schemify/wrap-annotation.rkt"
   (define (primitive-table name)
     (case name
-      [(|#%kernel|)
-       (hash 'syntax? rumble:correlated?
-             'syntax-e rumble:correlated-e)]
       [(|#%annotation|)
        ;; Normally, schemify is schemified so that these are accessed
        ;; directly as prefixed versions:

@@ -11,12 +11,11 @@
 ;; on each schemified form, which means that subexpressions of the
 ;; immediate expression have already been optimized.
 
-(define (optimize v prim-knowns knowns imports mutated unannotate)
+(define (optimize v prim-knowns knowns imports mutated)
   (match v
     [`(if ,t ,e1 ,e2)
-     (define u-t (unannotate t))
-     (if (literal? u-t)
-         (if (unwrap u-t) e1 e2)
+     (if (literal? t)
+         (if (unwrap t) e1 e2)
          v)]
     [`,_
      (define u (unwrap v))

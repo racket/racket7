@@ -111,11 +111,11 @@
     (printf "Schemify...\n")
     (define body
       (time
-       (schemify-body l (lambda (old-v new-v) new-v) values prim-knowns #hasheq() #hasheq())))
+       (schemify-body l (lambda (old-v new-v) new-v) prim-knowns #hasheq() #hasheq())))
     (printf "Lift...\n")
     ;; Lift functions to aviod closure creation:
     (time
-     (lift-in-schemified-body body (lambda (old new) new) values))))
+     (lift-in-schemified-body body (lambda (old new) new)))))
 
 ;; ----------------------------------------
 

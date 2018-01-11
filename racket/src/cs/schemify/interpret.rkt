@@ -1,8 +1,8 @@
 #lang racket/base
 (require racket/unsafe/undefined
          racket/unsafe/ops
-         "match-annotation.rkt"
-         "wrap-annotation.rkt"
+         "match.rkt"
+         "wrap.rkt"
          "interp-match.rkt")
 
 ;; Interpreter for the output of "jitify". This little interpreter is

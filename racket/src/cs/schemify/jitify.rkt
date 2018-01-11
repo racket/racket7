@@ -1,6 +1,6 @@
 #lang racket/base
-(require "match-annotation.rkt"
-         "wrap-annotation.rkt")
+(require "match.rkt"
+         "wrap.rkt")
 
 ;; Convert `lambda`s to make them fully closed, which is compatible
 ;; with JIT compilation of the `lambda` or separate ahead-of-time
@@ -30,7 +30,7 @@
                                    need-extract?
                                    convert-size-threshold ; #f or a number; see above
                                    extractable-annotation
-                                   reannotate strip-annotations)
+                                   reannotate)
 
   ;; Constucts a closed `lambda` form as wrapped with
   ;; `extractable-annotaton` and generates an application of
