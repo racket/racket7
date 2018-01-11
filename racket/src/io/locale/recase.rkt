@@ -5,9 +5,11 @@
          "../host/error.rkt"
          "../string/utf-16-encode.rkt"
          "../string/utf-16-decode.rkt"
+         "../converter/main.rkt"
          "parameter.rkt"
          "string.rkt"
-         "nul.rkt")
+         "nul.rkt"
+         "ucs-4.rkt")
 
 (provide string-locale-upcase
          string-locale-downcase
@@ -27,7 +29,7 @@
   ;; those directly
   (define len (string-length s))
   (let loop ([pos 0])
-    (define i-len (string-length-up-to-nul s pos len))
+    (define i-len (+ pos (string-length-up-to-nul s pos len)))
     (cond
       [(= i-len len)
        (define new-s (recase/no-nul (maybe-substring s pos len) up?))
@@ -36,7 +38,7 @@
            (list new-s))]
       [else
        (define new-s (recase/no-nul (substring s pos i-len) up?))
-       (define r (loop (+ pos i-len 1)))
+       (define r (loop (+ i-len 1)))
        (if (eqv? pos 0)
            (apply string-append new-s (string #\nul) r)
            (cons new-s (cons (string #\nul) r)))])))
@@ -57,12 +59,42 @@
      (end-atomic)
      (utf-16-decode sr)]
     [else
-     (define s-locale (string->bytes/locale s))
-     (start-atomic)
-     (sync-locale!)
-     (define sr (locale-recase #:up? up? s-locale))
-     (end-atomic)
-     (bytes->string/locale sr)]))
+     ;; We don't just convert to a locale encoding and recase,
+     ;; because there might be an encoding error; we'll leave
+     ;; encoding-error bytes alone.
+     (define c #f)
+     (define in-bstr (string->bytes/ucs-4 s 0 (string-length s)))
+     (dynamic-wind
+      (lambda ()
+        (set! c (bytes-open-converter ucs-4-encoding (locale-string-encoding))))
+      (lambda ()
+        (let loop ([pos 0])
+          (cond
+            [(= pos (bytes-length in-bstr))
+             (if (eqv? pos 0)
+                 ""
+                 '(""))]
+            [else
+             (define-values (bstr in-used status)
+               (bytes-convert c in-bstr pos))
+             (start-atomic)
+             (sync-locale!)
+             (define sr (locale-recase #:up? up? bstr))
+             (end-atomic)
+             (define ls (bytes->string/locale sr))
+             (cond
+               [(eq? status 'complete)
+                (if (eqv? pos 0)
+                    ls
+                    (list ls))]
+               [else
+                (define r (loop (+ pos in-used 4)))
+                (define err-s (string (string-ref s (arithmetic-shift (+ pos in-used) -2))))
+                (if (eqv? pos 0)
+                    (apply string-append ls err-s r)
+                    (list* ls err-s r))])])))
+      (lambda ()
+        (bytes-close-converter c)))]))
 
 ;; in atomic mode
 ;; Assumes that the locale is sync'ed

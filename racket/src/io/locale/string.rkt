@@ -3,7 +3,8 @@
          "../string/convert.rkt"
          "../string/utf-8-decode.rkt"
          "../converter/main.rkt"
-         "parameter.rkt")
+         "parameter.rkt"
+         "ucs-4.rkt")
 
 (provide string->bytes/locale
          bytes->string/locale)
@@ -21,9 +22,9 @@
      (define c #f)
      (dynamic-wind
       (lambda ()
-        (set! c (bytes-open-converter "UTF-8" (locale-string-encoding))))
+        (set! c (bytes-open-converter ucs-4-encoding (locale-string-encoding))))
       (lambda ()
-        (define in-bstr (string->bytes/utf-8 str))
+        (define in-bstr (string->bytes/ucs-4 str start end))
         (let loop ([pos 0])
           (define-values (bstr in-used status)
             (bytes-convert c in-bstr pos))
@@ -43,11 +44,9 @@
                     (bytes-append bstr err-bstr)
                     (list bstr err-bstr))]
                [else
-                ;; Skip the next character
-                (define char-len (char-length in-bstr (+ pos in-used)))
-                (define r (if (zero? char-len)
-                              null ; just in case the converter is somehow stuck
-                              (loop (+ pos in-used char-len))))
+                ;; Skip the next character; we're assuming that
+                ;; `in-used` is a multiple of 4
+                (define r (loop (+ pos in-used 4)))
                 (if (eqv? pos 0)
                     (apply bytes-append (cons bstr (cons err-bstr r)))
                     (cons bstr (cons err-bstr r)))])])))
@@ -97,13 +96,3 @@
                     (cons bstr (cons err-bstr r)))])])))
       (lambda ()
         (bytes-close-converter c)))]))
-
-(define (char-length in-bstr pos)
-  (define len (bytes-length in-bstr))
-  (cond
-    [(= pos len) 0]
-    [else
-     (define-values (used-bytes got-bytes status)
-       (utf-8-decode! in-bstr pos len
-                      #f 0 1))
-     (max 1 used-bytes)]))

@@ -15,4 +15,4 @@
 (define (maybe-substring s i l)
   (if (zero? i)
       s
-      (substring s i (+ i l))))
+      (substring s i l)))
