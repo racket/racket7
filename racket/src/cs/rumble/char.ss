@@ -11,21 +11,22 @@
   
 (define/who (char-punctuation? x)
   (check who char? x)
-  (chez:memq (#%char-general-category x) '(Pc Pd Ps Pe Pi Pf Po)))
+  (and (#%memq (#%char-general-category x) '(Pc Pd Ps Pe Pi Pf Po)) #t))
 
 (define/who (char-graphic? x)
   (check who char? x)
   (or (char-numeric? x)
       (char-alphabetic? x)
-      (chez:memq (#%char-general-category x) '(Ll Lm Lo Lt Lu Nd Nl No Mn Mc Me
-                                                  ;; char-symbolic?:
-                                                  Sm Sc Sk So
-                                                  ;; char-punctuation?:
-                                                  Pc Pd Ps Pe Pi Pf Po))))
+      (and (#%memq (#%char-general-category x) '(Ll Lm Lo Lt Lu Nd Nl No Mn Mc Me
+                                                    ;; char-symbolic?:
+                                                    Sm Sc Sk So
+                                                    ;; char-punctuation?:
+                                                    Pc Pd Ps Pe Pi Pf Po))
+           #t)))
 
 (define/who (char-symbolic? x)
   (check who char? x)
-  (chez:memq (#%char-general-category x) '(Sm Sc Sk So)))
+  (and (#%memq (#%char-general-category x) '(Sm Sc Sk So)) #t))
 
 (define (interned-char? v)
   (and (char? v) (< (char->integer v) 256)))
