@@ -25,11 +25,12 @@
         (define len (bytes-length rx))
         (values len len 0)]
        [(or (eq? rx rx:empty)
-            (eq? rx rx:start)
             (eq? rx rx:end)
-            (eq? rx rx:line-start)
             (eq? rx rx:line-end))
         (values 0 0 0)]
+       [(or (eq? rx rx:start)
+            (eq? rx rx:line-start))
+        (values 0 0 1)]
        [(or (eq? rx rx:word-boundary)
             (eq? rx rx:not-word-boundary))
         (values 0 0 1)]
