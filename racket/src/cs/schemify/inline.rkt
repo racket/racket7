@@ -176,7 +176,8 @@
     [`(begin0 ,exps ...)
      (body-any-free-variables? exps prim-knowns env)]
     [`(set! ,id ,rhs)
-     (any-free-variables? rhs prim-knowns env)]
+     (or (any-free-variables? id prim-knowns env)
+         (any-free-variables? rhs prim-knowns env))]
     [`(#%variable-reference . ,_)
      ;; Cannot inline a variable reference
      #t]
