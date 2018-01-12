@@ -7,6 +7,7 @@
          known-literal known-literal? known-literal-expr
          known-unknown known-unknown?
          known-procedure known-procedure?
+         known-procedure/can-inline known-procedure/can-inline? known-procedure/can-inline-expr
          known-struct-type known-struct-type? known-struct-type-type
          known-struct-type-field-count known-struct-type-pure-constructor?
          known-constructor known-constructor? known-constructor-type known-constructor-field-count
@@ -14,7 +15,7 @@
          known-accessor known-accessor? known-accessor-type
          known-mutator known-mutator? known-mutator-type
          known-struct-type-property/immediate-guard known-struct-type-property/immediate-guard?
-         
+
          a-known-constant
          a-known-unknown
          a-known-procedure
@@ -24,6 +25,7 @@
 (struct known-unknown () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
 (struct known-literal (expr) #:prefab #:omit-define-syntaxes #:super struct:known-constant)
 (struct known-procedure () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
+(struct known-procedure/can-inline (expr) #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
 (struct known-struct-type (type field-count pure-constructor?) #:prefab #:omit-define-syntaxes)
 (struct known-constructor (type field-count) ; field count can be 'any
         #:prefab #:omit-define-syntaxes #:super struct:known-procedure)

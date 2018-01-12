@@ -12,7 +12,9 @@
          "serialize.rkt"
          "let.rkt"
          "equal.rkt"
-         "optimize.rkt")
+         "optimize.rkt"
+         "infer-known.rkt"
+         "inline.rkt")
 
 (provide schemify-linklet
          schemify-body)
@@ -110,7 +112,8 @@
       ;; Convert internal to external identifiers
       (for/fold ([knowns (hasheq)]) ([ex-id (in-list ex-ids)])
         (define id (ex-int-id ex-id))
-        (define v (hash-ref defn-info id #f))
+        (define v (known-inline->export-known (hash-ref defn-info id #f)
+                                              prim-knowns imports exports))
         (cond
          [(and v
                (not (set!ed-mutated-state? (hash-ref mutated id #f))))
@@ -212,7 +215,7 @@
 ;; Schemify `let-values` to `let`, etc., and
 ;; reorganize struct bindings.
 (define (schemify v reannotate prim-knowns knowns mutated imports exports allow-set!-undefined?)
-  (let schemify/knowns ([knowns knowns] [v v])
+  (let schemify/knowns ([knowns knowns] [inline-fuel init-inline-fuel] [v v])
     (let schemify ([v v])
       (define s-v
         (reannotate
@@ -336,14 +339,15 @@
             (define new-knowns
               (for/fold ([knowns knowns]) ([id (in-list ids)]
                                            [rhs (in-list rhss)])
-                (if (lambda? rhs)
-                    (hash-set knowns (unwrap id) a-known-procedure)
+                (define k (infer-known rhs #f #f id knowns prim-knowns imports mutated))
+                (if k
+                    (hash-set knowns (unwrap id) k)
                     knowns)))
             (left-to-right/let ids
                                (for/list ([rhs (in-list rhss)])
                                  (schemify rhs))
                                (for/list ([body (in-list bodys)])
-                                 (schemify/knowns new-knowns body))
+                                 (schemify/knowns new-knowns inline-fuel body))
                                prim-knowns knowns imports mutated)]
            [`(let-values ([() (begin ,rhss ... (values))]) ,bodys ...)
             `(begin ,@(map schemify rhss) ,@(map schemify bodys))]
@@ -357,14 +361,15 @@
             (define new-knowns
               (for/fold ([knowns knowns]) ([id (in-list ids)]
                                            [rhs (in-list rhss)])
-                (if (lambda? rhs)
-                    (hash-set knowns (unwrap id) a-known-procedure)
+                (define k (infer-known rhs #f #t id knowns prim-knowns imports mutated))
+                (if k
+                    (hash-set knowns (unwrap id) k)
                     knowns)))
             `(letrec* ,(for/list ([id (in-list ids)]
                                   [rhs (in-list rhss)])
-                         `[,id ,(schemify/knowns new-knowns rhs)])
+                         `[,id ,(schemify/knowns new-knowns inline-fuel rhs)])
                       ,@(for/list ([body (in-list bodys)])
-                          (schemify/knowns new-knowns body)))]
+                          (schemify/knowns new-knowns inline-fuel body)))]
            [`(letrec-values ([,idss ,rhss] ...) ,bodys ...)
             ;; Convert
             ;;  (letrec*-values ([(id ...) rhs] ...) ....)
@@ -450,8 +455,10 @@
                                   (list (schemify generator) (schemify receiver))
                                   #t
                                   prim-knowns knowns imports mutated)])]
+           [`((letrec-values ,binds ,rator) ,rands ...)
+            (schemify `(letrec-values ,binds (,rator . ,rands)))]
            [`(,rator ,exps ...)
-            (define (left-left-lambda-convert)
+            (define (left-left-lambda-convert rator inline-fuel)
               (match rator
                 [`(lambda ,formal-args ,bodys ...)
                  ;; Try to line up `formal-args` with `exps`
@@ -459,7 +466,9 @@
                    (cond
                      [(wrap-null? formal-args)
                       (and (wrap-null? args)
-                           (schemify `(let-values ,(reverse binds) . ,bodys)))]
+                           (schemify/knowns knowns
+                                            inline-fuel
+                                            `(let-values ,(reverse binds) . ,bodys)))]
                      [(null? args) #f]
                      [(not (wrap-pair? formal-args)) #f]
                      [else
@@ -469,7 +478,19 @@
                                         (wrap-car args))
                                   binds))]))]
                 [`,_ #f]))
-            (or (left-left-lambda-convert)
+            (define (inline-rator)
+              (define u-rator (unwrap rator))
+              (and (symbol? u-rator)
+                   (let ([k (hash-ref-either knowns imports u-rator)])
+                     (and (known-procedure/can-inline? k)
+                          (simple-mutated-state? (hash-ref mutated u-rator #f))
+                          (left-left-lambda-convert (inline-clone (known-procedure/can-inline-expr k)
+                                                                  mutated
+                                                                  reannotate)
+                                                    (sub1 inline-fuel))))))
+            (or (left-left-lambda-convert rator inline-fuel)
+                (and (positive? inline-fuel)
+                     (inline-rator))
                 (let ([s-rator (schemify rator)]
                       [args (map schemify exps)]
                       [u-rator (unwrap rator)])

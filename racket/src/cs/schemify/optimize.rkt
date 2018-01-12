@@ -3,6 +3,7 @@
          "wrap.rkt"
          "import.rkt"
          "known.rkt"
+         "mutated-state.rkt"
          "literal.rkt")
 
 (provide optimize)
@@ -23,6 +24,8 @@
        [(symbol? u)
         (define k (hash-ref-either knowns imports u))
         (cond
-          [(known-literal? k) (known-literal-expr k)]
+          [(and (known-literal? k)
+                (simple-mutated-state? (hash-ref mutated u #f)))
+           (known-literal-expr k)]
           [else v])]
        [else v])]))

@@ -4,12 +4,10 @@
          "known.rkt"
          "import.rkt"
          "struct-type-info.rkt"
-         "simple.rkt"
-         "literal.rkt"
-         "optimize.rkt")
+         "optimize.rkt"
+         "infer-known.rkt")
 
-(provide find-definitions
-         lambda?)
+(provide find-definitions)
 
 ;; Record top-level functions and structure types, and returns
 ;;  (values knowns struct-type-info-or-#f)
@@ -20,19 +18,10 @@
                      (optimize orig-rhs prim-knowns knowns imports mutated)
                      orig-rhs))
      (values
-      (cond
-       [(lambda? rhs)
-        (hash-set knowns (unwrap id) a-known-procedure)]
-       [(and (literal? rhs)
-             (not (hash-ref mutated (unwrap id) #f)))
-        (hash-set knowns (unwrap id) (known-literal (unwrap-literal rhs)))]
-       [(and (symbol? (unwrap rhs))
-             (hash-ref prim-knowns (unwrap rhs) #f))
-        => (lambda (known)
-             (hash-set knowns (unwrap id) known))]
-       [(simple? rhs prim-knowns knowns imports mutated)
-        (hash-set knowns (unwrap id) a-known-unknown)]
-       [else knowns])
+      (let ([k (infer-known rhs #t #t id knowns prim-knowns imports mutated)])
+        (if k
+            (hash-set knowns (unwrap id) k)
+            knowns))
       #f)]
     [`(define-values (,struct:s ,make-s ,s? ,acc/muts ...) ; pattern from `struct` or `define-struct`
        (let-values (((,struct: ,make ,? ,-ref ,-set!) ,rhs))
@@ -103,18 +92,3 @@
          [else knowns]))
       #f)]
     [`,_ (values knowns #f)]))
-
-;; ----------------------------------------
-
-;; Recognize forms that produce plain procedures
-(define (lambda? v)
-  (match v
-    [`(lambda . ,_) #t]
-    [`(case-lambda . ,_) #t]
-    [`(let-values ([(,id) ,rhs]) ,body) (or (and (wrap-eq? id body) (lambda? rhs))
-                                            (lambda? body))]
-    [`(letrec-values ([(,id) ,rhs]) ,body) (or (and (wrap-eq? id body) (lambda? rhs))
-                                               (lambda? body))]
-    [`(let-values ,_ ,body) (lambda? body)]
-    [`(letrec-values ,_ ,body) (lambda? body)]
-    [`,_ #f]))
