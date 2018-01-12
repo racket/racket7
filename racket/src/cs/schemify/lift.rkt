@@ -588,7 +588,7 @@
        (define bindings
          (for/list ([id (in-list ids)]
                     [rhs (in-list rhss)]
-                    #:unless (liftable? (hash-ref lifts id #f)))
+                    #:unless (liftable? (hash-ref lifts (unwrap id) #f)))
            `[,id ,(convert-lifted-calls-in-expr rhs lifts frees)]))
        (define new-bindings+body
          (convert-lifted-calls-in-seq/add-mutators*

@@ -133,7 +133,7 @@
                           [print-extended-identifiers #t])
              (pretty-print (strip-jit-wrapper
                             (strip-nested-annotations
-                             v)))))))
+                             (correlated->annotation v))))))))
       v]))
 
   (define region-times (make-eq-hashtable))
@@ -379,11 +379,11 @@
        (define format (if jitify-mode? 'interpret 'compile))
        ;; Convert the linklet S-expression to a `lambda` S-expression:
        (define-values (impl-lam importss-abi exports-info)
-         (schemify-linklet (show "linklet" (correlated->annotation c))
+         (schemify-linklet (show "linklet" c)
                            serializable?
                            jitify-mode?
                            (|#%app| compile-allow-set!-undefined)
-                           reannotate
+                           recorrelate
                            prim-knowns
                            ;; Callback to get a specific linklet for a
                            ;; given import:
@@ -391,7 +391,7 @@
                              (lookup-linklet-or-instance get-import import-keys index))))
        (define impl-lam/lifts
          (lift-in-schemified-linklet (show pre-lift-on? "pre-lift" impl-lam)
-                                     reannotate))
+                                     recorrelate))
        (define impl-lam/jitified
          (cond
            [(not jitify-mode?) impl-lam/lifts]
@@ -404,31 +404,31 @@
                                        ;; compilation threshold for ahead-of-time mode:
                                        (and (eq? linklet-compilation-mode 'mach)
                                             linklet-compilation-limit)
-                                       ;; annotation -> lambda
+                                       ;; correlation -> lambda
                                        (case linklet-compilation-mode
                                          [(jit)
                                           ;; Preserve annotated `lambda` source for on-demand compilation:
                                           (lambda (expr arity-mask name)
-                                            (make-wrapped-code expr arity-mask name))]
+                                            (make-wrapped-code (correlated->annotation expr) arity-mask name))]
                                          [else
                                           ;; Compile an individual `lambda`:
                                            (lambda (expr arity-mask name)
                                              (performance-region
                                               'compile
                                               (let ([code ((if serializable? compile*-to-bytevector compile*)
-                                                           (show lambda-on? "lambda" expr))])
+                                                           (show lambda-on? "lambda" (correlated->annotation expr)))])
                                                 (if serializable?
                                                     (make-wrapped-code code arity-mask name)
                                                     code))))])
-                                       reannotate)]))
+                                       recorrelate)]))
        (define impl-lam/interpable
          (let ([impl-lam (case (and jitify-mode?
                                     linklet-compilation-mode)
                            [(mach) (show post-lambda-on? "post-lambda" impl-lam/jitified)]
                            [else (show "schemified" impl-lam/jitified)])])
            (if jitify-mode?
-               (interpretable-jitified-linklet impl-lam strip-nested-annotations)
-               impl-lam)))
+               (interpretable-jitified-linklet impl-lam correlated->datum)
+               (correlated->annotation impl-lam))))
        (when known-on?
          (show "known" (hash-map exports-info (lambda (k v) (list k v)))))
        (performance-region
@@ -1123,6 +1123,13 @@
 
   ;; --------------------------------------------------
 
+  (define (recorrelate old-term new-term)
+    (if (correlated? old-term)
+        (datum->correlated #f new-term old-term)
+        new-term))
+
+  ;; --------------------------------------------------
+
   (define (correlated->annotation v)
     (let-values ([(e stripped-e) (correlated->annotation* v)])
       e))
@@ -1173,15 +1180,6 @@
 
   ;; --------------------------------------------------
   
-  (define (reannotate old-term new-term)
-    (cond
-     [(annotation? new-term) new-term]
-     [(annotation? old-term)
-      (make-annotation new-term
-                       (annotation-source old-term)
-                       (strip-nested-annotations new-term))]
-     [else new-term]))
-
   (define (strip-nested-annotations s)
     (cond
      [(annotation? s) (annotation-stripped s)]

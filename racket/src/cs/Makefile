@@ -106,7 +106,7 @@ compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
 # the simplified expansion. Make annotation references direct to
 # improve performance. Declaring "collect.rkt" pure works around a
 # limitation of the flattener.
-IGNORE = ++knot read - ++direct-prefixed annotation ++pure ../../collects/racket/private/collect.rkt
+IGNORE = ++knot read - ++direct kernel ++pure ../../collects/racket/private/collect.rkt
 
 compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
 	$(RACKET) -N raco -l- raco make ../expander/bootstrap-run.rkt

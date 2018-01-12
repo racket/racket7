@@ -20,16 +20,16 @@
   ;; and "schemify/wrap-annotation.rkt"
   (define (primitive-table name)
     (case name
-      [(|#%annotation|)
+      [(|#%kernel|)
        ;; Normally, schemify is schemified so that these are accessed
-       ;; directly as prefixed versions:
-       (hash 'syntax? annotation?
-             'syntax-e annotation-expression)]
+       ;; directly, instead:
+       (hash 'syntax? rumble:correlated?
+             'syntax-e rumble:correlated-e)]
       [else #f]))
 
-  ;; Prefiex names for direct access by schemified schemify:
-  (define annotation:syntax? annotation?)
-  (define annotation:syntax-e annotation-expression)
+  ;; For direct access by schemified schemify:
+  (define syntax? rumble:correlated?)
+  (define syntax-e rumble:correlated-e)
 
   (include "compiled/schemify.scm")
 

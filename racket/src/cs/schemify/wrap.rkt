@@ -8,7 +8,7 @@
          in-wrap-list)
 
 (import-from-primitive-table
- (#%annotation #%kernel)
+ #%kernel
  [syntax? correlated?]
  [syntax-e correlated-e])
 
