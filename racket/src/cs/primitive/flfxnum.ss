@@ -1,28 +1,73 @@
 
-(define flfxnum-table
-  (make-primitive-table
-   
-   fx->fl fl->fx
-   fxabs
-   fx+ fx- fx*
-   fxquotient fxremainder fxmodulo 
-   fxand fxior fxxor
-   fxnot fxrshift fxlshift
-   fx>= fx> fx= fx< fx<=
-   fxmin fxmax
-   fxvector? fxvector make-fxvector 
-   shared-fxvector make-shared-fxvector
-   fxvector-length fxvector-ref fxvector-set!
-   fxvector-copy
-
-   fl+ fl- fl* fl/
-   flabs flsqrt flexp fllog
-   flsin flcos fltan flasin flacos flatan
-   flfloor flceiling flround fltruncate flexpt
-   fl= fl< fl<= fl> fl>= flmin flmax
-   ->fl fl->exact-integer
-   flvector? flvector make-flvector 
-   shared-flvector make-shared-flvector
-   flvector-length flvector-ref flvector-set!
-   flvector-copy
-   flreal-part flimag-part make-flrectangular))
+(define-primitive-table flfxnum-table
+  [->fl (known-procedure 2)]
+  [fl* (known-procedure 4)]
+  [fl+ (known-procedure 4)]
+  [fl- (known-procedure 4)]
+  [fl->exact-integer (known-procedure 2)]
+  [fl->fx (known-procedure 2)]
+  [fl/ (known-procedure 4)]
+  [fl< (known-procedure 4)]
+  [fl<= (known-procedure 4)]
+  [fl= (known-procedure 4)]
+  [fl> (known-procedure 4)]
+  [fl>= (known-procedure 4)]
+  [flabs (known-procedure 2)]
+  [flacos (known-procedure 2)]
+  [flasin (known-procedure 2)]
+  [flatan (known-procedure 2)]
+  [flceiling (known-procedure 2)]
+  [flcos (known-procedure 2)]
+  [flexp (known-procedure 2)]
+  [flexpt (known-procedure 4)]
+  [flfloor (known-procedure 2)]
+  [flimag-part (known-procedure 2)]
+  [fllog (known-procedure 2)]
+  [flmax (known-procedure 4)]
+  [flmin (known-procedure 4)]
+  [flreal-part (known-procedure 2)]
+  [flround (known-procedure 2)]
+  [flsin (known-procedure 2)]
+  [flsqrt (known-procedure 2)]
+  [fltan (known-procedure 2)]
+  [fltruncate (known-procedure 2)]
+  [flvector (known-procedure -1)]
+  [flvector-copy (known-procedure 14)]
+  [flvector-length (known-procedure 2)]
+  [flvector-ref (known-procedure 4)]
+  [flvector-set! (known-procedure 8)]
+  [flvector? (known-procedure 2)]
+  [fx* (known-procedure 4)]
+  [fx+ (known-procedure 4)]
+  [fx- (known-procedure 4)]
+  [fx->fl (known-procedure 2)]
+  [fx< (known-procedure 4)]
+  [fx<= (known-procedure 4)]
+  [fx= (known-procedure 4)]
+  [fx> (known-procedure 4)]
+  [fx>= (known-procedure 4)]
+  [fxabs (known-procedure 2)]
+  [fxand (known-procedure 4)]
+  [fxior (known-procedure 4)]
+  [fxlshift (known-procedure 4)]
+  [fxmax (known-procedure 4)]
+  [fxmin (known-procedure 4)]
+  [fxmodulo (known-procedure 4)]
+  [fxnot (known-procedure 2)]
+  [fxquotient (known-procedure 4)]
+  [fxremainder (known-procedure 4)]
+  [fxrshift (known-procedure 4)]
+  [fxvector (known-procedure -1)]
+  [fxvector-copy (known-procedure 14)]
+  [fxvector-length (known-procedure 2)]
+  [fxvector-ref (known-procedure 4)]
+  [fxvector-set! (known-procedure 8)]
+  [fxvector? (known-procedure 2)]
+  [fxxor (known-procedure 4)]
+  [make-flrectangular (known-procedure 4)]
+  [make-flvector (known-procedure 6)]
+  [make-fxvector (known-procedure 6)]
+  [make-shared-flvector (known-procedure 6)]
+  [make-shared-fxvector (known-procedure 6)]
+  [shared-flvector (known-procedure -1)]
+  [shared-fxvector (known-procedure -1)])

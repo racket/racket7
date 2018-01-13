@@ -5,36 +5,38 @@
 
 (provide known-constant known-constant?
          known-literal known-literal? known-literal-expr
-         known-unknown known-unknown?
-         known-procedure known-procedure?
+         known-procedure known-procedure? known-procedure-arity-mask
          known-procedure/can-inline known-procedure/can-inline? known-procedure/can-inline-expr
+         known-procedure/succeeds known-procedure/succeeds?
          known-struct-type known-struct-type? known-struct-type-type
          known-struct-type-field-count known-struct-type-pure-constructor?
-         known-constructor known-constructor? known-constructor-type known-constructor-field-count
+         known-constructor known-constructor? known-constructor-type
          known-predicate known-predicate? known-predicate-type
          known-accessor known-accessor? known-accessor-type
          known-mutator known-mutator? known-mutator-type
          known-struct-type-property/immediate-guard known-struct-type-property/immediate-guard?
-
-         a-known-constant
-         a-known-unknown
-         a-known-procedure
-         a-known-struct-type-property/immediate-guard)
+         a-known-constant)
 
 (struct known-constant () #:prefab #:omit-define-syntaxes)
-(struct known-unknown () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
+
+;; literal for constant propagation:
 (struct known-literal (expr) #:prefab #:omit-define-syntaxes #:super struct:known-constant)
-(struct known-procedure () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
+
+;; procedure with arity mark
+(struct known-procedure (arity-mask) #:prefab #:omit-define-syntaxes #:super struct:known-constant)
 (struct known-procedure/can-inline (expr) #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
+
+;; procedure that succeeds for all arguments, so it can be reordered
+(struct known-procedure/succeeds () #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
+
 (struct known-struct-type (type field-count pure-constructor?) #:prefab #:omit-define-syntaxes)
-(struct known-constructor (type field-count) ; field count can be 'any
-        #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
-(struct known-predicate (type) #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
+
+;; procedures with a known connection to a structure type:
+(struct known-constructor (type) #:prefab #:omit-define-syntaxes #:super struct:known-procedure/succeeds)
+(struct known-predicate (type) #:prefab #:omit-define-syntaxes #:super struct:known-procedure/succeeds)
 (struct known-accessor (type) #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
 (struct known-mutator (type) #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
+
 (struct known-struct-type-property/immediate-guard () #:prefab #:omit-define-syntaxes)
 
 (define a-known-constant (known-constant))
-(define a-known-unknown (known-unknown))
-(define a-known-procedure (known-procedure))
-(define a-known-struct-type-property/immediate-guard (known-struct-type-property/immediate-guard))

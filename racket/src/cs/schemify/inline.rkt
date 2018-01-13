@@ -148,7 +148,7 @@
      ;; For now, export inlinable only if there are no
      ;; references besides locals and primitives
      (if (any-free-variables? (known-procedure/can-inline-expr k) prim-knowns '())
-         a-known-procedure
+         (known-procedure (known-procedure-arity-mask k))
          k)]
     [else k]))
 

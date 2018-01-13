@@ -411,7 +411,8 @@ primitive.}
                                 #f])
           correlated?]
 @defproc*[([(correlated-property [stx correlated?]
-                             [key (if preserved? (and/c symbol? symbol-interned?) any/c)])
+                                 [key any/c]
+                                 [val any/c])
              correlated?]
            [(correlated-property [stx correlated?] [key any/c]) any/c])]
 @defproc[(correlated-property-symbol-keys [stx correlated?]) list?]

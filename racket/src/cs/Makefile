@@ -20,14 +20,14 @@ SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt 
                     schemify/lift.rkt schemify/jitify.rkt schemify/interpret.rkt schemify/size.rkt \
                     schemify/optimize.rkt schemify/literal.rkt schemify/infer-known.rkt \
                     schemify/inline.rkt schemify/main.rkt
-CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS) known-primitive.rkt
+CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS)
 
 CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt
 
 THREAD_DEPS = chezpart.so rumble.so
 IO_DEPS = $(THREAD_DEPS) thread.so
 REGEXP_DEPS = $(IO_DEPS) io.so
-SCHEMIFY_DEPS = $(REGEXP_DEPS) regexp.so known-primitive.so
+SCHEMIFY_DEPS = $(REGEXP_DEPS) regexp.so
 LINKLET_DEPS = $(SCHEMIFY_DEPS) schemify.so
 EXPANDER_DEPS = $(LINKLET_DEPS) linklet.so
 MAIN_DEPS = $(EXPANDER_DEPS) expander.so
@@ -96,7 +96,7 @@ linklet.so: linklet.sls $(LINKLET_DEPS) $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) linklet.sls $(LINKLET_DEPS)
 
 
-schemify.so: schemify.sls compiled/schemify.scm $(SCHEMIFY_DEPS) $(COMPILE_FILE_DEPS)
+schemify.so: schemify.sls compiled/schemify.scm compiled/known.scm $(SCHEMIFY_DEPS) $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) schemify.sls $(SCHEMIFY_DEPS)
 
 compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
@@ -113,11 +113,13 @@ compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
 	$(RACKET) ../expander/bootstrap-run.rkt -t schemify/main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/schemify.rktl
 
 
-known-primitive.so: known-primitive.sls $(COMPILE_FILE_DEPS)
-	$(COMPILE_FILE) known-primitive.sls
+# Used by schemify.sls at compile time
+compiled/known.scm: compiled/known.rktl $(CONVERT_DEPS)
+	$(CONVERT) --skip-export compiled/known.rktl compiled/known.scm
 
-known-primitive.sls: known-primitive.rkt
-	$(RACKET) known-primitive.rkt
+compiled/known.rktl: schemify/known.rkt
+	$(RACKET) -N raco -l- raco make ../expander/bootstrap-run.rkt
+	$(RACKET) ../expander/bootstrap-run.rkt -t schemify/known.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/known.rktl
 
 
 regexp-demo: regexp.so
@@ -266,7 +268,7 @@ chezpart.so: chezpart.sls $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) chezpart.sls
 
 clean:
-	rm -f chezpart.so rumble.so regexp.so io.so linklet.so known-primitive.so expander.so schemify.so
-	rm -f chezpart.wpo rumble.wpo regexp.wpo io.wpo linklet.wpo known-primitive.wpo expander.wpo schemify.wpo
+	rm -f chezpart.so rumble.so regexp.so io.so linklet.so expander.so schemify.so
+	rm -f chezpart.wpo rumble.wpo regexp.wpo io.wpo linklet.wpo expander.wpo schemify.wpo
 	rm -f thread.so thread.wpo main.wpo main.so
 	rm -rf compiled

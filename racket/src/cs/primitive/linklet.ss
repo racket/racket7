@@ -1,38 +1,30 @@
 
-(define linklet-table
-  (make-primitive-table
-   linklet?
-   compile-linklet
-   recompile-linklet
-   eval-linklet
-   read-compiled-linklet
-   instantiate-linklet
-   
-   linklet-import-variables
-   linklet-export-variables
-   
-   instance?
-   make-instance
-   instance-name
-   instance-data
-   instance-variable-names
-   instance-variable-value
-   instance-set-variable-value!
-   instance-unset-variable!
-
-   linklet-directory?
-   hash->linklet-directory
-   linklet-directory->hash
-
-   linklet-bundle?
-   hash->linklet-bundle
-   linklet-bundle->hash
-   
-   variable-reference?
-   variable-reference->instance
-   variable-reference-constant?
-
-   primitive->compiled-position
-   compiled-position->primitive
-
-   primitive-table))
+(define-primitive-table linklet-table
+  [compile-linklet (known-procedure 62)]
+  [compiled-position->primitive (known-procedure 2)]
+  [eval-linklet (known-procedure 2)]
+  [hash->linklet-bundle (known-procedure 2)]
+  [hash->linklet-directory (known-procedure 2)]
+  [instance-data (known-procedure 2)]
+  [instance-name (known-procedure 2)]
+  [instance-set-variable-value! (known-procedure 24)]
+  [instance-unset-variable! (known-procedure 4)]
+  [instance-variable-names (known-procedure 2)]
+  [instance-variable-value (known-procedure 12)]
+  [instance? (known-procedure 2)]
+  [instantiate-linklet (known-procedure 28)]
+  [linklet-bundle->hash (known-procedure 2)]
+  [linklet-bundle? (known-procedure 2)]
+  [linklet-directory->hash (known-procedure 2)]
+  [linklet-directory? (known-procedure 2)]
+  [linklet-export-variables (known-procedure 2)]
+  [linklet-import-variables (known-procedure 2)]
+  [linklet? (known-procedure 2)]
+  [make-instance (known-procedure -2)]
+  [primitive->compiled-position (known-procedure 2)]
+  [primitive-table (known-procedure 6)]
+  [read-compiled-linklet (known-procedure 2)]
+  [recompile-linklet (known-procedure 30)]
+  [variable-reference->instance (known-procedure 6)]
+  [variable-reference-constant? (known-procedure 2)]
+  [variable-reference? (known-procedure 2)])

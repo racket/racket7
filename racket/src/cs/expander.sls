@@ -47,19 +47,15 @@
       [(|#%extfl|) extfl-table]
       [(|#%network|) network-table]
       [else #f]))
-  
-  (define-syntax make-primitive-table
-    (syntax-rules ()
-      [(_ prim ...)
-       (let ([ht (make-hasheq)])
-         (hash-primitive-set! ht prim)
-         ...
-         ht)]))
 
-  (define-syntax hash-primitive-set!
+  (define-syntax define-primitive-table
     (syntax-rules ()
-      [(_ ht [local prim]) (hash-set! ht 'prim local)]
-      [(_ ht prim) (hash-set! ht 'prim prim)]))
+      [(_ id [prim known] ...)
+       (define id
+         (let ([ht (make-hasheq)])
+           (hash-set! ht 'prim prim)
+           ...
+           ht))]))
 
   (include "primitive/kernel.ss")
   (include "primitive/unsafe.ss")

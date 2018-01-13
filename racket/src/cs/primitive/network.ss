@@ -1,44 +1,43 @@
 
-(define network-table
-  (make-primitive-table
-   tcp-abandon-port
-   tcp-accept
-   tcp-accept-evt
-   tcp-accept-ready?
-   tcp-accept/enable-break
-   tcp-addresses
-   tcp-close
-   tcp-connect
-   tcp-connect/enable-break
-   tcp-listen
-   tcp-listener?
-   tcp-port?
-   udp?
-   udp-bind!
-   udp-bound?
-   udp-close
-   udp-connect!
-   udp-connected?
-   udp-multicast-interface
-   udp-multicast-join-group!
-   udp-multicast-leave-group!
-   udp-multicast-loopback?
-   udp-multicast-set-interface!
-   udp-multicast-set-loopback!
-   udp-multicast-set-ttl!
-   udp-multicast-ttl
-   udp-open-socket
-   udp-receive!
-   udp-receive!*
-   udp-receive!-evt
-   udp-receive!/enable-break
-   udp-receive-ready-evt
-   udp-send
-   udp-send*
-   udp-send-evt
-   udp-send-ready-evt
-   udp-send-to
-   udp-send-to*
-   udp-send-to-evt
-   udp-send-to/enable-break
-   udp-send/enable-break))
+(define-primitive-table network-table
+  [tcp-abandon-port (known-procedure 2)]
+  [tcp-accept (known-procedure 2)]
+  [tcp-accept-evt (known-procedure 2)]
+  [tcp-accept-ready? (known-procedure 2)]
+  [tcp-accept/enable-break (known-procedure 2)]
+  [tcp-addresses (known-procedure 6)]
+  [tcp-close (known-procedure 2)]
+  [tcp-connect (known-procedure 28)]
+  [tcp-connect/enable-break (known-procedure 28)]
+  [tcp-listen (known-procedure 30)]
+  [tcp-listener? (known-procedure 2)]
+  [tcp-port? (known-procedure 2)]
+  [udp-bind! (known-procedure 24)]
+  [udp-bound? (known-procedure 2)]
+  [udp-close (known-procedure 2)]
+  [udp-connect! (known-procedure 8)]
+  [udp-connected? (known-procedure 2)]
+  [udp-multicast-interface (known-procedure 2)]
+  [udp-multicast-join-group! (known-procedure 8)]
+  [udp-multicast-leave-group! (known-procedure 8)]
+  [udp-multicast-loopback? (known-procedure 2)]
+  [udp-multicast-set-interface! (known-procedure 4)]
+  [udp-multicast-set-loopback! (known-procedure 4)]
+  [udp-multicast-set-ttl! (known-procedure 4)]
+  [udp-multicast-ttl (known-procedure 2)]
+  [udp-open-socket (known-procedure 7)]
+  [udp-receive! (known-procedure 28)]
+  [udp-receive!* (known-procedure 28)]
+  [udp-receive!-evt (known-procedure 28)]
+  [udp-receive!/enable-break (known-procedure 28)]
+  [udp-receive-ready-evt (known-procedure 2)]
+  [udp-send (known-procedure 28)]
+  [udp-send* (known-procedure 28)]
+  [udp-send-evt (known-procedure 28)]
+  [udp-send-ready-evt (known-procedure 2)]
+  [udp-send-to (known-procedure 112)]
+  [udp-send-to* (known-procedure 112)]
+  [udp-send-to-evt (known-procedure 112)]
+  [udp-send-to/enable-break (known-procedure 112)]
+  [udp-send/enable-break (known-procedure 28)]
+  [udp? (known-procedure 2)])

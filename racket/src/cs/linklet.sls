@@ -637,7 +637,7 @@
        [(not constance) #f]
        [(and (eq? constance 'consistent)
              (#%procedure? (variable-val var)))
-        a-known-procedure]
+        (known-procedure (#%procedure-arity-mask (variable-val var)))]
        [else a-known-constant])))
 
   ;; ----------------------------------------

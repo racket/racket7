@@ -18,6 +18,27 @@
      (if (literal? t)
          (if (unwrap t) e1 e2)
          v)]
+    [`(procedure? ,e)
+     (define u (unwrap e))
+     (cond
+       [(symbol? u)
+        (define k (hash-ref-either knowns imports u))
+        (if (known-procedure? k)
+            '#t
+            v)]
+       [else v])]
+    [`(procedure-arity-includes? ,e ,n)
+     (define u (unwrap e))
+     (define u-n (unwrap n))
+     (cond
+       [(and (symbol? u)
+             (exact-integer? n))
+        (define k (hash-ref-either knowns imports u))
+        (if (and (known-procedure? k)
+                 (bitwise-bit-set? (known-procedure-arity-mask k) u-n))
+            '#t
+            v)]
+       [else v])]
     [`,_
      (define u (unwrap v))
      (cond

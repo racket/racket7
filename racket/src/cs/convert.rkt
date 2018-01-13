@@ -4,10 +4,10 @@
          racket/match
          racket/file
          racket/extflonum
+         racket/include
          "schemify/schemify.rkt"
          "schemify/known.rkt"
-         "schemify/lift.rkt"
-         "known-primitive.rkt")
+         "schemify/lift.rkt")
 
 (define skip-export? #f)
 
@@ -79,31 +79,21 @@
 
 (lift l)
 
-(define prim-known-procs
-  ;; Register primitives:
-  (let ([ns (make-base-namespace)])
-    (parameterize ([current-namespace ns])
-      (namespace-require 'racket/unsafe/ops)
-      (namespace-require 'racket/flonum)
-      (namespace-require 'racket/fixnum))
-    (for/fold ([prim-knowns (hasheq)]) ([s (in-list (namespace-mapped-symbols ns))])
-      (with-handlers ([exn:fail? (lambda (exn) prim-knowns)])
-        (cond
-         [(procedure? (eval s ns))
-          (hash-set prim-knowns s a-known-procedure)]
-         [else
-          (hash-set prim-knowns s a-known-constant)])))))
-
 (define prim-knowns
-  (let* ([prim-knowns (for/fold ([prim-knowns (hasheq)]) ([s (in-list known-procedures)])
-                        (hash-set prim-knowns s a-known-procedure))]
-         [prim-knowns (for/fold ([prim-knowns prim-knowns]) ([s+c (in-list known-constructors)])
-                        (hash-set prim-knowns (car s+c) (known-constructor (car s+c) (cadr s+c))))]
-         [prim-knowns (for/fold ([prim-knowns prim-knowns]) ([s (in-list known-struct-type-property/immediate-guards)])
-                        (hash-set prim-knowns s a-known-struct-type-property/immediate-guard))]
-         [prim-knowns (for/fold ([prim-knowns prim-knowns]) ([s (in-list known-constants)])
-                        (hash-set prim-knowns s a-known-constant))])
-    prim-knowns))
+  (let ([knowns (hasheq)])
+    (define-syntax-rule (define-primitive-table id [prim known] ...)
+      (begin (set! knowns (hash-set knowns 'prim known)) ...))
+    (include "primitive/kernel.ss")
+    (include "primitive/unsafe.ss")
+    (include "primitive/flfxnum.ss")
+    (include "primitive/paramz.ss")
+    (include "primitive/extfl.ss")
+    (include "primitive/network.ss")
+    (include "primitive/futures.ss")
+    (include "primitive/place.ss")
+    (include "primitive/foreign.ss")
+    (include "primitive/linklet.ss")
+    knowns))
 
 ;; Convert:
 (define schemified-body

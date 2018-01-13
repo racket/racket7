@@ -600,21 +600,28 @@
             (cons '() (convert-lifted-calls-in-seq vs lifts frees)))))
        (define new-bindings (car new-bindings+body))
        (define new-body (cdr new-bindings+body))
+       (define (rebuild-let let-id bindings body)
+         (cond
+           [(not (null? bindings))
+            `(,let-id ,bindings . ,body)]
+           [(and (pair? body) (null? (cdr body)))
+            (car body)]
+           [else `(begin . ,body)]))
        (reannotate
         v
         (cond
-          [(null? new-bindings) `(,let-id ,bindings . ,new-body)]
+          [(null? new-bindings) (rebuild-let let-id bindings new-body)]
           [else
            (case (unwrap let-id)
              [(letrec letrec*)
-              `(,let-id ,(append new-bindings bindings) . ,new-body)]
+              (rebuild-let let-id (append new-bindings bindings) new-body)]
              [(letrec-values)
               (define new*-bindings
                 (for/list ([binding (in-list new-bindings)])
                   (cons (list (car binding)) (cdr binding))))
-              `(,let-id ,(append new*-bindings bindings) . ,new-body)]
+              (rebuild-let let-id (append new*-bindings bindings) new-body)]
              [else
-              `(,let-id ,bindings (let ,new-bindings . ,new-body))])]))]))
+              (rebuild-let let-id bindings (list (rebuild-let 'let new-bindings new-body)))])]))]))
 
   (define (convert-lifted-calls-in-seq/add-mutators vs ids lifts frees)
     (convert-lifted-calls-in-seq/add-mutators*

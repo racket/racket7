@@ -1,18 +1,17 @@
 
-(define futures-table
-  (make-primitive-table
-   futures-enabled?
-   processor-count
-   future
-   future?
-   touch
-   would-be-future
-   current-future
-   make-fsemaphore
-   fsemaphore?
-   fsemaphore-post
-   fsemaphore-wait
-   fsemaphore-try-wait?
-   fsemaphore-count
-   reset-future-logs-for-tracing!
-   mark-future-trace-end!))
+(define-primitive-table futures-table
+  [current-future (known-procedure 1)]
+  [fsemaphore-count (known-procedure 2)]
+  [fsemaphore-post (known-procedure 2)]
+  [fsemaphore-try-wait? (known-procedure 2)]
+  [fsemaphore-wait (known-procedure 2)]
+  [fsemaphore? (known-procedure 2)]
+  [future (known-procedure 2)]
+  [future? (known-procedure 2)]
+  [futures-enabled? (known-procedure 1)]
+  [make-fsemaphore (known-procedure 2)]
+  [mark-future-trace-end! (known-procedure 1)]
+  [processor-count (known-procedure 1)]
+  [reset-future-logs-for-tracing! (known-procedure 1)]
+  [touch (known-procedure 2)]
+  [would-be-future (known-procedure 2)])

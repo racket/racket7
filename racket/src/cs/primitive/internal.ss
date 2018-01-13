@@ -2,28 +2,27 @@
 ;; Exports that are not exposed to Racket, but
 ;; can be used in a linklet:
 
-(define internal-table
-  (make-primitive-table
-   call/cm
-   extract-procedure
-   set-ctl-c-handler!
-   register-linklet-instantiate-continuation!
-   impersonator-val
-   impersonate-ref
-   impersonate-set!
-   struct-type-install-properties!
-   structure-type-lookup-prefab-uid
-   struct-type-constructor-add-guards
-   register-struct-constructor!
-   register-struct-predicate!
-   register-struct-field-accessor!
-   register-struct-field-mutator!
-   struct-property-set!   
-   |#%call-with-values|
+(define-primitive-table internal-table
+  [call/cm (known-constant)]
+  [extract-procedure (known-constant)]
+  [set-ctl-c-handler! (known-constant)]
+  [register-linklet-instantiate-continuation! (known-constant)]
+  [impersonator-val (known-constant)]
+  [impersonate-ref (known-constant)]
+  [impersonate-set! (known-constant)]
+  [struct-type-install-properties! (known-constant)]
+  [structure-type-lookup-prefab-uid (known-constant)]
+  [struct-type-constructor-add-guards (known-constant)]
+  [register-struct-constructor! (known-constant)]
+  [register-struct-predicate! (known-constant)]
+  [register-struct-field-accessor! (known-constant)]
+  [register-struct-field-mutator! (known-constant)]
+  [struct-property-set! (known-constant)]
+  [|#%call-with-values| (known-constant)]
 
-   make-record-type-descriptor
-   make-record-constructor-descriptor
-   record-constructor
-   record-predicate
-   record-accessor
-   record-mutator))
+  [make-record-type-descriptor (known-constant)]
+  [make-record-constructor-descriptor (known-constant)]
+  [record-constructor (known-constant)]
+  [record-predicate (known-constant)]
+  [record-accessor (known-constant)]
+  [record-mutator (known-constant)])

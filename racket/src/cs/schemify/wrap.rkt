@@ -5,12 +5,14 @@
 (provide unwrap unwrap-list
          wrap-pair? wrap-null? wrap-car wrap-cdr wrap-list?
          wrap-eq? wrap-equal?
-         in-wrap-list)
+         in-wrap-list
+         wrap-property)
 
 (import-from-primitive-table
  #%kernel
  [syntax? correlated?]
- [syntax-e correlated-e])
+ [syntax-e correlated-e]
+ [syntax-property correlated-property])
 
 (define (unwrap v)
   (if (correlated? v)
@@ -62,6 +64,10 @@
              (pair? b)
              (wrap-equal? (car a) (car b))
              (wrap-equal? (car a) (car b))))))
+
+(define (wrap-property a key)
+  (and (correlated? a)
+       (correlated-property a key)))
 
 (define-sequence-syntax in-wrap-list
   (lambda (stx) (raise-argument-error "allowed only in `for` forms" stx))

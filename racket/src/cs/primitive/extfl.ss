@@ -1,48 +1,47 @@
 
-(define extfl-table
-  (make-primitive-table
-   extflmin
-   extflatan
-   extfl+
-   extflmax
-   extflfloor
-   extfl<=
-   extflvector
-   extfl->floating-point-bytes
-   extfltruncate
-   ->extfl
-   extflsin
-   extflonum?
-   extflacos
-   extflvector-ref
-   extflexp
-   extflabs
-   extflonum-available?
-   extfl<
-   extfl->exact
-   extfl->fx
-   extfl->inexact
-   extflvector-set!
-   make-extflvector
-   extflcos
-   extflvector-length
-   extfl/
-   extflceiling
-   floating-point-bytes->extfl
-   extfl>=
-   make-shared-extflvector
-   extflround
-   extfl->exact-integer
-   real->extfl
-   extflexpt
-   fx->extfl
-   shared-extflvector
-   extfl>
-   extfllog
-   extflvector?
-   extfl=
-   extflsqrt
-   extfl*
-   extfl-
-   extfltan
-   extflasin))
+(define-primitive-table extfl-table
+  [->extfl (known-procedure 2)]
+  [extfl* (known-procedure 4)]
+  [extfl+ (known-procedure 4)]
+  [extfl- (known-procedure 4)]
+  [extfl->exact (known-procedure 2)]
+  [extfl->exact-integer (known-procedure 2)]
+  [extfl->floating-point-bytes (known-procedure 30)]
+  [extfl->fx (known-procedure 2)]
+  [extfl->inexact (known-procedure 2)]
+  [extfl/ (known-procedure 4)]
+  [extfl< (known-procedure 4)]
+  [extfl<= (known-procedure 4)]
+  [extfl= (known-procedure 4)]
+  [extfl> (known-procedure 4)]
+  [extfl>= (known-procedure 4)]
+  [extflabs (known-procedure 2)]
+  [extflacos (known-procedure 2)]
+  [extflasin (known-procedure 2)]
+  [extflatan (known-procedure 2)]
+  [extflceiling (known-procedure 2)]
+  [extflcos (known-procedure 2)]
+  [extflexp (known-procedure 2)]
+  [extflexpt (known-procedure 4)]
+  [extflfloor (known-procedure 2)]
+  [extfllog (known-procedure 2)]
+  [extflmax (known-procedure 4)]
+  [extflmin (known-procedure 4)]
+  [extflonum-available? (known-procedure 1)]
+  [extflonum? (known-procedure 2)]
+  [extflround (known-procedure 2)]
+  [extflsin (known-procedure 2)]
+  [extflsqrt (known-procedure 2)]
+  [extfltan (known-procedure 2)]
+  [extfltruncate (known-procedure 2)]
+  [extflvector (known-procedure -1)]
+  [extflvector-length (known-procedure 2)]
+  [extflvector-ref (known-procedure 4)]
+  [extflvector-set! (known-procedure 8)]
+  [extflvector? (known-procedure 2)]
+  [floating-point-bytes->extfl (known-procedure 30)]
+  [fx->extfl (known-procedure 2)]
+  [make-extflvector (known-procedure 6)]
+  [make-shared-extflvector (known-procedure 6)]
+  [real->extfl (known-procedure 2)]
+  [shared-extflvector (known-procedure -1)])

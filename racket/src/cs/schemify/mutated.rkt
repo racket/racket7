@@ -159,7 +159,7 @@
                       (not (hash-ref mutated rator #f))
                       (let ([v (hash-ref-either knowns imports rator)])
                         (and (known-constructor? v)
-                             (= (length exps) (known-constructor-field-count v))))
+                             (bitwise-bit-set? (known-procedure-arity-mask v) (length exps))))
                       (for/and ([exp (in-list exps)])
                         (simple? exp prim-knowns knowns imports mutated)))))
           ;; Can delay construction

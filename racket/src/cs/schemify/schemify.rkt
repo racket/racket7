@@ -477,6 +477,9 @@
                             (cons (list (list (wrap-car formal-args))
                                         (wrap-car args))
                                   binds))]))]
+                [`(case-lambda [,formal-args ,bodys ...] . ,rest)
+                 (or (left-left-lambda-convert `(lambda ,formal-args . ,bodys) inline-fuel)
+                     (left-left-lambda-convert `(case-lambda . ,rest) inline-fuel))]
                 [`,_ #f]))
             (define (inline-rator)
               (define u-rator (unwrap rator))
