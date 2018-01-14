@@ -6,12 +6,16 @@
          
          import-group-lookup
          import-lookup
-         
-         hash-ref-either)
 
-(struct import (grp id ext-id))
-(struct import-group ([knowns/thunk #:mutable] ; starts as a procedure to get table
-                      [converter #:mutable])) ; converts table entries to `known`s
+         hash-ref-either
+         
+         make-add-import!)
+
+(struct import (grp id int-id ext-id))
+(struct import-group (index
+                      [knowns/thunk #:mutable] ; starts as a procedure to get table
+                      [converter #:mutable]    ; converts table entries to `known`s
+                      [imports #:mutable]))    ; starts as declared imports, but inlining can grow
 
 (define (import-group-knowns grp)
   (define knowns/thunk (import-group-knowns/thunk grp))
@@ -45,3 +49,26 @@
       (let ([im (hash-ref imports key #f)])
         (and im
              (import-lookup im)))))
+
+(define (make-add-import! imports grps get-import-knowns add-group!)
+  (lambda (im ext-id index)
+    ;; The `im` argument represents an import into the current
+    ;; linklet. Let L be the linklet for that import. Map `ext-id` as
+    ;; either defined in L (if `index` is #f) or imported into L from
+    ;; its `index`th group to a new name in the current module,
+    ;; potentially adding an import into the current module.
+
+    ;; As a first step, just support a #f `index`
+    (cond
+      [index #f]
+      [else
+       (define grp (import-grp im))
+       (or (for/or ([im (in-list (import-group-imports grp))])
+             (and (eq? ext-id (import-ext-id im))
+                  (import-int-id im)))
+           (let ([id (gensym ext-id)]
+                 [int-id (gensym ext-id)])
+             (define im (import grp id int-id ext-id))
+             (set-import-group-imports! grp (cons im (import-group-imports grp)))
+             (hash-set! imports int-id im)
+             int-id))])))

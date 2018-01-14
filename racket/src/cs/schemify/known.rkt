@@ -7,6 +7,8 @@
          known-literal known-literal? known-literal-expr
          known-procedure known-procedure? known-procedure-arity-mask
          known-procedure/can-inline known-procedure/can-inline? known-procedure/can-inline-expr
+         known-procedure/can-inline/need-imports known-procedure/can-inline/need-imports?
+         known-procedure/can-inline/need-imports-needed
          known-procedure/succeeds known-procedure/succeeds?
          known-struct-type known-struct-type? known-struct-type-type
          known-struct-type-field-count known-struct-type-pure-constructor?
@@ -25,6 +27,8 @@
 ;; procedure with arity mark
 (struct known-procedure (arity-mask) #:prefab #:omit-define-syntaxes #:super struct:known-constant)
 (struct known-procedure/can-inline (expr) #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
+(struct known-procedure/can-inline/need-imports (needed) ; (list (cons <sym> (cons <sym> <#f-or-index>)) ...)
+  #:prefab #:omit-define-syntaxes #:super struct:known-procedure/can-inline)
 
 ;; procedure that succeeds for all arguments, so it can be reordered
 (struct known-procedure/succeeds () #:prefab #:omit-define-syntaxes #:super struct:known-procedure)

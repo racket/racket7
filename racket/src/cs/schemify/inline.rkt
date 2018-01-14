@@ -1,7 +1,9 @@
 #lang racket/base
 (require "wrap.rkt"
          "match.rkt"
-         "known.rkt")
+         "known.rkt"
+         "import.rkt"
+         "export.rkt")
 
 (provide init-inline-fuel
          can-inline?
@@ -40,16 +42,36 @@
 ;; All binding identifiers in a clone must be fresh to stay consistent
 ;; with the unique-variable invariant of expanded/schemified form.
 
-(define (inline-clone v mutated reannotate)
-  (match v
-    [`(lambda ,args . ,bodys)
-     (define-values (new-args env) (clone-args args '() mutated))
-     `(lambda ,new-args . ,(clone-body bodys env mutated reannotate))]
-    [`(case-lambda [,argss . ,bodyss] ...)
-     `(case-lambda ,@(for/list ([args (in-list argss)]
-                                [bodys (in-list bodyss)])
-                       (define-values (new-args env) (clone-args args '() mutated))
-                       `[,new-args . ,(clone-body bodys env mutated reannotate)]))]))
+(define (inline-clone k im add-import! mutated reannotate)
+  (define env (if (known-procedure/can-inline/need-imports? k)
+                  ;; The `needed->env` setup can fail if a needed
+                  ;; import cannot be made available:
+                  (needed->env (known-procedure/can-inline/need-imports-needed k)
+                               add-import!
+                               im)
+                  '()))
+  (and
+   env
+   (match (known-procedure/can-inline-expr k)
+     [`(lambda ,args . ,bodys)
+      (define-values (new-args new-env) (clone-args args env mutated))
+      `(lambda ,new-args . ,(clone-body bodys new-env mutated reannotate))]
+     [`(case-lambda [,argss . ,bodyss] ...)
+      `(case-lambda ,@(for/list ([args (in-list argss)]
+                                 [bodys (in-list bodyss)])
+                        (define-values (new-args new-env) (clone-args args env mutated))
+                        `[,new-args . ,(clone-body bodys new-env mutated reannotate)]))])))
+
+;; Build a mapping from ids in the expr to imports into the current
+;; linklet, where `add-import!` arranges for the import to exist as
+;; needed and if possible. The result is #f if some import cannot be
+;; made available.
+(define (needed->env needed add-import! im)
+  (for/fold ([env '()]) ([need (in-list needed)])
+    (and env
+         (let ([id (add-import! im (cadr need) (cddr need))])
+           (and id
+                (cons (cons (car need) id) env))))))
 
 (define (clone-args args base-env mutated)
   (define env
@@ -145,65 +167,96 @@
 (define (known-inline->export-known k prim-knowns imports exports)
   (cond
     [(known-procedure/can-inline? k)
-     ;; For now, export inlinable only if there are no
-     ;; references besides locals and primitives
-     (if (any-free-variables? (known-procedure/can-inline-expr k) prim-knowns '())
-         (known-procedure (known-procedure-arity-mask k))
-         k)]
+     (define needed
+       (needed-imports (known-procedure/can-inline-expr k) prim-knowns imports exports '() '#hasheq()))
+     (cond
+       [(not needed) (known-procedure (known-procedure-arity-mask k))]
+       [(hash-empty? needed) k]
+       [else
+        (known-procedure/can-inline/need-imports
+         (known-procedure-arity-mask k)
+         (known-procedure/can-inline-expr k)
+         (for/list ([(k v) (in-hash needed)])
+           (cons k v)))])]
     [else k]))
 
-(define (any-free-variables? v prim-knowns env)
-  (match v
-    [`(lambda ,args . ,bodys)
-     (body-any-free-variables? bodys prim-knowns (add-args env args))]
-    [`(case-lambda [,argss . ,bodyss] ...)
-     (for/or ([args (in-list argss)]
-              [bodys (in-list bodyss)])
-       (body-any-free-variables? bodys prim-knowns (add-args env args)))]
-    [`(quote ,_) #f]
-    [`(let-values . ,_) (let-any-free-variables? v prim-knowns env)]
-    [`(letrec-values . ,_) (let-any-free-variables? v prim-knowns env)]
-    [`(if ,tst ,thn ,els)
-     (or (any-free-variables? tst prim-knowns env)
-         (any-free-variables? thn prim-knowns env)
-         (any-free-variables? els prim-knowns env))]
-    [`(with-continuation-mark ,key ,val ,body)
-     (or (any-free-variables? key prim-knowns env)
-         (any-free-variables? val prim-knowns env)
-         (any-free-variables? body prim-knowns env))]
-    [`(begin ,exps ...)
-     (body-any-free-variables? exps prim-knowns env)]
-    [`(begin0 ,exps ...)
-     (body-any-free-variables? exps prim-knowns env)]
-    [`(set! ,id ,rhs)
-     (or (any-free-variables? id prim-knowns env)
-         (any-free-variables? rhs prim-knowns env))]
-    [`(#%variable-reference . ,_)
-     ;; Cannot inline a variable reference
-     #t]
-    [`(,rator . ,_)
-     (body-any-free-variables? v prim-knowns env)]
-    [`,_
-     (let ([u-v (unwrap v)])
-       (cond
-         [(symbol? u-v)
-          (not (or (memq u-v env)
-                   (hash-ref prim-knowns u-v #f)))]
-         [else #f]))]))
+(define (needed-imports v prim-knowns imports exports env needed)
+  (and
+   needed
+   (match v
+     [`(lambda ,args . ,bodys)
+      (body-needed-imports bodys prim-knowns imports exports (add-args env args) needed)]
+     [`(case-lambda [,argss . ,bodyss] ...)
+      (for/fold ([needed needed]) ([args (in-list argss)]
+                                   [bodys (in-list bodyss)])
+        (body-needed-imports bodys prim-knowns imports exports (add-args env args) needed))]
+     [`(quote ,_) needed]
+     [`(let-values . ,_) (let-needed-imports v prim-knowns imports exports env needed)]
+     [`(letrec-values . ,_) (let-needed-imports v prim-knowns imports exports env needed)]
+     [`(if ,tst ,thn ,els)
+      (needed-imports tst prim-knowns imports exports env
+                      (needed-imports thn prim-knowns imports exports env
+                                      (needed-imports els prim-knowns imports exports env
+                                                      needed)))]
+     [`(with-continuation-mark ,key ,val ,body)
+      (needed-imports key prim-knowns imports exports env
+                      (needed-imports val prim-knowns imports exports env
+                                      (needed-imports body prim-knowns imports exports env
+                                                      needed)))]
+     [`(begin ,exps ...)
+      (body-needed-imports exps prim-knowns imports exports env needed)]
+     [`(begin0 ,exps ...)
+      (body-needed-imports exps prim-knowns imports exports env needed)]
+     [`(set! ,id ,rhs)
+      (define u (unwrap id))
+      (cond
+        [(hash-ref exports id #f)
+         ;; Cannot inline assignment to an exported variable
+         #f]
+        [else
+         (needed-imports id prim-knowns imports exports env
+                         (needed-imports rhs prim-knowns imports exports env
+                                         needed))])]
+     [`(#%variable-reference . ,_)
+      ;; Cannot inline a variable reference
+      #f]
+     [`(,rator . ,_)
+      (body-needed-imports v prim-knowns imports exports env needed)]
+     [`,_
+      (let ([u-v (unwrap v)])
+        (cond
+          [(symbol? u-v)
+           (cond
+             [(or (memq u-v env)
+                  (hash-ref prim-knowns u-v #f)
+                  (hash-ref needed u-v #f))
+              needed]
+             [(hash-ref exports u-v #f)
+              => (lambda (ex)
+                   (hash-set needed u-v (cons (export-ext-id ex) #f)))]
+             [(hash-ref imports u-v #f)
+              => (lambda (im)
+                   (hash-set needed u-v (cons (import-ext-id im)
+                                              (import-group-index (import-grp im)))))]
+             [else
+              ;; Free variable (possibly defined but not exported) => cannot inline
+              #f])]
+          [else needed]))])))
 
-(define (body-any-free-variables? l prim-knowns env)
-  (for/or ([e (in-wrap-list l)])
-    (any-free-variables? e prim-knowns env)))
+(define (body-needed-imports l prim-knowns imports exports env needed)
+  (for/fold ([needed needed]) ([e (in-wrap-list l)])
+    (needed-imports e prim-knowns imports exports env needed)))
 
-(define (let-any-free-variables? v prim-knowns env)
+(define (let-needed-imports v prim-knowns imports exports env needed)
   (match v
     [`(,let-id ([,idss ,rhss] ...) ,bodys ...)
      (define new-env (for*/fold ([env env]) ([ids (in-list idss)]
                                              [id (in-list ids)])
                        (cons (unwrap id) env)))
-     (or (for/or ([rhs (in-list rhss)])
-           (any-free-variables? rhs prim-knowns new-env))
-         (body-any-free-variables? bodys prim-knowns new-env))]))
+     (body-needed-imports bodys prim-knowns imports exports new-env
+                          (for/fold ([needed needed]) ([rhs (in-list rhss)])
+                            (needed-imports rhs prim-knowns imports exports new-env
+                                            needed)))]))
 
 (define (add-args env args)
   (cond

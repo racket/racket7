@@ -363,14 +363,6 @@
      [(c name import-keys get-import serializable?)
       (performance-region
        'schemify
-       (define importss
-         (map (lambda (ps)
-                (map (lambda (p) (if (pair? p) (car p) p))
-                     ps))
-              (cadr c)))
-       (define exports
-         (map (lambda (p) (if (pair? p) (cadr p) p))
-              (caddr c)))
        (define jitify-mode?
          (or (eq? linklet-compilation-mode 'jit)
              (and (linklet-bigger-than? c linklet-compilation-limit serializable?)
@@ -378,7 +370,7 @@
                   #t)))
        (define format (if jitify-mode? 'interpret 'compile))
        ;; Convert the linklet S-expression to a `lambda` S-expression:
-       (define-values (impl-lam importss-abi exports-info)
+       (define-values (impl-lam importss exports importss-abi exports-info)
          (schemify-linklet (show "linklet" c)
                            serializable?
                            jitify-mode?

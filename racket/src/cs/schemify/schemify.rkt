@@ -3,6 +3,7 @@
          "match.rkt"
          "known.rkt"
          "import.rkt"
+         "export.rkt"
          "struct-type-info.rkt"
          "simple.rkt"
          "find-definition.rkt"
@@ -67,20 +68,36 @@
   ;; Assume no wraps unless the level of an id or expression
   (match lk
     [`(linklet ,im-idss ,ex-ids . ,bodys)
-     ;; For imports, map symbols to gensymed `variable` argument names:
+     ;; For imports, map symbols to gensymed `variable` argument names,
+     ;; keeping `import` records in groups:
+     (define grps
+       (for/list ([im-ids (in-list im-idss)]
+                  [index (in-naturals)])
+         (import-group index (lambda () (get-import-knowns index)) #f '())))
      (define imports
-       (for/fold ([imports (hasheq)]) ([im-ids (in-list im-idss)]
-                                       [index (in-naturals)])
-         (define grp (import-group (lambda () (get-import-knowns index)) #f))
-         (for/fold ([imports imports]) ([im-id (in-list im-ids)])
-           (define id (im-int-id im-id))
-           (define ext-id (im-ext-id im-id))
-           (hash-set imports id (import grp (gensym (symbol->string id)) ext-id)))))
-     ;; Ditto for exports:
+       (let ([imports (make-hasheq)])
+         (for ([im-ids (in-list im-idss)]
+               [grp (in-list grps)])
+           (set-import-group-imports!
+            grp
+            (for/list ([im-id (in-list im-ids)])
+              (define id (im-int-id im-id))
+              (define ext-id (im-ext-id im-id))
+              (define im (import grp (gensym (symbol->string id)) id ext-id))
+              (hash-set! imports id im)
+              im)))
+         imports))
+     (define new-grps '())
+     (define add-import!
+       (make-add-import! imports
+                         grps
+                         get-import-knowns
+                         (lambda (new-grp) (set! new-grps (cons new-grp new-grps)))))
+     ;; For exports, too, map symbols to gensymed `variable` argument names
      (define exports
        (for/fold ([exports (hasheq)]) ([ex-id (in-list ex-ids)])
          (define id (ex-int-id ex-id))
-         (hash-set exports id (gensym (symbol->string id)))))
+         (hash-set exports id (export (gensym (symbol->string id)) (ex-ext-id ex-id)))))
      ;; Lift any quoted constants that can't be serialized
      (define-values (bodys/constants-lifted lifted-constants)
        (if serializable?
@@ -89,26 +106,32 @@
      ;; Schemify the body, collecting information about defined names:
      (define-values (new-body defn-info mutated)
        (schemify-body* bodys/constants-lifted reannotate prim-knowns imports exports
-                       for-jitify? allow-set!-undefined?))
+                       for-jitify? allow-set!-undefined? add-import!))
+     (define all-grps (append (reverse new-grps) grps))
      (values
       ;; Build `lambda` with schemified body:
       (make-let*
        lifted-constants
        `(lambda (instance-variable-reference
-                 ,@(for*/list ([im-ids (in-list im-idss)]
-                               [im-id (in-list im-ids)])
-                     (import-id (hash-ref imports (im-int-id im-id))))
+                 ,@(for*/list ([grp (in-list all-grps)]
+                               [im (in-list (import-group-imports grp))])
+                     (import-id im))
                  ,@(for/list ([ex-id (in-list ex-ids)])
-                     (hash-ref exports (ex-int-id ex-id))))
+                     (export-id (hash-ref exports (ex-int-id ex-id)))))
           ,@new-body))
+      ;; Imports (external names), possibly extended via inlining:
+      (for/list ([grp (in-list all-grps)])
+        (for/list ([im (in-list (import-group-imports grp))])
+          (import-ext-id im)))
+      ;; Exports (external names):
+      (for/list ([ex-id (in-list ex-ids)])
+        (ex-ext-id ex-id))
       ;; Import ABI: request values for constants, `variable`s otherwise
-      (for/list ([im-ids (in-list im-idss)])
-        (define grp (and (pair? (unwrap im-ids))
-                         (import-grp (hash-ref imports (im-int-id (wrap-car im-ids))))))
-        (define im-ready? (and grp (import-group-lookup-ready? grp)))
-        (for/list ([im-id (in-list im-ids)])
+      (for/list ([grp (in-list all-grps)])
+        (define im-ready? (import-group-lookup-ready? grp))
+        (for/list ([im (in-list (import-group-imports grp))])
           (and im-ready?
-               (known-constant? (import-group-lookup grp (im-ext-id im-id))))))
+               (known-constant? (import-group-lookup grp (import-ext-id im))))))
       ;; Convert internal to external identifiers
       (for/fold ([knowns (hasheq)]) ([ex-id (in-list ex-ids)])
         (define id (ex-int-id ex-id))
@@ -125,10 +148,10 @@
 
 (define (schemify-body l reannotate prim-knowns imports exports)
   (define-values (new-body defn-info mutated)
-    (schemify-body* l reannotate prim-knowns imports exports #f #f))
+    (schemify-body* l reannotate prim-knowns imports exports #f #f (lambda (im ext-id index) #f)))
   new-body)
 
-(define (schemify-body* l reannotate prim-knowns imports exports for-jitify? allow-set!-undefined?)
+(define (schemify-body* l reannotate prim-knowns imports exports for-jitify? allow-set!-undefined? add-import!)
   ;; Various conversion steps need information about mutated variables,
   ;; where "mutated" here includes visible implicit mutation, such as
   ;; a variable that might be used before it is defined:
@@ -161,7 +184,8 @@
         (define form (car l))
         (define schemified (schemify form reannotate
                                      prim-knowns knowns mutated imports exports
-                                     allow-set!-undefined?))
+                                     allow-set!-undefined?
+                                     add-import!))
         (match form
           [`(define-values ,ids ,_)
            (append
@@ -194,8 +218,8 @@
 
 (define (make-set-variable id exports knowns mutated)
   (define int-id (unwrap id))
-  (define ex-var (hash-ref exports int-id))
-  `(variable-set! ,ex-var ,id ',(variable-constance int-id knowns mutated)))
+  (define ex (hash-ref exports int-id))
+  `(variable-set! ,(export-id ex) ,id ',(variable-constance int-id knowns mutated)))
 
 (define (make-expr-defns accum-exprs)
   (for/list ([expr (in-list (reverse accum-exprs))])
@@ -214,7 +238,7 @@
 
 ;; Schemify `let-values` to `let`, etc., and
 ;; reorganize struct bindings.
-(define (schemify v reannotate prim-knowns knowns mutated imports exports allow-set!-undefined?)
+(define (schemify v reannotate prim-knowns knowns mutated imports exports allow-set!-undefined? add-import!)
   (let schemify/knowns ([knowns knowns] [inline-fuel init-inline-fuel] [v v])
     (let schemify ([v v])
       (define s-v
@@ -406,9 +430,9 @@
             `(begin0 . ,(map schemify exps))]
            [`(set! ,id ,rhs)
             (define int-id (unwrap id))
-            (define ex-id (hash-ref exports int-id #f))
-            (if ex-id
-                `(,(if allow-set!-undefined? 'variable-set! 'variable-set!/check-undefined) ,ex-id ,(schemify rhs) '#f)
+            (define ex (hash-ref exports int-id #f))
+            (if ex
+                `(,(if allow-set!-undefined? 'variable-set! 'variable-set!/check-undefined) ,(export-id ex) ,(schemify rhs) '#f)
                 `(set! ,id ,(schemify rhs)))]
            [`(variable-reference-constant? (#%variable-reference ,id))
             (let ([id (unwrap id)])
@@ -420,9 +444,10 @@
             'instance-variable-reference]
            [`(#%variable-reference ,id)
             (define u (unwrap id))
-            (define v (or (hash-ref exports u #f)
-                          (let ([i (hash-ref imports u #f)])
-                            (and i (import-id i)))))
+            (define v (or (let ([ex (hash-ref exports u #f)])
+                            (and ex (export-id ex)))
+                          (let ([im (hash-ref imports u #f)])
+                            (and im (import-id im)))))
             (if v
                 `(make-instance-variable-reference 
                   instance-variable-reference
@@ -487,10 +512,9 @@
                    (let ([k (hash-ref-either knowns imports u-rator)])
                      (and (known-procedure/can-inline? k)
                           (simple-mutated-state? (hash-ref mutated u-rator #f))
-                          (left-left-lambda-convert (inline-clone (known-procedure/can-inline-expr k)
-                                                                  mutated
-                                                                  reannotate)
-                                                    (sub1 inline-fuel))))))
+                          (left-left-lambda-convert
+                           (inline-clone k (hash-ref imports u-rator #f) add-import! mutated reannotate)
+                           (sub1 inline-fuel))))))
             (or (left-left-lambda-convert rator inline-fuel)
                 (and (positive? inline-fuel)
                      (inline-rator))
@@ -512,7 +536,7 @@
                 [(and (symbol? u-v)
                       (via-variable-mutated-state? (hash-ref mutated u-v #f))
                       (hash-ref exports u-v #f))
-                 => (lambda (ex-id) `(variable-ref ,ex-id))]
+                 => (lambda (ex) `(variable-ref ,(export-id ex)))]
                 [(and (symbol? u-v)
                       (hash-ref imports u-v #f))
                  => (lambda (im)
