@@ -9,26 +9,30 @@
 (define lists (make-weak-eq-hashtable))
 
 (define (list? v)
-  (cond
-   [(null? v) #t]
-   [(not (pair? v)) #f]
-   [else
-    (let loop ([fast (cdr v)] [slow v] [slow-step? #f] [depth 0])
-      (let ([return (lambda (result)
-                      (when (fx> depth 10)
-                        (hashtable-set! lists slow result))
-                      result)])
-        (cond
-         [(null? fast) (return #t)]
-         [(not (pair? fast)) (return #f)]
-         [(eq? fast slow) (return #f)] ; cycle
-         [else
-          (let ([is-list? (hashtable-ref lists fast none)])
+  (let loop ([v v] [depth 0])
+    (cond
+     [(null? v) #t]
+     [(not (pair? v)) #f]
+     [(pair? v)
+      (cond
+       [(fx<= depth 32)
+        (loop (cdr v) (fx+ depth 1))]
+       [else
+        (let loop ([fast (cdr v)] [slow v] [slow-step? #f])
+          (let ([return (lambda (result)
+                          (hashtable-set! lists slow result)
+                          result)])
             (cond
-             [(eq? is-list? none)
-              (loop (cdr fast) (if slow-step? (cdr slow) slow) (not slow-step?) (fx1+ depth))]
+             [(null? fast) (return #t)]
+             [(not (pair? fast)) (return #f)]
+             [(eq? fast slow) (return #f)] ; cycle
              [else
-              (return is-list?)]))])))]))
+              (let ([is-list? (hashtable-ref lists fast none)])
+                (cond
+                 [(eq? is-list? none)
+                  (loop (cdr fast) (if slow-step? (cdr slow) slow) (not slow-step?))]
+                 [else
+                  (return is-list?)]))])))])])))
 
 (define (append-n l n l2)
   (cond
