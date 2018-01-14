@@ -10,6 +10,9 @@
 (provide infer-known
          lambda?)
 
+;; For definitions, it's useful to infer `a-known-constant` to reflect
+;; that the variable will get a value without referencing anything
+;; too early.
 (define (infer-known rhs defn rec? id knowns prim-knowns imports mutated)
   (cond
     [(lambda? rhs)
@@ -31,10 +34,15 @@
             (and (not (hash-ref mutated u-rhs #f))
                  (hash-ref-either knowns imports u-rhs)))
         => (lambda (known)
-             (if (known-procedure/can-inline/need-imports? known)
-                 ;; can't propagate, since it loses the connection to the import
-                 a-known-constant
-                 known))]
+             (cond
+               [(known-procedure/can-inline/need-imports? known)
+                ;; can't just return `known`, since that loses the connection to the import;
+                ;; the `inline-clone` function specially handles an identifier as the
+                ;; expression to inline
+                (known-procedure/can-inline (known-procedure-arity-mask known)
+                                            rhs)]
+               [else
+                known]))]
        [else (and defn a-known-constant)])]
     [(and defn
           (simple? rhs prim-knowns knowns imports mutated))

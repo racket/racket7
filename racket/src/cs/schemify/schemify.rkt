@@ -241,7 +241,7 @@
   (cond
     [(set!ed-mutated-state? (hash-ref mutated id #f))
      #f]
-    [(known-constant? (hash-ref knowns id #f))
+    [(known-consistent? (hash-ref knowns id #f))
      'consistent]
     [else
      'constant]))
@@ -525,7 +525,7 @@
                      (and (known-procedure/can-inline? k)
                           (simple-mutated-state? (hash-ref mutated u-rator #f))
                           (left-left-lambda-convert
-                           (inline-clone k (hash-ref imports u-rator #f) add-import! mutated reannotate)
+                           (inline-clone k (hash-ref imports u-rator #f) add-import! mutated imports reannotate)
                            (sub1 inline-fuel))))))
             (or (left-left-lambda-convert rator inline-fuel)
                 (and (positive? inline-fuel)

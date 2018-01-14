@@ -42,7 +42,7 @@
 ;; All binding identifiers in a clone must be fresh to stay consistent
 ;; with the unique-variable invariant of expanded/schemified form.
 
-(define (inline-clone k im add-import! mutated reannotate)
+(define (inline-clone k im add-import! mutated imports reannotate)
   (define env (if (known-procedure/can-inline/need-imports? k)
                   ;; The `needed->env` setup can fail if a needed
                   ;; import cannot be made available:
@@ -60,7 +60,17 @@
       `(case-lambda ,@(for/list ([args (in-list argss)]
                                  [bodys (in-list bodyss)])
                         (define-values (new-args new-env) (clone-args args env mutated))
-                        `[,new-args . ,(clone-body bodys new-env mutated reannotate)]))])))
+                        `[,new-args . ,(clone-body bodys new-env mutated reannotate)]))]
+     [`,id
+      ;; We expect `id` to refer to an imported variable, where inlining the
+      ;; imported variable will need to pull from there
+      (cond
+        [(hash-ref imports (unwrap id) #f)
+         => (lambda (im)
+              (define i-k (import-lookup im))
+              (and (known-procedure/can-inline? i-k)
+                   (inline-clone i-k im add-import! mutated imports reannotate)))]
+        [else #f])])))
 
 ;; Build a mapping from ids in the expr to imports into the current
 ;; linklet, where `add-import!` arranges for the import to exist as

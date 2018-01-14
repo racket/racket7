@@ -561,7 +561,7 @@
   [never-evt (known-constant)]
   [newline (known-procedure 3)]
   [not (known-procedure 2)]
-  [null (known-constant)]
+  [null (known-literal '(quote ()))]
   [null? (known-procedure/succeeds 2)]
   [number->string (known-procedure 6)]
   [number? (known-procedure/succeeds 2)]
