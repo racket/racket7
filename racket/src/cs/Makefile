@@ -19,7 +19,7 @@ SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt 
                     schemify/simple.rkt schemify/serialize.rkt schemify/let.rkt schemify/equal.rkt \
                     schemify/lift.rkt schemify/jitify.rkt schemify/interpret.rkt schemify/size.rkt \
                     schemify/optimize.rkt schemify/literal.rkt schemify/infer-known.rkt \
-                    schemify/inline.rkt schemify/export.rkt schemify/main.rkt
+                    schemify/inline.rkt schemify/export.rkt schemify/find-known.rkt schemify/main.rkt
 CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS)
 
 CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt

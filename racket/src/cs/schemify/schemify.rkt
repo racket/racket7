@@ -14,6 +14,7 @@
          "let.rkt"
          "equal.rkt"
          "optimize.rkt"
+         "find-known.rkt"
          "infer-known.rkt"
          "inline.rkt")
 
@@ -521,9 +522,8 @@
             (define (inline-rator)
               (define u-rator (unwrap rator))
               (and (symbol? u-rator)
-                   (let ([k (hash-ref-either knowns imports u-rator)])
+                   (let ([k (find-known u-rator prim-knowns knowns imports mutated)])
                      (and (known-procedure/can-inline? k)
-                          (simple-mutated-state? (hash-ref mutated u-rator #f))
                           (left-left-lambda-convert
                            (inline-clone k (hash-ref imports u-rator #f) add-import! mutated imports reannotate)
                            (sub1 inline-fuel))))))
@@ -534,9 +534,7 @@
                       [args (map schemify exps)]
                       [u-rator (unwrap rator)])
                   (let ([plain-app?
-                         (or (and (known-procedure? (hash-ref-either knowns imports u-rator))
-                                  (not (hash-ref mutated u-rator #f)))
-                             (known-procedure? (hash-ref prim-knowns u-rator #f))
+                         (or (known-procedure? (find-known u-rator prim-knowns knowns imports mutated))
                              (lambda? rator))])
                     (left-to-right/app s-rator
                                        args
@@ -545,12 +543,12 @@
            [`,_
             (let ([u-v (unwrap v)])
               (cond
-                [(and (symbol? u-v)
-                      (via-variable-mutated-state? (hash-ref mutated u-v #f))
+                [(not (symbol? u-v))
+                 v]
+                [(and (via-variable-mutated-state? (hash-ref mutated u-v #f))
                       (hash-ref exports u-v #f))
                  => (lambda (ex) `(variable-ref ,(export-id ex)))]
-                [(and (symbol? u-v)
-                      (hash-ref imports u-v #f))
+                [(hash-ref imports u-v #f)
                  => (lambda (im)
                       (define k (import-lookup im))
                       (if (known-constant? k)
@@ -567,5 +565,12 @@
                           ;; module system won't link to an instance whose
                           ;; definitions didn't complete):
                           `(variable-ref/no-check ,(import-id im))))]
+                [(hash-ref knowns u-v #f)
+                 => (lambda (k)
+                      (cond
+                        [(and (known-copy? k)
+                              (simple-mutated-state? (hash-ref mutated u-v #f)))
+                         (schemify (known-copy-id k))]
+                        [else v]))]
                 [else v]))])))
       (optimize s-v prim-knowns knowns imports mutated))))

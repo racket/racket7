@@ -5,6 +5,7 @@
 
 (provide known-constant known-constant?
          known-consistent known-consistent?
+         known-copy? known-copy known-copy-id
          known-literal known-literal? known-literal-expr
          known-procedure known-procedure? known-procedure-arity-mask
          known-procedure/can-inline known-procedure/can-inline? known-procedure/can-inline-expr
@@ -29,6 +30,9 @@
 ;; a procedure of 1 argument, always being a structure type, or always
 ;; being a predicate for a structure type
 (struct known-consistent () #:prefab #:omit-define-syntaxes #:super struct:known-constant)
+
+;; copy propagation --- use for local bindings or copies of primitives, only
+(struct known-copy (id) #:prefab #:omit-define-syntaxes #:super struct:known-constant)
 
 ;; literal for constant propagation:
 (struct known-literal (expr) #:prefab #:omit-define-syntaxes #:super struct:known-consistent)

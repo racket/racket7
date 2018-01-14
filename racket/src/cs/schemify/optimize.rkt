@@ -3,6 +3,7 @@
          "wrap.rkt"
          "import.rkt"
          "known.rkt"
+         "find-known.rkt"
          "mutated-state.rkt"
          "literal.rkt")
 
@@ -22,7 +23,7 @@
      (define u (unwrap e))
      (cond
        [(symbol? u)
-        (define k (hash-ref-either knowns imports u))
+        (define k (find-known u prim-knowns knowns imports mutated))
         (if (known-procedure? k)
             '#t
             v)]
@@ -33,7 +34,7 @@
      (cond
        [(and (symbol? u)
              (exact-integer? n))
-        (define k (hash-ref-either knowns imports u))
+        (define k (find-known u prim-knowns knowns imports mutated))
         (if (and (known-procedure? k)
                  (bitwise-bit-set? (known-procedure-arity-mask k) u-n))
             '#t
@@ -48,5 +49,8 @@
           [(and (known-literal? k)
                 (simple-mutated-state? (hash-ref mutated u #f)))
            (known-literal-expr k)]
+          ;; Note: we can't do `known-copy?` here, because a copy of
+          ;; an imported or exported name will need to be schemified
+          ;; to a different name
           [else v])]
        [else v])]))

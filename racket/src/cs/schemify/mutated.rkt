@@ -6,7 +6,8 @@
          "simple.rkt"
          "find-definition.rkt"
          "struct-type-info.rkt"
-         "mutated-state.rkt")
+         "mutated-state.rkt"
+         "find-known.rkt")
 
 (provide mutated-in-body)
 
@@ -156,8 +157,7 @@
          [(and ids
                (let ([rator (unwrap rator)])
                  (and (symbol? rator)
-                      (not (hash-ref mutated rator #f))
-                      (let ([v (hash-ref-either knowns imports rator)])
+                      (let ([v (find-known rator prim-knowns knowns imports mutated)])
                         (and (known-constructor? v)
                              (bitwise-bit-set? (known-procedure-arity-mask v) (length exps))))
                       (for/and ([exp (in-list exps)])

@@ -5,7 +5,8 @@
          "import.rkt"
          "simple.rkt"
          "literal.rkt"
-         "inline.rkt")
+         "inline.rkt"
+         "mutated-state.rkt")
 
 (provide infer-known
          lambda?)
@@ -30,9 +31,12 @@
           (not (hash-ref mutated (unwrap id) #f)))
      (define u-rhs (unwrap rhs))
      (cond
-       [(or (hash-ref prim-knowns u-rhs #f)
-            (and (not (hash-ref mutated u-rhs #f))
-                 (hash-ref-either knowns imports u-rhs)))
+       [(hash-ref prim-knowns u-rhs #f)
+        => (lambda (known) known)]
+       [(not (simple-mutated-state? (hash-ref mutated u-rhs #f)))
+        ;; referenced variable is mutated, but not necessarily the target
+        (and defn a-known-constant)]
+       [(hash-ref-either knowns imports u-rhs)
         => (lambda (known)
              (cond
                [(known-procedure/can-inline/need-imports? known)
@@ -41,9 +45,14 @@
                 ;; expression to inline
                 (known-procedure/can-inline (known-procedure-arity-mask known)
                                             rhs)]
-               [else
-                known]))]
-       [else (and defn a-known-constant)])]
+               [(or (known-procedure/can-inline? known)
+                    (known-literal? known))
+                known]
+               [(not defn)
+                (known-copy rhs)]
+               [else known]))]
+       [defn a-known-constant]
+       [else (known-copy rhs)])]
     [(and defn
           (simple? rhs prim-knowns knowns imports mutated))
      a-known-constant]

@@ -4,7 +4,8 @@
          "known.rkt"
          "import.rkt"
          "mutated-state.rkt"
-         "simple.rkt")
+         "simple.rkt"
+         "find-known.rkt")
 
 (provide (struct-out struct-type-info)
          struct-type-info-rest-properties-list-pos
@@ -33,9 +34,8 @@
                            u-parent))])
        (and (symbol? u-name)
             (or (not u-parent)
-                (known-struct-type? (hash-ref prim-knowns u-parent #f))
-                (and (known-struct-type? (hash-ref-either knowns imports u-parent))
-                     (simple-mutated-state? (hash-ref mutated u-parent #f))))
+                (known-struct-type?
+                 (find-known u-parent prim-knowns knowns imports mutated)))
             (exact-nonnegative-integer? fields)
             (let ([prefab-imms
                    ;; The inspector argument needs to be missing or duplicable,
@@ -50,7 +50,7 @@
                      [`(,_ 'prefab ,_) '()]
                      [`(,_ 'prefab) '()]
                      [`,_ #f])]
-                  [parent-sti (and u-parent (hash-ref-either knowns imports u-parent))])
+                  [parent-sti (and u-parent (find-known u-parent prim-knowns knowns imports mutated))])
               (define (includes-property? name)
                 (and (pair? rest)
                      (match (car rest)
@@ -90,8 +90,8 @@
                [val (in-list vals)])
        (let ([u-prop (unwrap prop)])
          (and (symbol? u-prop)
-              (or (known-struct-type-property/immediate-guard? (hash-ref prim-knowns u-prop #f))
-                  (known-struct-type-property/immediate-guard? (hash-ref-either knowns imports u-prop)))
+              (or (known-struct-type-property/immediate-guard?
+                   (find-known u-prop prim-knowns knowns imports mutated)))
               (simple? val prim-knowns knowns imports mutated))))]
     [`null #t]
     [`'() #t]
