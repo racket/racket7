@@ -370,7 +370,7 @@
                   #t)))
        (define format (if jitify-mode? 'interpret 'compile))
        ;; Convert the linklet S-expression to a `lambda` S-expression:
-       (define-values (impl-lam importss exports importss-abi exports-info)
+       (define-values (impl-lam importss exports new-import-keys importss-abi exports-info)
          (schemify-linklet (show "linklet" c)
                            serializable?
                            jitify-mode?
@@ -379,8 +379,9 @@
                            prim-knowns
                            ;; Callback to get a specific linklet for a
                            ;; given import:
-                           (lambda (index)
-                             (lookup-linklet-or-instance get-import import-keys index))))
+                           (lambda (key)
+                             (lookup-linklet-or-instance get-import key))
+                           import-keys))
        (define impl-lam/lifts
          (lift-in-schemified-linklet (show pre-lift-on? "pre-lift" impl-lam)
                                      recorrelate))
@@ -442,30 +443,29 @@
           ;; In general, `compile-linklet` is allowed to extend the set
           ;; of linklet imports if `import-keys` is provided (e.g., for
           ;; cross-linklet optimization where inlining needs a new
-          ;; direct import) - but we don't do that, currently
+          ;; direct import)
           (if import-keys
-              (values lk import-keys)
+              (values lk new-import-keys)
               lk))))]))
 
-  (define (lookup-linklet-or-instance get-import import-keys index)
+  (define (lookup-linklet-or-instance get-import key)
     ;; Use the provided callback to get an linklet for the
     ;; import at `index`
     (cond
-     [(and get-import
-           import-keys
-           (vector-ref import-keys index))
-      => (lambda (key)
-           (let-values ([(lnk/inst more-import-keys) (get-import key)])
-             (cond
-              [(linklet? lnk/inst)
-               (values (linklet-exports-info lnk/inst)
-                       ;; No conversion needed:
-                       #f)]
-              [(instance? lnk/inst)
-               (values (instance-hash lnk/inst)
-                       variable->known)]
-              [else (values #f #f)])))]
-     [else (values #f #f)]))
+     [key
+      (let-values ([(lnk/inst more-import-keys) (get-import key)])
+        (cond
+         [(linklet? lnk/inst)
+          (values (linklet-exports-info lnk/inst)
+                  ;; No conversion needed:
+                  #f
+                  more-import-keys)]
+         [(instance? lnk/inst)
+          (values (instance-hash lnk/inst)
+                  variable->known
+                  more-import-keys)]
+         [else (values #f #f #f)]))]
+     [else (values #f #f #f)]))
 
   (define (recompile-linklet lnk . args) lnk)
 

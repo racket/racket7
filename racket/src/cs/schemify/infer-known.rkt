@@ -30,7 +30,11 @@
        [(or (hash-ref prim-knowns u-rhs #f)
             (and (not (hash-ref mutated u-rhs #f))
                  (hash-ref-either knowns imports u-rhs)))
-        => (lambda (known) known)]
+        => (lambda (known)
+             (if (known-procedure/can-inline/need-imports? known)
+                 ;; can't propagate, since it loses the connection to the import
+                 a-known-constant
+                 known))]
        [else (and defn a-known-constant)])]
     [(and defn
           (simple? rhs prim-knowns knowns imports mutated))

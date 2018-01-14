@@ -60,7 +60,7 @@
 ;; linklet imports, where #t to means that a value is expected, and #f
 ;; means that a variable (which boxes a value) is expected
 (define (schemify-linklet lk serializable? for-jitify? allow-set!-undefined?
-                          reannotate prim-knowns get-import-knowns)
+                          reannotate prim-knowns get-import-knowns import-keys)
   (define (im-int-id id) (unwrap (if (pair? id) (cadr id) id)))
   (define (im-ext-id id) (unwrap (if (pair? id) (car id) id)))
   (define (ex-int-id id) (unwrap (if (pair? id) (car id) id)))
@@ -73,7 +73,13 @@
      (define grps
        (for/list ([im-ids (in-list im-idss)]
                   [index (in-naturals)])
-         (import-group index (lambda () (get-import-knowns index)) #f '())))
+         ;; An import key from `import-keys` lets us get cross-module
+         ;; information on demand
+         (import-group index (and import-keys (vector-ref import-keys index))
+                       get-import-knowns #f #f
+                       '())))
+     ;; Record import information in both the `imports` table and within
+     ;; the import-group record
      (define imports
        (let ([imports (make-hasheq)])
          (for ([im-ids (in-list im-idss)]
@@ -87,6 +93,7 @@
               (hash-set! imports id im)
               im)))
          imports))
+     ;; Inlining can add new import groups or add imports to an existing group
      (define new-grps '())
      (define add-import!
        (make-add-import! imports
@@ -107,7 +114,7 @@
      (define-values (new-body defn-info mutated)
        (schemify-body* bodys/constants-lifted reannotate prim-knowns imports exports
                        for-jitify? allow-set!-undefined? add-import!))
-     (define all-grps (append (reverse new-grps) grps))
+     (define all-grps (append grps (reverse new-grps)))
      (values
       ;; Build `lambda` with schemified body:
       (make-let*
@@ -126,6 +133,11 @@
       ;; Exports (external names):
       (for/list ([ex-id (in-list ex-ids)])
         (ex-ext-id ex-id))
+      ;; Import keys --- revised if we added any import groups
+      (if (null? new-grps)
+          import-keys
+          (for/vector #:length (length all-grps) ([grp (in-list all-grps)])
+            (import-group-key grp)))
       ;; Import ABI: request values for constants, `variable`s otherwise
       (for/list ([grp (in-list all-grps)])
         (define im-ready? (import-group-lookup-ready? grp))
