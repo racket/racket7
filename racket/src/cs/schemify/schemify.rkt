@@ -371,7 +371,7 @@
            [`(let-values () ,body)
             (schemify body)]
            [`(let-values () ,bodys ...)
-            `(begin ,@(map schemify bodys))]
+            (schemify `(begin . ,bodys))]
            [`(let-values ([(,ids) ,rhss] ...) ,bodys ...)
             (define new-knowns
               (for/fold ([knowns knowns]) ([id (in-list ids)]
@@ -394,6 +394,10 @@
                                         (schemify rhs))
                                       (map schemify bodys)
                                       mutated)]
+           [`(letrec-values () ,bodys ...)
+            (schemify `(begin . ,bodys))]
+           [`(letrec-values ([() (values)]) ,bodys ...)
+            (schemify `(begin . ,bodys))]
            [`(letrec-values ([(,ids) ,rhss] ...) ,bodys ...)
             (define new-knowns
               (for/fold ([knowns knowns]) ([id (in-list ids)]
@@ -437,6 +441,8 @@
             `(if ,(schemify tst) ,(schemify thn) ,(schemify els))]
            [`(with-continuation-mark ,key ,val ,body)
             `(with-continuation-mark ,(schemify key) ,(schemify val) ,(schemify body))]
+           [`(begin ,exp)
+            (schemify exp)]
            [`(begin ,exps ...)
             `(begin . ,(map schemify exps))]
            [`(begin0 ,exps ...)
