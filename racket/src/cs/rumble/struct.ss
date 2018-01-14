@@ -1115,9 +1115,10 @@
            (with-syntax ([ctr-expr (with-syntax ([mk #'(record-constructor (make-record-constructor-descriptor struct:name #f #f))])
                                      (if (or (syntax->datum #'parent) (syntax->datum #'guard-expr))
                                          #'(struct-type-constructor-add-guards* mk struct:name guard-expr 'name)
-                                         #'mk))])
+                                         #'mk))]
+                         [uid (datum->syntax #'name ((current-generate-id) (syntax->datum #'name)))])
              #'(begin
-                 (define struct:name (make-record-type-descriptor 'name struct:parent #f #f #f '#((immutable field) ...)))
+                 (define struct:name (make-record-type-descriptor 'name struct:parent 'uid #f #f '#((immutable field) ...)))
                  (define name ctr-expr)
                  (define authentic-name? (record-predicate struct:name))
                  (define name? (lambda (v) (or (authentic-name? v)
