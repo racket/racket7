@@ -7,7 +7,8 @@
          "find-definition.rkt"
          "struct-type-info.rkt"
          "mutated-state.rkt"
-         "find-known.rkt")
+         "find-known.rkt"
+         "letrec.rkt")
 
 (provide mutated-in-body)
 
@@ -119,18 +120,22 @@
          (find-mutated! rhs ids))
        (find-mutated!* bodys ids)]
       [`(letrec-values ([,idss ,rhss] ...) ,bodys ...)
-       (for* ([ids (in-list idss)]
-              [id (in-wrap-list ids)])
-         (hash-set! mutated (unwrap id) 'not-ready))
-       (for ([ids (in-list idss)]
-             [rhs (in-list rhss)])
-         (find-mutated! rhs (unwrap-list ids))
-         ;; Each `id` in `ids` is now ready (but might also hold a delay):
-         (for ([id (in-wrap-list ids)])
-           (let ([id (unwrap id)])
-             (when (eq? 'not-ready (hash-ref mutated id))
-               (hash-remove! mutated id)))))
-       (find-mutated!* bodys ids)]
+       (cond
+         [(letrec-splitable-values-binding? idss rhss)
+          (find-mutated! (letrec-split-values-binding idss rhss bodys) ids)]
+         [else
+          (for* ([ids (in-list idss)]
+                 [id (in-wrap-list ids)])
+            (hash-set! mutated (unwrap id) 'not-ready))
+          (for ([ids (in-list idss)]
+                [rhs (in-list rhss)])
+            (find-mutated! rhs (unwrap-list ids))
+            ;; Each `id` in `ids` is now ready (but might also hold a delay):
+            (for ([id (in-wrap-list ids)])
+              (let ([id (unwrap id)])
+                (when (eq? 'not-ready (hash-ref mutated id))
+                  (hash-remove! mutated id)))))
+          (find-mutated!* bodys ids)])]
       [`(if ,tst ,thn ,els)
        (find-mutated! tst #f)
        (find-mutated! thn #f)

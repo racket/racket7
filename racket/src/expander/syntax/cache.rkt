@@ -21,7 +21,8 @@
      (when c
        (hash-clear! c))]))
 
-(struct entry (scs smss phase binding))
+(struct entry (scs smss phase binding)
+  #:authentic)
 
 (define (resolve-cache-get sym phase scs smss)
   (define c (weak-box-value (unbox cache)))

@@ -16,7 +16,8 @@
          "optimize.rkt"
          "find-known.rkt"
          "infer-known.rkt"
-         "inline.rkt")
+         "inline.rkt"
+         "letrec.rkt")
 
 (provide schemify-linklet
          schemify-body)
@@ -398,6 +399,9 @@
             (schemify `(begin . ,bodys))]
            [`(letrec-values ([() (values)]) ,bodys ...)
             (schemify `(begin . ,bodys))]
+           [`(letrec-values ([(,id) (values ,rhs)]) ,bodys ...)
+            ;; special case of splitable values:
+            (schemify `(letrec-values ([(,id) ,rhs]) . ,bodys))]
            [`(letrec-values ([(,ids) ,rhss] ...) ,bodys ...)
             (define new-knowns
               (for/fold ([knowns knowns]) ([id (in-list ids)]
@@ -412,31 +416,36 @@
                       ,@(for/list ([body (in-list bodys)])
                           (schemify/knowns new-knowns inline-fuel body)))]
            [`(letrec-values ([,idss ,rhss] ...) ,bodys ...)
-            ;; Convert
-            ;;  (letrec*-values ([(id ...) rhs] ...) ....)
-            ;; to
-            ;;  (letrec* ([vec (call-with-values rhs vector)]
-            ;;            [id (vector-ref vec 0)]
-            ;;            ... ...)
-            ;;    ....)
-            `(letrec* ,(apply
-                        append
-                        (for/list ([ids (in-wrap-list idss)]
-                                   [rhs (in-list rhss)])
-                          (let ([rhs (schemify rhs)])
-                            (cond
-                              [(null? ids)
-                               `([,(gensym "lr")
-                                  ,(make-let-values null rhs '(void))])]
-                              [(and (pair? ids) (null? (cdr ids)))
-                               `([,(car ids) ,rhs])]
-                              [else
-                               (define lr (gensym "lr"))
-                               `([,lr ,(make-let-values ids rhs `(vector . ,ids))]
-                                 ,@(for/list ([id (in-list ids)]
-                                              [pos (in-naturals)])
-                                     `[,id (vector-ref ,lr ,pos)]))]))))
-                      ,@(map schemify bodys))]
+            (cond
+              [(letrec-splitable-values-binding? idss rhss)
+               (schemify
+                (letrec-split-values-binding idss rhss bodys))]
+              [else
+               ;; Convert
+               ;;  (letrec*-values ([(id ...) rhs] ...) ....)
+               ;; to
+               ;;  (letrec* ([vec (call-with-values rhs vector)]
+               ;;            [id (vector-ref vec 0)]
+               ;;            ... ...)
+               ;;    ....)
+               `(letrec* ,(apply
+                           append
+                           (for/list ([ids (in-wrap-list idss)]
+                                      [rhs (in-list rhss)])
+                             (let ([rhs (schemify rhs)])
+                               (cond
+                                 [(null? ids)
+                                  `([,(gensym "lr")
+                                     ,(make-let-values null rhs '(void))])]
+                                 [(and (pair? ids) (null? (cdr ids)))
+                                  `([,(car ids) ,rhs])]
+                                 [else
+                                  (define lr (gensym "lr"))
+                                  `([,lr ,(make-let-values ids rhs `(vector . ,ids))]
+                                    ,@(for/list ([id (in-list ids)]
+                                                 [pos (in-naturals)])
+                                        `[,id (vector-ref ,lr ,pos)]))]))))
+                         ,@(map schemify bodys))])]
            [`(if ,tst ,thn ,els)
             `(if ,(schemify tst) ,(schemify thn) ,(schemify els))]
            [`(with-continuation-mark ,key ,val ,body)

@@ -61,7 +61,7 @@
 ;; ----------------------------------------
 
 ;; Recognize forms that produce plain procedures
-(define (lambda? v)
+(define (lambda? v #:simple? [simple? #f])
   (match v
     [`(lambda . ,_) #t]
     [`(case-lambda . ,_) #t]
@@ -69,8 +69,10 @@
                                             (lambda? body))]
     [`(letrec-values ([(,id) ,rhs]) ,body) (or (and (wrap-eq? id body) (lambda? rhs))
                                                (lambda? body))]
-    [`(let-values ,_ ,body) (lambda? body)]
-    [`(letrec-values ,_ ,body) (lambda? body)]
+    [`(let-values ,_ ,body) (and (not simple?) (lambda? body))]
+    [`(letrec-values ,_ ,body) (and (not simple?) (lambda? body))]
+    [`(begin ,body) (lambda? body)]
+    [`(values ,body) (lambda? body)]
     [`,_ #f]))
 
 ;; Recognize forms that produce plain procedures
@@ -87,7 +89,9 @@
          (extract-lambda rhs)
          (extract-lambda* body))]
     [`(let-values ,_ ,body) (extract-lambda* body)]
-    [`(letrec-values ,_ ,body) (extract-lambda* body)]))
+    [`(letrec-values ,_ ,body) (extract-lambda* body)]
+    [`(begin ,body) (extract-lambda body)]
+    [`(values ,body) (extract-lambda body)]))
 
 (define (extract-lambda* v)
   (define-values (lam inlinable?) (extract-lambda v))

@@ -10,7 +10,8 @@
                          module-self ; if non-#f, same as `self` and compiling the body of a module
                          full-module-name ; set to a symbol or symbol list if `self` is non-#f
                          lazy-syntax-literals? ; #t (for modules) => deserialize and shift syntax on demand
-                         header))    ; accumulates initialization and other parts shared among expressions
+                         header)     ; accumulates initialization and other parts shared among expressions
+  #:authentic)
 
 (define (make-compile-context #:namespace [namespace (current-namespace)]
                               #:phase [phase (namespace-phase namespace)]

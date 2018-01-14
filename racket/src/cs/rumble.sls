@@ -306,9 +306,9 @@
 
           vector?
           mutable-vector?
-          vector-length
-          vector-ref
-          vector-set!
+          (rename [inline:vector-length vector-length]
+                  [inline:vector-ref vector-ref]
+                  [inline:vector-set! vector-set!])
           vector-copy
           vector-copy!
           vector-immutable
@@ -324,7 +324,9 @@
           unsafe-impersonate-vector
           unsafe-chaperone-vector
 
-          box? unbox set-box!
+          box?
+          (rename [inline:unbox unbox]
+                  [inline:set-box! set-box!])
           make-weak-box weak-box? weak-box-value
           impersonate-box
           chaperone-box
@@ -380,7 +382,12 @@
           pseudo-random-generator->vector
           pseudo-random-generator-vector?
 
-          mpair? mcons mcar mcdr set-mcar! set-mcdr!
+          mpair?
+          mcons
+          (rename [inline:mcar mcar]
+                  [inline:mcdr mcdr]
+                  [inline:set-mcar! set-mcar!]
+                  [inline:set-mcdr! set-mcdr!])
 
           flvector?
           (rename [new-flvector flvector])
@@ -698,6 +705,7 @@
   (include "rumble/place.ss")
   (include "rumble/foreign.ss")
   (include "rumble/future.ss")
+  (include "rumble/inline.ss")
 
   (set-no-locate-source!)
   ;; Note: if there's a bug in `rumble` that causes exception handling to error,

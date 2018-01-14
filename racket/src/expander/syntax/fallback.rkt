@@ -24,7 +24,8 @@
 ;; A fallback is created by `push-scope`, which creates a new fallback
 ;; layer if the given multi-scope is not in the current set of scopes.
 
-(struct fallback (search-list) #:prefab)
+(struct fallback (search-list)
+  #:authentic)
 
 (define (fallback-first smss)
   (if (fallback? smss)
