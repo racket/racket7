@@ -16,19 +16,10 @@
 ;;                 variables of the function and the closure
 ;;                 allocation (if any) can be lifted to the top level
 ;;
-;; * `indirected` - a variable that is `set!`ed or referenced via
-;;                `#%variable-reference`, which means that it can't be
+;; * `indirected` - a variable that is `set!`ed, which means that it can't be
 ;;                replaced by an argument if it appears as a free
 ;;                variable in a liftable function; instead, the
-;;                argument must be an accessor, mutator, and/or
-;;                variable reference
-;;
-;; * `mutator` - records that a synthesized identifier is a mutator,
-;;                and maps back to the original identifier; these are
-;;                removed after the first pass
-;;
-;; * `var-ref` - similar to `mutated`, but for a
-;;               `#%variable-reference`d variable
+;;                argument must be a box
 ;;
 ;; There's nothing analogous to `mutator` and `var-ref` for
 ;; synthesized accessors, because they're relevant only for the second
@@ -42,10 +33,7 @@
                   [frees #:mutable] ; set of variables free in `expr`, plus any lifted bindings
                   [binds #:mutable])) ; set of variables bound in `expr`
 
-(struct indirected (accessor ; symbol for synthesized accessor binding
-                    mutator  ; symbol for synthesized mutator binding
-                    variable-reference) ; synbol for synthesized variable reference
-  #:mutable)
+(struct indirected ([check? #:mutable]))
 
 (struct mutator (orig)) ; `orig` maps back to the original identifier
 (struct var-ref (orig)) ; ditto
@@ -99,8 +87,8 @@
       [`(let . ,_) (lift-in-let? v)]
       [`(letrec . ,_) (lift-in-let? v)]
       [`(letrec* . ,_) (lift-in-let? v)]
-      [`(let-values . ,_) (lift-in-let? v)]
-      [`(letrec-values . ,_) (lift-in-let? v)]
+      [`(let-values . ,_) (error 'internal-error "unexpected let-values")]
+      [`(letrec-values . ,_) (error 'internal-error "unexpected letrec-values")]
       [`(begin . ,vs)
        (for/or ([v (in-wrap-list vs)])
          (lift-in-expr? v))]
@@ -109,8 +97,7 @@
       [`(with-continuation-mark ,key ,val ,body)
        (or (lift-in-expr? key) (lift-in-expr? val) (lift-in-expr? body))]
       [`(quote ,_) #f]
-      [`(#%variable-reference ,_) #f]
-      [`(#%variable-reference) #f]
+      [`(#%variable-reference . ,_) (error 'internal-error "unexpected variable reference")]
       [`(set! ,_ ,rhs)
        (lift-in-expr? rhs)]
       [`(,_ ...)
@@ -193,7 +180,7 @@
            [(zero? (hash-count lifts)) v]
            [else
             `(letrec ,(extract-lifted-bindings lifts)
-               ,(reannotate v `(lambda ,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts #hasheq()))))]))]
+               ,(reannotate v `(lambda ,args . ,(convert-lifted-calls-in-seq/box-mutated body args lifts #hasheq()))))]))]
       [`(case-lambda [,argss . ,bodys] ...)
        ;; Lift each clause separately, then splice results:
        (let ([lams (for/list ([args (in-list argss)]
@@ -216,8 +203,8 @@
       [`(let . ,_) (lift-in-let v)]
       [`(letrec . ,_) (lift-in-let v)]
       [`(letrec* . ,_) (lift-in-let v)]
-      [`(let-values . ,_) (lift-in-let v)]
-      [`(letrec-values . ,_) (lift-in-let v)]
+      [`(let-values . ,_) (error 'internal-error "unexpected let-values")]
+      [`(letrec-values . ,_) (error 'internal-error "unexpected letrec-values")]
       [`(begin . ,vs)
        (reannotate v `(begin ,@(for/list ([v (in-wrap-list vs)])
                                  (lift-in-expr v))))]
@@ -230,8 +217,7 @@
                                               ,(lift-in-expr val)
                                               ,(lift-in-expr body)))]
       [`(quote ,_) v]
-      [`(#%variable-reference ,_) v]
-      [`(#%variable-reference) v]
+      [`(#%variable-reference . ,_) (error 'internal-error "unexpected variable reference")]
       [`(set! ,id ,rhs)
        (reannotate v `(set! ,id ,(lift-in-expr rhs)))]
       [`(,_ ...)
@@ -274,22 +260,6 @@
        (compute-letrec-lifts! v frees+binds lifts locals)]
       [`(letrec* . ,_)
        (compute-letrec-lifts! v frees+binds lifts locals)]
-      [`(let-values ([,idss ,rhss] ...) . ,body)
-       (let* ([frees+binds (compute-seq-lifts! rhss frees+binds lifts locals)]
-              [locals (for/fold ([locals locals]) ([ids (in-list idss)])
-                        (add-args ids locals))]
-              [frees+binds (compute-seq-lifts! body frees+binds lifts locals)])
-         (for/fold ([frees+binds frees+binds]) ([ids (in-list idss)])
-           (remove-frees/add-binds ids frees+binds lifts)))]
-      [`(letrec-values ([,idss ,rhss] ...) . ,body)
-       (let* ([rhs-locals (for/fold ([locals locals]) ([ids (in-list idss)])
-                            (add-args ids locals 'early))]
-              [frees+binds (compute-seq-lifts! rhss frees+binds lifts rhs-locals)]
-              [locals (for/fold ([locals locals]) ([ids (in-list idss)])
-                        (add-args ids locals))]
-              [frees+binds (compute-seq-lifts! body frees+binds lifts locals)])
-         (for/fold ([frees+binds frees+binds]) ([ids (in-list idss)])
-           (remove-frees/add-binds ids frees+binds lifts)))]
       [`((letrec ([,id ,rhs]) ,rator) ,rands ...)
        (compute-lifts! `(letrec ([,id ,rhs]) (,rator . ,rands)) frees+binds lifts locals)]
       [`((letrec* ([,id ,rhs]) ,rator) ,rands ...)
@@ -321,19 +291,13 @@
        (define var (unwrap id))
        (let ([frees+binds (cond
                             [(hash-ref locals var #f)
-                             (define ind (lookup-indirected-variable lifts var))
-                             (add-free frees+binds (indirected-mutator ind))]
+                             => (lambda (status)
+                                  (lookup-indirected-variable lifts var (eq? status 'early))
+                                  (add-free frees+binds var))]
                             [else frees+binds])])
          (compute-lifts! rhs frees+binds lifts locals))]
-      [`(#%variable-reference)
-       frees+binds]
-      [`(#%variable-reference ,id)
-       (define var (unwrap id))
-       (cond
-         [(hash-ref locals var #f)
-          (define ind (lookup-indirected-variable lifts var))
-          (add-free frees+binds (indirected-variable-reference ind))]
-         [else frees+binds])]
+      [`(#%variable-reference . ,_)
+       (error 'internal-error "lift: unexpected variable reference")]
       [`(,rator . ,rands)
        (define f (unwrap rator))
        (let ([frees+binds
@@ -373,8 +337,8 @@
                (let ([frees+binds (add-free frees+binds x)])
                  (cond
                    [(eq? loc-status 'early)
-                    (define ind (lookup-indirected-variable lifts x))
-                    (add-free frees+binds (indirected-mutator ind))]
+                    (lookup-indirected-variable lifts x #t)
+                    (add-free frees+binds x)]
                    [else frees+binds]))]
               [else frees+binds]))])]))
 
@@ -464,25 +428,12 @@
                            (v-loop (cdr v-frees)
                                    (hash-set frees g #t)
                                    (cons g todo))]))))]
-               [(mutator? info)
-                ;; Re-register mutator
-                (define ind (lookup-reregister-indirected-variable (mutator-orig info) new-lifts))
-                (set-indirected-mutator! ind v)
-                (loop frees (cdr todo))]
-               [(var-ref? info)
-                ;; Re-register variable reference
-                (define ind (lookup-reregister-indirected-variable (var-ref-orig info) new-lifts))
-                (set-indirected-variable-reference! ind v)
-                (loop frees (cdr todo))]
                [(indirected? info)
-                ;; Switch to accessor and register it
-                (define ind (lookup-reregister-indirected-variable v new-lifts))
-                (define new-v (indirected-accessor info))
-                (set-indirected-accessor! ind new-v)
-                (loop (hash-set (hash-remove frees v) new-v #t)
-                      (cdr todo))]
+                ;; Preserve recording of this variable as boxed
+                (hash-set! new-lifts v info)
+                (loop frees (cdr todo))]
                [else
-                ;; Normal (non-mutated, non-lifted) variable:
+                ;; Normal variable:
                 (loop frees (cdr todo))])])))
       (set-liftable-frees! proc closed-frees))
     ;; Remove references to lifted from free-variable sets, and also
@@ -505,24 +456,20 @@
         [`(let . ,_)
          (convert-lifted-calls-in-let v lifts frees)]
         [`(letrec . ,_)
-         (convert-lifted-calls-in-let v lifts frees)]
+         (convert-lifted-calls-in-letrec v lifts frees)]
         [`(letrec* . ,_)
-         (convert-lifted-calls-in-let v lifts frees)]
-        [`(let-values . ,_)
-         (convert-lifted-calls-in-let v lifts frees)]
-        [`(letrec-values . ,_)
-         (convert-lifted-calls-in-let v lifts frees)]
+         (convert-lifted-calls-in-letrec v lifts frees)]
         [`((letrec ([,id ,rhs]) ,rator) ,rands ...)
          (convert (reannotate v `(letrec ([,id ,rhs]) (,rator . ,rands))))]
         [`((letrec* ([,id ,rhs]) ,rator) ,rands ...)
          (convert (reannotate v `(letrec* ([,id ,rhs]) (,rator . ,rands))))]
         [`(lambda ,args . ,body)
-         (reannotate v `(lambda ,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts frees)))]
+         (reannotate v `(lambda ,args . ,(convert-lifted-calls-in-seq/box-mutated body args lifts frees)))]
         [`(case-lambda [,argss . ,bodys] ...)
          (reannotate v `(case-lambda
                           ,@(for/list ([args (in-list argss)]
                                        [body (in-list bodys)])
-                              `[,args . ,(convert-lifted-calls-in-seq/add-mutators body args lifts frees)])))]
+                              `[,args . ,(convert-lifted-calls-in-seq/box-mutated body args lifts frees)])))]
         [`(begin . ,vs)
          (reannotate v `(begin . ,(convert-lifted-calls-in-seq vs lifts frees)))]
         [`(begin0 . ,vs)
@@ -535,25 +482,14 @@
         [`(set! ,id ,rhs)
          (define info (and (hash-ref lifts (unwrap id) #f)))
          (cond
-           [(and (indirected? info)
-                 (let ([mutator-var (indirected-mutator info)])
-                   (and (hash-ref frees mutator-var #f)
-                        mutator-var)))
-            => (lambda (mutator-var)
-                 (reannotate v `(,mutator-var ,(convert rhs))))]
+           [(indirected? info)
+            (reannotate v (if (indirected-check? info)
+                              `(set-box!/check-undefined ,id ,(convert rhs) ',id)
+                              `(set-box! ,id ,(convert rhs))))]
            [else
             (reannotate v `(set! ,id ,(convert rhs)))])]
-        [`(#%variable-reference) v]
-        [`(#%variable-reference ,id)
-         (define info (hash-ref lifts (unwrap id) #f))
-         (cond
-           [(and (indirected? info)
-                 (let ([var-ref-var (indirected-variable-reference info)])
-                   (and (hash-ref frees var-ref-var #f)
-                        var-ref-var)))
-            => (lambda (var-ref-var)
-                 var-ref-var)]
-           [else v])]
+        [`(#%variable-reference . ,_)
+         (error 'internal-error "lift: unexpected variable reference")]
         [`(,rator . ,rands)
          (let ([rands (convert-lifted-calls-in-seq rands lifts frees)])
            (define f (unwrap rator))
@@ -570,12 +506,10 @@
          (define info (and (symbol? var)
                            (hash-ref lifts var #f)))
          (cond
-           [(and (indirected? info)
-                 (let ([accessor-var (indirected-accessor info)])
-                   (and (hash-ref frees accessor-var #f)
-                        accessor-var)))
-            => (lambda (accessor-var)
-                 (reannotate v `(,accessor-var)))]
+           [(indirected? info)
+            (reannotate v (if (indirected-check? info)
+                              `(unbox/check-undefined ,v ',v)
+                              `(unbox ,v)))]
            [else v])])))
   
   (define (convert-lifted-calls-in-seq vs lifts frees)
@@ -589,90 +523,55 @@
          (for/list ([id (in-list ids)]
                     [rhs (in-list rhss)]
                     #:unless (liftable? (hash-ref lifts (unwrap id) #f)))
-           `[,id ,(convert-lifted-calls-in-expr rhs lifts frees)]))
-       (define new-bindings+body
-         (convert-lifted-calls-in-seq/add-mutators*
-          body ids lifts frees
-          (lambda (bindings new-bindings+body)
-            (cons (append bindings (car new-bindings+body))
-                  (cdr new-bindings+body)))
-          (lambda (vs lifts free)
-            (cons '() (convert-lifted-calls-in-seq vs lifts frees)))))
-       (define new-bindings (car new-bindings+body))
-       (define new-body (cdr new-bindings+body))
-       (define (rebuild-let let-id bindings body)
-         (cond
-           [(not (null? bindings))
-            `(,let-id ,bindings . ,body)]
-           [(and (pair? body) (null? (cdr body)))
-            (car body)]
-           [else `(begin . ,body)]))
+           `[,id ,(let ([rhs (convert-lifted-calls-in-expr rhs lifts frees)])
+                    (if (indirected? (hash-ref lifts (unwrap id) #f))
+                        `(box ,rhs)
+                        rhs))]))
+       (define new-body
+         (convert-lifted-calls-in-seq body lifts frees))
        (reannotate
         v
-        (cond
-          [(null? new-bindings) (rebuild-let let-id bindings new-body)]
-          [else
-           (case (unwrap let-id)
-             [(letrec letrec*)
-              (rebuild-let let-id (append new-bindings bindings) new-body)]
-             [(letrec-values)
-              (define new*-bindings
-                (for/list ([binding (in-list new-bindings)])
-                  (cons (list (car binding)) (cdr binding))))
-              (rebuild-let let-id (append new*-bindings bindings) new-body)]
-             [else
-              (rebuild-let let-id bindings (list (rebuild-let 'let new-bindings new-body)))])]))]))
+        (rebuild-let let-id bindings new-body))]))
 
-  (define (convert-lifted-calls-in-seq/add-mutators vs ids lifts frees)
-    (convert-lifted-calls-in-seq/add-mutators*
-     vs ids lifts frees
-     (lambda (bindings body)
-       `((let ,bindings . ,body)))
-     (lambda (vs lifts free)
-       (convert-lifted-calls-in-seq vs lifts frees))))
+  (define (convert-lifted-calls-in-letrec v lifts frees)
+    (match v
+      [`(,let-id ([,ids ,rhss] ...) . ,body)
+       (define pre-bindings
+         (for/list ([id (in-list ids)]
+                    [rhs (in-list rhss)]
+                    #:when (indirected? (hash-ref lifts (unwrap id) #f)))
+           `[,id (box unsafe-undefined)]))
+       (define bindings
+         (for/list ([id (in-list ids)]
+                    [rhs (in-list rhss)]
+                    #:unless (liftable? (hash-ref lifts (unwrap id) #f)))
+           (define new-rhs (convert-lifted-calls-in-expr rhs lifts frees))
+           (cond
+             [(indirected? (hash-ref lifts (unwrap id) #f))
+              `[,(gensym) (set-box! ,id ,new-rhs)]]
+             [else `[,id ,new-rhs]])))
+       (define new-bindings
+         (if (null? bindings)
+             pre-bindings
+             (append pre-bindings bindings)))
+       (define new-body
+         (convert-lifted-calls-in-seq body lifts frees))
+       (reannotate
+        v
+        (rebuild-let let-id new-bindings new-body))]))
 
-  ;; For any `id` in `ids` that needs a mutator or variable-reference
-  ;; binding to pass to a lifted function (as indicated by an
-  ;; `indirected` mapping in `lifts`), add the binding. The `ids` can
-  ;; be any tree of annotated symbols.
-  (define (convert-lifted-calls-in-seq/add-mutators* vs ids lifts frees
-                                                     add-bindings finish)
+  (define (convert-lifted-calls-in-seq/box-mutated vs ids lifts frees)
     (let loop ([ids ids])
       (cond
-        [(null? ids) (finish vs lifts frees)]
+        [(wrap-null? ids)
+         (convert-lifted-calls-in-seq vs lifts frees)]
         [(wrap-pair? ids)
-         (let ([a (wrap-car ids)])
-           (cond
-             [(wrap-pair? a)
-              (loop (cons (wrap-car a) (cons (wrap-cdr a) (wrap-cdr ids))))]
-             [(wrap-null? a)
-              (loop (wrap-cdr ids))]
-             [else
-              (define v (unwrap a))
-              (define ind (hash-ref lifts v #f))
-              (cond
-                [(indirected? ind)
-                 ;; Add a binding for a mutator and/or variable reference
-                 (add-bindings
-                  (append
-                   (if (indirected-accessor ind)
-                       `([,(indirected-accessor ind)
-                          (lambda () ,v)])
-                       '())
-                   (if (indirected-mutator ind)
-                       `([,(indirected-mutator ind)
-                          ,(let ([val-var (gensym 'v)])
-                             `(lambda (,val-var) (set! ,v ,val-var)))])
-                       '())
-                   (if (indirected-variable-reference ind)
-                       `([,(indirected-variable-reference ind)
-                          (#%variable-reference ,v)])
-                       '()))
-                  (loop (wrap-cdr ids)))]
-                [else (loop (wrap-cdr ids))])]))]
-        [else
-         ;; `rest` arg:
-         (loop (list ids))])))
+         (define id (wrap-car ids))
+         (if (indirected? (hash-ref lifts (unwrap id) #f))
+             `((let ([,id (box ,id)])
+                 . ,(loop (wrap-cdr ids))))
+             (loop (wrap-cdr ids)))]
+        [else (loop (list ids))])))
 
   ;; Create bindings for lifted functions, adding new arguments
   ;; as the functions are lifted
@@ -685,14 +584,15 @@
              [rhs (liftable-expr proc)])
         `[,f ,(match rhs
                 [`(lambda ,args . ,body)
-                 (let ([body (convert-lifted-calls-in-seq/add-mutators body args lifts frees)])
+                 (let ([body (convert-lifted-calls-in-seq/box-mutated body args lifts frees)])
                    (reannotate rhs `(lambda ,(append new-args args) . ,body)))]
                 [`(case-lambda [,argss . ,bodys] ...)
                  (reannotate rhs `(case-lambda
                                     ,@(for/list ([args (in-list argss)]
                                                  [body (in-list bodys)])
-                                        (let ([body (convert-lifted-calls-in-seq/add-mutators body args lifts frees)])
+                                        (let ([body (convert-lifted-calls-in-seq/box-mutated body args lifts frees)])
                                           `[,(append new-args args) . ,body]))))])])))
+
 
   ;; ----------------------------------------
   ;; Helpers
@@ -721,23 +621,14 @@
       [`,_ #f]))
 
   ;; Find or create an `indirected` record for a variable
-  (define (lookup-indirected-variable lifts var)
+  (define (lookup-indirected-variable lifts var need-check?)
     (define ind (hash-ref lifts var #f))
     (or (and (indirected? ind)
-             ind)
-        (let ([ind (indirected (gensym var) ; accessor
-                               (gensym var) ; mutator
-                               (gensym var))]) ; variable reference
-          (hash-set! lifts var ind)
-          (hash-set! lifts (indirected-mutator ind) (mutator var))
-          (hash-set! lifts (indirected-variable-reference ind) (var-ref var))
-          ind)))
-
-  ;; Find or create an `indirected` record for a variable in the
-  ;; post-transitive-closure table of lift information
-  (define (lookup-reregister-indirected-variable var lifts)
-    (or (hash-ref lifts var #f)
-        (let ([ind (indirected #f #f #f)])
+             (begin
+               (when need-check?
+                 (set-indirected-check?! ind #t))
+               ind))
+        (let ([ind (indirected need-check?)])
           (hash-set! lifts var ind)
           ind)))
 
@@ -771,18 +662,6 @@
          ;; will know that they don't need to chain
          (cons (car frees+binds)
                (hash-set (cdr frees+binds) arg #t))]
-        [(indirected? info)
-         ;; In addition to `arg`, move associated mutator and variable-reference
-         (let* ([frees (car frees+binds)]
-                [frees (hash-remove frees arg)]
-                [frees (hash-remove frees (indirected-mutator info))]
-                [frees (hash-remove frees (indirected-variable-reference info))]
-                [binds (cdr frees+binds)]
-                [binds (hash-set binds arg #t)]
-                [binds (hash-set binds (indirected-accessor info) #t)]
-                [binds (hash-set binds (indirected-mutator info) #t)]
-                [binds (hash-set binds (indirected-variable-reference info) #t)])
-           (cons frees binds))]
         [else (cons (hash-remove (car frees+binds) arg)
                     (hash-set (cdr frees+binds) arg #t))]))
     (let loop ([args args] [frees+binds frees+binds])
@@ -801,6 +680,14 @@
       [else
        (for/fold ([s2 s2]) ([k (in-hash-keys s1)])
          (hash-set s2 k #t))]))
+
+   (define (rebuild-let let-id bindings body)
+     (cond
+       [(not (null? bindings))
+        `(,let-id ,bindings . ,body)]
+       [(and (pair? body) (null? (cdr body)))
+        (car body)]
+       [else `(begin . ,body)]))
 
   ;; ----------------------------------------
   ;; Go

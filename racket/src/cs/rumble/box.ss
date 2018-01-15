@@ -32,6 +32,15 @@
   ;; must handle impersonators
   (set-box! b v))
 
+;; in schemified:
+(define (unbox/check-undefined b name)
+  (check-not-unsafe-undefined (#3%unbox b) name))
+
+;; in schemified:
+(define (set-box!/check-undefined b v name)
+  (check-not-unsafe-undefined/assign (unbox b) name)
+  (#3%set-box! b v))
+
 (define/who (chaperone-box b ref set . props)
   (check who box? b)
   (do-impersonate-box 'chaperone-box make-box-chaperone b ref set

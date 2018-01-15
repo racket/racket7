@@ -53,8 +53,6 @@
           variable-ref
           variable-ref/no-check
           make-instance-variable-reference
-          unbox/check-undefined
-          set-box!/check-undefined
           jitified-extract-closed
           jitified-extract
           schemify-table)
@@ -1182,15 +1180,6 @@
             s
             (cons a d)))]
      [else s]))
-
-  ;; --------------------------------------------------
-
-  (define (unbox/check-undefined b name)
-    (check-not-unsafe-undefined (#3%unbox b) name))
-
-  (define (set-box!/check-undefined b v name)
-    (check-not-unsafe-undefined/assign (unbox b) name)
-    (#3%set-box! b v))
   
   ;; --------------------------------------------------
   

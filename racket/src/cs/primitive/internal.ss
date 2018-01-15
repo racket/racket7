@@ -19,6 +19,8 @@
   [register-struct-field-mutator! (known-constant)]
   [struct-property-set! (known-constant)]
   [|#%call-with-values| (known-constant)]
+  [unbox/check-undefined (known-constant)]
+  [set-box!/check-undefined (known-constant)]
 
   [make-record-type-descriptor (known-constant)]
   [make-record-constructor-descriptor (known-constant)]

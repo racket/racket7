@@ -330,6 +330,8 @@
           make-weak-box weak-box? weak-box-value
           impersonate-box
           chaperone-box
+          unbox/check-undefined    ; not exported to Racket
+          set-box!/check-undefined ; not exported to Racket
 
           immutable?
 
