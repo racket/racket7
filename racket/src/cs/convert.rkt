@@ -23,6 +23,14 @@
 (define content (call-with-input-file* in-file read))
 (define l (cdddr content))
 
+(let loop ([l l])
+  (cond
+    [(eq? l 'make-optional-keyword-procedure)
+     (error "keyword residual `make-optional-keyword-procedure` appears in .rktl")]
+    [(pair? l)
+     (loop (car l))
+     (loop (cdr l))]))
+
 (define lifts (make-hash))
 (define ordered-lifts null)
 

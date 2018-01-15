@@ -1,7 +1,9 @@
 #lang racket/base
 (require racket/private/check
          racket/private/config
-         "parameter.rkt")
+         "parameter.rkt"
+         ;; Avoid keyword-argument variant:
+         (only-in '#%kernel directory-list))
 
 (provide collection-path
          collection-file-path
