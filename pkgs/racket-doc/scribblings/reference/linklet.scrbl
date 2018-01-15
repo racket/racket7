@@ -165,7 +165,8 @@ always returns two @racket[#f] results.
 When @racket[import-keys] is not @racket[#f], then the compiler is
 allowed to grow or shrink the set of imported instances for the
 linklet. The result vector specifies the keys of the imports for the
-returned linklet.}
+returned linklet. Any key that is @racket[#f] or a @tech{linklet instance}
+must be preserved intact, however.}
 
 
 @defproc*[([(recompile-linklet [linklet linklet?]
@@ -301,6 +302,7 @@ Returns @racket[#t] if @racket[v] is a @tech{linklet instance},
 
 @defproc[(make-instance [name any/c]
                         [data any/c #f]
+                        [mode (or/c #f 'constant 'consistent) #f]
                         [variable-name symbol?]
                         [variable-value any/c] ... ...)
          instance?]{
@@ -308,7 +310,14 @@ Returns @racket[#t] if @racket[v] is a @tech{linklet instance},
 Constructs a @tech{linklet instance} directly. Besides associating an
 arbitrary @racket[name] and @racket[data] value to the instance, the
 instance is populated with variables as specified by
-@racket[variable-name] and @racket[variable-value].}
+@racket[variable-name] and @racket[variable-value].
+
+The optional @racket[data] and @racket[mode] arguments must be
+provided if any @racket[variable-name] and @racket[variable-value]
+arguments are provided. The @racket[mode] argument is used as in
+@racket[instance-set-variable-value!] for every
+@racket[variable-name].}
+
 
 @defproc[(instance-name [instance instance?]) any/c]{
 

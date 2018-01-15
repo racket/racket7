@@ -7,7 +7,8 @@
          "built-in-symbol.rkt"
          "reserved-symbol.rkt"
          "namespace-scope.rkt"
-         "serialize.rkt")
+         "serialize.rkt"
+         "vector-ref.rkt")
 
 (provide (struct-out header)
          make-header
@@ -105,26 +106,26 @@
       (make-vector ,(syntax-literals-count sl) #f))
     (define-values (,get-syntax-literal!-id)
       (lambda (pos)
-        (let-values ([(ready-stx) (vector-ref ,syntax-literals-id pos)])
+        (let-values ([(ready-stx) (,unsafe-vector-ref-id ,syntax-literals-id pos)])
           (if ready-stx
               ready-stx
               (begin
                 ,@(if skip-deserialize?
                       null
-                      `((if (vector-ref ,deserialized-syntax-vector-id 0)
+                      `((if (,unsafe-vector-ref-id ,deserialized-syntax-vector-id 0)
                             (void)
                             (,deserialize-syntax-id ,bulk-binding-registry-id))))
                 (let-values ([(stx)
                               (syntax-module-path-index-shift
                                (syntax-shift-phase-level
-                                (vector-ref ,deserialized-syntax-vector-id pos)
+                                (,unsafe-vector-ref-id ,deserialized-syntax-vector-id pos)
                                 ,phase-shift-id)
                                ,(add-module-path-index! mpis self)
                                ,self-id
                                ,inspector-id)])
                   (begin
                     (vector-cas! ,syntax-literals-id pos #f stx)
-                    (vector-ref ,syntax-literals-id pos))))))))))
+                    (,unsafe-vector-ref-id ,syntax-literals-id pos))))))))))
 
 ;; Generate on-demand deserialization (shared across instances); the
 ;; result defines `deserialize-syntax-id`
@@ -188,7 +189,7 @@
               (cdr ns+stxss)))))]))
 
 (define (generate-eager-syntax-literal-lookup pos)
-  `(vector-ref ,syntax-literals-id ,pos))
+  `(,unsafe-vector-ref-id ,syntax-literals-id ,pos))
 
 ;; Genereate a vector for a set of syntax objects; the result is a
 ;; vector like the one generated in expression from by

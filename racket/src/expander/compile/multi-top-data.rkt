@@ -3,6 +3,7 @@
          "serialize.rkt"
          "header.rkt"
          "eager-instance.rkt"
+         "reserved-symbol.rkt"
          "../host/linklet.rkt")
 
 (provide build-shared-data-linklet)

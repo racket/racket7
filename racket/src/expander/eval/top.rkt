@@ -193,6 +193,6 @@
                                          (compiled-in-memory-namespace-scopes cim)
                                          to-ns))]))
   ;; Create the instance:
-  (make-instance 'link #f
+  (make-instance 'link #f 'constant
                  mpi-vector-id (compiled-in-memory-mpis cim)
                  syntax-literals-id syntax-literals))

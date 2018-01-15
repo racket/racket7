@@ -359,33 +359,23 @@
 ;; ----------------------------------------
 
 (define (make-data-instance-from-compiled-in-memory cim)
-  (make-instance 'data #f
+  (make-instance 'data #f 'constant
                  mpi-vector-id (compiled-in-memory-mpis cim)))
 
 (define (make-declaration-instance-from-compiled-in-memory cim)
-  (make-instance 'decl #f
+  (make-instance 'decl #f 'constant
                  'self-mpi (compiled-in-memory-original-self cim)
                  'requires (compiled-in-memory-requires cim)
                  'provides (compiled-in-memory-provides cim)
                  'phase-to-link-modules (compiled-in-memory-phase-to-link-module-uses cim)))
 
 (define (make-syntax-literal-data-instance-from-compiled-in-memory cim)
-  (make-instance 'syntax-literal-data #f
+  (make-instance 'syntax-literal-data #f #f
                  deserialize-syntax-id void
                  deserialized-syntax-vector-id (compiled-in-memory-syntax-literals cim)))
 
-(define empty-syntax-literals-data-instance
-  (make-instance 'empty-stx-data #f
-                 deserialized-syntax-vector-id (vector)
-                 deserialize-syntax-id void))
-
-(define empty-syntax-literals-instance
-  (make-instance 'empty-stx #f
-                 get-syntax-literal!-id (lambda (pos) #f)
-                 'get-encoded-root-expand-ctx #f))
-
 (define empty-syntax-literals-instance/empty-namespace
-  (make-instance 'empty-stx/empty-ns #f
+  (make-instance 'empty-stx/empty-ns #f 'constant
                  get-syntax-literal!-id (lambda (pos) #f)
                  'get-encoded-root-expand-ctx 'empty))
 

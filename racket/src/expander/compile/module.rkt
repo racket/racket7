@@ -147,6 +147,8 @@
      (compile-forms bodys body-cctx mpis
                     #:body-imports `([,get-syntax-literal!-id]
                                      [,set-transformer!-id])
+                    #:body-import-instances (list empty-syntax-literals-instance
+                                                  empty-module-body-instance)
                     #:body-suffix-forms '((void)) ; otherwise, compiler always preserves last form
                     #:force-phases '(0) ; minor hack for more consistent compilation
                     #:encoded-root-expand-ctx-box encoded-root-expand-ctx-box
@@ -214,7 +216,15 @@
           ((if to-source? values (lambda (s)
                                    (performance-region
                                     ['compile 'module 'linklet]
-                                    (compile-linklet s 'syntax-literals #f #F serializable?))))
+                                    (define-values (linklet new-keys)
+                                      (compile-linklet s 'syntax-literals
+                                                       (vector deserialize-instance
+                                                               empty-top-syntax-literal-instance
+                                                               empty-syntax-literals-data-instance
+                                                               empty-instance-instance)
+                                                       (lambda (inst) (values inst #f))
+                                                       serializable?))
+                                    linklet)))
            `(linklet
              ;; imports
              (,deserialize-imports

@@ -66,8 +66,9 @@
       [index
        (import-group-knowns grp) ; force thunk
        (define import-keys (import-group-import-keys grp))
-       (and import-keys ; no keys available => can't inline
-            (let ([from-grp (find-or-add-import-group! grps (vector-ref import-keys index)
+       (define key (and import-keys (vector-ref import-keys index)))
+       (and key ; no key available => can't inline
+            (let ([from-grp (find-or-add-import-group! grps key
                                                        get-import-knowns
                                                        add-group!
                                                        next-index

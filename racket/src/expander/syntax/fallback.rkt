@@ -25,7 +25,8 @@
 ;; layer if the given multi-scope is not in the current set of scopes.
 
 (struct fallback (search-list)
-  #:authentic)
+  ;; Can appear in serialized:
+  #:prefab)
 
 (define (fallback-first smss)
   (if (fallback? smss)

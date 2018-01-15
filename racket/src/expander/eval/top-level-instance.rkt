@@ -17,7 +17,7 @@
 
 (define top-level-instance
   (make-instance
-   'top-level #f
+   'top-level #f 'constant
    
    top-level-bind!-id
    (lambda (id mpi orig-phase phase-shift ns sym trans? trans-val)

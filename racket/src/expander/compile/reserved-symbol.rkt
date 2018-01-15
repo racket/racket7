@@ -15,7 +15,8 @@
          deserialized-syntax-vector-id
          set-transformer!-id
          top-level-bind!-id
-         top-level-require!-id)
+         top-level-require!-id
+         mpi-vector-id)
 
 (define phase-shift-id (make-built-in-symbol! 'phase))
 (define dest-phase-id (make-built-in-symbol! 'dest-phase))
@@ -30,4 +31,5 @@
 (define set-transformer!-id (make-built-in-symbol! 'set-transformer!))
 (define top-level-bind!-id (make-built-in-symbol! 'top-level-bind!))
 (define top-level-require!-id (make-built-in-symbol! 'top-level-require!))
+(define mpi-vector-id (make-built-in-symbol! 'mpi-vector))
 

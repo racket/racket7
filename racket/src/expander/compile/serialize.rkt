@@ -16,7 +16,8 @@
          "module-use.rkt"
          "../host/linklet.rkt"
          "built-in-symbol.rkt"
-         "reserved-symbol.rkt")
+         "reserved-symbol.rkt"
+         "vector-ref.rkt")
 
 ;; Serializaiton is mostly for syntax object and module path indexes.
 ;;
@@ -73,7 +74,6 @@
          add-module-path-index!/pos
          generate-module-path-index-deserialize
          mpis-as-vector
-         mpi-vector-id
          
          generate-deserialize
 
@@ -88,8 +88,6 @@
 
 (struct module-path-index-table (positions intern))
 
-(define mpi-vector-id (make-built-in-symbol! 'mpi-vector))
-
 (define (make-module-path-index-table)
   (module-path-index-table (make-hasheq) ; module-path-index -> pos
                            (make-module-path-index-intern-table)))
@@ -98,7 +96,7 @@
   (define pos
     (add-module-path-index!/pos mpis mpi))
   (and pos
-       `(vector-ref ,mpi-vector-id ,pos)))
+       `(,unsafe-vector-ref-id ,mpi-vector-id ,pos)))
 
 (define (add-module-path-index!/pos mpis mpi)
   (cond
@@ -885,7 +883,7 @@
     syntax-module-path-index-shift))
     
 (define deserialize-instance
-  (make-instance 'deserialize #f
+  (make-instance 'deserialize #f 'constant
                  'deserialize-module-path-indexes deserialize-module-path-indexes
                  'syntax-module-path-index-shift syntax-module-path-index-shift/no-keywords
                  'syntax-shift-phase-level syntax-shift-phase-level

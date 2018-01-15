@@ -8,7 +8,8 @@
 ;; namspace, its phase, etc.
 
 (provide eager-instance-imports
-         make-eager-instance-instance)
+         make-eager-instance-instance
+         empty-eager-instance-instance)
 
 (define eager-instance-imports
   `(,ns-id
@@ -23,10 +24,17 @@
                                       #:self self 
                                       #:bulk-binding-registry bulk-binding-registry
                                       #:inspector inspector)
-  (make-instance 'instance #f
+  (make-instance 'instance #f 'constant
                  ns-id ns
                  dest-phase-id dest-phase
                  self-id self
                  bulk-binding-registry-id bulk-binding-registry
                  inspector-id inspector
                  'swap-top-level-scopes swap-top-level-scopes))
+
+(define empty-eager-instance-instance
+  (make-eager-instance-instance #:namespace #f
+                                #:dest-phase #f
+                                #:self #f
+                                #:bulk-binding-registry #f
+                                #:inspector #f))

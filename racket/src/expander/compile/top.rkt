@@ -8,6 +8,7 @@
          "../expand/parsed.rkt"
          "../compile/reserved-symbol.rkt"
          "../common/performance.rkt"
+         "../eval/top-level-instance.rkt"
          "compiled-in-memory.rkt"
          "context.rkt"
          "header.rkt"
@@ -31,7 +32,7 @@
                #:single-expression? #t))
 
 ;; Compile a single form, which can be a `define-values` form, a
-;; `define-synatxes` form, or an expression (where `begin` is treated
+;; `define-syntaxes` form, or an expression (where `begin` is treated
 ;; as an expression form). If `serializable?` is false, don't bother
 ;; generating the linklet for serialized data, because it won't be
 ;; used. If `to-source?` is true, the result is a hash table containing
@@ -68,6 +69,9 @@
                                          [,mpi-vector-id
                                           ,syntax-literals-id]
                                          ,instance-imports))
+                    #:body-import-instances (list top-level-instance
+                                                  empty-top-syntax-literal-instance
+                                                  empty-instance-instance)
                     #:to-source? to-source?
                     #:serializable? serializable?
                     #:definition-callback (lambda () (set! purely-functional? #f))
@@ -104,9 +108,16 @@
              (compile-context-namespace cctx))))
 
          (define link-linklet
-           ((if to-source? values (lambda (s) (performance-region
-                                          ['compile 'top 'linklet]
-                                          (compile-linklet s #f #f #f))))
+           ((if to-source? values (lambda (s)
+                                    (performance-region
+                                     ['compile 'top 'linklet]
+                                     (define-values (linklet new-keys)
+                                       (compile-linklet s
+                                                        #f
+                                                        (vector deserialize-instance
+                                                                empty-eager-instance-instance)
+                                                        (lambda (inst) (values inst #f))))
+                                     linklet)))
             `(linklet
               ;; imports
               (,deserialize-imports

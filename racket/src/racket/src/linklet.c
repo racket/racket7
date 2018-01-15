@@ -493,6 +493,22 @@ static Scheme_Object *instance_p(int argc, Scheme_Object **argv)
           : scheme_false);
 }
 
+static int parse_constantness_flag(const char *who, int i, int argc, Scheme_Object **argv)
+{
+  int set_flags = 0;
+
+  if (SCHEME_FALSEP(argv[i]))
+    set_flags = 0;
+  else if (SAME_OBJ(argv[i], constant_symbol))
+    set_flags = GLOB_IS_IMMUTATED;
+  else if (SAME_OBJ(argv[i], consistent_symbol))
+    set_flags = GLOB_IS_IMMUTATED | GLOB_IS_CONSISTENT;
+  else
+    scheme_wrong_contract(who, "(or/c #f 'constant 'consistent)", i, argc, argv);
+
+  return set_flags;
+}
+
 static Scheme_Object *make_instance(int argc, Scheme_Object **argv)
 {
   Scheme_Instance *inst;
@@ -500,12 +516,16 @@ static Scheme_Object *make_instance(int argc, Scheme_Object **argv)
 
   inst = scheme_make_instance(argv[0], (argc > 1) ? argv[1] : scheme_false);
 
-  if (argc > 2) {
+  if (argc > 3) {
     Scheme_Bucket **a, *b;
+    int set_flags = 0;
 
-    a = MALLOC_N(Scheme_Bucket *, (argc - 2) >> 1);
+    set_flags = parse_constantness_flag("make-instance", 2, argc, argv);
+
+    i = 3;
+    a = MALLOC_N(Scheme_Bucket *, (argc - i) >> 1);
     
-    for (i = 2; i < argc; i += 2) {
+    for (; i < argc; i += 2) {
       if (!SCHEME_SYMBOLP(argv[i]))
         scheme_wrong_contract("make-instance", "symbol?", i, argc, argv);
       if (i+1 == argc)
@@ -514,6 +534,8 @@ static Scheme_Object *make_instance(int argc, Scheme_Object **argv)
                               "variable name", 1, argv[i],
                               NULL);
       b = make_bucket(argv[i], argv[i+1], inst);
+      if (set_flags)
+        ((Scheme_Bucket_With_Flags *)b)->flags |= set_flags;
       a[(i-2)>>1] = b;
     }
 
@@ -608,14 +630,8 @@ static Scheme_Object *instance_set_variable_value(int argc, Scheme_Object **argv
     scheme_wrong_contract("instance-set-variable-value!", "instance?", 0, argc, argv);
   if (!SCHEME_SYMBOLP(argv[1]))
     scheme_wrong_contract("instance-set-variable-value!", "symbol?", 1, argc, argv);
-  if ((argc > 3) && !SCHEME_FALSEP(argv[3])) {
-    if (SAME_OBJ(argv[3], constant_symbol))
-      set_flags = GLOB_IS_IMMUTATED;
-    else if (SAME_OBJ(argv[3], consistent_symbol))
-      set_flags = GLOB_IS_IMMUTATED | GLOB_IS_CONSISTENT;
-    else
-      scheme_wrong_contract("instance-set-variable-value!", "(or/c #f 'constant 'consistent)", 3, argc, argv);
-  }
+  if (argc > 3)
+    set_flags = parse_constantness_flag("instance-set-variable-value!", 3, argc, argv);
 
   b = scheme_instance_variable_bucket(argv[1], (Scheme_Instance *)argv[0]);
 

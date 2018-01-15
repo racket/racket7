@@ -34,6 +34,7 @@
 ;; linklet directory to cover all phases covered by the forms
 (define (compile-forms bodys cctx mpis
                        #:body-imports body-imports
+                       #:body-import-instances body-import-instances
                        #:body-suffix-forms [body-suffix-forms null]
                        #:force-phases [force-phases null]
                        #:encoded-root-expand-ctx-box [encoded-root-expand-ctx-box #f] ; encoded root context, if any
@@ -248,9 +249,7 @@
          ((if to-source?
               (lambda (l name keys getter) (values l keys))
               (lambda (l name keys getter)
-                (if cross-linklet-inlining?
-                    (compile-linklet l name keys getter serializable?)
-                    (values (compile-linklet l name #f #f serializable?) keys))))
+                (compile-linklet l name keys getter serializable?)))
           `(linklet
             ;; imports
             (,@body-imports
@@ -269,16 +268,17 @@
           'module
           ;; Support for cross-module optimization starts with a vector
           ;; of keys for the linklet imports; we use `module-use` values
-          ;; as keys, plus #f for the boilerplate linklets
-          (list->vector (append (for/list ([i (in-list body-imports)]) #f)
+          ;; as keys, plus #f or an instance (=> cannot be pruned) for
+          ;; each boilerplate linklet
+          (list->vector (append body-import-instances
                                 (link-info-link-module-uses li)))
           ;; To complete cross-module support, map a key (which is a `module-use`)
           ;; to a linklet and an optional vector of keys for that linklet's
           ;; imports:
-          (and cross-linklet-inlining?
-               (make-module-use-to-linklet (compile-context-namespace cctx)
-                                           get-module-linklet-info
-                                           (link-info-link-module-uses li))))))
+          (make-module-use-to-linklet cross-linklet-inlining?
+                                      (compile-context-namespace cctx)
+                                      get-module-linklet-info
+                                      (link-info-link-module-uses li)))))
       (values phase (cons linklet (list-tail (vector->list new-module-uses)
                                              (length body-imports))))))
   
@@ -376,8 +376,8 @@
 
 ;; ----------------------------------------
 
-(define (make-module-use-to-linklet ns get-module-linklet-info init-mus)
-  ;; Inlining might reach the same module though differnt indirections;
+(define (make-module-use-to-linklet cross-linklet-inlining? ns get-module-linklet-info init-mus)
+  ;; Inlining might reach the same module though different indirections;
   ;; use a consistent `module-use` value so that the compiler knows to
   ;; collapse them to a single import
   (define mu-intern-table (make-hash))
@@ -391,6 +391,16 @@
   ;; The callback function supplied to `compile-linklet`:
   (lambda (mu)
     (cond
+     [(instance? mu)
+      ;; An instance represents a boilerplate linklet. An instance
+      ;; doesn't enable inlining (and we don't want inlining, since
+      ;; that would change the overall protocol for module or
+      ;; top-level linklets], but it can describe shapes.
+      (values mu #f)]
+     [(not cross-linklet-inlining?)
+      ;; Although we let instances through, because that's cheap,
+      ;; don't track down linklets and allow inlining of functions
+      (values #f #f)]
      [mu
       (define mod-name (module-path-index-resolve (module-use-module mu)))
       (define mli (or (get-module-linklet-info mod-name (module-use-phase mu))
@@ -414,6 +424,5 @@
           ;; Didn't find info, for some reason:
           (values #f #f))]
      [else
-      ;; No inlining of boilerplate, since that would change the
-      ;; overall protocol for module or top-level linklets
+      ;; Boilerplate linklet with no compile-time information
       (values #f #f)])))

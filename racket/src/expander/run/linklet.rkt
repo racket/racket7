@@ -53,7 +53,7 @@
                   data        ; any value (e.g., a namespace)
                   variables)) ; symbol -> value
 
-(define (make-instance name [data #f] . content)
+(define (make-instance name [data #f] [mode #f] . content)
   (define i (instance name data (make-hasheq)))
   (let loop ([content content])
     (cond
@@ -67,7 +67,7 @@
         (raise-arguments-error 'make-instance
                                "missing variable value"
                                "variable" (car content)))
-      (instance-set-variable-value! i (car content) (cadr content))
+      (instance-set-variable-value! i (car content) (cadr content) mode)
       (loop (cddr content))]))
   i)
 

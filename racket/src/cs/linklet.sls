@@ -641,17 +641,17 @@
   (define make-instance
     (case-lambda
      [(name) (make-instance name #f)]
-     [(name data . content)
+     [(name data) (make-instance name data #f)]
+     [(name data constance . content)
       (let* ([ht (make-hasheq)]
              [inst (new-instance name data ht)]
              [inst-box (weak-cons inst #f)])
+        (check-constance 'make-instance constance)
         (let loop ([content content])
           (cond
            [(null? content) (void)]
-           [(null? (cdr content))
-            (raise-arguments-error 'make-instance "odd number of arguments")]
            [else
-            (hash-set! ht (car content) (make-variable (cadr content) (car content) #f inst-box))
+            (hash-set! ht (car content) (make-variable (cadr content) (car content) constance inst-box))
             (loop (cddr content))]))
         inst)]))
 
@@ -681,6 +681,11 @@
     (case-lambda
      [(i k v) (instance-set-variable-value! i k v #f)]
      [(i k v mode)
+      (unless (instance? i)
+        (raise-argument-error 'instance-set-variable-value! "instance?" i))
+      (unless (symbol? k)
+        (raise-argument-error 'instance-set-variable-value! "symbol?" i))
+      (check-constance 'instance-set-variable-value! mode)
       (let ([var (or (hash-ref (instance-hash i) k #f)
                      (let ([var (make-variable unsafe-undefined k #f (weak-cons i #f))])
                        (hash-set! (instance-hash i) k var)
@@ -688,9 +693,17 @@
         (variable-set! var v mode))]))
 
   (define (instance-unset-variable! i k)
+    (unless (instance? i)
+      (raise-argument-error 'instance-unset-variable! "instance?" i))
+    (unless (symbol? k)
+      (raise-argument-error 'instance-unset-variable! "symbol?" i))
     (let ([var (hash-ref (instance-hash i) k #f)])
       (when var
         (set-variable-val! var unsafe-undefined))))
+
+  (define (check-constance who mode)
+    (unless (or (not mode) (eq? mode 'constant) (eq? mode 'consistent))
+      (raise-argument-error who "(or/c #f 'constant 'consistant)" mode)))
 
   ;; --------------------------------------------------
 

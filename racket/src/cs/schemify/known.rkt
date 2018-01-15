@@ -46,7 +46,7 @@
 (struct known-procedure/can-inline/need-imports (needed) ; (list (cons <sym> (cons <sym> <#f-or-index>)) ...)
   #:prefab #:omit-define-syntaxes #:super struct:known-procedure/can-inline)
 
-;; procedure that succeeds for all arguments, so it can be reordered
+;; procedure that succeeds for all arguments and is functional so that it can be reordered
 (struct known-procedure/succeeds () #:prefab #:omit-define-syntaxes #:super struct:known-procedure)
 
 (struct known-struct-type (type field-count pure-constructor?) #:prefab #:omit-define-syntaxes #:super struct:known-consistent)

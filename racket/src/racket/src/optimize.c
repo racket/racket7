@@ -10450,7 +10450,11 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
     } else
       used += k;
     total_used += used;
-    if (!used && _import_keys && SCHEME_TRUEP(SCHEME_VEC_ELS(*_import_keys)[i])) {
+    if (!used && _import_keys
+        /* When a key is #f or an instance, then dropping is not allowed */
+        && ((i >= SCHEME_VEC_SIZE(*_import_keys))
+            || (SCHEME_TRUEP(SCHEME_VEC_ELS(*_import_keys)[i])
+                && !SAME_TYPE(scheme_instance_type, SCHEME_TYPE(SCHEME_VEC_ELS(*_import_keys)[i]))))) {
       dropped_imports++;
       /* A number commuicates to the resolve pass that the import
          instance had that many variables, but we can drop it

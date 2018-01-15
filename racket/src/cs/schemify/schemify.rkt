@@ -444,7 +444,7 @@
                                   `([,lr ,(make-let-values ids rhs `(vector . ,ids))]
                                     ,@(for/list ([id (in-list ids)]
                                                  [pos (in-naturals)])
-                                        `[,id (vector-ref ,lr ,pos)]))]))))
+                                        `[,id (unsafe-vector*-ref ,lr ,pos)]))]))))
                          ,@(map schemify bodys))])]
            [`(if ,tst ,thn ,els)
             `(if ,(schemify tst) ,(schemify thn) ,(schemify els))]
