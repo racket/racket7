@@ -157,8 +157,9 @@
            ret-type name ([rktio-type rktio] [arg-type arg] ...))]))
 
     (define loaded-librktio
-      (load-shared-object (string-append "../../lib/librktio"
-                                         (utf8->string (system-type 'so-suffix)))))
+      (or (foreign-entry? "rktio_init")
+          (load-shared-object (string-append "../../lib/librktio"
+                                             (utf8->string (system-type 'so-suffix))))))
 
     (define (rktio-lookup name)
       (foreign-entry (symbol->string name)))

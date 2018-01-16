@@ -8,7 +8,9 @@
 
 (provide find-system-path
          set-exec-file!
-         set-run-file!)
+         set-run-file!
+         set-collects-dir!
+         set-config-dir!)
 
 (define/who (find-system-path key)
   (begin0
@@ -17,8 +19,10 @@
                        (string->path "/usr/local/bin/racket"))]
       [(run-file) (or run-file
                       (find-system-path 'exec-file))]
-      [(config-dir host-config-dir) (string->path "../etc")]
-      [(collects-dir host-collects-dir) (string->path "../collects")]
+      [(config-dir host-config-dir) (or config-dir
+                                        (string->path "../etc"))]
+      [(collects-dir host-collects-dir) (or collects-dir
+                                            (string->path "../collects"))]
       [(orig-dir) (string->path (|#%app| current-directory))]
       [(temp-dir) (rktio-system-path who RKTIO_PATH_TEMP_DIR)]
       [(sys-dir) (rktio-system-path who RKTIO_PATH_SYS_DIR)]
@@ -45,6 +49,12 @@
 
 (define run-file #f)
 (define (set-run-file! p) (set! run-file p))
+
+(define collects-dir #f)
+(define (set-collects-dir! p) (set! collects-dir p))
+
+(define config-dir #f)
+(define (set-config-dir! p) (set! config-dir p))
 
 (define (rktio-system-path who key)
   (start-atomic)

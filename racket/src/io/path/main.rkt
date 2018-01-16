@@ -57,6 +57,8 @@
          find-system-path
          set-exec-file!
          set-run-file!
+         set-collects-dir!
+         set-config-dir!
 
          _path)
 

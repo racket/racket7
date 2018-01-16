@@ -1,13 +1,13 @@
 
 #################################################################
 # This is the source for the `configure` script, to be compiled #
-# by autoconf (use `make-configure` in "../racket").            #
+# by autoconf (use `make-configure` in "../../racket").         #
 #################################################################
 
-AC_INIT([rktio.h])
-AC_CONFIG_HEADERS([rktio_config.h])
+AC_INIT([embed-boot.rkt])
+AC_CONFIG_HEADERS([cs_config.h])
 
-AC_CONFIG_AUX_DIR(../lt)
+AC_CONFIG_AUX_DIR(../../lt)
 AC_CANONICAL_SYSTEM
 
 AC_ARG_ENABLE(shared,     [  --enable-shared         create shared libraries (ok, but not recommended)])
@@ -21,10 +21,12 @@ fi
 
 skip_iconv_check=no
 
-# For standalone builds:
-rktio_version=1.0
-HIDE_STANDALONE=hide_standalone_
-HIDE_NOT_STANDALONE=
+INCLUDEDEP="#"
+OSX="not_osx"
+NOT_OSX=""
+
+FRAMEWORK_INSTALL_DIR='$(srcdir)/../../../lib/'
+FRAMEWORK_PREFIX='@executable_path/../lib/'
 
 ###### Autoconfigure #######
 
@@ -35,18 +37,6 @@ if test "$CC" = "gcc" ; then
   CFLAGS="$CFLAGS -Wall"
 fi
 
-AC_PROG_RANLIB
-if test "$AR" = '' ; then 
-  AR="${ac_tool_prefix}ar"
-  AC_CHECK_PROG(platform_ar_found, $AR, yes, no)
-  if test "$platform_ar_found" = 'no' ; then
-    AR="ar"
-  fi
-fi
-if test "$ARFLAGS" = '' ; then 
-  ARFLAGS=ruv
-fi
-
 AC_CHECK_LIB(m, fmod)
 AC_CHECK_LIB(dl, dlopen)
 
@@ -54,40 +44,22 @@ AC_CHECK_LIB(dl, dlopen)
 
 case "$host_os" in
   solaris2*)
-    # Need these libs so that `getaddrinfo` is found:
-    LIBS="$LIBS -lsocket -lnsl -lintl"
-    try_poll_syscall="no" # poll() has performance problems on Solaris?
-    use_flag_pthread="no"
-    use_flag_posix_pthread="yes"
     ;;
   aix*)
     ;;
   *freebsd*)
-    enable_pthread_by_default=yes
-    try_kqueue_syscall=yes
     ;;
   openbsd*)
-    enable_pthread_by_default=yes
-    try_kqueue_syscall=yes
     ;;
   bitrig*)
-    enable_pthread_by_default=yes
-    try_kqueue_syscall=yes
     ;;
   dragonfly*)
-    enable_pthread_by_default=yes
-    try_kqueue_syscall=yes
     ;;
   netbsd*)
-    try_kqueue_syscall=yes
     ;;
   irix*)
     ;;
   linux*)
-    enable_pthread_by_default=yes
-    try_poll_syscall=yes
-    try_epoll_syscall=yes
-    try_inotify_syscall=yes
     ;;
   osf1*)
     ;;
@@ -99,25 +71,15 @@ case "$host_os" in
   cygwin*)
     ;;
   darwin*)
-    PREFLAGS="$PREFLAGS -DOS_X -D_DARWIN_UNLIMITED_SELECT"
-    enable_pthread_by_default=yes
-    try_kqueue_syscall=yes
-
-    # Although select() generally works as well as poll() on OS X,
-    # getdtablesize() appears not to be constant within a process,
-    # and that breaks static allocation of fd_sets
-    try_poll_syscall=yes
+    PREFLAGS="$PREFLAGS -DOS_X"
+    MACH=a6osx
+    LIBS="${LIBS} -lncurses -framework CoreFoundation"
+    INCLUDEDEP="-include"
+    OSX=""
+    NOT_OSX="osx"
 
     # -pthread is not needed and triggers a warning
     use_flag_pthread=no
-
-    # Use custom non-libtool build for a shared object
-    if test "${enable_standalone}" = "yes" ; then
-       if test "${enable_shared}" = "" ; then
-         enable_shared=no
-         make_darwin_dylib=yes
-       fi
-    fi
     ;;
   nto-qnx*)
     use_flag_pthread=no
@@ -126,22 +88,12 @@ case "$host_os" in
     ;;
 esac
 
+SCHEME_SRC=../ChezScheme
+SCHEME_CONFIG_ARGS="--machine=${MACH}"
+
 ############## C flags ################
 
 AC_LANG_C
-
-AC_TYPE_INTPTR_T
-AC_TYPE_UINTPTR_T
-
-AC_MSG_CHECKING([for getaddrinfo])
-AC_TRY_LINK([#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>],
-	[getaddrinfo(0, 0, 0, 0);],
-   AC_DEFINE(HAVE_GETADDRINFO,1,[Have getaddrinfo])
-   have_getaddrinfo=yes,
-   have_getaddrinfo=no)
-AC_MSG_RESULT($have_getaddrinfo)
 
 iconv_lib_flag=""
 if test "${skip_iconv_check}" = "no" ; then
@@ -195,109 +147,6 @@ if test "${enable_iconv}" = "yes" ; then
   AC_MSG_RESULT($have_codeset)
 fi
 
-[ msg="for mbsrtowcs" ]
-AC_MSG_CHECKING($msg)
-AC_LINK_IFELSE([AC_LANG_SOURCE([
-   #include <wchar.h>
-   #include <strings.h>
-   int main() {
-     mbstate_t state;
-     char *src = "X";
-     bzero(&state, sizeof(mbstate_t));
-     mbsrtowcs(0, &src, 0, &state);
-     return 0;
-   }])], mbsrtowcs=yes, mbsrtowcs=no)
-if test "$mbsrtowcs" = "no" ; then
-  CFLAGS="$CFLAGS -DNO_MBTOWC_FUNCTIONS"
-fi
-AC_MSG_RESULT($mbsrtowcs)
-
-if test "${try_poll_syscall}" = "yes" ; then
-  [ msg="for poll" ]
-  AC_MSG_CHECKING($msg)
-  AC_LINK_IFELSE([AC_LANG_SOURCE([
-     #include <poll.h>
-     int main() {
-      struct pollfd pfd;
-      int r;
-      pfd.fd = 0;
-      pfd.events = POLLIN;
-      r = poll(&pfd, 1, 0);
-      return 0;
-     }])], use_poll=yes, use_poll=no)
-  AC_MSG_RESULT($use_poll)
-  if test "${use_poll}" = "yes" ; then
-     AC_DEFINE(HAVE_POLL_SYSCALL,1,[Have poll])
-  fi
-fi
-
-if test "${try_epoll_syscall}" = "yes" ; then
-  [ msg="for epoll" ]
-  AC_MSG_CHECKING($msg)
-  AC_LINK_IFELSE([AC_LANG_SOURCE([
-    #include <sys/epoll.h>
-    int main() {
-      int fd;
-      struct epoll_event ev;
-      fd = epoll_create(5);
-      ev.events = EPOLLIN | EPOLLONESHOT;
-      epoll_ctl(fd, EPOLL_CTL_ADD, 0, &ev);
-      return 0;
-    }])], use_epoll=yes, use_epoll=no)
-  AC_MSG_RESULT($use_epoll)
-  if test "${use_epoll}" = "yes" ; then
-     AC_DEFINE(HAVE_EPOLL_SYSCALL,1,[Have epoll])
-  fi
-fi
-
-if test "${try_inotify_syscall}" = "yes" ; then
-  [ msg="for inotify" ]
-  AC_MSG_CHECKING($msg)
-  AC_LINK_IFELSE([AC_LANG_SOURCE([
-    #include <sys/inotify.h> 
-    int main() {
-      int fd;
-      int wd;
-      fd = inotify_init();
-      wd = inotify_add_watch(fd, "/tmp", 
-                             (IN_CREATE | IN_DELETE | IN_DELETE_SELF
-                              | IN_MODIFY | IN_MOVE_SELF | IN_MOVED_TO));
-      return 0;
-    }])], use_inotify=yes, use_inotify=no)
-  AC_MSG_RESULT($use_inotify)
-  if test "${use_inotify}" = "yes" ; then
-     AC_DEFINE(HAVE_INOTIFY_SYSCALL,1,[Have inotify])
-  fi
-fi
-
-if test "${try_kqueue_syscall}" = "yes" ; then
-  [ msg="for kqueue" ]
-  AC_MSG_CHECKING($msg)
-  AC_LINK_IFELSE([AC_LANG_SOURCE([
-     #include <sys/types.h>
-     #include <sys/event.h>
-     #include <sys/time.h>
-     int main() {
-        int kq;
-        struct kevent kev;
-        struct timespec timeout = {0, 0};
-        kq = kqueue();
-        EV_SET(&kev, 0, EVFILT_READ, EV_ADD, 0, 0, NULL);
-        kevent(kq, &kev, 1, NULL, 0, &timeout);
-        return 0;
-     }])], use_kqueue=yes, use_kqueue=no)
-  AC_MSG_RESULT($use_kqueue)
-  if test "${use_kqueue}" = "yes" ; then
-     AC_DEFINE(HAVE_KQUEUE_SYSCALL,1,[Have kqueue])
-  fi
-fi
-
-LFS_CFLAGS=`getconf LFS_CFLAGS 2> /dev/null`
-if test "${LFS_CFLAGS}" != "" && test "${LFS_CFLAGS}" != "undefined"; then
-  echo "Large-file support: ${LFS_CFLAGS}"
-  CFLAGS="${CFLAGS} ${LFS_CFLAGS}"  
-fi
-
 ############### pthread ###################
 
 if test "${enable_pthread}" = "" ; then
@@ -319,22 +168,14 @@ fi
 
 ############## libtool ################
 
-if test "${enable_standalone}" = "yes" ; then
-   HIDE_STANDALONE=""
-   HIDE_NOT_STANDALONE=hide_not_standalone_
-   if test "${enable_shared}" = "" ; then
-     enable_shared=yes
-   fi
-fi
-
 if test "${enable_shared}" = "yes" ; then
   echo "Configuring libtool"
 
   # Assuming an absolute "${libdir}":
   abslibdir="${libdir}"
 
-  if test ! -d "../lt" ; then
-    mkdir "../lt"
+  if test ! -d "../../lt" ; then
+    mkdir "../../lt"
   fi
   abssrcdir=`(cd ${srcdir}; pwd)`
 
@@ -395,22 +236,26 @@ AC_SUBST(CFLAGS)
 AC_SUBST(CPPFLAGS)
 AC_SUBST(LDFLAGS)
 AC_SUBST(LIBS)
-AC_SUBST(RKTLINKER)
 AC_SUBST(AR)
 AC_SUBST(ARFLAGS)
 AC_SUBST(RANLIB)
 AC_SUBST(STATIC_AR)
-AC_SUBST(ICP_LIB)
-
-AC_SUBST(LIBSFX)
-AC_SUBST(LTO)
-AC_SUBST(LTA)
-
-AC_SUBST(HIDE_NOT_STANDALONE)
-AC_SUBST(HIDE_STANDALONE)
-
-AC_SUBST(RKTIO_NO_ICONV)
+AC_SUBST(ICP)
+AC_SUBST(RKTLINKER)
+AC_SUBST(INCLUDEDEP)
+AC_SUBST(MACH)
+AC_SUBST(OSX)
+AC_SUBST(NOT_OSX)
+AC_SUBST(SCHEME_SRC)
+AC_SUBST(SCHEME_CONFIG_ARGS)
+AC_SUBST(FRAMEWORK_INSTALL_DIR)
+AC_SUBST(FRAMEWORK_PREFIX)
 
 makefiles="Makefile"
 
 AC_OUTPUT($makefiles)
+
+mkdir -p rktio
+abssrcdir=`(cd ${srcdir}; pwd)`
+echo "=== configuring in rktio (${abssrcdir}/../../rktio)"
+cd rktio; ${abssrcdir}/../../rktio/configure

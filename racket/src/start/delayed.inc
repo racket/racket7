@@ -1,4 +1,6 @@
 
+/* Extra configuration and support for Windows */
+
 # ifdef MZ_PRECISE_GC
 #  define DLL_3M_SUFFIX "3m"
 # else

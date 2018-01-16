@@ -28,12 +28,15 @@
 ;;         | (*ref <type>) ; transparent argument, can be represented by a byte string
 
 (define output-file #f)
+(define c-mode? #f)
 
 (define input-file
   (command-line
    #:once-each
    [("-o") file "Write output to <file>"
     (set! output-file file)]
+   [("-c") "Generate foreign-symbol registration"
+    (set! c-mode? #t)]
    #:args
    (file)
    file))
@@ -287,11 +290,21 @@
                 unsorted-content))))
 
 (define (show-content)
-  (printf "(begin\n")
-  (for ([e (in-list content)]
-        #:when e)
-    (pretty-write e))
-  (printf ")\n"))
+  (cond
+    [(not c-mode?)
+     (printf "(begin\n")
+     (for ([e (in-list content)]
+           #:when e)
+       (pretty-write e))
+     (printf ")\n")]
+    [else
+     (for ([e (in-list content)]
+           #:when (and (pair? e)
+                       (or (eq? 'define-function (car e))
+                           (eq? 'define-function/errno (car e))
+                           (eq? 'define-function/errno+step (car e)))))
+       (define n (list-ref e (- (length e) 2)))
+       (printf "Sforeign_symbol(~s, (void *)~a);\n" (symbol->string n) n))]))
 
 (if output-file
     (with-output-to-file output-file

@@ -30,9 +30,19 @@
 
  (linklet-performance-init!)
 
- (unless (pair? (command-line-arguments))
-   (error 'racket "expected a `self` executable path to start"))
- (set-exec-file! (path->complete-path (car (command-line-arguments))))
+ (define the-command-line-arguments
+   (or (and (top-level-bound? 'bytes-command-line-arguments)
+            (map (lambda (s) (bytes->string/locale s #\?))
+                 (top-level-value 'bytes-command-line-arguments)))
+       (command-line-arguments)))
+
+ (unless (>= (length the-command-line-arguments) 5)
+   (error 'racket "expected `self`, `collects`, and `libs` paths plus `segment-offset` and `is-gui?` to start"))
+ (set-exec-file! (path->complete-path (car the-command-line-arguments)))
+ (set-collects-dir! (string->path (cadr the-command-line-arguments)))
+ (set-config-dir! (string->path (caddr the-command-line-arguments)))
+ (define segment-offset (#%string->number (list-ref the-command-line-arguments 3)))
+ (define gracket? (string=? "true" (list-ref the-command-line-arguments 4)))
 
  (|#%app| use-compiled-file-paths
   (list (string->path (string-append "compiled/"
@@ -85,7 +95,9 @@
          (if default (list default) null)]
         [else (fail)]))))
 
- (define init-library '(lib "racket"))
+ (define init-library (if gracket?
+                          '(lib "racket/gui/init")
+                          '(lib "racket/init")))
  (define loads '())
  (define repl? #f)
  (define version? #f)
@@ -115,7 +127,7 @@
           (let () body ...)
           (string-case arg rest ...))]))
 
- (let flags-loop ([args (cdr (command-line-arguments))]
+ (let flags-loop ([args (list-tail the-command-line-arguments 5)]
                   [saw (hasheq)])
    ;; An element of `args` can become `(cons _arg _within-arg)`
    ;; due to splitting multiple flags with a single "-"
@@ -130,7 +142,8 @@
        (|#%app| current-command-line-arguments (list->vector args))
        (when (and (null? args) (not (saw? saw 'non-config)))
          (set! repl? #t)
-         (set! version? #t))]))
+         (unless gracket?
+           (set! version? #t)))]))
    ;; Dispatch on first argument:
    (if (null? args)
        (finish args saw)
@@ -206,6 +219,10 @@
           [("-W" "--stderr")
            (let-values ([(spec rest-args) (next-arg "stderr level" arg within-arg args)])
              (set! stderr-logging-arg (parse-logging-spec spec (format "after ~a switch" (or within-arg arg)) #t))
+             (loop rest-args))]
+          [("-N" "--name")
+           (let-values ([(name rest-args) (next-arg "name" arg within-arg args)])
+             (set-run-file! (string->path name))
              (loop rest-args))]
           [("--")
            (cond
@@ -350,8 +367,11 @@
              (reverse loads))
 
    (when repl?
-     (|#%app| (dynamic-require 'racket/base 'read-eval-print-loop))
-     (newline))
+     (|#%app| (if gracket?
+                  (dynamic-require 'racket/gui/init 'graphical-read-eval-print-loop)
+                  (dynamic-require 'racket/base 'read-eval-print-loop)))
+     (unless gracket?
+       (newline)))
 
    (|#%app| (|#%app| executable-yield-handler) 0)
    

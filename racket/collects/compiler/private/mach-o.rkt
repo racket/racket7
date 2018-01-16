@@ -136,7 +136,8 @@
                                      [nreloc (read-ulong p)]
                                      [flags (read-ulong p)])
                                  (when ((+ offset vmsz) . > . (+ cmdssz (if (equal? exe-id #xFeedFacf) 32 28)))
-                                   (when (offset . < . min-used)
+                                   (when (and (positive? offset)
+                                              (offset . < . min-used))
                                      ;; (printf "   new min!\n")
                                      (set! min-used offset)))
                                  ;; (printf "    ~s,~s 0x~x 0x~x\n" seg sect offset vmsz)

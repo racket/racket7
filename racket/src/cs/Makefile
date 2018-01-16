@@ -13,6 +13,8 @@ RUMBLE_UNSAFE_COMP = --unsafe
 COMPILE_FILE = $(SCHEME) --script compile-file.ss $(UNSAFE_COMP) $(DEBUG_COMP)
 COMPILE_FILE_DEPS = compile-file.ss
 
+RACKET_SETUP_ARGS = ../../bin/racket ../collects ../etc 0 false
+
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
                     schemify/struct-type-info.rkt schemify/import.rkt schemify/mutated-state.rkt \
@@ -36,13 +38,13 @@ MAIN_DEPS = $(EXPANDER_DEPS) expander.so
 all:
 	$(MAKE) rktio
 	$(MAKE) rktl
-	$(MAKE) expander.so
+	$(MAKE) racket.so
 
 expander-demo: expander.so demo/expander.ss
 	$(SCHEME) $(EXPANDER_DEPS) expander.so demo/expander.ss
 
 run: main.so ../../bin/racket
-	$(SCHEME) --script main.so ../../bin/racket $(ARGS)
+	$(SCHEME) --script main.so $(RACKET_SETUP_ARGS) $(ARGS)
 
 setup:
 	$(MAKE) run ARGS="-l- setup $(ARGS)"
@@ -51,7 +53,7 @@ setup-v:
 	$(MAKE) run ARGS="-W 'info@compiler/cm info@linklet debug@GC:major error' -l- setup $(ARGS)"
 
 run-wpo: racket.so ../../bin/racket
-	$(SCHEME) --script racket.so ../../bin/racket $(ARGS)
+	$(SCHEME) --script racket.so $(RACKET_SETUP_ARGS) $(ARGS)
 
 racket.so: main.so $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) --whole-program racket.so main.wpo
