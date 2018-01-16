@@ -14,6 +14,7 @@
 (check-defined 'generate-procedure-source-information)
 (check-defined 'object-backreferences)
 (check-defined 'current-generate-id)
+(check-defined 'load-compiled-from-port)
 
 ;; ----------------------------------------
 

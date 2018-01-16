@@ -251,13 +251,9 @@
 
   (define (code-from-bytevector bv)
     (let ([i (open-bytevector-input-port bv)])
-      ;; HACK: This probably always works for the `lambda` or
-      ;; `let`+`lambda` forms that we compile as linklets, but we need a
-      ;; better function from the host Scheme:
-      (let ([v (fasl-read i)])
-        (performance-region
-         'outer
-         (((cdr (if (vector? v) (vector-ref v 1) v))))))))
+      (performance-region
+       'outer
+       ((load-compiled-from-port i)))))
 
   (define-record-type wrapped-code
     (fields (mutable content) ; bytevector for 'lambda mode; annotation for 'jit mode
