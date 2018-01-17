@@ -19,7 +19,7 @@ static int boot_file_offset = 18;
 
 #ifdef OS_X
 # include <mach-o/dyld.h>
-char *get_self_path()
+static char *get_self_path()
 {
   char buf[1024], *s;
   uint32_t size = sizeof(buf);
@@ -38,6 +38,31 @@ char *get_self_path()
   }
 }
 #endif
+
+#if defined(__linux__)
+# include <errno.h>
+static char *get_self_path()
+{
+  char buf[256], *s = buf;
+  ssize_t len, blen = sizeof(buf);
+
+  while (1) {
+    len = readlink("/proc/self/exe", s, blen-1);
+    if (len == (blen-1)) {
+      if (s != buf) free(s);
+      blen *= 2;
+      s = malloc(blen);
+    } else if (len < 0) {
+      fprintf(stderr, "failed to get self (%d)\n", errno);
+      exit(1);
+    } else
+      break;
+  }
+  buf[len] = 0;
+  return strdup(buf);
+}
+#endif
+
 
 #ifndef do_pre_filter_cmdline_arguments
 # define do_pre_filter_cmdline_arguments(argc, argv) /* empty */

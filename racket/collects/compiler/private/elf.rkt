@@ -258,7 +258,7 @@
                           (section-size s)))
          s)))
 
-;; The `get-data` function must return
+;; The `get-data` function takes an offset and must return
 ;;  (values bytes any1 any2)
 ;; The result of `add-racket-section` is either
 ;;  (values #f #f #f #f) ; => not an ELF file

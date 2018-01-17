@@ -29,7 +29,7 @@
         ;; ELF?
         (define-values (start-pos end-pos any1 any2)
           (add-racket-section src-file dest-file #".rackboot"
-                              (lambda ()
+                              (lambda (pos)
                                 (values data 'any1 'any2))))
         (cond
           [start-pos
