@@ -1,14 +1,18 @@
 srcdir = @srcdir@
 
-SCHEME_BIN = @SCHEME_SRC@/@MACH@/bin/@MACH@/scheme
-SCHEME_INC = @SCHEME_SRC@/@MACH@/boot/@MACH@/
+SCHEME_SRC = @SCHEME_SRC@
+MACH = @MACH@
+SCHEME_BIN = $(SCHEME_SRC)/$(MACH)/bin/$(MACH)/scheme
+SCHEME_INC = $(SCHEME_SRC)/$(MACH)/boot/$(MACH)
+SCHEME = $(SCHEME_BIN) -b $(SCHEME_INC)/petite.boot -b $(SCHEME_INC)/scheme.boot
 
 CC = @CC@
 CFLAGS = @CFLAGS@ @CPPFLAGS@ -I$(SCHEME_INC) -I$(srcdir)/../../rktio -Irktio -I.
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
 
-RACKET = $(srcdir)/../../../bin/racket
+DEFAULT_RACKET = $(srcdir)/../../../bin/racket
+RACKET = @RACKET@
 RACO = $(RACKET) -N raco -l- raco
 
 CS_INSTALLED = cs
@@ -21,14 +25,18 @@ mainsrcdir = @srcdir@/../..
 @INCLUDEDEP@ @srcdir@/../../racket/version.mak
 
 cs:
-	$(MAKE) racket.so RACKET="`$(RACKET) $(srcdir)/../absify.rkt --exec $(RACKET)`"
-	cd rktio; $(MAKE)
 	$(MAKE) scheme
+	$(MAKE) racket.so
+	cd rktio; $(MAKE)
 	$(MAKE) racketcs
 	$(MAKE) gracketcs
+	$(MAKE) starter
 
 racket.so:
-	cd $(srcdir)/.. && $(MAKE) RACKET="$(RACKET)"
+	$(MAKE) build-racket.so RACKET="`$(RACKET) $(srcdir)/../absify.rkt --exec $(RACKET)`" SCHEME_SRC="`$(RACKET) $(srcdir)/../absify.rkt $(SCHEME_SRC)`"
+
+build-racket.so:
+	cd $(srcdir)/.. && @CONFIGURE_RACKET_SO_COMPILE@ $(MAKE) RACKET="$(RACKET)" SCHEME="$(SCHEME)"
 
 scheme:
 	$(MAKE) $(SCHEME_BIN)
@@ -37,13 +45,27 @@ $(SCHEME_BIN):
 	cd @SCHEME_SRC@ && ./configure @SCHEME_CONFIG_ARGS@
 	cd @SCHEME_SRC@ && make
 
-racketcs@NOT_OSX@: raw_racketcs $(srcdir)/../racket.so
+# ----------------------------------------
+# Unix
+
+EMBED_DEPS = $(srcdir)/embed-boot.rkt
+
+racketcs@NOT_OSX@: raw_racketcs $(srcdir)/../racket.so $(EMBED_DEPS)
 	$(RACKET) $(srcdir)/embed-boot.rkt raw_racketcs racketcs $(SCHEME_INC) $(srcdir)/../racket.so
+
+gracketcs@NOT_OSX@: raw_gracketcs $(srcdir)/../racket.so $(EMBED_DEPS)
+	$(RACKET) $(srcdir)/embed-boot.rkt raw_gracketcs gracketcs $(SCHEME_INC) $(srcdir)/../racket.so
 
 BOOT_OBJS = boot.o $(SCHEME_INC)/kernel.o rktio/librktio.a
 
 raw_racketcs: main.o boot.o
-	$(CC) $(CFLAGS) -o raw_racketcs main.o $(BOOT_OBJS)
+	$(CC) $(CFLAGS) -o raw_racketcs main.o $(BOOT_OBJS) $(LDFLAGS) $(LIBS)
+
+raw_gracketcs: grmain.o boot.o
+	$(CC) $(CFLAGS) -o raw_gracketcs grmain.o $(BOOT_OBJS) $(LDFLAGS) $(LIBS)
+
+# ----------------------------------------
+# Mac OS
 
 RKTFWDIR = Racket.framework/Versions/$(FWVERSION)_CS
 RKTFW = $(RKTFWDIR)/Racket
@@ -76,6 +98,9 @@ $(RKTFW): $(BOOT_OBJS) $(BOOT_FILES)
 	cp $(SCHEME_INC)/petite.boot $(SCHEME_INC)/scheme.boot Racket.framework/Versions/$(FWVERSION)_CS/boot
 	cp $(srcdir)/../racket.so Racket.framework/Versions/$(FWVERSION)_CS/boot
 
+# ----------------------------------------
+# Common
+
 DEF_COLLECTS_DIR = -DINITIAL_COLLECTS_DIRECTORY='"'"`cd $(srcdir)/../../../collects; pwd`"'"'
 DEF_CONFIG_DIR = -DINITIAL_CONFIG_DIRECTORY='"'"`cd $(srcdir)/../../..; pwd`/etc"'"'
 DEF_C_DIRS = $(DEF_COLLECTS_DIR) $(DEF_CONFIG_DIR)
@@ -94,19 +119,32 @@ boot.o: $(srcdir)/boot.c rktio.inc $(srcdir)/boot.h
 rktio.inc: $(srcdir)/../../rktio/parse.rkt $(srcdir)/../../rktio/rktio.h
 	$(RACKET) $(srcdir)/../../rktio/parse.rkt -c -o rktio.inc $(srcdir)/../../rktio/rktio.h
 
+starter: $(srcdir)/../../start/ustart.c
+	$(CC) $(CFLAGS) -o starter $(srcdir)/../../start/ustart.c
+
 # ----------------------------------------
+# Install
 
-RKTFWDEST = @FRAMEWORK_INSTALL_DIR@/Racket.framework
 ICP=@ICP@
-
-unix-install:
-	$(ICP) racketcs "$(DESTDIR)$(bindir)/racket$(CS_INSTALLED)"
 
 install@NOT_OSX@:
 	$(MAKE) unix-install
 
 install@OSX@:
-	$(MAKE) unix-install
+	$(MAKE) macos-install
+
+common-install:
+	$(ICP) racketcs "$(DESTDIR)$(bindir)/racket$(CS_INSTALLED)"
+	$(ICP) starter "$(DESTDIR)$(libpltdir)/starter"
+
+unix-install:
+	$(MAKE) common-install
+	$(ICP) gracketcs "$(DESTDIR)$(libpltdir)/gracket$(CS_INSTALLED)"
+
+RKTFWDEST = @FRAMEWORK_INSTALL_DIR@/Racket.framework
+
+macos-install:
+	$(MAKE) common-install
 	rm -f $(DESTDIR)$(RKTFWDEST)/Racket
 	rm -rf $(DESTDIR)$(RKTFWDEST)/Versions/$(FWVERSION)_CS
 	mkdir -p $(DESTDIR)"$(RKTFWDEST)/Versions/$(FWVERSION)_CS"

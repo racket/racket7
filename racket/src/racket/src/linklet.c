@@ -1316,7 +1316,7 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
   Scheme_Object **rs, *v;
   Scheme_Prefix *pf;
   int i, j, pos, tl_map_len, num_importss, num_defns, starts_empty;
-  GC_CAN_IGNORE const char *bad_reason;
+  GC_CAN_IGNORE const char *bad_reason = NULL;
 
   rs = MZ_RUNSTACK;
 

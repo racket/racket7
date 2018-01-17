@@ -7,8 +7,11 @@
 #include "rktio.h"
 #include "boot.h"
 
-#ifdef OS_X
+#if defined(OS_X) && !defined(RACKET_XONX)
+
 # include <mach-o/dyld.h>
+# define RACKET_USE_FRAMEWORK
+
 const char *get_framework_path() {
   int i, c, len;
   const char *s;
@@ -59,13 +62,13 @@ void racket_boot(int argc, char **argv, char *self, long segment_offset,
 /* exe argument already stripped from argv */
 {
   int fd; 
-#ifdef OS_X
+#ifdef RACKET_USE_FRAMEWORK
   const char *fw_path;
 #endif
  
   Sscheme_init(NULL);
 
-#ifdef OS_X
+#ifdef RACKET_USE_FRAMEWORK
   fw_path = get_framework_path();
   Sregister_boot_file(path_append(fw_path, "petite.boot"));
   Sregister_boot_file(path_append(fw_path, "scheme.boot"));
@@ -106,7 +109,7 @@ void racket_boot(int argc, char **argv, char *self, long segment_offset,
     Sset_top_level_value(Sstring_to_symbol("bytes-command-line-arguments"), l);
   }
 
-#ifdef OS_X
+#ifdef RACKET_USE_FRAMEWORK
   fd = open(path_append(fw_path, "racket.so"), O_RDONLY);
   pos3 = 0;
 #endif

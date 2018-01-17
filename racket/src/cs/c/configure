@@ -625,9 +625,12 @@ FRAMEWORK_PREFIX
 FRAMEWORK_INSTALL_DIR
 SCHEME_CONFIG_ARGS
 SCHEME_SRC
+CONFIGURE_RACKET_SO_COMPILE
 NOT_OSX
 OSX
 MACH
+SCHEME_DIR
+RACKET
 INCLUDEDEP
 RKTLINKER
 ICP
@@ -702,6 +705,10 @@ enable_shared
 enable_standalone
 enable_pthread
 enable_iconv
+enable_xonx
+enable_racket
+enable_scheme
+enable_mach
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1328,6 +1335,10 @@ Optional Features:
   --enable-standalone     create a standalone shared library
   --enable-pthread        link with pthreads (usually auto-enabled if needed)
   --enable-iconv          use iconv (usually auto-enabled)
+  --enable-xonx           use Unix style (e.g., use Gtk) for Mac OS
+  --enable-racket=<path>  use <path> as Racket to build; or "auto" to create
+  --enable-scheme=<path>  Chez Scheme build dierctory at <path>
+  --enable-mach=<mac>     Use Chez Scheme machine type <mach>
 
 Some influential environment variables:
   CC          C compiler command
@@ -2215,19 +2226,72 @@ if test "${enable_iconv+set}" = set; then :
   enableval=$enable_iconv;
 fi
 
+# Check whether --enable-xonx was given.
+if test "${enable_xonx+set}" = set; then :
+  enableval=$enable_xonx;
+fi
+
+# Check whether --enable-racket was given.
+if test "${enable_racket+set}" = set; then :
+  enableval=$enable_racket;
+fi
+
+# Check whether --enable-scheme was given.
+if test "${enable_scheme+set}" = set; then :
+  enableval=$enable_scheme;
+fi
+
+# Check whether --enable-mach was given.
+if test "${enable_mach+set}" = set; then :
+  enableval=$enable_mach;
+fi
+
+
+show_explicitly_enabled()
+{
+  if test "$1" = "yes" ; then
+    echo "=== $2 enabled"
+    if test "$3" != "" ; then
+      echo "  $3"
+    fi
+  fi
+}
+
+show_explicitly_set()
+{
+  if test "$1" != "" ; then
+    echo "=== $2 set to $1"
+  fi
+}
+
+show_explicitly_enabled "${enable_xonx}" "Unix style"
+show_explicitly_set "${enable_racket}" "Racket"
+show_explicitly_set "${enable_scheme}" "Chez Scheme build directory"
+show_explicitly_set "${enable_mach}" "machine type"
 
 if test "${enable_iconv}" = "" ; then
   enable_iconv=yes
 fi
 
+if test "${enable_xonx}" == "" ; then
+  enable_xonx=no
+fi
+
 skip_iconv_check=no
+use_flag_pthread=yes
+use_flag_posix_pthread=no
 
 INCLUDEDEP="#"
 OSX="not_osx"
 NOT_OSX=""
+CONFIGURE_RACKET_SO_COMPILE=""
 
 FRAMEWORK_INSTALL_DIR='$(srcdir)/../../../lib/'
 FRAMEWORK_PREFIX='@executable_path/../lib/'
+
+RACKET='$(DEFAULT_RACKET)'
+
+enable_pthread_by_default=yes
 
 ###### Autoconfigure #######
 
@@ -3122,22 +3186,28 @@ fi
 
 case "$host_os" in
   solaris2*)
+    MACH_OS=s2
     ;;
   aix*)
     ;;
   *freebsd*)
+    MACH_OS=fb
     ;;
   openbsd*)
+    MACH_OS=ob
     ;;
   bitrig*)
     ;;
   dragonfly*)
     ;;
   netbsd*)
+    MACH_OS=nb
     ;;
   irix*)
     ;;
   linux*)
+    MACH_OS=le
+    LIBS="${LIBS} -lncurses"
     ;;
   osf1*)
     ;;
@@ -3150,23 +3220,53 @@ case "$host_os" in
     ;;
   darwin*)
     PREFLAGS="$PREFLAGS -DOS_X"
-    MACH=a6osx
+    MACH_OS=osx
     LIBS="${LIBS} -lncurses -framework CoreFoundation"
-    INCLUDEDEP="-include"
-    OSX=""
-    NOT_OSX="osx"
+    if test "${enable_xonx}" == "no" ; then
+      INCLUDEDEP="-include"
+      OSX=""
+      NOT_OSX="osx"
+    else
+      CONFIGURE_RACKET_SO_COMPILE="env PLT_CS_MAKE_UNIX_STYLE_MACOS=y"
+      CPPFLAGS="${CPPFLAGS} -DRACKET_XONX"
+    fi
 
     # -pthread is not needed and triggers a warning
     use_flag_pthread=no
     ;;
   nto-qnx*)
+    MACH_OS=qnx
     use_flag_pthread=no
     ;;
   *)
     ;;
 esac
 
+case "$host_cpu" in
+  x86_64)
+    MACH="a6${MACH_OS}"
+    ;;
+  x86|i*86)
+    MACH="i3${MACH_OS}"
+    ;;
+  arm*)
+    MACH="arm32${MACH_OS}"
+    ;;
+  power*)
+    MACH="ppc32${MACH_OS}"
+    ;;
+esac
+
 SCHEME_SRC=../ChezScheme
+
+if test "${enable_scheme}" != "" ; then
+  SCHEME_SRC="${enable_scheme}"
+fi
+
+if test "${enable_mach}" != "" ; then
+  MACH="${enable_mach}"
+fi
+
 SCHEME_CONFIG_ARGS="--machine=${MACH}"
 
 ############## C flags ################
@@ -3769,6 +3869,9 @@ fi
 ############## final output ################
 
 CPPFLAGS="$CPPFLAGS $PREFLAGS"
+
+
+
 
 
 
