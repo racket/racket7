@@ -25,7 +25,8 @@
          "boot/linklet-primitive.rkt"
          "boot/runtime-primitive.rkt"
          "boot/handler.rkt"
-         "syntax/api.rkt")
+         "syntax/api.rkt"
+         (only-in racket/private/config find-main-config))
 
 ;; All bindings provided by this module must correspond to variables
 ;; (as opposed to syntax). Provided functions must not accept keyword
@@ -53,7 +54,8 @@
 
          find-library-collection-paths
          find-library-collection-links
-         
+         find-main-config
+
          current-library-collection-paths
          current-library-collection-links
          use-compiled-file-paths

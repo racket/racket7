@@ -11,6 +11,7 @@
                find-library-collection-links
                current-library-collection-paths
                find-library-collection-paths
+               find-main-config
                executable-yield-handler
                load-on-demand-enabled
                eval
@@ -18,6 +19,9 @@
                load
                dynamic-require
                namespace-require
+               module-declared?
+               module->language-info
+               module-path-index-join
                version
                exit)
          (regexp)
@@ -95,13 +99,63 @@
          (if default (list default) null)]
         [else (fail)]))))
 
+ (define (configure-runtime m)
+   ;; New-style configuration through a `configure-runtime` submodule:
+   (let ([config-m (module-path-index-join '(submod "." configure-runtime) m)])
+     (when (module-declared? config-m #t)
+       (dynamic-require config-m #f)))
+   ;; Old-style configuration with module language info:
+   (let ([info (module->language-info m #t)])
+     (when (and (vector? info) (= 3 (vector-length info)))
+       (let* ([info-load (lambda (info)
+                           ((dynamic-require (vector-ref info 0) (vector-ref info 1)) (vector-ref info 2)))]
+              [get (info-load info)]
+              [infos (get 'configure-runtime '())])
+         (unless (and (list? infos)
+                      (andmap (lambda (info) (and (vector? info) (= 3 (vector-length info))))
+                              infos))
+           (raise-argument-error 'runtime-configure "(listof (vector any any any))" infos))
+         (for-each info-load infos)))))
+
+ (define need-runtime-configure? #t)
+ (define (namespace-require+ mod)
+   (let ([m (module-path-index-join mod #f)])
+     (when need-runtime-configure?
+       (configure-runtime m)
+       (set! need-runtime-configure? #f))
+     (namespace-require m)
+     ;; Run `main` submodule, if any:
+     (let ([main-m (module-path-index-join '(submod "." main) m)])
+       (when (module-declared? main-m)
+         (dynamic-require main-m #f)))))
+
+ (define (get-repl-init-filename)
+   (call-with-continuation-prompt
+    (lambda ()
+      (or (let ([p (build-path (find-system-path 'addon-dir)
+                               (if gracket?
+                                   "gui-interactive.rkt"
+                                   "interactive.rkt"))])
+            (and (file-exists? p) p))
+          (hash-ref (call-with-input-file
+                     (build-path (find-main-config) "config.rktd")
+                     read)
+                    (if gracket? 'gui-interactive-file 'interactive-file)
+                    #f)
+          (if gracket? 'racket/interactive 'racket/gui/interactive)))
+    (default-continuation-prompt-tag)
+    (lambda args #f)))
+
  (define init-library (if gracket?
                           '(lib "racket/gui/init")
                           '(lib "racket/init")))
  (define loads '())
  (define repl? #f)
+ (define repl-init? #t)
  (define version? #f)
  (define stderr-logging-arg #f)
+ (define runtime-for-init? #t)
+ (define exit-value #t)
 
  (define (no-init! saw)
    (unless (saw? saw 'top)
@@ -157,7 +211,7 @@
              (set! loads
                    (cons
                     (lambda ()
-                      (namespace-require `(lib ,lib-name)))
+                      (namespace-require+ `(lib ,lib-name)))
                     loads))
              (no-init! saw)
              (flags-loop rest-args (see saw 'non-config 'lib)))]
@@ -166,7 +220,7 @@
              (set! loads
                    (cons
                     (lambda ()
-                      (namespace-require `(file ,file-name)))
+                      (namespace-require+ `(file ,file-name)))
                     loads))
              (no-init! saw)
              (flags-loop rest-args (see saw 'non-config 'lib)))]
@@ -175,7 +229,7 @@
              (set! loads
                    (cons
                     (lambda ()
-                      (namespace-require `(file ,file-name)))
+                      (namespace-require+ `(file ,file-name)))
                     loads))
              (no-init! saw)
              (flags-loop rest-args (see saw 'non-config 'lib)))]
@@ -215,6 +269,9 @@
              (loop rest-args))]
           [("-d")
            (|#%app| load-on-demand-enabled #f)
+           (loop (cdr args))]
+          [("-q" "--no-init-file")
+           (set! repl-init? #f)
            (loop (cdr args))]
           [("-W" "--stderr")
            (let-values ([(spec rest-args) (next-arg "stderr level" arg within-arg args)])
@@ -360,13 +417,19 @@
      (find-library-collection-paths))
 
    (when init-library
-     (namespace-require init-library))
+     (namespace-require+ init-library))
 
-   (for-each (lambda (ld)
-               (ld))
+   (for-each (lambda (ld) (ld))
              (reverse loads))
 
    (when repl?
+     (when repl-init?
+       (let ([m (get-repl-init-filename)])
+         (when m
+           (call-with-continuation-prompt
+            (lambda () (dynamic-require m 0))
+            (default-continuation-prompt-tag)
+            (lambda args (set! exit-value #f))))))
      (|#%app| (if gracket?
                   (dynamic-require 'racket/gui/init 'graphical-read-eval-print-loop)
                   (dynamic-require 'racket/base 'read-eval-print-loop)))
@@ -375,4 +438,4 @@
 
    (|#%app| (|#%app| executable-yield-handler) 0)
    
-   (exit))))
+   (exit exit-value))))

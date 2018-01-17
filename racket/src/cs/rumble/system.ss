@@ -6,11 +6,17 @@
                'chez-scheme
                (system-type* mode))]))
 
+(define unix-style-macos?
+  (meta-cond
+   [(getenv "PLT_CS_MAKE_UNIX_STYLE_MACOS") #t]
+   [else #f]))
+
 (define (system-type* mode)
   (case mode
     [(vm) 'chez-scheme]
     [(os) (case (machine-type)
-            [(a6osx ta6osx i3osx ti3osx) 'macosx]
+            [(a6osx ta6osx i3osx ti3osx)
+             (if unix-style-macos? 'unix 'macosx)]
             [(a6nt ta6nt i3nt ti3nt) 'windows]
             [else 'unix])]
     [(word) (if (> (fixnum-width) 32) 64 32)]
@@ -39,8 +45,8 @@
   (case (machine-type)
     [(a6nt ta6nt) "win32\\x86_64"]
     [(i3nt ti3nt) "win32\\i386"]
-    [(a6osx ta6osx) "x86_64-macosx"]
-    [(i3osx ti3osx) "i386-macosx"]
+    [(a6osx ta6osx) (if unix-style-macos? "x86_64-darwin" "x86_64-macosx")]
+    [(i3osx ti3osx) (if unix-style-macos? "i386-darwin" "i386-macosx")]
     [(a6le ta6le) "x86_64-linux"]
     [(i3le ti3le) "i386-linux"]
     [(arm32le tarm32le) "arm-linux"]
