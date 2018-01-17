@@ -19,6 +19,15 @@ CS_INSTALLED = cs
 CS_GR_INSTALLED = CS
 bindir = $(srcdir)/../../../bin
 libpltdir = $(srcdir)/../../../lib
+docdir = $(srcdir)/../../../doc
+sharepltdir = $(srcdir)/../../../share
+configdir = $(srcdir)/../../../etc
+
+ALLDIRINFO = "$(DESTDIR)$(bindir)" \
+             "$(DESTDIR)$(docdir)" \
+             "$(DESTDIR)$(libpltdir)" \
+             "$(DESTDIR)$(sharepltdir)" \
+             "$(DESTDIR)$(configdir)"
 
 # Defines FWVERSION:
 mainsrcdir = @srcdir@/../..
@@ -32,8 +41,11 @@ cs:
 	$(MAKE) gracketcs
 	$(MAKE) starter
 
+ABS_RACKET = "`$(RACKET) $(srcdir)/../absify.rkt --exec $(RACKET)`"
+ABS_SCHEME_SRC = "`$(RACKET) $(srcdir)/../absify.rkt $(SCHEME_SRC)`"
+
 racket.so:
-	$(MAKE) build-racket.so RACKET="`$(RACKET) $(srcdir)/../absify.rkt --exec $(RACKET)`" SCHEME_SRC="`$(RACKET) $(srcdir)/../absify.rkt $(SCHEME_SRC)`"
+	$(MAKE) build-racket.so RACKET="$(ABS_RACKET)" SCHEME_SRC="$(ABS_SCHEME_SRC)" RKTIO_LIBRARY_TARGET=skip
 
 build-racket.so:
 	cd $(srcdir)/.. && @CONFIGURE_RACKET_SO_COMPILE@ $(MAKE) RACKET="$(RACKET)" SCHEME="$(SCHEME)"
@@ -127,15 +139,21 @@ starter: $(srcdir)/../../start/ustart.c
 
 ICP=@ICP@
 
-install@NOT_OSX@:
+install:
+	$(MAKE) plain-install
+	$(srcdir)/../../../bin/racketcs $(SELF_RACKET_FLAGS) -N raco -l- raco setup $(PLT_SETUP_OPTIONS)
+
+plain-install@NOT_OSX@:
 	$(MAKE) unix-install
 
-install@OSX@:
+plain-install@OSX@:
 	$(MAKE) macos-install
 
 common-install:
+	mkdir -p $(ALLDIRINFO)
 	$(ICP) racketcs "$(DESTDIR)$(bindir)/racket$(CS_INSTALLED)"
 	$(ICP) starter "$(DESTDIR)$(libpltdir)/starter"
+	$(ICP) $(srcdir)/../../start/starter-sh "$(DESTDIR)$(libpltdir)/starter-sh"
 
 unix-install:
 	$(MAKE) common-install

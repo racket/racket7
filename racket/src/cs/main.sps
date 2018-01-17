@@ -11,9 +11,11 @@
                find-library-collection-links
                current-library-collection-paths
                find-library-collection-paths
+               use-collection-link-paths
                find-main-config
                executable-yield-handler
                load-on-demand-enabled
+               use-user-specific-search-paths
                eval
                read
                load
@@ -43,10 +45,15 @@
  (unless (>= (length the-command-line-arguments) 5)
    (error 'racket "expected `self`, `collects`, and `libs` paths plus `segment-offset` and `is-gui?` to start"))
  (set-exec-file! (path->complete-path (car the-command-line-arguments)))
- (set-collects-dir! (string->path (cadr the-command-line-arguments)))
- (set-config-dir! (string->path (caddr the-command-line-arguments)))
+ (define init-collects-dir (let ([s (cadr the-command-line-arguments)])
+                             (if (equal? s "") 'disable (string->path s))))
+ (define init-config-dir (string->path (or (getenv "PLTCONFIGDIR")
+                                           (caddr the-command-line-arguments))))
  (define segment-offset (#%string->number (list-ref the-command-line-arguments 3)))
  (define gracket? (string=? "true" (list-ref the-command-line-arguments 4)))
+
+ (when (foreign-entry? "racket_exit")
+   (#%exit-handler (foreign-procedure "racket_exit" (int) void)))
 
  (|#%app| use-compiled-file-paths
   (list (string->path (string-append "compiled/"
@@ -126,7 +133,7 @@
      (namespace-require m)
      ;; Run `main` submodule, if any:
      (let ([main-m (module-path-index-join '(submod "." main) m)])
-       (when (module-declared? main-m)
+       (when (module-declared? main-m #t)
          (dynamic-require main-m #f)))))
 
  (define (get-repl-init-filename)
@@ -155,7 +162,9 @@
  (define version? #f)
  (define stderr-logging-arg #f)
  (define runtime-for-init? #t)
- (define exit-value #t)
+ (define exit-value 0)
+ (define host-collects-dir init-collects-dir)
+ (define host-config-dir init-config-dir)
 
  (define (no-init! saw)
    (unless (saw? saw 'top)
@@ -170,6 +179,10 @@
        (loop (cdr args) (cons (car args) accum))]
       [else
        (values (car args) (append (reverse accum) (cdr args)))])))
+
+ (define (check-path-arg what flag within-flag)
+   (when (equal? what "")
+     (error 'racket "empty ~a after ~a switch" what (or within-flag flag))))
 
  (define-syntax string-case
    ;; Assumes that `arg` is a variable
@@ -267,6 +280,27 @@
              (when init-library
                (set! init-library `(lib ,lib-name)))
              (loop rest-args))]
+          [("-X" "--collects")
+           (let-values ([(collects-path rest-args) (next-arg "collects path" arg within-arg args)])
+             (cond
+              [(equal? collects-path "")
+               (set! init-collects-dir 'disable)]
+              [else 
+               (check-path-arg "collects path" arg within-arg)
+               (set! init-collects-dir (path->complete-path (string->path collects-path)))])
+             (loop rest-args))]
+          [("-G" "--config")
+           (let-values ([(config-path rest-args) (next-arg "config path" arg within-arg args)])
+             (check-path-arg "config path" arg within-arg)
+             (set! init-config-dir (path->complete-path (string->path config-path)))
+             (loop rest-args))]
+          [("-C" "--cross")
+           (set! host-config-dir init-config-dir)
+           (set! host-collects-dir init-collects-dir)
+           (loop (cdr args))]
+          [("-U" "--no-user-path")
+           (|#%app| use-user-specific-search-paths #f)
+           (loop (cdr args))]
           [("-d")
            (|#%app| load-on-demand-enabled #f)
            (loop (cdr args))]
@@ -290,10 +324,10 @@
              (loop (cons (cadr args) (cons (car args) (cddr args))))])]
           [else
            (cond
-            [(and (> (string-length arg) 2)
-                  (eqv? (string-ref arg 0) #\-))
+            [(eqv? (string-ref arg 0) #\-)
              (cond
-              [(not (eqv? (string-ref arg 1) #\-))
+              [(and (> (string-length arg) 2)
+                    (not (eqv? (string-ref arg 1) #\-)))
                ;; Split flags
                (loop (append (map (lambda (c) (cons (string #\- c) arg))
                                   (cdr (string->list arg)))
@@ -411,10 +445,18 @@
     (when (and stderr-logging
                (not (null? stderr-logging)))
       (apply add-stderr-log-receiver! (|#%app| current-logger) stderr-logging))
-    (|#%app| current-library-collection-links
-     (find-library-collection-links))
-    (|#%app| current-library-collection-paths
-     (find-library-collection-paths))
+    (cond
+     [(eq? init-collects-dir 'disable)
+      (|#%app| use-collection-link-paths #f)
+      (set-collects-dir! (build-path 'same))]
+     [else
+      (set-collects-dir! init-collects-dir)])
+    (set-config-dir! init-config-dir)
+    (unless (eq? init-collects-dir 'disable)
+      (|#%app| current-library-collection-links
+       (find-library-collection-links))
+      (|#%app| current-library-collection-paths
+       (find-library-collection-paths)))
 
    (when init-library
      (namespace-require+ init-library))
@@ -429,7 +471,7 @@
            (call-with-continuation-prompt
             (lambda () (dynamic-require m 0))
             (default-continuation-prompt-tag)
-            (lambda args (set! exit-value #f))))))
+            (lambda args (set! exit-value 1))))))
      (|#%app| (if gracket?
                   (dynamic-require 'racket/gui/init 'graphical-read-eval-print-loop)
                   (dynamic-require 'racket/base 'read-eval-print-loop)))
@@ -437,5 +479,5 @@
        (newline)))
 
    (|#%app| (|#%app| executable-yield-handler) 0)
-   
+
    (exit exit-value))))

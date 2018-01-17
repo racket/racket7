@@ -1,5 +1,12 @@
 Work-in-progress Racket on Chez Scheme.
 
+You can just use `make cs` in the top-level directory of the "racket7"
+repo to build Racket-on-Chez. See "INSTALL.txt" in the top-level
+directory for more information.
+
+I you're working on the implementation of Racket-on-Chez, then it's
+more convenient to work in this directory, so keep reading here.
+
 
 Requirements
 ------------
@@ -33,15 +40,12 @@ Requirements
 Building
 --------
 
-Running `make` will build the Racket-on-Chez implementation. Use `make
-expander-demo` to run a demo that loads `racket/base` from source.
+Running `make` will build the Racket-on-Chez implementation, although
+not in stand-alone form. Use `make expander-demo` to run a demo that
+loads `racket/base` from source.
 
-Use `make setup` to try to build ".zo" files for collection-based
-libraries. Compilation should get theough the main "collects"
-directory without errors, and building packages will likely encounter
-errors. (The `make setup` step is useful to at least get the
-`racket/base` and `racket` built.) See "JIT versus Machine Code"
-below.
+Use `make setup` (or `make setup-v` for a verbose version) to build
+".zo" files for collection-based libraries.
 
 If you want to control the `raco setup` that `make setup` runs, supply
 an `ARGS` variable to make, such as
@@ -87,8 +91,7 @@ Running
 
 Use `make run ARGS="..."` to run Racket on Chez Scheme analogous to
 running plain `racket`, where command-line arguments are supplied in
-`ARGS`. Only some of the normal `racket` command-line arguments are
-supported currently.
+`ARGS`.
 
 
 Structure
@@ -344,7 +347,8 @@ Status and Thoughts on Various Racket Subsystems
 Performance Notes
 -----------------
 
-The best-case scenario for performance is
+The best-case scenario for performance is current the default
+configuration:
 
  * `UNSAFE_COMP` is enabled in "Makefile" --- currently on by default.
 

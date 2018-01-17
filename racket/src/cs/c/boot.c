@@ -55,6 +55,11 @@ static ptr Sbytevector(char *s)
   return bv;
 }
 
+static void racket_exit(int v)
+{
+  exit(v);
+}
+
 void racket_boot(int argc, char **argv, char *self, long segment_offset,
                  char *coldir, char *configdir,
                  int pos1, int pos2, int pos3,
@@ -91,7 +96,8 @@ void racket_boot(int argc, char **argv, char *self, long segment_offset,
   Sbuild_heap(NULL, NULL);
 
 # include "rktio.inc"
-
+  Sforeign_symbol("racket_exit", (void *)racket_exit);
+  
   {
     ptr l = Snil;
     int i;

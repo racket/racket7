@@ -376,7 +376,7 @@ unix-install:
 	cd ..; rm -f "$(DESTDIR)@MZINSTALLBINDIR@/racket@CGC_INSTALLED@"
 	cd ..; rm -f "$(DESTDIR)@MZINSTALLBINDIR@/racket@MMM_INSTALLED@"
 	cd ..; cp racket/starter@EXE_SUFFIX@ "$(DESTDIR)$(libpltdir)/starter@EXE_SUFFIX@"
-	cp $(srcdir)/dynsrc/starter-sh .
+	cp $(srcdir)/../start/starter-sh .
 	cd ..; cp racket/starter-sh "$(DESTDIR)$(libpltdir)/starter-sh"
 	cd ..; $(STRIP_DEBUG) "$(DESTDIR)$(libpltdir)/starter@EXE_SUFFIX@"
 	@RUN_RACKET_CGC@ -cu "$(srcdir)/collects-path.rkt" "$(DESTDIR)$(libpltdir)/starter@EXE_SUFFIX@" $(DESTDIR)@COLLECTS_PATH@ $(DESTDIR)@CONFIG_PATH@

@@ -1,17 +1,15 @@
 This is a work-in-progress implementation of Racket with
 
- * The macro expander and module system implemented in Racket; see
+ * the macro expander and module system implemented in Racket, and
 
-     racket/src/expander/README.txt
+ * a reimplementation of Racket to run on top of Chez Scheme.
 
-   If you just `make` in the top-level directory, you get that.
+When you just `make`, then you get Racket with the new expander and
+the (mostly) old virtual machine.
 
- * A reimplementation of Racket to run on top of Chez Scheme; see
+When you `make cs`, you get Racket-on-Chez as `racket/bin/racketcs`.
 
-     racket/src/cs/README.txt
-
-   for more information, including information on building and running
-   Racket on Chez Scheme.
+Thee "INSTALL.txt" for more information.
 
 ----------------------------------------
 

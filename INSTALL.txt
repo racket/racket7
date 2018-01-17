@@ -32,6 +32,14 @@ If you stick with this repository, then you have several options:
    Racket itself or staying on the bleeding edge. See "Quick
    Instructions: In-place Build" below.
 
+ * In-place Racket-on-Chez build --- when you use `make cs`. Unless
+   you use various options described in "More Instructions: Building
+   Racket-on-Chez" below, this process downloads Chez Scheme from
+   Github, builds a traditional `racket` with minimal packages, builds
+   Chez Scheme, and then builds Racket-on-Chez using Racket and Chez
+   Scheme. Final executables that end in "cs" or "CS" are the
+   Racket-on-Chez variants.
+
  * Unix-style install --- installs to a given destination directory
    (on platforms other Windows), leaving no reference to the source
    directory. This is the most natural mode for installing once from
@@ -164,6 +172,31 @@ include changes to the Racket core. (If you change only packages, then
 
 If you need even more control over the build, carry on to "Even More
 Instructions: Building Racket Pieces".
+
+
+More Instructions: Building Racket-on-Chez
+==========================================
+
+The `make cs` target (or `make cs-as-is` for a rebuild) builds an
+experimental variant of Racket that runs on Chez Scheme. The
+executables for the Racket-on-Chez variant all have a "cs" or "CS"
+suffix, so they coexist with a traditional Racket build. (One day, if
+the experiment goes well, there will be an option or default to build
+Racket-on-Chez as `racket` instead of `racketcs`.)
+
+Building Racket-on-Chez requires an existing Racket and Chez Scheme.
+If you use `make cs` with no further arguments, then the build process
+will bootstrap by building a traditional variant of Racket and by
+downloading and building Chez Scheme.
+
+If you have a sufficiently recent Racket installation already with at
+least the "compiler-lib" and "parser-tools-libs" packages installed,
+you can supply `RACKET=...` with `make cs` to skip that part of the
+bootstrap. And if you have a Chez Scheme source directory already, you
+can supply that with `SCHEME_SRC=...` instead of downloading a new
+copy.
+
+  make cs RACKET=racket SCHEME_SRC=path/to/ChezScheme
 
 
 Even More Instructions: Building Racket Pieces

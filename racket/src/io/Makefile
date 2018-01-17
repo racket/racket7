@@ -2,6 +2,10 @@
 RACKET = ../../bin/racket
 RACO = $(RACKET) -N raco -l- raco
 
+# Set to `skip` if the stand-alone rktio
+# library is not needed
+RKTIO_LIBRARY_TARGET = skip
+
 # Ignoring functions from `#%read` works beause they won't appear in
 # the simplified expansion, and declaring "collect.rkt" pure works
 # around a limitation of the flattener:
@@ -25,11 +29,14 @@ demo-thread: compiled/rktio.rktl
 
 
 compiled/rktio.rktl: ../rktio/parse.rkt ../rktio/rktio.h
-	$(MAKE) rktio
+	$(MAKE) $(RKTIO_LIBRARY_TARGET)
 	mkdir -p compiled
 	$(RACKET) ../rktio/parse.rkt -o compiled/rktio.rktl ../rktio/rktio.h
 
-rktio:
+skip:
+	echo Not building stand-along rktio
+
+rktio-library:
 	$(MAKE) build-rktio RACKET="`$(RACKET) ../cs/absify.rkt --exec $(RACKET)`" PREFIX="`$(RACKET) ../cs/absify.rkt ../..`"
 
 build-rktio:
