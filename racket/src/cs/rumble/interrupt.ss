@@ -4,10 +4,8 @@
 ;; as disabling and enabling interrupts at the Chez
 ;; level, but cheaper and more limited.
 
-(define current-in-uninterrupted (internal-make-thread-parameter #f))
-
-;;(define pending-interrupt-callback #f)
-(define pending-interrupt-callback (internal-make-thread-parameter #f))
+(define-virtual-register current-in-uninterrupted #f)
+(define-virtual-register pending-interrupt-callback #f)
 
 (define-syntax CHECK-uninterrupted
   (syntax-rules ()

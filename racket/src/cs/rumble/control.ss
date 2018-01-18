@@ -97,9 +97,9 @@
 ;; `end-uninterrupted` functions bracket such regions dynamically. See
 ;; also "rumble/engine.ss" and "rumble/interrupt.ss"
 
-(define current-metacontinuation (internal-make-thread-parameter '()))
+(define-virtual-register current-metacontinuation '())
 
-(define current-empty-k (internal-make-thread-parameter #f))
+(define-virtual-register current-empty-k #f)
 
 (define-record metacontinuation-frame (tag          ; continuation prompt tag or #f
                                        resume-k     ; delivers values to the prompt
@@ -793,7 +793,7 @@
                                  flat)) ; #f or cached list that contains only tables and elem+caches
 
 ;; A mark stack is made of marks-stack frames:
-(define current-mark-stack (internal-make-thread-parameter #f))
+(define-virtual-register current-mark-stack #f)
 
 ;; An extra mark stack of size 0 or 1 that is conceptually appended to
 ;; the end of `current-mark-stack`, mainly to support composable
@@ -802,7 +802,7 @@
 ;; `current-mark-stack-splice`, then then frames are conceptually
 ;; merged, so no key should be inthe mark-splice frame if it's in the
 ;; mark-stack frame.
-(define current-mark-splice (internal-make-thread-parameter #f))
+(define-virtual-register current-mark-splice #f)
 
 ;; See copy in "expander.sls"
 (define-syntax with-continuation-mark
@@ -1638,7 +1638,7 @@
 
 ;; ----------------------------------------
 
-(define current-winders (internal-make-thread-parameter '()))
+(define-virtual-register current-winders '())
 
 (define-record winder (depth k pre post mark-stack))
 
@@ -1818,7 +1818,7 @@
 ;; because the frame uses host-Scheme parameters and/or `fluid-let`.
 ;; For example, jumping out/in the host compiler needs to save/restore
 ;; compiler state.
-(define current-system-wind-start-k (internal-make-thread-parameter #f))
+(define-virtual-register current-system-wind-start-k #f)
 
 ;; During `call-with-system-wind`, the current metacontinuation frame
 ;; must remain as the most recent one, so that `swap-metacontinuation`

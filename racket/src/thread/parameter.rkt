@@ -3,4 +3,4 @@
 
 (provide current-thread)
 
-(define current-thread (internal-make-thread-parameter #f))
+(define current-thread (make-pthread-parameter #f))

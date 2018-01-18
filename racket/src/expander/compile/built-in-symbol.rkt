@@ -58,4 +58,5 @@
             annotation?
             annotation-expression
             #%app
-            #%call-with-values))
+            #%call-with-values
+            make-pthread-parameter))

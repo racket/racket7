@@ -11,7 +11,9 @@
 
          set-end-atomic-callback!)
 
-(define current-atomic (internal-make-thread-parameter 0))
+;; This definition is specially recognized for Racket on
+;; Chez Scheme and converted to use a virtual register:
+(define current-atomic (make-pthread-parameter 0))
 
 (define-syntax-rule (atomically expr ...)
   (begin

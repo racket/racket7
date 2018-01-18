@@ -131,12 +131,15 @@
 (struct exn:break:hang-up/non-engine exn:break/non-engine ())
 (struct exn:break:terminate/non-engine exn:break/non-engine ())
 
-(define (internal-make-thread-parameter v)
+(define (make-pthread-parameter v)
   (define x v)
   (case-lambda
     [() x]
     [(v) (set! x v)]))
 
+(primitive-table '#%pthread
+                 (hash
+                  'make-pthread-parameter make-pthread-parameter))
 (primitive-table '#%engine
                  (hash 
                   'make-engine
@@ -176,8 +179,6 @@
                   exn:break:hang-up/non-engine
                   'exn:break:terminate/non-engine
                   exn:break:terminate/non-engine
-                  'internal-make-thread-parameter
-                  internal-make-thread-parameter
                   'fork-pthread
                   (lambda args
                     (error "fork-pthread: not ready"))

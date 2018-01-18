@@ -619,7 +619,7 @@
           unsafe-f80vector-ref
 
           ;; --- not exported to Racket: ---
-          internal-make-thread-parameter
+          make-pthread-parameter
           fork-pthread
           pthread?
           get-thread-id
@@ -656,6 +656,7 @@
   (define/no-lift none2 (chez:gensym "none2"))
 
   (include "rumble/define.ss")
+  (include "rumble/virtual-register.ss")
   (include "rumble/version.ss")
   (include "rumble/syntax-rule.ss")
   (include "rumble/check.ss")
@@ -708,6 +709,9 @@
   (include "rumble/foreign.ss")
   (include "rumble/future.ss")
   (include "rumble/inline.ss")
+
+  (define-virtual-registers-init init-virtual-registers)
+  (init-virtual-registers)
 
   (set-no-locate-source!)
   ;; Note: if there's a bug in `rumble` that causes exception handling to error,

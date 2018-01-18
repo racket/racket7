@@ -101,6 +101,7 @@
     (include "primitive/place.ss")
     (include "primitive/foreign.ss")
     (include "primitive/linklet.ss")
+    (include "primitive/internal.ss")
     knowns))
 
 ;; Convert:

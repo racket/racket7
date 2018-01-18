@@ -1,6 +1,7 @@
 (library (thread)
   (export)
-  (import (chezpart)
+  (import (rename (chezpart)
+                  [define chez:define])
           (rename (only (chezscheme)
                         sleep
                         printf)
@@ -23,10 +24,21 @@
                   [fork-pthread rumble:fork-thread]
                   [threaded? rumble:threaded?]
                   [get-thread-id rumble:get-thread-id]
-                  [internal-make-thread-parameter rumble:make-thread-parameter]
                   [set-ctl-c-handler! rumble:set-ctl-c-handler!]
                   [root-continuation-prompt-tag rumble:root-continuation-prompt-tag]
                   [set-break-enabled-transition-hook! rumble:set-break-enabled-transition-hook!]))
+
+  ;; Special handling of `current-atomic`: use virtual register 15.
+  ;; We reliy on the fact that the register's default value is 0.
+  (define-syntax (define stx)
+    (syntax-case stx (current-atomic make-pthread-parameter)
+      [(_ current-atomic (make-pthread-parameter 0))
+       (with-syntax ([(_ id _) stx])
+         #'(define-syntax id
+             (syntax-rules ()
+               [(_) (virtual-register 15)]
+               [(_ v) (set-virtual-register! 15 v)])))]
+      [(_ . rest) #'(chez:define . rest)]))
 
   (define (exit n)
     (chez:exit n))
@@ -39,42 +51,49 @@
 
   (define (primitive-table key)
     (case key
-      [(|#%engine|) (hash
-                     'make-engine rumble:make-engine
-                     'engine-block rumble:engine-block
-                     'engine-return rumble:engine-return
-                     'current-engine-state rumble:current-engine-state
-                     'set-ctl-c-handler! rumble:set-ctl-c-handler!
-                     'root-continuation-prompt-tag rumble:root-continuation-prompt-tag
-                     'poll-will-executors poll-will-executors
-                     'make-will-executor rumble:make-will-executor
-                     'make-stubborn-will-executor rumble:make-stubborn-will-executor
-                     'will-executor? rumble:will-executor?
-                     'will-register rumble:will-register
-                     'will-try-execute rumble:will-try-execute
-                     'break-enabled-key break-enabled-key
-                     'set-break-enabled-transition-hook! rumble:set-break-enabled-transition-hook!
-                     'continuation-marks rumble:continuation-marks
-                     'exn:break/non-engine exn:break
-                     'exn:break:hang-up/non-engine exn:break:hang-up
-                     'exn:break:terminate/non-engine exn:break:terminate
-                     'current-process-milliseconds cpu-time
-                     'internal-make-thread-parameter rumble:make-thread-parameter
-                     'fork-pthread rumble:fork-thread
-                     'pthread? rumble:thread?
-                     'get-thread-id rumble:get-thread-id
-                     'make-condition rumble:make-condition
-                     'condition-wait rumble:condition-wait
-                     'condition-signal rumble:condition-signal
-                     'condition-broadcast rumble:condition-broadcast
-                     'make-mutex rumble:make-mutex
-                     'mutex-acquire rumble:mutex-acquire
-                     'mutex-release rumble:mutex-release
-                     'active-pthreads active-pthreads
-                     'collect-garbage-pending-major? collect-garbage-pending-major?
-                     'collect-garbage-pending-minor? collect-garbage-pending-minor?
-                     'threaded? rumble:threaded?
-                     )]
+      [(|#%pthread|)
+       ;; Entries in the `#%pthread` table are referenced more
+       ;; directly in "compiled/thread.scm". To make that work, the
+       ;; entries need to be registered as built-in names with the
+       ;; expander, and they need to be listed in
+       ;; "primitives/internal.ss".
+       (hash
+        'make-pthread-parameter make-pthread-parameter)]
+      [(|#%engine|)
+       (hash
+        'make-engine rumble:make-engine
+        'engine-block rumble:engine-block
+        'engine-return rumble:engine-return
+        'current-engine-state (lambda (v) (rumble:current-engine-state v))
+        'set-ctl-c-handler! rumble:set-ctl-c-handler!
+        'root-continuation-prompt-tag rumble:root-continuation-prompt-tag
+        'poll-will-executors poll-will-executors
+        'make-will-executor rumble:make-will-executor
+        'make-stubborn-will-executor rumble:make-stubborn-will-executor
+        'will-executor? rumble:will-executor?
+        'will-register rumble:will-register
+        'will-try-execute rumble:will-try-execute
+        'break-enabled-key break-enabled-key
+        'set-break-enabled-transition-hook! rumble:set-break-enabled-transition-hook!
+        'continuation-marks rumble:continuation-marks
+        'exn:break/non-engine exn:break
+        'exn:break:hang-up/non-engine exn:break:hang-up
+        'exn:break:terminate/non-engine exn:break:terminate
+        'current-process-milliseconds cpu-time
+        'fork-pthread rumble:fork-thread
+        'pthread? rumble:thread?
+        'get-thread-id rumble:get-thread-id
+        'make-condition rumble:make-condition
+        'condition-wait rumble:condition-wait
+        'condition-signal rumble:condition-signal
+        'condition-broadcast rumble:condition-broadcast
+        'make-mutex rumble:make-mutex
+        'mutex-acquire rumble:mutex-acquire
+        'mutex-release rumble:mutex-release
+        'active-pthreads active-pthreads
+        'collect-garbage-pending-major? collect-garbage-pending-major?
+        'collect-garbage-pending-minor? collect-garbage-pending-minor?
+        'threaded? rumble:threaded?)]
       [else #f]))
 
 

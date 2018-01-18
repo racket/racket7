@@ -27,4 +27,6 @@
   [record-constructor (known-constant)]
   [record-predicate (known-constant)]
   [record-accessor (known-constant)]
-  [record-mutator (known-constant)])
+  [record-mutator (known-constant)]
+
+  [make-pthread-parameter (known-procedure 2)])

@@ -1,7 +1,10 @@
 (meta-cond
  [(threaded?)
-  (define internal-make-thread-parameter make-thread-parameter)
-  (define fork-pthread fork-thread)
+  (define make-pthread-parameter make-thread-parameter)
+  (define (fork-pthread thunk)
+    (fork-thread (lambda ()
+                   (init-virtual-registers)
+                   (thunk))))
   (define pthread? thread?)
   ;; make-condition
   ;; condition-wait
@@ -12,7 +15,7 @@
   ;; mutex-release
   ]
  [else
-  (define internal-make-thread-parameter chez:make-parameter)
+  (define make-pthread-parameter #%make-parameter)
   (define (fork-pthread) (void))
   (define (pthread?) #f)
   (define (make-condition) (void))

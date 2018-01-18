@@ -80,7 +80,7 @@
 
 (define future? future*?)
 
-(define current-future (internal-make-thread-parameter #f))
+(define current-future (make-pthread-parameter #f))
 
 (define (current-future-prompt)
   (if (current-future)

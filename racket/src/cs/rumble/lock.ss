@@ -41,47 +41,51 @@
  [else
   ;; Using a Chez Scheme build with thread support; make hash-table
   ;; access thread-safe at that level for `eq?`- and `eqv?`-based
-  ;; tables; an `equal?`-based table is not thread-safe at that
-  ;; level, because operations can take unbounded time, and then
-  ;; the Racket scheduler could become blocked on a Chez-level mutex
-  ;; in the same Chez-level thread.
+  ;; tables.
+  ;; An `equal?`-based table is made safe at the level of Racket
+  ;; threads, but not at Chez threads. Blocking a Chez thread might
+  ;; block the Racket scheduler itself, so we just don't support it.
 
-  ;; Idea: instead of mutexes, which are relatively expansive, use
-  ;;  https://lwn.net/Articles/590243/
-  ;;  Synchronization Without Contention Mellor-Crummey Scott (MCS lock)
-  #|
-  (define-record mcs-spinlock (next locked?))
-
-  (define (create-mcs-spinlock) (make-mcs-spinlock #f #f))
-  |#
-  
-  ;; create own atomic region. TODO
+  ;; Assume low contention on `eq?`- and `eqv?`-based tables across
+  ;; Chez Scheme threads, in which case a compare-and-set spinlock is
+  ;; good enough.
+  (define (make-spinlock) (box #f))
+  (define (spinlock? v) (#%box? v))
+  (define (spinlock-acquire q)
+    (disable-interrupts) ; => ensure that an unlock will happen
+    (let loop ()
+      (unless (#%box-cas! q #f #t)
+        (loop))))
+  (define (spinlock-release q)
+    (#%set-box! q #f)
+    (enable-interrupts)
+    (void))
 
   (define (make-lock for-kind)
     (cond
      [(eq? for-kind 'equal?)
       (make-scheduler-lock)]
      [else
-      (make-mutex)]))
+      (make-spinlock)]))
 
   (define lock-acquire
     (case-lambda
      [(lock)
       (cond
-       [(mutex? lock)
-	(mutex-acquire lock)]
+       [(spinlock? lock)
+	(spinlock-acquire lock)]
        [else
 	(scheduler-lock-acquire lock)])]
      [(lock block?)
       (cond
-       [(mutex? lock)
-	(mutex-acquire lock block?)]
+       [(spinlock? lock)
+	(spinlock-acquire lock block?)]
        [else
 	(scheduler-lock-acquire lock)])]))
   
   (define (lock-release lock)
     (cond
-     [(mutex? lock)
-      (mutex-release lock)]
+     [(spinlock? lock)
+      (spinlock-release lock)]
      [else
       (scheduler-lock-release lock)]))])

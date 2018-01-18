@@ -9,7 +9,7 @@
 
 (define-record engine-state (mc complete expire thread-cell-values init-break-enabled-cell reset-handler))
 
-(define current-engine-state (internal-make-thread-parameter #f))
+(define-virtual-register current-engine-state #f)
 
 (define (set-ctl-c-handler! proc)
   (keyboard-interrupt-handler (case-lambda

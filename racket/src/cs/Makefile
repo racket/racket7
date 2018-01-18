@@ -15,6 +15,11 @@ COMPILE_FILE_DEPS = compile-file.ss
 
 RACKET_SETUP_ARGS = ../../bin/racket ../collects ../etc 0 false
 
+PRIMITIVES_TABLES = primitive/kernel.ss primitive/unsafe.ss primitive/flfxnum.ss \
+                    primitive/paramz.ss primitive/extfl.ss primitive/network.ss \
+                    primitive/futures.ss primitive/foreign.ss primitive/place.ss \
+                    primitive/linklet.ss primitive/internal.ss
+
 SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
                     schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
                     schemify/struct-type-info.rkt schemify/import.rkt schemify/mutated-state.rkt \
@@ -22,8 +27,9 @@ SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt 
                     schemify/lift.rkt schemify/jitify.rkt schemify/interpret.rkt schemify/size.rkt \
                     schemify/optimize.rkt schemify/literal.rkt schemify/infer-known.rkt \
                     schemify/inline.rkt schemify/export.rkt schemify/find-known.rkt schemify/letrec.rkt \
-                    schemify/main.rkt
-CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS)
+                    schemify/pthread-parameter.rkt schemify/main.rkt
+
+CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS) $(PRIMITIVES_TABLES)
 
 CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt
 
@@ -74,11 +80,6 @@ rktl:
 ../../bin/racket:
 	mkdir -p ../../bin
 	touch ../../bin/racket
-
-PRIMITIVES_TABLES = primitive/kernel.ss primitive/unsafe.ss primitive/flfxnum.ss \
-                    primitive/paramz.ss primitive/extfl.ss primitive/network.ss \
-                    primitive/futures.ss primitive/foreign.ss primitive/place.ss \
-                    primitive/linklet.ss primitive/internal.ss
 
 expander.so: expander.sls compiled/expander.scm $(PRIMITIVES_TABLES) $(EXPANDER_DEPS) $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) expander.sls $(EXPANDER_DEPS)
@@ -211,6 +212,7 @@ future2-demo: rumble.so
 	$(SCHEME) chezpart.so rumble.so demo/future2.ss
 
 RUMBLE_SRCS = rumble/define.ss \
+              rumble/virtual-register.ss \
               rumble/check.ss \
 	      rumble/syntax-rule.ss \
               rumble/constant.ss \

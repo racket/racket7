@@ -5,7 +5,7 @@ RACO = $(RACKET) -N raco -l- raco
 # Ignoring functions from `#%read` works beause they won't appear in
 # the simplified expansion, and declaring "collect.rkt" pure works
 # around a limitation of the flattener:
-IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
+IGNORE = ++knot read - ++direct pthread ++pure ../../collects/racket/private/collect.rkt
 
 thread-src:
 	$(RACO) make main.rkt

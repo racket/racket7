@@ -1,11 +1,17 @@
 #lang racket/base
-(require "internal-error.rkt"
+(require racket/private/primitive-table
+         "internal-error.rkt"
          (only-in '#%linklet primitive-table)
          (for-syntax racket/base))
 
+(void (unless (primitive-table '#%engine)
+        (internal-error "engines not provided by host")))
+(void (unless (primitive-table '#%pthread)
+        (internal-error "pthreads not provided by host")))
+
 (define-syntax (bounce stx)
   (syntax-case stx ()
-    [(_ bind ...)
+    [(_ table bind ...)
      (with-syntax ([([orig-id here-id] ...)
                     (for/list ([bind (in-list (syntax->list #'(bind ...)))])
                       (if (identifier? bind)
@@ -13,15 +19,15 @@
                           bind))])
        #'(begin
            (provide here-id ...)
-           (define-values (here-id ...)
-             (let ([ht (primitive-table '#%engine)])
-               (unless ht
-                 (internal-error "engines not provided by host"))
-               (values
-                (hash-ref ht 'orig-id)
-                ...)))))]))
+           (import-from-primitive-table table bind ...)))]))
 
-(bounce make-engine
+;; This `#%pthread` table's entries are linked more directly
+;; than `#%engine` entries:
+(bounce #%pthread
+        make-pthread-parameter)
+
+(bounce #%engine
+        make-engine
         engine-block
         engine-return
         current-engine-state
@@ -46,7 +52,6 @@
         exn:break:hang-up/non-engine
         exn:break:terminate/non-engine
 
-        internal-make-thread-parameter
         fork-pthread
         pthread?
         [get-thread-id get-pthread-id]

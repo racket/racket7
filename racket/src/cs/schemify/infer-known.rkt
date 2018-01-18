@@ -4,6 +4,7 @@
          "known.rkt"
          "import.rkt"
          "simple.rkt"
+         "pthread-parameter.rkt"
          "literal.rkt"
          "inline.rkt"
          "mutated-state.rkt")
@@ -32,7 +33,7 @@
      (define u-rhs (unwrap rhs))
      (cond
        [(hash-ref prim-knowns u-rhs #f)
-        => (lambda (known) known)]
+        => (lambda (known) (known-copy u-rhs))]
        [(not (simple-mutated-state? (hash-ref mutated u-rhs #f)))
         ;; referenced variable is mutated, but not necessarily the target
         (and defn a-known-constant)]
@@ -53,6 +54,8 @@
                [else known]))]
        [defn a-known-constant]
        [else (known-copy rhs)])]
+    [(pthread-parameter? rhs prim-knowns knowns mutated)
+     (known-procedure 3)]
     [(and defn
           (simple? rhs prim-knowns knowns imports mutated))
      a-known-constant]
