@@ -195,7 +195,7 @@
 ;; ----------------------------------------
 ;; Phantom bytes:
 
-(when (eq? '3m (system-type 'gc))
+(unless (eq? 'cgc (system-type 'gc))
   (define s (make-semaphore))
   (define c (make-custodian))
   (define t (parameterize ([current-custodian c])
@@ -241,7 +241,7 @@
 ;; Check that local variables are cleared for space safety
 ;; before a tail `sync' or `thread-wait':
 
-(when (eq? '3m (system-type 'gc))
+(unless (eq? 'cgc (system-type 'gc))
   (define weak-syms (make-weak-hash))
 
   (define thds
@@ -270,7 +270,7 @@
 ;; a reference can be important to the expansion to a call to a keyword-accepting
 ;; function.
 
-(when (eq? '3m (system-type 'gc))
+(unless (eq? 'cgc (system-type 'gc))
   (define (mk)
     (parameterize ([current-namespace (make-base-namespace)])
       (eval '(module module-with-unoptimized-varref-constant racket/base
@@ -364,7 +364,7 @@
 ;; module-level variables doesn't retain the
 ;; namespace strongly
 
-(when (eq? '3m (system-type 'gc))
+(unless (eq? 'cgc (system-type 'gc))
   (define-values (f w)
     (parameterize ([current-namespace (make-base-namespace)])
       (define g (gensym 'gensym-via-namespace))
@@ -399,7 +399,7 @@
 ;; Check that ephemeron chains do not lead
 ;; to O(N^2) behavior with 3m
 
-(when (eq? '3m (system-type 'gc))
+(unless (eq? 'cgc (system-type 'gc))
   (define (wrapper v) (list 1 2 3 4 5 v))
 
   ;; Create a chain of ephemerons where we have all
@@ -462,7 +462,7 @@
 ;; ----------------------------------------
 ;; Check that `apply` doesn't retain its argument
 
-(when (eq? '3m (system-type 'gc))
+(unless (eq? 'cgc (system-type 'gc))
   
   (define retained 0)
 

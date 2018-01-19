@@ -2019,7 +2019,7 @@ platform's installation already includes those libraries.
 
 @history[#:added "6.3"]
 
-@defproc[(cross-system-type [mode (or/c 'os 'word 'gc 'link 'machine
+@defproc[(cross-system-type [mode (or/c 'os 'word 'gc 'vm 'link 'machine
                                         'so-suffix 'so-mode 'fs-change)
                             'os])
          (or/c symbol? string? bytes? exact-positive-integer? vector?)]{
@@ -2032,7 +2032,7 @@ cross-installation mode, the results are the same as for
 See also @racket['cross] mode for @racket[system-type].}
 
 
-@defproc[(cross-system-library-subpath [mode (or/c 'cgc '3m #f)
+@defproc[(cross-system-library-subpath [mode (or/c 'cgc '3m 'cs #f)
                                              (system-type 'gc)])
          path-for-some-system?]{
 

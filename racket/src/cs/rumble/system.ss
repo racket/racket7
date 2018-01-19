@@ -20,7 +20,7 @@
             [(a6nt ta6nt i3nt ti3nt) 'windows]
             [else 'unix])]
     [(word) (if (> (fixnum-width) 32) 64 32)]
-    [(gc) '3m]
+    [(gc) 'cs]
     [(link) 'framework]
     [(machine) "localhost info..."]
     [(so-suffix) (case (machine-type)

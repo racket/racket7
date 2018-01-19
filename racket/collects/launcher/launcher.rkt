@@ -112,9 +112,7 @@
   (let* ([cased-kind-name (if (eq? kind 'mzscheme)
                               "Racket"
                               "GRacket")]
-         [normal-kind (if (eq? 'racket (cross-system-type 'vm))
-                          (cross-system-type 'gc)
-                          'cs)]
+         [normal-kind (cross-system-type 'gc)]
          [alt-kind (if (eq? '3m normal-kind)
                        'cgc
                        '3m)]

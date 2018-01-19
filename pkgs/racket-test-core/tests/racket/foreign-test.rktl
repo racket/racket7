@@ -622,7 +622,7 @@
   (define ENOENT 2)
   (define ERANGE 34)
   (define _getcwd   ;; sets errno = ERANGE if path longer than buffer
-    (get-ffi-obj '_getcwd msvcrt (_fun #:save-errno 'posix _bytes _int -> _void)))
+    (get-ffi-obj '_getcwd msvcrt (_fun #:save-errno 'posix _bytes/nul-terminated _int -> _void)))
   (define _chdir    ;; sets errno = ENOENT if path doesn't exist
     (get-ffi-obj '_chdir  msvcrt (_fun #:save-errno 'posix _string -> _int)))
   (define (bad/ERANGE) (_getcwd (make-bytes 1) 1))

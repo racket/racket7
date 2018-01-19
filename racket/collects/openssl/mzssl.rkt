@@ -205,8 +205,6 @@ TO DO:
   (or libssl-load-fail-reason
       libcrypto-load-fail-reason))
 
-(define 3m? (eq? '3m (system-type 'gc)))
-
 (define libmz (ffi-lib #f))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -197,9 +197,9 @@ ROSYM static Scheme_Object *sys_symbol;
 ROSYM static Scheme_Object *link_symbol, *machine_symbol, *vm_symbol, *gc_symbol;
 ROSYM static Scheme_Object *so_suffix_symbol, *so_mode_symbol, *word_symbol;
 ROSYM static Scheme_Object *os_symbol, *fs_change_symbol, *cross_symbol;
-ROSYM static Scheme_Object *racket_symbol, *cgc_symbol, *_3m_symbol;
+ROSYM static Scheme_Object *racket_symbol, *cgc_symbol, *_3m_symbol, *cs_symbol;
 ROSYM static Scheme_Object *force_symbol, *infer_symbol;
-ROSYM static Scheme_Object *platform_3m_path, *platform_cgc_path;
+ROSYM static Scheme_Object *platform_3m_path, *platform_cgc_path, *platform_cs_path;
 READ_ONLY static Scheme_Object *zero_length_char_string;
 READ_ONLY static Scheme_Object *zero_length_byte_string;
 
@@ -261,9 +261,11 @@ scheme_init_string (Scheme_Startup_Env *env)
   REGISTER_SO(racket_symbol);
   REGISTER_SO(cgc_symbol);
   REGISTER_SO(_3m_symbol);
+  REGISTER_SO(cs_symbol);
   racket_symbol = scheme_intern_symbol("racket");
   cgc_symbol = scheme_intern_symbol("cgc");
   _3m_symbol = scheme_intern_symbol("3m");
+  cs_symbol = scheme_intern_symbol("cs");
 
   REGISTER_SO(force_symbol);
   REGISTER_SO(infer_symbol);
@@ -285,19 +287,19 @@ scheme_init_string (Scheme_Startup_Env *env)
   error_symbol = scheme_intern_symbol("error");
 
   REGISTER_SO(platform_3m_path);
-#ifdef UNIX_FILE_SYSTEM
-# define MZ3M_SUBDIR "/3m"
-#else
 # ifdef DOS_FILE_SYSTEM
 #  define MZ3M_SUBDIR "\\3m"
+#  define MZCS_SUBDIR "\\cs"
 # else
-#  define MZ3M_SUBDIR ":3m"
-# endif
+#  define MZ3M_SUBDIR "/3m"
+#  define MZCS_SUBDIR "/cs"
 #endif
   REGISTER_SO(platform_3m_path);
   REGISTER_SO(platform_cgc_path);
+  REGISTER_SO(platform_cs_path);
   platform_cgc_path = scheme_make_path(SCHEME_PLATFORM_LIBRARY_SUBPATH SPLS_SUFFIX);
   platform_3m_path = scheme_make_path(SCHEME_PLATFORM_LIBRARY_SUBPATH SPLS_SUFFIX MZ3M_SUBDIR);
+  platform_cs_path = scheme_make_path(SCHEME_PLATFORM_LIBRARY_SUBPATH SPLS_SUFFIX MZCS_SUBDIR);
 
   REGISTER_SO(embedding_banner);
   REGISTER_SO(vers_str);
@@ -2426,7 +2428,10 @@ static Scheme_Object *system_library_subpath(int argc, Scheme_Object *argv[])
     if (SAME_OBJ(_3m_symbol, argv[0]))
       return platform_3m_path;
 
-    scheme_wrong_contract("system-library-subpath", "(or/c 'cgc '3m #f)", 0, argc, argv);
+    if (SAME_OBJ(cs_symbol, argv[0]))
+      return platform_cs_path;
+
+    scheme_wrong_contract("system-library-subpath", "(or/c 'cgc '3m 'cs #f)", 0, argc, argv);
     return NULL;
   } else {
 #ifdef MZ_PRECISE_GC

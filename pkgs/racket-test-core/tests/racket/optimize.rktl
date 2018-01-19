@@ -5456,7 +5456,7 @@
       (lambda ()
         (with-handlers ([exn:fail:out-of-memory? void])
           (arithmetic-shift 1 30070458541082)))))))
-(when (eq? '3m (system-type 'gc))
+(unless (eq? 'cgc (system-type 'gc))
   (void (dynamic-require ''uses-too-much-memory-for-shift #f)))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

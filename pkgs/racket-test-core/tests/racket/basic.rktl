@@ -227,7 +227,7 @@
 (box-tests make-weak-box weak-box-value weak-box? #f #f 'weak-box-value #t)
 
 ;; test clearing weak boxes
-(when (eq? '3m (system-type 'gc))
+(unless (eq? 'cgc (system-type 'gc))
   (let* ([s (gensym)]
          [b (make-weak-box s)])
     (test s weak-box-value b)

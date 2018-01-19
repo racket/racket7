@@ -364,9 +364,12 @@
          [(eq? mode '3m) (if (eq? 'windows (system-path-convention-type))
                              "\\3m"
                              "/3m")]
+         [(eq? mode 'cs) (if (eq? 'windows (system-path-convention-type))
+                             "\\cs"
+                             "/cs")]
          [(or (eq? mode 'cgc) (not mode)) ""]
          [else (raise-argument-error 'system-library-subpath
-                                     "(or/c '3m 'cgc #f)"
+                                     "(or/c '3m 'cgc 'cs #f)"
                                      mode)])))]))
 
   (define (primitive-table key)
