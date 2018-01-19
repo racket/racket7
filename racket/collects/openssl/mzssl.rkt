@@ -281,13 +281,13 @@ TO DO:
   (SSL_CTX_ctrl ctx SSL_CTRL_OPTIONS opts #f))
 
 (define-ssl SSL_CTX_set_verify (_fun _SSL_CTX* _int _pointer -> _void))
-(define-ssl SSL_CTX_use_certificate_chain_file (_fun _SSL_CTX* _bytes -> _int))
-(define-ssl SSL_CTX_load_verify_locations (_fun _SSL_CTX* _bytes _bytes -> _int))
+(define-ssl SSL_CTX_use_certificate_chain_file (_fun _SSL_CTX* _path -> _int))
+(define-ssl SSL_CTX_load_verify_locations (_fun _SSL_CTX* _path _bytes -> _int))
 (define-ssl SSL_CTX_set_client_CA_list (_fun _SSL_CTX* _X509_NAME* -> _int))
 (define-ssl SSL_CTX_set_session_id_context (_fun _SSL_CTX* _bytes _int -> _int))
-(define-ssl SSL_CTX_use_RSAPrivateKey_file (_fun _SSL_CTX* _bytes _int -> _int))
-(define-ssl SSL_CTX_use_PrivateKey_file (_fun _SSL_CTX* _bytes _int -> _int))
-(define-ssl SSL_load_client_CA_file (_fun _bytes -> _X509_NAME*/null))
+(define-ssl SSL_CTX_use_RSAPrivateKey_file (_fun _SSL_CTX* _path _int -> _int))
+(define-ssl SSL_CTX_use_PrivateKey_file (_fun _SSL_CTX* _path _int -> _int))
+(define-ssl SSL_load_client_CA_file (_fun _path -> _X509_NAME*/null))
 (define-ssl SSL_CTX_set_cipher_list (_fun _SSL_CTX* _string -> _int))
 
 (define-ssl SSL_free (_fun _SSL* -> _void)
@@ -707,13 +707,12 @@ TO DO:
            (path->complete-path (cleanse-path pathname)
                                 (current-directory))])
       (security-guard-check-file who path '(read))
-      (let ([path (path->bytes path)])
-        (atomically ;; for to connect ERR_get_error to `load-it'
-         (let ([n (load-it ctx path)])
-           (unless (or (= n 1) try?)
-             (error who "load failed from: ~e ~a"
-                    pathname
-                    (get-error-message (ERR_get_error))))))))))
+      (atomically ;; for to connect ERR_get_error to `load-it'
+       (let ([n (load-it ctx path)])
+         (unless (or (= n 1) try?)
+           (error who "load failed from: ~e ~a"
+                  pathname
+                  (get-error-message (ERR_get_error)))))))))
 
 (define (ssl-load-certificate-chain! ssl-context-or-listener pathname)
   (ssl-load-... 'ssl-load-certificate-chain! 
