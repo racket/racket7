@@ -274,6 +274,11 @@ FFI Differences
    the foreign content to/from a byte string or use `ptr-ref` and
    `ptr-set!` to read and write at the address.
 
+ * When `_bytes` is used as an argument type, beware that a byte
+   string is not implicitly terminated with a NUL byte. When `_bytes`
+   is used as a result type, the C result is copied into a fresh byte
+   string.
+
  * The 'atomic-interior allocation mode returns memory that is allowed
    to move after the cpointer returned by allocation becomes
    unreachable.
