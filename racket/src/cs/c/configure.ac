@@ -19,6 +19,13 @@ AC_ARG_ENABLE(racket,     [  --enable-racket=<path>  use <path> as Racket to bui
 AC_ARG_ENABLE(scheme,     [  --enable-scheme=<path>  Chez Scheme build dierctory at <path>])
 AC_ARG_ENABLE(mach,       [  --enable-mach=<mac>     Use Chez Scheme machine type <mach>])
 
+show_explicitly_disabled()
+{
+  if test "$1" = "no" ; then
+    echo "=== $2 disabled"
+  fi
+}
+
 show_explicitly_enabled()
 {
   if test "$1" = "yes" ; then
@@ -36,6 +43,8 @@ show_explicitly_set()
   fi
 }
 
+show_explicitly_enabled "${enable_pthread}" "pthreads"
+show_explicitly_disabled "${enable_pthread}" "pthreads"
 show_explicitly_enabled "${enable_xonx}" "Unix style"
 show_explicitly_set "${enable_racket}" "Racket"
 show_explicitly_set "${enable_scheme}" "Chez Scheme build directory"
@@ -138,17 +147,36 @@ case "$host_os" in
 esac
 
 case "$host_cpu" in
+  arm*)
+    enable_pthread_by_default=no
+    ;;
+esac
+
+if test "${enable_pthread}" = "" ; then
+  if test "${enable_pthread_by_default}" = "yes" ; then
+    enable_pthread=yes
+  fi
+fi
+
+thread_prefix=""
+thread_config_arg=""
+if test "${enable_pthread}" = "yes" ; then
+  thread_prefix="t"
+  thread_config_arg="--threads"
+fi
+
+case "$host_cpu" in
   x86_64)
-    MACH="a6${MACH_OS}"
+    MACH="${thread_prefix}a6${MACH_OS}"
     ;;
   x86|i*86)
-    MACH="i3${MACH_OS}"
+    MACH="${thread_prefix}i3${MACH_OS}"
     ;;
   arm*)
-    MACH="arm32${MACH_OS}"
+    MACH="${thread_prefix}arm32${MACH_OS}"
     ;;
   power*)
-    MACH="ppc32${MACH_OS}"
+    MACH="${thread_prefix}ppc32${MACH_OS}"
     ;;
 esac
 
@@ -162,7 +190,7 @@ if test "${enable_mach}" != "" ; then
   MACH="${enable_mach}"
 fi
 
-SCHEME_CONFIG_ARGS="--machine=${MACH}"
+SCHEME_CONFIG_ARGS="--machine=${MACH} ${thread_config_arg}"
 
 ############## C flags ################
 
@@ -221,12 +249,6 @@ if test "${enable_iconv}" = "yes" ; then
 fi
 
 ############### pthread ###################
-
-if test "${enable_pthread}" = "" ; then
-  if test "${enable_pthread_by_default}" = "yes" ; then
-    enable_pthread=yes
-  fi
-fi
 
 if test "${enable_pthread}" = "yes" ; then
   if test "${use_flag_pthread}" = "yes" ; then
