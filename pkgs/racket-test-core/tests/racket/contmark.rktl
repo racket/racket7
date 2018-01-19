@@ -458,6 +458,13 @@
 (err/rt-test (call-with-parameterization 10 (lambda () 12)))
 (err/rt-test (call-with-parameterization (current-parameterization) (lambda (x) 12)))
 
+(err/rt-test (current-continuation-marks (make-continuation-prompt-tag 'px))
+             exn:fail:contract:continuation?)
+(err/rt-test (continuation-marks (let/cc k k) (make-continuation-prompt-tag 'px))
+             exn:fail:contract:continuation?)
+(err/rt-test (continuation-mark-set-first #f 'key #f (make-continuation-prompt-tag 'px))
+             exn:fail:contract:continuation?)
+
 ;; Create a deep stack with a deep mark stack
 
 (define (p-equal? a b)
@@ -1008,6 +1015,45 @@
   (err/rt-test (do-test/no-lookup cha2-mark #t) exn:fail?)
   (err/rt-test (do-test bad-mark 5) exn:fail?)
   (err/rt-test (do-test bad-mark-2 5) exn:fail?))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check that caching works right for marks in continuations that
+;; capture metacontinuations
+
+(let ()
+  (define tag (make-continuation-prompt-tag 'tag))
+
+  (define comp-k
+    (call-with-continuation-prompt
+     (lambda ()
+       (with-continuation-mark
+        'key
+        'val
+        ((call-with-composable-continuation
+          (lambda (k)
+            (lambda () k))
+          tag))))
+     tag))
+
+  (define k
+    (call-with-continuation-prompt
+     (lambda ()
+       (with-continuation-mark
+        'other-key
+        'other-val
+        (comp-k (lambda ()
+                  (call/cc
+                   (lambda (k)
+                     (abort-current-continuation
+                      tag
+                      (lambda () k)))
+                   tag)))))
+     tag))
+
+  (test '((val) (val))
+        list
+        (continuation-mark-set->list (continuation-marks k) 'key)
+        (continuation-mark-set->list (continuation-marks k) 'key)))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
