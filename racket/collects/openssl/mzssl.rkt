@@ -282,7 +282,7 @@ TO DO:
 
 (define-ssl SSL_CTX_set_verify (_fun _SSL_CTX* _int _pointer -> _void))
 (define-ssl SSL_CTX_use_certificate_chain_file (_fun _SSL_CTX* _path -> _int))
-(define-ssl SSL_CTX_load_verify_locations (_fun _SSL_CTX* _path _bytes -> _int))
+(define-ssl SSL_CTX_load_verify_locations (_fun _SSL_CTX* _path _path -> _int))
 (define-ssl SSL_CTX_set_client_CA_list (_fun _SSL_CTX* _X509_NAME* -> _int))
 (define-ssl SSL_CTX_set_session_id_context (_fun _SSL_CTX* _bytes _int -> _int))
 (define-ssl SSL_CTX_use_RSAPrivateKey_file (_fun _SSL_CTX* _path _int -> _int))
