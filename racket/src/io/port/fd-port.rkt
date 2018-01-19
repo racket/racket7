@@ -238,8 +238,8 @@
        [(output-port? p) (->core-output-port p)]
        [else
         (raise-argument-error 'terminal-port? "port?" p)])))
-  (and (fd-data? p)
-       (rktio_fd_is_terminal (fd-data-fd p))))
+  (and (fd-data? data)
+       (rktio_fd_is_terminal rktio (fd-data-fd data))))
 
 (define (fd-port-fd p)
   (define data
