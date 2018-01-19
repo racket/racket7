@@ -1,8 +1,9 @@
 ;; We get a small number of virtual registers for fast,
 ;; pthread-specific bindings.
 
-;; BEWARE: virtual register 15 is reserved for use by the thread
+;; BEWARE: the last virtual register is reserved for use by the thread
 ;; system.
+(meta define num-reserved-virtual-registers 1)
 
 (meta define virtual-register-initial-values '())
 
@@ -11,7 +12,8 @@
     [(_ id init-val)
      (with-syntax ([pos (datum->syntax #'here (length virtual-register-initial-values))])
        (set! virtual-register-initial-values (cons #'init-val virtual-register-initial-values))
-       (when (>= (length virtual-register-initial-values) 15)
+       (when (>= (length virtual-register-initial-values) (- (virtual-register-count)
+                                                             num-reserved-virtual-registers))
          (syntax-error stx "too many virtual-register definitions:"))
        #`(define-syntax id
            (syntax-rules ()

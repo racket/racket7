@@ -28,16 +28,17 @@
                   [root-continuation-prompt-tag rumble:root-continuation-prompt-tag]
                   [set-break-enabled-transition-hook! rumble:set-break-enabled-transition-hook!]))
 
-  ;; Special handling of `current-atomic`: use virtual register 15.
-  ;; We reliy on the fact that the register's default value is 0.
+  ;; Special handling of `current-atomic`: use the last virtual register.
+  ;; We rely on the fact that the register's default value is 0.
   (define-syntax (define stx)
     (syntax-case stx (current-atomic make-pthread-parameter)
       [(_ current-atomic (make-pthread-parameter 0))
-       (with-syntax ([(_ id _) stx])
+       (with-syntax ([(_ id _) stx]
+                     [n (datum->syntax #'here (sub1 (virtual-register-count)))])
          #'(define-syntax id
              (syntax-rules ()
-               [(_) (virtual-register 15)]
-               [(_ v) (set-virtual-register! 15 v)])))]
+               [(_) (virtual-register n)]
+               [(_ v) (set-virtual-register! n v)])))]
       [(_ . rest) #'(chez:define . rest)]))
 
   (define (exit n)
