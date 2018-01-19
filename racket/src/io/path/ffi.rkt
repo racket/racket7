@@ -10,6 +10,6 @@
   (make-ctype _bytes
               (lambda (p)
                 (check who path-string? #:or-false p)
-                (and p (->host p #f '())))
+                (and p (bytes-append (->host p #f '()) #"\0")))
               (lambda (bstr) (and bstr (path (bytes->immutable-bytes bstr)
                                              (system-path-convention-type))))))
