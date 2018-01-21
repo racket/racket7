@@ -26,7 +26,8 @@
          "stats.rkt"
          "stack-size.rkt"
          "future.rkt"
-         "fsemaphore.rkt")
+         "fsemaphore.rkt"
+         "os-thread.rkt")
 
 (provide call-in-main-thread
          
@@ -166,8 +167,6 @@
          future-block
          future-wait
          current-future-prompt
-         halt-workers
-         resume-workers
          reset-future-logs-for-tracing!
          mark-future-trace-end!
 
@@ -177,6 +176,12 @@
          fsemaphore-wait
          fsemaphore-try-wait?
          fsemaphore-count
+
+         unsafe-os-thread-enabled?
+         unsafe-call-in-os-thread
+         unsafe-make-os-semaphore
+         unsafe-os-semaphore-post
+         unsafe-os-semaphore-wait
 
          #%thread-instance)
 

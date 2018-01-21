@@ -3,6 +3,7 @@
 
 (provide atomically
          non-atomically
+         atomically/no-interrupts
          check-current-custodian)
 
 (define table
@@ -44,6 +45,8 @@
         current-sandman
         start-atomic
         end-atomic
+        start-atomic/no-interrupts ; => disable GC, too, if GC can call back
+        end-atomic/no-interrupts
         current-custodian
         unsafe-custodian-register
         unsafe-custodian-unregister
@@ -64,6 +67,14 @@
     (begin0
       (let () e ...)
       (start-atomic))))
+
+;; Cannot be exited with `non-atomically`:
+(define-syntax-rule (atomically/no-interrupts e ...)
+  (begin
+    (start-atomic/no-interrupts)
+    (begin0
+      (let () e ...)
+      (end-atomic/no-interrupts))))
 
 ;; in atomic mode
 (define (check-current-custodian who)

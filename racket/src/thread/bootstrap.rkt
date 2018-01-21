@@ -142,83 +142,48 @@
                   'make-pthread-parameter make-pthread-parameter))
 (primitive-table '#%engine
                  (hash 
-                  'make-engine
-                  make-engine
-                  'engine-block
-                  engine-block
-                  'engine-return
-                  (lambda args
-                    (error "engine-return: not ready"))
-                  'current-process-milliseconds
-                  current-process-milliseconds
-                  'set-ctl-c-handler!
-                  set-ctl-c-handler!
-                  'root-continuation-prompt-tag
-                  root-continuation-prompt-tag
-                  'break-enabled-key
-                  break-enabled-key
-                  'set-break-enabled-transition-hook!
-                  void
-                  'continuation-marks
-                  continuation-marks ; doesn't work on engines
-                  'poll-will-executors
-                  poll-will-executors
-                  'make-will-executor
-                  make-will-executor/notify
-                  'make-stubborn-will-executor
-                  make-stubborn-will-executor/notify
-                  'will-executor?
-                  will-executor/notify?
-                  'will-register
-                  will-register/notify
-                  'will-try-execute
-                  will-try-execute/notify
-                  'exn:break/non-engine
-                  exn:break/non-engine
-                  'exn:break:hang-up/non-engine
-                  exn:break:hang-up/non-engine
-                  'exn:break:terminate/non-engine
-                  exn:break:terminate/non-engine
-                  'fork-pthread
-                  (lambda args
-                    (error "fork-pthread: not ready"))
-                  'pthread?
-                  (lambda args
-                    (error "thread?: not ready"))
-                  'get-thread-id
-                  (lambda args
-                    (error "get-pthread-id: not ready"))
-                  'make-condition
-                  (lambda () 'condition)
-                  'condition-wait
-                  (lambda args
-                    (error "condition-wait: not ready"))
-                  'condition-signal 
-                  (lambda args
-                    (error "condition-signal: not ready"))
-                  'condition-broadcast
-                  (lambda args
-                    (error "condition-broadcast: not ready"))
-                  'threaded?
-                  (lambda args
-                    (error "threaded?: not ready"))
-                  'current-engine-state
-                  (lambda args
-                    (error "current-engine state: not ready"))
-                  'make-mutex
-                  (lambda () 'mutex)
-                  'mutex-acquire
-                  (lambda args
-                    (error "mutex-acquire: not ready"))
-                  'mutex-release
-                  (lambda args
-                    (error "mutex-release: not ready"))
-                  'active-pthreads
-                  (lambda () 0)
-                  'collect-garbage-pending-major?
-                  (box '())
-                  'collect-garbage-pending-minor?
-                  (box '())))
+                  'make-engine make-engine
+                  'engine-block engine-block
+                  'engine-return (lambda args
+                                   (error "engine-return: not ready"))
+                  'current-process-milliseconds current-process-milliseconds
+                  'set-ctl-c-handler! set-ctl-c-handler!
+                  'root-continuation-prompt-tag root-continuation-prompt-tag
+                  'break-enabled-key break-enabled-key
+                  'set-break-enabled-transition-hook! void
+                  'continuation-marks continuation-marks ; doesn't work on engines
+                  'poll-will-executors poll-will-executors
+                  'make-will-executor make-will-executor/notify
+                  'make-stubborn-will-executor make-stubborn-will-executor/notify
+                  'will-executor? will-executor/notify?
+                  'will-register will-register/notify
+                  'will-try-execute will-try-execute/notify
+                  'exn:break/non-engine exn:break/non-engine
+                  'exn:break:hang-up/non-engine exn:break:hang-up/non-engine
+                  'exn:break:terminate/non-engine exn:break:terminate/non-engine
+                  'disable-interrupts void
+                  'enable-interrupts void
+                  'fork-pthread (lambda args
+                                  (error "fork-pthread: not ready"))
+                  'pthread? (lambda args
+                              (error "thread?: not ready"))
+                  'get-thread-id (lambda args
+                                   (error "get-pthread-id: not ready"))
+                  'make-condition (lambda () 'condition)
+                  'condition-wait (lambda args
+                                    (error "condition-wait: not ready"))
+                  'condition-signal (lambda args
+                                      (error "condition-signal: not ready"))
+                  'condition-broadcast (lambda args
+                                         (error "condition-broadcast: not ready"))
+                  'threaded? (lambda () #f)
+                  'current-engine-state (lambda args
+                                          (error "current-engine state: not ready"))
+                  'make-mutex (lambda () 'mutex)
+                  'mutex-acquire (lambda args
+                                   (error "mutex-acquire: not ready"))
+                  'mutex-release (lambda args
+                                   (error "mutex-release: not ready"))))
 
 ;; add dummy definitions that implement pthreads and conditions etc.
 ;; dummy definitions that error

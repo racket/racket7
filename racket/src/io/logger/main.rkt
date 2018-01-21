@@ -10,11 +10,11 @@
          logger-name
          current-logger
          make-logger
-         log-level?
+         log-level?    ; ok to call in host-Scheme interrupt handler
          log-max-level
          log-all-levels
          log-level-evt
-         log-message
+         log-message  ; ok to call in host-Scheme interrupt handler
          log-receiver?
          make-log-receiver
          add-stderr-log-receiver!)
@@ -38,6 +38,11 @@
                  #:parent parent
                  #:propagate-filters (parse-filters 'make-logger filters #:default-level 'debug)))
 
+;; Can be called in any host Scheme thread, including in an interrupt
+;; handler (where "interrupt" is a host-Scheme concept, such as a GC
+;; handler). If it's not the thread that runs Racket, then it's in
+;; atomic, non-interrupt mode and we assume that the argument checks
+;; will pass.
 (define/who (log-level? logger level [topic #f])
   (check who logger? logger)
   (check-level who level)
@@ -65,6 +70,8 @@
         (set-logger-level-sema! logger s)])))
   (semaphore-peek-evt s))
 
+;; Can be called in any host Scheme thread and in interrupt handler,
+;; like `log-level?`:
 (define/who log-message
   ;; Complex dispatch based on number and whether third is a string:
   (case-lambda
@@ -85,13 +92,15 @@
     [(logger level topic message data prefix?)
      (do-log-message who logger level topic message data prefix?)]))
 
+;; Can be called in any host Scheme thread and in interrupt handler,
+;; like `log-level?`:
 (define (do-log-message who logger level topic message data prefix?)
   (check who logger? logger)
   (check-level who level)
   (check who #:or-false symbol? topic)
   (check who string? message)
   (define msg #f)
-  (atomically
+  (atomically/no-interrupts
    (when ((logger-max-wanted-level logger) . level>=? . level)
      (let loop ([logger logger])
        (for ([r (in-list (logger-receivers logger))])

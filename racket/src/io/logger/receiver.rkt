@@ -25,38 +25,42 @@
   #:property
   prop:receiver-send
   (lambda (lr msg)
-    ;; called in atomic mode
-    (define b (queue-remove! (queue-log-receiver-waiters lr)))
-    (cond
-      [b
-       (define select! (unbox b))
-       (set-box! b msg)
-       (select!)]
-      [else
-       (queue-add! (queue-log-receiver-msgs lr) msg)]))
+    ;; called in atomic mode and possibly in host interrupt handler,
+    ;; so anything we touch here should only be modified with
+    ;; interrupts disabled
+    (atomically/no-interrupts
+     (define b (queue-remove! (queue-log-receiver-waiters lr)))
+     (cond
+       [b
+        (define select! (unbox b))
+        (set-box! b msg)
+        (select!)]
+       [else
+        (queue-add! (queue-log-receiver-msgs lr) msg)])))
   #:property
   prop:evt
   (poller (lambda (lr ctx)
-            (define msg (queue-remove! (queue-log-receiver-msgs lr)))
+            (define msg (atomically/no-interrupts (queue-remove! (queue-log-receiver-msgs lr))))
             (cond
               [msg
                (values (list msg) #f)]
               [else
                (define b (box (poll-ctx-select-proc ctx)))
-               (define n (queue-add! (queue-log-receiver-waiters lr) b))
+               (define n (atomically/no-interrupts (queue-add! (queue-log-receiver-waiters lr) b)))
                (values #f (control-state-evt
                            (wrap-evt async-evt (lambda (e) (unbox b)))
-                           (lambda () (queue-remove-node! (queue-log-receiver-waiters lr) n))
+                           (lambda () (atomically/no-interrupts (queue-remove-node! (queue-log-receiver-waiters lr) n)))
                            void
                            (lambda ()
-                             (define msg (queue-remove! (queue-log-receiver-msgs lr)))
-                             (cond
-                               [msg
-                                (set-box! b msg)
-                                (values msg #t)]
-                               [else
-                                (set! n (queue-add! (queue-log-receiver-waiters lr) b))
-                                (values #f #f)]))))]))))
+                             (atomically/no-interrupts
+                              (define msg (queue-remove! (queue-log-receiver-msgs lr)))
+                              (cond
+                                [msg
+                                 (set-box! b msg)
+                                 (values msg #t)]
+                                [else
+                                 (set! n (queue-add! (queue-log-receiver-waiters lr) b))
+                                 (values #f #f)])))))]))))
 
 (define/who (make-log-receiver logger level . args)
   (check who logger? logger)
@@ -72,7 +76,7 @@
   #:property
   prop:receiver-send
   (lambda (lr msg)
-    ;; called in atomic mode
+    ;; called in atomic mode and possibly in host interrupt handler
     (define fd (rktio_std_fd rktio RKTIO_STDERR))
     (define bstr (bytes-append (string->bytes/utf-8 (vector-ref msg 1)) #"\n"))
     (define len (bytes-length bstr))
@@ -94,7 +98,7 @@
 ;; ----------------------------------------
 
 (define (add-log-receiver! logger lr)
-  (atomically
+  (atomically/no-interrupts
    ;; Add receiver to the logger's list, purning empty boxes
    ;; every time the list length doubles (roughly):
    (cond
@@ -116,6 +120,7 @@
    (when (logger-level-sema logger)
      (semaphore-post (logger-level-sema logger))
      (set-logger-level-sema! logger #f))))
-         
+
+;; Called in atomic mode and with interrupts disabled
 (define (log-receiver-send! r msg)
   ((receiver-send-ref r) r msg))

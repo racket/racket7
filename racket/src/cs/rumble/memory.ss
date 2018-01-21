@@ -1,7 +1,16 @@
 
-(define (set-collect-handler!)
-  (collect-request-handler (lambda () (collect/report #f))))
+(define collect-request (box #f))
 
+(define (set-collect-handler!)
+  (collect-request-handler (lambda ()
+                             ;; Handler is called in an unspecified thread with
+                             ;; all other threads paused (at some point where interrupts
+                             ;; were enabled) and with interrupts disabled
+                             (let ([r (unbox collect-request)])
+                               (set-box! collect-request #f)
+                               (collect/report r)))))
+
+;; Notification can be called in any Chez Scheme thread
 (define (set-garbage-collect-notify! proc)
   (set! garbage-collect-notify proc))
 
@@ -9,9 +18,6 @@
   (lambda (gen pre-allocated pre-allocated+overhead pre-time re-cpu-time
                post-allocated post-allocated+overhead post-time post-cpu-time)
     (void)))
-
-(define collect-garbage-pending-major? (box '()))
-(define collect-garbage-pending-minor? (box '()))
 
 ;; Replicate the counting that `(collect)` would do
 ;; so that we can report a generation to the notification
@@ -21,6 +27,7 @@
 (define collect-generation-radix-mask (sub1 (bitwise-arithmetic-shift 1 log-collect-generation-radix)))
 (define allocated-after-major (* 32 1024 1024))
 
+;; Called in any thread with all other threads paused
 (define (collect/report g)
   (let ([this-counter (if g (bitwise-arithmetic-shift-left 1 (* log-collect-generation-radix g)) gc-counter)]
         [pre-allocated (bytes-allocated)]
@@ -56,37 +63,24 @@
    [() (collect-garbage 'major)]
    [(request)
     (cond
-     [(eq? request 'incremental) ;; don't want to halt for void.
+     [(eq? request 'incremental)
       (void)]
-     [(= 0 (get-thread-id))
-      (halt-workers)
-      (case request
-        [(minor)
-         (collect/report 0)]
-        [(major)
-         (collect/report (collect-maximum-generation))]
-        [else
-         (raise-argument-error 'collect-garbage
-                               "(or/c 'major 'minor 'incremental)"
-                               request)])
-      (resume-workers)]
      [else
-      (let ([rq-box (case request
-                      [(minor)
-                       collect-garbage-pending-minor?]
-                      [(major)
-                       collect-garbage-pending-major?]
-                      [else
-                       (raise-argument-error 'collect-garbage
-                               "(or/c 'major 'minor 'incremental)"
-                               request)])])
-        (let add-request ()
-          (let ([old-val (unbox rq-box)])
-            (unless (box-cas! rq-box
-                              old-val
-                              (cons (current-future) old-val))
-                    (add-request)))))
-      (future-wait)])]))
+      (let ([req (case request
+                   [(minor) 0]
+                   [(major) (collect-maximum-generation)]
+                   [else
+                    (raise-argument-error 'collect-garbage
+                                          "(or/c 'major 'minor 'incremental)"
+                                          request)])])
+        (let loop ()
+          (let ([current-req (unbox collect-request)])
+            (unless (#%box-cas! collect-request current-req (max req (or current-req 0)))
+              (loop))))
+        ;; Seems like there should be a better way to request a rendezvous
+        ;; plus call to the collect handler
+        (#%$set-top-level-value! '$collect-request-pending #t)
+        (#%$collect-rendezvous))])]))
 
 (define current-memory-use
   (case-lambda

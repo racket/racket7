@@ -1116,6 +1116,7 @@
 
 (define the-foreign-guardian (make-guardian))
 
+;; Can be called in any host thread
 (define (poll-foreign-guardian)
   (let ([v (the-foreign-guardian)])
     (when v

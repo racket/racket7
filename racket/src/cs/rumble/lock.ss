@@ -49,12 +49,16 @@
   ;; Assume low contention on `eq?`- and `eqv?`-based tables across
   ;; Chez Scheme threads, in which case a compare-and-set spinlock is
   ;; good enough.
+  ;; Taking a lock disables interrupts, whcih ensures that the GC
+  ;; callback or other atomic actions can use hash tables without
+  ;; deadlocking.
   (define (make-spinlock) (box #f))
   (define (spinlock? v) (#%box? v))
   (define (spinlock-acquire q)
-    (disable-interrupts) ; => ensure that an unlock will happen
     (let loop ()
+      (disable-interrupts)
       (unless (#%box-cas! q #f #t)
+        (enable-interrupts)
         (loop))))
   (define (spinlock-release q)
     (#%set-box! q #f)

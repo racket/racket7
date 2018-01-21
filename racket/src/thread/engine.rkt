@@ -52,6 +52,13 @@
         exn:break:hang-up/non-engine
         exn:break:terminate/non-engine
 
+        ;; Disabling interrupts prevents a race with interrupt handlers.
+        ;; For example, if a GC is handled as an interrupt, then disabling
+        ;; interrupts prevents a race with a GC handler, and aything that
+        ;; disables interrupts can be used from a GC handler.
+        [disable-interrupts host:disable-interrupts]
+        [enable-interrupts host:enable-interrupts]
+
         fork-pthread
         pthread?
         [get-thread-id get-pthread-id]
@@ -62,7 +69,4 @@
         [make-mutex chez:make-mutex]
         [mutex-acquire chez:mutex-acquire]
         [mutex-release chez:mutex-release]
-        [active-pthreads chez:active-threads]
-        [collect-garbage-pending-major? chez:collect-garbage-pending-major?]
-        [collect-garbage-pending-minor? chez:collect-garbage-pending-minor?]
         threaded?)

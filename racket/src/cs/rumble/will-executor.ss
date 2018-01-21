@@ -58,6 +58,7 @@
       (enable-interrupts)
       #f])))
 
+;; Call with interrupts disabled or from the thread scheduler
 (define (poll-guardian guardian will-stacks)
   ;; Poll the guardian (which is shared among will executors)
   ;; for ready values, and add any ready value to the receiving will

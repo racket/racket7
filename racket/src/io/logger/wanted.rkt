@@ -9,7 +9,7 @@
          logger-all-levels)
 
 (define (logger-wanted-level logger topic)
-  (atomically
+  (atomically/no-interrupts
    (cond
      [(not topic) (logger-max-wanted-level logger)]
      [else
@@ -30,7 +30,7 @@
          (logger-wanted-level logger topic)])])))
                          
 (define (logger-max-wanted-level logger)
-  (atomically
+  (atomically/no-interrupts
    (cond
      [((logger-local-level-timestamp logger) . >= . (unbox (logger-root-level-timestamp-box logger)))
       ;; Ccahed value is up-to-date

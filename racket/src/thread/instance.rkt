@@ -41,6 +41,8 @@
           'schedule-info-did-work! schedule-info-did-work!
           'start-atomic start-atomic
           'end-atomic end-atomic
+          'start-atomic/no-interrupts start-atomic/no-interrupts
+          'end-atomic/no-interrupts end-atomic/no-interrupts
           'current-custodian current-custodian
           'unsafe-custodian-register unsafe-custodian-register
           'unsafe-custodian-unregister unsafe-custodian-unregister

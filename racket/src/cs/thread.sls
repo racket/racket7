@@ -81,6 +81,8 @@
         'exn:break:hang-up/non-engine exn:break:hang-up
         'exn:break:terminate/non-engine exn:break:terminate
         'current-process-milliseconds cpu-time
+        'disable-interrupts disable-interrupts
+        'enable-interrupts enable-interrupts
         'fork-pthread rumble:fork-thread
         'pthread? rumble:thread?
         'get-thread-id rumble:get-thread-id
@@ -91,9 +93,6 @@
         'make-mutex rumble:make-mutex
         'mutex-acquire rumble:mutex-acquire
         'mutex-release rumble:mutex-release
-        'active-pthreads active-pthreads
-        'collect-garbage-pending-major? collect-garbage-pending-major?
-        'collect-garbage-pending-minor? collect-garbage-pending-minor?
         'threaded? rumble:threaded?)]
       [else #f]))
 
@@ -113,5 +112,4 @@
                                  1/semaphore-post)
 
   (set-future-callbacks! 1/future? 1/current-future
-                         future-block future-wait current-future-prompt
-			 halt-workers resume-workers))
+                         future-block future-wait current-future-prompt))

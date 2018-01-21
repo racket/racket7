@@ -98,6 +98,8 @@
                          'current-sandman current-sandman
                          'start-atomic start-atomic
                          'end-atomic end-atomic
+                         'start-atomic/no-interrupts start-atomic
+                         'end-atomic/no-interrupts end-atomic
                          'current-custodian current-custodian
                          'custodian-shut-down? (lambda (c)
                                                  (define v (box 1))

@@ -9,6 +9,9 @@
          start-atomic
          end-atomic
 
+         start-atomic/no-interrupts
+         end-atomic/no-interrupts
+
          set-end-atomic-callback!)
 
 ;; This definition is specially recognized for Racket on
@@ -36,6 +39,14 @@
      (cb)]
     [else
      (current-atomic n)]))
+
+(define (start-atomic/no-interrupts)
+  (start-atomic)
+  (host:disable-interrupts))
+
+(define (end-atomic/no-interrupts)
+  (host:enable-interrupts)
+  (end-atomic))
 
 ;; ----------------------------------------
 

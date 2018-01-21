@@ -5,6 +5,8 @@
          ffi/unsafe/alloc
          ffi/unsafe/atomic
          ffi/unsafe/custodian
+         ffi/unsafe/schedule
+         ffi/unsafe/os-thread
          racket/port
          racket/format
          openssl)
@@ -177,8 +179,6 @@
                                        [proc4 (_fun #:atomic? #t #:async-apply (lambda (f) (f)) -> _pointer)])
   #:malloc-mode 'nonatomic)
 
-(define-racket scheme_signal_received (_fun -> _void))
-
 (define _pthread (_cpointer/null 'pthread))
 
 (define-racket pthread_create
@@ -192,10 +192,12 @@
 (define-racket scheme_call_sequence_of_procedures-ptr _fpointer
   #:c-id scheme_call_sequence_of_procedures)
   
-(define-cf CFRunLoopRun-ptr _fpointer
-  #:c-id CFRunLoopRun)
+(define-cf CFRunLoopGetCurrent (_fun -> _CFRunLoopRef))
+(define-cf CFRunLoopRun (_fun _CFRunLoopRef -> _void))
 (define-cf CFRunLoopGetCurrent-ptr _fpointer
   #:c-id CFRunLoopGetCurrent)
+(define-cf CFRunLoopRun-ptr _fpointer
+  #:c-id CFRunLoopRun)
 
 (define stop-and-release
   ((deallocator)
@@ -211,36 +213,58 @@
 
 (define (launch-run-loop-in-pthread init-reg more-retain)
   (define run-loop #f)
-  (define done (make-semaphore))
-  (define (setup r)
-    ;; Called in atomic mode in arbitrary Racket thread:
-    (set! run-loop (CFRetainRunLoop (cast r _pointer _CFRunLoopRef)))
-    (init-reg run-loop)
-    (semaphore-post done)
-    (scheme_signal_received)
-    #f)
-  (define (finished)
-    (free-immobile-cell retainer)
-    #f)
-  ;; Retains callbacks until the thread is done:
-  (define retainer (malloc-immobile-cell
-                    (vector setup finished more-retain)))
-  (define seq (make-Scheme_Proc_Sequence 4
-                                         #f
-                                         CFRunLoopGetCurrent-ptr
-                                         ;; `#:aync-apply` moves the following
-                                         ;; back to the main thread (in atomic mode):
-                                         setup
-                                         CFRunLoopRun-ptr
-                                         ;; `#:async-apply` here, too:
-                                         finished))
-  (define pth (pthread_create #f scheme_call_sequence_of_procedures-ptr seq))
-  (unless pth (error "could not start run-loop thread"))
-  (pthread_detach pth)
-  
-  (semaphore-wait done)
-  (set! done seq) ; retains `seq` until here
+  (cond
+    [(os-thread-enabled?)
+     (define create-done (make-os-semaphore))
+     (define retain-done (make-os-semaphore))
+     (define setup-done create-done)
+     (call-in-os-thread
+      (lambda ()
+        (define rl (CFRunLoopGetCurrent))
+        (set! run-loop rl)
+        (os-semaphore-post create-done)
+        (os-semaphore-wait retain-done)
+        (init-reg rl)
+        (os-semaphore-post setup-done)
+        ;; This isn't right, yet, because it blocks GC everywhere:
+        (CFRunLoopRun rl)))
+     (os-semaphore-wait create-done)
+     ;; To be on the safe side, register a finalizer in the Racket thread:
+     (set! run-loop (CFRetainRunLoop run-loop))
+     (os-semaphore-post retain-done)
+     (os-semaphore-wait setup-done)]
+    [else
+     (define done (make-semaphore))
+     (define (setup r)
+       ;; Called in atomic mode in arbitrary Racket thread:
+       (set! run-loop (CFRetainRunLoop (cast r _pointer _CFRunLoopRef)))
+       (init-reg run-loop)
+       (semaphore-post done)
+       (unsafe-signal-received)
+       #f)
+     (define (finished)
+       (free-immobile-cell retainer)
+       #f)
+     ;; Retains callbacks until the thread is done:
+     (define retainer (malloc-immobile-cell
+                       (vector setup finished more-retain)))
+     (define seq (make-Scheme_Proc_Sequence 4
+                                            #f
+                                            CFRunLoopGetCurrent-ptr
+                                            ;; `#:aync-apply` moves the following
+                                            ;; back to the main thread (in atomic mode):
+                                            setup
+                                            CFRunLoopRun-ptr
+                                            ;; `#:async-apply` here, too:
+                                            finished))
+     (define pth (pthread_create #f scheme_call_sequence_of_procedures-ptr seq))
+     (unless pth (error "could not start run-loop thread"))
+     (pthread_detach pth)
 
+     (semaphore-wait done)
+     (set! done seq) ; retains `seq` until here
+
+     (void)])
   run-loop)
 
 ;; ----------------------------------------
@@ -284,11 +308,11 @@
   (define in-callback (lambda (_in evt _null)
                         (void (semaphore-try-wait? in-ready))
                         (semaphore-post in-ready)
-                        (scheme_signal_received)))
+                        (unsafe-signal-received)))
   (define out-callback (lambda (_out evt _null)
                          (void (semaphore-try-wait? out-ready))
                          (semaphore-post out-ready)
-                         (scheme_signal_received)))
+                         (unsafe-signal-received)))
 
   (define context (make-CFStreamClientContext 0 #f #f #f #f))
   (check-ok (CFReadStreamSetClient in all-evts in-callback context))
@@ -296,7 +320,8 @@
 
   (define run-loop
     (launch-run-loop-in-pthread
-     ;; This function will be called as atomic within the scheduler:
+     ;; This function will be called as atomic within the scheduler
+     ;; or in a separate OS thread:
      (lambda (run-loop)
        (CFReadStreamScheduleWithRunLoop in run-loop kCFRunLoopDefaultMode)
        (CFWriteStreamScheduleWithRunLoop out run-loop kCFRunLoopDefaultMode))

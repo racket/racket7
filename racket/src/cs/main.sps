@@ -381,6 +381,7 @@
  (define peak-mem 0)
  (set-garbage-collect-notify!
   (let ([root-logger (|#%app| current-logger)])
+    ;; This function can be called in any Chez Scheme thread
     (lambda (gen pre-allocated pre-allocated+overhead pre-time pre-cpu-time
                  post-allocated post-allocated+overhead post-time post-cpu-time)
       (let ([minor? (< gen (collect-maximum-generation))])

@@ -23,8 +23,6 @@
          future:condition-signal
          future:condition-wait
          future:make-condition
-	 halt-workers
-         resume-workers
          signal-future
          reset-future-logs-for-tracing!
          mark-future-trace-end!)
@@ -228,8 +226,7 @@
 
 (struct worker (id lock mutex cond
                    [queue #:mutable] [idle? #:mutable] 
-                   [pthread #:mutable #:auto] [die? #:mutable #:auto]
-                   [halt? #:mutable #:auto])
+                   [pthread #:mutable #:auto] [die? #:mutable #:auto])
   #:auto-value #f)
 
 (struct scheduler ([workers #:mutable #:auto])
@@ -250,29 +247,6 @@
                 (with-lock ((worker-lock w) (get-caller))
                   (set-worker-die?! w #t)))
               (scheduler-workers global-scheduler))))
-
-(define halt-cond (chez:make-condition))
-(define halt-mutex (chez:make-mutex))
-
-(define (halt-workers)
-  (when global-scheduler
-    (for-each (lambda (w)
-    	        (with-lock ((worker-lock w) (get-caller))
-		  (set-worker-halt?! w #t)))
-	      (scheduler-workers global-scheduler))
-    (let f ()
-      (when (> (chez:active-threads) 1) ;; block until all workers have halted
-        (f)))))
-
-(define (resume-workers)
-  (when global-scheduler
-    (for-each (lambda (w)
-                (with-lock ((worker-lock w) (get-caller))
-                  (chez:mutex-acquire (worker-mutex w))
-                  (set-worker-halt?! w #f)
-                  (chez:mutex-release (worker-mutex w))))
-              (scheduler-workers global-scheduler))
-    (chez:condition-broadcast halt-cond)))
 
 (define (create-workers)
   (let loop ([id 1])
@@ -343,12 +317,6 @@
       (cond
         [(worker-die? worker) ;; worker was killed
          (lock-release (worker-lock worker) (get-pthread-id))]
-	[(worker-halt? worker) ;; worker is halting for gc
-	 (lock-release (worker-lock worker) (get-pthread-id))
-	 (chez:mutex-acquire halt-mutex)
-	 (chez:condition-wait halt-cond halt-mutex)
-	 (chez:mutex-release halt-mutex)
-	 (loop)]
         [(queue-empty? (worker-queue worker)) ;; have lock. no work
          (lock-release (worker-lock worker) (get-pthread-id))
          (cond

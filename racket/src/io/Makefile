@@ -4,7 +4,7 @@ RACO = $(RACKET) -N raco -l- raco
 
 # Set to `skip` if the stand-alone rktio
 # library is not needed
-RKTIO_LIBRARY_TARGET = skip
+RKTIO_LIBRARY_TARGET = rktio-library
 
 # Ignoring functions from `#%read` works beause they won't appear in
 # the simplified expansion, and declaring "collect.rkt" pure works
