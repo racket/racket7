@@ -77,10 +77,7 @@
           (let ([current-req (unbox collect-request)])
             (unless (#%box-cas! collect-request current-req (max req (or current-req 0)))
               (loop))))
-        ;; Seems like there should be a better way to request a rendezvous
-        ;; plus call to the collect handler
-        (#%$set-top-level-value! '$collect-request-pending #t)
-        (#%$collect-rendezvous))])]))
+        (collect-rendezvous))])]))
 
 (define current-memory-use
   (case-lambda

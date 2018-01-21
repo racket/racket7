@@ -15,6 +15,7 @@
 (check-defined 'object-backreferences)
 (check-defined 'current-generate-id)
 (check-defined 'load-compiled-from-port)
+(check-defined 'collect-rendezvous)
 
 ;; ----------------------------------------
 
