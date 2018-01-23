@@ -109,10 +109,13 @@
     
     (meta define (convert-function stx)
           (syntax-case stx ()
-            [(_ orig-ret-type name ([orig-arg-type arg-name] ...))
+            [(_ (flag ...) orig-ret-type name ([orig-arg-type arg-name] ...))
              (with-syntax ([ret-type (convert-type #'orig-ret-type)]
-                           [(arg-type ...) (map convert-type #'(orig-arg-type ...))])
-               #'(let ([proc (foreign-procedure (rktio-lookup 'name)
+                           [(arg-type ...) (map convert-type #'(orig-arg-type ...))]
+                           [(conv ...) (if (#%memq 'blocking (map syntax->datum #'(flag ...)))
+                                           #'(__thread)
+                                           #'())])
+               #'(let ([proc (foreign-procedure conv ... (rktio-lookup 'name)
                                                 (arg-type ...)
                                                 ret-type)])
                    (lambda (arg-name ...)
@@ -122,15 +125,15 @@
 
     (define-syntax (define-function stx)
       (syntax-case stx ()
-        [(_ _ name . _)
+        [(_ _ _ name . _)
          (with-syntax ([rhs (convert-function stx)])
            #'(define name rhs))]))
 
     (define-syntax (define-function*/errno stx)
       (syntax-case stx ()
-        [(_ err-val err-expr ret-type name ([rktio-type rktio] [arg-type arg] ...))
+        [(_ err-val err-expr flags ret-type name ([rktio-type rktio] [arg-type arg] ...))
          (with-syntax ([rhs (convert-function
-                             #'(define-function ret-type name ([rktio-type rktio] [arg-type arg] ...)))])
+                             #'(define-function flags ret-type name ([rktio-type rktio] [arg-type arg] ...)))])
            #'(define name
                (let ([proc rhs])
                  (lambda (rktio arg ...)
@@ -141,20 +144,20 @@
 
     (define-syntax define-function/errno
       (syntax-rules ()
-        [(_ err-val ret-type name ([rktio-type rktio] [arg-type arg] ...))
+        [(_ err-val flags ret-type name ([rktio-type rktio] [arg-type arg] ...))
          (define-function*/errno err-val
            (vector (rktio_get_last_error_kind rktio)
                    (rktio_get_last_error rktio))
-           ret-type name ([rktio-type rktio] [arg-type arg] ...))]))
+           flags ret-type name ([rktio-type rktio] [arg-type arg] ...))]))
     
     (define-syntax define-function/errno+step
       (syntax-rules ()
-        [(_ err-val ret-type name ([rktio-type rktio] [arg-type arg] ...))
+        [(_ err-val flags ret-type name ([rktio-type rktio] [arg-type arg] ...))
          (define-function*/errno err-val
            (vector (rktio_get_last_error_kind rktio)
                    (rktio_get_last_error rktio)
                    (rktio_get_last_error_step rktio))
-           ret-type name ([rktio-type rktio] [arg-type arg] ...))]))
+           flags ret-type name ([rktio-type rktio] [arg-type arg] ...))]))
 
     (define loaded-librktio
       (or (foreign-entry? "rktio_init")
@@ -290,11 +293,11 @@
              (extract-functions accum . rest)]
             [(_ accum (define-struct-type . _) . rest)
              (extract-functions accum . rest)]
-            [(_ accum (define-function _ id . _) . rest)
+            [(_ accum (define-function _ _ id . _) . rest)
              (extract-functions ('id id . accum) . rest)]
-            [(_ accum (define-function/errno _ _ id . _) . rest)
+            [(_ accum (define-function/errno _ _ _ id . _) . rest)
              (extract-functions ('id id . accum) . rest)]
-            [(_ accum (define-function/errno+step _ _ id . _) . rest)
+            [(_ accum (define-function/errno+step _ _ _ id . _) . rest)
              (extract-functions ('id id . accum) . rest)]))
         (define-syntax begin
           (syntax-rules ()

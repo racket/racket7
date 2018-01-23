@@ -48,11 +48,11 @@
 (define-syntax-rule (ref t) _pointer)
 (define-syntax-rule (*ref t) _pointer)
 
-(define-syntax-rule (define-function ret-type name ([arg-type arg-name] ...))
+(define-syntax-rule (define-function flags ret-type name ([arg-type arg-name] ...))
   (define name
     (get-ffi-obj 'name librktio (_fun arg-type ... -> ret-type))))
 
-(define-syntax-rule (define-function/errno* err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
+(define-syntax-rule (define-function/errno* err-v flags ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
                       err-expr)
   (begin
     (define proc
@@ -67,13 +67,13 @@
                 v))
           (end-atomic))))))
 
-(define-syntax-rule (define-function/errno err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...))
-  (define-function/errno* err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
+(define-syntax-rule (define-function/errno err-v flags ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...))
+  (define-function/errno* err-v flags ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
     (vector (rktio_get_last_error_kind rktio-name)
             (rktio_get_last_error rktio-name))))
 
-(define-syntax-rule (define-function/errno+step err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...))
-  (define-function/errno* err-v ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
+(define-syntax-rule (define-function/errno+step err-v flags ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...))
+  (define-function/errno* err-v flags ret-type name ([rktio-type rktio-name] [arg-type arg-name] ...)
     (vector (rktio_get_last_error_kind rktio-name)
             (rktio_get_last_error rktio-name)
             (rktio_get_last_error_step rktio-name))))
@@ -185,11 +185,11 @@
                         (extract-functions accum . rest)]
                        [(_ accum (define-struct-type . _) . rest)
                         (extract-functions accum . rest)]
-                       [(_ accum (define-function _ id . _) . rest)
+                       [(_ accum (define-function _ _ id . _) . rest)
                         (extract-functions ('id id . accum) . rest)]
-                       [(_ accum (define-function/errno _ _ id . _) . rest)
+                       [(_ accum (define-function/errno _ _ _ id . _) . rest)
                         (extract-functions ('id id . accum) . rest)]
-                       [(_ accum (define-function/errno+step _ _ id . _) . rest)
+                       [(_ accum (define-function/errno+step _ _ _ id . _) . rest)
                         (extract-functions ('id id . accum) . rest)]))
                    (define-syntax-rule (begin form ...)
                      (extract-functions [#;(begin)

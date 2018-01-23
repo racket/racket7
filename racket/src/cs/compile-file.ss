@@ -2,12 +2,12 @@
 ;; Check to make we're using a build of Chez Scheme
 ;; that has all the features we need.
 
-(define (check-defined sym)
-  (unless (guard (x [else #f]) (eval sym))
+(define (check-defined expr)
+  (unless (guard (x [else #f]) (eval expr))
     (error 'compile-file
            (format
-            "missing definition of `~a`; probably you need a newer Chez Scheme"
-            sym))))
+            "failed trying `~a`; probably you need a newer Chez Scheme"
+            expr))))
 
 (check-defined 'box-cas!)
 (check-defined 'make-arity-wrapper-procedure)
@@ -16,6 +16,7 @@
 (check-defined 'current-generate-id)
 (check-defined 'load-compiled-from-port)
 (check-defined 'collect-rendezvous)
+(check-defined '(define-ftype T (function __thread () void)))
 
 ;; ----------------------------------------
 
