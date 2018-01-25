@@ -18,7 +18,8 @@
 (test #f malloc 0 _int)
 (test #f malloc _int 0)
 
-(test 0 bytes-length (make-sized-byte-string #f 0))
+(unless (eq? 'cs (system-type 'gc))
+  (test 0 bytes-length (make-sized-byte-string #f 0)))
 
 ;; Check integer-range checking:
 (let ()
@@ -323,9 +324,10 @@
       (set-box! b #f)))
   ;; ---
   ;; test exposing internal mzscheme functionality
-  (test '(1 2)
-        (get-ffi-obj 'scheme_make_pair #f (_fun _scheme _scheme -> _scheme))
-        1 '(2))
+  (when (eq? 'racket (system-type 'vm))
+    (test '(1 2)
+          (get-ffi-obj 'scheme_make_pair #f (_fun _scheme _scheme -> _scheme))
+          1 '(2)))
   ;; ---
   ;; test arrays
   (let ([p (malloc _c7_list)]) ;; should allocate the right size
@@ -559,7 +561,7 @@
     (test 'hello hash-ref ht seventeen3 #f)))
 
 ;; Check proper handling of offsets:
-(let ()
+(when (eq? 'racket (system-type 'vm))
   (define scheme_make_sized_byte_string 
     (get-ffi-obj 'scheme_make_sized_byte_string #f (_fun _pointer _intptr _int -> _scheme)))
   ;; Non-gcable:
@@ -591,7 +593,7 @@
   (define _stuff-pointer (_cpointer 'stuff))
   
   (define p (cast (ptr-add (malloc 10) 5) _pointer _thing-pointer))
-  (cpointer-gcable? p)
+  (test #t cpointer-gcable? p)
   (define q (cast p _thing-pointer _stuff-pointer))
   (test (cast p _pointer _intptr)
         cast q _pointer _intptr)
@@ -650,7 +652,7 @@
 
 (delete-test-files)
 
-(let ()
+(when (eq? 'racket (system-type 'vm))
   (define _values (get-ffi-obj 'scheme_values #f (_fun _int (_list i _racket) -> _racket)))
   (test-values '(1 "b" three) (lambda () (_values 3 (list 1 "b" 'three)))))
 
@@ -665,8 +667,9 @@
   (test 4.4t0 extflvector-ref v 2)
   (test 2.2t0 ptr-ref (ptr-add (extflvector->cpointer v) (ctype-sizeof _longdouble)) _longdouble))
 
-;; Check a corner of UTF-16 conversion:
-(test "\U171D3" cast (cast "\U171D3" _string/utf-16 _gcpointer) _gcpointer _string/utf-16)
+(when (eq? 'racket (system-type 'vm))
+  ;; Check a corner of UTF-16 conversion:
+  (test "\U171D3" cast (cast "\U171D3" _string/utf-16 _gcpointer) _gcpointer _string/utf-16))
 
 ;; check async:
 (when test-async?
@@ -715,61 +718,51 @@
       (begin . body)))
 
   (define (malloc/register size/type)
-    (define m (malloc (if (ctype? size/type)
-                          (ctype-sizeof size/type)
-                          size/type)
-                      'raw))
+    (define sz (if (ctype? size/type)
+                   (ctype-sizeof size/type)
+                   size/type))
+    (define m (malloc sz 'raw))
+    (memset m 0 sz)
     (hash-set! (current-raw) m #t)
     m)
 
   ;; run multiple times to better catching gc related errors
   (define num-runs 5)
 
+  (define-syntax-rule (err/rt-test e p?)
+    (with-handlers ([p? void]
+                    [exn:fail? (lambda (exn) (error 'test "exn test ~a failed, expected ~a but got ~a" 'e p? exn))])
+      e))
+
   (define-syntax-rule (check-exn exn thunk)
     (if (regexp? exn)
         (err/rt-test (thunk) (lambda (e) (regexp-match? exn (exn-message e))))
         (err/rt-test (thunk) exn)))
-   (define-syntax-rule (err/rt-test e p?)
-     (with-handlers ([p? void]
-                     [exn:fail? (lambda (exn) (eprintf "exn test ~a failed, expected ~a but got ~a\n" 'e p? exn))])
-       e))
 
   ;; --- syntax errors
-  (define-syntax-rule (check-not-exn e)
-    (with-handlers ([exn:fail? (lambda (exn) (eprintf "no-exn test ~a failed, got exn ~a\n" 'e exn))])
-      e))
+  (define-syntax-rule (check-not-exn thunk)
+    (with-handlers ([exn:fail? (lambda (exn) (error 'test "no-exn test ~a failed, got exn ~a" 'e exn))])
+      (thunk)))
 
   (define-syntax-rule (check-equal? e v)
     (let ([r e]
           [v* v])
       (unless (equal? e v*)
-        (eprintf "check-equal? ~a: expected ~a but got ~a" 'e v* r))))
-  (begin-for-syntax
-   (define-syntax-rule (err/rt-test e p?)
-     (with-handlers ([p? void]
-                     [exn:fail? (lambda (exn) (eprintf "exn test ~a failed, expected ~a but got ~a\n" 'e p? exn))])
-       e))
-   (define-syntax-rule (check-not-exn e)
-     (with-handlers ([exn:fail? (lambda (exn) (eprintf "no-exn test ~a failed, got exn ~a\n" 'e exn))])
-       e))
-   (define-syntax-rule (check-exn+rx exn rx thunk)
-     (begin
-       (err/rt-test (thunk) exn)
-       (err/rt-test (thunk) (lambda (e) (regexp-match? rx (exn-message e))))))
+        (error 'test "check-equal? ~a: expected ~s but got ~s" 'e v* r))))
 
-
-
-
-
-   (check-exn+rx exn:fail:syntax? #rx"id must start with"
-                 (lambda () (local-expand #'(define-serializable-cstruct F1a ([a _int])) 'module #f)))
-   (check-exn+rx exn:fail:syntax? #rx"only allowed in module context"
-                 (lambda () (local-expand #'(define-serializable-cstruct _F1b ([a _int])) 'expression #f)))
-   (check-exn+rx exn:fail:syntax? #rx"#:property prop:serializable not allowed"
-                 (lambda () (local-expand #'(define-serializable-cstruct _F1c ([a _int]) #:property prop:serializable #f)
-                                          'module #f)))
-   (check-exn+rx exn:fail:syntax? #rx"expected \\[field-id ctype\\]"
-                 (lambda () (local-expand #'(define-serializable-cstruct _F1d ()) 'module #f))))
+  (define-syntax-rule (check-exn+rx exn rx thunk)
+    (begin
+      (err/rt-test (thunk) exn)
+      (err/rt-test (thunk) (lambda (e) (regexp-match? rx (exn-message e))))))
+  
+  (check-exn+rx exn:fail:syntax? #rx"id must start with"
+                (lambda () (expand #'(define-serializable-cstruct F1a ([a _int])))))
+  (check-exn+rx exn:fail:syntax? #rx"only allowed in module or top-level context"
+                (lambda () (expand #'(+ 1 (define-serializable-cstruct _F1b ([a _int]))))))
+  (check-exn+rx exn:fail:syntax? #rx"#:property prop:serializable not allowed"
+                (lambda () (expand #'(define-serializable-cstruct _F1c ([a _int]) #:property prop:serializable #f))))
+  (check-exn+rx exn:fail:syntax? #rx"expected \\[field-id ctype\\]"
+                (lambda () (expand #'(define-serializable-cstruct _F1d ()))))
 
 
   ;; --- misc creation tests
@@ -883,7 +876,7 @@
 
      (define s1 (serialize a))
      (define ds1 (deserialize s1))
-     (check-equal? #t (ptr-equal? (C-b (A-c ds1)) (D-b (A-d ds1))))
+     (check-equal? (ptr-equal? (C-b (A-c ds1)) (D-b (A-d ds1))) #t)
 
      (collect-garbage)
      (check-equal? (C-b (A-c a)) (D-b (A-d a)))
@@ -958,9 +951,10 @@
      (define ds (deserialize (serialize par)))
      (collect-garbage)
 
-     (check-equal? #t
+     (check-equal?
       (for*/and ([i 2] [j 5])
-        (= (SINT-a (array-ref (PTRAR-a ds) i j)) (+ 10 j (* i 5)))))
+        (= (SINT-a (array-ref (PTRAR-a ds) i j)) (+ 10 j (* i 5))))
+      #t)
 
      ;; --
      (define ear (ptr-ref (malloc/register _EMBAR) _EMBAR))
@@ -970,9 +964,10 @@
      (define ds2 (deserialize (serialize ear)))
      (collect-garbage)
 
-     (check-equal? #t
+     (check-equal?
       (for*/and ([i 2] [j 5])
-        (= (SINT-a (array-ref (EMBAR-a ds2) i j)) (+ 10 j (* i 5)))))))
+        (= (SINT-a (array-ref (EMBAR-a ds2) i j)) (+ 10 j (* i 5))))
+      #t)))
 
   ;; --- array with embedded struct with pointer
   (define-serializable-cstruct _TP ([a _int]) #:malloc-mode malloc/register)
@@ -995,6 +990,8 @@
 
 
   ;; --- inplace tests
+  (define can-in-place? (not (eq? 'chez-scheme (system-type 'vm))))
+
   (define-serializable-cstruct _NOIN ([a _int]))
 
   (define-serializable-cstruct _INS ([a _int]) #:serialize-inplace)
@@ -1003,7 +1000,9 @@
 
   (define-serializable-cstruct _INSD ([a _int])
     #:serialize-inplace #:deserialize-inplace
-    #:malloc-mode (lambda (_) (error "should not get here")))
+    #:malloc-mode (if can-in-place?
+                      (lambda (_) (error "should not get here"))
+                      malloc/register))
 
   ;; non-inplace + modification
   (let ()
@@ -1034,7 +1033,7 @@
     ;; modified
     (set-INS-a! ins 456)
     (define ds2 (deserialize s))
-    (check-equal? 456 (INS-a ds2)))
+    (check-equal? (if can-in-place? 456 123) (INS-a ds2)))
 
   ;; inplace deser
   (let ()
@@ -1195,44 +1194,45 @@
 
 ;; ----------------------------------------
 
-(define scheme_make_type
-  (get-ffi-obj 'scheme_make_type #f (_fun _string -> _short)))
-(define scheme_register_type_gc_shape
-  (get-ffi-obj 'scheme_register_type_gc_shape #f (_fun _short (_list i _intptr) -> _void)))
+(when (eq? 'racket (system-type 'vm))
+  (define scheme_make_type
+    (get-ffi-obj 'scheme_make_type #f (_fun _string -> _short)))
+  (define scheme_register_type_gc_shape
+    (get-ffi-obj 'scheme_register_type_gc_shape #f (_fun _short (_list i _intptr) -> _void)))
 
-(define SHAPE_STR_TERM       0)
-(define SHAPE_STR_PTR_OFFSET 1)
+  (define SHAPE_STR_TERM       0)
+  (define SHAPE_STR_PTR_OFFSET 1)
 
-(define-cstruct _tagged ([type-tag _short]
-                         [obj1 _racket]
-                         [non2 _intptr]
-                         [obj3 _racket]
-                         [non4 _intptr])
-  #:define-unsafe
-  #:malloc-mode 'tagged)
-(test #t cpointer-predicate-procedure? tagged?)
+  (define-cstruct _tagged ([type-tag _short]
+                           [obj1 _racket]
+                           [non2 _intptr]
+                           [obj3 _racket]
+                           [non4 _intptr])
+    #:define-unsafe
+    #:malloc-mode 'tagged)
+  (test #t cpointer-predicate-procedure? tagged?)
 
-(define t (scheme_make_type "new-type"))
-(scheme_register_type_gc_shape t (list SHAPE_STR_PTR_OFFSET tagged-obj1-offset
-                                       SHAPE_STR_PTR_OFFSET tagged-obj3-offset
-                                       SHAPE_STR_TERM))
+  (define t (scheme_make_type "new-type"))
+  (scheme_register_type_gc_shape t (list SHAPE_STR_PTR_OFFSET tagged-obj1-offset
+                                         SHAPE_STR_PTR_OFFSET tagged-obj3-offset
+                                         SHAPE_STR_TERM))
 
-(define obj1 (make-string 10))
-(define obj2 (make-bytes 12))
-(define obj3 (make-bytes 14))
-(define obj4 (make-string 16))
+  (define obj1 (make-string 10))
+  (define obj2 (make-bytes 12))
+  (define obj3 (make-bytes 14))
+  (define obj4 (make-string 16))
 
-(define obj2-addr (cast obj2 _racket _intptr))
-(define obj4-addr (cast obj4 _racket _intptr))
+  (define obj2-addr (cast obj2 _racket _intptr))
+  (define obj4-addr (cast obj4 _racket _intptr))
 
-(define o (make-tagged t obj1 obj2-addr obj3 obj4-addr))
+  (define o (make-tagged t obj1 obj2-addr obj3 obj4-addr))
 
-(collect-garbage)
+  (collect-garbage)
 
-(eq? (tagged-obj1 o) obj1)
-(eq? (tagged-obj3 o) obj3)
-(= (tagged-non2 o) obj2-addr)
-(= (tagged-non4 o) obj4-addr)
+  (eq? (tagged-obj1 o) obj1)
+  (eq? (tagged-obj3 o) obj3)
+  (= (tagged-non2 o) obj2-addr)
+  (= (tagged-non4 o) obj4-addr))
 
 ;; ----------------------------------------
 

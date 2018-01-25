@@ -109,6 +109,10 @@
 ;; address:
 (define (memory->cpointer x)
   (cond
+   [(or (not x) (authentic-cpointer? x))
+    ;; This happens when a pointer is converted without going through
+    ;; `cpointer-address` such as a `ptr-ref` on a struct or array type
+    x]
    [(eqv? x 0) #f]
    [else (make-cpointer x #f)]))
 
@@ -258,7 +262,7 @@
    [(has-cpointer-property? p)
     (do-ptr-add (unwrap-cpointer p) n save-tags?)]
    [else
-    (make-cpointer+offset p #f n)]))
+    (make-cpointer+offset (or p 0) #f n)]))
 
 (define ptr-add!
   (case-lambda
@@ -381,21 +385,33 @@
 (define-ctype _bytes 'void* 'bytes
   (lambda (x) x)
   (lambda (x)
-    (if (eqv? x 0)
-        #f
+    (cond
+     [(not x) ; happens with non-atomic memory reference
+      x]
+     [(bytes? x) ; happens with non-atomic memory reference
+      ;; For consistency, truncate byte string at any NUL byte
+      (let ([len (bytes-length x)])
         (let loop ([i 0])
-          (if (fx= 0 (foreign-ref 'unsigned-8 x i))
-              (let ([bstr (make-bytes i)])
-                (memcpy* bstr 0 x 0 i)
-                bstr)
-              (loop (add1 i)))))))
+          (cond
+           [(fx= i len) x]
+           [(fx= 0 (bytes-ref x i))
+            (subbytes x 0 i)]
+           [else (loop (fx+ i 1))])))]
+     [(eqv? x 0) #f]
+     [else
+      (let loop ([i 0])
+        (if (fx= 0 (foreign-ref 'unsigned-8 x i))
+            (let ([bstr (make-bytes i)])
+              (memcpy* bstr 0 x 0 i #f)
+              bstr)
+            (loop (add1 i))))])))
 
 (define-ctype _short_bytes 'void* 'bytes
   (lambda (x) x)
   (lambda (x) (let loop ([i 0])
                 (if (fx= 0 (foreign-ref 'unsigned-16 x i))
                     (let ([bstr (make-bytes i)])
-                      (memcpy* bstr 0 x 0 i)
+                      (memcpy* bstr 0 x 0 i #f)
                       bstr)
                     (loop (+ i 2))))))
 
@@ -470,8 +486,8 @@
         (create-compound-ctype 'struct
                                'struct
                                types
-                               (lambda (s) s) ; like `_pointer`: resolved later
-                               (lambda (c) c)
+                               (lambda (s) (unwrap-cpointer s)) ; like `_pointer`: resolved later
+                               (lambda (c) (memory->cpointer c))
                                make-decls
                                size
                                alignment)))]))
@@ -493,8 +509,8 @@
     (create-compound-ctype 'union
                            'union
                            types
-                           (lambda (s) s) ; like `_pointer`: resolved later
-                           (lambda (c) c)
+                           (lambda (s) (unwrap-cpointer s)) ; like `_pointer`: resolved later
+                           (lambda (c) (memory->cpointer c))
                            make-decls
                            size
                            alignment)))
@@ -513,9 +529,9 @@
         [alignment (ctype-alignof type)])
     (create-compound-ctype 'array
                            'array
-                           'array ; type
-                           (lambda (s) s) ; like `_pointer`: resolved later
-                           (lambda (c) (make-cpointer c #f)) ; was atomically converted to a bytestring
+                           (vector type count)
+                           (lambda (s) (unwrap-cpointer s)) ; like `_pointer`: resolved later
+                           (lambda (c) (memory->cpointer c))
                            make-decls
                            size
                            alignment)))
@@ -848,7 +864,8 @@
       ;; Corresponds to a copy, since `v` is represented by a pointer
       (memcpy* p offset
                (s->c type orig-v) 0
-               (compound-ctype-size type))]
+               (compound-ctype-size type)
+               #f)]
      [else
       (let ([host-rep (ctype-host-rep type)]
             [v (s->c type orig-v)])
@@ -897,7 +914,7 @@
                            [(void*) (cpointer-address v)]
                            [else v])))]))])))
 
-(define (memcpy* to to-offset from from-offset len)
+(define (memcpy* to to-offset from from-offset len move?)
   (let ([to (unwrap-cpointer* to)]
         [from (unwrap-cpointer* from)])
     (cond
@@ -919,29 +936,68 @@
                             (cpointer-memory from) from-i
                             (+ from-i n)))]
            [else
-            (raise-arguments-error 'memcpy "unaligned non-atomic memory transfer"
+            (raise-arguments-error (if move? 'memmove 'memcpy) "unaligned non-atomic memory transfer"
                                    "destination" to
                                    "source" from
                                    "destination offset" to-offset
                                    "source offset" from-offset
                                    "count" len)]))]
        [else
-        (raise-arguments-error 'memcpy "cannot copy non-atomic to/from atomic"
+        (raise-arguments-error (if move? 'memmove 'memcpy) "cannot copy non-atomic to/from atomic"
                                "destination" to
                                "source" from)])]
      [else
       (with-interrupts-disabled
-       (let ()
-         (let loop ([to (+ (cpointer*-address to) to-offset)]
-                    [from (+ (cpointer*-address from) from-offset)]
-                    [len len])
+       (let ([to (fx+ (cpointer*-address to) to-offset)]
+             [from (fx+ (cpointer*-address from) from-offset)])
+       (cond
+        [(and move?
+              ;; overlap?
+              (or (<= to from (fx+ to len -1))
+                  (<= from to (fx+ from len -1)))
+              ;; shifting up?
+              (< from to))
+         ;; Copy from high to low to move in overlapping region
+         (let loop ([to (+ to len)] [from (+ from len)] [len len])
            (unless (fx= len 0)
              (cond
+              #;
+              [(fx>= len 8)
+               (let ([to (fx- to 8)]
+                     [from (fx- from 8)])
+                 (foreign-set! 'integer-64 to 0
+                               (foreign-ref 'integer-64 from 0))
+                 (loop to from (fx- len 8)))]
+              [(and (meta-cond [(> (fixnum-width) 32) #t] [else #f])
+                    (fx>= len 4))
+               (let ([to (fx- to 4)]
+                     [from (fx- from 4)])
+                 (foreign-set! 'integer-32 to 0
+                               (foreign-ref 'integer-32 from 0))
+                 (loop to from (fx- len 4)))]
+              [(fx>= len 2)
+               (let ([to (fx- to 2)]
+                     [from (fx- from 2)])
+                 (foreign-set! 'integer-16 to 0
+                               (foreign-ref 'integer-16 from 0))
+                 (loop to from (fx- len 2)))]
+              [else
+               (let ([to (fx- to 1)]
+                     [from (fx- from 1)])
+                 (foreign-set! 'integer-8 to 0
+                               (foreign-ref 'integer-8 from 0))
+                 (loop to from (fx- len 1)))])))]
+        [else
+         (let loop ([to to] [from from] [len len])
+           (unless (fx= len 0)
+             (cond
+              #;
               [(fx>= len 8)
                (foreign-set! 'integer-64 to 0
                              (foreign-ref 'integer-64 from 0))
                (loop (fx+ to 8) (fx+ from 8) (fx- len 8))]
-              [(fx>= len 4)
+              [(and (meta-cond [(> (fixnum-width) 32) #t] [else #f])
+                    (fx>= len 4))
                (foreign-set! 'integer-32 to 0
                              (foreign-ref 'integer-32 from 0))
                (loop (fx+ to 4) (fx+ from 4) (fx- len 4))]
@@ -952,24 +1008,124 @@
               [else
                (foreign-set! 'integer-8 to 0
                              (foreign-ref 'integer-8 from 0))
-               (loop (fx+ to 1) (fx+ from 1) (fx- len 1))])))))])))
+               (loop (fx+ to 1) (fx+ from 1) (fx- len 1))])))])))])))
 
-(define memcpy
+(define memcpy/memmove
+  (case-lambda
+   [(who cptr src-cptr count)
+    (check who cpointer? cptr)
+    (check who cpointer? src-cptr)
+    (check who exact-nonnegative-integer? count)
+    (memcpy* cptr 0 src-cptr 0 count (eq? who 'memmove))]
+   [(who cptr offset/src-cptr/src-cptr src-cptr/offset/count count/count/type)
+    (check who cpointer? cptr)
+    (cond
+     [(cpointer? offset/src-cptr/src-cptr)
+      ;; use y or z of x/y/z
+      (cond
+       [(ctype? count/count/type)
+        ;; use z of x/y/z
+        (check who exact-nonnegative-integer? src-cptr/offset/count)
+        (memcpy* cptr 0 (unwrap-cpointer offset/src-cptr/src-cptr) 0 (* src-cptr/offset/count (ctype-sizeof count/count/type)) (eq? who 'memmove))]
+       [else
+        ;; use y of x/y/z
+        (check who exact-integer? src-cptr/offset/count)
+        (check who exact-nonnegative-integer? count/count/type)
+        (memcpy* cptr 0 (unwrap-cpointer offset/src-cptr/src-cptr) src-cptr/offset/count src-cptr/offset/count (eq? who 'memmove))])]
+     [else
+      ;; use x of x/y/z
+      (check who exact-integer? offset/src-cptr/src-cptr)
+      (check who cpointer? src-cptr/offset/count)
+      (check who exact-nonnegative-integer? count/count/type)
+      (memcpy* cptr offset/src-cptr/src-cptr src-cptr/offset/count 0 count/count/type (eq? who 'memmove))])]
+   [(who cptr offset src-cptr src-offset/count count/type)
+    (check who cpointer? cptr)
+    (check who exact-integer? offset)
+    (check who cpointer? src-cptr)
+    (cond
+     [(ctype? count/type)
+      ;; use y of x/y
+      (check who exact-nonnegative-integer? src-offset/count)
+      (let ([sz (ctype-sizeof count/type)])
+        (memcpy* cptr (* sz offset) src-cptr 0 (* src-offset/count sz) (eq? who 'memmove)))]
+     [else
+      ;; use x of x/y
+      (check who exact-integer? src-offset/count)
+      (check who exact-nonnegative-integer? count/type)
+      (memcpy* cptr offset src-cptr src-offset/count count/type (eq? who 'memmove))])]
+   [(who cptr offset src-cptr src-offset count type)
+    (check who cpointer? cptr)
+    (check who exact-integer? offset)
+    (check who cpointer? src-cptr)
+    (check who exact-integer? src-offset)
+    (check who ctype? type)
+    (let ([sz (ctype-sizeof type)])
+      (memcpy* cptr (* offset sz) src-cptr (* src-offset sz) (* count sz) (eq? who 'memmove)))]))
+
+(define/who memcpy
   (case-lambda
    [(cptr src-cptr count)
-    (memcpy* cptr 0 src-cptr 0 count)]
+    (memcpy/memmove who cptr src-cptr count)]
    [(cptr offset/src-cptr src-cptr/count count/type)
-    (if (ctype? count/type)
-        (memcpy* cptr 0 (unwrap-cpointer offset/src-cptr) 0 (* src-cptr/count (ctype-sizeof count/type)))
-        (memcpy* cptr offset/src-cptr src-cptr/count 0 count/type))]
+    (memcpy/memmove who cptr offset/src-cptr src-cptr/count count/type)]
    [(cptr offset src-cptr src-offset/count count/type)
-    (if (ctype? count/type)
-        (let ([sz (ctype-sizeof count/type)])
-          (memcpy* cptr (* sz offset) src-cptr 0 (* src-offset/count sz)))
-        (memcpy* cptr offset src-cptr src-offset/count count/type))]
+    (memcpy/memmove who cptr offset src-cptr src-offset/count count/type)]
    [(cptr offset src-cptr src-offset count type)
-    (let ([sz (ctype-sizeof type)])
-      (memcpy* cptr (* offset sz) src-cptr (* src-offset sz) (* count sz)))]))
+    (memcpy/memmove who cptr offset src-cptr src-offset count type)]))
+
+(define/who memmove
+  (case-lambda
+   [(cptr src-cptr count)
+    (memcpy/memmove who cptr src-cptr count)]
+   [(cptr offset/src-cptr src-cptr/count count/type)
+    (memcpy/memmove who cptr offset/src-cptr src-cptr/count count/type)]
+   [(cptr offset src-cptr src-offset/count count/type)
+    (memcpy/memmove who cptr offset src-cptr src-offset/count count/type)]
+   [(cptr offset src-cptr src-offset count type)
+    (memcpy/memmove who cptr offset src-cptr src-offset count type)]))
+
+;; ----------------------------------------
+
+(define (memset* to to-offset byte len)
+  (let ([to (unwrap-cpointer* to)])
+    (cond
+     [(cpointer-nonatomic? to)
+      (raise-arguments-error 'memset "cannot set non-atomic"
+                             "destination" to)]
+     [else
+      (with-interrupts-disabled
+       (let ([to (fx+ (cpointer*-address to) to-offset)])
+         (let loop ([to to] [len len])
+           (unless (fx= len 0)
+             (foreign-set! 'unsigned-8 to 0 byte)
+             (loop (fx+ to 1) (fx- len 1))))))])))
+
+(define/who memset
+  (case-lambda
+   [(cptr byte count)
+    (check who cpointer? cptr)
+    (check who byte? byte)
+    (check who exact-nonnegative-integer? count)
+    (memset* cptr 0 byte count)]
+   [(cptr byte/offset count/byte type/count)
+    (check who cpointer? cptr)
+    (cond
+     [(ctype? type/count)
+      (check who byte? byte/offset)
+      (check who exact-nonnegative-integer? count/byte)
+      (memset* cptr 0 byte/offset (fx* count/byte (ctype-sizeof type/count)))]
+     [else
+      (check who exact-integer? byte/offset)
+      (check who byte? count/byte)
+      (check who exact-nonnegative-integer? type/count)
+      (memset* cptr byte/offset count/byte type/count)])]
+   [(cptr offset byte count type)
+    (check who cpointer? cptr)
+    (check who exact-integer? offset)
+    (check who byte? byte)
+    (check who exact-nonnegative-integer? count)
+    (check who ctype? type)
+    (memset* cptr (fx* offset (ctype-sizeof type)) byte (fx* count (ctype-sizeof type)))]))
 
 ;; ----------------------------------------
 
@@ -1025,7 +1181,7 @@
                [p (normalized-malloc len
                                      (or mode (if type (ctype-malloc-mode type) 'atomic)))])
           (when copy-from
-            (memcpy* p 0 copy-from 0 len))
+            (memcpy* p 0 copy-from 0 len #f))
           p)]
        [(nonnegative-fixnum? (car args))
         (if count
@@ -1081,7 +1237,9 @@
                              (format "'~a mode is not supported" mode))]))
 
 (define (free p)
-  (foreign-free (cpointer-memory p)))
+  (let ([p (unwrap-cpointer p)])
+    (with-interrupts-disabled
+     (foreign-free (cpointer-address p)))))
 
 (define-record-type (cpointer/cell make-cpointer/cell cpointer/cell?)
   (parent cpointer)
@@ -1131,11 +1289,11 @@
     (ffi-call p in-types out-type #f #f #f)]
    [(p in-types out-type abi)
     (ffi-call p in-types out-type abi #f #f)]
-   [(p in-types out-type abi save-errno?)
-    (ffi-call p in-types out-type abi save-errno? #f)]
-   [(p in-types out-type abi save-errno? orig-place?)
-    (ffi-call p in-types out-type abi save-errno? orig-place? #f)]
-   [(p in-types out-type abi save-errno? orig-place? lock-name)
+   [(p in-types out-type abi save-errno)
+    (ffi-call p in-types out-type abi save-errno #f)]
+   [(p in-types out-type abi save-errno orig-place?)
+    (ffi-call p in-types out-type abi save-errno orig-place? #f)]
+   [(p in-types out-type abi save-errno orig-place? lock-name)
     (check who cpointer? p)
     (check who (lambda (l)
                  (and (list? l)
@@ -1143,9 +1301,9 @@
            :contract "(listof ctype?)"
            in-types)
     (check who ctype? out-type)
-    (ffi-call/callable #t p in-types out-type abi)]))
+    (ffi-call/callable #t p in-types out-type abi save-errno)]))
 
-(define (ffi-call/callable call? to-wrap in-types out-type abi)
+(define (ffi-call/callable call? to-wrap in-types out-type abi save-errno)
   (let* ([conv (case abi
                  [(stdcall) '__stdcall]
                  [(sysv) '__cdecl]
@@ -1244,12 +1402,15 @@
                                                     (maker (cpointer-address arg))]
                                                    [else arg])))
                                              args in-types arg-makers)))])
-                       (cond
-                        [ret-ptr
-                         (make-cpointer ret-ptr #f)]
-                        [(eq? (ctype-our-rep out-type) 'gcpointer)
-                         (addr->gcpointer-memory r)]
-                        [else r]))))])
+                         (case save-errno
+                           [(posix) (thread-cell-set! errno-cell (get-errno))]
+                           [(windows) (thread-cell-set! errno-cell (get-last-error))])
+                         (cond
+                          [ret-ptr
+                           (make-cpointer ret-ptr #f)]
+                          [(eq? (ctype-our-rep out-type) 'gcpointer)
+                           (addr->gcpointer-memory r)]
+                          [else r]))))])
             (c->s out-type r))))]
      [else ; callable
       (gen-proc (lambda args ; if ret-id, includes an extra initial argument to receive the result
@@ -1268,7 +1429,7 @@
                                                             (let* ([size (compound-ctype-size type)]
                                                                    [addr (ftype-pointer-address arg)]
                                                                    [bstr (make-bytevector size)])
-                                                              (memcpy* bstr 0 addr 0 size)
+                                                              (memcpy* bstr 0 addr 0 size #f)
                                                               (make-cpointer bstr #f))]
                                                            [else
                                                             (cond
@@ -1279,7 +1440,7 @@
                     (if ret-id
                         (let* ([size (compound-ctype-size out-type)]
                                [addr (ftype-pointer-address (car args))])
-                          (memcpy* addr 0 v 0 size))
+                          (memcpy* addr 0 v 0 size #f))
                         (case (ctype-host-rep out-type)
                           [(void*) (cpointer-address v)]
                           [else v])))))])))
@@ -1324,7 +1485,7 @@
            :contract "(listof ctype?)"
            in-types)
     (check who ctype? out-type)
-    (let* ([code (ffi-call/callable #f proc in-types out-type abi)]
+    (let* ([code (ffi-call/callable #f proc in-types out-type abi #f)]
            [cb (create-callback code)])
       (lock-object code)
       (the-foreign-guardian cb (lambda () (unlock-object code)))
@@ -1332,20 +1493,52 @@
 
 ;; ----------------------------------------
 
-(define-syntax define-foreign-not-yet-available
-  (syntax-rules ()
-    [(_ id)
-     (define (id . args)
-       (error 'id "foreign API not yet supported"))]
-    [(_ id ...)
-     (begin (define-foreign-not-yet-available id) ...)]))
+(define/who (make-sized-byte-string cptr len)
+  (check who cpointer? cptr)
+  (check who exact-nonnegative-integer? len)
+  (raise-unsupported-error who))
 
-(define-foreign-not-yet-available
-  lookup-errno
-  make-sized-byte-string
-  memmove
-  memset
-  saved-errno)
+(define errno-cell (make-thread-cell 0))
+
+(define/who saved-errno
+  (case-lambda
+   [() (thread-cell-ref errno-cell)]
+   [(v)
+    (check who exact-integer? v)
+    (thread-cell-set! errno-cell v)]))
+
+(define/who (lookup-errno sym)
+  (check who symbol? sym)
+  (raise-unsupported-error who))
+
+;; function is called with interrupts disabled
+(define get-errno
+  (let ([get-&errno-name
+         (case (machine-type)
+           [(a6nt ta6nt i3nt ti3nt)
+            (load-shared-object "msvcrt.dll")
+            "_errno"]
+           [(a6osx ta6osx i3osx ti3osx)
+            (load-shared-object "libc.dylib")
+            "__error"]
+           [(a6le ta6le i3le ti3le)
+            (load-shared-object "libc.so.6")
+            "__errno_location"]
+           [else
+            ;; FIXME for more platforms
+            (load-shared-object "libc.so")
+            "__error"])])
+    (let ([get-&errno (foreign-procedure get-&errno-name () void*)])
+      (lambda ()
+        (foreign-ref 'int (get-&errno) 0)))))
+
+;; function is called with interrupts disabled
+(define get-last-error
+  (case (machine-type)
+    [(a6nt ta6nt i3nt ti3nt)
+     (load-shared-object "kernel32.dll")
+     (foreign-procedure "GetLastError" () int)]
+    [else (lambda () 0)]))
 
 ;; ----------------------------------------
 

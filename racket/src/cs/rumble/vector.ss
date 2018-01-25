@@ -291,13 +291,23 @@
       (check-range who "vector" src s-start s-end (vector-length src))
       (let ([len (fx- s-end s-start)])
         (check-space who "vector" d-start d-len len)
-        (if (and (#%vector? src) (#%vector? dest))
-            (vector*-copy! dest d-start src s-start s-end)
-            (let loop ([i len])
-              (unless (fx= 0 i)
-                (let ([i (fx1- i)])
-                  (vector-set! dest (fx+ d-start i) (vector-ref src (fx+ s-start i)))
-                  (loop i)))))))]))
+        (cond
+         [(and (#%vector? src) (#%vector? dest))
+          (vector*-copy! dest d-start src s-start s-end)]
+         [(and (eq? (strip-impersonator dest)
+                    (strip-impersonator src))
+               (< d-start s-start))
+          ;; Need to copy from low to high to be memmove-like
+          (let loop ([i 0])
+            (unless (fx= i len)
+              (vector-set! dest (fx+ d-start i) (vector-ref src (fx+ s-start i)))
+              (loop (fx+ i 1))))]
+         [else
+          (let loop ([i len])
+            (unless (fx= 0 i)
+              (let ([i (fx1- i)])
+                (vector-set! dest (fx+ d-start i) (vector-ref src (fx+ s-start i)))
+                (loop i))))])))]))
 
 ;; Like `vector-copy!`, but doesn't work on impersonators, and doesn't
 ;; add its own tests on the vector or range (so unsafe if Rumble is
@@ -309,11 +319,22 @@
    [(src src-start dest dest-start)
     (vector*-copy! dest dest-start src src-start (#%vector-length src))]
    [(dest dest-start src src-start src-end)
-    (let loop ([i (fx- src-end src-start)])
-      (unless (fx= 0 i)
-        (let ([i (fx1- i)])
-          (#%vector-set! dest (fx+ dest-start i) (vector-ref src (fx+ src-start i)))
-          (loop i))))]))
+    (let ([len (fx- src-end src-start)])
+      (cond
+       [(and (eq? (strip-impersonator dest)
+                  (strip-impersonator src))
+             (< dest-start src-start))
+        ;; Need to copy from low to high to be memmove-like
+        (let loop ([i 0])
+          (unless (fx= len i)
+            (#%vector-set! dest (fx+ dest-start i) (vector-ref src (fx+ src-start i)))
+            (loop (fx+ i 1))))]
+       [else
+        (let loop ([i len])
+          (unless (fx= 0 i)
+            (let ([i (fx1- i)])
+              (#%vector-set! dest (fx+ dest-start i) (vector-ref src (fx+ src-start i)))
+              (loop i))))]))]))
 
 (define/who vector->values
   (case-lambda

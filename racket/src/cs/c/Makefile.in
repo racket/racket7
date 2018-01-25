@@ -70,10 +70,10 @@ gracketcs@NOT_OSX@: raw_gracketcs $(srcdir)/../racket.so $(EMBED_DEPS)
 
 BOOT_OBJS = boot.o $(SCHEME_INC)/kernel.o rktio/librktio.a
 
-raw_racketcs: main.o boot.o
+raw_racketcs: main.o boot.o $(BOOT_OBJS)
 	$(CC) $(CFLAGS) -o raw_racketcs main.o $(BOOT_OBJS) $(LDFLAGS) $(LIBS)
 
-raw_gracketcs: grmain.o boot.o
+raw_gracketcs: grmain.o boot.o $(BOOT_OBJS)
 	$(CC) $(CFLAGS) -o raw_gracketcs grmain.o $(BOOT_OBJS) $(LDFLAGS) $(LIBS)
 
 # ----------------------------------------
