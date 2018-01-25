@@ -46,7 +46,7 @@
 
 ;; Gets a primitive cpointer type by following a `prop:evt` property
 ;; as needed. Call with function *before* disabling GC interrupts.
-(define (unwrap-cpointer p)
+(define (unwrap-cpointer who p)
   (cond
    [(authentic-cpointer? p) p]
    [(not p) p]
@@ -57,7 +57,7 @@
             [(exact-nonnegative-integer? v)
              (let ([v (unsafe-struct-ref p v)])
                (if (cpointer? v)
-                   (unwrap-cpointer v)
+                   (unwrap-cpointer who v)
                    #f))]
             [(procedure? v)
              (let ([p2 (v p)])
@@ -65,44 +65,44 @@
                  (raise-result-error 'prop:cpointer-accessor
                                      "cpointer?"
                                      p2))
-               (unwrap-cpointer p2))]
+               (unwrap-cpointer who p2))]
             [else
-             (unwrap-cpointer v)]))]))
+             (unwrap-cpointer who v)]))]))
 
 ;; Like `unwrap-cpointer*`, but also allows an integer as a raw
 ;; foreign address:
-(define (unwrap-cpointer* p)
+(define (unwrap-cpointer* who p)
   (if (integer? p)
       p
-      (unwrap-cpointer p)))
+      (unwrap-cpointer who p)))
 
 (define (offset-ptr? p)
   (unless (cpointer? p)
     (raise-argument-error 'offset-ptr? "cpointer?" p))
   (cpointer+offset? p))
 
-(define (set-cpointer-tag! p t)
+(define/who (set-cpointer-tag! p t)
   (if (authentic-cpointer? p)
       (cpointer-tags-set! p t)
       (if (cpointer? p)
-          (let ([q (unwrap-cpointer p)])
+          (let ([q (unwrap-cpointer who p)])
             (if (authentic-cpointer? q)
                 (set-cpointer-tag! q t)
-                (raise-arguments-error 'set-cpointer-tag!
+                (raise-arguments-error who
                                        "cannot set tag on given cpointer"
                                        "given" p
                                        "tag" t)))
-          (raise-argument-error 'set-cpointer-tag! "cpointer?" p))))
+          (raise-argument-error who "cpointer?" p))))
 
-(define (cpointer-tag p)
+(define/who (cpointer-tag p)
   (if (authentic-cpointer? p)
       (cpointer-tags p)
       (if (cpointer? p)
-          (let ([q (unwrap-cpointer p)])
+          (let ([q (unwrap-cpointer who p)])
             (if (authentic-cpointer? q)
                 (cpointer-tag q)
                 #f))
-          (raise-argument-error 'cpointer-tag "cpointer?" p))))
+          (raise-argument-error who "cpointer?" p))))
 
 ;; Convert a `memory` --- typically a raw foreign address, but possibly
 ;; a byte string or vector --- to a cpointer, using #f for a NULL
@@ -208,20 +208,14 @@
 
 ;; ----------------------------------------
 
-(define (ptr-equal? p1 p2)
-  (unless (cpointer? p1)
-    (raise-argument-error 'ptr-equal? "cpointer?" p1))
-  (unless (cpointer? p2)
-    (raise-argument-error 'ptr-equal? "cpointer?" p2))
-  (let ([p1 (unwrap-cpointer p1)]
-        [p2 (unwrap-cpointer p2)])
+(define/who (ptr-equal? p1 p2)
+  (let ([p1 (unwrap-cpointer who p1)]
+        [p2 (unwrap-cpointer who p2)])
     (with-interrupts-disabled ; disable GC while extracting addresses
      (= (cpointer-address p1) (cpointer-address p2)))))
 
-(define (ptr-offset p)
-  (unless (cpointer? p)
-    (raise-argument-error 'ptr-offset "cpointer?" p))
-  (let ([p (unwrap-cpointer p)])
+(define/who (ptr-offset p)
+  (let ([p (unwrap-cpointer who p)])
     (ptr-offset* p)))
 
 (define (ptr-offset* p)
@@ -260,7 +254,7 @@
                           (and save-tags? (cpointer-tag p))
                           (+ n (ptr-offset* p)))]
    [(has-cpointer-property? p)
-    (do-ptr-add (unwrap-cpointer p) n save-tags?)]
+    (do-ptr-add (unwrap-cpointer 'do-ptr-add p) n save-tags?)]
    [else
     (make-cpointer+offset (or p 0) #f n)]))
 
@@ -352,38 +346,51 @@
 (define-syntax define-ctype
   (syntax-rules ()
     [(_ id host-rep basetype)
-     (define id (create-ctype host-rep basetype basetype #f #f))]
+     (define/who id (create-ctype host-rep basetype basetype #f #f))]
     [(_ id host-rep basetype s->c)
-     (define id (create-ctype host-rep basetype basetype s->c #f))]
+     (define/who id (create-ctype host-rep basetype basetype s->c #f))]
     [(_ id host-rep basetype s->c c->s)
-     (define id (create-ctype host-rep basetype basetype s->c c->s))]))
+     (define/who id (create-ctype host-rep basetype basetype s->c c->s))]))
+
+;; We need `s->c` checks, even if they seem redundant, to make sure
+;; that the checks happen early enough --- outside of atomic and
+;; foreign-thread regions. Also, the integer checks built into Chez
+;; Scheme are more permissive than Racket's.
+
+(define-syntax-rule (checker who ?) (lambda (x) (if (? x) x (bad-ctype-value who x))))
+(define-syntax integer-checker
+  (syntax-rules (signed unsigned)
+    [(_ who signed n int?) (checker who (lambda (x) (and (int? x) (<= (- (expt 2 (- n 1))) x  (- (expt 2 (- n 1)) 1)))))]
+    [(_ who unsigned n int?) (checker who (lambda (x) (and (int? x) (<= 0 x  (- (expt 2 n) 1)))))]))
 
 (define-ctype _bool 'boolean 'bool)
-(define-ctype _double 'double 'double)
-(define-ctype _fixnum 'fixnum 'fixnum)
-(define-ctype _float 'float 'float)
-(define-ctype _int8 'integer-8 'int8)
-(define-ctype _int16 'integer-16 'int16)
-(define-ctype _int32 'integer-32 'int32)
-(define-ctype _int64 'integer-64 'int64)
-(define-ctype _uint8 'unsigned-8 'uint8)
-(define-ctype _uint16 'unsigned-16 'uint16)
-(define-ctype _uint32 'unsigned-32 'uint32)
-(define-ctype _uint64 'unsigned-64 'uint64)
+(define-ctype _double 'double 'double (checker who flonum?))
+(define-ctype _fixnum 'fixnum 'fixnum (checker who fixnum?))
+(define-ctype _float 'float 'float (checker who flonum?))
+(define-ctype _int8 'integer-8 'int8 (integer-checker who signed 8 fixnum?))
+(define-ctype _int16 'integer-16 'int16 (integer-checker who signed 16 fixnum?))
+(define-ctype _int32 'integer-32 'int32 (integer-checker who signed 32 exact-integer?))
+(define-ctype _int64 'integer-64 'int64 (integer-checker who signed 64 exact-integer?))
+(define-ctype _uint8 'unsigned-8 'uint8 (integer-checker who unsigned 8 fixnum?))
+(define-ctype _uint16 'unsigned-16 'uint16 (integer-checker who unsigned 16 fixnum?))
+(define-ctype _uint32 'unsigned-32 'uint32 (integer-checker who unsigned 32 exact-integer?))
+(define-ctype _uint64 'unsigned-64 'uint64 (integer-checker who unsigned 64 exact-integer?))
 (define-ctype _scheme 'scheme-object 'scheme)
-(define-ctype _string/ucs-4 (if (system-big-endian?) 'utf-32be 'utf-32le) 'string/ucs-4)
-(define-ctype _string/utf-16 (if (system-big-endian?) 'utf-16be 'utf-16le) 'string/utf-16)
-(define-ctype _void 'void 'void)
+(define-ctype _string/ucs-4 (if (system-big-endian?) 'utf-32be 'utf-32le) 'string/ucs-4
+   (checker who string?))
+(define-ctype _string/utf-16 (if (system-big-endian?) 'utf-16be 'utf-16le) 'string/utf-16
+  (checker who string?))
+(define-ctype _void 'void 'void (checker who void))
 
 (define (bad-ctype-value type-name v)
   (raise-arguments-error 'apply
                          "bad value for conversion"
-                         "ctype" type-name
+                         "ctype" (make-unquoted-printing-string (symbol->string type-name))
                          "value" v))
 
 ;; Unlike traditional Racket, copies when converting from C:
 (define-ctype _bytes 'void* 'bytes
-  (lambda (x) x)
+  (checker who (lambda (x) (or (not x) (bytes? x))))
   (lambda (x)
     (cond
      [(not x) ; happens with non-atomic memory reference
@@ -418,46 +425,35 @@
 (define-ctype _double* 'double 'double
   (lambda (x) (if (real? x)
                   (exact->inexact x)
-                  (bad-ctype-value '_double* x))))
+                  (bad-ctype-value who x))))
 
-(define-ctype _ufixnum 'fixnum 'fixnum
-  (lambda (x) (if (and (fixnum? x) (fx> x 0))
-                  x
-                  (bad-ctype-value x '_ufixnum))))
-
-(define-ctype _fixint 'integer-32 'fixint
-  (lambda (x) (if (fixnum? x)
-                  x
-                  (bad-ctype-value x '_fixint))))
-
-(define-ctype _ufixint 'unsigned-32 'ufixint
-  (lambda (x) (if (fixnum? x)
-                  x
-                  (bad-ctype-value x '_ufixint))))
+(define-ctype _ufixnum 'fixnum 'fixnum (checker who fixnum?)) ; historically, no sign check
+(define-ctype _fixint 'integer-32 'fixint (checker who fixnum?))
+(define-ctype _ufixint 'unsigned-32 'ufixint (checker who fixnum?)) ; historically, no sign check
 
 (define-ctype _symbol 'string 'string
   (lambda (x) (if (symbol? x)
                   (symbol->string x)
-                  (bad-ctype-value '_symbol x)))
+                  (bad-ctype-value who x)))
   (lambda (s) (string->symbol s)))
 
 (define-ctype _longdouble 'double 'double
-  (lambda (x) (bad-ctype-value '_longdouble x)))
+  (lambda (x) (bad-ctype-value who x)))
 
 (define-ctype _pointer 'void* 'pointer
-  (lambda (v) (unwrap-cpointer v)) ; resolved to an address later (with the GC disabled)
+  (lambda (v) (unwrap-cpointer who v)) ; resolved to an address later (with the GC disabled)
   (lambda (x) (memory->cpointer x)))
 
 ;; Treated specially by `ptr-ref`
 (define-ctype _fpointer 'void* 'fpointer
-  (lambda (v) (unwrap-cpointer v)) ; resolved to an address later (with the GC disabled)
+  (lambda (v) (unwrap-cpointer who v)) ; resolved to an address later (with the GC disabled)
   (lambda (x)
     (if (ffi-obj? x) ; check for `ptr-ref` special case on `ffi-obj`s
         x
         (memory->cpointer x))))
 
 (define-ctype _gcpointer 'void* 'gcpointer
-  (lambda (v) (unwrap-cpointer v)) ; like `_pointer`: resolved later
+  (lambda (v) (unwrap-cpointer who v)) ; like `_pointer`: resolved later
   (lambda (x)
     ;; `x` must have been converted to a bytevector or vector before
     ;; the GC was re-enabled
@@ -486,7 +482,7 @@
         (create-compound-ctype 'struct
                                'struct
                                types
-                               (lambda (s) (unwrap-cpointer s)) ; like `_pointer`: resolved later
+                               (lambda (s) (unwrap-cpointer '_struct s)) ; like `_pointer`: resolved later
                                (lambda (c) (memory->cpointer c))
                                make-decls
                                size
@@ -509,7 +505,7 @@
     (create-compound-ctype 'union
                            'union
                            types
-                           (lambda (s) (unwrap-cpointer s)) ; like `_pointer`: resolved later
+                           (lambda (s) (unwrap-cpointer '_union s)) ; like `_pointer`: resolved later
                            (lambda (c) (memory->cpointer c))
                            make-decls
                            size
@@ -530,7 +526,7 @@
     (create-compound-ctype 'array
                            'array
                            (vector type count)
-                           (lambda (s) (unwrap-cpointer s)) ; like `_pointer`: resolved later
+                           (lambda (s) (unwrap-cpointer '_array s)) ; like `_pointer`: resolved later
                            (lambda (c) (memory->cpointer c))
                            make-decls
                            size
@@ -671,8 +667,7 @@
     (ctype-sizeof c)]))
 
 (define/who (cpointer-gcable? p)
-  (check who cpointer? p)
-  (let ([p (unwrap-cpointer p)])
+  (let ([p (unwrap-cpointer who p)])
     (or (bytes? p)
         (and (authentic-cpointer? p)
              (let ([memory (cpointer-memory p)])
@@ -782,7 +777,7 @@
       ;; Instead of copying, get a pointer within `p`:
       (do-ptr-add orig-p offset #f)]
      [else
-      (let ([p (unwrap-cpointer orig-p)]
+      (let ([p (unwrap-cpointer 'foreign-ref* orig-p)]
             [host-rep (ctype-host-rep type)])
         (cond
          [(cpointer-nonatomic? p)
@@ -858,7 +853,7 @@
   (zero? (fxand offset (fx- ptr-size-in-bytes 1))))
 
 (define (foreign-set!* type orig-p offset orig-v)
-  (let ([p (unwrap-cpointer orig-p)])
+  (let ([p (unwrap-cpointer 'foreign-set!* orig-p)])
     (cond
      [(compound-ctype? type)
       ;; Corresponds to a copy, since `v` is represented by a pointer
@@ -915,8 +910,8 @@
                            [else v])))]))])))
 
 (define (memcpy* to to-offset from from-offset len move?)
-  (let ([to (unwrap-cpointer* to)]
-        [from (unwrap-cpointer* from)])
+  (let ([to (unwrap-cpointer* 'memcpy to)]
+        [from (unwrap-cpointer* 'memcpy from)])
     (cond
      [(or (cpointer-nonatomic? to)
           (cpointer-nonatomic? from))
@@ -1026,12 +1021,12 @@
        [(ctype? count/count/type)
         ;; use z of x/y/z
         (check who exact-nonnegative-integer? src-cptr/offset/count)
-        (memcpy* cptr 0 (unwrap-cpointer offset/src-cptr/src-cptr) 0 (* src-cptr/offset/count (ctype-sizeof count/count/type)) (eq? who 'memmove))]
+        (memcpy* cptr 0 (unwrap-cpointer who offset/src-cptr/src-cptr) 0 (* src-cptr/offset/count (ctype-sizeof count/count/type)) (eq? who 'memmove))]
        [else
         ;; use y of x/y/z
         (check who exact-integer? src-cptr/offset/count)
         (check who exact-nonnegative-integer? count/count/type)
-        (memcpy* cptr 0 (unwrap-cpointer offset/src-cptr/src-cptr) src-cptr/offset/count src-cptr/offset/count (eq? who 'memmove))])]
+        (memcpy* cptr 0 (unwrap-cpointer who offset/src-cptr/src-cptr) src-cptr/offset/count src-cptr/offset/count (eq? who 'memmove))])]
      [else
       ;; use x of x/y/z
       (check who exact-integer? offset/src-cptr/src-cptr)
@@ -1087,7 +1082,7 @@
 ;; ----------------------------------------
 
 (define (memset* to to-offset byte len)
-  (let ([to (unwrap-cpointer* to)])
+  (let ([to (unwrap-cpointer* 'memset to)])
     (cond
      [(cpointer-nonatomic? to)
       (raise-arguments-error 'memset "cannot set non-atomic"
@@ -1236,8 +1231,8 @@
     (raise-unsupported-error 'malloc
                              (format "'~a mode is not supported" mode))]))
 
-(define (free p)
-  (let ([p (unwrap-cpointer p)])
+(define/who (free p)
+  (let ([p (unwrap-cpointer who p)])
     (with-interrupts-disabled
      (foreign-free (cpointer-address p)))))
 
@@ -1373,13 +1368,13 @@
          [async-callback-queue (and (procedure? async-apply) (current-async-callback-queue))])
     (cond
      [call?
-      (let* ([proc-p (unwrap-cpointer to-wrap)])
+      (let* ([proc-p (unwrap-cpointer 'ffi-call to-wrap)])
         (lambda args
           (let* ([args (map (lambda (orig-arg in-type)
                               (let ([arg (s->c in-type orig-arg)])
                                 (if (and (cpointer? arg)
                                          (not (eq? 'scheme-object (ctype-host-rep in-type))))
-                                    (let ([p (unwrap-cpointer arg)])
+                                    (let ([p (unwrap-cpointer 'ffi-call arg)])
                                       (when (and (cpointer-nonatomic? p)
                                                  (not (cpointer/cell? p)))
                                         (disallow-nonatomic-pointer 'argument orig-arg proc-p))
