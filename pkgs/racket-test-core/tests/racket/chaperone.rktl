@@ -223,6 +223,20 @@
     (define-values (a b c) (vector->values b2))
     (test '(1 2 3) list a b c)))
 
+;; vector-copy! and chaperones
+(let ([b (vector 1 2 3)])
+  (let ([b2 (impersonate-vector b
+                                (lambda (b i v) v)
+                                (lambda (b i v) v))])
+    (vector-copy! b 0 b2 1)
+    (test '#(2 3 3) values b)))
+(let ([b (vector 2 3 4)])
+  (let ([b2 (impersonate-vector b
+                                (lambda (b i v) v)
+                                (lambda (b i v) v))])
+    (vector-copy! b 1 b2 0 2)
+    (test '#(2 2 3) values b)))
+
 (define unsafe-chaperone-vector-name "unsafe-chaperone-vector")
 (define unsafe-impersonate-vector-name "unsafe-impersonate-vector")
 (define chaperone-vector*-name "chaperone-vector*")
@@ -2270,15 +2284,18 @@
     (for/list ([j 4])
       (thread
        (lambda ()
+         (define save-keys '())
          (for ([i 1000])
            (define v (random 100000))
            (define k (a v))
+           (set! save-keys (cons k save-keys))
            (hash-set! cht k v)
            ;; Make sure the addition didn't get lost, which
            ;; can happen when a lock is missing:
            (unless (equal? (hash-ref cht k #f) v)
              (error "oops")))
-         (semaphore-post done)))))
+         (semaphore-post done)
+         save-keys))))
 
   (for-each sync ths)
 
