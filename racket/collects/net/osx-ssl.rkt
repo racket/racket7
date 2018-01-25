@@ -226,7 +226,8 @@
         (os-semaphore-wait retain-done)
         (init-reg rl)
         (os-semaphore-post setup-done)
-        (CFRunLoopRun rl)))
+        (CFRunLoopRun rl)
+        (void/reference-sink more-retain)))
      (os-semaphore-wait create-done)
      ;; To be on the safe side, register a finalizer in the Racket thread:
      (set! run-loop (CFRetainRunLoop run-loop))
