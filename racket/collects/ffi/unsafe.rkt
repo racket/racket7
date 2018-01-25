@@ -468,19 +468,35 @@
                       #:keep        [keep    #t]
                       #:atomic?     [atomic? #f]
                       #:in-original-place? [orig-place? #f]
+                      #:blocking?   [blocking? #f]
                       #:lock-name   [lock-name #f]
                       #:async-apply [async-apply #f]
                       #:save-errno  [errno   #f])
-  (_cprocedure* itypes otype abi wrapper keep atomic? orig-place? async-apply errno lock-name))
+  (_cprocedure* itypes otype abi wrapper keep atomic? orig-place? blocking? async-apply errno lock-name))
+
+;; A lightwegith delay meachnism for a single-argument function when
+;; it's ok (but unlikely) to evaluate `expr` more than once and keep
+;; the first result:
+(define-syntax-rule (delay/cas expr)
+  (let ([b (box #f)])
+    (lambda (arg)
+      (define f (unbox b))
+      (cond
+        [f (f arg)]
+        [else
+         (box-cas! b #f expr)
+         ((unbox b) arg)]))))
 
 ;; for internal use
 (define held-callbacks (make-weak-hasheq))
-(define (_cprocedure* itypes otype abi wrapper keep atomic? orig-place? async-apply errno lock-name)
+(define (_cprocedure* itypes otype abi wrapper keep atomic? orig-place? blocking? async-apply errno lock-name)
+  (define make-ffi-callback (delay/cas (ffi-callback-maker itypes otype abi atomic? async-apply)))
+  (define make-ffi-call (delay/cas (ffi-call-maker itypes otype abi errno orig-place? lock-name blocking?)))
   (define-syntax-rule (make-it wrap)
     (make-ctype _fpointer
       (lambda (x)
         (and x
-             (let ([cb (ffi-callback (wrap x) itypes otype abi atomic? async-apply)])
+             (let ([cb (make-ffi-callback (wrap x))])
                (cond [(eq? keep #t) (hash-set! held-callbacks x (make-ephemeron x cb))]
                      [(box? keep)
                       (let ([x (unbox keep)])
@@ -488,7 +504,7 @@
                                   (if (or (null? x) (pair? x)) (cons cb x) cb)))]
                      [(procedure? keep) (keep cb)])
                cb)))
-      (lambda (x) (and x (wrap (ffi-call x itypes otype abi errno orig-place? lock-name))))))
+      (lambda (x) (and x (wrap (make-ffi-call x))))))
   (if wrapper (make-it wrapper) (make-it begin)))
 
 ;; Syntax for the special _fun type:
@@ -512,7 +528,7 @@
 (provide _fun)
 (define-for-syntax _fun-keywords
   `([#:abi ,#'#f] [#:keep ,#'#t] [#:atomic? ,#'#f]
-    [#:in-original-place? ,#'#f] [#:lock-name ,#'#f]
+    [#:in-original-place? ,#'#f] [#:blocking? ,#'#f] [#:lock-name ,#'#f]
     [#:async-apply ,#'#f] [#:save-errno ,#'#f]
     [#:retry #f]))
 (define-syntax (_fun stx)
@@ -675,6 +691,7 @@
                              #,(kwd-ref '#:keep)
                              #,(kwd-ref '#:atomic?)
                              #,(kwd-ref '#:in-original-place?)
+                             #,(kwd-ref '#:blocking?)
                              #,(kwd-ref '#:async-apply)
                              #,(kwd-ref '#:save-errno)
                              #,(kwd-ref '#:lock-name)))])

@@ -1107,7 +1107,7 @@ static Scheme_Object *default_sym;
 static Scheme_Object *stdcall_sym;
 static Scheme_Object *sysv_sym;
 
-static ffi_abi sym_to_abi(char *who, Scheme_Object *sym)
+static ffi_abi sym_to_abi(const char *who, Scheme_Object *sym)
 {
   if (SCHEME_FALSEP(sym) || SAME_OBJ(sym, default_sym))
     return FFI_DEFAULT_ABI;
@@ -1539,7 +1539,7 @@ int ffi_callback_FIXUP(void *p) {
   return gcBYTES_TO_WORDS(sizeof(ffi_callback_struct));
 }
 END_XFORM_SKIP;
-#endif
+#endif   /* pointer to another ffi-callback for a curried callback */
 
 /* The sync field:
  *   NULL => non-atomic mode
@@ -3481,13 +3481,18 @@ static Scheme_Object *ffi_do_call(int argc, Scheme_Object *argv[], Scheme_Object
 /* data := {name, c-function, itypes, otype, cif} */
 {
   Scheme_Object *data = SCHEME_PRIM_CLOSURE_ELS(self)[0];
+  int curried = !SCHEME_VEC_ELS(data)[1] && !SCHEME_INT_VAL(SCHEME_VEC_ELS(data)[5]);
   const char    *name = SCHEME_BYTE_STR_VAL(SCHEME_VEC_ELS(data)[0]);
-  void          *c_func = (void*)(SCHEME_VEC_ELS(data)[1]);
+  void          *c_func = (curried
+                           ? (void*)SCHEME_PRIM_CLOSURE_ELS(self)[1]
+                           : (void*)(SCHEME_VEC_ELS(data)[1]));
   Scheme_Object *itypes = SCHEME_VEC_ELS(data)[2];
   Scheme_Object *otype  = SCHEME_VEC_ELS(data)[3];
   Scheme_Object *base;
   ffi_cif       *cif    = (ffi_cif*)(SCHEME_VEC_ELS(data)[4]);
-  intptr_t      cfoff   = SCHEME_INT_VAL(SCHEME_VEC_ELS(data)[5]);
+  intptr_t      cfoff   = (curried
+                           ? SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(self)[2])
+                           : SCHEME_INT_VAL(SCHEME_VEC_ELS(data)[5]));
   int           save_errno = SCHEME_INT_VAL(SCHEME_VEC_ELS(data)[6]);
   Scheme_Object *lock = SCHEME_VEC_ELS(data)[7];
 #ifdef MZ_USE_PLACES
@@ -3644,13 +3649,44 @@ void free_fficall_data(void *data, void *p)
 
 static Scheme_Object *ffi_name = NULL;
 
-/* (ffi-call ffi-obj in-types out-type [abi save-errno? orig-place?]) -> (in-types -> out-value) */
-/* the real work is done by ffi_do_call above */
-#define MYNAME "ffi-call"
-static Scheme_Object *foreign_ffi_call(int argc, Scheme_Object *argv[])
+static Scheme_Object *make_ffi_call_from_curried(int argc, Scheme_Object *argv[], Scheme_Object *self)
 {
-  Scheme_Object *itypes = argv[1];
-  Scheme_Object *otype  = argv[2];
+  Scheme_Object *data = SCHEME_PRIM_CLOSURE_ELS(self)[0];
+  Scheme_Object *a[3], *name, *itypes, *obj, *cp;
+  intptr_t ooff;
+  int nargs;
+
+  cp = unwrap_cpointer_property(argv[0]);
+  if (!SCHEME_FFIANYPTRP(cp))
+    scheme_wrong_contract("make-ffi-call", "(or/c ffi-obj? cpointer?)", 0, argc, argv);
+  obj = SCHEME_FFIANYPTR_VAL(cp);
+  ooff = SCHEME_FFIANYPTR_OFFSET(cp);
+  if ((obj == NULL) && (ooff == 0))
+    scheme_wrong_contract("make-ffi-call", NON_NULL_CPOINTER, 0, argc, argv);
+
+  name = SCHEME_VEC_ELS(data)[0];
+  if (SCHEME_FFIOBJP(cp))
+    name = scheme_make_byte_string(((ffi_obj_struct*)(cp))->name);
+
+  itypes = SCHEME_VEC_ELS(data)[2];
+
+  nargs = scheme_proper_list_length(itypes);
+
+  a[0] = data;
+  a[1] = obj;
+  a[2] = scheme_make_integer_value(ooff);
+
+  return scheme_make_prim_closure_w_arity(ffi_do_call_after_stack_check,
+                                          3, a,
+                                          SCHEME_BYTE_STR_VAL(name),
+                                          nargs, nargs);
+
+}
+
+static Scheme_Object *ffi_call_or_curry(const char *who, int curry, int argc, Scheme_Object **argv) {
+# define ARGPOS(n) ((n) - (curry ? 1 : 0))
+  Scheme_Object *itypes = argv[ARGPOS(1)];
+  Scheme_Object *otype  = argv[ARGPOS(2)];
   Scheme_Object *obj, *data, *p, *base, *cp, *name, *a[1];
   ffi_abi abi;
   intptr_t ooff;
@@ -3664,57 +3700,63 @@ static Scheme_Object *foreign_ffi_call(int argc, Scheme_Object *argv[])
 # else /* MZ_USE_PLACES undefined */
 # define FFI_CALL_VEC_SIZE 8
 # endif /* MZ_USE_PLACES */
-  cp = unwrap_cpointer_property(argv[0]);
-  if (!SCHEME_FFIANYPTRP(cp))
-    scheme_wrong_contract(MYNAME, "(or/c ffi-obj? cpointer?)", 0, argc, argv);
-  obj = SCHEME_FFIANYPTR_VAL(cp);
-  ooff = SCHEME_FFIANYPTR_OFFSET(cp);
-  if ((obj == NULL) && (ooff == 0))
-    scheme_wrong_contract(MYNAME, NON_NULL_CPOINTER, 0, argc, argv);
+  if (!curry) {
+    cp = unwrap_cpointer_property(argv[ARGPOS(0)]);
+    if (!SCHEME_FFIANYPTRP(cp))
+      scheme_wrong_contract(who, "(or/c ffi-obj? cpointer?)", ARGPOS(0), argc, argv);
+    obj = SCHEME_FFIANYPTR_VAL(cp);
+    ooff = SCHEME_FFIANYPTR_OFFSET(cp);
+    if ((obj == NULL) && (ooff == 0))
+      scheme_wrong_contract(who, NON_NULL_CPOINTER, 0, argc, argv);
+  } else {
+    cp = NULL;
+    obj = NULL;
+    ooff = 0;
+  }
   nargs = scheme_proper_list_length(itypes);
   if (nargs < 0)
-    scheme_wrong_contract(MYNAME, "list?", 1, argc, argv);
+    scheme_wrong_contract(who, "list?", ARGPOS(1), argc, argv);
   if (NULL == (base = get_ctype_base(otype)))
-    scheme_wrong_contract(MYNAME, "ctype?", 2, argc, argv);
+    scheme_wrong_contract(who, "ctype?", ARGPOS(2), argc, argv);
   rtype = CTYPE_ARG_PRIMTYPE(base);
-  abi = GET_ABI(MYNAME,3);
-  if (argc > 4) {
+  abi = GET_ABI(who, ARGPOS(3));
+  if (argc > ARGPOS(4)) {
     save_errno = -1;
-    if (SCHEME_FALSEP(argv[4]))
+    if (SCHEME_FALSEP(argv[ARGPOS(4)]))
       save_errno = 0;
-    else if (SCHEME_SYMBOLP(argv[4])
-             && !SCHEME_SYM_WEIRDP(argv[4])) {
-      if (!strcmp(SCHEME_SYM_VAL(argv[4]), "posix"))
+    else if (SCHEME_SYMBOLP(argv[ARGPOS(4)])
+             && !SCHEME_SYM_WEIRDP(argv[ARGPOS(4)])) {
+      if (!strcmp(SCHEME_SYM_VAL(argv[ARGPOS(4)]), "posix"))
         save_errno = 1;
-      else if (!strcmp(SCHEME_SYM_VAL(argv[4]), "windows"))
+      else if (!strcmp(SCHEME_SYM_VAL(argv[ARGPOS(4)]), "windows"))
         save_errno = 2;
     }
     if (save_errno == -1) {
-      scheme_wrong_contract(MYNAME, "(or/c 'posix 'windows #f)", 4, argc, argv);
+      scheme_wrong_contract(who, "(or/c 'posix 'windows #f)", ARGPOS(4), argc, argv);
     }
   } else
     save_errno = 0;
 # if defined(MZ_USE_PLACES) && !defined(MZ_USE_FFIPOLL)
-  if (argc > 5) orig_place = SCHEME_TRUEP(argv[5]);
+  if (argc > ARGPOS(5)) orig_place = SCHEME_TRUEP(argv[ARGPOS(5)]);
   else orig_place = 0;
 # endif /* defined(MZ_USE_PLACES) && !defined(MZ_USE_FFIPOLL) */
-  if (argc > 6) {
-    if (!SCHEME_FALSEP(argv[6])) {
-      if (!SCHEME_CHAR_STRINGP(argv[6]))
-        scheme_wrong_contract(MYNAME, "(or/c string? #f)", 4, argc, argv);
+  if (argc > ARGPOS(6)) {
+    if (!SCHEME_FALSEP(argv[ARGPOS(6)])) {
+      if (!SCHEME_CHAR_STRINGP(argv[ARGPOS(6)]))
+        scheme_wrong_contract(who, "(or/c string? #f)", 4, argc, argv);
       lock = name_to_ffi_lock(scheme_char_string_to_byte_string(argv[6]));
     }
   }
-  if (SCHEME_FFIOBJP(cp))
+  if (cp && SCHEME_FFIOBJP(cp))
     name = scheme_make_byte_string(((ffi_obj_struct*)(cp))->name);
   else
     name = ffi_name;
   atypes = malloc(nargs * sizeof(ffi_type*));
   for (i=0, p=itypes; i<nargs; i++, p=SCHEME_CDR(p)) {
     if (NULL == (base = get_ctype_base(SCHEME_CAR(p))))
-      scheme_wrong_contract(MYNAME, "(listof ctype?)", 1, argc, argv);
+      scheme_wrong_contract(who, "(listof ctype?)", 1, argc, argv);
     if (CTYPE_PRIMLABEL(base) == FOREIGN_void)
-      wrong_void(MYNAME, SCHEME_CAR(p), 1, 1, argc, argv);
+      wrong_void(who, SCHEME_CAR(p), 1, 1, argc, argv);
     atypes[i] = CTYPE_ARG_PRIMTYPE(base);
   }
   cif = malloc(sizeof(ffi_cif));
@@ -3734,10 +3776,36 @@ static Scheme_Object *foreign_ffi_call(int argc, Scheme_Object *argv[])
 # endif /* MZ_USE_PLACES */
   scheme_register_finalizer(data, free_fficall_data, cif, NULL, NULL);
   a[0] = data;
-  return scheme_make_prim_closure_w_arity(ffi_do_call_after_stack_check,
-                                          1, a,
-                                          SCHEME_BYTE_STR_VAL(name),
-                                          nargs, nargs);
+
+  if (curry) {
+    return scheme_make_prim_closure_w_arity(make_ffi_call_from_curried,
+                                            1, a,
+                                            "make-ffi-call",
+                                            1, 1);
+  } else {
+    return scheme_make_prim_closure_w_arity(ffi_do_call_after_stack_check,
+                                            1, a,
+                                            SCHEME_BYTE_STR_VAL(name),
+                                            nargs, nargs);
+  }
+#undef ARGPOS
+}
+
+/* (ffi-call ffi-obj in-types out-type [abi save-errno? orig-place? lock-name blocking?]) -> (in-types -> out-value) */
+/* the real work is done by ffi_do_call above */
+#define MYNAME "ffi-call"
+static Scheme_Object *foreign_ffi_call(int argc, Scheme_Object *argv[])
+{
+  return ffi_call_or_curry(MYNAME, 0, argc, argv);
+}
+#undef MYNAME
+
+/* (ffi-call-maker in-types out-type [abi save-errno? orig-place? lock-name blocking?]) -> (ffi->obj -> (in-types -> out-value)) */
+/* Curried version of `ffi-call` */
+#define MYNAME "ffi-call-maker"
+static Scheme_Object *foreign_ffi_call_maker(int argc, Scheme_Object *argv[])
+{
+  return ffi_call_or_curry(MYNAME, 1, argc, argv);
 }
 #undef MYNAME
 
@@ -3755,11 +3823,11 @@ static ffi_callback_struct *extract_ffi_callback(void *userdata)
   {
     void *tmp;
     tmp  = *((void**)userdata);
-    data = (ffi_callback_struct*)(SCHEME_WEAK_BOX_VAL(tmp));
+    data = (ffi_callback_struct *)SCHEME_WEAK_BOX_VAL(tmp);
     if (data == NULL) scheme_signal_error("callback lost");
   }
 #else
-  data = (ffi_callback_struct*)userdata;
+  data = (ffi_callback_struct *)userdata;
 #endif
 
   return data;
@@ -4016,15 +4084,12 @@ static void free_cl_cif_queue_args(void *ignored, void *p)
 }
 #endif
 
-/* (ffi-callback scheme-proc in-types out-type [abi atomic? sync]) -> ffi-callback */
-/* the treatment of in-types and out-types is similar to that in ffi-call */
-/* the real work is done by ffi_do_callback above */
-#define MYNAME "ffi-callback"
-static Scheme_Object *foreign_ffi_callback(int argc, Scheme_Object *argv[])
-{
+/* In `curry` mode, just check arguments */
+static Scheme_Object *ffi_callback_or_curry(const char *who, int curry, int argc, Scheme_Object **argv) {
+# define ARGPOS(n) ((n) - (curry ? 1 : 0))
   ffi_callback_struct *data;
-  Scheme_Object *itypes = argv[1];
-  Scheme_Object *otype = argv[2];
+  Scheme_Object *itypes = argv[ARGPOS(1)];
+  Scheme_Object *otype = argv[ARGPOS(2)];
   Scheme_Object *sync;
   Scheme_Object *p, *base;
   ffi_abi abi;
@@ -4071,22 +4136,28 @@ static Scheme_Object *foreign_ffi_callback(int argc, Scheme_Object *argv[])
   int constant_reply_size = 0;
 # endif /* MZ_USE_MZRT */
 
-  if (!SCHEME_PROCP(argv[0]))
-    scheme_wrong_contract(MYNAME, "procedure?", 0, argc, argv);
+  if (!curry && !SCHEME_PROCP(argv[ARGPOS(0)]))
+    scheme_wrong_contract(who, "procedure?", ARGPOS(0), argc, argv);
   nargs = scheme_proper_list_length(itypes);
   if (nargs < 0)
-    scheme_wrong_contract(MYNAME, "list?", 1, argc, argv);
+    scheme_wrong_contract(who, "list?", ARGPOS(1), argc, argv);
   if (NULL == (base = get_ctype_base(otype)))
-    scheme_wrong_contract(MYNAME, "ctype?", 2, argc, argv);
+    scheme_wrong_contract(who, "ctype?", ARGPOS(2), argc, argv);
   rtype = CTYPE_ARG_PRIMTYPE(base);
-  abi = GET_ABI(MYNAME,3);
-  is_atomic = ((argc > 4) && SCHEME_TRUEP(argv[4]));
+  abi = GET_ABI(who, ARGPOS(3));
+  is_atomic = ((argc > ARGPOS(4)) && SCHEME_TRUEP(argv[ARGPOS(4)]));
   sync = (is_atomic ? scheme_true : NULL);
-  if ((argc > 5)
-      && !SCHEME_BOXP(argv[5])
-      && !scheme_check_proc_arity2(NULL, 1, 5, argc, argv, 1))
-    scheme_wrong_contract(MYNAME, "(or/c #f (procedure-arity-includes/c 0) box?)", 5, argc, argv);
-  if (((argc > 5) && SCHEME_TRUEP(argv[5]))) {
+  if ((argc > ARGPOS(5))
+      && !SCHEME_BOXP(argv[ARGPOS(5)])
+      && !scheme_check_proc_arity2(NULL, 1, ARGPOS(5), argc, argv, 1))
+    scheme_wrong_contract(who, "(or/c #f (procedure-arity-includes/c 0) box?)", ARGPOS(5), argc, argv);
+
+  if (curry) {
+    /* all checks are done */
+    return NULL;
+  }
+
+  if (((argc > ARGPOS(5)) && SCHEME_TRUEP(argv[ARGPOS(5)]))) {
 #   ifdef MZ_USE_MZRT
     if (!ffi_sync_queue) {
       mzrt_os_thread_id tid;
@@ -4100,20 +4171,20 @@ static Scheme_Object *foreign_ffi_callback(int argc, Scheme_Object *argv[])
       ffi_sync_queue->sig_hand = sig_hand;
       ffi_sync_queue->callbacks = NULL;
     }
-    if (SCHEME_BOXP(argv[5])) {
+    if (SCHEME_BOXP(argv[ARGPOS(5)])) {
       /* when called in a foreign thread, return a constant */
       constant_reply_size = ctype_sizeof(otype);
-      if (!constant_reply_size && SCHEME_VOIDP(SCHEME_BOX_VAL(argv[5]))) {
+      if (!constant_reply_size && SCHEME_VOIDP(SCHEME_BOX_VAL(argv[ARGPOS(5)]))) {
         /* void result */
         constant_reply = scheme_malloc_atomic(1);
       } else {
         /* non-void result */
         constant_reply = scheme_malloc_atomic(constant_reply_size);
-        SCHEME2C(MYNAME, otype, constant_reply, 0, SCHEME_BOX_VAL(argv[5]), NULL, NULL, 0);
+        SCHEME2C(who, otype, constant_reply, 0, SCHEME_BOX_VAL(argv[ARGPOS(5)]), NULL, NULL, 0);
       }
     } else {
       /* when called in a foreign thread, queue a reply back here */
-      sync = argv[5];
+      sync = argv[ARGPOS(5)];
       if (is_atomic) sync = scheme_box(sync);
       constant_reply = NULL;
       constant_reply_size = 0;
@@ -4131,9 +4202,9 @@ static Scheme_Object *foreign_ffi_callback(int argc, Scheme_Object *argv[])
   atypes = (ffi_type **)(((char*)cl_cif_args) + sizeof(closure_and_cif));
   for (i=0, p=itypes; i<nargs; i++, p=SCHEME_CDR(p)) {
     if (NULL == (base = get_ctype_base(SCHEME_CAR(p))))
-      scheme_wrong_contract(MYNAME, "(listof ctype?)", 1, argc, argv);
+      scheme_wrong_contract(who, "(listof ctype?)", ARGPOS(1), argc, argv);
     if (CTYPE_PRIMLABEL(base) == FOREIGN_void)
-      wrong_void(MYNAME, SCHEME_CAR(p), 1, 1, argc, argv);
+      wrong_void(who, SCHEME_CAR(p), 1, ARGPOS(1), argc, argv);
     atypes[i] = CTYPE_ARG_PRIMTYPE(base);
   }
   if (ffi_prep_cif(cif, abi, nargs, rtype, atypes) != FFI_OK)
@@ -4141,9 +4212,9 @@ static Scheme_Object *foreign_ffi_callback(int argc, Scheme_Object *argv[])
   data = (ffi_callback_struct*)scheme_malloc_tagged(sizeof(ffi_callback_struct));
   data->so.type = ffi_callback_tag;
   data->callback = (cl_cif_args);
-  data->proc = (argv[0]);
-  data->itypes = (argv[1]);
-  data->otype = (argv[2]);
+  data->proc = ((curry ? NULL : argv[ARGPOS(0)]));
+  data->itypes = (argv[ARGPOS(1)]);
+  data->otype = (argv[ARGPOS(2)]);
   data->sync = (sync);
 # ifdef MZ_PRECISE_GC
   {
@@ -4186,7 +4257,56 @@ static Scheme_Object *foreign_ffi_callback(int argc, Scheme_Object *argv[])
   else
 # endif /* MZ_USE_MZRT */
   scheme_register_finalizer(data, free_cl_cif_args, cl_cif_args, NULL, NULL);
+
   return (Scheme_Object*)data;
+#undef ARGPOS
+}
+
+/* (ffi-callback scheme-proc in-types out-type [abi atomic? sync]) -> ffi-callback */
+/* the treatment of in-types and out-types is similar to that in ffi-call */
+/* the real work is done by ffi_do_callback above */
+#define MYNAME "ffi-callback"
+static Scheme_Object *foreign_ffi_callback(int argc, Scheme_Object *argv[])
+{
+  return ffi_callback_or_curry(MYNAME, 0, argc, argv);
+}
+#undef MYNAME
+
+static Scheme_Object *make_ffi_callback_from_curried(int argc, Scheme_Object *argv[], Scheme_Object *self)
+{
+  Scheme_Object *vec = SCHEME_PRIM_CLOSURE_ELS(self)[0];
+  Scheme_Object *a[6];
+  int c = SCHEME_VEC_SIZE(vec), i;
+
+  for (i = 0; i < c; i++) {
+    a[i+1] = SCHEME_VEC_ELS(vec)[i];
+  }
+  a[0] = argv[0];
+
+  return ffi_callback_or_curry("make-ffi-callback", 0, c+1, a);
+}
+
+/* (ffi-callback-maker in-types out-type [abi atomic? sync]) -> (proc -> ffi-callback) */
+/* Curried version of `ffi-callback`. Check arguments eagerly, but we don't do anything
+   otherwise until a function is available. */
+#define MYNAME "ffi-callback-maker"
+static Scheme_Object *foreign_ffi_callback_maker(int argc, Scheme_Object *argv[])
+{
+  int i;
+  Scheme_Object *vec, *a[1];
+
+  (void)ffi_callback_or_curry(MYNAME, 1, argc, argv);
+
+  vec = scheme_make_vector(argc, NULL);
+  for (i = 0; i < argc; i++) {
+    SCHEME_VEC_ELS(vec)[i] = argv[i];
+  }
+  a[0] = vec;
+
+  return scheme_make_prim_closure_w_arity(make_ffi_callback_from_curried,
+                                          1, a,
+                                          "make-ffi-callback",
+                                          1, 1);
 }
 #undef MYNAME
 
@@ -4825,9 +4945,13 @@ void scheme_init_foreign(Scheme_Startup_Env *env)
   scheme_addto_prim_instance("make-sized-byte-string",
     scheme_make_noncm_prim(foreign_make_sized_byte_string, "make-sized-byte-string", 2, 2), env);
   scheme_addto_prim_instance("ffi-call",
-    scheme_make_noncm_prim(foreign_ffi_call, "ffi-call", 3, 7), env);
+    scheme_make_noncm_prim(foreign_ffi_call, "ffi-call", 3, 8), env);
+  scheme_addto_prim_instance("ffi-call-maker",
+    scheme_make_noncm_prim(foreign_ffi_call_maker, "ffi-call-maker", 2, 7), env);
   scheme_addto_prim_instance("ffi-callback",
     scheme_make_noncm_prim(foreign_ffi_callback, "ffi-callback", 3, 6), env);
+  scheme_addto_prim_instance("ffi-callback-maker",
+    scheme_make_noncm_prim(foreign_ffi_callback_maker, "ffi-callback-maker", 2, 5), env);
   scheme_addto_prim_instance("saved-errno",
     scheme_make_immed_prim(foreign_saved_errno, "saved-errno", 0, 1), env);
   scheme_addto_prim_instance("lookup-errno",
@@ -5186,9 +5310,13 @@ void scheme_init_foreign(Scheme_Env *env)
   scheme_addto_primitive_instance("make-sized-byte-string",
    scheme_make_noncm_prim((Scheme_Prim *)unimplemented, "make-sized-byte-string", 2, 2), env);
   scheme_addto_primitive_instance("ffi-call",
-   scheme_make_noncm_prim((Scheme_Prim *)unimplemented, "ffi-call", 3, 7), env);
+   scheme_make_noncm_prim((Scheme_Prim *)unimplemented, "ffi-call", 3, 8), env);
+  scheme_addto_primitive_instance("ffi-call-maker",
+   scheme_make_noncm_prim((Scheme_Prim *)unimplemented, "ffi-call-maker", 2, 7), env);
   scheme_addto_primitive_instance("ffi-callback",
    scheme_make_noncm_prim((Scheme_Prim *)unimplemented, "ffi-callback", 3, 6), env);
+  scheme_addto_primitive_instance("ffi-callback-maker",
+   scheme_make_noncm_prim((Scheme_Prim *)unimplemented, "ffi-callback-maker", 2, 5), env);
   scheme_addto_primitive_instance("saved-errno",
    scheme_make_immed_prim((Scheme_Prim *)unimplemented, "saved-errno", 0, 1), env);
   scheme_addto_primitive_instance("lookup-errno",

@@ -193,7 +193,7 @@
   #:c-id scheme_call_sequence_of_procedures)
   
 (define-cf CFRunLoopGetCurrent (_fun -> _CFRunLoopRef))
-(define-cf CFRunLoopRun (_fun _CFRunLoopRef -> _void))
+(define-cf CFRunLoopRun (_fun #:blocking? #t _CFRunLoopRef -> _void))
 (define-cf CFRunLoopGetCurrent-ptr _fpointer
   #:c-id CFRunLoopGetCurrent)
 (define-cf CFRunLoopRun-ptr _fpointer
@@ -226,7 +226,6 @@
         (os-semaphore-wait retain-done)
         (init-reg rl)
         (os-semaphore-post setup-done)
-        ;; This isn't right, yet, because it blocks GC everywhere:
         (CFRunLoopRun rl)))
      (os-semaphore-wait create-done)
      ;; To be on the safe side, register a finalizer in the Racket thread:

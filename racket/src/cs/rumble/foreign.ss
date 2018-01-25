@@ -1289,6 +1289,8 @@
    [(p in-types out-type abi save-errno orig-place?)
     (ffi-call p in-types out-type abi save-errno orig-place? #f)]
    [(p in-types out-type abi save-errno orig-place? lock-name)
+    (ffi-call p in-types out-type abi save-errno orig-place? lock-name #f)]
+   [(p in-types out-type abi save-errno orig-place? lock-name blocking?)
     (check who cpointer? p)
     (check who (lambda (l)
                  (and (list? l)
@@ -1296,9 +1298,30 @@
            :contract "(listof ctype?)"
            in-types)
     (check who ctype? out-type)
-    (ffi-call/callable #t p in-types out-type abi save-errno #f #f)]))
+    ((ffi-call/callable #t in-types out-type abi save-errno blocking? #f #f) p)]))
 
-(define (ffi-call/callable call? to-wrap in-types out-type abi save-errno atomic? async-apply)
+(define/who ffi-call-maker
+  (case-lambda
+   [(in-types out-type)
+    (ffi-call-maker in-types out-type #f #f #f)]
+   [(in-types out-type abi)
+    (ffi-call-maker in-types out-type abi #f #f)]
+   [(in-types out-type abi save-errno)
+    (ffi-call-maker in-types out-type abi save-errno #f)]
+   [(in-types out-type abi save-errno orig-place?)
+    (ffi-call-maker in-types out-type abi save-errno orig-place? #f)]
+   [(in-types out-type abi save-errno orig-place? lock-name)
+    (ffi-call-maker in-types out-type abi save-errno orig-place? lock-name #f)]
+   [(in-types out-type abi save-errno orig-place? lock-name blocking?)
+    (check who (lambda (l)
+                 (and (list? l)
+                      (andmap ctype? l)))
+           :contract "(listof ctype?)"
+           in-types)
+    (check who ctype? out-type)
+    (ffi-call/callable #t in-types out-type abi save-errno blocking? #f #f)]))
+
+(define (ffi-call/callable call? in-types out-type abi save-errno blocking? atomic? async-apply)
   (let* ([conv (case abi
                  [(stdcall) '__stdcall]
                  [(sysv) '__cdecl]
@@ -1338,7 +1361,7 @@
                           (lambda (to-wrap)
                             (,(if call? 'foreign-procedure 'foreign-callable)
                              ,conv
-                             ,@(if async-apply '(__thread) '())
+                             ,@(if (or blocking? async-apply) '(__thread) '())
                              to-wrap
                              ,(map (lambda (in-type id)
                                      (if id
@@ -1368,84 +1391,86 @@
          [async-callback-queue (and (procedure? async-apply) (current-async-callback-queue))])
     (cond
      [call?
-      (let* ([proc-p (unwrap-cpointer 'ffi-call to-wrap)])
-        (lambda args
-          (let* ([args (map (lambda (orig-arg in-type)
-                              (let ([arg (s->c in-type orig-arg)])
-                                (if (and (cpointer? arg)
-                                         (not (eq? 'scheme-object (ctype-host-rep in-type))))
-                                    (let ([p (unwrap-cpointer 'ffi-call arg)])
-                                      (when (and (cpointer-nonatomic? p)
-                                                 (not (cpointer/cell? p)))
-                                        (disallow-nonatomic-pointer 'argument orig-arg proc-p))
-                                      p)
-                                    arg)))
-                            args in-types)]
-                 [r (let ([ret-ptr (and ret-id
-                                        ;; result is a struct type; need to allocate space for it
-                                        (make-bytevector ret-size))])
-                      (with-interrupts-disabled
-                       (let ([r (apply (gen-proc (cpointer-address proc-p))
-                                       (append
-                                        (if ret-ptr
-                                            (list (ret-maker (memory-address ret-ptr)))
-                                            '())
-                                        (map (lambda (arg in-type maker)
-                                               (let ([host-rep (array-rep-to-pointer-rep
-                                                                (ctype-host-rep in-type))])
-                                                 (case host-rep
-                                                   [(void*) (cpointer-address arg)]
-                                                   [(struct union)
-                                                    (maker (cpointer-address arg))]
-                                                   [else arg])))
-                                             args in-types arg-makers)))])
-                         (case save-errno
-                           [(posix) (thread-cell-set! errno-cell (get-errno))]
-                           [(windows) (thread-cell-set! errno-cell (get-last-error))])
-                         (cond
-                          [ret-ptr
-                           (make-cpointer ret-ptr #f)]
-                          [(eq? (ctype-our-rep out-type) 'gcpointer)
-                           (addr->gcpointer-memory r)]
-                          [else r]))))])
-            (c->s out-type r))))]
+      (lambda (to-wrap)
+        (let* ([proc-p (unwrap-cpointer 'ffi-call to-wrap)])
+          (lambda args
+            (let* ([args (map (lambda (orig-arg in-type)
+                                (let ([arg (s->c in-type orig-arg)])
+                                  (if (and (cpointer? arg)
+                                           (not (eq? 'scheme-object (ctype-host-rep in-type))))
+                                      (let ([p (unwrap-cpointer 'ffi-call arg)])
+                                        (when (and (cpointer-nonatomic? p)
+                                                   (not (cpointer/cell? p)))
+                                          (disallow-nonatomic-pointer 'argument orig-arg proc-p))
+                                        p)
+                                      arg)))
+                              args in-types)]
+                   [r (let ([ret-ptr (and ret-id
+                                          ;; result is a struct type; need to allocate space for it
+                                          (make-bytevector ret-size))])
+                        (with-interrupts-disabled
+                         (let ([r (#%apply (gen-proc (cpointer-address proc-p))
+                                           (append
+                                            (if ret-ptr
+                                                (list (ret-maker (memory-address ret-ptr)))
+                                                '())
+                                            (map (lambda (arg in-type maker)
+                                                   (let ([host-rep (array-rep-to-pointer-rep
+                                                                    (ctype-host-rep in-type))])
+                                                     (case host-rep
+                                                       [(void*) (cpointer-address arg)]
+                                                       [(struct union)
+                                                        (maker (cpointer-address arg))]
+                                                       [else arg])))
+                                                 args in-types arg-makers)))])
+                           (case save-errno
+                             [(posix) (thread-cell-set! errno-cell (get-errno))]
+                             [(windows) (thread-cell-set! errno-cell (get-last-error))])
+                           (cond
+                            [ret-ptr
+                             (make-cpointer ret-ptr #f)]
+                            [(eq? (ctype-our-rep out-type) 'gcpointer)
+                             (addr->gcpointer-memory r)]
+                            [else r]))))])
+              (c->s out-type r)))))]
      [else ; callable
-      (gen-proc (lambda args ; if ret-id, includes an extra initial argument to receive the result
-                  (let ([v (call-as-atomic-callback
-                            (lambda ()
-                              (s->c
-                               out-type
-                               (apply to-wrap
-                                      (let loop ([args (if ret-id (cdr args) args)] [in-types in-types])
-                                        (cond
-                                         [(null? args) '()]
-                                         [else
-                                          (let* ([arg (car args)]
-                                                 [type (car in-types)]
-                                                 [arg (c->s type
-                                                            (case (ctype-host-rep type)
-                                                              [(struct union)
-                                                               (let* ([size (compound-ctype-size type)]
-                                                                      [addr (ftype-pointer-address arg)]
-                                                                      [bstr (make-bytevector size)])
-                                                                 (memcpy* bstr 0 addr 0 size #f)
-                                                                 (make-cpointer bstr #f))]
-                                                              [else
-                                                               (cond
-                                                                [(eq? (ctype-our-rep type) 'gcpointer)
-                                                                 (addr->gcpointer-memory arg)]
-                                                                [else arg])]))])
-                                            (cons arg (loop (cdr args) (cdr in-types))))])))))
-                            atomic?
-                            async-apply
-                            async-callback-queue)])
-                    (if ret-id
-                        (let* ([size (compound-ctype-size out-type)]
-                               [addr (ftype-pointer-address (car args))])
-                          (memcpy* addr 0 v 0 size #f))
-                        (case (ctype-host-rep out-type)
-                          [(void*) (cpointer-address v)]
-                          [else v])))))])))
+      (lambda (to-wrap)
+        (gen-proc (lambda args ; if ret-id, includes an extra initial argument to receive the result
+                    (let ([v (call-as-atomic-callback
+                              (lambda ()
+                                (s->c
+                                 out-type
+                                 (apply to-wrap
+                                        (let loop ([args (if ret-id (cdr args) args)] [in-types in-types])
+                                          (cond
+                                           [(null? args) '()]
+                                           [else
+                                            (let* ([arg (car args)]
+                                                   [type (car in-types)]
+                                                   [arg (c->s type
+                                                              (case (ctype-host-rep type)
+                                                                [(struct union)
+                                                                 (let* ([size (compound-ctype-size type)]
+                                                                        [addr (ftype-pointer-address arg)]
+                                                                        [bstr (make-bytevector size)])
+                                                                   (memcpy* bstr 0 addr 0 size #f)
+                                                                   (make-cpointer bstr #f))]
+                                                                [else
+                                                                 (cond
+                                                                  [(eq? (ctype-our-rep type) 'gcpointer)
+                                                                   (addr->gcpointer-memory arg)]
+                                                                  [else arg])]))])
+                                              (cons arg (loop (cdr args) (cdr in-types))))])))))
+                              atomic?
+                              async-apply
+                              async-callback-queue)])
+                      (if ret-id
+                          (let* ([size (compound-ctype-size out-type)]
+                                 [addr (ftype-pointer-address (car args))])
+                            (memcpy* addr 0 v 0 size #f))
+                          (case (ctype-host-rep out-type)
+                            [(void*) (cpointer-address v)]
+                            [else v]))))))])))
 
 (define (types->reps types)
   (let loop ([types types] [reps '()] [decls '()])
@@ -1558,11 +1583,31 @@
            :contract "(listof ctype?)"
            in-types)
     (check who ctype? out-type)
-    (let* ([code (ffi-call/callable #f proc in-types out-type abi #f atomic? async-apply)]
-           [cb (create-callback code)])
-      (lock-object code)
-      (the-foreign-guardian cb (lambda () (unlock-object code)))
-      cb)]))
+    ((ffi-callback-maker in-types out-type abi atomic? async-apply) proc)]))
+
+(define/who ffi-callback-maker
+  (case-lambda
+   [(in-types out-type)
+    (ffi-callback-maker in-types out-type #f #f #f)]
+   [(in-types out-type abi)
+    (ffi-callback-maker in-types out-type abi #f #f)]
+   [(in-types out-type abi atomic?)
+    (ffi-callback-maker in-types out-type abi atomic? #f)]
+   [(in-types out-type abi atomic? async-apply)
+    (check who (lambda (l)
+                 (and (list? l)
+                      (andmap ctype? l)))
+           :contract "(listof ctype?)"
+           in-types)
+    (check who ctype? out-type)
+    (let ([make-code (ffi-call/callable #f in-types out-type abi #f #f (and atomic? #t) async-apply)])
+      (lambda (proc)
+        (check 'make-ffi-callback procedure? proc)
+        (let* ([code (make-code proc)]
+               [cb (create-callback code)])
+          (lock-object code)
+          (the-foreign-guardian cb (lambda () (unlock-object code)))
+          cb)))]))
 
 ;; ----------------------------------------
 

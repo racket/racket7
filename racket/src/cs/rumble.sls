@@ -560,7 +560,8 @@
           compiler-sizeof cpointer-gcable? cpointer-tag cpointer?
           ctype-alignof ctype-basetype ctype-c->scheme ctype-scheme->c ctype-sizeof ctype?
           end-stubborn-change extflvector->cpointer
-          ffi-call ffi-callback ffi-callback? ffi-lib-name ffi-lib? ffi-obj ffi-obj-lib
+          ffi-call ffi-call-maker ffi-callback ffi-callback-maker ffi-callback?
+          ffi-lib-name ffi-lib? ffi-obj ffi-obj-lib
           ffi-obj-name  ffi-obj? flvector->cpointer free free-immobile-cell lookup-errno
           make-array-type make-cstruct-type make-ctype make-late-weak-box make-late-weak-hasheq
           make-sized-byte-string make-union-type malloc malloc-immobile-cell
