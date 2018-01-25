@@ -52,6 +52,9 @@
         exn:break:hang-up/non-engine
         exn:break:terminate/non-engine
 
+        ;; Check for async foreign callbacks:
+        [poll-async-callbacks host:poll-async-callbacks]
+
         ;; Disabling interrupts prevents a race with interrupt handlers.
         ;; For example, if a GC is handled as an interrupt, then disabling
         ;; interrupts prevents a race with a GC handler, and aything that

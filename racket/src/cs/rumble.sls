@@ -50,6 +50,7 @@
           set-ctl-c-handler! ; not exported to Racket
           get-ctl-c-handler  ; not exported to Racket
           set-scheduler-lock-callbacks! ; not exported to Racket
+          set-scheduler-atomicity-callbacks! ; not exported to Racket
           set-engine-exit-handler! ; not exported to Racket
 
           make-thread-cell
@@ -451,7 +452,7 @@
            [will-executor? rumble:will-executor?]
            [will-register rumble:will-register]
            [will-try-execute rumble:will-try-execute])
-          poll-will-executors
+          poll-will-executors ; not exported to Racket
 
           make-ephemeron
           ephemeron?
@@ -568,6 +569,7 @@
           unsafe-register-process-global
           (rename [ffi-lib* ffi-lib])
           set-ffi-get-lib-and-obj! ; not exported to Racket
+          poll-async-callbacks ; not exported to Racket
 
           unsafe-unbox
           unsafe-unbox*

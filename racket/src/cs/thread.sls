@@ -81,6 +81,7 @@
         'exn:break:hang-up/non-engine exn:break:hang-up
         'exn:break:terminate/non-engine exn:break:terminate
         'current-process-milliseconds cpu-time
+        'poll-async-callbacks poll-async-callbacks
         'disable-interrupts disable-interrupts
         'enable-interrupts enable-interrupts
         'fork-pthread rumble:fork-thread
@@ -110,6 +111,11 @@
   (set-scheduler-lock-callbacks! (lambda () (1/make-semaphore 1))
                                  1/semaphore-wait
                                  1/semaphore-post)
+
+  (set-scheduler-atomicity-callbacks! (lambda ()
+                                        (current-atomic (fx+ (current-atomic) 1)))
+                                      (lambda ()
+                                        (current-atomic (fx- (current-atomic) 1))))
 
   (set-future-callbacks! 1/future? 1/current-future
                          future-block future-wait current-future-prompt))

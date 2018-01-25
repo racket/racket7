@@ -43,7 +43,7 @@
             ;; lifted one.
             ;; Earlier entries in `binds` shadow later ones, and
             ;; entires in `env` shadow `binds` entries.
-            (lambda (e env binds)
+            (lambda (e env binds mutated)
               (syntax-case e (quote begin lambda case-lambda
                                     let letrec let* let-values
                                     fluid-let-syntax let-syntax
@@ -53,7 +53,7 @@
                 [(quote _)
                  (list e '())]
                 [(begin e)
-                 (lift-local-functions #'e env binds)]
+                 (lift-local-functions #'e env binds mutated)]
                 [(seq e ...)
                  (and (symbol? (syntax->datum #'seq))
                       (or (free-identifier=? #'seq #'begin)
@@ -61,7 +61,7 @@
                           (free-identifier=? #'seq #'if)))
                  (with-syntax ([((new-e lifts) ...)
                                 (map (lambda (e)
-                                       (lift-local-functions e env binds))
+                                       (lift-local-functions e env binds mutated))
                                      #'(e ...))])
                    (list #'(seq new-e ...)
                          (append-all #'(lifts ...))))]
@@ -69,7 +69,8 @@
                  (with-syntax ([(body lifts)
                                 (lift-local-functions #'(begin e ...)
                                                       (add-args env #'args)
-                                                      binds)])
+                                                      binds
+                                                      mutated)])
                    #`((lambda args body)
                       lifts))]
                 [(case-lambda [args e ...] ...)
@@ -77,14 +78,15 @@
                                 (map (lambda (args body)
                                        (lift-local-functions body
                                                              (add-args env args)
-                                                             binds))
+                                                             binds
+                                                             mutated))
                                      #'(args ...)
                                      #'((begin e ...) ...))])
                    (list #'(case-lambda [args body] ...)
                          (append-all #'(lifts ...))))]
                 [(let loop ([arg val] ...) e ...)
                  (symbol? (syntax->datum #'loop))
-                 (generate-lifted env binds
+                 (generate-lifted env binds mutated
                                   #'loop          ; name
                                   #'(arg ...)     ; argument names
                                   #'(begin e ...) ; body
@@ -96,22 +98,23 @@
                                       #`((new-loop-name val ... free-var ...)
                                          (defn-to-lift)))))]
                 [(let* () e ...)
-                 (lift-local-functions #`(begin e ...) env binds)]
+                 (lift-local-functions #`(begin e ...) env binds mutated)]
                 [(let* ([id rhs] . more-binds) e ...)
-                 (lift-local-functions #`(let ([id rhs]) (let* more-binds e ...)) env binds)]
+                 (lift-local-functions #`(let ([id rhs]) (let* more-binds e ...)) env binds mutated)]
                 [(let . _)
-                 (lift-local-functions-in-let/lift-immediate e env binds)]
+                 (lift-local-functions-in-let/lift-immediate e env binds mutated)]
                 [(letrec . _)
-                 (lift-local-functions-in-let e env binds #t)]
+                 (lift-local-functions-in-let e env binds mutated #t)]
                 [(let-values ([(id ...) rhs] ...) e ...)
                  (with-syntax ([((new-rhs lifts) ...)
                                 (map (lambda (rhs)
-                                       (lift-local-functions rhs env binds))
+                                       (lift-local-functions rhs env binds mutated))
                                      #'(rhs ...))])
                    (with-syntax ([(new-body body-lifts)
                                   (lift-local-functions #'(begin e ...)
                                                         (add-args env (#%apply append #'((id ...) ...)))
-                                                        binds)])
+                                                        binds
+                                                        mutated)])
                      (list #'(let-values ([(id ...) new-rhs] ...) new-body)
                            (append #'body-lifts (append-all #'(lifts ...))))))]
                 [(fluid-let-syntax ([id rhs] ...) e ...)
@@ -119,7 +122,8 @@
                                 (lift-local-functions #'(begin e ...)
                                                       (remove-args env #'(id ...))
                                                       (cons #'(fluid-let-syntax ([id rhs] ...))
-                                                            binds))])
+                                                            binds)
+                                                      mutated)])
                    #`((fluid-let-syntax ([id rhs] ...) new-body)
                       body-lifts))]
                 [(let-syntax ([id rhs] ...) e ...)
@@ -127,48 +131,50 @@
                                 (lift-local-functions #'(begin e ...)
                                                       (remove-args env #'(id ...))
                                                       (cons #'(let-syntax ([id rhs] ...))
-                                                            binds))])
+                                                            binds)
+                                                      mutated)])
                    #`((let-syntax ([id rhs] ...) new-body)
                       body-lifts))]
                 [(cond [e ...] ...)
                  (with-syntax ([(((new-e lifts) ...) ...)
                                 (map (lambda (es)
                                        (map (lambda (e)
-                                              (lift-local-functions e env binds))
+                                              (lift-local-functions e env binds mutated))
                                             es))
                                      #'((e ...) ...))])
                    (list #'(cond [new-e ...] ...)
                          (append-all (append-all #'((lifts ...) ...)))))]
                 [(set! id rhs)
-                 (with-syntax ([(new-rhs lifts) (lift-local-functions #'rhs env binds)])
+                 (track-mutated! mutated #'id 'mutated)
+                 (with-syntax ([(new-rhs lifts) (lift-local-functions #'rhs env binds mutated)])
                    #'((set! id new-rhs)
                       lifts))]
                 [(rator rand ...)
                  (with-syntax ([((new-e lifts) ...)
                                 (map (lambda (e)
-                                       (lift-local-functions e env binds))
+                                       (lift-local-functions e env binds mutated))
                                      #'(rator rand ...))])
                    (list #'(new-e ...)
                          (append-all #'(lifts ...))))]
                 [_ (list e '())]))]
 
            [lift-local-functions-in-let
-            (lambda (e env binds rec?)
+            (lambda (e env binds mutated rec?)
               (syntax-case e ()
                 [(form ([id rhs] ...) e ...)
                  (let ([body-env (add-args env #'(id ...))])
                    (with-syntax ([((new-rhs lifts) ...)
                                   (map (lambda (rhs)
-                                         (lift-local-functions rhs (if rec? body-env env) binds))
+                                         (lift-local-functions rhs (if rec? body-env env) binds mutated))
                                        #'(rhs ...))])
                      (with-syntax ([(new-body body-lifts)
-                                    (lift-local-functions #'(begin e ...) body-env binds)])
+                                    (lift-local-functions #'(begin e ...) body-env binds mutated)])
                        (list #'(form ([id new-rhs] ...) new-body)
                              (append #'body-lifts (append-all #'(lifts ...)))))))]))]
 
            [lift-local-functions-in-let/lift-immediate
             ;; Split `lambda` bindings for other bindings, then lift the `lambda`s
-            (lambda (e env binds)
+            (lambda (e env binds mutated)
               (syntax-case e ()
                 [(form ([id rhs] ...) . body)
                  (let ([body-env (add-args env #'(id ...))])
@@ -176,7 +182,7 @@
                                  (split-proc-binds #'([id rhs] ...))])
                      (cond
                       [(null? proc-binds)
-                       (lift-local-functions-in-let e env binds #f)]
+                       (lift-local-functions-in-let e env binds mutated #f)]
                       [else
                        (let loop ([proc-binds proc-binds]
                                   [e (with-syntax ([other-binds other-binds])
@@ -184,13 +190,13 @@
                                   [lifts '()])
                          (cond
                           [(null? proc-binds)
-                           (with-syntax ([(new-e e-lifts) (lift-local-functions e env binds)])
+                           (with-syntax ([(new-e e-lifts) (lift-local-functions e env binds mutated)])
                              (list #'new-e
                                    (append lifts #'e-lifts)))]
                           [else
                            (with-syntax ([[id (_ rhs-args rhs-e ...)] (car proc-binds)])
                              (generate-lifted
-                              env binds
+                              env binds mutated
                               #'id                ; name
                               #'rhs-args          ; argument names
                               #'(begin rhs-e ...) ; body
@@ -221,12 +227,13 @@
 
            [generate-lifted
             ;; Takes pieces for a function to lift an generates the lifted version
-            (lambda (env binds name args body rec? k)
+            (lambda (env binds mutated name args body rec? k)
               (let* ([ids (if rec? (cons name args) args)]
                      [binds (filter-shadowed-binds binds (add-args env ids))]
                      [body-env (remove-args env ids)]
                      [direct-free-vars (extract-free-vars body body-env)]
                      [direct-called-vars (extract-free-vars body (binds-to-env binds))])
+                (for-each (lambda (free-var) (track-mutated! mutated free-var 'must-not)) direct-free-vars)
                 (let-values ([(free-vars called-vars) (extract-bind-vars binds body-env direct-free-vars direct-called-vars)])
                   (let ([free-vars (unique-ids free-vars)]
                         [called-vars (unique-ids called-vars)])
@@ -424,6 +431,14 @@
                                             (cdr args))]
                  [else (#%remq args env)])))]
 
+           [track-mutated!
+            (lambda (mutated id state)
+              (let ([old-state (hashtable-ref mutated (syntax->datum id) #f)])
+                (when (and old-state
+                           (not (eq? old-state state)))
+                  (syntax-error id "lift seems to need to close over mutated variable:"))
+                (hashtable-set! mutated (syntax->datum id) state)))]
+
            [unique-ids
             (lambda (l)
               (let loop ([l l])
@@ -453,7 +468,8 @@
        (with-syntax ([(new-rhs (lift ...)) (lift-local-functions
                                             #'rhs
                                             '()
-                                            '())])
+                                            '()
+                                            (make-eq-hashtable))])
          #'(define/no-lift id
              (let ()
                lift ...

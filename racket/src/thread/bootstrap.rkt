@@ -161,6 +161,7 @@
                   'exn:break/non-engine exn:break/non-engine
                   'exn:break:hang-up/non-engine exn:break:hang-up/non-engine
                   'exn:break:terminate/non-engine exn:break:terminate/non-engine
+                  'poll-async-callbacks (lambda () null)
                   'disable-interrupts void
                   'enable-interrupts void
                   'fork-pthread (lambda args

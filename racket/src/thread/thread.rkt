@@ -130,7 +130,7 @@
 
 (define (do-make-thread who
                         proc
-                        #:custodian [c (current-custodian)]
+                        #:custodian [c (current-custodian)] ; can be #f
                         #:at-root? [at-root? #f]
                         #:initial? [initial? #f]
                         #:suspend-to-kill? [suspend-to-kill? #f])
@@ -181,9 +181,9 @@
                     void ; condition-wakeup
                     )) 
   ((atomically
-    (define cref (unsafe-custodian-register c t remove-thread-custodian #f #t))
+    (define cref (and c (unsafe-custodian-register c t remove-thread-custodian #f #t)))
     (cond
-      [cref
+      [(or (not c) cref)
        (set-thread-custodian-references! t (list cref))
        (thread-group-add! p t)
        void]

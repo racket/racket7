@@ -1301,9 +1301,9 @@
            :contract "(listof ctype?)"
            in-types)
     (check who ctype? out-type)
-    (ffi-call/callable #t p in-types out-type abi save-errno)]))
+    (ffi-call/callable #t p in-types out-type abi save-errno #f #f)]))
 
-(define (ffi-call/callable call? to-wrap in-types out-type abi save-errno)
+(define (ffi-call/callable call? to-wrap in-types out-type abi save-errno atomic? async-apply)
   (let* ([conv (case abi
                  [(stdcall) '__stdcall]
                  [(sysv) '__cdecl]
@@ -1343,6 +1343,7 @@
                           (lambda (to-wrap)
                             (,(if call? 'foreign-procedure 'foreign-callable)
                              ,conv
+                             ,@(if async-apply '(__thread) '())
                              to-wrap
                              ,(map (lambda (in-type id)
                                      (if id
@@ -1368,7 +1369,8 @@
             (call-with-system-wind (lambda () (eval expr))))]
          [gen-proc (car gen-proc+ret-maker+arg-makers)]
          [ret-maker (cadr gen-proc+ret-maker+arg-makers)]
-         [arg-makers (cddr gen-proc+ret-maker+arg-makers)])
+         [arg-makers (cddr gen-proc+ret-maker+arg-makers)]
+         [async-callback-queue (and (procedure? async-apply) (current-async-callback-queue))])
     (cond
      [call?
       (let* ([proc-p (unwrap-cpointer to-wrap)])
@@ -1414,29 +1416,34 @@
             (c->s out-type r))))]
      [else ; callable
       (gen-proc (lambda args ; if ret-id, includes an extra initial argument to receive the result
-                  (let ([v (s->c
-                            out-type
-                            (apply to-wrap
-                                   (let loop ([args (if ret-id (cdr args) args)] [in-types in-types])
-                                     (cond
-                                      [(null? args) '()]
-                                      [else
-                                       (let* ([arg (car args)]
-                                              [type (car in-types)]
-                                              [arg (c->s type
-                                                         (case (ctype-host-rep type)
-                                                           [(struct union)
-                                                            (let* ([size (compound-ctype-size type)]
-                                                                   [addr (ftype-pointer-address arg)]
-                                                                   [bstr (make-bytevector size)])
-                                                              (memcpy* bstr 0 addr 0 size #f)
-                                                              (make-cpointer bstr #f))]
-                                                           [else
-                                                            (cond
-                                                             [(eq? (ctype-our-rep type) 'gcpointer)
-                                                              (addr->gcpointer-memory arg)]
-                                                             [else arg])]))])
-                                         (cons arg (loop (cdr args) (cdr in-types))))]))))])
+                  (let ([v (call-as-atomic-callback
+                            (lambda ()
+                              (s->c
+                               out-type
+                               (apply to-wrap
+                                      (let loop ([args (if ret-id (cdr args) args)] [in-types in-types])
+                                        (cond
+                                         [(null? args) '()]
+                                         [else
+                                          (let* ([arg (car args)]
+                                                 [type (car in-types)]
+                                                 [arg (c->s type
+                                                            (case (ctype-host-rep type)
+                                                              [(struct union)
+                                                               (let* ([size (compound-ctype-size type)]
+                                                                      [addr (ftype-pointer-address arg)]
+                                                                      [bstr (make-bytevector size)])
+                                                                 (memcpy* bstr 0 addr 0 size #f)
+                                                                 (make-cpointer bstr #f))]
+                                                              [else
+                                                               (cond
+                                                                [(eq? (ctype-our-rep type) 'gcpointer)
+                                                                 (addr->gcpointer-memory arg)]
+                                                                [else arg])]))])
+                                            (cons arg (loop (cdr args) (cdr in-types))))])))))
+                            atomic?
+                            async-apply
+                            async-callback-queue)])
                     (if ret-id
                         (let* ([size (compound-ctype-size out-type)]
                                [addr (ftype-pointer-address (car args))])
@@ -1464,6 +1471,77 @@
                                              (cpointer/ffi-obj-name proc-p))
                                         'unknown)))
 
+;; Can be called in any Scheme thread
+(define (call-as-atomic-callback thunk atomic? async-apply async-callback-queue)
+  (cond
+   [(not (no-engine-state? (current-engine-state)))
+    (cond
+     [(not atomic?)
+      ;; We must have gotten here by a foreign call that called
+      ;; back, so interrupts are currently disabled; reenable them
+      (enable-interrupts)
+      (let ([v (thunk)])
+        (disable-interrupts)
+        v)]
+     [else
+      ;; In a place's main thread; interrupts are already off, but
+      ;; inform the scheduler that it's in atomic mode
+      (scheduler-start-atomic)
+      (let ([v (thunk)])
+        (scheduler-end-atomic)
+        v)])]
+   [(box? async-apply)
+    ;; Not in a place's main thread; return the box's content
+    (unbox async-apply)]
+   [else
+    ;; Not in a place's main thread; queue an async callback
+    ;; and wait for the response
+    (let* ([result-done? (box #f)]
+           [result #f]
+           [q async-callback-queue]
+           [m (async-callback-queue-lock q)])
+      (mutex-acquire m)
+      (set-async-callback-queue-in! q (cons (lambda ()
+                                              (set! result (async-apply thunk))
+                                              (mutex-acquire m)
+                                              (set-box! result-done? #t)
+                                              (condition-broadcast (async-callback-queue-condition q))
+                                              (mutex-release m))
+                                            (async-callback-queue-in q)))
+      (let loop ()
+        (unless (unbox result-done?)
+          (condition-wait (async-callback-queue-condition q) m)
+          (loop)))
+      (mutex-release m)
+      result)]))
+
+(define scheduler-start-atomic void)
+(define scheduler-end-atomic void)
+(define (set-scheduler-atomicity-callbacks! start-atomic end-atomic)
+  (set! scheduler-start-atomic start-atomic)
+  (set! scheduler-end-atomic end-atomic))
+
+(define-record async-callback-queue (lock condition in))
+
+(define current-async-callback-queue
+  (make-pthread-parameter (make-async-callback-queue (make-mutex)
+                                                     (make-condition)
+                                                     '())))
+
+;; Returns callbacks to run in atomic mode
+(define (poll-async-callbacks)
+  (let ([q (current-async-callback-queue)])
+    (mutex-acquire (async-callback-queue-lock q))
+    (let ([in (async-callback-queue-in q)])
+      (cond
+       [(null? in)
+        (mutex-release (async-callback-queue-lock q))
+        '()]
+       [else
+        (set-async-callback-queue-in! q '())
+        (mutex-release (async-callback-queue-lock q))
+        (reverse in)]))))
+
 ;; ----------------------------------------
 
 (define-record-type (callback create-callback ffi-callback?)
@@ -1477,7 +1555,7 @@
     (ffi-callback proc in-types out-type abi #f #f)]
    [(proc in-types out-type abi atomic?)
     (ffi-callback proc in-types out-type abi atomic? #f)]
-   [(proc in-types out-type abi atomic async-apply)
+   [(proc in-types out-type abi atomic? async-apply)
     (check who procedure? proc)
     (check who (lambda (l)
                  (and (list? l)
@@ -1485,7 +1563,7 @@
            :contract "(listof ctype?)"
            in-types)
     (check who ctype? out-type)
-    (let* ([code (ffi-call/callable #f proc in-types out-type abi #f)]
+    (let* ([code (ffi-call/callable #f proc in-types out-type abi #f atomic? async-apply)]
            [cb (create-callback code)])
       (lock-object code)
       (the-foreign-guardian cb (lambda () (unlock-object code)))

@@ -27,24 +27,28 @@
 
 ;; ----------------------------------------
 
-(define (select-thread!)
-  (let loop ([g root-thread-group] [none-k maybe-done])
+(define (select-thread! [pending-callbacks null])
+  (let loop ([g root-thread-group] [pending-callbacks pending-callbacks] [none-k maybe-done])
+    (define callbacks (if (null? pending-callbacks)
+                          (host:poll-async-callbacks)
+                          pending-callbacks))
     (host:poll-will-executors)
     (check-external-events 'fast)
-    (when (and (all-threads-poll-done?)
+    (when (and (null? callbacks)
+               (all-threads-poll-done?)
                (waiting-on-external-or-idle?))
       (or (check-external-events 'slow)
           (post-idle)
           (process-sleep)))
     (define child (thread-group-next! g))
     (cond
-      [(not child) (none-k)]
+      [(not child) (none-k callbacks)]
       [(thread? child)
-       (swap-in-thread child)]
+       (swap-in-thread child callbacks)]
       [else
-       (loop child (lambda () (loop g none-k)))])))
+       (loop child callbacks (lambda (pending-callbacks) (loop g none-k pending-callbacks)))])))
 
-(define (swap-in-thread t)
+(define (swap-in-thread t callbacks)
   (define e (thread-engine t))
   (set-thread-engine! t 'running)
   (set-thread-sched-info! t #f)
@@ -54,6 +58,7 @@
     (e
      TICKS
      (lambda ()
+       (run-callbacks callbacks)
        (check-for-break)
        (when atomic-timeout-callback
          (when (positive? (current-atomic))
@@ -81,8 +86,15 @@
           (set-end-atomic-callback! engine-block)
           (loop e)])))))
 
-(define (maybe-done)
+(define (maybe-done callbacks)
   (cond
+    [(pair? callbacks)
+     ;; We have callbacks to run and no thread willing
+     ;; to run them. Make a new thread.
+     (do-make-thread 'scheduler-make-thread
+                     void
+                     #:custodian #f)
+     (select-thread! callbacks)]
     [(and (not (sandman-any-sleepers?))
           (not (sandman-any-waiters?))
           (not (any-idle-waiters?)))
@@ -115,6 +127,14 @@
   (when did?
     (thread-did-work!))
   did?)
+
+;; Run foreign "async-apply" callbacks, if any
+(define (run-callbacks callbacks)
+  (unless (null? callbacks)
+    (start-atomic)
+    (for ([callback (in-list callbacks)])
+      (callback))
+    (end-atomic)))
 
 ;; ----------------------------------------
 

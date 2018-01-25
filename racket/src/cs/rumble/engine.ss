@@ -10,6 +10,7 @@
 (define-record engine-state (mc complete expire thread-cell-values init-break-enabled-cell reset-handler))
 
 (define-virtual-register current-engine-state #f)
+(define (no-engine-state? v) (eqv? v 0)) ; because a virtual register defaults to 0
 
 (define (set-ctl-c-handler! proc)
   (keyboard-interrupt-handler (case-lambda
