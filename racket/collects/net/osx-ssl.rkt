@@ -41,6 +41,7 @@
 
 (define _CFReadStreamRef (_cpointer/null 'CFReadStreamRef))
 (define _CFWriteStreamRef (_cpointer/null 'CFWriteStreamRef))
+(define _CFErrorRef (_cpointer/null 'CFError))
 
 (define _CFRunLoopRef (_cpointer/null 'CFRunLoopRef))
 
@@ -158,6 +159,14 @@
 (define-cf CFWriteStreamGetStatus
   (_fun _CFWriteStreamRef -> _CFStreamStatus))
 
+(define-cf CFReadStreamCopyError
+  (_fun _CFReadStreamRef -> _CFErrorRef)
+  #:wrap (allocator CFRelease))
+(define-cf CFWriteStreamCopyError
+  (_fun _CFWriteStreamRef -> _CFErrorRef)
+  #:wrap (allocator CFRelease))
+(define-cf CFErrorCopyDescription
+  (_fun _CFErrorRef -> _NSString))
 
 (define-cf CFDictionaryCreate
   (_fun (_pointer = #f)
@@ -341,6 +350,13 @@
     (raise
      (exn:fail:network
       (~a "osx-ssl-connect: connection failed\n"
+          "  message: " (let ([err (if (eq? (CFReadStreamGetStatus in) 'kCFStreamStatusError)
+                                       (CFReadStreamCopyError in)
+                                       (CFWriteStreamCopyError out))])
+                          (begin0
+                            (CFErrorCopyDescription err)
+                            (CFRelease err)))
+          "\n"
           "  address: " host "\n"
           "  port number: " port)
       (current-continuation-marks))))
