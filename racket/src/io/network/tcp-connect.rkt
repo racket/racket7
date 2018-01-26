@@ -5,6 +5,7 @@
          "../host/rktio.rkt"
          "../host/error.rkt"
          "../security/main.rkt"
+         "../format/main.rkt"
          "tcp-port.rkt"
          "port-number.rkt"
          "address.rkt"

@@ -40,8 +40,9 @@
         (define lookup (unbox lookup-box))
         (let loop ()
           (cond
-            [(eqv? (rktio_poll_addrinfo_lookup_ready rktio lookup)
-                   RKTIO_POLL_NOT_READY)
+            [(and (not (rktio-error? lookup))
+                  (eqv? (rktio_poll_addrinfo_lookup_ready rktio lookup)
+                        RKTIO_POLL_NOT_READY))
              (end-atomic)
              ((if enable-break? sync/enable-break sync)
               (rktio-evt (lambda ()
@@ -54,7 +55,9 @@
             [else
              (set-box! lookup-box #f) ; receiving result implies `lookup` is destroyed
              (call-with-resource
-              (rktio_addrinfo_lookup_get rktio lookup)
+              (if (rktio-error? lookup)
+                  lookup
+                  (rktio_addrinfo_lookup_get rktio lookup))
               ;; in atomic mode
               (lambda (addr) (rktio_addrinfo_free rktio addr))
               ;; in atomic mode
