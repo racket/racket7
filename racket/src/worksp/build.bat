@@ -18,9 +18,17 @@ if not exist ..\..\share  mkdir ..\..\share
 
 if not defined BUILD_CONFIG set BUILD_CONFIG=..\..\etc
 
+cl cstartup.c
+cstartup.exe ..\racket\src\startup.inc libracket\startup.inc
+if not exist libracket\cstartup.inc echo #include "startup.inc" > libracket\cstartup.inc
+
 cd racket
 msbuild racket%PLTSLNVER%.sln /p:Configuration=Release /p:Platform=%BUILDMODE%
 if errorlevel 1 exit /B 1
+..\..\..\racketcgc -cu ..\..\racket\src\compile-startup.rkt ..\libracket\cstartup.inc ..\..\racket\src\startup.inc ..\..\racket\src\schvers.h
+if errorlevel 1 exit /B 1
+msbuild racket%PLTSLNVER%.sln /p:Configuration=Release /p:Platform=%BUILDMODE%
+
 cd ..\gracket
 msbuild gracket%PLTSLNVER%.sln /p:Configuration=Release /p:Platform=%BUILDMODE%
 if errorlevel 1 exit /B 1

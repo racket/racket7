@@ -20,9 +20,14 @@
 */*X.vcxproj
 */*X.sln
 
+/libracket/cstartup.inc
+/libracket/startup.inc
+
 checkvs9.obj
 checkvs9.exe
 genvsx.obj
 genvsx.exe
 rbuildmode.obj
 rbuildmode.exe
+cstartup.obj
+cstartup.exe

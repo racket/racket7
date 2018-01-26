@@ -106,7 +106,7 @@ static int _configdir_offset = 17; /* Skip permanent tag */
 static char *extract_dlldir()
 {
   if (_dlldir[_dlldir_offset] != '<')
-    return _dlldir + _dlldir_offset);
+    return _dlldir + _dlldir_offset;
   else
     return NULL;
 }

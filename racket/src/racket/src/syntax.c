@@ -107,7 +107,6 @@ void scheme_init_stx(Scheme_Startup_Env *env)
   ADD_FOLDING_PRIM("syntax->datum", syntax_to_datum, 1, 1, 1, env);
   ADD_IMMED_PRIM("datum->syntax", datum_to_syntax, 2, 5, env);
   
-  REGISTER_SO(scheme_checked_syntax_e);
   o = scheme_make_folding_prim(scheme_checked_syntax_e, "syntax-e", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
   scheme_addto_prim_instance("syntax-e", o, env);

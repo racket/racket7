@@ -5,9 +5,9 @@
   
   (define-values (ht)
     (if (if (= (vector-length args) 1)
+            #t
             (equal? (vector-ref args (- (vector-length args) 1))
-                    (vector-ref args (- (vector-length args) 2)))
-            #f)
+                    (vector-ref args (- (vector-length args) 2))))
         ;; Not cross-compiling
         (hash 'os (system-type 'os)
               'word (system-type 'word)

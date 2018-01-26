@@ -32,7 +32,7 @@
         (if (eof-object? l)
             null
             (cons l (get-lines in))))))
-  
+
   (define-values (linklet)
     (compile-linklet
      (read
