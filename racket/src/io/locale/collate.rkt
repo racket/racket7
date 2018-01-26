@@ -7,7 +7,7 @@
          "parameter.rkt"
          "string.rkt"
          "recase.rkt"
-         "nul.rkt"
+         "nul-char.rkt"
          "ucs-4.rkt")
 
 (provide string-locale<?
