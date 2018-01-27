@@ -43,28 +43,30 @@
 
 (define wb (make-weak-box sym1))
 
-(define we/s (make-stubborn-will-executor))
-(will-register we/s sym1 (lambda (s)
-                           (unless (eq? s (weak-box-value wb))
-                             (error 'stubborn-executor-test "box context wrong"))
-                           (set! s/done? (symbol? s))))
+(define we/s (rumble:make-stubborn-will-executor void))
+(rumble:will-register we/s sym1 (lambda (s)
+                                  (unless (eq? s (weak-box-value wb))
+                                    (error 'stubborn-executor-test "box context wrong"))
+                                  (set! s/done? (symbol? s))))
 
-(define we (make-will-executor))
-(will-register we sym1 (letrec ([will (lambda (s)
-                                        (when s/done?
-                                          (error 'stubborn-executor-test "done too early"))
-                                        (set! done (add1 done))
-                                        (unless (= done 10)
-                                          (will-register we s will)))])
-                         will))
+(define we (rumble:make-will-executor void))
+(rumble:will-register we sym1 (letrec ([will (lambda (s)
+                                               (when s/done?
+                                                 (error 'stubborn-executor-test "done too early"))
+                                               (set! done (add1 done))
+                                               (unless (= done 10)
+                                                 (rumble:will-register we s will)))])
+                                will))
 
 (set! sym1 #f)
+
+(define (run p) (when p ((car p) (cdr p))))
 
 (let loop ()
   (unless s/done?
     (collect (collect-maximum-generation))
-    (will-try-execute we/s)
-    (will-try-execute we)
+    (run (rumble:will-try-execute we/s))
+    (run (rumble:will-try-execute we))
     (loop)))
 (collect (collect-maximum-generation))
 (unless (not (weak-box-value wb))

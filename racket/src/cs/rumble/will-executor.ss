@@ -42,7 +42,7 @@
   (enable-interrupts)
   (void))
 
-;; Returns #f for a pair: procedure and value
+;; Returns #f or a pair: procedure and value
 (define/who (will-try-execute executor)
   (check who will-executor? executor)
   (disable-interrupts)
