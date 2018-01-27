@@ -67,18 +67,22 @@
 (define (thread-group-add! parent child)
   (atomically
    (let loop ([parent parent] [child child])
-     (define t (thread-group-chain-end parent))
+     ;; Adding to the start of the group tends to reverse the schedule
+     ;; order, but it also avoids a problem where two threads that
+     ;; both loop and `sleep` (which deschedules and reschedules) take
+     ;; turns and starve everything else.
+     (define t (thread-group-chain-start parent))
      (define was-empty? (not t))
      (define n (child-node child))
      (unless (and (eq? (node-prev n) 'none)
                   (eq? (node-next n) 'none))
        (internal-error "thread-group-add!: thread or group is added already"))
-     (set-node-prev! n t)
-     (set-node-next! n #f)
+     (set-node-next! n t)
+     (set-node-prev! n #f)
      (if t
-         (set-node-next! t n)
-         (set-thread-group-chain-start! parent n))
-     (set-thread-group-chain-end! parent n)
+         (set-node-prev! t n)
+         (set-thread-group-chain-end! parent n))
+     (set-thread-group-chain-start! parent n)
      (unless (thread-group? child)
        (set! num-threads-in-groups (add1 num-threads-in-groups)))
      (when was-empty?

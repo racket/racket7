@@ -77,9 +77,11 @@
             void]))))
      (unbox b)]))
 
+;; in atomic mode
 (define (channel-get/poll ch poll-ctx)
   ;; Similar to `channel-get`, but works in terms of a
   ;; `select-waiter` instead of a thread
+  (assert-atomic-mode)
   (define pq (channel-put-queue ch))
   (define pw+v (queue-fremove! pq not-matching-select-waiter))
   (cond
@@ -138,9 +140,11 @@
           (waiter-resume! (car gw+b) v)
           void])))]))
 
+;; In atomic mode
 (define (channel-put/poll ch v result poll-ctx)
   ;; Similar to `channel-put`, but works in terms of a
   ;; `select-waiter` instead of a thread
+  (assert-atomic-mode)
   (define gq (channel-get-queue ch))
   (define gw+b (queue-fremove! gq not-matching-select-waiter))
   (cond

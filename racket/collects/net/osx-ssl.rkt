@@ -308,10 +308,10 @@
     (check-ok (CFReadStreamSetProperty in kCFStreamPropertySSLSettings d))
     (check-ok (CFWriteStreamSetProperty out kCFStreamPropertySSLSettings d))
     (CFRelease d))
-  
+
   (define in-ready (make-semaphore))
   (define out-ready (make-semaphore 1))
-  
+
   ;; These callback must be retained so that they're not GCed
   ;; until the run loop is terminated:
   (define in-callback (lambda (_in evt _null)
@@ -338,7 +338,7 @@
   
   (check-ok (CFWriteStreamOpen out))
   (check-ok (CFReadStreamOpen in))
-  
+
   (let loop ()
     (when (or (eq? (CFReadStreamGetStatus in) 'kCFStreamStatusOpening)
               (eq? (CFWriteStreamGetStatus out) 'kCFStreamStatusOpening))

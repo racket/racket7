@@ -34,6 +34,9 @@
   (set-os-semaphore-count! s (add1 (os-semaphore-count s)))
   (chez:mutex-release (os-semaphore-mutex s)))
 
+;; interrupts must be enabled when waiting on a semaphore; otherwise,
+;; the wait will block GCs, likely deadlocking this thread and another
+;; thread that is working toward posting the semaphore
 (define/who (unsafe-os-semaphore-wait s)
   (check who os-semaphore? s)
   (chez:mutex-acquire (os-semaphore-mutex s))

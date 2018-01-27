@@ -57,7 +57,9 @@
   (check who semaphore? s)
   (atomically (semaphore-post/atomic s)))
 
+;; In atomic mode:
 (define (semaphore-post/atomic s)
+  (assert-atomic-mode)
   (let loop ()
     (define w (queue-remove! (semaphore-queue s)))
     (cond
@@ -78,6 +80,7 @@
 
 ;; In atomic mode:
 (define (semaphore-any-waiters? s)
+  (assert-atomic-mode)
   (not (queue-empty? (semaphore-queue s))))
 
 ;; ----------------------------------------
@@ -115,11 +118,13 @@
        ;; is resumed:
        (lambda () (semaphore-wait s)))]))))
 
+;; In atomic mode
 (define (semaphore-wait/poll s poll-ctx
                              #:peek? [peek? #f]
                              #:result [result s])
   ;; Similar to `semaphore-wait, but as called by `sync`,
   ;; so use a select waiter instead of the current thread
+  (assert-atomic-mode)
   (define c (semaphore-count s))
   (cond
    [(positive? c)
@@ -140,10 +145,13 @@
     (values #f
             (wrap-evt
              (control-state-evt async-evt
-                                (lambda () (queue-remove-node! q n))
+                                (lambda ()
+                                  (assert-atomic-mode)
+                                  (queue-remove-node! q n))
                                 void
                                 (lambda ()
                                   ;; Retry: decrement or requeue
+                                  (assert-atomic-mode)
                                   (define c (semaphore-count s))
                                   (cond
                                    [(positive? c)

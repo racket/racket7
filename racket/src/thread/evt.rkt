@@ -1,5 +1,6 @@
 #lang racket/base
-(require racket/unsafe/ops)
+(require racket/unsafe/ops
+         "atomic.rkt")
 
 (provide prop:evt
          evt?
@@ -95,21 +96,29 @@
 ;; `select-proc` is not called if the event is abandoned.
 
 (struct never-evt ()
-  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx)
+                                (assert-atomic-mode)
+                                (values #f self))))
 (define the-never-evt (never-evt))
 
 (struct always-evt ()
-  #:property prop:evt (poller (lambda (self poll-ctx) (values (list self) #f))))
+  #:property prop:evt (poller (lambda (self poll-ctx)
+                                (assert-atomic-mode)
+                                (values (list self) #f))))
 (define the-always-evt (always-evt))
 
 ;; A placeholder for an event that will be selected through a callback
 ;; instead of polling:
 (struct async-evt ()
-  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self))))
+  #:property prop:evt (poller (lambda (self poll-ctx)
+                                (assert-atomic-mode)
+                                (values #f self))))
 (define the-async-evt (async-evt))
 
 (struct wrap-evt (evt wrap)
-  #:property prop:evt (poller (lambda (self poll-ctx) (values #f self)))
+  #:property prop:evt (poller (lambda (self poll-ctx)
+                                (assert-atomic-mode)
+                                (values #f self)))
   #:reflection-name 'evt)
 (struct handle-evt wrap-evt ())
 
@@ -150,6 +159,7 @@
 ;; (to call a `prop:evt` procedure) then return a `delayed-poll`
 ;; struct.
 (define (evt-poll evt poll-ctx)
+  (assert-atomic-mode)
   (let* ([v (cond
               [(evt-impersonator? evt) (evt-impersonator-ref evt)]
               [(primary-evt? evt)

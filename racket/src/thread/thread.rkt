@@ -79,6 +79,7 @@
 
            current-break-enabled-cell
            check-for-break
+           current-break-suspend
 
            break-max))
 
@@ -215,6 +216,7 @@
 
 ;; in atomic mode
 (define (set-thread-suspended?! t suspended?)
+  (assert-atomic-mode)
   (define b (or (thread-suspended-box t)
                 (let ([b (box #f)])
                   (set-thread-suspended-box! t b)
@@ -233,6 +235,7 @@
 ;; In atomic mode
 ;; Terminating the current thread does not suspend or exit
 (define (thread-dead! t)
+  (assert-atomic-mode)
   (set-thread-engine! t 'done)
   (when (thread-dead-sema t)
     (semaphore-post-all (thread-dead-sema t)))
@@ -252,11 +255,13 @@
 
 ;; Called in atomic mode:
 (define (thread-push-kill-callback! cb)
+  (assert-atomic-mode)
   (define t (current-thread))
   (set-thread-kill-callbacks! t (cons cb (thread-kill-callbacks t))))
 
 ;; Called in atomic mode:
 (define (thread-pop-kill-callback!)
+  (assert-atomic-mode)
   (define t (current-thread))
   (set-thread-kill-callbacks! t (cdr (thread-kill-callbacks t))))
 
@@ -282,11 +287,13 @@
 
 ;; Called in atomic mode:
 (define (do-kill-thread t)
+  (assert-atomic-mode)
   (unless (thread-dead? t)
     (thread-dead! t)))
 
 ;; Called in atomic mode:
 (define (remove-thread-custodian t c)
+  (assert-atomic-mode)
   (define new-crs (for/list ([cref (in-list (thread-custodian-references t))]
                              #:unless (custodian-manages-reference? c cref))
                     cref))
@@ -300,6 +307,7 @@
 
 ;; Called in atomic mode:
 (define (run-kill-callbacks! t)
+  (assert-atomic-mode)
   (for ([cb (in-list (thread-kill-callbacks t))])
     (cb))
   (set-thread-kill-callbacks! t null))
@@ -357,6 +365,7 @@
 
 ;; in atomic mode
 (define (remove-from-sleeping-threads! t)
+  (assert-atomic-mode)
   (define sleeping (thread-sleeping t))
   (when sleeping
     (set-thread-sleeping! t #f)
@@ -364,6 +373,7 @@
 
 ;; in atomic mode
 (define (add-to-sleeping-threads! t ext-events)
+  (assert-atomic-mode)
   (define sleeping (sandman-add-sleeping-thread! t ext-events))
   (set-thread-sleeping! t sleeping))
 
@@ -372,6 +382,7 @@
 ;; returns a thunk to be called in out of atomic mode to swap out the
 ;; thread, where the thunk returns `(void)`;
 (define (do-thread-deschedule! t timeout-at)
+  (assert-atomic-mode)
   (when (thread-descheduled? t)
     (internal-error "tried to deschedule a descheduled thread"))
   (set-thread-descheduled?! t #t)
@@ -416,6 +427,7 @@
 ;; in atomic mode
 ;; Add a thread back to its thread group
 (define (thread-reschedule! t)
+  (assert-atomic-mode)
   (when (thread-dead? t)
     (internal-error "tried to reschedule a dead thread"))
   (unless (thread-descheduled? t)
@@ -434,6 +446,7 @@
 ;; Returns a thunk to call to handle the case that
 ;; the current thread is suspended
 (define (do-thread-suspend t)
+  (assert-atomic-mode)
   (cond
     [(thread-dead? t) void]
     [else
@@ -468,6 +481,7 @@
 
 ;; in atomic mode
 (define (do-thread-resume t benefactor)
+  (assert-atomic-mode)
   (unless (thread-dead? t)
     (cond
       [(thread? benefactor)
@@ -490,6 +504,7 @@
 
 ;; in atomic mode
 (define (add-custodian-to-thread! t c)
+  (assert-atomic-mode)
   (let loop ([crs (thread-custodian-references t)]
              [accum null])
     (cond
@@ -520,6 +535,7 @@
 
 ;; in atomic mode
 (define (add-transitive-resume-to-thread! t b-t)
+  (assert-atomic-mode)
   ;; Look for `b-t` in list, and also prune
   ;; terminated threads
   (define new-l
@@ -541,6 +557,7 @@
 
 ;; in atomic mode
 (define (do-resume-transitive-resumes t c)
+  (assert-atomic-mode)
   (for ([tr (in-list (thread-transitive-resumes t))])
     (define b-t (weak-box-value (transitive-resume-weak-box tr)))
     (when b-t
@@ -549,22 +566,26 @@
 ;; Called in atomic mode:
 ;; Given callbacks are also called in atomic mode
 (define (thread-push-suspend+resume-callbacks! s-cb r-cb)
+  (assert-atomic-mode)
   (define t (current-thread))
   (set-thread-suspend+resume-callbacks! t (cons (cons s-cb r-cb)
                                                 (thread-suspend+resume-callbacks t))))
 
 ;; Called in atomic mode:
 (define (thread-pop-suspend+resume-callbacks!)
+  (assert-atomic-mode)
   (define t (current-thread))
   (set-thread-suspend+resume-callbacks! t (cdr (thread-suspend+resume-callbacks t))))
 
 ;; Called in atomic mode:
 (define (run-suspend/resume-callbacks t sel)
+  (assert-atomic-mode)
   (for ([cbs (in-list (thread-suspend+resume-callbacks t))])
     ((sel cbs))))
 
 ;; Called in atomic mode:
 (define (run-interrupt-callback t)
+  (assert-atomic-mode)
   (define interrupt-callback (thread-interrupt-callback t))
   (when interrupt-callback
     ;; The interrupt callback might remove the thread as
@@ -781,6 +802,7 @@
 
 ;; in atomic mode:
 (define (thread-ignore-break-cell? t bc)
+  (assert-atomic-mode)
   (let ([ignore (thread-ignore-break-cells t)])
     (or (eq? ignore bc)
         (and (hash? ignore)
@@ -788,6 +810,7 @@
 
 ;; in atomic mode:
 (define (thread-ignore-break-cell! t bc)
+  (assert-atomic-mode)
   (let ([ignore (thread-ignore-break-cells t)])
     (set-thread-ignore-break-cells! t (cond
                                         [(not ignore)
@@ -802,6 +825,7 @@
 
 ;; in atomic mode
 (define (thread-remove-ignored-break-cell! t bc)
+  (assert-atomic-mode)
   (when (thread-ignore-break-cell? t bc)
     (let ([ignore (thread-ignore-break-cells t)])
       (set-thread-ignore-break-cells! t (cond
@@ -813,10 +837,12 @@
 
 ;; in atomic mode
 (define (enqueue-mail! thd v)
+  (assert-atomic-mode)
   (queue-add! (thread-mailbox thd) v))
 
 ;; in atomic mode
 (define (dequeue-mail! thd)
+  (assert-atomic-mode)
   (define mbx (thread-mailbox thd))
   (cond
     [(queue-empty? mbx)
@@ -826,10 +852,12 @@
 
 ;; in atomic mode
 (define (is-mail? thd)
+  (assert-atomic-mode)
   (not (queue-empty? (thread-mailbox thd))))
 
 ;; in atomic mode
 (define (push-mail! thd v)
+  (assert-atomic-mode)
   (queue-add-front! (thread-mailbox thd) v))
 
 (define/who (thread-send thd v [fail-thunk 
@@ -923,6 +951,7 @@
   #:property prop:evt (poller
                        ;; in atomic mode:
                        (lambda (self poll-ctx)
+                         (assert-atomic-mode)
                          (define t (current-thread))
                          (cond
                            [(is-mail? t) (values (list self) #f)]

@@ -571,6 +571,7 @@
           (rename [ffi-lib* ffi-lib])
           set-ffi-get-lib-and-obj! ; not exported to Racket
           poll-async-callbacks ; not exported to Racket
+          set-async-callback-poll-wakeup! ; not exported to Racket
 
           unsafe-unbox
           unsafe-unbox*
@@ -718,6 +719,7 @@
   ;; the the following line will cause the error to loop with another error, etc.,
   ;; probably without printing anything:
   (set-base-exception-handler!)
+  (register-as-place-main!)
   (set-collect-handler!)
   (set-primitive-applicables!)
   (set-continuation-applicables!)

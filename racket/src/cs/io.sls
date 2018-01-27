@@ -390,4 +390,5 @@
                              (1/log-message (|#%app| 1/current-logger) level str #f)))
   (set-error-display-eprintf! (lambda (fmt . args)
                                 (apply 1/fprintf (|#%app| 1/current-error-port) fmt args)))
-  (set-ffi-get-lib-and-obj! ffi-get-lib ffi-get-obj ptr->address))
+  (set-ffi-get-lib-and-obj! ffi-get-lib ffi-get-obj ptr->address)
+  (set-async-callback-poll-wakeup! 1/unsafe-signal-received))

@@ -118,9 +118,16 @@
               [(and polled-all?
                     timeout
                     (timeout-at . <= . (current-inexact-milliseconds)))
+               (start-atomic)
                (syncing-done! s none-syncer)
-               ;; Return result in a thunk:
-               (lambda () #f)]
+               (cond
+                 [(syncing-selected s)
+                  ;; Selected after all:
+                  (end-atomic)
+                  (loop #f #f)]
+                 [else
+                  ;; Return result in a thunk:
+                  (lambda () #f)])]
               [(and (all-asynchronous? s)
                     (not (syncing-selected s)))
                (suspend-syncing-thread s timeout-at)
@@ -214,6 +221,7 @@
      (values (list
               ;; in atomic mode
               (lambda ()
+                (assert-atomic-mode)
                 (set! selected? #t)
                 (for ([commit (in-list commits)])
                   (commit))
@@ -221,21 +229,26 @@
              (list
               ;; in atomic mode
               (lambda ()
+                (assert-atomic-mode)
                 (unless selected?
                   (for ([abandon (in-list abandons)])
                     (abandon)))
                 (set! abandons null))))]))
 
+;; in atomic mode
 ;; remove a syncer from its chain in `s`
 (define (syncer-remove! sr s)
+  (assert-atomic-mode)
   (if (syncer-prev sr)
       (set-syncer-next! (syncer-prev sr) (syncer-next sr))
       (set-syncing-syncers! s (syncer-next sr)))
   (when (syncer-next sr)
     (set-syncer-prev! (syncer-next sr) (syncer-prev sr))))
 
+;; in atomic mode
 ;; Replace one syncer with a new, non-empty chain of syncers in `s`
 (define (syncer-replace! sr new-syncers s)
+  (assert-atomic-mode)
   (let ([prev (syncer-prev sr)])
     (set-syncer-prev! new-syncers prev)
     (if prev
@@ -290,6 +303,7 @@
                               ;; in a different thread; this callback
                               ;; must be invoked in atomic mode
                               (lambda ()
+                                (assert-atomic-mode)
                                 (syncing-done! s sr))
                               ;; Information to propagate to the thread
                               ;; scheduler
@@ -416,6 +430,7 @@
 ;;  on non-selected events to indicate that they will never be
 ;;  selected for this synchronization
 (define (syncing-done! s selected-sr)
+  (assert-atomic-mode)
   (set-syncing-selected! s selected-sr)
   (for ([callback (in-list (syncer-commits selected-sr))])
     (callback))
@@ -434,6 +449,7 @@
 
 ;; Called in atomic mode
 (define (syncing-abandon! s)
+  (assert-atomic-mode)
   (unless (syncing-selected s)
     (syncing-done! s none-syncer)))
 
@@ -441,6 +457,7 @@
 ;;  For each syncer that needs a notification (e.g., to get out of
 ;;  a queue of waiters), call its `interrupt` callback
 (define (syncing-interrupt! s)
+  (assert-atomic-mode)
   (let loop ([sr (syncing-syncers s)])
     (when sr
       (unless (syncer-interrupted? sr)
@@ -455,6 +472,7 @@
 ;;  succeed immediately, moving the synchronization into "selected"
 ;;  state
 (define (syncing-retry! s)
+  (assert-atomic-mode)
   (set-syncing-need-retry?! s #f)
   (let loop ([sr (syncing-syncers s)])
     (when (and sr

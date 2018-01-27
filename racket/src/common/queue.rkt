@@ -62,11 +62,10 @@
   (define n (node w e #f))
   (cond
    [(not e)
-    (set-queue-start! q n)
-    (set-queue-end! q n)]
+    (set-queue-start! q n)]
    [else
-    (set-node-next! e n)
-    (set-queue-end! q n)])
+    (set-node-next! e n)])
+  (set-queue-end! q n)
   n)
 
 (define (queue-add-front! q w)
@@ -82,7 +81,6 @@
   n)
 
 (define (queue-remove-node! q n)
-  ;; get out of line
   (if (node-prev n)
       (set-node-next! (node-prev n) (node-next n))
       (set-queue-start! q (node-next n)))
@@ -93,18 +91,15 @@
 (define (queue-remove-end! q)
   (define e (queue-end q))
   (cond
-    [(not e)
-     #f]
+    [(not e) #f]
     [else
-     (let ([n (node-prev e)])
-       (set-node-next! n #f)
-       (set-queue-end! q n)
-       (node-elem e))]))
+     (define n (node-prev e))
+     (set-node-next! n #f)
+     (set-queue-end! q n)
+     (node-elem e)]))
 
 (define (queue-length q)
-  (let loop ([qs (queue-start q)])
+  (let loop ([qs (queue-start q)] [len 0])
     (cond
-      [qs
-       (+ 1 (loop (node-next qs)))]
-      [else
-       0])))
+      [qs (loop (node-next qs) (+ len 1))]
+      [else len])))

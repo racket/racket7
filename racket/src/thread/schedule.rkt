@@ -53,38 +53,43 @@
   (set-thread-engine! t 'running)
   (set-thread-sched-info! t #f)
   (current-thread t)
-  (let loop ([e e])
-    (define start (current-process-milliseconds))
-    (e
-     TICKS
-     (lambda ()
-       (run-callbacks callbacks)
-       (check-for-break)
-       (when atomic-timeout-callback
-         (when (positive? (current-atomic))
-           (atomic-timeout-callback))))
-     (lambda args
-       (accum-cpu-time! t start)
-       (current-thread #f)
-       (unless (zero? (current-atomic))
-         (internal-error "terminated in atomic mode!"))
-       (thread-dead! t)
-       (when (eq? root-thread t)
-         (force-exit 0))
-       (thread-did-work!)
-       (select-thread!))
-     (lambda (e)
-       (cond
-         [(zero? (current-atomic))
+  (run-callbacks-in-engine
+   e callbacks
+   (lambda (e)
+     (let loop ([e e])
+       (define start (current-process-milliseconds))
+       (end-implicit-atomic-mode)
+       (e
+        TICKS
+        (lambda ()
+          (check-for-break)
+          (when atomic-timeout-callback
+            (when (positive? (current-atomic))
+              (atomic-timeout-callback))))
+        (lambda args
+          (start-implicit-atomic-mode)
           (accum-cpu-time! t start)
           (current-thread #f)
-          (unless (eq? (thread-engine t) 'done)
-            (set-thread-engine! t e))
-          (select-thread!)]
-         [else
-          ;; Swap out when the atomic region ends:
-          (set-end-atomic-callback! engine-block)
-          (loop e)])))))
+          (unless (zero? (current-atomic))
+            (internal-error "terminated in atomic mode!"))
+          (thread-dead! t)
+          (when (eq? root-thread t)
+            (force-exit 0))
+          (thread-did-work!)
+          (select-thread!))
+        (lambda (e)
+          (start-implicit-atomic-mode)
+          (cond
+            [(zero? (current-atomic))
+             (accum-cpu-time! t start)
+             (current-thread #f)
+             (unless (eq? (thread-engine t) 'done)
+               (set-thread-engine! t e))
+             (select-thread!)]
+            [else
+             ;; Swap out when the atomic region ends:
+             (set-end-atomic-callback! engine-block)
+             (loop e)])))))))
 
 (define (maybe-done callbacks)
   (cond
@@ -128,13 +133,37 @@
     (thread-did-work!))
   did?)
 
-;; Run foreign "async-apply" callbacks, if any
+;; Run callbacks within the thread for `e`, and don't give up until
+;; the callbacks are done
+(define (run-callbacks-in-engine e callbacks k)
+  (cond
+    [(null? callbacks) (k e)]
+    [else
+     (define done? #f)
+     (let loop ([e e])
+       (end-implicit-atomic-mode)
+       (e
+        TICKS
+        (lambda ()
+          (run-callbacks callbacks)
+          (set! done? #t)
+          (engine-block))
+        (lambda args
+          (internal-error "thread ended while it should run callbacks atomically"))
+        (lambda (e)
+          (start-implicit-atomic-mode)
+          (if done?
+              (k e)
+              (loop e)))))]))
+
+;; Run foreign "async-apply" callbacks, now that we're in some thread
 (define (run-callbacks callbacks)
-  (unless (null? callbacks)
-    (start-atomic)
-    (for ([callback (in-list callbacks)])
-      (callback))
-    (end-atomic)))
+  (start-atomic)
+  (current-break-suspend (add1 (current-break-suspend)))
+  (for ([callback (in-list callbacks)])
+    (callback))
+  (current-break-suspend (sub1 (current-break-suspend)))
+  (end-atomic))
 
 ;; ----------------------------------------
 

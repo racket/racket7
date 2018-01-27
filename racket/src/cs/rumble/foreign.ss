@@ -1491,21 +1491,30 @@
                                              (cpointer/ffi-obj-name proc-p))
                                         'unknown)))
 
+;; Rely on the fact that a virtual register defaults to 0 to detect a
+;; thread that we didn't start. For a thread that we did start, a
+(define PLACE-UNKNOWN-THREAD 0)
+(define PLACE-KNOWN-THREAD 1)
+(define PLACE-MAIN-THREAD 2)
+(define-virtual-register place-thread-category PLACE-KNOWN-THREAD)
+(define (register-as-place-main!) (place-thread-category PLACE-MAIN-THREAD))
+
 ;; Can be called in any Scheme thread
 (define (call-as-atomic-callback thunk atomic? async-apply async-callback-queue)
   (cond
-   [(not (no-engine-state? (current-engine-state)))
+   [(eqv? (place-thread-category) PLACE-MAIN-THREAD)
+    ;; In the main thread of a place. We must have gotten here by a
+      ;; foreign call that called back, so interrupts are currently
+      ;; disabled.
     (cond
      [(not atomic?)
-      ;; We must have gotten here by a foreign call that called
-      ;; back, so interrupts are currently disabled; reenable them
+      ;; reenable interrupts
       (enable-interrupts)
       (let ([v (thunk)])
         (disable-interrupts)
         v)]
      [else
-      ;; In a place's main thread; interrupts are already off, but
-      ;; inform the scheduler that it's in atomic mode
+      ;; Inform the scheduler that it's in atomic mode
       (scheduler-start-atomic)
       (let ([v (thunk)])
         (scheduler-end-atomic)
@@ -1519,18 +1528,29 @@
     (let* ([result-done? (box #f)]
            [result #f]
            [q async-callback-queue]
-           [m (async-callback-queue-lock q)])
+           [m (async-callback-queue-lock q)]
+           [need-interrupts?
+            ;; If we created this therad by `fork-pthread`, we must
+            ;; have gotten here by a foreign call, so interrupts are
+            ;; currently disabled
+            (eqv? (place-thread-category) PLACE-KNOWN-THREAD)])
       (mutex-acquire m)
       (set-async-callback-queue-in! q (cons (lambda ()
-                                              (set! result (async-apply thunk))
+                                              (set! result (|#%app| async-apply thunk))
                                               (mutex-acquire m)
                                               (set-box! result-done? #t)
                                               (condition-broadcast (async-callback-queue-condition q))
                                               (mutex-release m))
                                             (async-callback-queue-in q)))
+      (async-callback-poll-wakeup)
       (let loop ()
         (unless (unbox result-done?)
+          (when need-interrupts?
+            ;; Enable interrupts so that the thread is deactivated
+            ;; when we wait on the condition
+            (enable-interrupts))
           (condition-wait (async-callback-queue-condition q) m)
+          (when need-interrupts? (disable-interrupts))
           (loop)))
       (mutex-release m)
       result)]))
@@ -1540,6 +1560,10 @@
 (define (set-scheduler-atomicity-callbacks! start-atomic end-atomic)
   (set! scheduler-start-atomic start-atomic)
   (set! scheduler-end-atomic end-atomic))
+
+(define async-callback-poll-wakeup void)
+(define (set-async-callback-poll-wakeup! wakeup)
+  (set! async-callback-poll-wakeup wakeup))
 
 (define-record async-callback-queue (lock condition in))
 
