@@ -20,6 +20,8 @@
 
 (define TICKS 100000)
 
+(define process-milliseconds 0)
+
 ;; Initializes the thread system:
 (define (call-in-main-thread thunk)
   (make-initial-thread thunk)
@@ -57,7 +59,6 @@
    e callbacks
    (lambda (e)
      (let loop ([e e])
-       (define start (current-process-milliseconds))
        (end-implicit-atomic-mode)
        (e
         TICKS
@@ -68,7 +69,7 @@
               (atomic-timeout-callback))))
         (lambda args
           (start-implicit-atomic-mode)
-          (accum-cpu-time! t start)
+          (accum-cpu-time! t)
           (current-thread #f)
           (unless (zero? (current-atomic))
             (internal-error "terminated in atomic mode!"))
@@ -81,7 +82,7 @@
           (start-implicit-atomic-mode)
           (cond
             [(zero? (current-atomic))
-             (accum-cpu-time! t start)
+             (accum-cpu-time! t)
              (current-thread #f)
              (unless (eq? (thread-engine t) 'done)
                (set-thread-engine! t e))
@@ -195,9 +196,11 @@
 
 ;; ----------------------------------------
 
-(define (accum-cpu-time! t start)
+(define (accum-cpu-time! t)
+  (define start process-milliseconds)
+  (set! process-milliseconds (current-process-milliseconds))
   (set-thread-cpu-time! t (+ (thread-cpu-time t)
-                             (- (current-process-milliseconds) start))))
+                             (- process-milliseconds start))))
 
 ;; ----------------------------------------
 

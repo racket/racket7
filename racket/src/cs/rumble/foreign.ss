@@ -1497,7 +1497,11 @@
 (define PLACE-KNOWN-THREAD 1)
 (define PLACE-MAIN-THREAD 2)
 (define-virtual-register place-thread-category PLACE-KNOWN-THREAD)
-(define (register-as-place-main!) (place-thread-category PLACE-MAIN-THREAD))
+(define (register-as-place-main!)
+  (place-thread-category PLACE-MAIN-THREAD)
+  (current-async-callback-queue (make-async-callback-queue (make-mutex)
+                                                           (make-condition)
+                                                           '())))
 
 ;; Can be called in any Scheme thread
 (define (call-as-atomic-callback thunk atomic? async-apply async-callback-queue)
@@ -1567,10 +1571,7 @@
 
 (define-record async-callback-queue (lock condition in))
 
-(define current-async-callback-queue
-  (make-pthread-parameter (make-async-callback-queue (make-mutex)
-                                                     (make-condition)
-                                                     '())))
+(define-virtual-register current-async-callback-queue #f)
 
 ;; Returns callbacks to run in atomic mode
 (define (poll-async-callbacks)
