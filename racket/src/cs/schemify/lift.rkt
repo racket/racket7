@@ -145,7 +145,8 @@
     (match v
       [`(,_ ([,_ ,rhss] ...) . ,body)
        (or (for/or ([rhs (in-list rhss)])
-             (lambda? rhs))
+             (or (lambda? rhs)
+                 (lift? rhs)))
            (lift?/seq body))]))
 
   (define (lift?/seq vs)
