@@ -3743,8 +3743,8 @@ static Scheme_Object *ffi_call_or_curry(const char *who, int curry, int argc, Sc
   if (argc > ARGPOS(6)) {
     if (!SCHEME_FALSEP(argv[ARGPOS(6)])) {
       if (!SCHEME_CHAR_STRINGP(argv[ARGPOS(6)]))
-        scheme_wrong_contract(who, "(or/c string? #f)", 4, argc, argv);
-      lock = name_to_ffi_lock(scheme_char_string_to_byte_string(argv[6]));
+        scheme_wrong_contract(who, "(or/c string? #f)", ARGPOS(6), argc, argv);
+      lock = name_to_ffi_lock(scheme_char_string_to_byte_string(argv[ARGPOS(6)]));
     }
   }
   if (cp && SCHEME_FFIOBJP(cp))
@@ -3754,9 +3754,9 @@ static Scheme_Object *ffi_call_or_curry(const char *who, int curry, int argc, Sc
   atypes = malloc(nargs * sizeof(ffi_type*));
   for (i=0, p=itypes; i<nargs; i++, p=SCHEME_CDR(p)) {
     if (NULL == (base = get_ctype_base(SCHEME_CAR(p))))
-      scheme_wrong_contract(who, "(listof ctype?)", 1, argc, argv);
+      scheme_wrong_contract(who, "(listof ctype?)", ARGPOS(1), argc, argv);
     if (CTYPE_PRIMLABEL(base) == FOREIGN_void)
-      wrong_void(who, SCHEME_CAR(p), 1, 1, argc, argv);
+      wrong_void(who, SCHEME_CAR(p), 1, ARGPOS(1), argc, argv);
     atypes[i] = CTYPE_ARG_PRIMTYPE(base);
   }
   cif = malloc(sizeof(ffi_cif));
