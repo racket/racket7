@@ -1684,13 +1684,12 @@ static Scheme_Object *define_values_execute(Scheme_Object *vec)
     toplevels = (Scheme_Prefix *)MZ_RUNSTACK[SCHEME_TOPLEVEL_DEPTH(var)];
     b = (Scheme_Bucket *)toplevels->a[SCHEME_TOPLEVEL_POS(var)];
 
-    // REMOVEME printf("%s %ld\n", scheme_write_to_string((Scheme_Object *)b->key, 0), SCHEME_TOPLEVEL_POS(var));
-
     scheme_set_global_bucket("define-values", b, vals, 1);
       
     if (SCHEME_TOPLEVEL_FLAGS(var) & SCHEME_TOPLEVEL_SEAL) {
       int flags = GLOB_IS_IMMUTATED;
-      if (scheme_is_statically_proc(vals_expr, NULL, OMITTABLE_RESOLVED))
+      if (scheme_is_statically_proc(vals_expr, NULL, OMITTABLE_RESOLVED)
+          || (SCHEME_TYPE(vals_expr) >= _scheme_values_types_))
         flags |= GLOB_IS_CONSISTENT;
       ((Scheme_Bucket_With_Flags *)b)->flags |= flags;
     }
