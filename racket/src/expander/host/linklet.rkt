@@ -19,5 +19,6 @@
 
 (linklet-operations=> bounce)
 
-(unless variable-reference-constant?
-  (error "broken '#%linklet primitive table; maybe you need to use \"bootstrap-run.rkt\""))
+(void
+ (unless variable-reference-constant?
+   (error "broken '#%linklet primitive table; maybe you need to use \"bootstrap-run.rkt\"")))

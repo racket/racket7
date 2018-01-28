@@ -28,13 +28,15 @@
 
 ;; This is only a subset that we need to have bound;
 ;; the rest are added in "kernel.rkt"
-(add-runtime-primitive! 'values)
-(add-runtime-primitive! 'cons)
-(add-runtime-primitive! 'list)
-(add-runtime-primitive! 'make-struct-type)
-(add-runtime-primitive! 'make-struct-type-property)
-(add-runtime-primitive! 'gensym)
-(add-runtime-primitive! 'string->uninterned-symbol)
+(void
+ (begin
+   (add-runtime-primitive! 'values)
+   (add-runtime-primitive! 'cons)
+   (add-runtime-primitive! 'list)
+   (add-runtime-primitive! 'make-struct-type)
+   (add-runtime-primitive! 'make-struct-type-property)
+   (add-runtime-primitive! 'gensym)
+   (add-runtime-primitive! 'string->uninterned-symbol)))
 
 ;; Instances that are built into the runtime system, but
 ;; not including '#%linklet

@@ -25,38 +25,40 @@
 
 ;; ----------------------------------------
 
-;; Primitive expression forms
-(for-each register-built-in-symbol!
-          '(lambda case-lambda
-            if begin begin0
-            let-values letrec-values
-            set! quote
-            with-continuation-mark
-            #%variable-reference))
+(void
+ (begin
+   ;; Primitive expression forms
+   (for-each register-built-in-symbol!
+             '(lambda case-lambda
+                if begin begin0
+                let-values letrec-values
+                set! quote
+                with-continuation-mark
+                #%variable-reference))
 
-;; Source-mode linklet glue
-(for-each register-built-in-symbol!
-          '(check-not-undefined 
-            instance-variable-box
-            variable-reference
-            variable-reference?
-            variable-reference->instance
-            variable-reference-constant?))
+   ;; Source-mode linklet glue
+   (for-each register-built-in-symbol!
+             '(check-not-undefined 
+               instance-variable-box
+               variable-reference
+               variable-reference?
+               variable-reference->instance
+               variable-reference-constant?))
 
-;; Linklet compilation on Chez Scheme 
-(for-each register-built-in-symbol!
-          '(let
-            letrec*
-            define
-            or
-            and
-            pariah
-            variable-set!
-            variable-ref
-            variable-ref/no-check
-            make-instance-variable-reference
-            annotation?
-            annotation-expression
-            #%app
-            #%call-with-values
-            make-pthread-parameter))
+   ;; Linklet compilation on Chez Scheme 
+   (for-each register-built-in-symbol!
+             '(let
+                  letrec*
+                define
+                or
+                and
+                pariah
+                variable-set!
+                variable-ref
+                variable-ref/no-check
+                make-instance-variable-reference
+                annotation?
+                annotation-expression
+                #%app
+                #%call-with-values
+                make-pthread-parameter))))

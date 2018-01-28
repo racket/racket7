@@ -56,7 +56,11 @@
 (define core-forms #hasheq())
 (define core-primitives #hasheq())
 
-(define (add-core-form! sym proc)
+(define-syntax-rule (add-core-form! sym proc)
+  ;; The `void` wrapper suppress a `print-values` wrapper:
+  (void (add-core-form!* sym proc)))
+  
+(define (add-core-form!* sym proc)
   (add-core-binding! sym)
   (set! core-forms (hash-set core-forms
                              sym

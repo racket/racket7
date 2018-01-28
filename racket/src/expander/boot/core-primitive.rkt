@@ -33,8 +33,10 @@
 (define-syntax-rule (add-core-primitives! #:table primitive-ids id ...)
   (begin
     (define primitive-ids (seteq 'id ...))
-    (add-core-primitive! 'id id)
-    ...))
+    (void
+     (begin
+       (add-core-primitive! 'id id)
+       ...))))
 
 (add-core-primitives! #:table primitive-ids
                       
