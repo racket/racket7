@@ -747,7 +747,7 @@ make_prim_closure(Scheme_Prim *fun, int eternal,
 {
   Scheme_Primitive_Proc *prim;
   int hasr, size;
-
+  
   hasr = ((minr != 1) || (maxr != 1));
   size = (hasr 
 	  ? sizeof(Scheme_Prim_W_Result_Arity) 
@@ -2192,7 +2192,7 @@ int scheme_closure_preserves_marks(Scheme_Object *p)
   return 0;
 }
 
-Scheme_Object *scheme_get_or_check_procedure_shape(Scheme_Object *e, Scheme_Object *expected)
+Scheme_Object *scheme_get_or_check_procedure_shape(Scheme_Object *e, Scheme_Object *expected, int imprecise)
 /* result is interned --- a symbol or fixnum */
 {
   Scheme_Object *p;
@@ -2246,8 +2246,13 @@ Scheme_Object *scheme_get_or_check_procedure_shape(Scheme_Object *e, Scheme_Obje
        it preserves marks, which is useful information for the JIT. */
     intptr_t i = SCHEME_INT_VAL(p);
     i = ((uintptr_t)i) << 1;
-    if (scheme_closure_preserves_marks(e)) {
-      i |= 0x1;
+    if (expected && SCHEME_INTP(expected) && !(SCHEME_INT_VAL(expected) & 0x1)) {
+      /* It's ok for an `e` that preserves marks to match an
+         expectation of not preserving marks */
+    } else {
+      if (!imprecise && scheme_closure_preserves_marks(e)) {
+        i |= 0x1;
+      }
     }
     p = scheme_make_integer(i);
   }
@@ -2735,7 +2740,7 @@ Scheme_Object *scheme_procedure_arity_includes(int argc, Scheme_Object *argv[])
   /* -2 means a bignum */
 
   inc_ok = ((argc > 2) && SCHEME_TRUEP(argv[2]));
-  
+
   return get_or_check_arity(argv[0], n, argv[1], inc_ok);
 }
 

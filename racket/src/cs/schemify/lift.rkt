@@ -5,6 +5,9 @@
 ;; Reduces closure allocation by lifting bindings that are only used
 ;; in calls that have the right number of arguments.
 
+;; The output uses `letrec` to bind lifted and closed functions, while
+;; `letrec*` is still used for any other recursive binding.
+
 (provide lift-in-schemified-linklet
          lift-in-schemified-body)
 

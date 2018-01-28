@@ -424,7 +424,6 @@ static void init_foreign(Scheme_Startup_Env *env)
 static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thread)
 {
   Scheme_Env *env;
-  Scheme_Linklet *startup_linklet;
 
 #ifdef TIME_STARTUP_PROCESS
   printf("place_init @ %" PRIdPTR "\n", scheme_get_process_milliseconds());
@@ -517,8 +516,7 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
 
   REGISTER_SO(scheme_startup_instance);
   scheme_startup_instance = scheme_make_instance(scheme_intern_symbol("startup"), scheme_false);
-  startup_linklet = scheme_startup_linklet();
-  scheme_instantiate_linklet_multi(startup_linklet, scheme_startup_instance, 0, NULL, 0);
+  scheme_init_startup_instance(scheme_startup_instance);
 
   env = scheme_make_empty_env();
   scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 

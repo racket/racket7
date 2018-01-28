@@ -27,6 +27,11 @@
 #include "schvers.h"
 #include "schminc.h"
 
+/* May be empty, or may be the expander in C form: */
+#include "expander.inc"
+
+#ifndef SCHEME_STARTUP_DEFINED
+
 static Scheme_Linklet *eval_linklet_string(const char *str, intptr_t len, int extract)
 {
   Scheme_Object *port, *expr;
@@ -47,7 +52,7 @@ static Scheme_Linklet *eval_linklet_string(const char *str, intptr_t len, int ex
   }
 }
 
-Scheme_Linklet *scheme_startup_linklet()
+static Scheme_Linklet *startup_linklet()
 {
 #define EVAL_ONE_STR(str) return eval_linklet_string(str, -1, 0)
 #define EVAL_ONE_SIZED_STR(str, len) return eval_linklet_string(str, len, 1)
@@ -63,3 +68,10 @@ Scheme_Linklet *scheme_startup_linklet()
 # include "startup.inc"
 #endif
 }
+
+void scheme_init_startup_instance(Scheme_Instance *inst)
+{
+  scheme_instantiate_linklet_multi(startup_linklet(), inst, 0, NULL, 0);
+}
+
+#endif

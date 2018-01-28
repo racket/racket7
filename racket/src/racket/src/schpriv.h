@@ -487,8 +487,10 @@ Scheme_Object *scheme_make_local(Scheme_Type type, int pos, int flags);
 
 Scheme_Object *scheme_position_to_builtin(int l);
 
-typedef struct Scheme_Linklet  Scheme_Linklet;
-Scheme_Linklet *scheme_startup_linklet();
+typedef struct Scheme_Instance Scheme_Instance;
+typedef struct Scheme_Linklet Scheme_Linklet;
+
+void scheme_init_startup_instance(Scheme_Instance *i);
 
 void *scheme_get_os_thread_like();
 void scheme_init_os_thread_like(void *);
@@ -939,8 +941,6 @@ typedef struct {
   Scheme_Bucket_With_Ref_Id bucket;
   Scheme_Object *home_link; /* weak to Scheme_Instance *, except when GLOB_STRONG_HOME_LINK */
 } Scheme_Bucket_With_Home;
-
-typedef struct Scheme_Instance Scheme_Instance;
 
 XFORM_NONGCING Scheme_Instance *scheme_get_bucket_home(Scheme_Bucket *b);
 void scheme_set_bucket_home(Scheme_Bucket *b, Scheme_Instance *e);
@@ -3060,7 +3060,7 @@ Scheme_Object *scheme_make_struct_property_proc_shape(intptr_t k);
 #define STRUCT_PROP_PROC_SHAPE_GETTER        3
 #define SCHEME_PROP_PROC_SHAPE_MODE(obj) ((Scheme_Small_Object *)obj)->u.int_val
 
-Scheme_Object *scheme_get_or_check_procedure_shape(Scheme_Object *e, Scheme_Object *expected);
+Scheme_Object *scheme_get_or_check_procedure_shape(Scheme_Object *e, Scheme_Object *expected, int imprecise);
 intptr_t scheme_get_or_check_structure_shape(Scheme_Object *e, Scheme_Object *expected);
 int scheme_decode_struct_shape(Scheme_Object *shape, intptr_t *_v);
 intptr_t scheme_get_or_check_structure_property_shape(Scheme_Object *e, Scheme_Object *expected);
@@ -3180,7 +3180,7 @@ extern Scheme_Startup_Env * scheme_startup_env;
 
 /* A Scheme_Instance is a linklet instance */
 struct Scheme_Instance {
-  Scheme_Object so; /* scheme_instance_type */
+  Scheme_Inclhash_Object iso; /* 0x1 => inline only imprecise info into clients */
 
   union {
     Scheme_Bucket **a;       /* for a small, predefined number of keys */
@@ -3195,6 +3195,9 @@ struct Scheme_Instance {
   Scheme_Object *name;  /* for reporting purposes */
   Scheme_Object *data;
 };
+
+#define SCHEME_INSTANCE_FLAGS(obj) MZ_OPT_HASH_KEY(&(obj)->iso)
+#define SCHEME_INSTANCE_USE_IMPRECISE 0x1
 
 Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data);
 Scheme_Bucket *scheme_instance_variable_bucket(Scheme_Object *symbol, Scheme_Instance *inst);

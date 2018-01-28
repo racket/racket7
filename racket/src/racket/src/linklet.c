@@ -896,12 +896,18 @@ Scheme_Instance *scheme_make_instance(Scheme_Object *name, Scheme_Object *data)
   }
   
   inst = MALLOC_ONE_TAGGED(Scheme_Instance);
-  inst->so.type = scheme_instance_type;
+  inst->iso.so.type = scheme_instance_type;
 
   inst->name = (name ? name : scheme_false);
   inst->data = data;
 
   inst->source_names = empty_hash_tree;
+
+  if (scheme_starting_up) {
+    /* Avoid recording procedure-implementation details in bytecode
+       that uses the instances that are created on startup. */
+    SCHEME_INSTANCE_FLAGS(inst) |= SCHEME_INSTANCE_USE_IMPRECISE;
+  }
 
   return inst;
 }
@@ -1365,7 +1371,7 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
               v = NULL;
             }
           } else if (SCHEME_TRUEP(shape)) {
-            if (!scheme_get_or_check_procedure_shape(((Scheme_Bucket *)v)->val, shape)) {
+            if (!scheme_get_or_check_procedure_shape(((Scheme_Bucket *)v)->val, shape, 0)) {
               bad_reason = "has the wrong procedure or structure-type shape";
               v = NULL;
             }
@@ -1378,9 +1384,9 @@ static Scheme_Hash_Tree *push_prefix(Scheme_Linklet *linklet, Scheme_Instance *i
         scheme_signal_error("instantiate-linklet: mismatch;\n"
                             " reference to a variable that %s;\n"
                             " possibly, bytecode file needs re-compile because dependencies changed\n"
-                            "  name: %V\n"
-                            "  exporting instance: %V\n"
-                            "  importing instance: %V",
+                            "  name: %D\n"
+                            "  exporting instance: %D\n"
+                            "  importing instance: %D",
                             bad_reason,
                             SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[j])[i],
                             instances[j]->name,

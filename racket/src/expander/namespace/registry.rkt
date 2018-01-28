@@ -28,7 +28,7 @@
             void]
            [else
             ;; CAS failed; take it from the top
-            loop]))
+            (loop)]))
         (lambda ()
           (semaphore-post sema))))]
      [(eq? (current-thread) (cdr v))

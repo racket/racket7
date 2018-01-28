@@ -192,7 +192,7 @@ static Scheme_Object *get_import_shape(Optimize_Info *info, Scheme_IR_Toplevel *
 static Scheme_Object *get_import_inline(Optimize_Info *info, Scheme_IR_Toplevel *var, int argc, int case_ok);
 static void register_import_used(Optimize_Info *info, Scheme_IR_Toplevel *expr);
 static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet, Scheme_Object **_import_keys);
-static Scheme_Object *get_value_shape(Scheme_Object *v);
+static Scheme_Object *get_value_shape(Scheme_Object *v, int imprecise);
 
 XFORM_NONGCING static int relevant_predicate(Scheme_Object *pred);
 XFORM_NONGCING static int predicate_implies(Scheme_Object *pred1, Scheme_Object *pred2);
@@ -10211,7 +10211,7 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
     if (SCHEME_VECTORP(v) && (SCHEME_VEC_SIZE(v) == 2)) {
       /* a procedure */
       if (want_shape)
-        v = scheme_get_or_check_procedure_shape(SCHEME_VEC_ELS(v)[0], NULL);
+        v = scheme_get_or_check_procedure_shape(SCHEME_VEC_ELS(v)[0], NULL, 0);
       else if (for_props)
         return SCHEME_VEC_ELS(v)[0];
       else if (argc < 0)
@@ -10223,7 +10223,7 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
       if (for_props) {
         return SCHEME_VEC_ELS(v)[0];
       } else if (want_shape) {
-        v = scheme_get_or_check_procedure_shape(v, NULL);
+        v = scheme_get_or_check_procedure_shape(v, NULL, 0);
         if (v)
           info->cross->used_import_shape = 1;
       } else if (argc >= 0) {
@@ -10271,11 +10271,12 @@ static Scheme_Object *get_import_inline_or_shape(Optimize_Info *info, Scheme_IR_
     }
   } else {
     Scheme_Bucket *b;
+    int imprecise = SCHEME_INSTANCE_FLAGS((Scheme_Instance *)l_or_i) & SCHEME_INSTANCE_USE_IMPRECISE;
     b = scheme_instance_variable_bucket_or_null(name, (Scheme_Instance *)l_or_i);
     if (b && b->val && (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_IS_CONSISTENT)) {
       v = b->val;
       if (want_shape)
-        v = get_value_shape(v);
+        v = get_value_shape(v, imprecise);
       else if (argc < 0)
         v = scheme_constant_key;
       else
@@ -10492,7 +10493,7 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
         in_linklet = ((v && SAME_TYPE(SCHEME_TYPE(v), scheme_linklet_type)) ? (Scheme_Linklet *)v : NULL);
         in_instance = ((v && SAME_TYPE(SCHEME_TYPE(v), scheme_instance_type)) ? (Scheme_Instance *)v : NULL);
         MZ_ASSERT(!in_linklet || SAME_TYPE(in_linklet->so.type, scheme_linklet_type));
-        MZ_ASSERT(!in_instance || SAME_TYPE(in_instance->so.type, scheme_instance_type));
+        MZ_ASSERT(!in_instance || SAME_TYPE(in_instance->iso.so.type, scheme_instance_type));
         for (j = 0; j < SCHEME_VEC_SIZE(SCHEME_VEC_ELS(linklet->importss)[i]); j++) {
           name = SCHEME_VEC_ELS(SCHEME_VEC_ELS(linklet->importss)[i])[j];
           if (SCHEME_TRUEP(name)) {
@@ -10507,10 +10508,10 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
                   SCHEME_VEC_ELS(shapes)[k] = v;
                 } else if (SCHEME_VECTORP(v)) {
                   MZ_ASSERT(SCHEME_VEC_SIZE(v) == 2);
-                  v = scheme_get_or_check_procedure_shape(SCHEME_VEC_ELS(v)[0], NULL);
+                  v = scheme_get_or_check_procedure_shape(SCHEME_VEC_ELS(v)[0], NULL, 0);
                   SCHEME_VEC_ELS(shapes)[k] = v;
                 } else if (SAME_TYPE(SCHEME_TYPE(v), scheme_inline_variant_type)) {
-                  v = scheme_get_or_check_procedure_shape(v, NULL);
+                  v = scheme_get_or_check_procedure_shape(v, NULL, 0);
                   SCHEME_VEC_ELS(shapes)[k] = v;
                 } else if (SAME_OBJ(v, scheme_fixed_key)) {
                   SCHEME_VEC_ELS(shapes)[k] = scheme_void;
@@ -10521,7 +10522,8 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
             } else if (in_instance) {
               b = scheme_instance_variable_bucket_or_null(name, in_instance);
               if (b && b->val && (((Scheme_Bucket_With_Flags *)b)->flags & GLOB_IS_CONSISTENT)) {
-                v = get_value_shape(b->val);
+                int imprecise = SCHEME_INSTANCE_FLAGS(in_instance) & SCHEME_INSTANCE_USE_IMPRECISE;
+                v = get_value_shape(b->val, imprecise);
                 if (v) {
                   if (SAME_TYPE(SCHEME_TYPE(v), scheme_struct_proc_shape_type))
                     v = scheme_intern_struct_proc_shape(SCHEME_PROC_SHAPE_MODE(v));
@@ -10541,7 +10543,7 @@ static void record_optimize_shapes(Optimize_Info *info, Scheme_Linklet *linklet,
   }
 }
 
-static Scheme_Object *get_value_shape(Scheme_Object *v)
+static Scheme_Object *get_value_shape(Scheme_Object *v, int imprecise)
 {
   intptr_t s;
   Scheme_Object *identity;
@@ -10559,7 +10561,7 @@ static Scheme_Object *get_value_shape(Scheme_Object *v)
   if (s != -1)
     return scheme_make_struct_property_proc_shape(s);
 
-  return scheme_get_or_check_procedure_shape(v, NULL);
+  return scheme_get_or_check_procedure_shape(v, NULL, imprecise);
 }
 
 /*========================================================================*/

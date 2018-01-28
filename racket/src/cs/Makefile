@@ -87,6 +87,16 @@ expander.so: expander.sls compiled/expander.scm $(PRIMITIVES_TABLES) $(EXPANDER_
 compiled/expander.scm: ../expander/compiled/expander.rktl $(CONVERT_DEPS)
 	$(CONVERT) ../expander/compiled/expander.rktl compiled/expander.scm
 
+expander-inc:
+	$(RACKET) -l- raco make cify/cify.rkt
+	$(MAKE) ../build/racket/expander.inc
+
+../build/racket/expander.inc: compiled/expander.rktd cify/compiled/cify_rkt.dep
+	$(RACKET) cify/cify.rkt compiled/expander.rktd ../build/racket/expander.inc
+
+compiled/expander.rktd: ../expander/compiled/expander.rktl $(CONVERT_DEPS)
+	$(CONVERT) --for-cify ../expander/compiled/expander.rktl compiled/expander.rktd
+
 ..expander/compiled/expander.rktl:
 	$(MAKE) expander-rktl
 

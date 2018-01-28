@@ -6,16 +6,20 @@
          racket/extflonum
          racket/include
          "schemify/schemify.rkt"
+         "schemify/serialize.rkt"
          "schemify/known.rkt"
          "schemify/lift.rkt")
 
 (define skip-export? #f)
+(define for-cify? #f)
 
 (define-values (in-file out-file)
   (command-line
    #:once-each
    [("--skip-export") "Don't generate an `export` form"
     (set! skip-export? #t)]
+   [("--for-cify") "Keep `make-struct-type` as-is, etc."
+    (set! for-cify? #t)]
    #:args
    (in-file out-file)
    (values in-file out-file)))
@@ -85,7 +89,8 @@
     (lift (car v))
     (lift (cdr v))]))
 
-(lift l)
+(unless for-cify?
+  (lift l))
 
 (define prim-knowns
   (let ([knowns (hasheq)])
@@ -107,73 +112,85 @@
 ;; Convert:
 (define schemified-body
   (let ()
+    (define-values (bodys/constants-lifted lifted-constants)
+      (if for-cify?
+          (begin
+            (printf "Serializable...\n")
+            (time (convert-for-serialize l for-cify?)))
+          (values l null)))
     (printf "Schemify...\n")
     (define body
       (time
-       (schemify-body l (lambda (old-v new-v) new-v) prim-knowns #hasheq() #hasheq())))
+       (schemify-body bodys/constants-lifted (lambda (old-v new-v) new-v) prim-knowns #hasheq() #hasheq() for-cify?)))
     (printf "Lift...\n")
     ;; Lift functions to aviod closure creation:
-    (time
-     (lift-in-schemified-body body (lambda (old new) new)))))
+    (define lifted-body
+      (time
+       (lift-in-schemified-body body (lambda (old new) new))))
+    (append (for/list ([p (in-list lifted-constants)])
+              (cons 'define p))
+            lifted-body)))
 
 ;; ----------------------------------------
 
-;; Set a hook to redirect literal regexps and
-;; hash tables to lifted bindings
-(pretty-print-size-hook
- (lambda (v display? out)
-   (cond
-    [(and (pair? v)
-          (pair? (cdr v))
-          (eq? 'quote (car v))
-          (or (regexp? (cadr v))
-              (byte-regexp? (cadr v))
-              (pregexp? (cadr v))
-              (byte-pregexp? (cadr v))
-              (hash? (cadr v))
-              (nested-hash? (cadr v))
-              (keyword? (cadr v))
-              (list-of-keywords? (cadr v))
-              (extflonum? (cadr v))))
-     10]
-    [(bytes? v) (* 3 (bytes-length v))]
-    [(and (symbol? v) (regexp-match? #rx"#" (symbol->string v)))
-     (+ 2 (string-length (symbol->string v)))]
-    [(char? v) 5]
-    [(single-flonum? v) 5]
-    [(or (keyword? v)
-         (regexp? v)
-         (pregexp? v)
-         (hash? v))
-     (error 'lift "value that needs lifting is in an unrecognized context: ~v" v)]
-    [else #f])))
+(unless for-cify?
+  
+  ;; Set a hook to redirect literal regexps and
+  ;; hash tables to lifted bindings
+  (pretty-print-size-hook
+   (lambda (v display? out)
+     (cond
+       [(and (pair? v)
+             (pair? (cdr v))
+             (eq? 'quote (car v))
+             (or (regexp? (cadr v))
+                 (byte-regexp? (cadr v))
+                 (pregexp? (cadr v))
+                 (byte-pregexp? (cadr v))
+                 (hash? (cadr v))
+                 (nested-hash? (cadr v))
+                 (keyword? (cadr v))
+                 (list-of-keywords? (cadr v))
+                 (extflonum? (cadr v))))
+        10]
+       [(bytes? v) (* 3 (bytes-length v))]
+       [(and (symbol? v) (regexp-match? #rx"#" (symbol->string v)))
+        (+ 2 (string-length (symbol->string v)))]
+       [(char? v) 5]
+       [(single-flonum? v) 5]
+       [(or (keyword? v)
+            (regexp? v)
+            (pregexp? v)
+            (hash? v))
+        (error 'lift "value that needs lifting is in an unrecognized context: ~v" v)]
+       [else #f])))
 
-;; This hook goes with `pretty-print-size-hook`
-(pretty-print-print-hook
- (lambda (v display? out)
-   (cond
-    [(and (pair? v)
-          (eq? 'quote (car v))
-          (or (regexp? (cadr v))
-              (byte-regexp? (cadr v))
-              (pregexp? (cadr v))
-              (byte-pregexp? (cadr v))
-              (hash? (cadr v))
-              (nested-hash? (cadr v))
-              (keyword? (cadr v))
-              (list-of-keywords? (cadr v))
-              (extflonum? (cadr v))))
-     (write (hash-ref lifts (cadr v)) out)]
-    [(bytes? v)
-     (display "#vu8")
-     (write (bytes->list v) out)]
-    [(symbol? v)
-     (write-string (format "|~a|" v) out)]
-    [(char? v)
-     (write-string (format "#\\x~x" (char->integer v)) out)]
-    [(single-flonum? v)
-     (write (real->double-flonum v) out)]
-    [else #f])))
+  ;; This hook goes with `pretty-print-size-hook`
+  (pretty-print-print-hook
+   (lambda (v display? out)
+     (cond
+       [(and (pair? v)
+             (eq? 'quote (car v))
+             (or (regexp? (cadr v))
+                 (byte-regexp? (cadr v))
+                 (pregexp? (cadr v))
+                 (byte-pregexp? (cadr v))
+                 (hash? (cadr v))
+                 (nested-hash? (cadr v))
+                 (keyword? (cadr v))
+                 (list-of-keywords? (cadr v))
+                 (extflonum? (cadr v))))
+        (write (hash-ref lifts (cadr v)) out)]
+       [(bytes? v)
+        (display "#vu8")
+        (write (bytes->list v) out)]
+       [(symbol? v)
+        (write-string (format "|~a|" v) out)]
+       [(char? v)
+        (write-string (format "#\\x~x" (char->integer v)) out)]
+       [(single-flonum? v)
+        (write (real->double-flonum v) out)]
+       [else #f]))))
 
 ;; ----------------------------------------
 

@@ -97,6 +97,18 @@
     [_
      #'(values)]))
 
+(define-for-syntax (extract-guard body)
+  (syntax-case body ()
+    [(#:guard guard-expr . body)
+     #'guard-expr]
+    [_ #f]))
+
+(define-for-syntax (remove-guard body)
+  (syntax-case body ()
+    [(#:guard guard-expr . body)
+     #'body]
+    [_ body]))
+
 (define-syntax (match stx)
   (syntax-case stx (quasiquote)
     [(_ expr [`pattern body0 body ...] ...)
@@ -110,9 +122,13 @@
                     #'(error 'match "failed ~e" v)]
                    [else
                     (define ids (extract-pattern-variables (car patterns)))
-                    #`(if #,(check-one #'v (car patterns) head-id)
+                    (define match? (check-one #'v (car patterns) head-id))
+                    (define guard (extract-guard (car bodys)))
+                    #`(if #,(if guard
+                                #`(and #,match? #,guard)
+                                match?)
                           (let-values ([#,ids #,(extract-one #'v (car patterns))])
-                            . #,(car bodys))
+                            . #,(remove-guard (car bodys)))
                           #,(loop (cdr patterns) (cdr bodys)))])))
              ;; If the first pattern is `(<id> ....)`, then
              ;; extract the input head symbol, because we're

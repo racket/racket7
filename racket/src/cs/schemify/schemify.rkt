@@ -110,12 +110,12 @@
      ;; Lift any quoted constants that can't be serialized
      (define-values (bodys/constants-lifted lifted-constants)
        (if serializable?
-           (convert-for-serialize bodys)
+           (convert-for-serialize bodys #f)
            (values bodys null)))
      ;; Schemify the body, collecting information about defined names:
      (define-values (new-body defn-info mutated)
        (schemify-body* bodys/constants-lifted reannotate prim-knowns imports exports
-                       for-jitify? allow-set!-undefined? add-import!))
+                       for-jitify? allow-set!-undefined? add-import! #f))
      (define all-grps (append grps (reverse new-grps)))
      (values
       ;; Build `lambda` with schemified body:
@@ -160,12 +160,16 @@
 
 ;; ----------------------------------------
 
-(define (schemify-body l reannotate prim-knowns imports exports)
+(define (schemify-body l reannotate prim-knowns imports exports for-cify?)
   (define-values (new-body defn-info mutated)
-    (schemify-body* l reannotate prim-knowns imports exports #f #f (lambda (im ext-id index) #f)))
+    (schemify-body* l reannotate prim-knowns imports exports
+                    #f #f (lambda (im ext-id index) #f)
+                    for-cify?))
   new-body)
 
-(define (schemify-body* l reannotate prim-knowns imports exports for-jitify? allow-set!-undefined? add-import!)
+(define (schemify-body* l reannotate prim-knowns imports exports
+                        for-jitify? allow-set!-undefined? add-import!
+                        for-cify?)
   ;; Various conversion steps need information about mutated variables,
   ;; where "mutated" here includes visible implicit mutation, such as
   ;; a variable that might be used before it is defined:
@@ -199,11 +203,12 @@
         (define schemified (schemify form reannotate
                                      prim-knowns knowns mutated imports exports
                                      allow-set!-undefined?
-                                     add-import!))
+                                     add-import!
+                                     for-cify?))
         (match form
           [`(define-values ,ids ,_)
            (append
-            (if for-jitify?
+            (if (or for-jitify? for-cify?)
                 (reverse accum-exprs)
                 (make-expr-defns accum-exprs))
             (cons
@@ -211,7 +216,7 @@
              (let id-loop ([ids ids] [accum-exprs null] [accum-ids accum-ids])
                (cond
                 [(wrap-null? ids) (loop (wrap-cdr l) accum-exprs accum-ids)]
-                [(or for-jitify?
+                [(or (or for-jitify? for-cify?)
                      (via-variable-mutated-state? (hash-ref mutated (unwrap (wrap-car ids)) #f)))
                  (define id (unwrap (wrap-car ids)))
                  (cond
@@ -252,7 +257,7 @@
 
 ;; Schemify `let-values` to `let`, etc., and
 ;; reorganize struct bindings.
-(define (schemify v reannotate prim-knowns knowns mutated imports exports allow-set!-undefined? add-import!)
+(define (schemify v reannotate prim-knowns knowns mutated imports exports allow-set!-undefined? add-import! for-cify?)
   (let schemify/knowns ([knowns knowns] [inline-fuel init-inline-fuel] [v v])
     (let schemify ([v v])
       (define s-v
@@ -271,6 +276,7 @@
                          ,make2
                          ,?2
                          ,make-acc/muts ...)))
+            #:guard (not for-cify?)
             ;; Convert a `make-struct-type` binding into a 
             ;; set of bindings that Chez's cp0 recognizes,
             ;; and push the struct-specific extra work into
@@ -394,7 +400,8 @@
                                       (for/list ([rhs (in-list rhss)])
                                         (schemify rhs))
                                       (map schemify bodys)
-                                      mutated)]
+                                      mutated
+                                      for-cify?)]
            [`(letrec-values () ,bodys ...)
             (schemify `(begin . ,bodys))]
            [`(letrec-values ([() (values)]) ,bodys ...)
@@ -436,12 +443,12 @@
                                (cond
                                  [(null? ids)
                                   `([,(gensym "lr")
-                                     ,(make-let-values null rhs '(void))])]
+                                     ,(make-let-values null rhs '(void) for-cify?)])]
                                  [(and (pair? ids) (null? (cdr ids)))
                                   `([,(car ids) ,rhs])]
                                  [else
                                   (define lr (gensym "lr"))
-                                  `([,lr ,(make-let-values ids rhs `(vector . ,ids))]
+                                  `([,lr ,(make-let-values ids rhs `(vector . ,ids) for-cify?)]
                                     ,@(for/list ([id (in-list ids)]
                                                  [pos (in-naturals)])
                                         `[,id (unsafe-vector*-ref ,lr ,pos)]))]))))
@@ -496,7 +503,7 @@
                 [else
                  (left-to-right/app 'equal?
                                     (list exp1 exp2)
-                                    #t
+                                    #t for-cify?
                                     prim-knowns knowns imports mutated)]))]
            [`(call-with-values ,generator ,receiver)
             (cond
@@ -504,9 +511,9 @@
                     (lambda? receiver))
                `(call-with-values ,(schemify generator) ,(schemify receiver))]
               [else
-               (left-to-right/app '#%call-with-values
+               (left-to-right/app (if for-cify? 'call-with-values '#%call-with-values)
                                   (list (schemify generator) (schemify receiver))
-                                  #t
+                                  #t for-cify?
                                   prim-knowns knowns imports mutated)])]
            [`((letrec-values ,binds ,rator) ,rands ...)
             (schemify `(letrec-values ,binds (,rator . ,rands)))]
@@ -553,7 +560,7 @@
                              (lambda? rator))])
                     (left-to-right/app s-rator
                                        args
-                                       plain-app?
+                                       plain-app? for-cify?
                                        prim-knowns knowns imports mutated))))]
            [`,_
             (let ([u-v (unwrap v)])

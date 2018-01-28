@@ -15,7 +15,7 @@
 ;; reference. This lifting can interefere with optimizations, so only
 ;; lift as a last resort.
 
-(define (convert-for-serialize bodys)
+(define (convert-for-serialize bodys for-cify?)
   (define lifted-constants (make-hasheq))
   (define lift-bindings null)
   (define lifts-count 0)
@@ -28,13 +28,13 @@
   (define new-bodys
     (for/list ([v (in-list bodys)])
       (cond
-        [(convert-any? v)
+        [(convert-any? v for-cify?)
          (let convert ([v v])
            (match v
              [`(quote ,q)
               (cond
-                [(lift-quoted? q)
-                 (make-construct q add-lifted lifted-constants)]
+                [(lift-quoted? q for-cify?)
+                 (make-construct q add-lifted lifted-constants for-cify?)]
                 [else v])]
              [`(lambda ,formals ,body ...)
               `(lambda ,formals ,@(map convert body))]
@@ -68,50 +68,59 @@
              [`(#%variable-reference ,_) v]
              [`(,rator ,exps ...)
               `(,(convert rator) ,@(map convert exps))]
-             [`,_ v]))]
+             [`,_
+              (cond
+                [(and for-cify?
+                      (not (symbol? v))
+                      (lift-quoted? v for-cify?))
+                 (convert `(quote ,v))]
+                [else v])]))]
         [else v])))
   (values new-bodys
           (reverse lift-bindings)))
 
 ;; v is a form or a list of forms
-(define (convert-any? v)
-  (match v
-    [`(quote ,q) (lift-quoted? q)]
-    [`(lambda ,formals ,body ...)
-     (convert-any? body)]
-    [`(case-lambda [,formalss ,bodys ...] ...)
-     (convert-any? bodys)]
-    [`(define-values ,ids ,rhs)
-     (convert-any? rhs)]
-    [`(let-values ([,idss ,rhss] ...) ,bodys ...)
-     (or (convert-any? rhss)
-         (convert-any? bodys))]
-    [`(letrec-values ([,idss ,rhss] ...) ,bodys ...)
-     (or (convert-any? rhss)
-         (convert-any? bodys))]
-    [`(if ,tst ,thn ,els)
-     (or (convert-any? tst)
-         (convert-any? thn)
-         (convert-any? els))]
-    [`(with-continuation-mark ,key ,val ,body)
-     (or (convert-any? key)
-         (convert-any? val)
-         (convert-any? body))]
-    [`(begin ,exps ...)
-     (convert-any? exps)]
-    [`(begin0 ,exps ...)
-     (convert-any? exps)]
-    [`(set! ,id ,rhs)
-     (convert-any? rhs)]
-    [`(#%variable-reference) #f]
-    [`(#%variable-reference ,_) #f]
-    [`(,exps ...)
-     (for/or ([exp (in-list exps)])
-       (convert-any? exp))]
-    [`,_ #f]))
+(define (convert-any? v for-cify?)
+  (let convert-any? ([v v])
+    (match v
+      [`(quote ,q) (lift-quoted? q for-cify?)]
+      [`(lambda ,formals ,body ...)
+       (convert-any? body)]
+      [`(case-lambda [,formalss ,bodys ...] ...)
+       (convert-any? bodys)]
+      [`(define-values ,ids ,rhs)
+       (convert-any? rhs)]
+      [`(let-values ([,idss ,rhss] ...) ,bodys ...)
+       (or (convert-any? rhss)
+           (convert-any? bodys))]
+      [`(letrec-values ([,idss ,rhss] ...) ,bodys ...)
+       (or (convert-any? rhss)
+           (convert-any? bodys))]
+      [`(if ,tst ,thn ,els)
+       (or (convert-any? tst)
+           (convert-any? thn)
+           (convert-any? els))]
+      [`(with-continuation-mark ,key ,val ,body)
+       (or (convert-any? key)
+           (convert-any? val)
+           (convert-any? body))]
+      [`(begin ,exps ...)
+       (convert-any? exps)]
+      [`(begin0 ,exps ...)
+       (convert-any? exps)]
+      [`(set! ,id ,rhs)
+       (convert-any? rhs)]
+      [`(#%variable-reference) #f]
+      [`(#%variable-reference ,_) #f]
+      [`(,exps ...)
+       (for/or ([exp (in-list exps)])
+         (convert-any? exp))]
+      [`,_ (and for-cify?
+                (not (symbol? v))
+                (lift-quoted? v for-cify?))])))
 
 ;; Construct an expression to be lifted
-(define (make-construct q add-lifted lifted-constants)
+(define (make-construct q add-lifted lifted-constants for-cify?)
   (define (quote? e) (and (pair? e) (eq? 'quote (car e))))
   (let make-construct ([q q])
     (cond
@@ -170,7 +179,10 @@
             `(string->number ,(format "~a" q) 10 'read)]
            [else `(quote ,q)]))
        (cond
-         [(quote? rhs) rhs]
+         [(and (quote? rhs)
+               (or (not for-cify?)
+                   (not (lift-quoted? (cadr rhs) #t))))
+          rhs]
          [else
           (define id (add-lifted rhs))
           (hash-set! lifted-constants q id)
