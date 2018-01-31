@@ -2,6 +2,7 @@
 (require racket/list
          racket/port
          "match.rkt"
+         "out.rkt"
          "unique.rkt"
          "sort.rkt"
          "id.rkt"
@@ -26,12 +27,13 @@
       (lambda (in) (for/list ([e (in-port read in)])
                      e))))
    (define orig-out (current-output-port))
-   (with-output-to-file
-     out-file
-     #:exists 'truncate/replace
-     (lambda ()
-       (to-c (car in) `(begin . ,(cdr in))
-             #:orig-out orig-out)))))
+   (call-with-output-file*
+    out-file
+    #:exists 'truncate/replace
+    (lambda (out)
+      (parameterize ([current-c-output-port out])
+        (to-c (car in) `(begin . ,(cdr in))
+              #:orig-out orig-out))))))
 
 ;; ----------------------------------------
 
@@ -78,7 +80,7 @@
 
   ;; Generate top-level sequence just to set free-variable lists and
   ;; other state for each lambda:
-  (parameterize ([current-output-port (open-output-nowhere)])
+  (parameterize ([current-c-output-port (open-output-nowhere)])
     (define vehicles (for/list ([lam (in-sorted-hash-values lambdas (compare symbol<? lam-id))])
                        (lam-vehicle lam)))
     (generate-tops e exports knowns top-names state lambdas prim-names)

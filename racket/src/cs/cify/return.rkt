@@ -1,4 +1,5 @@
 #lang racket/base
+(require "out.rkt")
 
 (provide (struct-out tail-return)
          (struct-out multiple-return)
@@ -10,17 +11,16 @@
 (struct multiple-return (prefix))
 (struct multiple-return/suffix multiple-return (generate-suffix))
 
-(define (return indent ret e #:can-omit? [can-omit? #f])
+(define (return ret e #:can-omit? [can-omit? #f])
   (unless (and can-omit? (return-can-omit? ret))
-    (printf "~a~a ~a;\n"
-            indent
-            (cond
-              [(tail-return? ret) "return"]
-              [(multiple-return? ret) (multiple-return-prefix ret)]
-              [else ret])
-            e)
+    (out "~a ~a;"
+         (cond
+           [(tail-return? ret) "return"]
+           [(multiple-return? ret) (multiple-return-prefix ret)]
+           [else ret])
+         e)
     (when (multiple-return/suffix? ret)
-      ((multiple-return/suffix-generate-suffix ret) indent))))
+      ((multiple-return/suffix-generate-suffix ret)))))
 
 (define (return-can-omit? ret)
   (or (equal? ret "")

@@ -1,5 +1,6 @@
 #lang racket/base
 (require racket/list
+         "out.rkt"
          "match.rkt"
          "sort.rkt"
          "id.rkt"
@@ -10,7 +11,6 @@
          "struct.rkt"
          "arg.rkt"
          "union-find.rkt"
-         "indent.rkt"
          "state.rkt"
          "env.rkt"
          "simple.rkt"
@@ -24,78 +24,79 @@
          generate-tops)
 
 (define (generate-header)
-  (printf "#include \"expander-glue.inc\"\n\n"))
+  (out "#include \"expander-glue.inc\""))
 
 (define (generate-struct name names)
-  (printf "struct ~a_t {\n" name)
+  (out-next)
+  (out-open "struct ~a_t {" name)
   (for ([name (in-sorted-hash-keys names symbol<?)])
-    (printf "  Scheme_Object *~a;\n" (cify name)))
-  (printf "};\n")
-  (printf "static struct ~a_t ~a;\n" name name))
+    (out "Scheme_Object *~a;" (cify name)))
+  (out-close "};")
+  (out "static struct ~a_t ~a;" name name))
 
 (define (generate-prototypes vehicles)
-  (printf "\n")
+  (out-next)
   (for ([vehicle (in-list vehicles)])
-    (generate-prototype vehicle)
-    (printf ";\n")))
+    (generate-prototype vehicle #:open? #f)))
 
-(define (generate-prototype vehicle)
-  (printf "static Scheme_Object *~a(int __argc, Scheme_Object **__~aargv~a)"
-          (cify (vehicle-id vehicle))
-          (if (vehicle-use-argv-space? vehicle) "in_" "")
-          (if (vehicle-closure? vehicle) ", Scheme_Object *__self" "")))
+(define (generate-prototype vehicle #:open? open?)
+  ((if open? out-open out)
+   "static Scheme_Object *~a(int __argc, Scheme_Object **__~aargv~a)~a"
+   (cify (vehicle-id vehicle))
+   (if (vehicle-use-argv-space? vehicle) "in_" "")
+   (if (vehicle-closure? vehicle) ", Scheme_Object *__self" "")
+   (if open? " {" ";")))
   
 (define (generate-vehicles vehicles lambdas knowns top-names state)
   (for ([vehicle (in-list vehicles)])
     (generate-vehicle vehicle knowns top-names state lambdas)))
 
 (define (generate-vehicle vehicle knowns top-names state lambdas)
-  (printf "\n") (generate-prototype vehicle) (printf " {\n")
+  (out-next)
+  (generate-prototype vehicle #:open? #t)
   (define lams (vehicle-lams vehicle))
   (define multi? (pair? (cdr lams)))
   (when (vehicle-use-argv-space? vehicle)
-    (printf "  GC_CAN_IGNORE Scheme_Object *__argv_space[~a];\n" (vehicle-max-jump-argc vehicle))
-    (printf "  Scheme_Object **__argv = __in_argv;\n"))
+    (out "GC_CAN_IGNORE Scheme_Object *__argv_space[~a];" (vehicle-max-jump-argc vehicle))
+    (out "Scheme_Object **__argv = __in_argv;"))
   (when (vehicle-overflow-check? vehicle)
-    (printf "  if (check_overflow()) return handle_overflow(~a, __argc, __~aargv);\n"
-            (if (vehicle-closure? vehicle) "__self" (format "top.~a" (cify (vehicle-id vehicle))))
-            (if (vehicle-use-argv-space? vehicle) "in_" "")))
+    (out "if (check_overflow()) return handle_overflow(~a, __argc, __~aargv);"
+         (if (vehicle-closure? vehicle) "__self" (format "top.~a" (cify (vehicle-id vehicle))))
+         (if (vehicle-use-argv-space? vehicle) "in_" "")))
   (when multi?
-    (printf "  switch(SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(__self)[0])) {\n")
+    (out-open "switch(SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(__self)[0])) {")
     (for ([lam (in-list lams)]
           [i (in-naturals)])
-      (printf "  case ~a: goto __entry_~a;\n" i (cify (lam-id lam))))
-    (printf "  }\n"))
+      (out "case ~a: goto __entry_~a;" i (cify (lam-id lam))))
+    (out-close "}"))
   (for ([lam (in-list lams)])
     (when (or multi? (lam-need-entry? lam))
-      (printf "__entry_~a:\n" (cify (lam-id lam))))
+      (out-margin "__entry_~a:" (cify (lam-id lam))))
     (generate-lambda lam multi? (or multi? (vehicle-overflow-check? vehicle)) knowns top-names state lambdas))
-  (printf "}\n"))
+  (out-close "}"))
 
 (define (generate-lambda lam multi? bracket? knowns top-names state lambdas)
   (define e (lam-e lam))
   (define id (lam-id lam))
   (define free-vars (lam-free-vars lam))
   (define closure-offset (if multi? 1 0))
-  (define base-indent (tab ""))
-  (define indent (if bracket? (tab base-indent) base-indent))
-  (when bracket? (printf "~a{\n" base-indent))
+  (when bracket? (out-open "{"))
   (for ([free-var (in-list free-vars)]
         [i (in-naturals)])
-    (printf "~aScheme_Object *~a = SCHEME_PRIM_CLOSURE_ELS(__self)[~a];\n" indent (cify free-var) (+ closure-offset i)))
+    (out "Scheme_Object *~a = SCHEME_PRIM_CLOSURE_ELS(__self)[~a];" (cify free-var) (+ closure-offset i)))
   (match e
-    [`(lambda . ,_) (generate-lambda-case indent lam e knowns top-names state lambdas)]
+    [`(lambda . ,_) (generate-lambda-case lam e knowns top-names state lambdas)]
     [`(case-lambda [,idss . ,bodys] ...)
      (for ([ids (in-list idss)]
            [body (in-list bodys)]
            [i (in-naturals)])
-       (printf "~a~aif (__argc ~a ~a) {\n" indent (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
-       (generate-lambda-case (tab indent) lam `(lambda ,ids . ,body) knowns top-names state lambdas)
-       (printf "~a}\n" indent))
-     (printf "~aelse return NULL;\n" indent)])
-  (when bracket? (printf "~a}\n" base-indent)))
+       (out-open "~aif (__argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
+       (generate-lambda-case lam `(lambda ,ids . ,body) knowns top-names state lambdas)
+       (out-close "}"))
+     (out "else return NULL;")])
+  (when bracket? (out-close "}")))
 
-(define (generate-lambda-case indent lam e knowns top-names state lambdas)
+(define (generate-lambda-case lam e knowns top-names state lambdas)
   (define name (lam-id lam))
   (match e
     [`(lambda ,ids . ,body)
@@ -105,22 +106,21 @@
          (cond
            [(symbol? ids)
             (when (referenced? (hash-ref state ids #f))
-              (printf "~aScheme_Object *~a; ~a = __make_args_list(__argc, __argv, ~a);\n"
-                      indent
-                      (cify ids)
-                      (cify ids)
-                      i))]
+              (out "Scheme_Object *~a; ~a = __make_args_list(__argc, __argv, ~a);"
+                   (cify ids)
+                   (cify ids)
+                   i))]
            [else
             (when (referenced? (hash-ref state (car ids) #f))
-              (printf "~aScheme_Object *~a = __argv[~a];\n" indent (cify (car ids)) i))
+              (out "Scheme_Object *~a = __argv[~a];" (cify (car ids)) i))
             (loop (cdr ids) (add1 i))])))
      (when (hash-ref (lam-loop-targets lam) n #f)
-       (printf "__recur_~a_~a:\n" (cify name) n))
-     (box-mutable-ids indent ids state top-names)
-     (generate (tail-return name lam ids) `(begin . ,body) lam indent (add-args (lam-env lam) ids)
+       (out-margin "__recur_~a_~a:" (cify name) n))
+     (box-mutable-ids ids state top-names)
+     (generate (tail-return name lam ids) `(begin . ,body) lam (add-args (lam-env lam) ids)
                knowns top-names state lambdas)]))
 
-(define (box-mutable-ids indent ids state top-names)
+(define (box-mutable-ids ids state top-names)
   (let loop ([ids ids])
     (unless (null? ids)
       (cond
@@ -132,47 +132,49 @@
                             (if (hash-ref top-names (car ids) #f)
                                 (format "top.~a" c-name)
                                 c-name)))
-           (printf "~a~a = scheme_box_variable(~a);\n" indent c-name c-name))
+           (out "~a = scheme_box_variable(~a);" c-name c-name))
          (loop (cdr ids))]))))
 
 ;; ----------------------------------------
 
-(define (generate ret e in-lam indent env knowns top-names state lambdas)
+(define (generate ret e in-lam env knowns top-names state lambdas)
   (match e
     [`(quote ,v)
-     (generate-quote indent ret v)]
+     (generate-quote ret v)]
     [`(lambda . ,_)
-     (generate-closure ret e in-lam indent env knowns top-names state lambdas)]
+     (generate-closure ret e in-lam env knowns top-names state lambdas)]
     [`(case-lambda . ,_)
-     (generate-closure ret e in-lam indent env knowns top-names state lambdas)]
+     (generate-closure ret e in-lam env knowns top-names state lambdas)]
     [`(begin ,e)
-     (generate ret e in-lam indent env knowns top-names state lambdas)]
+     (generate ret e in-lam env knowns top-names state lambdas)]
     [`(begin ,e . ,r)
-     (generate (multiple-return "") e in-lam indent env knowns top-names state lambdas)
-     (generate ret `(begin . ,r) in-lam indent env knowns top-names state lambdas)]
+     (generate (multiple-return "") e in-lam env knowns top-names state lambdas)
+     (generate ret `(begin . ,r) in-lam env knowns top-names state lambdas)]
     [`(begin0 ,e . ,r)
      (define vals-id (genid '__vals))
-     (printf "~a{\n" indent)
-     (printf "~a  Scheme_Object *~a, **~a_values;\n" indent vals-id vals-id)
-     (printf "~a  int ~a_count;\n" indent vals-id)
-     (define (save-values indent)
-       (printf "~aif (~a == SCHEME_MULTIPLE_VALUES) {\n" indent vals-id)
-       (printf "~a  Scheme_Thread *p = scheme_current_thread;\n" indent)
-       (printf "~a  ~a_values = p->ku.multiple.array;\n" indent vals-id)
-       (printf "~a  ~a_count = p->ku.multiple.count;\n" indent vals-id)
-       (printf "~a  if (SAME_OBJ(~a_values, p->values_buffer))\n" indent vals-id)
-       (printf "~a    p->values_buffer = NULL;\n" indent)
-       (printf "~a} else\n" indent)
-       (printf "~a  ~a_count = 1;\n" indent vals-id))
-     (generate (multiple-return/suffix (format "~a =" vals-id) save-values) e in-lam (tab indent) env knowns top-names state lambdas)
-     (generate (multiple-return "") `(begin . ,r) in-lam (tab indent) env knowns top-names state lambdas)
-     (printf "~a  if (~a_count != 1)\n" indent vals-id)
-     (return (tab (tab indent)) ret #:can-omit? #t
+     (out-open "{")
+     (out "Scheme_Object *~a, **~a_values;" vals-id vals-id)
+     (out "int ~a_count;" vals-id)
+     (define (save-values)
+       (out-open "if (~a == SCHEME_MULTIPLE_VALUES) {" vals-id)
+       (out "Scheme_Thread *p = scheme_current_thread;")
+       (out "~a_values = p->ku.multiple.array;" vals-id)
+       (out "~a_count = p->ku.multiple.count;" vals-id)
+       (out "if (SAME_OBJ(~a_values, p->values_buffer))" vals-id)
+       (out "  p->values_buffer = NULL;")
+       (out-close+open "} else")
+       (out "~a_count = 1;" vals-id)
+       (out-close!))
+     (generate (multiple-return/suffix (format "~a =" vals-id) save-values) e in-lam env knowns top-names state lambdas)
+     (generate (multiple-return "") `(begin . ,r) in-lam env knowns top-names state lambdas)
+     (out-open "if (~a_count != 1)" vals-id)
+     (return ret #:can-omit? #t
              (format "scheme_values(~a_count, ~a_values)" vals-id vals-id))
-     (printf "~a  else\n" indent)
-     (return (tab (tab indent)) ret #:can-omit? #t
+     (out-close+open "else")
+     (return ret #:can-omit? #t
              vals-id)
-     (printf "~a}\n" indent)]
+     (out-close!)
+     (out-close "}")]
     [`(if ,orig-tst ,thn ,els)
      (define-values (tsts wrapper) (extract-inline-predicate orig-tst knowns #:compose? #t))
      (define tst-ids (for/list ([tst (in-list tsts)])
@@ -181,60 +183,58 @@
                            (genid '__if))))
      (define all-simple? (for/and ([tst-id (in-list tst-ids)])
                            (not tst-id)))
-     (define sub-indent (if all-simple? indent (tab indent)))
      (unless all-simple?
-       (printf "~a{\n" indent)
+       (out-open "{")
        (for ([tst-id (in-list tst-ids)]
              #:when tst-id)
-         (printf "~a  GC_CAN_IGNORE Scheme_Object *~a;\n" indent tst-id))
+         (out "GC_CAN_IGNORE Scheme_Object *~a;" tst-id))
        (for ([tst-id (in-list tst-ids)]
              [tst (in-list tsts)]
              #:when tst-id)
-         (generate (format "~a =" tst-id) tst in-lam (tab indent) env knowns top-names state lambdas)))
-     (printf "~aif (~a) {\n"
-             sub-indent
-             (wrapper (apply string-append
-                             (add-between
-                              (for/list ([tst-id (in-list tst-ids)]
-                                         [tst (in-list tsts)])
-                                (format "~a"
-                                        (or tst-id
-                                            (generate-simple tst env top-names knowns))))
-                              ", "))))
-     (generate ret thn in-lam (tab sub-indent) env knowns top-names state lambdas)
-     (printf "~a} else {\n" sub-indent)
-     (generate ret els in-lam (tab sub-indent) env knowns top-names state lambdas)
-     (printf "~a}\n" sub-indent)
+         (generate (format "~a =" tst-id) tst in-lam env knowns top-names state lambdas)))
+     (out-open "if (~a) {"
+               (wrapper (apply string-append
+                               (add-between
+                                (for/list ([tst-id (in-list tst-ids)]
+                                           [tst (in-list tsts)])
+                                  (format "~a"
+                                          (or tst-id
+                                              (generate-simple tst env top-names knowns))))
+                                ", "))))
+     (generate ret thn in-lam env knowns top-names state lambdas)
+     (out-close+open "} else {")
+     (generate ret els in-lam env knowns top-names state lambdas)
+     (out-close "}")
      (unless all-simple?
-       (printf "~a}\n" indent))]
+       (out-close "}"))]
     [`(with-continuation-mark ,key ,val ,body)
      (define wcm-id (genid '__wcm))
-     (printf "~a{\n" indent)
-     (printf "~a  Scheme_Object *~a_key, *~a_val;\n" indent wcm-id wcm-id)
+     (out-open "{")
+     (out "Scheme_Object *~a_key, *~a_val;" wcm-id wcm-id)
      (unless (tail-return? ret)
-       (printf "~a  Scheme_Cont_Frame_Data ~a_frame;\n" indent wcm-id)
-       (printf "~a  scheme_push_continuation_frame(&~a_frame);\n" indent wcm-id))
-     (generate (format "~a_key =" wcm-id) key in-lam (tab indent) env knowns top-names state lambdas)
-     (generate (format "~a_val =" wcm-id) val in-lam (tab indent) env knowns top-names state lambdas)
-     (printf "~a  scheme_set_cont_mark(~a_key, ~a_val);\n" indent wcm-id wcm-id)
-     (generate ret body in-lam (tab indent) env knowns top-names state lambdas)
+       (out "Scheme_Cont_Frame_Data ~a_frame;" wcm-id)
+       (out "scheme_push_continuation_frame(&~a_frame);" wcm-id))
+     (generate (format "~a_key =" wcm-id) key in-lam env knowns top-names state lambdas)
+     (generate (format "~a_val =" wcm-id) val in-lam env knowns top-names state lambdas)
+     (out "scheme_set_cont_mark(~a_key, ~a_val);" wcm-id wcm-id)
+     (generate ret body in-lam env knowns top-names state lambdas)
      (unless (tail-return? ret)
-       (printf "~a  scheme_pop_continuation_frame(&~a_frame);\n" indent wcm-id))
-     (printf "~a}\n" indent)]
-    [`(let . ,_) (generate-let ret e in-lam indent env knowns top-names state lambdas)]
-    [`(letrec . ,_) (generate-let ret e in-lam indent env knowns top-names state lambdas)]
-    [`(letrec* . ,_) (generate-let ret e in-lam indent env knowns top-names state lambdas)]
+       (out "scheme_pop_continuation_frame(&~a_frame);" wcm-id))
+     (out-close "}")]
+    [`(let . ,_) (generate-let ret e in-lam env knowns top-names state lambdas)]
+    [`(letrec . ,_) (generate-let ret e in-lam env knowns top-names state lambdas)]
+    [`(letrec* . ,_) (generate-let ret e in-lam env knowns top-names state lambdas)]
     [`(call-with-values (lambda () . ,body1) (lambda (,ids ...) . ,body2))
      (define values-ret (if (for/or ([id (in-list ids)])
                               (or (referenced? (hash-ref state id #f))
                                   (hash-ref top-names id #f)))
                             "/*needed*/"
                             ""))
-     (generate (multiple-return values-ret) `(begin . ,body1) in-lam indent env knowns top-names state lambdas)
-     (printf "~a{\n" indent)
-     (generate-multiple-value-binds (format "~aScheme_Object *" (tab indent)) ids state top-names)
-     (generate ret `(begin . ,body2) in-lam (tab indent) (add-args env ids) knowns top-names state lambdas)
-     (printf "~a}\n" indent)]
+     (generate (multiple-return values-ret) `(begin . ,body1) in-lam env knowns top-names state lambdas)
+     (out-open "{")
+     (generate-multiple-value-binds (format "Scheme_Object *") ids state top-names)
+     (generate ret `(begin . ,body2) in-lam (add-args env ids) knowns top-names state lambdas)
+     (out-close "}")]
     [`(set! ,id ,rhs)
      (define top? (hash-ref top-names id #f))
      (define target
@@ -242,21 +242,21 @@
          [top? (format "top.~a" (cify id))]
          [else (genid '__set)]))
      (unless top?
-       (printf "~a{\n" indent)
-       (printf "~a  GC_CAN_IGNORE Scheme_Object *~a;\n" indent target))
-     (generate (format "~a =" target) rhs in-lam (if top? indent (tab indent)) env knowns top-names state lambdas)
+       (out-open "{")
+       (out "GC_CAN_IGNORE Scheme_Object *~a;" target))
+     (generate (format "~a =" target) rhs in-lam env knowns top-names state lambdas)
      (unless top?
-       (printf "~a  SCHEME_UNBOX_VARIABLE_LHS(~a) = ~a;\n" indent (cify id) target)
-       (printf "~a}\n" indent))
-     (generate ret '(void) in-lam indent env knowns top-names state lambdas)]
-    [`(void) (return indent ret #:can-omit? #t "scheme_void")]
+       (out "SCHEME_UNBOX_VARIABLE_LHS(~a) = ~a;" (cify id) target)
+       (out-close "}"))
+     (generate ret '(void) in-lam env knowns top-names state lambdas)]
+    [`(void) (return ret #:can-omit? #t "scheme_void")]
     [`(void . ,r)
-     (generate ret `(begin ,@r (void)) in-lam indent env knowns top-names state lambdas)]
+     (generate ret `(begin ,@r (void)) in-lam env knowns top-names state lambdas)]
     [`(values ,r)
-     (generate ret r in-lam indent env knowns top-names state lambdas)]
-    [`null (return indent ret #:can-omit? #t "scheme_null")]
+     (generate ret r in-lam env knowns top-names state lambdas)]
+    [`null (return ret #:can-omit? #t "scheme_null")]
     [`(#%app . ,r)
-     (generate ret r in-lam indent env knowns top-names state lambdas)]
+     (generate ret r in-lam env knowns top-names state lambdas)]
     [`(,rator ,rands ...)
      (define n (length rands))
      (cond
@@ -267,14 +267,14 @@
         (define all-simple? (for/and ([tmp-id (in-list tmp-ids)])
                               (not tmp-id)))
         (unless all-simple?
-          (printf "~a{\n" indent)
+          (out-open "{")
           (for ([tmp-id (in-list tmp-ids)])
             (when tmp-id
-              (printf "~a  Scheme_Object *~a;\n" indent tmp-id)))
+              (out "Scheme_Object *~a;" tmp-id)))
           (for ([tmp-id (in-list tmp-ids)]
                 [rand (in-list rands)])
             (when tmp-id
-              (generate (format "~a =" tmp-id) rand in-lam (tab indent) env knowns top-names state lambdas))))
+              (generate (format "~a =" tmp-id) rand in-lam env knowns top-names state lambdas))))
         (define s (generate-simple (cons rator (for/list ([tmp-id (in-list tmp-ids)]
                                                           [rand (in-list rands)])
                                                  (if tmp-id
@@ -283,9 +283,9 @@
                                    env
                                    top-names
                                    knowns))
-        (return (if all-simple? indent (tab indent)) ret s)
+        (return ret s)
         (unless all-simple?
-          (printf "~a}\n" indent))]
+          (out-close "}"))]
        [else
         (define knowns-target-lam (let ([f (hash-ref knowns rator #f)])
                                    (and (function? f) (hash-ref lambdas (function-e f)))))
@@ -308,72 +308,71 @@
                            [(simple? rator state knowns) #f]
                            [else (genid '__rator)]))
         (define args-id (if (zero? n) 'NULL (genid '__args)))
-        (printf "~a{\n" indent)
+        (out-open "{")
         (when rator-id
-          (printf "~a  Scheme_Object *~a;\n" indent rator-id))
+          (out "Scheme_Object *~a;" rator-id))
         (unless (zero? n)
-          (printf "~a  ~aScheme_Object *~a[~a];\n" indent (if loop-all-simple? "GC_CAN_IGNORE " "") args-id n))
-        (let ([indent (tab indent)])
-          (when rator-id
-            (generate (format "~a =" rator-id) rator in-lam indent env knowns top-names state lambdas))
-          (for ([rand (in-list rands)]
-                [i (in-naturals)])
-            (generate (format "~a[~a] =" args-id i) rand in-lam indent env knowns top-names state lambdas))
-          (cond
-            [(eq? rator 'values)
-             (return indent ret #:can-omit? #t (format "scheme_values(~a, ~a)" n args-id))]
-            [(not direct?)
-             (define rator-s (or rator-id
-                                 (generate-simple rator env top-names knowns)))
-             (define use-tail-apply? (and (tail-return? ret)
-                                          (or (not (symbol? rator))
-                                              (hash-ref env rator #f)
-                                              (hash-ref top-names rator #f)
-                                              (not (direct-call-primitive? rator e)))))
-             (define template (cond
-                                [use-tail-apply? "_scheme_tail_apply(~a, ~a, ~a)"]
-                                [(or (multiple-return? ret) (tail-return? ret)) "_scheme_apply_multi(~a, ~a, ~a)"]
-                                [else "_scheme_apply(~a, ~a, ~a)"]))
-             (when use-tail-apply?
-               (set-vehicle-can-tail-apply?! (lam-vehicle in-lam) #t))
-             (return indent ret (format template rator-s n args-id))]
-            [(tail-return? ret)
-             (cond
-               [(and (eq? knowns-target-lam (tail-return-lam ret))
-                     (= n (args-length (tail-return-self-args ret))))
-                (hash-set! (lam-loop-targets (tail-return-lam ret)) n #t)
-                (for ([id (in-list (tail-return-self-args ret))]
-                      [i n])
-                  (printf "~a~a = ~a[~a];\n" indent (cify id) args-id i))
-                (printf "~agoto __recur_~a_~a;\n" indent (cify (lam-id knowns-target-lam)) n)]
-               [else
-                (set-lam-need-entry?! knowns-target-lam #t)
-                (define use-space? (vehicle-use-argv-space? (lam-vehicle knowns-target-lam)))
-                (set-lam-max-jump-argc! knowns-target-lam (max n (lam-max-jump-argc knowns-target-lam)))
-                (for ([i n])
-                  (printf "~a__argv~a[~a] = ~a[~a];\n" indent
-                          (if use-space? "_space" "") i
-                          args-id i))
-                (when use-space?
-                  (printf "~a__argv = __argv_space;\n" indent))
-                (printf "~a__argc = ~a;\n" indent n)
-                (unless (null? (lam-free-vars knowns-target-lam))
-                  (printf "~a__self = top.~a;\n" (cify (lam-id knowns-target-lam))))
-                (printf "~agoto __entry_~a;\n" indent (cify (lam-id knowns-target-lam)))])]
-            [else
-             (return indent ret (let ([s (format "~a(~a, ~a~a)"
-                                                 (cify (vehicle-id (lam-vehicle knowns-target-lam))) n args-id
-                                                 (if (vehicle-closure? (lam-vehicle knowns-target-lam))
-                                                     (format ", top.~a" (cify rator))
-                                                     ""))])
-                                  (if (vehicle-can-tail-apply? (lam-vehicle knowns-target-lam))
-                                      (format "scheme_force_~avalue(~a)" (if (multiple-return? ret) "" "one_") s)
-                                      s)))]))
-        (printf "~a}\n" indent)])]
+          (out "~aScheme_Object *~a[~a];" (if loop-all-simple? "GC_CAN_IGNORE " "") args-id n))
+        (when rator-id
+          (generate (format "~a =" rator-id) rator in-lam env knowns top-names state lambdas))
+        (for ([rand (in-list rands)]
+              [i (in-naturals)])
+          (generate (format "~a[~a] =" args-id i) rand in-lam env knowns top-names state lambdas))
+        (cond
+          [(eq? rator 'values)
+           (return ret #:can-omit? #t (format "scheme_values(~a, ~a)" n args-id))]
+          [(not direct?)
+           (define rator-s (or rator-id
+                               (generate-simple rator env top-names knowns)))
+           (define use-tail-apply? (and (tail-return? ret)
+                                        (or (not (symbol? rator))
+                                            (hash-ref env rator #f)
+                                            (hash-ref top-names rator #f)
+                                            (not (direct-call-primitive? rator e)))))
+           (define template (cond
+                              [use-tail-apply? "_scheme_tail_apply(~a, ~a, ~a)"]
+                              [(or (multiple-return? ret) (tail-return? ret)) "_scheme_apply_multi(~a, ~a, ~a)"]
+                              [else "_scheme_apply(~a, ~a, ~a)"]))
+           (when use-tail-apply?
+             (set-vehicle-can-tail-apply?! (lam-vehicle in-lam) #t))
+           (return ret (format template rator-s n args-id))]
+          [(tail-return? ret)
+           (cond
+             [(and (eq? knowns-target-lam (tail-return-lam ret))
+                   (= n (args-length (tail-return-self-args ret))))
+              (hash-set! (lam-loop-targets (tail-return-lam ret)) n #t)
+              (for ([id (in-list (tail-return-self-args ret))]
+                    [i n])
+                (out "~a = ~a[~a];" (cify id) args-id i))
+              (out "goto __recur_~a_~a;" (cify (lam-id knowns-target-lam)) n)]
+             [else
+              (set-lam-need-entry?! knowns-target-lam #t)
+              (define use-space? (vehicle-use-argv-space? (lam-vehicle knowns-target-lam)))
+              (set-lam-max-jump-argc! knowns-target-lam (max n (lam-max-jump-argc knowns-target-lam)))
+              (for ([i n])
+                (out "__argv~a[~a] = ~a[~a];"
+                     (if use-space? "_space" "") i
+                     args-id i))
+              (when use-space?
+                (out "__argv = __argv_space;"))
+              (out "__argc = ~a;" n)
+              (unless (null? (lam-free-vars knowns-target-lam))
+                (out "__self = top.~a;" (cify (lam-id knowns-target-lam))))
+              (out "goto __entry_~a;" (cify (lam-id knowns-target-lam)))])]
+          [else
+           (return ret (let ([s (format "~a(~a, ~a~a)"
+                                        (cify (vehicle-id (lam-vehicle knowns-target-lam))) n args-id
+                                        (if (vehicle-closure? (lam-vehicle knowns-target-lam))
+                                            (format ", top.~a" (cify rator))
+                                            ""))])
+                         (if (vehicle-can-tail-apply? (lam-vehicle knowns-target-lam))
+                             (format "scheme_force_~avalue(~a)" (if (multiple-return? ret) "" "one_") s)
+                             s)))])
+        (out-close "}")])]
     [`,_
      (cond
        [(symbol? e)
-        (return indent ret #:can-omit? #t
+        (return ret #:can-omit? #t
                 (let loop ([e e])
                   (cond
                     [(hash-ref env e #f)
@@ -389,9 +388,9 @@
                              (cify e)]))]
                     [(hash-ref top-names e #f) (format "top.~a" (cify e))]
                     [else (format "prims.~a" (cify e))])))]
-       [else (generate-quote indent ret e)])]))
+       [else (generate-quote ret e)])]))
 
-(define (generate-let ret e in-lam indent env knowns top-names state lambdas)
+(define (generate-let ret e in-lam env knowns top-names state lambdas)
   (match e
     [`(,let-id ([,ids ,rhss] ...) . ,body)
      (define body-env (for/fold ([env env]) ([id (in-list ids)]
@@ -407,34 +406,34 @@
        [(for/and ([id (in-list ids)])
           (propagate? (hash-ref body-env id #f)))
         ;; All propagated: simplify output by avoiding a layer of braces
-        (generate ret `(begin . ,body) in-lam indent body-env knowns top-names state lambdas)]
+        (generate ret `(begin . ,body) in-lam body-env knowns top-names state lambdas)]
        [else
         (define rhs-env (if (eq? let-id 'let) env body-env))
-        (printf "~a{\n" indent)
+        (out-open "{")
         (for ([id (in-list ids)]
               #:unless (or (not (referenced? (hash-ref state id #f)))
                            ;; flattened into top?
                            (hash-ref top-names id #f)))
-          (printf "~a  Scheme_Object *~a = NULL;\n" indent (cify id)))
+          (out "Scheme_Object *~a = NULL;" (cify id)))
         (when (eq? let-id 'letrec*)
-          (box-mutable-ids (tab indent) ids state top-names))
+          (box-mutable-ids ids state top-names))
         (for ([id (in-list ids)]
               [rhs (in-list rhss)]
               #:unless (propagate? (hash-ref body-env id #f)))
           (cond
             [(eq? let-id 'letrec*)
-             (generate "" `(set! ,id ,rhs) in-lam (tab indent) rhs-env knowns top-names state lambdas)]
+             (generate "" `(set! ,id ,rhs) in-lam rhs-env knowns top-names state lambdas)]
             [(not (referenced? (hash-ref state id #f)))
-             (generate "" rhs in-lam (tab indent) rhs-env knowns top-names state lambdas)]
+             (generate "" rhs in-lam rhs-env knowns top-names state lambdas)]
             [else
              (define c-name (if (hash-ref top-names id #f)
                                 (format "top.~a" (cify id))
                                 (cify id)))
-             (generate (format "~a =" c-name) rhs in-lam (tab indent) rhs-env knowns top-names state lambdas)]))
+             (generate (format "~a =" c-name) rhs in-lam rhs-env knowns top-names state lambdas)]))
         (when (eq? let-id 'let)
-          (box-mutable-ids (tab indent) ids state top-names))
-        (generate ret `(begin . ,body) in-lam (tab indent) body-env knowns top-names state lambdas)
-        (printf "~a}\n" indent)])
+          (box-mutable-ids ids state top-names))
+        (generate ret `(begin . ,body) in-lam body-env knowns top-names state lambdas)
+        (out-close "}")])
      (when (state-first-pass? state)
        ;; For each variable that is propagated, remove
        ;; the use of the right-hand side:
@@ -458,13 +457,13 @@
              (define lam (hash-ref lambdas lam-e #f))
              (set-lam-unused?! lam #t)))))]))
 
-(define (generate-closure ret e in-lam indent env knowns top-names state lambdas)
+(define (generate-closure ret e in-lam env knowns top-names state lambdas)
   (define lam (hash-ref lambdas e))
   (cond
     [(and (lam-moved-to-top? lam)
           (not (state-tops-pass? state)))
      ;; Lifted out after discovering that it has no free variables
-     (return indent ret (format "top.~a" (cify (lam-id lam))))]
+     (return ret (format "top.~a" (cify (lam-id lam))))]
     [else
      (when in-lam (set-lam-under-lambda?! lam #t))
      (define name (format "~a" (lam-id lam)))
@@ -474,72 +473,72 @@
      (cond
        [(and (null? free-vars)
              (not index-in-closure?))
-        (return indent ret #:can-omit? #t
+        (return ret #:can-omit? #t
                 (format "scheme_make_prim_w_~aarity(~a, ~s, ~a, ~a)"
                         (if (string? max-a) "case_" "")
                         (cify (lam-id lam)) name min-a max-a))]
        [else
         (define len (+ (length free-vars) (if index-in-closure? 1 0)))
         (define closure-id (genid '__closure))
-        (printf "~a{\n" indent)
-        (printf "~a  Scheme_Object *~a[~a];\n" indent closure-id len)
+        (out-open "{")
+        (out "Scheme_Object *~a[~a];" closure-id len)
         (when index-in-closure?
-          (printf "~a  ~a[0] = scheme_make_integer(~a);\n" indent closure-id (lam-index lam)))
+          (out "~a[0] = scheme_make_integer(~a);" closure-id (lam-index lam)))
         (for ([free-var (in-list free-vars)]
               [i (in-naturals)])
-          (printf "~a  ~a[~a] = ~a;\n" indent closure-id (if index-in-closure? (add1 i) i) (cify free-var)))
-        (return (tab indent) ret #:can-omit? #t
+          (out "~a[~a] = ~a;" closure-id (if index-in-closure? (add1 i) i) (cify free-var)))
+        (return ret #:can-omit? #t
                 (format "scheme_make_prim_closure_w_~aarity(~a, ~a, ~a, ~s, ~a, ~a)"
                         (if (string? max-a) "case_" "")
                         (cify (vehicle-id (lam-vehicle lam)))
                         len closure-id name min-a max-a))
-        (printf "~a}\n" indent)])]))
+        (out-close "}")])]))
 
-(define (generate-quote indent ret e)
+(define (generate-quote ret e)
   (cond
     [(return-can-omit? ret) (void)]
     [(simple-quote? e)
-     (return indent ret (generate-simple-quote e))]
+     (return ret (generate-simple-quote e))]
     [(pair? e)
      (define pair-id (genid '__pair))
-     (printf "~a{\n" indent)
-     (printf "~a  Scheme_Object *~a_car, *~a_cdr;\n" indent pair-id pair-id)
-     (generate-quote (tab indent) (format "~a_car =" pair-id) (car e))
-     (generate-quote (tab indent) (format "~a_cdr =" pair-id) (cdr e))
-     (return indent ret (format "scheme_make_pair(~a_car, ~a_cdr)" pair-id pair-id))
-     (printf "~a}\n" indent)]
+     (out-open "{")
+     (out "Scheme_Object *~a_car, *~a_cdr;" pair-id pair-id)
+     (generate-quote (format "~a_car =" pair-id) (car e))
+     (generate-quote (format "~a_cdr =" pair-id) (cdr e))
+     (return ret (format "scheme_make_pair(~a_car, ~a_cdr)" pair-id pair-id))
+     (out-close "}")]
     [(vector? e)
      (define vec-id (genid '__vec))
-     (printf "~a{\n" indent)
-     (printf "~a  Scheme_Object *~a;\n" indent vec-id)
+     (out-open "{")
+     (out "Scheme_Object *~a;" vec-id)
      (unless (zero? (vector-length e))
-       (printf "~a  Scheme_Object *~a_elem;\n" indent vec-id))
-     (printf "~a  ~a = scheme_make_vector(~a, NULL);\n" indent vec-id (vector-length e))
+       (out "Scheme_Object *~a_elem;" vec-id))
+     (out "~a = scheme_make_vector(~a, NULL);" vec-id (vector-length e))
      (for ([e (in-vector e)]
            [i (in-naturals)])
-       (generate-quote (tab indent) (format "~a_elem =" vec-id) e)
-       (printf "~a  SCHEME_VEC_ELS(~a)[~a] = ~a_elem;\n" indent vec-id i vec-id))
-     (return indent ret (format "~a" vec-id))
-     (printf "~a}\n" indent)]
+       (generate-quote (format "~a_elem =" vec-id) e)
+       (out "SCHEME_VEC_ELS(~a)[~a] = ~a_elem;" vec-id i vec-id))
+     (return ret (format "~a" vec-id))
+     (out-close "}")]
     [else
      (error 'generate-quote "not handled: ~e" e)]))
 
 ;; ----------------------------------------
 
 (define (generate-tops e exports knowns top-names state lambdas prim-names)
-  (printf "\nvoid scheme_init_startup_instance(Scheme_Instance *__instance) {\n")
-  (printf "  REGISTER_SO(prims);\n")
-  (printf "  REGISTER_SO(top);\n")
+  (out-open "void scheme_init_startup_instance(Scheme_Instance *__instance) {")
+  (out "REGISTER_SO(prims);")
+  (out "REGISTER_SO(top);")
   (for ([id (in-sorted-hash-keys prim-names symbol<?)])
-    (printf "  prims.~a = scheme_builtin_value(~s);\n" (cify id) (format "~a" id)))
+    (out "prims.~a = scheme_builtin_value(~s);" (cify id) (format "~a" id)))
   (generate-moved-to-top lambdas knowns top-names state)
   (generate-top e knowns top-names state lambdas)
   ;; Expects `(export (rename [<int-id> <ext-id>] ...))` for `exports`
   (for ([ex (in-list (cdr (cadr exports)))])
-    (printf "  scheme_instance_add(__instance, ~s, top.~a);\n"
+    (out "scheme_instance_add(__instance, ~s, top.~a);"
             (format "~a" (cadr ex))
             (cify (car ex))))
-  (printf "}\n"))
+  (out-close "}"))
 
 (define (generate-moved-to-top lambdas knowns top-names state)
   (for ([lam (in-sorted-hash-values lambdas (compare symbol<? lam-id))])
@@ -558,12 +557,12 @@
     [`(define ,id (letrec* . ,_))
      (generate-top-let e knowns top-names state lambdas)]
     [`(define ,id ,rhs)
-     (generate (format "top.~a =" (cify id)) rhs #f "  " #hasheq() knowns top-names state lambdas)]
+     (generate (format "top.~a =" (cify id)) rhs #f #hasheq() knowns top-names state lambdas)]
     [`(define-values (,ids ...) ,rhs)
-     (generate (multiple-return "/*needed*/") rhs #f "  " #hasheq() knowns top-names state lambdas)
-     (generate-multiple-value-binds "  top." ids state top-names)]
+     (generate (multiple-return "/*needed*/") rhs #f #hasheq() knowns top-names state lambdas)
+     (generate-multiple-value-binds "top." ids state top-names)]
     [`,_
-     (generate "" e #f "  " #hasheq() knowns top-names state lambdas)]))
+     (generate "" e #f #hasheq() knowns top-names state lambdas)]))
 
 (define (generate-top-let e knowns top-names state lambdas)
   (match e
@@ -588,4 +587,4 @@
         [i (in-naturals)]
         #:when (or (hash-ref top-names id #f)
                    (referenced? (hash-ref state id #f))))
-    (printf "~a~a = scheme_current_thread->ku.multiple.array[~a];\n" prefix (cify id) i)))
+    (out "~a~a = scheme_current_thread->ku.multiple.array[~a];" prefix (cify id) i)))
