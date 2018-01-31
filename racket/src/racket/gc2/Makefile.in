@@ -296,7 +296,7 @@ $(XSRCDIR)/sfs.c: $(XFORMDEP)
 	$(XFORM) $(XSRCDIR)/sfs.c $(SRCDIR)/sfs.c
 $(XSRCDIR)/sort.c: $(XFORMDEP)
 	$(XFORM) $(XSRCDIR)/sort.c $(SRCDIR)/sort.c
-$(XSRCDIR)/startup.c: $(XFORMDEP) ../cstartup.inc
+$(XSRCDIR)/startup.c: $(XFORMDEP) ../cstartup.inc ../expander.inc $(SRCDIR)/expander-glue.inc
 	$(XFORM_SETUP) --cpp "$(CPP) -I.. -I$(SRCDIR)/../src $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o $(XSRCDIR)/startup.c $(SRCDIR)/startup.c
 $(XSRCDIR)/string.c: $(XFORMDEP)  $(SRCDIR)/systype.inc
 	$(XFORM_SETUP) --cpp "$(CPP) -I../src $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o $(XSRCDIR)/string.c $(SRCDIR)/string.c
@@ -574,6 +574,8 @@ clean:
 # a redirect to "startup.inc"
 ../cstartup.inc:
 	echo '#include "startup.inc"' > ../cstartup.inc
+../expander.inc:
+	echo '/* none */' > ../expander.inc
 
 #--------------------------------------------------
 

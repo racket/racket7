@@ -1341,27 +1341,41 @@ force_values(Scheme_Object *obj, int multi_ok)
 {
   if (SAME_OBJ(obj, SCHEME_TAIL_CALL_WAITING)) {
     Scheme_Thread *p = scheme_current_thread;
-    GC_CAN_IGNORE Scheme_Object *rator;
+    GC_CAN_IGNORE Scheme_Object *rator, *result;
     GC_CAN_IGNORE Scheme_Object **rands;
-      
+    int argc = p->ku.apply.tail_num_rands, popc = 0;
+
+    rands = p->ku.apply.tail_rands;
+
     /* Watch out for use of tail buffer: */
-    if (p->ku.apply.tail_rands == p->tail_buffer)
-      scheme_realloc_tail_buffer(p);
+    if (rands == p->tail_buffer) {
+      GC_CAN_IGNORE Scheme_Object **runstack = MZ_RUNSTACK;
+      if (((runstack - MZ_RUNSTACK_START) - argc) > SCHEME_TAIL_COPY_THRESHOLD) {
+        /* There's room on the runstack; use that instead of allocating a new buffer */
+        runstack -= argc;
+        memcpy(runstack, rands, argc * sizeof(Scheme_Object *));
+        rands = runstack;
+        popc = argc;
+        MZ_RUNSTACK = rands;
+      } else {
+        scheme_realloc_tail_buffer(p);
+        rands = p->ku.apply.tail_rands;
+      }
+    }
 
     rator = p->ku.apply.tail_rator;
-    rands = p->ku.apply.tail_rands;
     p->ku.apply.tail_rator = NULL;
     p->ku.apply.tail_rands = NULL;
       
-    if (multi_ok) {
-      return _scheme_apply_multi(rator,
-				 p->ku.apply.tail_num_rands,
-				 rands);
-    } else {
-      return _scheme_apply(rator,
-			   p->ku.apply.tail_num_rands,
-			   rands);
-    }
+    if (multi_ok)
+      result = _scheme_apply_multi(rator, argc, rands);
+    else
+      result = _scheme_apply(rator, argc, rands);
+
+    if (popc)
+      MZ_RUNSTACK += popc;
+
+    return result;
   } else if (SAME_OBJ(obj, SCHEME_EVAL_WAITING)) {
     Scheme_Thread *p = scheme_current_thread;
     if (multi_ok)
