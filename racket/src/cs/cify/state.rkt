@@ -17,7 +17,7 @@
 (define (state-tops-pass? state)
   (hash-ref state '#:tops? #f))
 
-(define (adjust-state! state id delta where)
+(define (adjust-state! state id delta)
   (define new-n (+ (hash-ref state id 0) delta))
   (if (zero? new-n)
       (hash-remove! state id)

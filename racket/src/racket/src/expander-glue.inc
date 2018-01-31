@@ -1,9 +1,13 @@
 /* This file is #included by expander.inc when it is built via cify */
 
+/* XFORM is disabled here */
+
 #include "schmach.h"
 
 /* Disable the use of source or bytecode: */
 #define SCHEME_STARTUP_DEFINED
+
+#define __RUNSTACK_INIT_VAL NULL
 
 static void scheme_instance_add(Scheme_Instance *inst, const char *name, Scheme_Object *val)
 {
@@ -13,7 +17,12 @@ static void scheme_instance_add(Scheme_Instance *inst, const char *name, Scheme_
   ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_IS_CONST | GLOB_IS_CONSISTENT;
 }
 
-XFORM_NONGCING static int check_overflow()
+static int __check_runstack_space(int max_depth, Scheme_Object **runstack)
+{  
+  return ((runstack - MZ_RUNSTACK_START) < (max_depth + SCHEME_TAIL_COPY_THRESHOLD));
+}
+
+static int __check_overflow_or_runstack_space(int max_depth, Scheme_Object **runstack)
 {
 #ifdef DO_STACK_CHECK
   {
@@ -23,22 +32,36 @@ XFORM_NONGCING static int check_overflow()
     }
   }
 #endif
-  return 0;
+  return __check_runstack_space(max_depth, runstack);
 }
+
+static void __check_top_runstack_depth(int max_depth)
+{
+  if (__check_runstack_space(max_depth, MZ_RUNSTACK)) {
+    scheme_log_abort("initial runstack is too small to start up");
+    abort();
+  }
+}
+
 
 static Scheme_Object *do_apply_k(void)
 {
   Scheme_Thread *p = scheme_current_thread;
-  Scheme_Object *o = (Scheme_Object *)p->ku.k.p1;
-  Scheme_Object **argv = (Scheme_Object **)p->ku.k.p2;
-
-  p->ku.k.p1 = NULL;
-  p->ku.k.p2 = NULL;
-
-  return _scheme_apply_multi(o, p->ku.k.i1, argv);
+  
+  if (__check_runstack_space(p->ku.k.i2, MZ_RUNSTACK)) {
+    return (Scheme_Object *)scheme_enlarge_runstack(p->ku.k.i2, (void *(*)())do_apply_k);
+  } else {
+    Scheme_Object *o = (Scheme_Object *)p->ku.k.p1;
+    Scheme_Object **argv = (Scheme_Object **)p->ku.k.p2;
+    
+    p->ku.k.p1 = NULL;
+    p->ku.k.p2 = NULL;
+    
+    return _scheme_apply_multi(o, p->ku.k.i1, argv);
+  }
 }
 
-static Scheme_Object *handle_overflow(Scheme_Object *proc, int argc, Scheme_Object **argv)
+static Scheme_Object *__handle_overflow_or_space(Scheme_Object *proc, int argc, Scheme_Object **argv, int runstack_space)
 {
   Scheme_Thread *p = scheme_current_thread;
   Scheme_Object **argv2;
@@ -47,18 +70,45 @@ static Scheme_Object *handle_overflow(Scheme_Object *proc, int argc, Scheme_Obje
   memset(argv, 0, sizeof(Scheme_Object *) * argc); /* space safety */
   p->ku.k.p1 = (void *)proc;
   p->ku.k.i1 = argc;
+  p->ku.k.i2 = runstack_space;
   p->ku.k.p2 = (void *)argv2;
-  return scheme_handle_stack_overflow(do_apply_k);
+  
+#ifdef DO_STACK_CHECK
+  {
+# include "mzstkchk.h"
+    return scheme_handle_stack_overflow(do_apply_k);
+  }
+#endif
+  
+  return (Scheme_Object *)scheme_enlarge_runstack(runstack_space, (void *(*)())do_apply_k);
 }
 
-static Scheme_Object *__make_args_list(int argc, Scheme_Object **argv, int skip)
+static void __ensure_args_in_place_rest(int argc, Scheme_Object **argv, Scheme_Object **runbase, int direct_args, int rest_args)
 {
-  Scheme_Object *l = scheme_null;
-  while (argc-- > skip) {
-    l = scheme_make_pair(argv[argc], l);
+  Scheme_Object **runstack = runbase - direct_args - rest_args;
+  int i;
+
+  if (argc == direct_args) {
+    /* Copy into runbase. If there's a rest arg not supplied, then the
+       copy may be shifting down, and we need to add a `null` value
+       for the rest arg. */
+    for (i = 0; i < direct_args; i++)
+      runstack[i] = argv[i];
+    if (rest_args)
+      argv[direct_args] = scheme_null;
+  } else {
+    /* Need to build a list and then copy or shift up */
+    Scheme_Object *l = scheme_null;
+    for (i = argc; i-- > direct_args; )
+      l = scheme_make_pair(argv[i], l);
+    runstack[direct_args] = l;
+    for (i = direct_args; i--; )
+      runstack[i] = argv[i];
   }
-  return l;
 }
+
+#define __ensure_args_in_place(argc, argv, runbase) \
+  if (argv != (runbase - argc)) __ensure_args_in_place_rest(argc, argv, runbase, argc, 0)
 
 static mzshort *convert_arities(int mina, const char *a)
 {
@@ -91,12 +141,12 @@ static Scheme_Object *scheme_make_prim_closure_w_case_arity(Scheme_Primitive_Clo
   return p;
 }
 
-XFORM_NONGCING static int __same_obj(Scheme_Object *a, Scheme_Object *b)
+static int __same_obj(Scheme_Object *a, Scheme_Object *b)
 {
   return SAME_OBJ(a, b);
 }
 
-XFORM_NONGCING static int __is_struct_instance(Scheme_Object *v, Scheme_Object *_st)
+static int __is_struct_instance(Scheme_Object *v, Scheme_Object *_st)
 {
   Scheme_Struct_Type *st = (Scheme_Struct_Type *)_st;
   if (SCHEME_CHAPERONEP(v))
@@ -105,7 +155,7 @@ XFORM_NONGCING static int __is_struct_instance(Scheme_Object *v, Scheme_Object *
           && (((Scheme_Structure *)v)->stype->parent_types[st->name_pos] == st));
 }
 
-XFORM_NONGCING static int __is_authentic_struct_instance(Scheme_Object *v, Scheme_Object *_st)
+static int __is_authentic_struct_instance(Scheme_Object *v, Scheme_Object *_st)
 {
   Scheme_Struct_Type *st = (Scheme_Struct_Type *)_st;
   return (SCHEME_STRUCTP(v)
@@ -120,7 +170,7 @@ static Scheme_Object *__struct_ref(Scheme_Object *v, int pos)
     return ((Scheme_Structure *)v)->slots[pos];
 }
 
-XFORM_NONGCING static Scheme_Object *__authentic_struct_ref(Scheme_Object *v, int pos)
+static Scheme_Object *__authentic_struct_ref(Scheme_Object *v, int pos)
 {
   return ((Scheme_Structure *)v)->slots[pos];
 }
@@ -134,28 +184,28 @@ static Scheme_Object *__struct_set(Scheme_Object *v, Scheme_Object *a, int pos)
   return scheme_void;
 }
 
-XFORM_NONGCING static Scheme_Object *__authentic_struct_set(Scheme_Object *v, Scheme_Object *a, int pos)
+static Scheme_Object *__authentic_struct_set(Scheme_Object *v, Scheme_Object *a, int pos)
 {
   ((Scheme_Structure *)v)->slots[pos] = a;
   return scheme_void;
 }
 
-XFORM_NONGCING static int __int_lt(Scheme_Object *a, Scheme_Object *b)
+static int __int_lt(Scheme_Object *a, Scheme_Object *b)
 {
   return SCHEME_INT_VAL(a) < SCHEME_INT_VAL(b);
 }
 
-XFORM_NONGCING static int __int_gt(Scheme_Object *a, Scheme_Object *b)
+static int __int_gt(Scheme_Object *a, Scheme_Object *b)
 {
   return SCHEME_INT_VAL(a) > SCHEME_INT_VAL(b);
 }
 
-XFORM_NONGCING static Scheme_Object *__int_add(Scheme_Object *a, Scheme_Object *b)
+static Scheme_Object *__int_add(Scheme_Object *a, Scheme_Object *b)
 {
   return scheme_make_integer(SCHEME_INT_VAL(a) + SCHEME_INT_VAL(b));
 }
 
-XFORM_NONGCING static Scheme_Object *__authentic_vector_ref(Scheme_Object *v, Scheme_Object *i)
+static Scheme_Object *__authentic_vector_ref(Scheme_Object *v, Scheme_Object *i)
 {
   return SCHEME_VEC_ELS(v)[SCHEME_INT_VAL(i)];
 }
@@ -199,32 +249,32 @@ static Scheme_Object *__box_set(Scheme_Object *b, Scheme_Object *a)
   return scheme_void;
 }
 
-XFORM_NONGCING static Scheme_Object *__pair_car(Scheme_Object *p)
+static Scheme_Object *__pair_car(Scheme_Object *p)
 {
   return SCHEME_CAR(p);
 }
 
-XFORM_NONGCING static Scheme_Object *__pair_cdr(Scheme_Object *p)
+static Scheme_Object *__pair_cdr(Scheme_Object *p)
 {
   return SCHEME_CDR(p);
 }
 
-XFORM_NONGCING static Scheme_Object *__pair_caar(Scheme_Object *p)
+static Scheme_Object *__pair_caar(Scheme_Object *p)
 {
   return SCHEME_CAR(SCHEME_CAR(p));
 }
 
-XFORM_NONGCING static Scheme_Object *__pair_cdar(Scheme_Object *p)
+static Scheme_Object *__pair_cdar(Scheme_Object *p)
 {
   return SCHEME_CDR(SCHEME_CAR(p));
 }
 
-XFORM_NONGCING static Scheme_Object *__pair_cadr(Scheme_Object *p)
+static Scheme_Object *__pair_cadr(Scheme_Object *p)
 {
   return SCHEME_CAR(SCHEME_CDR(p));
 }
 
-XFORM_NONGCING static Scheme_Object *__pair_cddr(Scheme_Object *p)
+static Scheme_Object *__pair_cddr(Scheme_Object *p)
 {
   return SCHEME_CDR(SCHEME_CDR(p));
 }

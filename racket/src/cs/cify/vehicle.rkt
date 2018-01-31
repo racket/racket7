@@ -26,13 +26,13 @@
                  [closure? #:mutable]
                  [min-argc #:mutable]
                  [max-jump-argc #:mutable]
-                 [use-argv-space? #:mutable]
+                 [max-runstack-depth #:mutable]
                  [can-tail-apply? #:mutable]   ; if any in vehicle can tail apply
                  [overflow-check? #:mutable])) ; if the vehicle can be called directly
 
 (define (make-lam id e #:can-call-direct? [can-call-direct? #f])
   (define-values (min-argc max-argc) (lambda-arity e))
-  (define a-vehicle (vehicle id '() #f min-argc 0 #f #f can-call-direct?))
+  (define a-vehicle (vehicle id '() #f min-argc 0 0 #f can-call-direct?))
   (define a-lam (lam id e #f #f (make-hasheqv) 0 #f a-vehicle 0 #f #f #f))
   (set-vehicle-lams! a-vehicle (list a-lam))
   a-lam)
@@ -56,6 +56,8 @@
         (set-vehicle-lams! vehicle (cons lam lams))
         (set-vehicle-min-argc! vehicle (min (vehicle-min-argc vehicle)
                                             (vehicle-min-argc old-vehicle)))
+        (set-vehicle-max-runstack-depth! vehicle (max (vehicle-max-runstack-depth vehicle)
+                                                      (vehicle-max-runstack-depth old-vehicle)))
         (set-vehicle-can-tail-apply?! vehicle (or (vehicle-can-tail-apply? vehicle)
                                                   (vehicle-can-tail-apply? old-vehicle)))
         (set-lam-vehicle! lam vehicle)
@@ -66,6 +68,4 @@
                                               (max n m)))
   (for/list ([vehicle (in-sorted-hash-keys vehicles (compare symbol<? vehicle-id))])
     (set-vehicle-lams! vehicle (reverse (vehicle-lams vehicle)))
-    (when ((vehicle-max-jump-argc vehicle) . > . (vehicle-min-argc vehicle))
-      (set-vehicle-use-argv-space?! vehicle #t))
     vehicle))

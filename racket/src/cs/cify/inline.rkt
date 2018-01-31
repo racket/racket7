@@ -23,10 +23,12 @@
     [(vector-length unsafe-vector-length unsafe-vector*-length) (and (= n 1) '__vector_length)]
     [(fx+ unsafe-fx+) (and (= n 2) '__int_add)]
     [else
-     (define-values (pred-exprs pred-inliner)
+     (define-values (pred-exprs pred-gc? pred-inliner)
        (extract-inline-predicate (cons rator (for/list ([i (in-range n)]) '__unknown)) knowns))
      (cond
-       [pred-inliner (lambda (s) (format "(~a ? scheme_true : scheme_false)" (pred-inliner s)))]
+       [(and pred-inliner
+             (or (not pred-gc?) can-gc?))
+        (lambda (s) (format "(~a ? scheme_true : scheme_false)" (pred-inliner s)))]
        [else
         (define k (hash-ref knowns rator #f))
         (cond
@@ -43,62 +45,47 @@
           [else #f])])]))
 
 (define (extract-inline-predicate e knowns #:compose? [compose? #f])
-  (define (compose e wrapper)
-    (define-values (new-es new-wrapper) (extract-inline-predicate e knowns #:compose? compose?))
-    (values new-es (lambda (s) (wrapper (new-wrapper s)))))
+  (define (compose e gc? wrapper)
+    (define-values (new-es new-gc? new-wrapper) (extract-inline-predicate e knowns #:compose? compose?))
+    (values new-es (or gc? new-gc?) (lambda (s) (wrapper (new-wrapper s)))))
   (define (generic e)
     (if compose?
-        (values (list e) (lambda (s)
-                           (cond
-                             [(equal? s "scheme_false") "0"]
-                             [(equal? s "scheme_true") "1"]
-                             [else (format "SCHEME_TRUEP(~a)" s)])))
-        (values #f #f)))
+        (values (list e) #f (lambda (s)
+                              (cond
+                                [(equal? s "scheme_false") "0"]
+                                [(equal? s "scheme_true") "1"]
+                                [else (format "SCHEME_TRUEP(~a)" s)])))
+        (values #f #f #f)))
+  ;; simple => no GC
+  (define (simple template . args)
+    (values args #f (lambda (s) (format template s))))
   (match e
     [`(not ,e)
      (if compose?
-         (compose e (lambda (s) (format "!~a" s)))
-         (values (list e) (lambda (s)
-                            (cond
-                             [(equal? s "scheme_false") "1"]
-                             [(equal? s "scheme_true") "0"]
-                             [else (format "SCHEME_FALSEP(~a)" s)]))))]
-    [`(null? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_NULLP(~a)" s)))]
-    [`(boolean? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_BOOLP(~a)" s)))]
-    [`(number? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_NUMBERP(~a)" s)))]
-    [`(pair? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_PAIRP(~a)" s)))]
-    [`(vector? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_CHAPERONE_VECTORP(~a)" s)))]
-    [`(box? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_CHAPERONE_BOXP(~a)" s)))]
-    [`(symbol? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_SYMBOLP(~a)" s)))]
-    [`(keyword? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_KEYWORDP(~a)" s)))]
-    [`(string? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_CHAR_STRINGP(~a)" s)))]
-    [`(bytes? ,e)
-     (values (list e) (lambda (s) (format "SCHEME_BYTE_STRINGP(~a)" s)))]
-    [`(eq? ,e1 ,e2)
-     (values (list e1 e2) (lambda (s) (format "__same_obj(~a)" s)))]
-    [`(eqv? ,e1 ,e2)
-     (values (list e1 e2) (lambda (s) (format "scheme_eqv(~a)" s)))]
-    [`(equal? ,e1 ,e2)
-     (values (list e1 e2) (lambda (s) (format "scheme_equal(~a)" s)))]
-    [`(unsafe-fx< ,e1 ,e2)
-     (values (list e1 e2) (lambda (s) (format "__int_lt(~a)" s)))]
-    [`(unsafe-fx> ,e1 ,e2)
-     (values (list e1 e2) (lambda (s) (format "__int_gt(~a)" s)))]
-    [`(unsafe-fx>= ,e1 ,e2)
-     (values (list e1 e2) (lambda (s) (format "!__int_lt(~a)" s)))]
-    [`(unsafe-fx<= ,e1 ,e2)
-     (values (list e1 e2) (lambda (s) (format "!__int_gt(~a)" s)))]
-    [`(unsafe-fx= ,e1 ,e2)
-     (values (list e1 e2) (lambda (s) (format "__same_obj(~a)" s)))]
+         (compose e #f (lambda (s) (format "!~a" s)))
+         (values (list e) #f (lambda (s)
+                               (cond
+                                 [(equal? s "scheme_false") "1"]
+                                 [(equal? s "scheme_true") "0"]
+                                 [else (format "SCHEME_FALSEP(~a)" s)]))))]
+    [`(null? ,e) (simple "SCHEME_NULLP(~a)" e)]
+    [`(boolean? ,e) (simple "SCHEME_BOOLP(~a)" e)]
+    [`(number? ,e) (simple "SCHEME_NUMBERP(~a)" e)]
+    [`(pair? ,e) (simple "SCHEME_PAIRP(~a)" e)]
+    [`(vector? ,e) (simple "SCHEME_CHAPERONE_VECTORP(~a)" e)]
+    [`(box? ,e) (simple "SCHEME_CHAPERONE_BOXP(~a)" e)]
+    [`(symbol? ,e) (simple "SCHEME_SYMBOLP(~a)" e)]
+    [`(keyword? ,e) (simple "SCHEME_KEYWORDP(~a)" e)]
+    [`(string? ,e) (simple "SCHEME_CHAR_STRINGP(~a)" e)]
+    [`(bytes? ,e) (simple "SCHEME_BYTE_STRINGP(~a)" e)]
+    [`(eq? ,e1 ,e2) (simple "__same_obj(~a)" e1 e2)]
+    [`(eqv? ,e1 ,e2) (simple "scheme_eqv(~a)" e1 e2)]
+    [`(equal? ,e1 ,e2) (values (list e1 e2) #t (lambda (s) (format "scheme_equal(~a)" s)))]
+    [`(unsafe-fx< ,e1 ,e2) (simple "__int_lt(~a)" e1 e2)]
+    [`(unsafe-fx> ,e1 ,e2) (simple "__int_gt(~a)" e1 e2)]
+    [`(unsafe-fx>= ,e1 ,e2) (simple "!__int_lt(~a)" e1 e2)]
+    [`(unsafe-fx<= ,e1 ,e2) (simple "!__int_gt(~a)" e1 e2)]
+    [`(unsafe-fx= ,e1 ,e2) (simple "__same_obj(~a)" e1 e2)]
     [`(,rator ,rand)
      (define k (and (symbol? rator)
                     (hash-ref knowns rator #f)))
@@ -107,6 +94,7 @@
         (define si (struct-predicate-si k))
         (define s-id (struct-info-struct-id si))
         (values (list rand)
+                #f
                 (cond
                   [(struct-info-authentic? si)
                    (lambda (s) (format "__is_authentic_struct_instance(~a, top.~a)" s (cify s-id)))]

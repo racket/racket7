@@ -11,14 +11,26 @@
 (struct multiple-return (prefix))
 (struct multiple-return/suffix multiple-return (generate-suffix))
 
-(define (return ret e #:can-omit? [can-omit? #f])
+(define (return ret runstack s
+                #:can-omit? [can-omit? #f]
+                #:can-pre-pop? [can-pre-pop? #f])
   (unless (and can-omit? (return-can-omit? ret))
-    (out "~a ~a;"
+    (let loop ([ret ret])
+      (cond
+        [(tail-return? ret)
          (cond
-           [(tail-return? ret) "return"]
-           [(multiple-return? ret) (multiple-return-prefix ret)]
-           [else ret])
-         e)
+           [can-pre-pop?
+            (out "*__runstack_ptr = __orig_runstack;")
+            (out "return ~a;" s)]
+           [else
+            (out-open "{")
+            (out "Scheme_Object *__retval = ~a;" s)
+            (out "*__runstack_ptr = __orig_runstack;")
+            (out "return __retval;")
+            (out-close "}")])]
+        [(multiple-return? ret) (loop (multiple-return-prefix ret))]
+        [(procedure? ret) (ret s)]
+        [else (out "~a ~a;" ret s)]))
     (when (multiple-return/suffix? ret)
       ((multiple-return/suffix-generate-suffix ret)))))
 

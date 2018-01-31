@@ -3,21 +3,21 @@
          "inline.rkt"
          "state.rkt"
          "env.rkt"
-         "id.rkt")
+         "id.rkt"
+         "runstack.rkt")
 
 (provide simple?
          generate-simple
          simple-quote?
-         generate-simple-quote)
+         always-fixnum?)
 
-;; A simple expression is one that can be reordered and can be nested
-;; in other simple expression without aggravating xform.
+;; A simple expression is one that can be reordered and doesn't
+;; trigger a GC.
 
-(define (simple? e state knowns #:can-gc? [can-gc? #t])
+(define (simple? e state knowns #:can-gc? [can-gc? #f])
   (or (and (symbol? e)
            (not (mutated? (hash-ref state e #f))))
-      (boolean? e)
-      (always-fixnum? e)
+      (simple-quote? e)
       (and (pair? e)
            (symbol? (car e))
            (inline-function (car e) (length (cdr e)) knowns #:can-gc? can-gc?)
@@ -25,7 +25,7 @@
              (simple? e state knowns #:can-gc? can-gc?)))))
 
 ;; The `e` argument can be a string as pre-generated
-(define (generate-simple e env top-names knowns)
+(define (generate-simple e env runstack top-names knowns prim-names)
   (cond
     [(string? e) e]
     [(boolean? e) (if e "scheme_true" "scheme_false")]
@@ -35,72 +35,36 @@
        [(hash-ref env e #f)
         => (lambda (b)
              (if (propagate? b)
-                 (generate-simple b env top-names knowns)
-                 (cify e)))]
+                 (generate-simple b env runstack top-names knowns prim-names)
+                 (runstack-ref runstack e)))]
        [(or (hash-ref top-names e #f)
             (hash-ref knowns e #f))
         (format "top.~a" (cify e))]
-       [else
-        (format "prims.~a" (cify e))])]
+       [(hash-ref prim-names e #f)
+        (format "prims.~a" (cify e))]
+       [else (runstack-ref runstack e)])]
     [else
      (define inliner (inline-function (car e) (length (cdr e)) knowns))
      (define args (apply string-append
                          (append
                           (add-between
                            (for/list ([e (in-list (cdr e))])
-                             (format "~a" (generate-simple e env top-names knowns)))
+                             (format "~a" (generate-simple e env runstack top-names knowns prim-names)))
                            ", "))))
      (cond
        [(procedure? inliner) (inliner args)]
        [else
         (format "~a(~a)" inliner args)])]))
 
+;; ----------------------------------------
+
 (define (simple-quote? e)
-  (or (symbol? e)
-      (string? e)
-      (bytes? e)
-      (number? e)
-      (and (pair? e)
-           (simple-quote? (car e))
-           (simple-quote? (cdr e)))
+  (or (always-fixnum? e)
       (boolean? e)
       (null? e)
       (void? e)
-      (char? e)))
-
-(define (generate-simple-quote e)
-  (cond
-    [(symbol? e)
-     (format "scheme_intern_symbol(~s)" (symbol->string e))]
-    [(string? e)
-     (define s (string->bytes/utf-8 e))
-     (format "scheme_make_sized_utf8_string(~s, ~a)"
-             (bytes->string/latin-1 s)
-             (bytes-length s))]
-    [(bytes? e)
-     (format "scheme_make_sized_byte_string(~s, ~a, 0)"
-             (bytes->string/latin-1 e)
-             (bytes-length e))]
-    [(number? e)
-     (cond
-       [(always-fixnum? e)
-        (format "scheme_make_integer(~a)" e)]
-       [(eqv? e +inf.0) "scheme_inf_object"]
-       [(eqv? e -inf.0) "scheme_minus_inf_object"]
-       [(eqv? e +nan.0) "scheme_minus_inf_object"]
-       [(eqv? e +inf.f) "scheme_single_inf_object"]
-       [(eqv? e -inf.f) "scheme_single_minus_inf_object"]
-       [(eqv? e +nan.f) "scheme_single_minus_inf_object"]
-       [else
-        (format "scheme_make_double(~a)" e)])]
-    [(pair? e) (format "scheme_make_pair(~a, ~a)"
-                       (generate-simple-quote (car e))
-                       (generate-simple-quote (cdr e)))]
-    [(boolean? e) (if e "scheme_true" "scheme_false")]
-    [(null? e) "scheme_null"]
-    [(void? e) "scheme_void"]
-    [(char? e) (format "scheme_make_char(~a)" (char->integer e))]
-    [else (error 'generate-simple-quote "not handled: ~e" e)]))
+      (and (char? e)
+           (<= 0 (char->integer e) 255))))
 
 (define (always-fixnum? e)
   (and (integer? e)

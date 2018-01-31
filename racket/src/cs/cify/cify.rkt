@@ -80,13 +80,16 @@
 
   ;; Generate top-level sequence just to set free-variable lists and
   ;; other state for each lambda:
-  (parameterize ([current-c-output-port (open-output-nowhere)])
-    (define vehicles (for/list ([lam (in-sorted-hash-values lambdas (compare symbol<? lam-id))])
-                       (lam-vehicle lam)))
-    (generate-tops e exports knowns top-names state lambdas prim-names)
-    (generate-vehicles vehicles lambdas knowns top-names state)
-    (hash-set! state '#:done? #t)
-    (reset-genid-counters! '(__args)))
+  (define max-top-runstack-depth
+    (parameterize ([current-c-output-port (open-output-nowhere)])
+      (define vehicles (for/list ([lam (in-sorted-hash-values lambdas (compare symbol<? lam-id))])
+                         (lam-vehicle lam)))
+      (define max-top-runstack-depth
+        (generate-tops e 0 exports knowns top-names state lambdas prim-names))
+      (generate-vehicles vehicles lambdas knowns top-names state prim-names)
+      (hash-set! state '#:done? #t)
+      (reset-genid-counters! '(__args))
+      max-top-runstack-depth))
 
   ;; Now we know if a function that isn't already in `functions`
   ;; has zero free variables. If so, effectively lift it to
@@ -95,7 +98,6 @@
     (for/hash ([lam (in-hash-values lambdas)]
                #:when (and (null? (lam-free-vars lam))
                            (not (hash-ref functions (lam-id lam) #f))
-                           (lam-under-lambda? lam)
                            (not (lam-unused? lam))))
       (set-lam-moved-to-top?! lam #t)
       (values (lam-id lam) lam)))
@@ -109,8 +111,10 @@
 
   ;; Generate all the lambda bodies:
   (generate-prototypes vehicles)
-  (generate-vehicles vehicles lambdas knowns top-names state)
+  (generate-vehicles vehicles lambdas knowns top-names state prim-names)
 
   ;; Generate top-level sequence, this time to output:
   (hash-set! state '#:tops? #t)
-  (generate-tops e exports knowns top-names state lambdas prim-names))
+  (generate-tops e max-top-runstack-depth exports knowns top-names state lambdas prim-names)
+
+  (generate-footer))
