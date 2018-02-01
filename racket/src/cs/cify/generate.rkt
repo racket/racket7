@@ -128,7 +128,7 @@
         (out "__ensure_args_in_place_rest(__argc, __argv, __runbase, ~a, 1);" (args-length ids))])
      (unless (null? ids) (out-open "{"))
      ;; At this point, runstack == runbase - argument-count (including rest)
-     (define runstack (make-runstack))
+     (define runstack (make-runstack state))
      (let loop ([ids ids])
        (cond
          [(null? ids)]
@@ -381,7 +381,7 @@
                       #:unless (or (not (referenced? (hash-ref state id #f)))
                                    ;; flattened into top?
                                    (hash-ref top-names id #f)))
-              (runstack-push! runstack id)
+              (runstack-push! runstack id #:track-local? (eq? let-id 'let))
               1))
           (define let-one? (and (eq? let-id 'let)
                                 (= 1 (length ids))
@@ -410,7 +410,7 @@
                               (make-runstack-assign runstack id)]))
                (generate ret rhs in-lam rhs-env)]))
           (when let-one?
-            (runstack-push! runstack (car ids))
+            (runstack-push! runstack (car ids)  #:track-local? #t)
             (out "~a = ~a;" (runstack-assign runstack (car ids)) (cify let-one-id)))
           (when (eq? let-id 'let)
             (box-mutable-ids ids runstack state top-names))
@@ -608,9 +608,9 @@
                              (cond
                                [arg-id #f]
                                [(and (symbol? rand)
-                                     (eqv? (runstack-ref-pos runstack rand)
-                                           (- n i))
-                                     ((- n i) . <= . (args-length (tail-return-self-args ret))))
+                                     (eqv? (runstack-ref-pos runstack rand) (- n i))
+                                     ((- n i) . <= . (args-length (tail-return-self-args ret)))
+                                     (not (mutated? (hash-ref state rand #f))))
                                 ;; No need to copy an argument to itself, which is
                                 ;; common for lifted loops:
                                 (when (state-first-pass? state)
@@ -811,7 +811,7 @@
 ;; ----------------------------------------
 
 (define (generate-tops e max-runstack-depth exports knowns top-names state lambdas prim-names)
-  (define runstack (make-runstack))
+  (define runstack (make-runstack state))
 
   (define (generate-tops e)
     (out-open "void scheme_init_startup_instance(Scheme_Instance *__instance) {")

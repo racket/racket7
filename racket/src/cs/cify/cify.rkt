@@ -68,12 +68,7 @@
   ;; Find all the primitives that we'll need to call:
   (define prim-names (extract-prim-names #hasheq() e #hasheq() top-names))
 
-  ;; Maps variables names to
-  ;;   - 'mutated
-  ;;   - an integer for the use cuont
-  ;; and maps `lam` record for union-find of functions
-  ;; that tail-call each other
-  (define state (make-hasheq))
+  (define state (make-state))
 
   ;; Find mutable variables, which will need to be boxed:
   (extract-state! state e)

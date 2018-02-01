@@ -1,12 +1,27 @@
 #lang racket/base
 (require "match.rkt")
 
-(provide extract-state!
+(provide make-state
+         extract-state!
          mutated?
          referenced?
          state-first-pass?
          state-tops-pass?
          adjust-state!)
+
+;; The state table maps
+;;
+;;  * symbols (for variables names) to
+;;     - 'mutated
+;;     - an integer for the use count
+;;
+;;  * `lam` records for union-find of functions
+;;    that tail-call each other
+;;
+;;  * '#:runstack to information recorded and used
+;;     by "runstack.rkt"
+;;
+(define (make-state) (make-hasheq))
 
 (define (mutated? v) (eq? v 'mutated))
 (define (referenced? v) v)
