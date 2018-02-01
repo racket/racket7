@@ -40,59 +40,66 @@
        (cons (select-unique (car ids))
              (select-unique (cdr ids)))]))
 
-  (define (re-unique e)
+  (define (re-unique e env)
     (match e
       [`(define ,id ,rhs)
-       `(define ,id ,(re-unique rhs))]
+       `(define ,id ,(re-unique rhs env))]
       [`(define-values ,ids ,rhs)
-       `(define-values ,ids ,(re-unique rhs))]
+       `(define-values ,ids ,(re-unique rhs env))]
       [`(begin . ,body)
-       `(begin . ,(re-unique-body body))]
+       `(begin . ,(re-unique-body body env))]
       [`(begin0 . ,body)
-       `(begin0 . ,(re-unique-body body))]
+       `(begin0 . ,(re-unique-body body env))]
       [`(lambda ,ids . ,body)
        (define new-ids (select-unique ids))
-       `(lambda ,new-ids . ,(re-unique-body body))]
+       `(lambda ,new-ids . ,(re-unique-body body (env-add env ids new-ids)))]
       [`(case-lambda [,idss . ,bodys] ...)
        `(case-lambda
          ,@(for/list ([ids (in-list idss)]
                       [body (in-list bodys)])
              (define new-ids (select-unique ids))
-             `[,new-ids . ,(re-unique-body body)]))]
+             `[,new-ids . ,(re-unique-body body (env-add env ids new-ids))]))]
       [`(if ,tst ,thn ,els)
-       `(if ,(re-unique tst) ,(re-unique thn) ,(re-unique els))]
+       `(if ,(re-unique tst env) ,(re-unique thn env) ,(re-unique els env))]
       [`(with-continuation-mark ,key ,val ,body)
-       `(with-continuation-mark ,(re-unique key) ,(re-unique val) ,(re-unique body))]
-      [`(let . ,_) (re-unique-let e)]
-      [`(letrec . ,_) (re-unique-let e)]
-      [`(letrec* . ,_) (re-unique-let e)]
+       `(with-continuation-mark ,(re-unique key env) ,(re-unique val env) ,(re-unique body env))]
+      [`(let . ,_) (re-unique-let e env)]
+      [`(letrec . ,_) (re-unique-let e env)]
+      [`(letrec* . ,_) (re-unique-let e env)]
       [`(set! ,id ,rhs)
-       `(set! ,(re-unique id) ,(re-unique rhs))]
+       `(set! ,(re-unique id env) ,(re-unique rhs env))]
       [`(,rator ,rands ...)
-       (re-unique-body e)]
+       (re-unique-body e env)]
       [`,_
        (cond
-         [(symbol? e)
-          (hash-ref all-ids e e)]
+         [(symbol? e) (hash-ref env e e)]
          [else e])]))
 
-  (define (re-unique-body body)
+  (define (re-unique-body body env)
     (for/list ([e (in-list body)])
-      (re-unique e)))
+      (re-unique e env)))
   
-  (define (re-unique-let e)
+  (define (re-unique-let e env)
     (match e
       [`(,let-id ([,ids ,rhss] ...) . ,body)
        (define rec? (not (eq? let-id 'let)))
-       (define new-rhss (if rec?
-                            rhss
-                            (for/list ([rhs (in-list rhss)])
-                              (re-unique rhs))))
        (define new-ids (select-unique ids))
+       (define body-env (env-add env ids new-ids))
+       (define rhs-env (if rec? body-env env))
        `(,let-id ,(for/list ([id (in-list new-ids)]
-                             [rhs (in-list new-rhss)])
-                    `[,id ,(if rec? (re-unique rhs) rhs)])
-                 . ,(re-unique-body body))]))
+                             [rhs (in-list rhss)])
+                    `[,id ,(re-unique rhs rhs-env)])
+                 . ,(re-unique-body body body-env))]))
+
+  (define (env-add env ids new-ids)
+    (cond
+      [(null? ids) env]
+      [(symbol? ids)
+       (if (eq? ids new-ids)
+           env
+           (hash-set env ids new-ids))]
+      [else
+       (env-add (env-add env (car ids) (car new-ids)) (cdr ids) (cdr new-ids))]))
 
   (get-top-names e)
-  (re-unique e))
+  (re-unique e #hasheq()))

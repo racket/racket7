@@ -77,7 +77,7 @@
        (if (vehicle-closure? vehicle) "__self" (format "top.~a" (cify (vehicle-id vehicle))))
        (vehicle-max-runstack-depth vehicle))
   (out-close!)
-  (out-open "if (__argv == *__runstack_ptr)")
+  (out-open "if (__argv == __orig_runstack)")
   (out "__runbase = __argv + __argc;")
   (out-close+open "else")
   (out "__runbase = __orig_runstack;")
@@ -125,18 +125,23 @@
         ;; No rest arg
         (out "__ensure_args_in_place(~a, __argv, __runbase);" (length ids))]
        [else
-        (out "__ensure_args_in_place_rest(__argc, __argv, __runbase, ~a, 1);" (args-length ids))])
+        (out "~a__ensure_args_in_place_rest(__argc, __argv, __runbase, ~a, 1, ~a);"
+             (if (null? free-var-refs) "(void)" "__self =")
+             (args-length ids)
+             (if (null? free-var-refs) "NULL" "__self"))])
      (unless (null? ids) (out-open "{"))
      ;; At this point, runstack == runbase - argument-count (including rest)
      (define runstack (make-runstack state))
-     (let loop ([ids ids])
-       (cond
-         [(null? ids)]
-         [(symbol? ids) (loop (list ids))]
-         [else
-          ;; Push last first:
-          (loop (cdr ids))
-          (runstack-push! runstack (car ids) #:referenced? (referenced? (hash-ref state (car ids) #f)))]))
+     (define pushed-arg-count
+       (let loop ([ids ids])
+         (cond
+           [(null? ids) 0]
+           [(symbol? ids) (loop (list ids))]
+           [else
+            ;; Push last first:
+            (define count (add1 (loop (cdr ids))))
+            (runstack-push! runstack (car ids) #:referenced? (referenced? (hash-ref state (car ids) #f)))
+            count])))
      (runstack-synced! runstack) ; since runstack = start of arguments
      ;; Unpack closure
      (for ([ref (in-list free-var-refs)])
@@ -150,6 +155,7 @@
      (box-mutable-ids ids runstack state top-names)
      (generate (tail-return name lam ids) `(begin . ,body) lam (add-args (lam-env lam) ids) runstack
                knowns top-names state lambdas prim-names)
+     (runstack-pop! runstack pushed-arg-count)
      (unless (null? ids) (out-close "}"))
      (let ([vehicle (lam-vehicle lam)])
        (set-vehicle-max-runstack-depth! vehicle (max (runstack-max-depth runstack)
@@ -255,7 +261,7 @@
                                               [(eq? tst-id immediate-tst-id) (cify tst-id)]
                                               [tst-id (runstack-ref runstack tst-id)])))
                                   ", "))))
-       (define pre-branch (runstack-branch-before runstack))
+       (define pre-branch (runstack-branch-before! runstack))
        (define pre-ref-use (ref-use-branch-before! state))
        (generate ret thn in-lam env)
        (out-close+open "} else {")
@@ -328,7 +334,7 @@
        (generate (format "~a =" target) rhs in-lam env)
        (unless top?
          (out "SCHEME_UNBOX_VARIABLE_LHS(~a) = ~a;"
-              (runstack-ref runstack (unref ref) #:last-use? (and (ref? ref) (ref-last-use? ref)))
+              (runstack-ref runstack (unref ref) #:ref (and (ref? ref) ref))
               target)
          (out-close "}"))
        (generate ret '(void) in-lam env)]
@@ -352,13 +358,13 @@
                      (cond
                        [(mutated? (hash-ref state id #f))
                         (format "SCHEME_UNBOX_VARIABLE(~a)"
-                                (runstack-ref runstack id #:last-use? (ref-last-use? e)))]
+                                (runstack-ref runstack id #:ref e))]
                        [else
                         (when (and (return-can-omit? ret)
                                    can-omit?
                                    (state-first-pass? state))
                           (adjust-state! state id -1))
-                        (runstack-ref runstack id #:last-use? (ref-last-use? e))])]
+                        (runstack-ref runstack id #:ref e)])]
                     [(hash-ref top-names id #f) (format "top.~a" (cify id))]
                     [else (format "prims.~a" (cify id))]))]
          [else (generate-quote ret e)])]))
@@ -409,12 +415,13 @@
                            (make-runstack-assign runstack id)]))
             (generate ret rhs in-lam rhs-env)]))
        (when let-one?
-         (runstack-push! runstack (car ids)  #:track-local? #t)
+         (runstack-push! runstack (car ids) #:track-local? #t)
          (out "~a = ~a;" (runstack-assign runstack (car ids)) (cify let-one-id)))
        (when (eq? let-id 'let)
          (box-mutable-ids ids runstack state top-names))
        (generate ret `(begin . ,body) in-lam body-env)
-       (runstack-pop! runstack (if let-one? 1 pre-bind-count))
+       (runstack-pop! runstack (if let-one? 1 pre-bind-count)
+                      #:track-local? (eq? let-id 'let))
        (out-close "}")
        (when (state-first-pass? state)
          ;; For any variable that has become unused, mark a
@@ -506,7 +513,7 @@
                              (cify struct-tmp-id)
                              (runstack-ref runstack struct-id)))
     (unless all-simple?
-      (runstack-pop! runstack 1)
+      (runstack-pop! runstack 1 #:track-local? #t)
       (out-close "}"))
     (out-close "}"))
 
@@ -756,7 +763,7 @@
             (ref-use! free-var-ref state)
             (out "~a = ~a;"
                  (runstack-assign runstack clo-id)
-                 (runstack-ref runstack (ref-id free-var-ref) #:last-use? (ref-last-use? free-var-ref))))
+                 (runstack-ref runstack (ref-id free-var-ref) #:ref free-var-ref)))
           (runstack-sync! runstack)
           (return ret runstack #:can-omit? #t
                   (format "scheme_make_prim_closure_w_~aarity(~a, ~a, ~a, ~s, ~a, ~a)"

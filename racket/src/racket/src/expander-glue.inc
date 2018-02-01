@@ -17,7 +17,7 @@ static void scheme_instance_add(Scheme_Instance *inst, const char *name, Scheme_
   ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_IS_CONST | GLOB_IS_CONSISTENT;
 }
 
-static int __check_runstack_space(int max_depth, Scheme_Object **runstack)
+static MZ_INLINE int __check_runstack_space(int max_depth, Scheme_Object **runstack)
 {  
   return ((runstack - MZ_RUNSTACK_START) < (max_depth + SCHEME_TAIL_COPY_THRESHOLD));
 }
@@ -83,7 +83,9 @@ static Scheme_Object *__handle_overflow_or_space(Scheme_Object *proc, int argc, 
   return (Scheme_Object *)scheme_enlarge_runstack(runstack_space, (void *(*)())do_apply_k);
 }
 
-static void __ensure_args_in_place_rest(int argc, Scheme_Object **argv, Scheme_Object **runbase, int direct_args, int rest_args)
+static Scheme_Object *__ensure_args_in_place_rest(int argc, Scheme_Object **argv, Scheme_Object **runbase,
+                                                  int direct_args, int rest_args,
+                                                  Scheme_Object *self)
 {
   Scheme_Object **runstack = runbase - direct_args - rest_args;
   int i;
@@ -99,16 +101,25 @@ static void __ensure_args_in_place_rest(int argc, Scheme_Object **argv, Scheme_O
   } else {
     /* Need to build a list and then copy or shift up */
     Scheme_Object *l = scheme_null;
+    MZ_GC_DECL_REG(2);
+    
+    MZ_GC_VAR_IN_REG(0, argv);
+    MZ_GC_VAR_IN_REG(1, self);
+    MZ_GC_REG();
     for (i = argc; i-- > direct_args; )
       l = scheme_make_pair(argv[i], l);
+    MZ_GC_UNREG();
+    
     runstack[direct_args] = l;
     for (i = direct_args; i--; )
       runstack[i] = argv[i];
   }
+
+  return self;
 }
 
 #define __ensure_args_in_place(argc, argv, runbase) \
-  if (argv != (runbase - argc)) __ensure_args_in_place_rest(argc, argv, runbase, argc, 0)
+  if (argv != (runbase - argc)) (void)__ensure_args_in_place_rest(argc, argv, runbase, argc, 0, NULL)
 
 static mzshort *convert_arities(int mina, const char *a)
 {
@@ -141,17 +152,17 @@ static Scheme_Object *scheme_make_prim_closure_w_case_arity(Scheme_Primitive_Clo
   return p;
 }
 
-static int __same_obj(Scheme_Object *a, Scheme_Object *b)
+static MZ_INLINE int __same_obj(Scheme_Object *a, Scheme_Object *b)
 {
   return SAME_OBJ(a, b);
 }
 
-static Scheme_Object *__malloc_struct(int c)
+static MZ_INLINE Scheme_Object *__malloc_struct(int c)
 {
   return scheme_malloc_tagged(sizeof(Scheme_Structure) + (((c) - mzFLEX_DELTA) * sizeof(Scheme_Object *)));
 }
 
-static void __struct_set_type(Scheme_Object *s, Scheme_Object *_st)
+static MZ_INLINE void __struct_set_type(Scheme_Object *s, Scheme_Object *_st)
 {
   Scheme_Struct_Type *stype = (Scheme_Struct_Type *)_st;
   s->type = (stype->proc_attr ? scheme_proc_struct_type : scheme_structure_type);
@@ -160,7 +171,7 @@ static void __struct_set_type(Scheme_Object *s, Scheme_Object *_st)
 
 #define __STRUCT_ELS(o) (((Scheme_Structure *)(o))->slots)
 
-static int __is_struct_instance(Scheme_Object *v, Scheme_Object *_st)
+static MZ_INLINE int __is_struct_instance(Scheme_Object *v, Scheme_Object *_st)
 {
   Scheme_Struct_Type *st = (Scheme_Struct_Type *)_st;
   if (SCHEME_CHAPERONEP(v))
@@ -169,14 +180,14 @@ static int __is_struct_instance(Scheme_Object *v, Scheme_Object *_st)
           && (((Scheme_Structure *)v)->stype->parent_types[st->name_pos] == st));
 }
 
-static int __is_authentic_struct_instance(Scheme_Object *v, Scheme_Object *_st)
+static MZ_INLINE int __is_authentic_struct_instance(Scheme_Object *v, Scheme_Object *_st)
 {
   Scheme_Struct_Type *st = (Scheme_Struct_Type *)_st;
   return (SCHEME_STRUCTP(v)
           && (((Scheme_Structure *)v)->stype->parent_types[st->name_pos] == st));
 }
 
-static Scheme_Object *__struct_ref(Scheme_Object *v, int pos)
+static MZ_INLINE Scheme_Object *__struct_ref(Scheme_Object *v, int pos)
 {
   if (SCHEME_CHAPERONEP(v))
     return scheme_struct_ref(v, pos);
@@ -184,12 +195,12 @@ static Scheme_Object *__struct_ref(Scheme_Object *v, int pos)
     return ((Scheme_Structure *)v)->slots[pos];
 }
 
-static Scheme_Object *__authentic_struct_ref(Scheme_Object *v, int pos)
+static MZ_INLINE Scheme_Object *__authentic_struct_ref(Scheme_Object *v, int pos)
 {
   return ((Scheme_Structure *)v)->slots[pos];
 }
 
-static Scheme_Object *__struct_set(Scheme_Object *v, Scheme_Object *a, int pos)
+static MZ_INLINE Scheme_Object *__struct_set(Scheme_Object *v, Scheme_Object *a, int pos)
 {
   if (SCHEME_CHAPERONEP(v))
     scheme_struct_set(v, pos, a);
@@ -198,28 +209,28 @@ static Scheme_Object *__struct_set(Scheme_Object *v, Scheme_Object *a, int pos)
   return scheme_void;
 }
 
-static Scheme_Object *__authentic_struct_set(Scheme_Object *v, Scheme_Object *a, int pos)
+static MZ_INLINE Scheme_Object *__authentic_struct_set(Scheme_Object *v, Scheme_Object *a, int pos)
 {
   ((Scheme_Structure *)v)->slots[pos] = a;
   return scheme_void;
 }
 
-static int __int_lt(Scheme_Object *a, Scheme_Object *b)
+static MZ_INLINE int __int_lt(Scheme_Object *a, Scheme_Object *b)
 {
   return SCHEME_INT_VAL(a) < SCHEME_INT_VAL(b);
 }
 
-static int __int_gt(Scheme_Object *a, Scheme_Object *b)
+static MZ_INLINE int __int_gt(Scheme_Object *a, Scheme_Object *b)
 {
   return SCHEME_INT_VAL(a) > SCHEME_INT_VAL(b);
 }
 
-static Scheme_Object *__int_add(Scheme_Object *a, Scheme_Object *b)
+static MZ_INLINE Scheme_Object *__int_add(Scheme_Object *a, Scheme_Object *b)
 {
   return scheme_make_integer(SCHEME_INT_VAL(a) + SCHEME_INT_VAL(b));
 }
 
-#define __SCHEME_PREDFUNC(id, ID) static int id(Scheme_Object *v) { return ID(v); }
+#define __SCHEME_PREDFUNC(id, ID) static MZ_INLINE int id(Scheme_Object *v) { return ID(v); }
 
 __SCHEME_PREDFUNC(__scheme_truep, SCHEME_TRUEP)
 __SCHEME_PREDFUNC(__scheme_falsep, SCHEME_FALSEP)
@@ -234,12 +245,12 @@ __SCHEME_PREDFUNC(__scheme_keywordp, SCHEME_KEYWORDP)
 __SCHEME_PREDFUNC(__scheme_char_stringp, SCHEME_CHAR_STRINGP)
 __SCHEME_PREDFUNC(__scheme_byte_stringp, SCHEME_BYTE_STRINGP)
 
-static Scheme_Object *__authentic_vector_ref(Scheme_Object *v, Scheme_Object *i)
+static MZ_INLINE Scheme_Object *__authentic_vector_ref(Scheme_Object *v, Scheme_Object *i)
 {
   return SCHEME_VEC_ELS(v)[SCHEME_INT_VAL(i)];
 }
 
-static Scheme_Object *__vector_ref(Scheme_Object *v, Scheme_Object *i)
+static MZ_INLINE Scheme_Object *__vector_ref(Scheme_Object *v, Scheme_Object *i)
 {
   if (SCHEME_NP_CHAPERONEP(v))
     return scheme_chaperone_vector_ref(v, SCHEME_INT_VAL(i));
@@ -247,7 +258,7 @@ static Scheme_Object *__vector_ref(Scheme_Object *v, Scheme_Object *i)
     return SCHEME_VEC_ELS(v)[SCHEME_INT_VAL(i)];
 }
 
-static Scheme_Object *__vector_set(Scheme_Object *v, Scheme_Object *i, Scheme_Object *a)
+static MZ_INLINE Scheme_Object *__vector_set(Scheme_Object *v, Scheme_Object *i, Scheme_Object *a)
 {
   if (SCHEME_NP_CHAPERONEP(v))
     scheme_chaperone_vector_set(v, SCHEME_INT_VAL(i), a);
@@ -255,13 +266,13 @@ static Scheme_Object *__vector_set(Scheme_Object *v, Scheme_Object *i, Scheme_Ob
   return scheme_void;
 }
 
-static Scheme_Object *__vector_length(Scheme_Object *v)
+static MZ_INLINE Scheme_Object *__vector_length(Scheme_Object *v)
 {
   if (SCHEME_NP_CHAPERONEP(v)) v = SCHEME_CHAPERONE_VAL(v);
   return scheme_make_integer(SCHEME_VEC_SIZE(v));
 }
 
-static Scheme_Object *__box_ref(Scheme_Object *b)
+static MZ_INLINE Scheme_Object *__box_ref(Scheme_Object *b)
 {
   if (SCHEME_NP_CHAPERONEP(b))
     return scheme_unbox(b);
@@ -269,7 +280,7 @@ static Scheme_Object *__box_ref(Scheme_Object *b)
     return SCHEME_BOX_VAL(b);
 }
 
-static Scheme_Object *__box_set(Scheme_Object *b, Scheme_Object *a)
+static MZ_INLINE Scheme_Object *__box_set(Scheme_Object *b, Scheme_Object *a)
 {
   if (SCHEME_NP_CHAPERONEP(b))
     scheme_set_box(b, a);
@@ -278,38 +289,47 @@ static Scheme_Object *__box_set(Scheme_Object *b, Scheme_Object *a)
   return scheme_void;
 }
 
-static Scheme_Object *__pair_car(Scheme_Object *p)
+static MZ_INLINE Scheme_Object *__pair_car(Scheme_Object *p)
 {
   return SCHEME_CAR(p);
 }
 
-static Scheme_Object *__pair_cdr(Scheme_Object *p)
+static MZ_INLINE Scheme_Object *__pair_cdr(Scheme_Object *p)
 {
   return SCHEME_CDR(p);
 }
 
-static Scheme_Object *__pair_caar(Scheme_Object *p)
+static MZ_INLINE Scheme_Object *__pair_caar(Scheme_Object *p)
 {
   return SCHEME_CAR(SCHEME_CAR(p));
 }
 
-static Scheme_Object *__pair_cdar(Scheme_Object *p)
+static MZ_INLINE Scheme_Object *__pair_cdar(Scheme_Object *p)
 {
   return SCHEME_CDR(SCHEME_CAR(p));
 }
 
-static Scheme_Object *__pair_cadr(Scheme_Object *p)
+static MZ_INLINE Scheme_Object *__pair_cadr(Scheme_Object *p)
 {
   return SCHEME_CAR(SCHEME_CDR(p));
 }
 
-static Scheme_Object *__pair_cddr(Scheme_Object *p)
+static MZ_INLINE Scheme_Object *__pair_cddr(Scheme_Object *p)
 {
   return SCHEME_CDR(SCHEME_CDR(p));
 }
 
-#define SCHEME_UNBOX_VARIABLE(var) (*(Scheme_Object **)(var))
-#define SCHEME_UNBOX_VARIABLE_LHS(var) SCHEME_UNBOX_VARIABLE(var)
+static MZ_INLINE Scheme_Object *__last_use(Scheme_Object **r, int i)
+{
+  Scheme_Object *v = r[i];
+  r[i] = NULL;
+  return v;
+}
+
+#ifndef __VALIDATE_DEBUG
+
+# define SCHEME_UNBOX_VARIABLE(var) (*(Scheme_Object **)(var))
+# define SCHEME_UNBOX_VARIABLE_LHS(var) SCHEME_UNBOX_VARIABLE(var)
 
 static Scheme_Object *scheme_box_variable(Scheme_Object *v)
 {
@@ -319,9 +339,21 @@ static Scheme_Object *scheme_box_variable(Scheme_Object *v)
   return (Scheme_Object *)b;
 }
 
-static Scheme_Object *__last_use(Scheme_Object **r, int i)
+#else
+
+# define SCHEME_UNBOX_VARIABLE(var) SCHEME_BOX_VAL(var)
+# define SCHEME_UNBOX_VARIABLE_LHS(var) SCHEME_BOX_VAL(var)
+
+static Scheme_Object *scheme_box_variable(Scheme_Object *v)
 {
-  Scheme_Object *v = r[i];
-  r[i] = NULL;
-  return v;
+  return scheme_box(v);
 }
+
+static Scheme_Object *__validate(Scheme_Object *s)
+{
+  if ((SCHEME_TYPE(s) < 0) || (SCHEME_TYPE(s) > _scheme_last_type_))
+    abort();
+  return s;
+}
+
+#endif
