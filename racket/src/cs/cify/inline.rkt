@@ -50,11 +50,7 @@
     (values new-es (or gc? new-gc?) (lambda (s) (wrapper (new-wrapper s)))))
   (define (generic e)
     (if compose?
-        (values (list e) #f (lambda (s)
-                              (cond
-                                [(equal? s "scheme_false") "0"]
-                                [(equal? s "scheme_true") "1"]
-                                [else (format "SCHEME_TRUEP(~a)" s)])))
+        (values (list e) #f (lambda (s) (format "__scheme_truep(~a)" s)))
         (values #f #f #f)))
   ;; simple => no GC
   (define (simple template . args)
@@ -63,21 +59,17 @@
     [`(not ,e)
      (if compose?
          (compose e #f (lambda (s) (format "!~a" s)))
-         (values (list e) #f (lambda (s)
-                               (cond
-                                 [(equal? s "scheme_false") "1"]
-                                 [(equal? s "scheme_true") "0"]
-                                 [else (format "SCHEME_FALSEP(~a)" s)]))))]
-    [`(null? ,e) (simple "SCHEME_NULLP(~a)" e)]
-    [`(boolean? ,e) (simple "SCHEME_BOOLP(~a)" e)]
-    [`(number? ,e) (simple "SCHEME_NUMBERP(~a)" e)]
-    [`(pair? ,e) (simple "SCHEME_PAIRP(~a)" e)]
-    [`(vector? ,e) (simple "SCHEME_CHAPERONE_VECTORP(~a)" e)]
-    [`(box? ,e) (simple "SCHEME_CHAPERONE_BOXP(~a)" e)]
-    [`(symbol? ,e) (simple "SCHEME_SYMBOLP(~a)" e)]
-    [`(keyword? ,e) (simple "SCHEME_KEYWORDP(~a)" e)]
-    [`(string? ,e) (simple "SCHEME_CHAR_STRINGP(~a)" e)]
-    [`(bytes? ,e) (simple "SCHEME_BYTE_STRINGP(~a)" e)]
+         (values (list e) #f (lambda (s) (format "__scheme_falsep(~a)" s))))]
+    [`(null? ,e) (simple "__scheme_nullp(~a)" e)]
+    [`(boolean? ,e) (simple "__scheme_boolp(~a)" e)]
+    [`(number? ,e) (simple "__scheme_numberp(~a)" e)]
+    [`(pair? ,e) (simple "__scheme_pairp(~a)" e)]
+    [`(vector? ,e) (simple "__scheme_chaperone_vectorp(~a)" e)]
+    [`(box? ,e) (simple "__scheme_chaperone_boxp(~a)" e)]
+    [`(symbol? ,e) (simple "__scheme_symbolp(~a)" e)]
+    [`(keyword? ,e) (simple "__scheme_keywordp(~a)" e)]
+    [`(string? ,e) (simple "__scheme_char_stringp(~a)" e)]
+    [`(bytes? ,e) (simple "__scheme_byte_stringp(~a)" e)]
     [`(eq? ,e1 ,e2) (simple "__same_obj(~a)" e1 e2)]
     [`(eqv? ,e1 ,e2) (simple "scheme_eqv(~a)" e1 e2)]
     [`(equal? ,e1 ,e2) (values (list e1 e2) #t (lambda (s) (format "scheme_equal(~a)" s)))]

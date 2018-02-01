@@ -46,8 +46,6 @@
     [`(call-with-values (lambda () . ,body1) (lambda (,ids ...) . ,body2))
      (extract-lambdas! lambdas `(begin . ,body1))
      (extract-lambdas! lambdas `(begin . ,body2))]
-    [`(#%app . ,r)
-     (extract-lambdas! lambdas r)]
     [`(,rator ,rands ...)
      (extract-lambdas! lambdas `(begin ,rator . ,rands))]
     [`,_ (void)]))

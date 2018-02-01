@@ -146,7 +146,7 @@ static int __same_obj(Scheme_Object *a, Scheme_Object *b)
   return SAME_OBJ(a, b);
 }
 
-static Scheme_Object *__make_struct(int c)
+static Scheme_Object *__malloc_struct(int c)
 {
   return scheme_malloc_tagged(sizeof(Scheme_Structure) + (((c) - mzFLEX_DELTA) * sizeof(Scheme_Object *)));
 }
@@ -218,6 +218,21 @@ static Scheme_Object *__int_add(Scheme_Object *a, Scheme_Object *b)
 {
   return scheme_make_integer(SCHEME_INT_VAL(a) + SCHEME_INT_VAL(b));
 }
+
+#define __SCHEME_PREDFUNC(id, ID) static int id(Scheme_Object *v) { return ID(v); }
+
+__SCHEME_PREDFUNC(__scheme_truep, SCHEME_TRUEP)
+__SCHEME_PREDFUNC(__scheme_falsep, SCHEME_FALSEP)
+__SCHEME_PREDFUNC(__scheme_boolp, SCHEME_BOOLP)
+__SCHEME_PREDFUNC(__scheme_nullp, SCHEME_NULLP)
+__SCHEME_PREDFUNC(__scheme_pairp, SCHEME_PAIRP)
+__SCHEME_PREDFUNC(__scheme_numberp, SCHEME_NUMBERP)
+__SCHEME_PREDFUNC(__scheme_chaperone_vectorp, SCHEME_CHAPERONE_VECTORP)
+__SCHEME_PREDFUNC(__scheme_chaperone_boxp, SCHEME_CHAPERONE_BOXP)
+__SCHEME_PREDFUNC(__scheme_symbolp, SCHEME_SYMBOLP)
+__SCHEME_PREDFUNC(__scheme_keywordp, SCHEME_KEYWORDP)
+__SCHEME_PREDFUNC(__scheme_char_stringp, SCHEME_CHAR_STRINGP)
+__SCHEME_PREDFUNC(__scheme_byte_stringp, SCHEME_BYTE_STRINGP)
 
 static Scheme_Object *__authentic_vector_ref(Scheme_Object *v, Scheme_Object *i)
 {
@@ -296,10 +311,17 @@ static Scheme_Object *__pair_cddr(Scheme_Object *p)
 #define SCHEME_UNBOX_VARIABLE(var) (*(Scheme_Object **)(var))
 #define SCHEME_UNBOX_VARIABLE_LHS(var) SCHEME_UNBOX_VARIABLE(var)
 
-Scheme_Object *scheme_box_variable(Scheme_Object *v)
+static Scheme_Object *scheme_box_variable(Scheme_Object *v)
 {
   Scheme_Object **b;
   b = MALLOC_ONE(Scheme_Object *);
   b[0] = v;
   return (Scheme_Object *)b;
+}
+
+static Scheme_Object *__last_use(Scheme_Object **r, int i)
+{
+  Scheme_Object *v = r[i];
+  r[i] = NULL;
+  return v;
 }

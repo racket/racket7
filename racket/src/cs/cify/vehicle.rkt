@@ -10,7 +10,7 @@
          merge-vehicles!)
 
 (struct lam (id e
-                [free-vars #:mutable]
+                [free-var-refs #:mutable]
                 [env #:mutable]
                 loop-targets
                 [max-jump-argc #:mutable]
@@ -46,7 +46,7 @@
       (define old-vehicle (lam-vehicle lam))
       (set-vehicle-max-jump-argc! vehicle (max (vehicle-max-jump-argc vehicle)
                                                (lam-max-jump-argc lam)))
-      (unless (null? (lam-free-vars lam))
+      (unless (null? (lam-free-var-refs lam))
         (set-vehicle-closure?! vehicle #t))
       (unless (eq? vehicle old-vehicle)
         (define lams (vehicle-lams vehicle))

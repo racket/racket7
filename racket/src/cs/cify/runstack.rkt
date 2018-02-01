@@ -73,10 +73,12 @@
       (hash-remove! var-depths var)
       (loop (sub1 n)))))
 
-(define (runstack-ref rs id)
+(define (runstack-ref rs id #:last-use? [last-use? #f])
   (cond
     [(eq? 'local (hash-ref (runstack-var-depths rs) id #f))
      (format "~a" (cify id))]
+    [last-use?
+     (format "__last_use(__runbase, ~a)" (cify id))]
     [else
      (format "__runbase[~a]" (cify id))]))
 
@@ -95,7 +97,7 @@
 
 (define (runstack-sync! rs)
   (hash-clear! (runstack-unsynced rs))
-  (define vars (hash-keys (runstack-need-inits rs)))
+  (define vars (sort (hash-keys (runstack-need-inits rs)) symbol<?))
   (for ([var (in-list vars)])
     (out "~a = __RUNSTACK_INIT_VAL;" (runstack-assign rs var)))
   (unless (eqv? (runstack-depth rs) (runstack-sync-depth rs))

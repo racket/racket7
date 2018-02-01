@@ -9,6 +9,7 @@
          "vehicle.rkt"
          "top-name.rkt"
          "prim-name.rkt"
+         "ref.rkt"
          "function.rkt"
          "state.rkt"
          "generate.rkt"
@@ -42,11 +43,22 @@
   (generate-header)
 
   ;; Make sure all names are unique:
-  (define e (re-unique in-e))
+  (define unique-e (re-unique in-e))
 
-  ;; All `define`d names and `let[rec[*]]` names that are flattend
-  ;; into the top sequence:
-  (define top-names (extract-top-names #hasheq() e))
+  ;; Find all `define`d names and `let[rec[*]]` names that are
+  ;; flattend into the top sequence:
+  (define top-names (extract-top-names #hasheq() unique-e))
+
+  ;; Find all the primitives that we'll need to call:
+  (define prim-names (extract-prim-names unique-e top-names))
+
+  ;; Find mutable variables, which will need to be boxed:
+  (define state (make-state))
+  (extract-state! state unique-e)
+
+  ;; Wrap `ref` around every local-variable reference. Also,
+  ;; perform copy propagation:
+  (define e (wrap-ref unique-e top-names prim-names state))
 
   ;; Find all `lambda`s and `case-lambda`s, mapping each to
   ;; a newly synthesized name:
@@ -64,14 +76,6 @@
     (hash-set! lambdas e (make-lam id e #:can-call-direct? #t)))
 
   (define knowns (hash-union struct-knowns functions))
-
-  ;; Find all the primitives that we'll need to call:
-  (define prim-names (extract-prim-names #hasheq() e #hasheq() top-names))
-
-  (define state (make-state))
-
-  ;; Find mutable variables, which will need to be boxed:
-  (extract-state! state e)
 
   ;; Generate top-level sequence just to set free-variable lists and
   ;; other state for each lambda:
@@ -91,7 +95,11 @@
   ;; allocate the closure once
   (define closed-anonymous-functions
     (for/hash ([lam (in-hash-values lambdas)]
-               #:when (and (null? (lam-free-vars lam))
+               #:when (and (null? (lam-free-var-refs lam))
+                           ;; No need if it's only formed at the top, unless
+                           ;; `__self` isn't available for overflow handling:
+                           (or (lam-under-lambda? lam)
+                               (not (vehicle-closure? (lam-vehicle lam))))
                            (not (hash-ref functions (lam-id lam) #f))
                            (not (lam-unused? lam))))
       (set-lam-moved-to-top?! lam #t)

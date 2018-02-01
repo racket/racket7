@@ -38,7 +38,7 @@
      (extract-let-top-names names e)]
     [`(letrec . ,_)
      (extract-let-top-names names e)]
-    [`(letrec* ,_)
+    [`(letrec* . ,_)
      (extract-let-top-names names e)]
     [`(set! ,id ,rhs)
      (extract-top-names names rhs)]

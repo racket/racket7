@@ -1,5 +1,6 @@
 #lang racket/base
-(require "match.rkt")
+(require "match.rkt"
+         "ref.rkt")
 
 (provide extract-structs
          (struct-out struct-info)
@@ -63,11 +64,11 @@
                                             [make-acc/mut (in-list make-acc/muts)])
                  (match make-acc/mut
                    [`(make-struct-field-accessor ,id ,pos . ,_)
-                    (if (eq? id -ref)
+                    (if (eq? (unref id) -ref)
                         (hash-set knowns acc/mut (struct-accessor si (+ pos parent-field-count)))
                         knowns)]
                    [`(make-struct-field-mutator ,id ,pos . ,_)
-                    (if (eq? id -set!)
+                    (if (eq? (unref id) -set!)
                         (hash-set knowns acc/mut (struct-mutator si (+ pos parent-field-count)))
                         knowns)]
                    [`,_ knowns])))]

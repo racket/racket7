@@ -2,8 +2,8 @@
 (require racket/list
          "inline.rkt"
          "state.rkt"
-         "env.rkt"
          "id.rkt"
+         "ref.rkt"
          "runstack.rkt")
 
 (provide simple?
@@ -15,8 +15,8 @@
 ;; trigger a GC.
 
 (define (simple? e state knowns #:can-gc? [can-gc? #f])
-  (or (and (symbol? e)
-           (not (mutated? (hash-ref state e #f))))
+  (or (and (symbol-ref? e)
+           (not (mutated? (hash-ref state (unref e) #f))))
       (simple-quote? e)
       (and (pair? e)
            (symbol? (car e))
@@ -25,18 +25,16 @@
              (simple? e state knowns #:can-gc? can-gc?)))))
 
 ;; The `e` argument can be a string as pre-generated
-(define (generate-simple e env runstack top-names knowns prim-names)
+(define (generate-simple e env state runstack top-names knowns prim-names)
   (cond
     [(string? e) e]
     [(boolean? e) (if e "scheme_true" "scheme_false")]
     [(always-fixnum? e) (format "scheme_make_integer(~a)" e)]
-    [(symbol? e)
+    [(symbol-ref? e)
      (cond
-       [(hash-ref env e #f)
-        => (lambda (b)
-             (if (propagate? b)
-                 (generate-simple b env runstack top-names knowns prim-names)
-                 (runstack-ref runstack e)))]
+       [(ref? e)
+        (ref-use! e state)
+        (runstack-ref runstack (unref e) #:last-use? (ref-last-use? e))]
        [(or (hash-ref top-names e #f)
             (hash-ref knowns e #f))
         (format "top.~a" (cify e))]
@@ -49,7 +47,7 @@
                          (append
                           (add-between
                            (for/list ([e (in-list (cdr e))])
-                             (format "~a" (generate-simple e env runstack top-names knowns prim-names)))
+                             (format "~a" (generate-simple e env state runstack top-names knowns prim-names)))
                            ", "))))
      (cond
        [(procedure? inliner) (inliner args)]

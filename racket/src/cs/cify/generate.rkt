@@ -12,10 +12,10 @@
          "arg.rkt"
          "union-find.rkt"
          "state.rkt"
-         "env.rkt"
          "simple.rkt"
          "inline.rkt"
          "return.rkt"
+         "ref.rkt"
          "runstack.rkt")
 
 (provide generate-header
@@ -97,22 +97,22 @@
 (define (generate-lambda lam multi? bracket? knowns top-names state lambdas prim-names)
   (define e (lam-e lam))
   (define id (lam-id lam))
-  (define free-vars (lam-free-vars lam))
+  (define free-var-refs (lam-free-var-refs lam))
   (define closure-offset (if multi? 1 0))
   (when bracket? (out-open "{"))
   (match e
-    [`(lambda . ,_) (generate-lambda-case lam e free-vars closure-offset knowns top-names state lambdas prim-names)]
+    [`(lambda . ,_) (generate-lambda-case lam e free-var-refs closure-offset knowns top-names state lambdas prim-names)]
     [`(case-lambda [,idss . ,bodys] ...)
      (for ([ids (in-list idss)]
            [body (in-list bodys)]
            [i (in-naturals)])
        (out-open "~aif (__argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
-       (generate-lambda-case lam `(lambda ,ids . ,body) free-vars closure-offset  knowns top-names state lambdas prim-names)
+       (generate-lambda-case lam `(lambda ,ids . ,body) free-var-refs closure-offset  knowns top-names state lambdas prim-names)
        (out-close "}"))
      (out "else return NULL;")])
   (when bracket? (out-close "}")))
 
-(define (generate-lambda-case lam e free-vars closure-offset knowns top-names state lambdas prim-names)
+(define (generate-lambda-case lam e free-var-refs closure-offset knowns top-names state lambdas prim-names)
   (define name (lam-id lam))
   (match e
     [`(lambda ,ids . ,body)
@@ -139,9 +139,11 @@
           (runstack-push! runstack (car ids) #:referenced? (referenced? (hash-ref state (car ids) #f)))]))
      (runstack-synced! runstack) ; since runstack = start of arguments
      ;; Unpack closure
-     (for ([id (in-list free-vars)]
+     (for ([ref (in-list free-var-refs)])
+       (runstack-push! runstack (ref-id ref)))
+     (for ([ref (in-list free-var-refs)]
            [i (in-naturals)])
-       (runstack-push! runstack id)
+       (define id (ref-id ref))
        (out "~a = SCHEME_PRIM_CLOSURE_ELS(__self)[~a];" (runstack-assign runstack id) (+ closure-offset i)))
      (when (hash-ref (lam-loop-targets lam) n #f)
        (out-margin "__recur_~a_~a:" (cify name) n))
@@ -249,16 +251,19 @@
                                              [tst (in-list tsts)])
                                     (format "~a"
                                             (cond
-                                              [(not tst-id) (generate-simple tst env runstack top-names knowns prim-names)]
+                                              [(not tst-id) (generate-simple tst env state runstack top-names knowns prim-names)]
                                               [(eq? tst-id immediate-tst-id) (cify tst-id)]
                                               [tst-id (runstack-ref runstack tst-id)])))
                                   ", "))))
        (define pre-branch (runstack-branch-before runstack))
+       (define pre-ref-use (ref-use-branch-before! state))
        (generate ret thn in-lam env)
        (out-close+open "} else {")
        (define post-branch (runstack-branch-other! runstack pre-branch))
+       (define post-ref-use (ref-use-branch-other! state pre-ref-use))
        (generate ret els in-lam env)
        (runstack-branch-merge! runstack pre-branch post-branch)
+       (ref-use-branch-merge! state pre-ref-use post-ref-use)
        (out-close "}")
        (runstack-pop! runstack tst-id-count)
        (unless all-simple? (out-close "}"))]
@@ -311,18 +316,20 @@
        (generate ret `(begin . ,body2) in-lam (add-args env ids))
        (runstack-pop! runstack bind-count)
        (out-close "}")]
-      [`(set! ,id ,rhs)
-       (define top? (hash-ref top-names id #f))
+      [`(set! ,ref ,rhs)
+       (define top? (hash-ref top-names ref #f))
        (define target
          (cond
-           [top? (format "top.~a" (cify id))]
+           [top? (format "top.~a" (cify ref))]
            [else (genid '__set)]))
        (unless top?
          (out-open "{")
          (out "Scheme_Object *~a;" target))
        (generate (format "~a =" target) rhs in-lam env)
        (unless top?
-         (out "SCHEME_UNBOX_VARIABLE_LHS(~a) = ~a;" (runstack-ref runstack id) target)
+         (out "SCHEME_UNBOX_VARIABLE_LHS(~a) = ~a;"
+              (runstack-ref runstack (unref ref) #:last-use? (and (ref? ref) (ref-last-use? ref)))
+              target)
          (out-close "}"))
        (generate ret '(void) in-lam env)]
       [`(void) (return ret runstack #:can-omit? #t #:can-pre-pop? #t "scheme_void")]
@@ -331,102 +338,85 @@
       [`(values ,r)
        (generate ret r in-lam env)]
       [`null (return ret runstack #:can-omit? #t #:can-pre-pop? #t "scheme_null")]
-      [`(#%app . ,r)
-       (generate ret r in-lam env)]
       [`(,rator ,rands ...)
        (generate-app ret rator rands in-lam env)]
       [`,_
        (cond
-         [(symbol? e)
-          (return ret runstack #:can-omit? #t #:can-pre-pop? #t
-                  (let loop ([e e])
-                    (cond
-                      [(hash-ref env e #f)
-                       => (lambda (r)
-                            (cond
-                              [(propagate? r) (loop r)]
-                              [(mutated? (hash-ref state e #f))
-                               (format "SCHEME_UNBOX_VARIABLE(~a)" (runstack-ref runstack e))]
-                              [else
-                               (when (and (return-can-omit? ret)
-                                          (state-first-pass? state))
-                                 (adjust-state! state e -1))
-                               (runstack-ref runstack e)]))]
-                      [(hash-ref top-names e #f) (format "top.~a" (cify e))]
-                      [else (format "prims.~a" (cify e))])))]
+         [(symbol-ref? e)
+          (when (ref? e) (ref-use! e state))
+          (define can-omit? (not (and (ref? e) (ref-last-use? e))))
+          (define id (unref e))
+          (return ret runstack #:can-omit? can-omit? #:can-pre-pop? #t
+                  (cond
+                    [(hash-ref env id #f)
+                     (cond
+                       [(mutated? (hash-ref state id #f))
+                        (format "SCHEME_UNBOX_VARIABLE(~a)"
+                                (runstack-ref runstack id #:last-use? (ref-last-use? e)))]
+                       [else
+                        (when (and (return-can-omit? ret)
+                                   can-omit?
+                                   (state-first-pass? state))
+                          (adjust-state! state id -1))
+                        (runstack-ref runstack id #:last-use? (ref-last-use? e))])]
+                    [(hash-ref top-names id #f) (format "top.~a" (cify id))]
+                    [else (format "prims.~a" (cify id))]))]
          [else (generate-quote ret e)])]))
   
   (define (generate-let ret e in-lam env)
     (match e
       [`(,let-id ([,ids ,rhss] ...) . ,body)
        (define body-env (for/fold ([env env]) ([id (in-list ids)]
-                                               [rhs (in-list rhss)]
                                                ;; Leave out of the environment if flattened
                                                ;; into the top sequence:
                                                #:unless (hash-ref top-names id #f))
                           (when (eq? let-id 'letrec)
                             (unless (function? (hash-ref knowns id #f))
                               (log-error "`letrec` binding should have been treated as closed: ~e" id)))
-                          (hash-set env id (get-propagate id rhs env state))))
-       (cond
-         [(for/and ([id (in-list ids)])
-            (propagate? (hash-ref body-env id #f)))
-          ;; All propagated: simplify output by avoiding a layer of braces
-          (generate ret `(begin . ,body) in-lam body-env)]
-         [else
-          (define rhs-env (if (eq? let-id 'let) env body-env))
-          (out-open "{")
-          (define (push-binds)
-            (for/sum ([id (in-list ids)]
-                      #:unless (or (not (referenced? (hash-ref state id #f)))
-                                   ;; flattened into top?
-                                   (hash-ref top-names id #f)))
-              (runstack-push! runstack id #:track-local? (eq? let-id 'let))
-              1))
-          (define let-one? (and (eq? let-id 'let)
-                                (= 1 (length ids))
-                                (referenced? (hash-ref state (car ids) #f))
-                                (not (hash-ref top-names (car ids) #f))))
-          (define pre-bind-count (if let-one? 0 (push-binds)))
-          (define let-one-id (and let-one? (genid '__let)))
-          (when let-one?
-            (out "Scheme_Object *~a;" (cify let-one-id)))
-          (when (eq? let-id 'letrec*)
-            (box-mutable-ids ids runstack state top-names))
-          (for ([id (in-list ids)]
-                [rhs (in-list rhss)]
-                #:unless (propagate? (hash-ref body-env id #f)))
-            (cond
-              [(eq? let-id 'letrec*)
-               (generate "" `(set! ,id ,rhs) in-lam rhs-env)]
-              [(not (referenced? (hash-ref state id #f)))
-               (generate "" rhs in-lam rhs-env)]
-              [else
-               (define ret (cond
-                             [let-one? (format "~a = " (cify let-one-id))]
-                             [(hash-ref top-names id #f)
-                              (format "top.~a = " (cify id))]
-                             [else
-                              (make-runstack-assign runstack id)]))
-               (generate ret rhs in-lam rhs-env)]))
-          (when let-one?
-            (runstack-push! runstack (car ids)  #:track-local? #t)
-            (out "~a = ~a;" (runstack-assign runstack (car ids)) (cify let-one-id)))
-          (when (eq? let-id 'let)
-            (box-mutable-ids ids runstack state top-names))
-          (generate ret `(begin . ,body) in-lam body-env)
-          (runstack-pop! runstack (if let-one? 1 pre-bind-count))
-          (out-close "}")])
+                          (hash-set env id #t)))
+       (define rhs-env (if (eq? let-id 'let) env body-env))
+       (out-open "{")
+       (define (push-binds)
+         (for/sum ([id (in-list ids)]
+                   #:unless (or (not (referenced? (hash-ref state id #f)))
+                                ;; flattened into top?
+                                (hash-ref top-names id #f)))
+           (runstack-push! runstack id #:track-local? (eq? let-id 'let))
+           1))
+       (define let-one? (and (eq? let-id 'let)
+                             (= 1 (length ids))
+                             (referenced? (hash-ref state (car ids) #f))
+                             (not (hash-ref top-names (car ids) #f))))
+       (define pre-bind-count (if let-one? 0 (push-binds)))
+       (define let-one-id (and let-one? (genid '__let)))
+       (when let-one?
+         (out "Scheme_Object *~a;" (cify let-one-id)))
+       (when (eq? let-id 'letrec*)
+         (box-mutable-ids ids runstack state top-names))
+       (for ([id (in-list ids)]
+             [rhs (in-list rhss)])
+         (cond
+           [(eq? let-id 'letrec*)
+            (generate "" `(set! ,id ,rhs) in-lam rhs-env)]
+           [(not (referenced? (hash-ref state id #f)))
+            (generate "" rhs in-lam rhs-env)]
+           [else
+            (define ret (cond
+                          [let-one? (format "~a = " (cify let-one-id))]
+                          [(hash-ref top-names id #f)
+                           (format "top.~a = " (cify id))]
+                          [else
+                           (make-runstack-assign runstack id)]))
+            (generate ret rhs in-lam rhs-env)]))
+       (when let-one?
+         (runstack-push! runstack (car ids)  #:track-local? #t)
+         (out "~a = ~a;" (runstack-assign runstack (car ids)) (cify let-one-id)))
+       (when (eq? let-id 'let)
+         (box-mutable-ids ids runstack state top-names))
+       (generate ret `(begin . ,body) in-lam body-env)
+       (runstack-pop! runstack (if let-one? 1 pre-bind-count))
+       (out-close "}")
        (when (state-first-pass? state)
-         ;; For each variable that is propagated, remove
-         ;; the use of the right-hand side:
-         (for ([id (in-list ids)]
-               [rhs (in-list rhss)])
-           (define r (hash-ref body-env id #f))
-           (when (propagate? r)
-             (adjust-state! state r (hash-ref state id 0))
-             (adjust-state! state rhs -1)
-             (hash-remove! state id)))
          ;; For any variable that has become unused, mark a
          ;; right-hand side function as unused
          (for ([id (in-list ids)]
@@ -479,7 +469,7 @@
     (define s (generate-simple (cons rator (for/list ([tmp-id (in-list tmp-ids)]
                                                       [rand (in-list rands)])
                                              (or tmp-id rand)))
-                               env runstack top-names knowns prim-names))
+                               env state runstack top-names knowns prim-names))
     (return ret runstack #:can-pre-pop? #t s)
     (runstack-pop! runstack tmp-count)
     (unless all-simple? (out-close "}")))
@@ -627,7 +617,7 @@
       [(not direct?)
        (define rator-s (if rator-id
                            (runstack-ref runstack rator-id)
-                           (generate-simple rator env runstack top-names knowns prim-names)))
+                           (generate-simple rator env state runstack top-names knowns prim-names)))
        (define use-tail-apply? (and (tail-return? ret)
                                     (or (not (symbol? rator))
                                         (hash-ref env rator #f)
@@ -650,14 +640,14 @@
                                       [i (in-naturals)])
                              (cond
                                [arg-id #f]
-                               [(and (symbol? rand)
-                                     (eqv? (runstack-ref-pos runstack rand) (- n i))
+                               [(and (symbol-ref? rand)
+                                     (eqv? (runstack-ref-pos runstack (unref rand)) (- n i))
                                      ((- n i) . <= . (args-length (tail-return-self-args ret)))
-                                     (not (mutated? (hash-ref state rand #f))))
+                                     (not (mutated? (hash-ref state (unref rand) #f))))
                                 ;; No need to copy an argument to itself, which is
                                 ;; common for lifted loops:
                                 (when (state-first-pass? state)
-                                  (adjust-state! state rand -1))
+                                  (adjust-state! state (unref rand) -1))
                                 #f]
                                [else
                                 (genid '__argtmp)])))
@@ -687,6 +677,14 @@
              [arg-tmp-id (in-list arg-tmp-ids)])
          (when arg-tmp-id
            (out "__runbase[~a] = ~a;" (- i n) (cify arg-tmp-id))))
+       ;; For any argument that was skipped because it's already in
+       ;; place, record that we need it live to here:
+       (for ([arg-id (in-list arg-ids)]
+             [arg-tmp-id (in-list arg-tmp-ids)]
+             [rand (in-list rands)])
+         (unless (or arg-id arg-tmp-id)
+           (out "/* in place: ~a */" (cify (unref rand)))
+           (ref-use! rand state)))
        (when any-simple?
          (out-close "}"))
        ;; Set the runstack pointer to the argument start, then jump:
@@ -695,13 +693,15 @@
          [(and (eq? known-target-lam (tail-return-lam ret))
                (= n (args-length (tail-return-self-args ret))))
           (hash-set! (lam-loop-targets (tail-return-lam ret)) n #t)
+          (for ([free-var-ref (in-list (lam-free-var-refs known-target-lam))])
+            (ref-implicit-use! (ref-id free-var-ref) state))
           (out "goto __recur_~a_~a;" (cify (lam-id known-target-lam)) n)]
          [else
           (set-lam-need-entry?! known-target-lam #t)
           (set-lam-max-jump-argc! known-target-lam (max n (lam-max-jump-argc known-target-lam)))
           (out "__argv = __runbase - ~a;" n)
           (out "__argc = ~a;" n)
-          (unless (null? (lam-free-vars known-target-lam))
+          (unless (null? (lam-free-var-refs known-target-lam))
             (out "__self = top.~a;" (cify (lam-id known-target-lam))))
           (out "goto __entry_~a;" (cify (lam-id known-target-lam)))])]
       ;; Non-tail call to a known-target:
@@ -731,11 +731,11 @@
       [else
        (when in-lam (set-lam-under-lambda?! lam #t))
        (define name (format "~a" (lam-id lam)))
-       (define free-vars (get-free-vars e env lambdas knowns top-names state))
+       (define free-var-refs (get-free-vars e env lambdas knowns top-names state))
        (define index-in-closure? (pair? (cdr (vehicle-lams (lam-vehicle lam)))))
        (define-values (min-a max-a) (lambda-arity e #:precise-cases? #t))
        (cond
-         [(and (null? free-vars)
+         [(and (null? free-var-refs)
                (not index-in-closure?))
           (runstack-sync! runstack)
           (return ret runstack #:can-omit? #t #:can-pre-pop? #t
@@ -743,7 +743,7 @@
                           (if (string? max-a) "case_" "")
                           (cify (lam-id lam)) name min-a max-a))]
          [else
-          (define len (+ (length free-vars) (if index-in-closure? 1 0)))
+          (define len (+ (length free-var-refs) (if index-in-closure? 1 0)))
           (out-open "{")
           (define clo-ids (for/list ([i (in-range len)])
                             (genid '__clo)))
@@ -751,9 +751,12 @@
             (runstack-push! runstack id))
           (when index-in-closure?
             (out "~a = scheme_make_integer(~a);" (runstack-assign runstack (car clo-ids)) (lam-index lam)))
-          (for ([free-var (in-list free-vars)]
+          (for ([free-var-ref (in-list free-var-refs)]
                 [clo-id (in-list (if index-in-closure? (cdr clo-ids) clo-ids))])
-            (out "~a = ~a;" (runstack-assign runstack clo-id) (runstack-ref runstack free-var)))
+            (ref-use! free-var-ref state)
+            (out "~a = ~a;"
+                 (runstack-assign runstack clo-id)
+                 (runstack-ref runstack (ref-id free-var-ref) #:last-use? (ref-last-use? free-var-ref))))
           (runstack-sync! runstack)
           (return ret runstack #:can-omit? #t
                   (format "scheme_make_prim_closure_w_~aarity(~a, ~a, ~a, ~s, ~a, ~a)"
