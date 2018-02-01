@@ -146,6 +146,20 @@ static int __same_obj(Scheme_Object *a, Scheme_Object *b)
   return SAME_OBJ(a, b);
 }
 
+static Scheme_Object *__make_struct(int c)
+{
+  return scheme_malloc_tagged(sizeof(Scheme_Structure) + (((c) - mzFLEX_DELTA) * sizeof(Scheme_Object *)));
+}
+
+static void __struct_set_type(Scheme_Object *s, Scheme_Object *_st)
+{
+  Scheme_Struct_Type *stype = (Scheme_Struct_Type *)_st;
+  s->type = (stype->proc_attr ? scheme_proc_struct_type : scheme_structure_type);
+  ((Scheme_Structure *)s)->stype = stype;
+}
+
+#define __STRUCT_ELS(o) (((Scheme_Structure *)(o))->slots)
+
 static int __is_struct_instance(Scheme_Object *v, Scheme_Object *_st)
 {
   Scheme_Struct_Type *st = (Scheme_Struct_Type *)_st;

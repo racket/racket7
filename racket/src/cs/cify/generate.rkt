@@ -446,6 +446,13 @@
       [(and (symbol? rator)
             (inline-function rator n knowns))
        (generate-inline-app ret rator rands n in-lam env)]
+      [(and (symbol? rator)
+            (let ([k (hash-ref knowns rator #f)])
+              (and (struct-constructor? k)
+                   (struct-info-pure-constructor? (struct-constructor-si k))
+                   k)))
+       => (lambda (k)
+            (generate-inline-construct ret k rands n in-lam env))]
       [else
        (generate-general-app ret rator rands n in-lam env)]))
 
@@ -476,6 +483,42 @@
     (return ret runstack #:can-pre-pop? #t s)
     (runstack-pop! runstack tmp-count)
     (unless all-simple? (out-close "}")))
+
+  (define (generate-inline-construct ret k rands n in-lam env)
+    (define si (struct-constructor-si k))
+    (out-open "{")
+    (define struct-tmp-id (genid '__structtmp))
+    (out "Scheme_Object *~a;" (cify struct-tmp-id))
+    (runstack-sync! runstack)
+    (out "~a = __malloc_struct(~a);" (cify struct-tmp-id) (struct-info-field-count si))
+    (out "__struct_set_type(~a, top.~a);" (cify struct-tmp-id) (cify (struct-info-struct-id si)))
+    (define all-simple? (for/and ([rand (in-list rands)])
+                          (simple? rand state knowns)))
+    (define struct-id (and (not all-simple?) (genid '__struct)))
+    (unless all-simple?
+      (out-open "{")
+      (runstack-push! runstack struct-id #:track-local? #t)
+      (out "~a = ~a;" (runstack-assign runstack struct-id) (cify struct-tmp-id)))
+    (for ([rand (in-list rands)]
+          [i (in-naturals)])
+      (define to-struct-s (format "__STRUCT_ELS(~a)[~a] ="
+                                  (if all-simple?
+                                      (cify struct-tmp-id)
+                                      (runstack-ref runstack struct-id))
+                                  i))
+      (generate (if all-simple?
+                    to-struct-s
+                    (format "~a =" (cify struct-tmp-id)))
+                rand in-lam env)
+      (unless all-simple?
+        (out "~a ~a;" to-struct-s (cify struct-tmp-id))))
+    (return ret runstack (if all-simple?
+                             (cify struct-tmp-id)
+                             (runstack-ref runstack struct-id)))
+    (unless all-simple?
+      (runstack-pop! runstack 1)
+      (out-close "}"))
+    (out-close "}"))
 
   (define (generate-general-app ret rator rands n in-lam env)
     (define known-target-lam (let ([f (hash-ref knowns rator #f)])

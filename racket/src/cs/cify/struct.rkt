@@ -8,7 +8,7 @@
          (struct-out struct-accessor)
          (struct-out struct-mutator))
 
-(struct struct-info (struct-id field-count authentic?))
+(struct struct-info (struct-id field-count authentic? pure-constructor?))
 (struct struct-constructor (si))
 (struct struct-predicate (si))
 (struct struct-accessor (si pos))
@@ -44,10 +44,18 @@
                   (exact-nonnegative-integer? fields)
                   (= (length acc/muts) (length make-acc/muts)))
              (define parent-field-count (if parent (struct-info-field-count parent) 0))
+             (define pure-constructor?
+               ;; pure if no guard and no prop:chaperone-unsafe-undefined
+               (and (or (not parent)
+                        (struct-info-pure-constructor? parent))
+                    (or ((length rest) . < . 5)
+                        (not (list-ref rest 4)))
+                    (not (includes-property? 'prop:chaperone-unsafe-undefined))))
              (define si (struct-info
                          struct:s
                          (+ fields parent-field-count)
-                         (includes-property? 'prop:authentic)))
+                         (includes-property? 'prop:authentic)
+                         pure-constructor?))
              (let* ([knowns (hash-set knowns struct:s si)]
                     [knowns (hash-set knowns make-s (struct-constructor si))]
                     [knowns (hash-set knowns s? (struct-predicate si))])
