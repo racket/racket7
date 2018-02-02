@@ -1,5 +1,6 @@
 #lang racket/base
-(require "match.rkt"
+(require racket/pretty
+         "match.rkt"
          "arg.rkt"
          "state.rkt"
          "union.rkt")
@@ -102,6 +103,12 @@
     (match e
       [`(define ,id ,rhs)
        `(define ,id ,(wrap-ref rhs env))]
+      [`(define-values (,ids ...) (values ,rhss ...))
+       (wrap-ref `(begin
+                    ,@(for/list ([id (in-list ids)]
+                                 [rhs (in-list rhss)])
+                        `(define ,id ,rhs)))
+                 env)]
       [`(define-values ,ids ,rhs)
        `(define-values ,ids ,(wrap-ref rhs env))]
       [`(begin ,e)
@@ -121,12 +128,9 @@
        `(if ,(wrap-ref tst env) ,(wrap-ref thn env) ,(wrap-ref els env))]
       [`(with-continuation-mark ,key ,val ,body)
        `(with-continuation-mark ,(wrap-ref key env) ,(wrap-ref val env) ,(wrap-ref body env))]
-      [`(let . ,_)
-       (wrap-let-ref e env)]
-      [`(letrec . ,_)
-       (wrap-let-ref e env)]
-      [`(letrec* . ,_)
-       (wrap-let-ref e env)]
+      [`(let . ,_) (wrap-let-ref e env)]
+      [`(letrec . ,_) (wrap-let-ref e env)]
+      [`(letrec* . ,_) (wrap-let-ref e env)]
       [`(set! ,id ,rhs)
        `(set! ,(wrap-ref id env) ,(wrap-ref rhs env))]
       [`(call-with-values (lambda () (values ,val-es ...)) (lambda (,arg-ids ...) . ,body))
@@ -149,14 +153,16 @@
       [`,_
        (cond
          [(symbol? e)
-          (cond
-            [(propagate? (hash-ref env e #f))
-             (make-ref (hash-ref env e #f))]
-            [else
-             (if (or (hash-ref top-names e #f)
-                     (hash-ref prim-names e #f))
-                 e
-                 (make-ref e))])]
+          (let loop ([e e])
+            (define r (hash-ref env e #f))
+            (cond
+              [(propagate? r)
+               (loop r)]
+              [else
+               (if (or (hash-ref top-names e #f)
+                       (hash-ref prim-names e #f))
+                   e
+                   (make-ref e))]))]
          [else e])]))
 
   (define (wrap-body-ref es env)
@@ -174,13 +180,15 @@
        (define new-e
          (cond
            [(for/and ([id (in-list ids)])
-              (propagate? (hash-ref body-env id #f)))
+              (and (not (hash-ref top-names id #f))
+                   (propagate? (hash-ref body-env id #f))))
             ;; All propagated
             (wrap-ref `(begin . ,body) body-env)]
            [else
             `(,let-id ,(for/list ([id (in-list ids)]
                                   [rhs (in-list rhss)]
-                                  #:unless (propagate? (hash-ref body-env id #f)))
+                                  #:unless (and (not (hash-ref top-names id #f))
+                                                (propagate? (hash-ref body-env id #f))))
                          `[,id ,(wrap-ref rhs rhs-env)])
                       . ,(wrap-body-ref body body-env))]))
        ;; For each variable that is propagated, remove
@@ -195,7 +203,71 @@
        ;; Return form with wrapped refs:
        new-e]))
 
-  (wrap-ref e #hasheq()))
+  (wrap-ref e (top-env e top-names prim-names state)))
+
+;; ----------------------------------------
+
+;; Extract an initial copy-propagation mapping for top names
+
+(define (top-env e top-names prim-names state)
+  (define (top-env e for-id env)
+    (match e
+      [`(define ,id ,rhs)
+       (top-env rhs id env)]
+      [`(define-values (,ids ...) (values ,rhss ...))
+       (for/fold ([env env]) ([id (in-list ids)]
+                              [rhs (in-list rhss)])
+         (top-env rhs id env))]
+      [`(define-values ,ids ,rhs)
+       (top-env rhs #f env)]
+      [`(begin ,e ,es ...)
+       (top-body-env es for-id env)]
+      [`(begin0 ,e ,es ...)
+       (top-body-env es #f (top-env e for-id env))]
+      [`(lambda . ,_) env]
+      [`(case-lambda . ,_) env]
+      [`(quote ,_) env]
+      [`(if ,tst ,thn ,els)
+       (top-env tst #f (top-env thn #f (top-env els #f env)))]
+      [`(with-continuation-mark ,key ,val ,body)
+       (top-env key #f (top-env val #f (top-env body for-id env)))]
+      [`(let . ,_) (top-let-env e for-id env)]
+      [`(letrec . ,_) (top-let-env e for-id env)]
+      [`(letrec* . ,_) (top-let-env e for-id env)]
+      [`(set! ,id ,rhs) (top-env rhs #f env)]
+      [`(#%app . ,r) (top-env r for-id env)]
+      [`(,rator ,rands ...)
+       (top-body-env e #f env)]
+      [`,_
+       (cond
+         [(symbol? e)
+          (if (and for-id
+                   (hash-ref top-names for-id #f)
+                   (or (hash-ref top-names e #f)
+                       (hash-ref prim-names e #f))
+                   (not (mutated? (hash-ref state e #f)))
+                   (not (mutated? (hash-ref state for-id #f))))
+              (hash-set env for-id e)
+              env)]
+         [else env])]))
+
+  (define (top-body-env es for-id env)
+    (cond
+      [(null? es) env]
+      [(null? (cdr es)) (top-env (car es) for-id env)]
+      [else (top-body-env (cdr es) for-id (top-env (car es) #f env))]))
+
+  (define (top-let-env e for-id env)
+    (match e
+      [`(,let-id ([,ids ,rhss] ...) . ,body)
+       (top-body-env
+        body
+        for-id
+        (for/fold ([env env]) ([id (in-list ids)]
+                               [rhs (in-list rhss)])
+          (top-env rhs id env)))]))
+
+  (top-env e #f #hasheq()))
 
 ;; ----------------------------------------
 
