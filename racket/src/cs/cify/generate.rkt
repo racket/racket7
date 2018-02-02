@@ -152,6 +152,7 @@
        (out "~a = SCHEME_PRIM_CLOSURE_ELS(__self)[~a];" (runstack-assign runstack id) (+ closure-offset i)))
      (when (hash-ref (lam-loop-targets lam) n #f)
        (out-margin "__recur_~a_~a:" (cify name) n))
+     (clear-unused-ids ids runstack state)
      (box-mutable-ids ids runstack state top-names)
      (generate (tail-return name lam ids) `(begin . ,body) lam (add-args (lam-env lam) ids) runstack
                knowns top-names state lambdas prim-names)
@@ -175,6 +176,18 @@
                            (runstack-assign runstack id))))
            (runstack-sync! runstack)
            (out "~a = scheme_box_variable(~a);" s s))
+         (loop (cdr ids))]))))
+
+(define (clear-unused-ids ids runstack state)
+  (let loop ([ids ids])
+    (unless (null? ids)
+      (cond
+        [(symbol? ids) (loop (list ids))]
+        [else
+         (define id (car ids))
+         (when (and (not (referenced? (hash-ref state id #f)))
+                    (not (state-implicitly-referenced? state id)))
+           (runstack-stage-clear! runstack id state))
          (loop (cdr ids))]))))
 
 ;; ----------------------------------------
@@ -261,13 +274,20 @@
                                               [(eq? tst-id immediate-tst-id) (cify tst-id)]
                                               [tst-id (runstack-ref runstack tst-id)])))
                                   ", "))))
+       (define-values (thn-refs els-refs) (let ([p (hash-ref state e '(#hasheq() . #hasheq()))])
+                                            (values (car p) (cdr p))))
        (define pre-branch (runstack-branch-before! runstack))
        (define pre-ref-use (ref-use-branch-before! state))
+       (runstack-stage-clear-unused! runstack thn-refs els-refs state)
        (generate ret thn in-lam env)
        (out-close+open "} else {")
+       (runstack-stage-clear-unused! runstack els-refs thn-refs state)
        (define post-branch (runstack-branch-other! runstack pre-branch))
        (define post-ref-use (ref-use-branch-other! state pre-ref-use))
        (generate ret els in-lam env)
+       (when (state-first-pass? state)
+         (define-values (thn-refs els-refs) (runstack-branch-refs runstack pre-branch post-branch))
+         (hash-set! state e (cons thn-refs els-refs)))
        (runstack-branch-merge! runstack pre-branch post-branch)
        (ref-use-branch-merge! state pre-ref-use post-ref-use)
        (out-close "}")
@@ -690,8 +710,10 @@
              [arg-tmp-id (in-list arg-tmp-ids)]
              [rand (in-list rands)])
          (unless (or arg-id arg-tmp-id)
-           (out "/* in place: ~a */" (cify (unref rand)))
-           (ref-use! rand state)))
+           (out "/* in place: ~a */" (cify (ref-id rand)))
+           (runstack-ref-use! runstack rand)
+           (ref-use! rand state)
+           (state-implicit-reference! state (ref-id rand))))
        (when any-simple?
          (out-close "}"))
        ;; Set the runstack pointer to the argument start, then jump:

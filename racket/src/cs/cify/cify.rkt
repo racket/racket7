@@ -75,7 +75,7 @@
     (define e (function-e f))
     (hash-set! lambdas e (make-lam id e #:can-call-direct? #t)))
 
-  (define knowns (hash-union struct-knowns functions))
+  (define knowns (hash-directed-union struct-knowns functions))
 
   ;; Generate top-level sequence just to set free-variable lists and
   ;; other state for each lambda:

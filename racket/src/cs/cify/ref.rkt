@@ -24,7 +24,7 @@
 ;; This pass eliminates `#%app`, so other passes don't have to
 ;; recognize it.
 
-(struct ref (id [last-use? #:mutable]))
+(struct ref (id [last-use? #:mutable]) #:transparent)
 (define (make-ref id) (ref id #f))
 
 (define (symbol-ref? e) (or (symbol? e) (ref? e)))

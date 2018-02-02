@@ -1,12 +1,16 @@
 #lang racket/base
 (require "out.rkt"
          "id.rkt"
-         "ref.rkt")
+         "ref.rkt"
+         "state.rkt"
+         "union.rkt"
+         "sort.rkt")
 
 (provide make-runstack
          runstack-push!
          runstack-pop!
          runstack-ref
+         runstack-ref-use!
          runstack-assign
          make-runstack-assign
          runstack-stack-ref
@@ -14,9 +18,13 @@
          runstack-sync!
          runstack-synced!
          runstack-max-depth
+
          runstack-branch-before!
          runstack-branch-other!
-         runstack-branch-merge!)
+         runstack-branch-merge!
+         runstack-branch-refs
+         runstack-stage-clear-unused!
+         runstack-stage-clear!)
 
 (struct runstack (rs-state    ; shared state table
                   depth       ; curent stack depth
@@ -26,7 +34,9 @@
                   var-depths  ; pushed var -> 'local or distance from stack start
                   need-inits  ; set of pushed vars that are not yet initialized
                   unsynced    ; pushed vars that haven't yet lived through a GC boundary
-                  unsynced-refs) ; per-var refs that haven't yet lived through a GC boundary
+                  unsynced-refs ; per-var refs that haven't yet lived through a GC boundary
+                  all-refs    ; per-var, all references encountered
+                  staged-clears) ; clears staged by branching
   #:mutable)
 
 (define (make-runstack state)
@@ -34,7 +44,17 @@
                        (let ([ht (make-hasheq)])
                          (hash-set! state '#:runstack ht)
                          ht)))
-  (runstack rs-state 0 0 #f '() (make-hasheq) (make-hasheq) (make-hasheq) (make-hasheq)))
+  (runstack rs-state
+            0 ; depth
+            0 ; max-depth
+            #f ; sync-dept
+            '() ; vars
+            (make-hasheq) ; var-depths
+            (make-hasheq) ; need-inits
+            (make-hasheq) ; unsyned
+            (make-hasheq) ; unsynced-refs
+            #hasheq()     ; all-refs
+            #hasheq()))   ; staged-clears
 
 (define (runstack-push! rs id
                         #:referenced? [referenced? #t]
@@ -81,13 +101,16 @@
           (for ([ref (in-list refs)])
             (set-ref-last-use?! ref #f))))
       (set-runstack-vars! rs (cdr (runstack-vars rs)))
+      (set-runstack-all-refs! rs (hash-remove (runstack-all-refs rs) var))
       (hash-remove! var-depths var)
+      (set-runstack-staged-clears! rs (hash-remove (runstack-staged-clears rs) var))
       (loop (sub1 n)))))
 
 (define (runstack-ref rs id #:assign? [assign? #f] #:ref [ref #f])
   (when ref
-    ;; Remember the rest, so we can clear its `last-use?` if no sync
-    ;; happends before the variable is popped
+    (runstack-ref-use! rs ref)
+    ;; Remember the ref, so we can clear its `last-use?` if no sync
+    ;; happens before the variable is popped
     (hash-set! (runstack-unsynced-refs rs) id
                (cons ref (hash-ref (runstack-unsynced-refs rs) id '()))))
   (cond
@@ -97,6 +120,9 @@
      (format "__last_use(__runbase, ~a)" (cify id))]
     [else
      (format "__runbase[~a]"  (cify id))]))
+
+(define (runstack-ref-use! rs ref)
+  (set-runstack-all-refs! rs (hash-set2 (runstack-all-refs rs) (ref-id ref) ref #t)))
 
 (define (runstack-assign rs id)
   (hash-remove! (runstack-need-inits rs) id)
@@ -114,6 +140,7 @@
 (define (runstack-sync! rs)
   (hash-clear! (runstack-unsynced rs))
   (hash-clear! (runstack-unsynced-refs rs))
+  (runstack-generate-staged-clears! rs)
   (define vars (sort (hash-keys (runstack-need-inits rs)) symbol<?))
   (for ([var (in-list vars)])
     (out "~a = __RUNSTACK_INIT_VAL;" (runstack-assign rs var)))
@@ -126,23 +153,36 @@
   (hash-clear! (runstack-unsynced rs))
   (hash-clear! (runstack-unsynced-refs rs)))
 
-(struct runstack-branch-state (need-inits sync-depth unsynced-refs))
+(struct runstack-branch-state (need-inits sync-depth unsynced-refs all-refs staged-clears))
 
 (define (runstack-branch-before! rs)
   (define unsynced-refs (runstack-unsynced-refs rs))
+  (define all-refs (runstack-all-refs rs))
   (set-runstack-unsynced-refs! rs (make-hasheq))
+  (set-runstack-all-refs! rs #hasheq())
   (runstack-branch-state (hash-copy (runstack-need-inits rs))
                          (runstack-sync-depth rs)
-                         unsynced-refs))
+                         unsynced-refs
+                         all-refs
+                         (runstack-staged-clears rs)))
 
 (define (runstack-branch-other! rs pre)
   (begin0
     (runstack-branch-state (hash-copy (runstack-need-inits rs))
                            (runstack-sync-depth rs)
-                           (runstack-unsynced-refs rs))
+                           (runstack-unsynced-refs rs)
+                           (runstack-all-refs rs)
+                           (runstack-staged-clears rs))
     (set-runstack-need-inits! rs (runstack-branch-state-need-inits pre))
     (set-runstack-sync-depth! rs (runstack-branch-state-sync-depth pre))
-    (set-runstack-unsynced-refs! rs (make-hasheq))))
+    (set-runstack-unsynced-refs! rs (make-hasheq))
+    (set-runstack-all-refs! rs #hasheq())
+    (set-runstack-staged-clears! rs (runstack-branch-state-staged-clears pre))))
+
+;; Called after "then" branch, before merge:
+(define (runstack-branch-refs runstack pre post)
+  (values (runstack-branch-state-all-refs post)
+          (runstack-all-refs runstack)))
 
 (define (runstack-branch-merge! rs pre post)
   (for ([(k v) (in-hash (runstack-branch-state-need-inits post))])
@@ -151,7 +191,12 @@
     (set-runstack-sync-depth! rs #f))
   (set-runstack-unsynced-refs! rs (union-unsynced-refs! (runstack-unsynced-refs rs)
                                                         (runstack-branch-state-unsynced-refs pre)
-                                                        (runstack-branch-state-unsynced-refs post))))
+                                                        (runstack-branch-state-unsynced-refs post)))
+  (set-runstack-all-refs! rs (union-all-refs (runstack-all-refs rs)
+                                             (runstack-branch-state-all-refs pre)
+                                             (runstack-branch-state-all-refs post)))
+  (set-runstack-staged-clears! rs (hash-union (runstack-staged-clears rs)
+                                              (runstack-branch-state-staged-clears post))))
 
 (define union-unsynced-refs!
   (case-lambda
@@ -165,7 +210,67 @@
         (union-unsynced-refs! a b)
         (union-unsynced-refs! a c)])]
     [(a b)
-     (for ([(k l) (in-hash b)])
-       (hash-set! a k (append l (hash-ref a k '()))))
+     (for ([(id l) (in-hash b)])
+       (hash-set! a id (append l (hash-ref a id '()))))
      a]))
 
+(define union-all-refs
+  (case-lambda
+    [(a b c)
+     (cond
+       [((hash-count b) . > . (hash-count a))
+        (union-all-refs b a c)]
+       [((hash-count c) . > . (hash-count b))
+        (union-all-refs a c b)]
+       [else
+        (union-all-refs (union-all-refs a b) c)])]
+    [(a b)
+     (for/fold ([a a]) ([(id b-refs) (in-hash b)])
+       (define a-refs (hash-ref a id #hasheq()))
+       (hash-set a id (hash-union a-refs b-refs)))]))
+
+(define (hash-set2 ht key key2 val)
+  (hash-set ht key
+            (hash-set (hash-ref ht key #hasheq())
+                      key2
+                      val)))
+
+;; ----------------------------------------
+
+;; If `other-refs` includes a last use of a variable that
+;; is not referenced in `my-refs`, then stage a clear
+;; operation for space safety. The clear operation is emitted
+;; only if the variable is still live by the time the runstack
+;; is synced.
+(define (runstack-stage-clear-unused! rs my-refs other-refs state)
+  (for* ([refs (in-hash-values other-refs)]
+         [ref (in-hash-keys refs)])
+    (define id (ref-id ref))
+    (when (and (ref-last-use? ref)
+               (not (hash-ref my-refs id #f)))
+      (runstack-stage-clear! rs id state))))
+
+;; A danger of lazy clearing is that we might push the same
+;; clearing operation to two different branches. It would be
+;; better to clear eagerly at the start of a branch if there
+;; will definitely by a sync point later, but we don't currently
+;; have the "sync point later?" information.
+(define (runstack-stage-clear! rs id state)
+  (set-runstack-staged-clears!
+   rs
+   (hash-set (runstack-staged-clears rs)
+             id
+             ;; the `get-pos` thunk:
+             (lambda ()
+               (cond
+                 [(not (referenced? (hash-ref state id #f)))
+                  ;; This can happen in we need to clear a variable that is
+                  ;; otherwise only implicitly passed in a tail call:
+                  (format "-~a /* ~a */" (runstack-ref-pos rs id) (cify id))]
+                 [else
+                  (cify id)])))))
+
+(define (runstack-generate-staged-clears! rs)
+  (for ([(id get-pos) (in-sorted-hash (runstack-staged-clears rs) symbol<?)])
+    (out "__no_use(__runbase, ~a);" (get-pos)))
+  (set-runstack-staged-clears! rs #hasheq()))

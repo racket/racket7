@@ -7,7 +7,9 @@
          referenced?
          state-first-pass?
          state-tops-pass?
-         adjust-state!)
+         adjust-state!
+         state-implicit-reference!
+         state-implicitly-referenced?)
 
 ;; The state table maps
 ;;
@@ -18,8 +20,15 @@
 ;;  * `lam` records for union-find of functions
 ;;    that tail-call each other
 ;;
+;;  * `(if ...)` expressions to a table of used
+;;    references for each branch
+;;
 ;;  * '#:runstack to information recorded and used
 ;;     by "runstack.rkt"
+;;
+;;  * '#:implicit to a table of implicity referenced
+;;    variables; an implicit reference happens when
+;;    a variable is passed in-place in a tail call
 ;;
 (define (make-state) (make-hasheq))
 
@@ -37,6 +46,17 @@
   (if (zero? new-n)
       (hash-remove! state id)
       (hash-set! state id new-n)))
+
+(define (state-implicit-reference! state id)
+  (define ir (or (hash-ref state '#:implicit #f)
+                 (let ([ht (make-hasheq)])
+                   (hash-set! state '#:implicit ht)
+                   ht)))
+  (hash-set! ir id #t))
+  
+(define (state-implicitly-referenced? state id)
+  (define ir (hash-ref state '#:implicit #f))
+  (and ir (hash-ref ir id #f)))
 
 ;; ----------------------------------------
 

@@ -326,6 +326,11 @@ static MZ_INLINE Scheme_Object *__last_use(Scheme_Object **r, int i)
   return v;
 }
 
+static MZ_INLINE void __no_use(Scheme_Object **r, int i)
+{
+  r[i] = NULL;
+}
+
 #ifndef __VALIDATE_DEBUG
 
 # define SCHEME_UNBOX_VARIABLE(var) (*(Scheme_Object **)(var))
