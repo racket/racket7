@@ -651,7 +651,10 @@
       ;; Special case for `values`:
       [(eq? rator 'values)
        (runstack-sync! runstack) ; now argv == runstack
-       (return ret runstack #:can-omit? #t (format "scheme_values(~a, *__runstack_ptr)" n))]
+       (return ret runstack #:can-omit? #t
+               (if (zero? n)
+                   "__zero_values()"
+                   (format "scheme_values(~a, *__runstack_ptr)" n)))]
       ;; Call to a non-inlined primitive or to an unknown target
       [(not direct?)
        (define rator-s (if rator-id

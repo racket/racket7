@@ -129,6 +129,19 @@
        (wrap-let-ref e env)]
       [`(set! ,id ,rhs)
        `(set! ,(wrap-ref id env) ,(wrap-ref rhs env))]
+      [`(call-with-values (lambda () (values ,val-es ...)) (lambda (,arg-ids ...) . ,body))
+       (wrap-ref
+        `(let ,(for/list ([arg-id (in-list arg-ids)]
+                          [val-e (in-list val-es)])
+                 `[,arg-id ,val-e])
+           . ,body)
+        env)]
+      [`(call-with-values (lambda () (let ,binds . ,body)) ,target)
+       (wrap-ref `(let ,binds (call-with-values (lambda () . ,body) ,target)) env)]
+      [`(call-with-values (lambda () (begin ,e)) ,target)
+       (wrap-ref `(call-with-values (lambda () ,e) ,target) env)]
+      [`(call-with-values (lambda () (begin ,e . ,r)) ,target)
+       (wrap-ref `(begin ,e (call-with-values (lambda () (begin . ,r)) ,target)) env)]
       [`(#%app . ,r)
        (wrap-ref r env)]
       [`(,rator ,rands ...)

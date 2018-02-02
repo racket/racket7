@@ -389,6 +389,14 @@ static Scheme_Object *__unsafe_immutable_hash_iterate_next(Scheme_Object *ht, Sc
   return scheme_unsafe_hash_tree_next((Scheme_Hash_Tree *)ht, i);
 }
 
+static Scheme_Object *__zero_values()
+{
+  Scheme_Thread *p = scheme_current_thread;
+  p->ku.multiple.count = 0;
+  p->ku.multiple.array = NULL;
+  return SCHEME_MULTIPLE_VALUES;
+}
+
 static MZ_INLINE Scheme_Object *__last_use(Scheme_Object **r, int i)
 {
   Scheme_Object *v = r[i];
