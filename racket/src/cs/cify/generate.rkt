@@ -65,23 +65,29 @@
 
 (define (generate-vehicle vehicle knowns top-names state lambdas prim-names)
   (out-next)
-  (generate-prototype vehicle #:open? #t)
   (define lams (vehicle-lams vehicle))
   (define multi? (pair? (cdr lams)))
-  (out "Scheme_Object ***__runstack_ptr = &MZ_RUNSTACK;")
-  (out "Scheme_Object **__runbase, **__orig_runstack = *__runstack_ptr;")
-  (out-open "if (__check_~arunstack_space(~a, __orig_runstack))"
-            (if (vehicle-overflow-check? vehicle) "overflow_or_" "")
-            (vehicle-max-runstack-depth vehicle))
-  (out "return __handle_overflow_or_space(~a, __argc, __argv, ~a);"
-       (if (vehicle-closure? vehicle) "__self" (format "top.~a" (cify (vehicle-id vehicle))))
-       (vehicle-max-runstack-depth vehicle))
-  (out-close!)
-  (out-open "if (__argv == __orig_runstack)")
-  (out "__runbase = __argv + __argc;")
-  (out-close+open "else")
-  (out "__runbase = __orig_runstack;")
-  (out-close!)
+  (define leaf? (and (not multi?)
+                     (lam-leaf? (car lams))
+                     (zero? (hash-count (lam-loop-targets (car lams))))
+                     (lambda-no-rest-args? (lam-e (car lams)))))
+  (when leaf? (out "/* leaf */"))
+  (generate-prototype vehicle #:open? #t)
+  (unless leaf?
+    (out "Scheme_Object ***__runstack_ptr = &MZ_RUNSTACK;")
+    (out "Scheme_Object **__runbase, **__orig_runstack = *__runstack_ptr;")
+    (out-open "if (__check_~arunstack_space(~a, __orig_runstack))"
+              (if (vehicle-overflow-check? vehicle) "overflow_or_" "")
+              (vehicle-max-runstack-depth vehicle))
+    (out "return __handle_overflow_or_space(~a, __argc, __argv, ~a);"
+         (if (vehicle-closure? vehicle) "__self" (format "top.~a" (cify (vehicle-id vehicle))))
+         (vehicle-max-runstack-depth vehicle))
+    (out-close!)
+    (out-open "if (__argv == __orig_runstack)")
+    (out "__runbase = __argv + __argc;")
+    (out-close+open "else")
+    (out "__runbase = __orig_runstack;")
+    (out-close!))
   (when multi?
     (out-open "switch(SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(__self)[0])) {")
     (for ([lam (in-list lams)]
@@ -91,46 +97,57 @@
   (for ([lam (in-list lams)])
     (when (or multi? (lam-need-entry? lam))
       (out-margin "__entry_~a:" (cify (lam-id lam))))
-    (generate-lambda lam multi? (or multi? (vehicle-overflow-check? vehicle)) knowns top-names state lambdas prim-names))
+    (generate-lambda lam multi? leaf? (or multi? (vehicle-overflow-check? vehicle)) knowns top-names state lambdas prim-names))
   (out-close "}"))
 
-(define (generate-lambda lam multi? bracket? knowns top-names state lambdas prim-names)
+(define (generate-lambda lam multi? leaf? bracket? knowns top-names state lambdas prim-names)
   (define e (lam-e lam))
   (define id (lam-id lam))
   (define free-var-refs (lam-free-var-refs lam))
   (define closure-offset (if multi? 1 0))
   (when bracket? (out-open "{"))
-  (match e
-    [`(lambda . ,_) (generate-lambda-case lam e free-var-refs closure-offset knowns top-names state lambdas prim-names)]
-    [`(case-lambda [,idss . ,bodys] ...)
-     (for ([ids (in-list idss)]
-           [body (in-list bodys)]
-           [i (in-naturals)])
-       (out-open "~aif (__argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
-       (generate-lambda-case lam `(lambda ,ids . ,body) free-var-refs closure-offset  knowns top-names state lambdas prim-names)
-       (out-close "}"))
-     (out "else return NULL;")])
-  (when bracket? (out-close "}")))
+  (define next-leaf?
+    (match e
+      [`(lambda . ,_) (generate-lambda-case lam leaf? e free-var-refs closure-offset knowns top-names state lambdas prim-names)]
+      [`(case-lambda [,idss . ,bodys] ...)
+       (define next-leaf?
+         (for/fold ([next-leaf? #t])  ([ids (in-list idss)]
+                                       [body (in-list bodys)]
+                                       [i (in-naturals)])
+           (out-open "~aif (__argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
+           (define this-next-leaf?
+             (generate-lambda-case lam leaf? `(lambda ,ids . ,body) free-var-refs closure-offset  knowns top-names state lambdas prim-names))
+           (out-close "}")
+           (and next-leaf? this-next-leaf?)))
+       (out "else return NULL;")
+       next-leaf?]))
+  (when bracket? (out-close "}"))
+  (set-lam-leaf?! lam next-leaf?))
 
-(define (generate-lambda-case lam e free-var-refs closure-offset knowns top-names state lambdas prim-names)
+;; Returns a boolean indicating whether the functon can be a leaf
+(define (generate-lambda-case lam leaf? e free-var-refs closure-offset knowns top-names state lambdas prim-names)
   (define name (lam-id lam))
   (match e
     [`(lambda ,ids . ,body)
      (define n (args-length ids))
-     (cond
-       [(null? ids)
-        ;; No args
-        (void)]
-       [(list? ids)
-        ;; No rest arg
-        (out "__ensure_args_in_place(~a, __argv, __runbase);" (length ids))]
-       [else
-        (out "~a__ensure_args_in_place_rest(__argc, __argv, __runbase, ~a, 1, ~a);"
-             (if (null? free-var-refs) "(void)" "__self =")
-             (args-length ids)
-             (if (null? free-var-refs) "NULL" "__self"))])
+     (unless leaf?
+       (cond
+         [(null? ids)
+          ;; No args
+          (void)]
+         [(list? ids)
+          ;; No rest arg
+          (out "__ensure_args_in_place(~a, __argv, __runbase);" (length ids))]
+         [else
+          (out "~a__ensure_args_in_place_rest(__argc, __argv, __runbase, ~a, 1, ~a);"
+               (if (null? free-var-refs) "(void)" "__self =")
+               (args-length ids)
+               (if (null? free-var-refs) "NULL" "__self"))]))
      (unless (null? ids) (out-open "{"))
-     ;; At this point, runstack == runbase - argument-count (including rest)
+     (when (and leaf? (for/or ([id (in-list ids)])
+                        (referenced? (hash-ref state id #f))))
+       (out "Scheme_Object **__runbase = __argv + ~a;" n))
+     ;; At this point, for a non-leaf, runstack == runbase - argument-count (including rest)
      (define runstack (make-runstack state))
      (define pushed-arg-count
        (let loop ([ids ids])
@@ -145,7 +162,7 @@
      (runstack-synced! runstack) ; since runstack = start of arguments
      ;; Unpack closure
      (for ([ref (in-list free-var-refs)])
-       (runstack-push! runstack (ref-id ref)))
+       (runstack-push! runstack (ref-id ref) #:local? leaf?))
      (for ([ref (in-list free-var-refs)]
            [i (in-naturals)])
        (define id (ref-id ref))
@@ -154,13 +171,14 @@
        (out-margin "__recur_~a_~a:" (cify name) n))
      (clear-unused-ids ids runstack state)
      (box-mutable-ids ids runstack state top-names)
-     (generate (tail-return name lam ids) `(begin . ,body) lam (add-args (lam-env lam) ids) runstack
+     (generate (tail-return name lam ids leaf?) `(begin . ,body) lam (add-args (lam-env lam) ids) runstack
                knowns top-names state lambdas prim-names)
      (runstack-pop! runstack pushed-arg-count)
      (unless (null? ids) (out-close "}"))
      (let ([vehicle (lam-vehicle lam)])
        (set-vehicle-max-runstack-depth! vehicle (max (runstack-max-depth runstack)
-                                                     (vehicle-max-runstack-depth vehicle))))]))
+                                                     (vehicle-max-runstack-depth vehicle))))
+     (not (runstack-ever-synced? runstack))]))
 
 (define (box-mutable-ids ids runstack state top-names)
   (let loop ([ids ids])

@@ -19,7 +19,8 @@
                 [index #:mutable]
                 [under-lambda? #:mutable] ; inside another function?
                 [moved-to-top? #:mutable]
-                [unused? #:mutable]))     ; in case a `lambda` gets dropped completely
+                [unused? #:mutable]       ; in case a `lambda` gets dropped completely
+                [leaf? #:mutable]))       ; never syncs runstack => GC-independent leaf
 
 (struct vehicle ([id #:mutable]
                  [lams #:mutable]
@@ -33,7 +34,7 @@
 (define (make-lam id e #:can-call-direct? [can-call-direct? #f])
   (define-values (min-argc max-argc) (lambda-arity e))
   (define a-vehicle (vehicle id '() #f min-argc 0 0 #f can-call-direct?))
-  (define a-lam (lam id e #f #f (make-hasheqv) 0 #f a-vehicle 0 #f #f #f))
+  (define a-lam (lam id e #f #f (make-hasheqv) 0 #f a-vehicle 0 #f #f #f #f))
   (set-vehicle-lams! a-vehicle (list a-lam))
   a-lam)
 

@@ -18,6 +18,7 @@
          runstack-sync!
          runstack-synced!
          runstack-max-depth
+         runstack-ever-synced?
 
          runstack-branch-before!
          runstack-branch-other!
@@ -36,7 +37,8 @@
                   unsynced    ; pushed vars that haven't yet lived through a GC boundary
                   unsynced-refs ; per-var refs that haven't yet lived through a GC boundary
                   all-refs    ; per-var, all references encountered
-                  staged-clears) ; clears staged by branching
+                  staged-clears ; clears staged by branching
+                  ever-synced?) ; whether the runstack is ever synced
   #:mutable)
 
 (define (make-runstack state)
@@ -45,25 +47,28 @@
                          (hash-set! state '#:runstack ht)
                          ht)))
   (runstack rs-state
-            0 ; depth
-            0 ; max-depth
-            #f ; sync-dept
-            '() ; vars
+            0             ; depth
+            0             ; max-depth
+            #f            ; sync-depth
+            '()           ; vars
             (make-hasheq) ; var-depths
             (make-hasheq) ; need-inits
             (make-hasheq) ; unsyned
             (make-hasheq) ; unsynced-refs
             #hasheq()     ; all-refs
-            #hasheq()))   ; staged-clears
+            #hasheq()     ; staged-clears
+            #f))          ; ever-synced?
 
 (define (runstack-push! rs id
                         #:referenced? [referenced? #t]
+                        #:local? [local? #f]
                         #:track-local? [track-local? #f])
   (set-runstack-vars! rs (cons id (runstack-vars rs)))
   (cond
-    [(and track-local?
-          referenced?
-          (eq? 'local (hash-ref (runstack-rs-state rs) id #f)))
+    [(or local?
+         (and track-local?
+              referenced?
+              (eq? 'local (hash-ref (runstack-rs-state rs) id #f))))
      ;; A previous pass determined that this variable will not
      ;; live across a GC boundary, so it can be stored in a C local.
      ;; Note that we're sharing a global table, even though an id
@@ -138,6 +143,7 @@
   (hash-ref (runstack-var-depths rs) id #f))
 
 (define (runstack-sync! rs)
+  (set-runstack-ever-synced?! rs #t)
   (hash-clear! (runstack-unsynced rs))
   (hash-clear! (runstack-unsynced-refs rs))
   (runstack-generate-staged-clears! rs)

@@ -3,6 +3,7 @@
 
 (provide add-args
          lambda-arity
+         lambda-no-rest-args?
          args-length
          compatible-args?)
 
@@ -49,6 +50,13 @@
                        -1
                        (max max-a new-max-a))
                    (cdr idss))]))])]))
+
+(define (lambda-no-rest-args? e)
+  (match e
+    [`(lambda ,ids . ,_) (list? ids)]
+    [`(case-lambda [,idss . ,_] ...)
+     (for/and ([ids (in-list idss)])
+       (list? ids))]))
 
 (define (args-length ids)
   (if (pair? ids) (add1 (args-length (cdr ids))) 0))

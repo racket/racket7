@@ -7,7 +7,7 @@
          return
          return-can-omit?)
 
-(struct tail-return (function-id lam self-args))
+(struct tail-return (function-id lam self-args leaf?))
 (struct multiple-return (prefix))
 (struct multiple-return/suffix multiple-return (generate-suffix))
 
@@ -19,6 +19,8 @@
       (cond
         [(tail-return? ret)
          (cond
+           [(tail-return-leaf? ret)
+            (out "return ~a;" s)]
            [can-pre-pop?
             (out "*__runstack_ptr = __orig_runstack;")
             (out "return ~a;" s)]
