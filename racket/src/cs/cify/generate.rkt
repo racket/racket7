@@ -40,12 +40,9 @@
 (define (generate-struct name names)
   (out-next)
   (out-open "struct ~a_t {" name)
-  (when (equal? name "prims")
-    (out "Scheme_Instance *__instance;"))
   (for ([name (in-sorted-hash-keys names symbol<?)])
     (out "Scheme_Object *~a;" (cify name)))
-  (out-close "};")
-  (out "static struct ~a_t ~a;" name name))
+  (out-close "};"))
 
 (define (generate-prototypes vehicles)
   (out-next)
@@ -68,7 +65,7 @@
   (define lams (vehicle-lams vehicle))
   (define multi? (pair? (cdr lams)))
   (define leaf? (and (not multi?)
-                     (lam-leaf? (car lams))
+                     (lam-can-leaf? (car lams))
                      (zero? (hash-count (lam-loop-targets (car lams))))
                      (lambda-no-rest-args? (lam-e (car lams)))))
   (when leaf? (out "/* leaf */"))
@@ -80,7 +77,7 @@
               (if (vehicle-overflow-check? vehicle) "overflow_or_" "")
               (vehicle-max-runstack-depth vehicle))
     (out "return __handle_overflow_or_space(~a, __argc, __argv, ~a);"
-         (if (vehicle-closure? vehicle) "__self" (format "top.~a" (cify (vehicle-id vehicle))))
+         (if (vehicle-closure? vehicle) "__self" (format "__top->~a" (cify (vehicle-id vehicle))))
          (vehicle-max-runstack-depth vehicle))
     (out-close!)
     (out-open "if (__argv == __orig_runstack)")
@@ -106,23 +103,17 @@
   (define free-var-refs (lam-free-var-refs lam))
   (define closure-offset (if multi? 1 0))
   (when bracket? (out-open "{"))
-  (define next-leaf?
-    (match e
-      [`(lambda . ,_) (generate-lambda-case lam leaf? e free-var-refs closure-offset knowns top-names state lambdas prim-names)]
-      [`(case-lambda [,idss . ,bodys] ...)
-       (define next-leaf?
-         (for/fold ([next-leaf? #t])  ([ids (in-list idss)]
-                                       [body (in-list bodys)]
-                                       [i (in-naturals)])
-           (out-open "~aif (__argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
-           (define this-next-leaf?
-             (generate-lambda-case lam leaf? `(lambda ,ids . ,body) free-var-refs closure-offset  knowns top-names state lambdas prim-names))
-           (out-close "}")
-           (and next-leaf? this-next-leaf?)))
-       (out "else return NULL;")
-       next-leaf?]))
-  (when bracket? (out-close "}"))
-  (set-lam-leaf?! lam next-leaf?))
+  (match e
+    [`(lambda . ,_) (generate-lambda-case lam leaf? e free-var-refs closure-offset knowns top-names state lambdas prim-names)]
+    [`(case-lambda [,idss . ,bodys] ...)
+     (for ([ids (in-list idss)]
+           [body (in-list bodys)]
+           [i (in-naturals)])
+       (out-open "~aif (__argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
+       (generate-lambda-case lam leaf? `(lambda ,ids . ,body) free-var-refs closure-offset  knowns top-names state lambdas prim-names)
+       (out-close "}"))
+     (out "else return NULL;")])
+  (when bracket? (out-close "}")))
 
 ;; Returns a boolean indicating whether the functon can be a leaf
 (define (generate-lambda-case lam leaf? e free-var-refs closure-offset knowns top-names state lambdas prim-names)
@@ -178,7 +169,7 @@
      (let ([vehicle (lam-vehicle lam)])
        (set-vehicle-max-runstack-depth! vehicle (max (runstack-max-depth runstack)
                                                      (vehicle-max-runstack-depth vehicle))))
-     (not (runstack-ever-synced? runstack))]))
+     (set-lam-can-leaf?! lam (not (runstack-ever-synced? runstack)))]))
 
 (define (box-mutable-ids ids runstack state top-names)
   (let loop ([ids ids])
@@ -190,7 +181,7 @@
                     (not (hash-ref top-names (car ids) #f)))
            (define s (let ([id (car ids)])
                        (if (hash-ref top-names id #f)
-                           (format "top.~a" (cify id))
+                           (format "__top->~a" (cify id))
                            (runstack-assign runstack id))))
            (runstack-sync! runstack)
            (out "~a = scheme_box_variable(~a);" s s))
@@ -364,7 +355,7 @@
        (define top? (hash-ref top-names ref #f))
        (define target
          (cond
-           [top? (format "top.~a" (cify ref))]
+           [top? (format "__top->~a" (cify ref))]
            [else (genid '__set)]))
        (unless top?
          (out-open "{")
@@ -403,8 +394,8 @@
                                    (state-first-pass? state))
                           (adjust-state! state id -1))
                         (runstack-ref runstack id #:ref e)])]
-                    [(hash-ref top-names id #f) (format "top.~a" (cify id))]
-                    [else (format "prims.~a" (cify id))]))]
+                    [(hash-ref top-names id #f) (format "__top->~a" (cify id))]
+                    [else (format "__prims.~a" (cify id))]))]
          [else (generate-quote ret e)])]))
   
   (define (generate-let ret e in-lam env)
@@ -448,7 +439,7 @@
             (define ret (cond
                           [let-one? (format "~a = " (cify let-one-id))]
                           [(hash-ref top-names id #f)
-                           (format "top.~a = " (cify id))]
+                           (format "__top->~a = " (cify id))]
                           [else
                            (make-runstack-assign runstack id)]))
             (generate ret rhs in-lam rhs-env)]))
@@ -526,7 +517,7 @@
     (out "Scheme_Object *~a;" (cify struct-tmp-id))
     (runstack-sync! runstack)
     (out "~a = __malloc_struct(~a);" (cify struct-tmp-id) (struct-info-field-count si))
-    (out "__struct_set_type(~a, top.~a);" (cify struct-tmp-id) (cify (struct-info-struct-id si)))
+    (out "__struct_set_type(~a, __top->~a);" (cify struct-tmp-id) (cify (struct-info-struct-id si)))
     (define all-simple? (for/and ([rand (in-list rands)])
                           (simple? rand state knowns)))
     (define struct-id (and (not all-simple?) (genid '__struct)))
@@ -749,7 +740,7 @@
           (out "__argv = __runbase - ~a;" n)
           (out "__argc = ~a;" n)
           (unless (null? (lam-free-var-refs known-target-lam))
-            (out "__self = top.~a;" (cify (lam-id known-target-lam))))
+            (out "__self = __top->~a;" (cify (lam-id known-target-lam))))
           (out "goto __entry_~a;" (cify (lam-id known-target-lam)))])]
       ;; Non-tail call to a known-target:
       [else
@@ -759,7 +750,7 @@
                                 (cify (vehicle-id (lam-vehicle known-target-lam))) n
                                 (runstack-stack-ref runstack)
                                 (if (vehicle-closure? (lam-vehicle known-target-lam))
-                                    (format ", top.~a" (cify rator))
+                                    (format ", __top->~a" (cify rator))
                                     ""))])
                  (if (vehicle-can-tail-apply? (lam-vehicle known-target-lam))
                      (format "scheme_force_~avalue(~a)" (if (multiple-return? ret) "" "one_") s)
@@ -774,7 +765,7 @@
       [(and (lam-moved-to-top? lam)
             (not (state-tops-pass? state)))
        ;; Lifted out after discovering that it has no free variables
-       (return ret runstack #:can-pre-pop? #t (format "top.~a" (cify (lam-id lam))))]
+       (return ret runstack #:can-pre-pop? #t (format "__top->~a" (cify (lam-id lam))))]
       [else
        (when in-lam (set-lam-under-lambda?! lam #t))
        (define name (format "~a" (lam-id lam)))
@@ -907,22 +898,28 @@
   (define runstack (make-runstack state))
 
   (define (generate-tops e)
+    (generate-init-prims)
+    (out-next)
     (out-open "void scheme_init_startup_instance(Scheme_Instance *__instance) {")
     (out "Scheme_Object ***__runstack_ptr = &MZ_RUNSTACK;")
     (out "Scheme_Object **__runbase = *__runstack_ptr;")
-    (out "REGISTER_SO(prims);")
-    (out "REGISTER_SO(top);")
-    (out "prims.__instance = __instance;")
+    (out "MZ_GC_DECL_REG(1);")
+    (out "MZ_GC_VAR_IN_REG(0, __instance);")
+    (out "MZ_GC_REG();")
+
+    (out "REGISTER_SO(__top);")
+    (out "__top = scheme_malloc(sizeof(struct startup_instance_top_t));")
+
     (out "__check_top_runstack_depth(~a);" max-runstack-depth)
-    (for ([id (in-sorted-hash-keys prim-names symbol<?)])
-      (out "prims.~a = scheme_builtin_value(~s);" (cify id) (format "~a" id)))
     (generate-moved-to-top lambdas)
     (generate-top e)
     ;; Expects `(export (rename [<int-id> <ext-id>] ...))` for `exports`
     (for ([ex (in-list (cdr (cadr exports)))])
-      (out "scheme_instance_add(prims.__instance, ~s, top.~a);"
+      (out "scheme_instance_add(__instance, ~s, __top->~a);"
            (format "~a" (cadr ex))
            (cify (car ex))))
+
+    (out "MZ_GC_UNREG();")
     (out-close "}")
     (runstack-max-depth runstack))
 
@@ -943,7 +940,7 @@
       [`(define ,id (letrec* . ,_))
        (generate-top-let e)]
       [`(define ,id ,rhs)
-       (generate (format "top.~a =" (cify id)) rhs #f #hasheq()
+       (generate (format "__top->~a =" (cify id)) rhs #f #hasheq()
                  runstack knowns top-names state lambdas prim-names)]
       [`(define-values (,ids ...) ,rhs)
        (generate (multiple-return "/*needed*/") rhs #f #hasheq()
@@ -970,6 +967,14 @@
              (define new-e `(define ,id (begin ,rhs)))
              (generate-top new-e)])])]))
 
+  (define (generate-init-prims)
+    (out-next)
+    (out-open "void scheme_init_startup() {")
+    (out "REGISTER_SO(__prims);")
+    (for ([id (in-sorted-hash-keys prim-names symbol<?)])
+      (out "__prims.~a = scheme_builtin_value(~s);" (cify id) (format "~a" id)))
+    (out-close "}"))
+
   (generate-tops e))
 
 ;; ----------------------------------------
@@ -980,6 +985,6 @@
         #:when (or (hash-ref top-names id #f)
                    (referenced? (hash-ref state id #f))))
     (define s (if (hash-ref top-names id #f)
-                  (format "top.~a" (cify id))
+                  (format "__top->~a" (cify id))
                   (runstack-assign runstack id)))
     (out "~a = scheme_current_thread->ku.multiple.array[~a];" s i)))

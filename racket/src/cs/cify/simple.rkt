@@ -37,9 +37,9 @@
         (runstack-ref runstack (unref e) #:ref e)]
        [(or (hash-ref top-names e #f)
             (hash-ref knowns e #f))
-        (format "top.~a" (cify e))]
+        (format "__top->~a" (cify e))]
        [(hash-ref prim-names e #f)
-        (format "prims.~a" (cify e))]
+        (format "__prims.~a" (cify e))]
        [else (runstack-ref runstack e)])]
     [else
      (define inliner (inline-function (car e) (length (cdr e)) knowns))

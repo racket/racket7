@@ -490,6 +490,7 @@ Scheme_Object *scheme_position_to_builtin(int l);
 typedef struct Scheme_Instance Scheme_Instance;
 typedef struct Scheme_Linklet Scheme_Linklet;
 
+void scheme_init_startup(void); /* across places */
 void scheme_init_startup_instance(Scheme_Instance *i);
 
 void *scheme_get_os_thread_like();

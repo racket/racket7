@@ -20,7 +20,7 @@
                 [under-lambda? #:mutable] ; inside another function?
                 [moved-to-top? #:mutable]
                 [unused? #:mutable]       ; in case a `lambda` gets dropped completely
-                [leaf? #:mutable]))       ; never syncs runstack => GC-independent leaf
+                [can-leaf? #:mutable]))   ; never syncs runstack => GC-independent leaf
 
 (struct vehicle ([id #:mutable]
                  [lams #:mutable]

@@ -234,8 +234,8 @@ static MZ_INLINE Scheme_Object *__int_add(Scheme_Object *a, Scheme_Object *b)
 
 __SCHEME_PREDFUNC(__scheme_truep, SCHEME_TRUEP)
 __SCHEME_PREDFUNC(__scheme_falsep, SCHEME_FALSEP)
-__SCHEME_PREDFUNC(__scheme_boolp, SCHEME_BOOLP)
 __SCHEME_PREDFUNC(__scheme_nullp, SCHEME_NULLP)
+__SCHEME_PREDFUNC(__scheme_boolp, SCHEME_BOOLP)
 __SCHEME_PREDFUNC(__scheme_pairp, SCHEME_PAIRP)
 __SCHEME_PREDFUNC(__scheme_numberp, SCHEME_NUMBERP)
 __SCHEME_PREDFUNC(__scheme_chaperone_vectorp, SCHEME_CHAPERONE_VECTORP)
@@ -326,10 +326,8 @@ static MZ_INLINE Scheme_Object *__last_use(Scheme_Object **r, int i)
   return v;
 }
 
-static MZ_INLINE void __no_use(Scheme_Object **r, int i)
-{
-  r[i] = NULL;
-}
+/* static MZ_INLINE void __no_use(Scheme_Object **r, int i) { r[i] = NULL; } */
+#define __no_use(r, i) r[i] = NULL
 
 #ifndef __VALIDATE_DEBUG
 

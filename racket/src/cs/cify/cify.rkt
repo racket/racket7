@@ -109,10 +109,15 @@
       (set-lam-moved-to-top?! lam #t)
       (values (lam-id lam) lam)))
 
-  ;; Generate prim and top-variable records:
-  (generate-struct "prims" prim-names)
-  (generate-struct "top" (hash-union (hash-union top-names functions)
-                                     closed-anonymous-functions))
+  ;; Generate prim record:
+  (generate-struct "__prims" prim-names)
+  (out "static struct __prims_t __prims;")
+
+  ;; Generate top-variable record:
+  (generate-struct "startup_instance_top" (hash-union (hash-union top-names functions)
+                                                      closed-anonymous-functions))
+  (out "THREAD_LOCAL_DECL(static struct startup_instance_top_t *__startup_instance_top);")
+  (out "#define __top __startup_instance_top")
   
   (define vehicles (merge-vehicles! lambdas state orig-out))
 

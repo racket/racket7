@@ -69,8 +69,14 @@ static Scheme_Linklet *startup_linklet()
 #endif
 }
 
+void scheme_init_startup_instance(void)
+{
+  /* called once (not per-place) */
+}
+
 void scheme_init_startup_instance(Scheme_Instance *inst)
 {
+  /* called per-places */
   scheme_instantiate_linklet_multi(startup_linklet(), inst, 0, NULL, 0);
 }
 

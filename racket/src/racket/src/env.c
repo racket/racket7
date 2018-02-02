@@ -356,6 +356,8 @@ static void init_startup_env(void)
 
   scheme_init_longdouble_fixup();
 
+  scheme_init_startup();
+
   scheme_defining_primitives = 0;
 }
 

@@ -89,8 +89,8 @@
                 #f
                 (cond
                   [(struct-info-authentic? si)
-                   (lambda (s) (format "__is_authentic_struct_instance(~a, top.~a)" s (cify s-id)))]
+                   (lambda (s) (format "__is_authentic_struct_instance(~a, __top->~a)" s (cify s-id)))]
                   [else
-                   (lambda (s) (format "__is_struct_instance(~a, top.~a)" s (cify s-id)))]))]
+                   (lambda (s) (format "__is_struct_instance(~a, __top->~a)" s (cify s-id)))]))]
        [else (generic e)])]
     [`,_ (generic e)]))
