@@ -37,7 +37,7 @@
          [`(begin0 . ,body)
           (body-leftover-size body (sub1 size))]
          [`(quote ,v) (if (and serializable?
-                               (lift-quoted? v))
+                               (lift-quoted? v #f))
                           ;; pessimistically assume that full
                           ;; strcuture must be lifted for
                           ;; serialization:

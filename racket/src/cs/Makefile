@@ -27,7 +27,7 @@ SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt 
                     schemify/lift.rkt schemify/jitify.rkt schemify/interpret.rkt schemify/size.rkt \
                     schemify/optimize.rkt schemify/literal.rkt schemify/infer-known.rkt \
                     schemify/inline.rkt schemify/export.rkt schemify/find-known.rkt schemify/letrec.rkt \
-                    schemify/pthread-parameter.rkt schemify/main.rkt
+                    schemify/pthread-parameter.rkt schemify/quoted.rkt schemify/main.rkt
 
 CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS) $(PRIMITIVES_TABLES)
 

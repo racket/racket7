@@ -21,11 +21,11 @@
     [(hash? q) #t]
     [(string? q) #t]
     [(bytes? q) #t]
-    [(pair? q) (or (lift-quoted? (car q))
-                   (lift-quoted? (cdr q)))]
+    [(pair? q) (or (lift-quoted? (car q) for-cify?)
+                   (lift-quoted? (cdr q) for-cify?))]
     [(vector? q) (for/or ([e (in-vector q)])
-                   (lift-quoted? e))]
-    [(box? q) (lift-quoted? (unbox q))]
+                   (lift-quoted? e for-cify?))]
+    [(box? q) (lift-quoted? (unbox q) for-cify?)]
     [(prefab-struct-key q) #t]
     [(extflonum? q) #t]
     [else #f]))
