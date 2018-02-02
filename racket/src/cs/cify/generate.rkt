@@ -87,6 +87,7 @@
     (out-close!))
   (when multi?
     (out-open "switch(SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(__self)[0])) {")
+    (out "default:")
     (for ([lam (in-list lams)]
           [i (in-naturals)])
       (out "case ~a: goto __entry_~a;" i (cify (lam-id lam))))
@@ -222,7 +223,7 @@
        (out "int ~a_count;" vals-id)
        (generate (multiple-return (lambda (s)
                                     (out "~a = ~a;" (runstack-assign runstack vals-id) s)
-                                    (out-open "if (~a == SCHEME_MULTIPLE_VALUES) {" (runstack-ref runstack vals-id))
+                                    (out-open "if (~a == SCHEME_MULTIPLE_VALUES) {" (runstack-ref runstack vals-id #:values-ok? #t))
                                     (out "Scheme_Thread *p = scheme_current_thread;")
                                     (out "Scheme_Object **~a_vals;" vals-id)
                                     (out "~a_vals = p->ku.multiple.array;" vals-id)
@@ -437,9 +438,9 @@
             (generate "" rhs in-lam rhs-env)]
            [else
             (define ret (cond
-                          [let-one? (format "~a = " (cify let-one-id))]
+                          [let-one? (format "~a =" (cify let-one-id))]
                           [(hash-ref top-names id #f)
-                           (format "__top->~a = " (cify id))]
+                           (format "__top->~a =" (cify id))]
                           [else
                            (make-runstack-assign runstack id)]))
             (generate ret rhs in-lam rhs-env)]))
@@ -470,7 +471,7 @@
     (define n (length rands))
     (cond
       [(and (symbol? rator)
-            (inline-function rator n knowns))
+            (inline-function rator n rands knowns))
        (generate-inline-app ret rator rands n in-lam env)]
       [(and (symbol? rator)
             (let ([k (hash-ref knowns rator #f)])
@@ -483,10 +484,11 @@
        (generate-general-app ret rator rands n in-lam env)]))
 
   (define (generate-inline-app ret rator rands n in-lam env)
-    (define need-sync? (not (inline-function rator n knowns #:can-gc? #f)))
-    (define tmp-ids (for/list ([rand (in-list rands)])
+    (define need-sync? (not (inline-function rator n rands knowns #:can-gc? #f)))
+    (define tmp-ids (for/list ([rand (in-list rands)]
+                               [i (in-naturals)])
                       (and (not (simple? rand state knowns))
-                           (genid '__arg))))
+                           (genid (format "__arg_~a_" i)))))
     (define all-simple? (for/and ([tmp-id (in-list tmp-ids)])
                           (not tmp-id)))
     (unless all-simple? (out-open "{"))
@@ -573,11 +575,12 @@
     ;; that part of the runstack will be argv.
     ;; For a tail call, we only need an arg-id for a non-simple
     ;; expression, and we don't need one for the last non-simple.
-    (define arg-ids (for/list ([rand (in-list rands)])
+    (define arg-ids (for/list ([rand (in-list rands)]
+                               [i (in-naturals)])
                       (if (and direct-tail?
                                (simple? rand state knowns))
                           #f
-                          (genid '__arg))))
+                          (genid (format "__arg_~a_" i)))))
     (define last-non-simple-arg-id
       (and direct-tail? (for/last ([arg-id (in-list arg-ids)])
                           arg-id)))
@@ -664,7 +667,9 @@
                           [(or (multiple-return? ret) (tail-return? ret)) "_scheme_apply_multi(~a, ~a, ~a)"]
                           [else "_scheme_apply(~a, ~a, ~a)"]))
        (when use-tail-apply?
-         (set-vehicle-can-tail-apply?! (lam-vehicle in-lam) #t))
+         (if known-target-lam
+             (lam-add-transitive-tail-apply! in-lam known-target-lam)
+             (set-lam-can-tail-apply?! in-lam #t)))
        (runstack-sync! runstack) ; now argv == runstack
        (return ret runstack (format template rator-s n (if (zero? n) "NULL" (runstack-stack-ref runstack))))]
       ;; Tail call to a known target:
@@ -741,7 +746,8 @@
           (out "__argc = ~a;" n)
           (unless (null? (lam-free-var-refs known-target-lam))
             (out "__self = __top->~a;" (cify (lam-id known-target-lam))))
-          (out "goto __entry_~a;" (cify (lam-id known-target-lam)))])]
+          (out "goto __entry_~a;" (cify (lam-id known-target-lam)))])
+       (lam-add-transitive-tail-apply! in-lam known-target-lam)]
       ;; Non-tail call to a known-target:
       [else
        (runstack-sync! runstack) ; now argv == runstack
@@ -752,7 +758,7 @@
                                 (if (vehicle-closure? (lam-vehicle known-target-lam))
                                     (format ", __top->~a" (cify rator))
                                     ""))])
-                 (if (vehicle-can-tail-apply? (lam-vehicle known-target-lam))
+                 (if (lam-can-tail-apply? known-target-lam)
                      (format "scheme_force_~avalue(~a)" (if (multiple-return? ret) "" "one_") s)
                      s)))])
     (when declared-tmp? (out-close "}"))

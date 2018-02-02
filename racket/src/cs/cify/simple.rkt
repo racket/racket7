@@ -20,7 +20,7 @@
       (simple-quote? e)
       (and (pair? e)
            (symbol? (car e))
-           (inline-function (car e) (length (cdr e)) knowns #:can-gc? can-gc?)
+           (inline-function (car e) (length (cdr e)) (cdr e) knowns #:can-gc? can-gc?)
            (for/and ([e (in-list (cdr e))])
              (simple? e state knowns #:can-gc? can-gc?)))))
 
@@ -42,7 +42,7 @@
         (format "__prims.~a" (cify e))]
        [else (runstack-ref runstack e)])]
     [else
-     (define inliner (inline-function (car e) (length (cdr e)) knowns))
+     (define inliner (inline-function (car e) (length (cdr e)) (cdr e) knowns))
      (define args (apply string-append
                          (append
                           (add-between

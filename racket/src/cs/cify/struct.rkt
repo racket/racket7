@@ -74,10 +74,17 @@
                    [`,_ knowns])))]
             [else knowns]))
         (lambda () knowns))]
-      [`(define ,id (quote ,s))
-       (cond
-         [(symbol? s) (hash-set knowns id s)]
-         [else knowns])]
+      [`(define ,id ,rhs)
+       (match rhs
+         [`(quote ,s)
+          (cond
+            [(symbol? s) (hash-set knowns id s)]
+            [else (hash-set knowns id '#:non-procedure)])]
+         [`(hash . ,_) (hash-set knowns id '#:non-procedure)]
+         [`(hasheq . ,_) (hash-set knowns id '#:non-procedure)]
+         [`(hasheqv . ,_) (hash-set knowns id '#:non-procedure)]
+         [`(gensym . ,_) (hash-set knowns id '#:non-procedure)]
+         [`,_ knowns])]
       [`(begin . ,es)
        (for/fold ([knowns knowns]) ([e (in-list es)])
          (loop e knowns))]

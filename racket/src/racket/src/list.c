@@ -126,7 +126,6 @@ Scheme_Object *scheme_hash_equal_p(int argc, Scheme_Object *argv[]);
 static Scheme_Object *hash_weak_p(int argc, Scheme_Object *argv[]);
 static Scheme_Object *hash_table_put_bang(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_hash_table_put(int argc, Scheme_Object *argv[]);
-static Scheme_Object *hash_table_get(int argc, Scheme_Object *argv[]);
 static Scheme_Object *hash_table_remove_bang(int argc, Scheme_Object *argv[]);
 static Scheme_Object *hash_table_remove(int argc, Scheme_Object *argv[]);
 static Scheme_Object *hash_table_clear_bang(int argc, Scheme_Object *argv[]);
@@ -614,7 +613,7 @@ scheme_init_list (Scheme_Startup_Env *env)
 						    3, 3),
 			     env);
   REGISTER_SO(scheme_hash_ref_proc);
-  scheme_hash_ref_proc = scheme_make_prim_w_arity(hash_table_get, "hash-ref", 2, 3);
+  scheme_hash_ref_proc = scheme_make_prim_w_arity(scheme_checked_hash_ref, "hash-ref", 2, 3);
   scheme_addto_prim_instance("hash-ref", scheme_hash_ref_proc, env);
   scheme_addto_prim_instance("hash-remove!",
 			     scheme_make_noncm_prim(hash_table_remove_bang,
@@ -2563,7 +2562,7 @@ static Scheme_Object *gen_hash_table_get(int argc, Scheme_Object *argv[])
     return hash_failed(argc, argv);
 }
 
-static Scheme_Object *hash_table_get(int argc, Scheme_Object *argv[])
+Scheme_Object *scheme_checked_hash_ref(int argc, Scheme_Object *argv[])
 {
   Scheme_Object *v;
 

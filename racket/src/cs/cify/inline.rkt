@@ -6,7 +6,7 @@
 (provide inline-function
          extract-inline-predicate)
 
-(define (inline-function rator n knowns #:can-gc? [can-gc? #t])
+(define (inline-function rator n rands knowns #:can-gc? [can-gc? #t])
   (case rator
     [(car unsafe-car) (and (= n 1) '__pair_car)]
     [(cdr unsafe-cdr) (and (= n 1) '__pair_cdr)]
@@ -22,6 +22,11 @@
     [(unsafe-vector*-ref) (and (= n 2) '__authentic_vector_ref)]
     [(vector-length unsafe-vector-length unsafe-vector*-length) (and (= n 1) '__vector_length)]
     [(fx+ unsafe-fx+) (and (= n 2) '__int_add)]
+    [(hash-ref) (cond
+                  [(= n 3) (and can-gc? (known-non-procedure? (caddr rands) knowns) '__hash_ref)]
+                  [(= n 2) (and can-gc? '__hash_ref2)]
+                  [else #f])]
+    [(unsafe-immutable-hash-iterate-next) (and (= n 2) can-gc? '__unsafe_immutable_hash_iterate_next)]
     [else
      (define-values (pred-exprs pred-gc? pred-inliner)
        (extract-inline-predicate (cons rator (for/list ([i (in-range n)]) '__unknown)) knowns))
@@ -94,3 +99,12 @@
                    (lambda (s) (format "__is_struct_instance(~a, __top->~a)" s (cify s-id)))]))]
        [else (generic e)])]
     [`,_ (generic e)]))
+
+(define (known-non-procedure? e knowns)
+  (or (boolean? e)
+      (number? e)
+      (eq? e 'null)
+      (and (symbol? e)
+           (let ([k (hash-ref knowns e #f)])
+             (or (symbol? k)
+                 (eq? k '#:non-procedure))))))

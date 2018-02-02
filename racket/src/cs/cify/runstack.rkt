@@ -111,20 +111,24 @@
       (set-runstack-staged-clears! rs (hash-remove (runstack-staged-clears rs) var))
       (loop (sub1 n)))))
 
-(define (runstack-ref rs id #:assign? [assign? #f] #:ref [ref #f])
+(define (runstack-ref rs id #:assign? [assign? #f] #:ref [ref #f] #:values-ok? [values-ok? #f])
   (when ref
     (runstack-ref-use! rs ref)
     ;; Remember the ref, so we can clear its `last-use?` if no sync
     ;; happens before the variable is popped
     (hash-set! (runstack-unsynced-refs rs) id
                (cons ref (hash-ref (runstack-unsynced-refs rs) id '()))))
-  (cond
-    [(eq? 'local (hash-ref (runstack-var-depths rs) id #f))
-     (format "~a" (cify id))]
-    [(and ref (ref-last-use? ref))
-     (format "__last_use(__runbase, ~a)" (cify id))]
-    [else
-     (format "__runbase[~a]"  (cify id))]))
+  (define s
+    (cond
+      [(eq? 'local (hash-ref (runstack-var-depths rs) id #f))
+       (format "~a" (cify id))]
+      [(and ref (ref-last-use? ref))
+       (format "__last_use(__runbase, ~a)" (cify id))]
+      [else
+       (format "__runbase[~a]"  (cify id))]))
+  (if (and #f (not values-ok?) (not assign?)) ; <- enable for debugging
+      (format "__validate(~a)" s)
+      s))
 
 (define (runstack-ref-use! rs ref)
   (set-runstack-all-refs! rs (hash-set2 (runstack-all-refs rs) (ref-id ref) ref #t)))

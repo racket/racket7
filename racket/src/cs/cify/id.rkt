@@ -53,7 +53,8 @@
 
 (define compiler-ids (make-hasheq))
 
-(define (genid s)
+(define (genid in-s)
+  (define s (if (string? in-s) (string->symbol in-s) in-s))
   (define c (hash-ref compiler-ids s 0))
   (hash-set! compiler-ids s (add1 c))
   (string->symbol (format "~a~a" s c)))

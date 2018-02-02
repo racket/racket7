@@ -319,6 +319,76 @@ static MZ_INLINE Scheme_Object *__pair_cddr(Scheme_Object *p)
   return SCHEME_CDR(SCHEME_CDR(p));
 }
 
+/* Only when `default` is definitely not a procedure: */
+static Scheme_Object *__hash_ref(Scheme_Object *ht, Scheme_Object *key, Scheme_Object *defval)
+{
+  Scheme_Object *v;
+  
+  /* The fast path doesn't trigger any GCs: */
+  if (SCHEME_HASHTP(ht)) {
+    if (!((Scheme_Hash_Table *)ht)->make_hash_indices) {
+      v = scheme_eq_hash_get((Scheme_Hash_Table *)ht, key);
+      if (v)
+        return v;
+      else
+        return defval;
+    }
+  } else if (SCHEME_HASHTRP(ht)) {
+    if (SAME_TYPE(scheme_eq_hash_tree_type, SCHEME_HASHTR_TYPE(ht))) {
+      v = scheme_eq_hash_tree_get((Scheme_Hash_Tree *)ht, key);
+      if (v)
+        return v;
+      else
+        return defval;
+    }
+  }
+
+  {
+    Scheme_Object *argv[3];
+    MZ_GC_DECL_REG(3);
+
+    MZ_GC_VAR_IN_REG(0, argv[0]);
+    MZ_GC_VAR_IN_REG(1, argv[1]);
+    MZ_GC_VAR_IN_REG(2, argv[2]);
+    MZ_GC_REG();
+
+    argv[0] = ht;
+    argv[1] = key;
+    argv[2] = defval;
+
+    v = scheme_checked_hash_ref(3, argv);
+
+    MZ_GC_UNREG();
+
+    return v;
+  }
+}
+
+static Scheme_Object *__hash_ref2(Scheme_Object *ht, Scheme_Object *key)
+{
+  Scheme_Object *argv[2], *v;
+  MZ_GC_DECL_REG(2);
+
+  MZ_GC_VAR_IN_REG(0, argv[0]);
+  MZ_GC_VAR_IN_REG(1, argv[1]);
+  MZ_GC_REG();
+
+  argv[0] = ht;
+  argv[1] = key;
+
+  v = scheme_checked_hash_ref(2, argv);
+
+  MZ_GC_UNREG();
+
+  return v;
+}
+
+static Scheme_Object *__unsafe_immutable_hash_iterate_next(Scheme_Object *ht, Scheme_Object *i)
+{
+  if (SCHEME_NP_CHAPERONEP(ht)) ht = SCHEME_CHAPERONE_VAL(ht);
+  return scheme_unsafe_hash_tree_next((Scheme_Hash_Tree *)ht, i);
+}
+
 static MZ_INLINE Scheme_Object *__last_use(Scheme_Object **r, int i)
 {
   Scheme_Object *v = r[i];
