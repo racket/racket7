@@ -86,17 +86,26 @@
     (out-close+open "else")
     (out "__runbase = __orig_runstack;")
     (out-close!))
-  (when multi?
-    (out-open "switch(SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(__self)[0])) {")
-    (out "default:")
-    (for ([lam (in-list lams)]
-          [i (in-naturals)])
-      (out "case ~a: goto __entry_~a;" i (cify (lam-id lam))))
-    (out-close "}"))
+  (cond
+    [multi?
+     (out-open "switch(SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(__self)[0])) {")
+     (out "default:")
+     (for ([lam (in-list lams)]
+           [i (in-naturals)])
+       (out-open "case ~a:" i)
+       (when (lam-no-rest-args? lam)
+         (ensure-lambda-args-in-place leaf? lam))
+       (out "goto __entry_~a;" (cify (lam-id lam)))
+       (out-close!))
+     (out-close "}")]
+    [else
+     (when (lam-no-rest-args? (car lams))
+       (ensure-lambda-args-in-place leaf? (car lams)))])
   (for ([lam (in-list lams)])
     (when (or multi? (lam-need-entry? lam))
       (out-margin "__entry_~a:" (cify (lam-id lam))))
-    (generate-lambda lam multi? leaf? (or multi? (vehicle-overflow-check? vehicle)) knowns top-names state lambdas prim-names))
+    (generate-lambda lam multi? leaf? (or multi? (vehicle-overflow-check? vehicle))
+                     knowns top-names state lambdas prim-names))
   (out-close "}"))
 
 (define (generate-lambda lam multi? leaf? bracket? knowns top-names state lambdas prim-names)
@@ -123,19 +132,11 @@
   (match e
     [`(lambda ,ids . ,body)
      (define n (args-length ids))
-     (unless leaf?
-       (cond
-         [(null? ids)
-          ;; No args
-          (void)]
-         [(list? ids)
-          ;; No rest arg
-          (out "__ensure_args_in_place(~a, __argv, __runbase);" (length ids))]
-         [else
-          (out "~a__ensure_args_in_place_rest(__argc, __argv, __runbase, ~a, 1, ~a);"
-               (if (null? free-var-refs) "(void)" "__self =")
-               (args-length ids)
-               (if (null? free-var-refs) "NULL" "__self"))]))
+     (when (not (lam-no-rest-args? lam))
+       (define rest-arg? (not (list? ids)))
+       (ensure-args-in-place leaf? n free-var-refs
+                             #:rest-arg? rest-arg?
+                             #:rest-arg-used? (and rest-arg? (referenced? (hash-ref state (extract-rest-arg ids) #f)))))
      (unless (null? ids) (out-open "{"))
      (when (and leaf? (for/or ([id (in-list ids)])
                         (referenced? (hash-ref state id #f))))
@@ -172,6 +173,49 @@
        (set-vehicle-max-runstack-depth! vehicle (max (runstack-max-depth runstack)
                                                      (vehicle-max-runstack-depth vehicle))))
      (set-lam-can-leaf?! lam (not (runstack-ever-synced? runstack)))]))
+
+(define (lam-constant-args-count? lam)
+  (match (lam-e lam)
+    [`(lambda (,_ ...) . ,_) #t]
+    [`,_ #f]))
+
+(define (lam-no-rest-args? lam)
+  (match (lam-e lam)
+    [`(lambda (,_ ...) . ,_) #t]
+    [`(case-lambda [(,_ ...) . ,_] ...) #t]
+    [`,_ #f]))
+
+;; Only used when no rest args:
+(define (ensure-lambda-args-in-place leaf? lam)
+  (match (lam-e lam)
+    [`(lambda ,ids . ,_)
+     (ensure-args-in-place leaf? (length ids) #:rest-arg? #f (lam-free-var-refs lam))]
+    [`,_
+     (ensure-args-in-place leaf? "__argc" #:rest-arg? #f (lam-free-var-refs lam))]))
+
+(define (ensure-args-in-place leaf? expected-n free-var-refs
+                              #:rest-arg? rest-arg?
+                              #:rest-arg-used? [rest-arg-used? #t])
+  ;; Generate code to make sure that `__runbase` minus the number of
+  ;; argument variables (including a "rest" args) holds arguments,
+  ;; converting "rest" args to a list as needed. We don't need to
+  ;; perform this check (or set `__argv` and `__argc`) for a call
+  ;; within a vehicle for a non-`case-lambda`, because it will
+  ;; definitely hold then.
+  (unless leaf?
+    (cond
+      [rest-arg?
+       (out "~a__ensure_args_in_place_rest(__argc, __argv, __runbase, ~a, 1, ~a, ~a);"
+            (if (null? free-var-refs) "(void)" "__self = ")
+            expected-n
+            (if rest-arg-used? "__rest_arg_used" "__rest_arg_unused")
+            (if (null? free-var-refs) "NULL" "__self"))]
+      [(eqv? 0 expected-n)
+       ;; No args; we can always assume that 0 arguments are at `_runbase`
+       (void)]
+      [else
+       ;; No rest arg
+       (out "__ensure_args_in_place(~a, __argv, __runbase);" expected-n)])))
 
 (define (box-mutable-ids ids runstack in-lam state top-names)
   (let loop ([ids ids])
@@ -744,8 +788,10 @@
          [else
           (set-lam-need-entry?! known-target-lam #t)
           (set-lam-max-jump-argc! known-target-lam (max n (lam-max-jump-argc known-target-lam)))
-          (out "__argv = __runbase - ~a;" n)
-          (out "__argc = ~a;" n)
+          (unless (lam-constant-args-count? known-target-lam)
+            (out "__argc = ~a;" n)
+            (unless (lam-no-rest-args? known-target-lam)
+              (out "__argv = __runbase - ~a;" n)))
           (unless (null? (lam-free-var-refs known-target-lam))
             (out "__self = ~a;" (top-ref in-lam (lam-id known-target-lam))))
           (out "goto __entry_~a;" (cify (lam-id known-target-lam)))])

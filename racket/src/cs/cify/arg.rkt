@@ -2,6 +2,7 @@
 (require "match.rkt")
 
 (provide add-args
+         extract-rest-arg
          lambda-arity
          lambda-no-rest-args?
          args-length
@@ -13,6 +14,11 @@
     [(symbol? ids) (hash-set env ids #t)]
     [else (add-args (hash-set env (car ids) #t)
                     (cdr ids))]))
+
+(define (extract-rest-arg ids)
+  (if (pair? ids)
+      (extract-rest-arg (cdr ids))
+      ids))
 
 (define (lambda-arity e #:precise-cases? [precise-cases? #f])
   (match e

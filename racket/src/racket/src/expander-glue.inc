@@ -101,7 +101,7 @@ static Scheme_Object *__handle_overflow_or_space(Scheme_Object *proc, int argc, 
 }
 
 static Scheme_Object *__ensure_args_in_place_rest(int argc, Scheme_Object **argv, Scheme_Object **runbase,
-                                                  int direct_args, int rest_args,
+                                                  int direct_args, int rest_args, int rest_arg_used,
                                                   Scheme_Object *self)
 {
   Scheme_Object **runstack = runbase - direct_args - rest_args;
@@ -118,14 +118,16 @@ static Scheme_Object *__ensure_args_in_place_rest(int argc, Scheme_Object **argv
   } else {
     /* Need to build a list and then copy or shift up */
     Scheme_Object *l = scheme_null;
-    MZ_GC_DECL_REG(2);
+    if (rest_arg_used) {
+      MZ_GC_DECL_REG(2);
     
-    MZ_GC_VAR_IN_REG(0, argv);
-    MZ_GC_VAR_IN_REG(1, self);
-    MZ_GC_REG();
-    for (i = argc; i-- > direct_args; )
-      l = scheme_make_pair(argv[i], l);
-    MZ_GC_UNREG();
+      MZ_GC_VAR_IN_REG(0, argv);
+      MZ_GC_VAR_IN_REG(1, self);
+      MZ_GC_REG();
+      for (i = argc; i-- > direct_args; )
+        l = scheme_make_pair(argv[i], l);
+      MZ_GC_UNREG();
+    }
     
     runstack[direct_args] = l;
     for (i = direct_args; i--; )
@@ -136,7 +138,9 @@ static Scheme_Object *__ensure_args_in_place_rest(int argc, Scheme_Object **argv
 }
 
 #define __ensure_args_in_place(argc, argv, runbase) \
-  if (argv != (runbase - argc)) (void)__ensure_args_in_place_rest(argc, argv, runbase, argc, 0, NULL)
+  if (argv != (runbase - argc)) (void)__ensure_args_in_place_rest(argc, argv, runbase, argc, 0, 0, NULL)
+#define __rest_arg_used   1
+#define __rest_arg_unused 0
 
 static mzshort *convert_arities(int mina, const char *a)
 {
