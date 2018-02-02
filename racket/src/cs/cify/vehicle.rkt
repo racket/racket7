@@ -7,6 +7,7 @@
 (provide (struct-out lam)
          (struct-out vehicle)
          make-lam
+         top-ref
          lam-add-transitive-tail-apply!
          merge-vehicles!)
 
@@ -28,6 +29,7 @@
 (struct vehicle ([id #:mutable]
                  [lams #:mutable]
                  [closure? #:mutable]
+                 [uses-top? #:mutable]
                  [min-argc #:mutable]
                  [max-jump-argc #:mutable]
                  [max-runstack-depth #:mutable]
@@ -35,10 +37,15 @@
 
 (define (make-lam id e #:can-call-direct? [can-call-direct? #f])
   (define-values (min-argc max-argc) (lambda-arity e))
-  (define a-vehicle (vehicle id '() #f min-argc 0 0 can-call-direct?))
+  (define a-vehicle (vehicle id '() #f #f min-argc 0 0 can-call-direct?))
   (define a-lam (lam id e #f #f (make-hasheqv) 0 #f a-vehicle 0 #f #f #f #f #hasheq() #f))
   (set-vehicle-lams! a-vehicle (list a-lam))
   a-lam)
+
+(define (top-ref in-lam id)
+  (when in-lam
+    (set-vehicle-uses-top?! (lam-vehicle in-lam) #t))
+  (format "__top->~a" (cify id)))
 
 (define (lam-add-transitive-tail-apply! lam target-lam)
   (set-lam-transitive-tail-applies!
@@ -62,6 +69,8 @@
           (set-vehicle-id! vehicle (genid '__vehicle)))
         (set-lam-index! lam (length lams))
         (set-vehicle-lams! vehicle (cons lam lams))
+        (set-vehicle-uses-top?! vehicle (or (vehicle-uses-top? vehicle)
+                                            (vehicle-uses-top? old-vehicle)))
         (set-vehicle-min-argc! vehicle (min (vehicle-min-argc vehicle)
                                             (vehicle-min-argc old-vehicle)))
         (set-vehicle-max-runstack-depth! vehicle (max (vehicle-max-runstack-depth vehicle)

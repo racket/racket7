@@ -117,7 +117,7 @@
   (generate-struct "startup_instance_top" (hash-union (hash-union top-names functions)
                                                       closed-anonymous-functions))
   (out "THREAD_LOCAL_DECL(static struct startup_instance_top_t *__startup_instance_top);")
-  (out "#define __top __startup_instance_top")
+  (out "#define __top ___startup_instance_top")
   
   (define vehicles (merge-vehicles! lambdas state orig-out))
 

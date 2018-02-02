@@ -155,7 +155,7 @@
   (for ([var (in-list vars)])
     (out "~a = __RUNSTACK_INIT_VAL;" (runstack-assign rs var)))
   (unless (eqv? (runstack-depth rs) (runstack-sync-depth rs))
-    (out "*__runstack_ptr = ~a;" (runstack-stack-ref rs))
+    (out "__current_runstack = ~a;" (runstack-stack-ref rs))
     (set-runstack-sync-depth! rs (runstack-depth rs))))
 
 (define (runstack-synced! rs)

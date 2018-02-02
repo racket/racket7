@@ -1,12 +1,13 @@
 #lang racket/base
 (require "match.rkt"
          "id.rkt"
+         "vehicle.rkt"
          "struct.rkt")
 
 (provide inline-function
          extract-inline-predicate)
 
-(define (inline-function rator n rands knowns #:can-gc? [can-gc? #t])
+(define (inline-function rator n rands in-lam knowns #:can-gc? [can-gc? #t])
   (case rator
     [(car unsafe-car) (and (= n 1) '__pair_car)]
     [(cdr unsafe-cdr) (and (= n 1) '__pair_cdr)]
@@ -29,7 +30,7 @@
     [(unsafe-immutable-hash-iterate-next) (and (= n 2) can-gc? '__unsafe_immutable_hash_iterate_next)]
     [else
      (define-values (pred-exprs pred-gc? pred-inliner)
-       (extract-inline-predicate (cons rator (for/list ([i (in-range n)]) '__unknown)) knowns))
+       (extract-inline-predicate (cons rator (for/list ([i (in-range n)]) '__unknown)) in-lam knowns))
      (cond
        [(and pred-inliner
              (or (not pred-gc?) can-gc?))
@@ -49,9 +50,9 @@
                  (format "__struct_set(~a, ~a)" s (struct-mutator-pos k))))]
           [else #f])])]))
 
-(define (extract-inline-predicate e knowns #:compose? [compose? #f])
+(define (extract-inline-predicate e in-lam knowns #:compose? [compose? #f])
   (define (compose e gc? wrapper)
-    (define-values (new-es new-gc? new-wrapper) (extract-inline-predicate e knowns #:compose? compose?))
+    (define-values (new-es new-gc? new-wrapper) (extract-inline-predicate e in-lam knowns #:compose? compose?))
     (values new-es (or gc? new-gc?) (lambda (s) (wrapper (new-wrapper s)))))
   (define (generic e)
     (if compose?
@@ -94,9 +95,9 @@
                 #f
                 (cond
                   [(struct-info-authentic? si)
-                   (lambda (s) (format "__is_authentic_struct_instance(~a, __top->~a)" s (cify s-id)))]
+                   (lambda (s) (format "__is_authentic_struct_instance(~a, ~a)" s (top-ref in-lam s-id)))]
                   [else
-                   (lambda (s) (format "__is_struct_instance(~a, __top->~a)" s (cify s-id)))]))]
+                   (lambda (s) (format "__is_struct_instance(~a, ~a)" s (top-ref in-lam s-id)))]))]
        [else (generic e)])]
     [`,_ (generic e)]))
 

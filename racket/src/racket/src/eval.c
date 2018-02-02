@@ -190,7 +190,6 @@ THREAD_LOCAL_DECL(uintptr_t scheme_stack_boundary);
 THREAD_LOCAL_DECL(uintptr_t volatile scheme_jit_stack_boundary);
 #endif
 THREAD_LOCAL_DECL(int scheme_continuation_application_count);
-THREAD_LOCAL_DECL(static int generate_lifts_count);
 THREAD_LOCAL_DECL(int scheme_overflow_count);
 THREAD_LOCAL_DECL(Scheme_Prefix *scheme_prefix_finalize);
 THREAD_LOCAL_DECL(Scheme_Prefix *scheme_inc_prefix_finalize);

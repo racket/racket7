@@ -69,7 +69,7 @@ static Scheme_Linklet *startup_linklet()
 #endif
 }
 
-void scheme_init_startup_instance(void)
+void scheme_init_startup(void)
 {
   /* called once (not per-place) */
 }

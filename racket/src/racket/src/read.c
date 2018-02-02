@@ -62,7 +62,7 @@ SHARED_OK int scheme_curly_braces_are_parens = 1;
 /* global flag set from environment variable */
 SHARED_OK static int use_perma_cache = 1;
 
-THREAD_LOCAL_DECL(int scheme_num_read_syntax_objects);
+THREAD_LOCAL_DECL(int scheme_num_read_syntax_objects = 0);
 
 /* read-only global symbols */
 SHARED_OK static unsigned char delim[128];

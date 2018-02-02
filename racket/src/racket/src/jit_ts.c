@@ -239,6 +239,7 @@ define_ts_s_s(scheme_box, FSRC_OTHER)
 # define ts_scheme_checked_byte_string_set scheme_checked_byte_string_set
 # define ts_scheme_checked_flvector_ref scheme_checked_flvector_ref
 # define ts_scheme_checked_flvector_set scheme_checked_flvector_set
+# define ts_scheme_checked_syntax_e scheme_checked_syntax_e
 #ifdef MZ_LONG_DOUBLE
 # define ts_scheme_checked_extflvector_ref scheme_checked_extflvector_ref
 # define ts_scheme_checked_extflvector_set scheme_checked_extflvector_set

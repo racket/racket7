@@ -7,6 +7,25 @@
 /* Disable the use of source or bytecode: */
 #define SCHEME_STARTUP_DEFINED
 
+THREAD_LOCAL_DECL(static struct startup_instance_top_t *__startup_instance_top);
+
+/* Pulling the address of the thread-local table into a local variable
+   can have a big effect on compile time (not so much on run time) if
+   the the thread-local implementation is opqaue to the compiler. */
+#ifdef PREFER_TO_CACHE_THREAD_LOCAL
+# define __LINK_THREAD_LOCAL Thread_Local_Variables *__racket_tls = scheme_get_thread_local_variables();
+# define __current_runstack       (__racket_tls)->scheme_current_runstack_
+# define __current_runstack_start (__racket_tls)->scheme_current_runstack_start_
+# define __current_thread         (__racket_tls)->scheme_current_thread_
+# define ___startup_instance_top  (__racket_tls)->__startup_instance_top_
+#else
+# define __LINK_THREAD_LOCAL /* empty */
+# define __current_runstack       MZ_RUNSTACK
+# define __current_runstack_start MZ_RUNSTACK_START
+# define __current_thread         scheme_current_thread
+# define ___startup_instance_top  __startup_instance_top
+#endif
+
 #define __RUNSTACK_INIT_VAL NULL
 
 static void scheme_instance_add(Scheme_Instance *inst, const char *name, Scheme_Object *val)
@@ -17,12 +36,10 @@ static void scheme_instance_add(Scheme_Instance *inst, const char *name, Scheme_
   ((Scheme_Bucket_With_Flags *)b)->flags |= GLOB_IS_CONST | GLOB_IS_CONSISTENT;
 }
 
-static MZ_INLINE int __check_runstack_space(int max_depth, Scheme_Object **runstack)
-{  
-  return ((runstack - MZ_RUNSTACK_START) < (max_depth + SCHEME_TAIL_COPY_THRESHOLD));
-}
+#define __check_runstack_space(max_depth, runstack, runstack_start) \
+  ((runstack - runstack_start) < (max_depth + SCHEME_TAIL_COPY_THRESHOLD))
 
-static int __check_overflow_or_runstack_space(int max_depth, Scheme_Object **runstack)
+static int __check_overflow_or_runstack_space(int max_depth, Scheme_Object **runstack, Scheme_Object **runstack_start)
 {
 #ifdef DO_STACK_CHECK
   {
@@ -32,12 +49,12 @@ static int __check_overflow_or_runstack_space(int max_depth, Scheme_Object **run
     }
   }
 #endif
-  return __check_runstack_space(max_depth, runstack);
+  return __check_runstack_space(max_depth, runstack, runstack_start);
 }
 
 static void __check_top_runstack_depth(int max_depth)
 {
-  if (__check_runstack_space(max_depth, MZ_RUNSTACK)) {
+  if (__check_runstack_space(max_depth, MZ_RUNSTACK, MZ_RUNSTACK_START)) {
     scheme_log_abort("initial runstack is too small to start up");
     abort();
   }
@@ -48,7 +65,7 @@ static Scheme_Object *do_apply_k(void)
 {
   Scheme_Thread *p = scheme_current_thread;
   
-  if (__check_runstack_space(p->ku.k.i2, MZ_RUNSTACK)) {
+  if (__check_runstack_space(p->ku.k.i2, MZ_RUNSTACK, MZ_RUNSTACK_START)) {
     return (Scheme_Object *)scheme_enlarge_runstack(p->ku.k.i2, (void *(*)())do_apply_k);
   } else {
     Scheme_Object *o = (Scheme_Object *)p->ku.k.p1;

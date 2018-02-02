@@ -22,12 +22,12 @@
            [(tail-return-leaf? ret)
             (out "return ~a;" s)]
            [can-pre-pop?
-            (out "*__runstack_ptr = __orig_runstack;")
+            (out "__current_runstack = __orig_runstack;")
             (out "return ~a;" s)]
            [else
             (out-open "{")
             (out "Scheme_Object *__retval = ~a;" s)
-            (out "*__runstack_ptr = __orig_runstack;")
+            (out "__current_runstack = __orig_runstack;")
             (out "return __retval;")
             (out-close "}")])]
         [(multiple-return? ret) (loop (multiple-return-prefix ret))]

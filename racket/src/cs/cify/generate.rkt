@@ -70,10 +70,11 @@
                      (lambda-no-rest-args? (lam-e (car lams)))))
   (when leaf? (out "/* leaf */"))
   (generate-prototype vehicle #:open? #t)
+  (when (or (not leaf?) (vehicle-uses-top? vehicle))
+    (out "__LINK_THREAD_LOCAL"))
   (unless leaf?
-    (out "Scheme_Object ***__runstack_ptr = &MZ_RUNSTACK;")
-    (out "Scheme_Object **__runbase, **__orig_runstack = *__runstack_ptr;")
-    (out-open "if (__check_~arunstack_space(~a, __orig_runstack))"
+    (out "Scheme_Object **__runbase, **__orig_runstack = __current_runstack;")
+    (out-open "if (__check_~arunstack_space(~a, __orig_runstack, __current_runstack_start))"
               (if (vehicle-overflow-check? vehicle) "overflow_or_" "")
               (vehicle-max-runstack-depth vehicle))
     (out "return __handle_overflow_or_space(~a, __argc, __argv, ~a);"
@@ -162,7 +163,7 @@
      (when (hash-ref (lam-loop-targets lam) n #f)
        (out-margin "__recur_~a_~a:" (cify name) n))
      (clear-unused-ids ids runstack state)
-     (box-mutable-ids ids runstack state top-names)
+     (box-mutable-ids ids runstack lam state top-names)
      (generate (tail-return name lam ids leaf?) `(begin . ,body) lam (add-args (lam-env lam) ids) runstack
                knowns top-names state lambdas prim-names)
      (runstack-pop! runstack pushed-arg-count)
@@ -172,7 +173,7 @@
                                                      (vehicle-max-runstack-depth vehicle))))
      (set-lam-can-leaf?! lam (not (runstack-ever-synced? runstack)))]))
 
-(define (box-mutable-ids ids runstack state top-names)
+(define (box-mutable-ids ids runstack in-lam state top-names)
   (let loop ([ids ids])
     (unless (null? ids)
       (cond
@@ -182,7 +183,7 @@
                     (not (hash-ref top-names (car ids) #f)))
            (define s (let ([id (car ids)])
                        (if (hash-ref top-names id #f)
-                           (format "__top->~a" (cify id))
+                           (format "~a =" (top-ref in-lam id))
                            (runstack-assign runstack id))))
            (runstack-sync! runstack)
            (out "~a = scheme_box_variable(~a);" s s))
@@ -203,19 +204,19 @@
 ;; ----------------------------------------
 
 (define (generate ret e in-lam env runstack knowns top-names state lambdas prim-names)
-  (define (generate ret e in-lam env)
+  (define (generate ret e env)
     (match e
       [`(quote ,v)
        (generate-quote ret v)]
       [`(lambda . ,_)
-       (generate-closure ret e in-lam env)]
+       (generate-closure ret e env)]
       [`(case-lambda . ,_)
-       (generate-closure ret e in-lam env)]
+       (generate-closure ret e env)]
       [`(begin ,e)
-       (generate ret e in-lam env)]
+       (generate ret e env)]
       [`(begin ,e . ,r)
-       (generate (multiple-return "") e in-lam env)
-       (generate ret `(begin . ,r) in-lam env)]
+       (generate (multiple-return "") e env)
+       (generate ret `(begin . ,r) env)]
       [`(begin0 ,e . ,r)
        (define vals-id (genid '__vals))
        (out-open "{")
@@ -224,18 +225,17 @@
        (generate (multiple-return (lambda (s)
                                     (out "~a = ~a;" (runstack-assign runstack vals-id) s)
                                     (out-open "if (~a == SCHEME_MULTIPLE_VALUES) {" (runstack-ref runstack vals-id #:values-ok? #t))
-                                    (out "Scheme_Thread *p = scheme_current_thread;")
                                     (out "Scheme_Object **~a_vals;" vals-id)
-                                    (out "~a_vals = p->ku.multiple.array;" vals-id)
-                                    (out "~a_count = p->ku.multiple.count;" vals-id)
-                                    (out "if (SAME_OBJ(~a_vals, p->values_buffer))" vals-id)
-                                    (out "  p->values_buffer = NULL;")
+                                    (out "~a_vals = __current_thread->ku.multiple.array;" vals-id)
+                                    (out "~a_count = __current_thread->ku.multiple.count;" vals-id)
+                                    (out "if (SAME_OBJ(~a_vals, __current_thread->values_buffer))" vals-id)
+                                    (out "  __current_thread->values_buffer = NULL;")
                                     (out "~a = (Scheme_Object *)~a_vals;" (runstack-assign runstack vals-id) vals-id)
                                     (out-close+open "} else")
                                     (out "~a_count = 1;" vals-id)
                                     (out-close!)))
-                 e in-lam env)
-       (generate (multiple-return "") `(begin . ,r) in-lam env)
+                 e env)
+       (generate (multiple-return "") `(begin . ,r) env)
        (out-open "if (~a_count != 1)" vals-id)
        (return ret runstack #:can-omit? #t
                (format "scheme_values(~a_count, (Scheme_Object **)~a)" vals-id (runstack-ref runstack vals-id)))
@@ -246,9 +246,9 @@
        (runstack-pop! runstack)
        (out-close "}")]
       [`(if ,orig-tst ,thn ,els)
-       (define-values (tsts sync-for-gc? wrapper) (extract-inline-predicate orig-tst knowns #:compose? #t))
+       (define-values (tsts sync-for-gc? wrapper) (extract-inline-predicate orig-tst in-lam knowns #:compose? #t))
        (define tst-ids (for/list ([tst (in-list tsts)])
-                         (if (simple? tst state knowns)
+                         (if (simple? tst in-lam state knowns)
                              #f
                              (genid '__if))))
        (define all-simple? (for/and ([tst-id (in-list tst-ids)])
@@ -270,7 +270,7 @@
          (generate (if (eq? tst-id immediate-tst-id)
                        (format "~a =" (cify tst-id))
                        (make-runstack-assign runstack tst-id))
-                   tst in-lam env))
+                   tst env))
        (when sync-for-gc?
          (runstack-sync! runstack))
        (out-open "if (~a) {"
@@ -280,7 +280,7 @@
                                              [tst (in-list tsts)])
                                     (format "~a"
                                             (cond
-                                              [(not tst-id) (generate-simple tst env state runstack top-names knowns prim-names)]
+                                              [(not tst-id) (generate-simple tst env runstack in-lam state top-names knowns prim-names)]
                                               [(eq? tst-id immediate-tst-id) (cify tst-id)]
                                               [tst-id (runstack-ref runstack tst-id)])))
                                   ", "))))
@@ -289,12 +289,12 @@
        (define pre-branch (runstack-branch-before! runstack))
        (define pre-ref-use (ref-use-branch-before! state))
        (runstack-stage-clear-unused! runstack thn-refs els-refs state)
-       (generate ret thn in-lam env)
+       (generate ret thn env)
        (out-close+open "} else {")
        (runstack-stage-clear-unused! runstack els-refs thn-refs state)
        (define post-branch (runstack-branch-other! runstack pre-branch))
        (define post-ref-use (ref-use-branch-other! state pre-ref-use))
-       (generate ret els in-lam env)
+       (generate ret els env)
        (when (state-first-pass? state)
          (define-values (thn-refs els-refs) (runstack-branch-refs runstack pre-branch post-branch))
          (hash-set! state e (cons thn-refs els-refs)))
@@ -314,32 +314,32 @@
          (out "Scheme_Cont_Frame_Data ~a_frame;" wcm-id)
          (out "scheme_push_continuation_frame(&~a_frame);" wcm-id))
        (generate (make-runstack-assign runstack wcm-key-id)
-                 key in-lam env)
+                 key env)
        (generate (make-runstack-assign runstack wcm-val-id)
-                 val in-lam env)
+                 val env)
        (runstack-sync! runstack)
        (out "scheme_set_cont_mark(~a, ~a);"
             (runstack-ref runstack wcm-key-id)
             (runstack-ref runstack wcm-val-id))
        (runstack-pop! runstack 2)
-       (generate ret body in-lam env)
+       (generate ret body env)
        (unless (tail-return? ret)
          (out "scheme_pop_continuation_frame(&~a_frame);" wcm-id))
        (out-close "}")]
-      [`(let () . ,body) (generate ret `(begin . ,body) in-lam env)]
-      [`(let (,_) . ,_) (generate-let ret e in-lam env)]
+      [`(let () . ,body) (generate ret `(begin . ,body) env)]
+      [`(let (,_) . ,_) (generate-let ret e env)]
       [`(let ([,id ,rhs] . ,rest) . ,body)
        ;; One at a time, so runstack slot can be allocated after RHS:
-       (generate ret `(let ([,id ,rhs]) (let ,rest . ,body)) in-lam env)]
-      [`(letrec . ,_) (generate-let ret e in-lam env)]
-      [`(letrec* . ,_) (generate-let ret e in-lam env)]
+       (generate ret `(let ([,id ,rhs]) (let ,rest . ,body)) env)]
+      [`(letrec . ,_) (generate-let ret e env)]
+      [`(letrec* . ,_) (generate-let ret e env)]
       [`(call-with-values (lambda () . ,body1) (lambda (,ids ...) . ,body2))
        (define values-ret (if (for/or ([id (in-list ids)])
                                 (or (referenced? (hash-ref state id #f))
                                     (hash-ref top-names id #f)))
                               "/*needed*/"
                               ""))
-       (generate (multiple-return values-ret) `(begin . ,body1) in-lam env)
+       (generate (multiple-return values-ret) `(begin . ,body1) env)
        (out-open "{")
        (define bind-count
          (for/sum ([id (in-list ids)]
@@ -347,35 +347,35 @@
                                 (not (referenced? (hash-ref state id #f)))))
            (runstack-push! runstack id)
            1))
-       (generate-multiple-value-binds ids runstack state top-names)
-       (box-mutable-ids ids runstack state top-names)
-       (generate ret `(begin . ,body2) in-lam (add-args env ids))
+       (generate-multiple-value-binds ids runstack in-lam state top-names)
+       (box-mutable-ids ids runstack in-lam state top-names)
+       (generate ret `(begin . ,body2) (add-args env ids))
        (runstack-pop! runstack bind-count)
        (out-close "}")]
       [`(set! ,ref ,rhs)
        (define top? (hash-ref top-names ref #f))
        (define target
          (cond
-           [top? (format "__top->~a" (cify ref))]
+           [top? (top-ref in-lam ref)]
            [else (genid '__set)]))
        (unless top?
          (out-open "{")
          (out "Scheme_Object *~a;" target))
-       (generate (format "~a =" target) rhs in-lam env)
+       (generate (format "~a =" target) rhs env)
        (unless top?
          (out "SCHEME_UNBOX_VARIABLE_LHS(~a) = ~a;"
               (runstack-ref runstack (unref ref) #:ref (and (ref? ref) ref))
               target)
          (out-close "}"))
-       (generate ret '(void) in-lam env)]
+       (generate ret '(void) env)]
       [`(void) (return ret runstack #:can-omit? #t #:can-pre-pop? #t "scheme_void")]
       [`(void . ,r)
-       (generate ret `(begin ,@r (void)) in-lam env)]
+       (generate ret `(begin ,@r (void)) env)]
       [`(values ,r)
-       (generate ret r in-lam env)]
+       (generate ret r env)]
       [`null (return ret runstack #:can-omit? #t #:can-pre-pop? #t "scheme_null")]
       [`(,rator ,rands ...)
-       (generate-app ret rator rands in-lam env)]
+       (generate-app ret rator rands env)]
       [`,_
        (cond
          [(symbol-ref? e)
@@ -395,11 +395,11 @@
                                    (state-first-pass? state))
                           (adjust-state! state id -1))
                         (runstack-ref runstack id #:ref e)])]
-                    [(hash-ref top-names id #f) (format "__top->~a" (cify id))]
+                    [(hash-ref top-names id #f) (top-ref in-lam id)]
                     [else (format "__prims.~a" (cify id))]))]
          [else (generate-quote ret e)])]))
   
-  (define (generate-let ret e in-lam env)
+  (define (generate-let ret e env)
     (match e
       [`(,let-id ([,ids ,rhss] ...) . ,body)
        (define body-env (for/fold ([env env]) ([id (in-list ids)]
@@ -428,28 +428,27 @@
        (when let-one?
          (out "Scheme_Object *~a;" (cify let-one-id)))
        (when (eq? let-id 'letrec*)
-         (box-mutable-ids ids runstack state top-names))
+         (box-mutable-ids ids runstack in-lam state top-names))
        (for ([id (in-list ids)]
              [rhs (in-list rhss)])
          (cond
            [(eq? let-id 'letrec*)
-            (generate "" `(set! ,id ,rhs) in-lam rhs-env)]
+            (generate "" `(set! ,id ,rhs) rhs-env)]
            [(not (referenced? (hash-ref state id #f)))
-            (generate "" rhs in-lam rhs-env)]
+            (generate "" rhs rhs-env)]
            [else
             (define ret (cond
                           [let-one? (format "~a =" (cify let-one-id))]
-                          [(hash-ref top-names id #f)
-                           (format "__top->~a =" (cify id))]
+                          [(hash-ref top-names id #f) (format "~a =" (top-ref in-lam id))]
                           [else
                            (make-runstack-assign runstack id)]))
-            (generate ret rhs in-lam rhs-env)]))
+            (generate ret rhs rhs-env)]))
        (when let-one?
          (runstack-push! runstack (car ids) #:track-local? #t)
          (out "~a = ~a;" (runstack-assign runstack (car ids)) (cify let-one-id)))
        (when (eq? let-id 'let)
-         (box-mutable-ids ids runstack state top-names))
-       (generate ret `(begin . ,body) in-lam body-env)
+         (box-mutable-ids ids runstack in-lam state top-names))
+       (generate ret `(begin . ,body) body-env)
        (runstack-pop! runstack (if let-one? 1 pre-bind-count)
                       #:track-local? (eq? let-id 'let))
        (out-close "}")
@@ -467,27 +466,27 @@
                (define lam (hash-ref lambdas lam-e #f))
                (set-lam-unused?! lam #t)))))]))
 
-  (define (generate-app ret rator rands in-lam env)
+  (define (generate-app ret rator rands env)
     (define n (length rands))
     (cond
       [(and (symbol? rator)
-            (inline-function rator n rands knowns))
-       (generate-inline-app ret rator rands n in-lam env)]
+            (inline-function rator n rands in-lam knowns))
+       (generate-inline-app ret rator rands n env)]
       [(and (symbol? rator)
             (let ([k (hash-ref knowns rator #f)])
               (and (struct-constructor? k)
                    (struct-info-pure-constructor? (struct-constructor-si k))
                    k)))
        => (lambda (k)
-            (generate-inline-construct ret k rands n in-lam env))]
+            (generate-inline-construct ret k rands n env))]
       [else
-       (generate-general-app ret rator rands n in-lam env)]))
+       (generate-general-app ret rator rands n env)]))
 
-  (define (generate-inline-app ret rator rands n in-lam env)
-    (define need-sync? (not (inline-function rator n rands knowns #:can-gc? #f)))
+  (define (generate-inline-app ret rator rands n env)
+    (define need-sync? (not (inline-function rator n rands in-lam knowns #:can-gc? #f)))
     (define tmp-ids (for/list ([rand (in-list rands)]
                                [i (in-naturals)])
-                      (and (not (simple? rand state knowns))
+                      (and (not (simple? rand in-lam state knowns))
                            (genid (format "__arg_~a_" i)))))
     (define all-simple? (for/and ([tmp-id (in-list tmp-ids)])
                           (not tmp-id)))
@@ -501,27 +500,27 @@
           [rand (in-list rands)])
       (when tmp-id
         (generate (make-runstack-assign runstack tmp-id)
-                  rand in-lam env)))
+                  rand env)))
     (when need-sync?
       (runstack-sync! runstack))
     (define s (generate-simple (cons rator (for/list ([tmp-id (in-list tmp-ids)]
                                                       [rand (in-list rands)])
                                              (or tmp-id rand)))
-                               env state runstack top-names knowns prim-names))
+                               env runstack in-lam state top-names knowns prim-names))
     (return ret runstack #:can-pre-pop? #t s)
     (runstack-pop! runstack tmp-count)
     (unless all-simple? (out-close "}")))
 
-  (define (generate-inline-construct ret k rands n in-lam env)
+  (define (generate-inline-construct ret k rands n env)
     (define si (struct-constructor-si k))
     (out-open "{")
     (define struct-tmp-id (genid '__structtmp))
     (out "Scheme_Object *~a;" (cify struct-tmp-id))
     (runstack-sync! runstack)
     (out "~a = __malloc_struct(~a);" (cify struct-tmp-id) (struct-info-field-count si))
-    (out "__struct_set_type(~a, __top->~a);" (cify struct-tmp-id) (cify (struct-info-struct-id si)))
+    (out "__struct_set_type(~a, ~a);" (cify struct-tmp-id) (top-ref in-lam (struct-info-struct-id si)))
     (define all-simple? (for/and ([rand (in-list rands)])
-                          (simple? rand state knowns)))
+                          (simple? rand in-lam state knowns)))
     (define struct-id (and (not all-simple?) (genid '__struct)))
     (unless all-simple?
       (out-open "{")
@@ -537,7 +536,7 @@
       (generate (if all-simple?
                     to-struct-s
                     (format "~a =" (cify struct-tmp-id)))
-                rand in-lam env)
+                rand env)
       (unless all-simple?
         (out "~a ~a;" to-struct-s (cify struct-tmp-id))))
     (return ret runstack (if all-simple?
@@ -548,7 +547,7 @@
       (out-close "}"))
     (out-close "}"))
 
-  (define (generate-general-app ret rator rands n in-lam env)
+  (define (generate-general-app ret rator rands n env)
     (define known-target-lam (let ([f (hash-ref knowns rator #f)])
                                (and (function? f) (hash-ref lambdas (function-e f)))))
     ;; If the target is known for a tail call, put this lambda and
@@ -569,7 +568,7 @@
     ;; will be non-#f:
     (define rator-id (cond
                        [direct? #f]
-                       [(simple? rator state knowns) #f]
+                       [(simple? rator in-lam state knowns) #f]
                        [else (genid '__rator)]))
     ;; For a non-tail call, make a runstack id for every argument;
     ;; that part of the runstack will be argv.
@@ -578,7 +577,7 @@
     (define arg-ids (for/list ([rand (in-list rands)]
                                [i (in-naturals)])
                       (if (and direct-tail?
-                               (simple? rand state knowns))
+                               (simple? rand in-lam state knowns))
                           #f
                           (genid (format "__arg_~a_" i)))))
     (define last-non-simple-arg-id
@@ -594,14 +593,14 @@
           (let loop ([arg-ids arg-ids] [rands rands])
             (cond
               [(null? arg-ids) (values #f #f)]
-              [(simple? (car rands) state knowns) (loop (cdr arg-ids) (cdr rands))]
+              [(simple? (car rands) in-lam state knowns) (loop (cdr arg-ids) (cdr rands))]
               [else (values (car arg-ids) (car rands))]))))
     (define first-tmp-id (and first-non-simple-id
                               (genid '__argtmp)))
     (when first-non-simple-id
       (out "Scheme_Object *~a;" (cify first-tmp-id))
       (generate (format "~a =" (cify first-tmp-id))
-                first-non-simple-e in-lam env))
+                first-non-simple-e env))
     (when last-non-simple-arg-id ; could be the same as `first-non-simple-id`
       (out "Scheme_Object *~a;" (cify last-non-simple-arg-id)))
     (define declared-tmp? (or first-non-simple-id last-non-simple-arg-id))
@@ -627,16 +626,16 @@
               (cify first-tmp-id))]
         [(eq? id last-non-simple-arg-id)
          (generate (format "~a =" (cify id))
-                   e in-lam env)]
+                   e env)]
         [else
          (generate (make-runstack-assign runstack id)
-                   e in-lam env)]))
+                   e env)]))
     (define (generate-args #:simple? gen-simple?)
       (for ([arg-id (in-list arg-ids)]
             [rand (in-list rands)]
             #:when (and arg-id
                         (eq? (and gen-simple? #t)
-                             (simple? rand state knowns))))
+                             (simple? rand in-lam state knowns))))
         (generate-assign arg-id rand)))
     ;; For a non-tail call, generate simple arguments first, so
     ;; that the allocated runstacks are filled:
@@ -654,12 +653,12 @@
        (return ret runstack #:can-omit? #t
                (if (zero? n)
                    "__zero_values()"
-                   (format "scheme_values(~a, *__runstack_ptr)" n)))]
+                   (format "scheme_values(~a, __current_runstack)" n)))]
       ;; Call to a non-inlined primitive or to an unknown target
       [(not direct?)
        (define rator-s (if rator-id
                            (runstack-ref runstack rator-id)
-                           (generate-simple rator env state runstack top-names knowns prim-names)))
+                           (generate-simple rator env runstack in-lam state top-names knowns prim-names)))
        (define use-tail-apply? (and (tail-return? ret)
                                     (or (not (symbol? rator))
                                         (hash-ref env rator #f)
@@ -704,7 +703,7 @@
                [rand (in-list rands)]
                #:when arg-tmp-id)
            (generate (format "~a =" (cify arg-tmp-id))
-                     rand in-lam env)))
+                     rand env)))
        ;; Non-simple args are on the runstack. We need to move from
        ;; last to first, since the runstack staging area and the
        ;; and target argument area may overlap.
@@ -734,7 +733,7 @@
        (when any-simple?
          (out-close "}"))
        ;; Set the runstack pointer to the argument start, then jump:
-       (out "*__runstack_ptr = __runbase - ~a;" n)
+       (out "__current_runstack = __runbase - ~a;" n)
        (cond
          [(and (eq? known-target-lam (tail-return-lam ret))
                (= n (args-length (tail-return-self-args ret))))
@@ -748,7 +747,7 @@
           (out "__argv = __runbase - ~a;" n)
           (out "__argc = ~a;" n)
           (unless (null? (lam-free-var-refs known-target-lam))
-            (out "__self = __top->~a;" (cify (lam-id known-target-lam))))
+            (out "__self = ~a;" (top-ref in-lam (lam-id known-target-lam))))
           (out "goto __entry_~a;" (cify (lam-id known-target-lam)))])
        (lam-add-transitive-tail-apply! in-lam known-target-lam)]
       ;; Non-tail call to a known-target:
@@ -759,7 +758,7 @@
                                 (cify (vehicle-id (lam-vehicle known-target-lam))) n
                                 (runstack-stack-ref runstack)
                                 (if (vehicle-closure? (lam-vehicle known-target-lam))
-                                    (format ", __top->~a" (cify rator))
+                                    (format ", ~a" (top-ref in-lam rator))
                                     ""))])
                  (if (lam-can-tail-apply? known-target-lam)
                      (format "scheme_force_~avalue(~a)" (if (multiple-return? ret) "" "one_") s)
@@ -768,13 +767,13 @@
     (runstack-pop! runstack (+ arg-push-count (if rator-id 1 0)))
     (when open? (out-close "}")))
 
-  (define (generate-closure ret e in-lam env)
+  (define (generate-closure ret e env)
     (define lam (hash-ref lambdas e))
     (cond
       [(and (lam-moved-to-top? lam)
             (not (state-tops-pass? state)))
        ;; Lifted out after discovering that it has no free variables
-       (return ret runstack #:can-pre-pop? #t (format "__top->~a" (cify (lam-id lam))))]
+       (return ret runstack #:can-pre-pop? #t (top-ref in-lam (lam-id lam)))]
       [else
        (when in-lam (set-lam-under-lambda?! lam #t))
        (define name (format "~a" (lam-id lam)))
@@ -899,7 +898,7 @@
       [else
        (error 'generate-quote "not handled: ~e" e)]))
 
-  (generate ret e in-lam env))
+  (generate ret e env))
 
 ;; ----------------------------------------
 
@@ -910,8 +909,8 @@
     (generate-init-prims)
     (out-next)
     (out-open "void scheme_init_startup_instance(Scheme_Instance *__instance) {")
-    (out "Scheme_Object ***__runstack_ptr = &MZ_RUNSTACK;")
-    (out "Scheme_Object **__runbase = *__runstack_ptr;")
+    (out "__LINK_THREAD_LOCAL")
+    (out "Scheme_Object **__runbase = __current_runstack;")
     (out "MZ_GC_DECL_REG(1);")
     (out "MZ_GC_VAR_IN_REG(0, __instance);")
     (out "MZ_GC_REG();")
@@ -924,9 +923,9 @@
     (generate-top e)
     ;; Expects `(export (rename [<int-id> <ext-id>] ...))` for `exports`
     (for ([ex (in-list (cdr (cadr exports)))])
-      (out "scheme_instance_add(__instance, ~s, __top->~a);"
+      (out "scheme_instance_add(__instance, ~s, ~a);"
            (format "~a" (cadr ex))
-           (cify (car ex))))
+           (top-ref #f (car ex))))
 
     (out "MZ_GC_UNREG();")
     (out-close "}")
@@ -949,12 +948,12 @@
       [`(define ,id (letrec* . ,_))
        (generate-top-let e)]
       [`(define ,id ,rhs)
-       (generate (format "__top->~a =" (cify id)) rhs #f #hasheq()
+       (generate (format "~a =" (top-ref #f id)) rhs #f #hasheq()
                  runstack knowns top-names state lambdas prim-names)]
       [`(define-values (,ids ...) ,rhs)
        (generate (multiple-return "/*needed*/") rhs #f #hasheq()
                  runstack knowns top-names state lambdas prim-names)
-       (generate-multiple-value-binds ids runstack state top-names)]
+       (generate-multiple-value-binds ids runstack #f state top-names)]
       [`,_
        (generate "" e #f #hasheq() runstack knowns top-names state lambdas prim-names)]))
 
@@ -988,12 +987,12 @@
 
 ;; ----------------------------------------
 
-(define (generate-multiple-value-binds ids runstack state top-names)
+(define (generate-multiple-value-binds ids runstack in-lam state top-names)
   (for ([id (in-list ids)]
         [i (in-naturals)]
         #:when (or (hash-ref top-names id #f)
                    (referenced? (hash-ref state id #f))))
     (define s (if (hash-ref top-names id #f)
-                  (format "__top->~a" (cify id))
+                  (top-ref in-lam id)
                   (runstack-assign runstack id)))
-    (out "~a = scheme_current_thread->ku.multiple.array[~a];" s i)))
+    (out "~a = __current_thread->ku.multiple.array[~a];" s i)))
