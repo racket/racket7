@@ -10,17 +10,18 @@
          inline-clone
          known-inline->export-known)
 
+(define inline-base 3)
 (define inline-factor 3)
 (define init-inline-fuel 8)
 
 (define (can-inline? v)
   (match v
     [`(lambda ,args . ,bodys)
-     (smaller-than? bodys (* inline-factor (args-size args)))]
+     (smaller-than? bodys (+ inline-base (* inline-factor (args-size args))))]
     [`(case-lambda [,argss . ,bodyss] ...)
      (for/and ([args (in-list argss)]
                [bodys (in-list bodyss)])
-       (smaller-than? bodys (* inline-factor (args-size args))))]
+       (smaller-than? bodys (+ inline-base (* inline-factor (args-size args)))))]
     [`,_ #f]))
 
 (define (args-size args)

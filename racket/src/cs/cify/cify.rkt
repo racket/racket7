@@ -3,6 +3,7 @@
          racket/port
          "match.rkt"
          "out.rkt"
+         "prune.rkt"
          "unique.rkt"
          "sort.rkt"
          "id.rkt"
@@ -42,8 +43,11 @@
               #:orig-out orig-out)
   (generate-header)
 
+  ;; Inlining may have made some definitions useless:
+  (define pruned-e (prune-unused in-e exports))
+
   ;; Make sure all names are unique:
-  (define unique-e (re-unique in-e))
+  (define unique-e (re-unique pruned-e))
 
   ;; Find all `define`d names and `let[rec[*]]` names that are
   ;; flattend into the top sequence:
