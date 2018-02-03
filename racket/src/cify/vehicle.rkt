@@ -52,7 +52,7 @@
    lam
    (hash-set (lam-transitive-tail-applies lam) target-lam #t)))
 
-(define (merge-vehicles! lambdas state orig-out)
+(define (merge-vehicles! lambdas state)
   (define vehicles
     (for/fold ([vehicles #hash()]) ([lam (in-sorted-hash-values lambdas (compare symbol<? lam-id))]
                                     #:unless (lam-unused? lam))
@@ -78,9 +78,9 @@
         (set-lam-vehicle! lam vehicle)
         (set-vehicle-closure?! vehicle #t))
       (hash-set vehicles vehicle (add1 (hash-ref vehicles vehicle 0)))))
-  (fprintf orig-out "vehicles: ~a\n" (hash-count vehicles))
-  (fprintf orig-out "max vehicle size ~a\n" (for/fold ([n 0]) ([m (in-hash-values vehicles)])
-                                              (max n m)))
+  (printf "vehicles: ~a\n" (hash-count vehicles))
+  (printf "max vehicle size ~a\n" (for/fold ([n 0]) ([m (in-hash-values vehicles)])
+                                    (max n m)))
   ;; Fixpoint to determine tail-call behavior:
   (let loop ()
     (when (for*/fold ([changed? #f]) ([vehicle (in-hash-keys vehicles)]

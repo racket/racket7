@@ -1,6 +1,7 @@
 #lang racket/base
 
 (provide out
+         out-exact
          out-open
          out-close
          out-close+open
@@ -16,6 +17,9 @@
 (define (out fmt . args)
   (display indent (current-c-output-port))
   (apply out-margin fmt args))
+
+(define (out-exact s)
+  (displayln s (current-c-output-port)))
 
 (define (out-margin fmt . args)
   (define o (current-c-output-port))

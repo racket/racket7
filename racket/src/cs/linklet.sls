@@ -40,6 +40,7 @@
 
           primitive->compiled-position
           compiled-position->primitive
+          primitive-in-category?
 
           platform-independent-zo-mode? ; not exported to racket
           linklet-performance-init!   ; not exported to racket
@@ -97,6 +98,7 @@
 
   (define (primitive->compiled-position prim) #f)
   (define (compiled-position->primitive pos) #f)
+  (define (primitive-in-category? sym cat) #f)
 
   (define root-logger (|#%app| current-logger))
 

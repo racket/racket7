@@ -12,6 +12,7 @@
             '(primitive-table
               primitive->compiled-position
               compiled-position->primitive
+              primitive-in-category?
               
               linklet?
               compile-linklet             ; result is serializable

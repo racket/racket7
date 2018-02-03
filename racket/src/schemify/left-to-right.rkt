@@ -29,7 +29,7 @@
              `(let ([,id ,rhs])
                 . ,bodys)
              `(let ([,id ,rhs])
-                (let ,binds
+                (let ,binds ; <- allocate ids after all `rhs`s are evaluated
                   . ,bodys)))]
        [else
         (define id (car ids))

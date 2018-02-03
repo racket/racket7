@@ -425,7 +425,7 @@ sort.@LTO@: $(COMMON_HEADERS) \
          $(srcdir)/stypes.h
 startup.@LTO@: $(COMMON_HEADERS) $(srcdir)/schvers.h \
          $(srcdir)/stypes.h  $(srcdir)/schminc.h $(srcdir)/startup.inc ../cstartup.inc \
-         ../expander.inc $(srcdir)/expander-glue.inc
+         $(srcdir)/startup-glue.inc
 string.@LTO@: $(COMMON_HEADERS) $(RKTIO_HEADERS) \
          $(srcdir)/stypes.h    $(srcdir)/schvers.h $(srcdir)/mzmark_string.inc $(srcdir)/strops.inc \
          $(srcdir)/schustr.inc $(srcdir)/systype.inc
@@ -448,5 +448,3 @@ validate.@LTO@: $(COMMON_HEADERS) \
 # a redirect to "startup.inc"
 ../cstartup.inc:
 	echo '#include "startup.inc"' > ../cstartup.inc
-../expander.inc:
-	echo '/* none */' > ../expander.inc

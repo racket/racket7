@@ -5,10 +5,10 @@
          racket/file
          racket/extflonum
          racket/include
-         "schemify/schemify.rkt"
-         "schemify/serialize.rkt"
-         "schemify/known.rkt"
-         "schemify/lift.rkt")
+         "../schemify/schemify.rkt"
+         "../schemify/serialize.rkt"
+         "../schemify/known.rkt"
+         "../schemify/lift.rkt")
 
 (define skip-export? #f)
 (define for-cify? #f)

@@ -1,8 +1,9 @@
 /* This file is #included by expander.inc when it is built via cify */
-
-/* XFORM is disabled here */
-
 #include "schmach.h"
+
+#ifdef MZ_PRECISE_GC
+START_XFORM_SKIP;
+#endif
 
 /* Disable the use of source or bytecode: */
 #define SCHEME_STARTUP_DEFINED
@@ -677,4 +678,8 @@ static Scheme_Object *__validate(Scheme_Object *s)
   return s;
 }
 
+#endif
+
+#ifdef MZ_PRECISE_GC
+END_XFORM_SKIP;
 #endif

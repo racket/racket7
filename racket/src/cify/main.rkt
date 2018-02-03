@@ -18,29 +18,23 @@
          "struct.rkt"
          "union.rkt")
 
-(module+ main
-  (require racket/cmdline)
-  (command-line
-   #:args
-   (in-file out-file)
-   (define in
-     (call-with-input-file*
-      in-file
-      (lambda (in) (for/list ([e (in-port read in)])
-                     e))))
-   (define orig-out (current-output-port))
-   (call-with-output-file*
-    out-file
-    #:exists 'truncate/replace
-    (lambda (out)
-      (parameterize ([current-c-output-port out])
-        (to-c (car in) `(begin . ,(cdr in))
-              #:orig-out orig-out))))))
+(provide (rename-out [main-cify cify]))
+
+(define (main-cify out-file exports in-e prim-knowns
+                   #:preamble [preamble '()]
+                   #:postamble [postamble '()])
+  (call-with-output-file*
+   out-file
+   #:exists 'truncate/replace
+   (lambda (out)
+     (parameterize ([current-c-output-port out])
+       (for-each out-exact preamble)
+       (to-c exports in-e prim-knowns)
+       (for-each out-exact postamble)))))
 
 ;; ----------------------------------------
 
-(define (to-c exports in-e
-              #:orig-out orig-out)
+(define (to-c exports in-e prim-knowns)
   (generate-header)
 
   ;; Inlining may have made some definitions useless:
@@ -88,8 +82,8 @@
       (define vehicles (for/list ([lam (in-sorted-hash-values lambdas (compare symbol<? lam-id))])
                          (lam-vehicle lam)))
       (define max-top-runstack-depth
-        (generate-tops e 0 exports knowns top-names state lambdas prim-names))
-      (generate-vehicles vehicles lambdas knowns top-names state prim-names)
+        (generate-tops e 0 exports knowns top-names state lambdas prim-names prim-knowns))
+      (generate-vehicles vehicles lambdas knowns top-names state prim-names prim-knowns)
       (hash-set! state '#:done? #t)
       (reset-genid-counters! '(__args))
       max-top-runstack-depth))
@@ -119,14 +113,14 @@
   (out "THREAD_LOCAL_DECL(static struct startup_instance_top_t *__startup_instance_top);")
   (out "#define __top ___startup_instance_top")
   
-  (define vehicles (merge-vehicles! lambdas state orig-out))
+  (define vehicles (merge-vehicles! lambdas state))
 
   ;; Generate all the lambda bodies:
   (generate-prototypes vehicles)
-  (generate-vehicles vehicles lambdas knowns top-names state prim-names)
+  (generate-vehicles vehicles lambdas knowns top-names state prim-names prim-knowns)
 
   ;; Generate top-level sequence, this time to output:
   (hash-set! state '#:tops? #t)
-  (generate-tops e max-top-runstack-depth exports knowns top-names state lambdas prim-names)
+  (generate-tops e max-top-runstack-depth exports knowns top-names state lambdas prim-names prim-knowns)
 
   (generate-footer))

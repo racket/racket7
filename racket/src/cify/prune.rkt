@@ -81,7 +81,7 @@
        (find-body! body)]))
 
   (find-candidate-ids! e)
-  (for ([ex (in-list (cdr (cadr exports)))])
+  (for ([ex (in-list exports)])
     (hash-remove! candidate-ids (cadr ex)))
   (find! e)
   (prune e))

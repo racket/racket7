@@ -33,12 +33,17 @@ SHARED_OK static int recompile_every_compile = 0;
 
 static Scheme_Object *constant_symbol;
 static Scheme_Object *consistent_symbol;
+static Scheme_Object *noncm_symbol;
+static Scheme_Object *immediate_symbol;
+static Scheme_Object *omitable_symbol;
+static Scheme_Object *folding_symbol;
 
 THREAD_LOCAL_DECL(Scheme_Hash_Table *local_primitive_tables);
 
 static Scheme_Object *primitive_table(int argc, Scheme_Object **argv);
 static Scheme_Object *primitive_to_position(int argc, Scheme_Object **argv);
 static Scheme_Object *position_to_primitive(int argc, Scheme_Object **argv);
+static Scheme_Object *primitive_in_category_p(int argc, Scheme_Object **argv);
 
 static Scheme_Object *linklet_p(int argc, Scheme_Object **argv);
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv);
@@ -113,10 +118,20 @@ void scheme_init_linklet(Scheme_Startup_Env *env)
   constant_symbol = scheme_intern_symbol("constant");
   consistent_symbol = scheme_intern_symbol("consistent");
 
+  REGISTER_SO(noncm_symbol);
+  REGISTER_SO(immediate_symbol);
+  REGISTER_SO(omitable_symbol);
+  REGISTER_SO(folding_symbol);
+  noncm_symbol = scheme_intern_symbol("noncm");
+  immediate_symbol = scheme_intern_symbol("immediate");
+  omitable_symbol = scheme_intern_symbol("omitable");
+  folding_symbol = scheme_intern_symbol("folding");
+
   scheme_switch_prim_instance(env, "#%linklet");
 
   ADD_IMMED_PRIM("primitive->compiled-position", primitive_to_position, 1, 1, env);
   ADD_IMMED_PRIM("compiled-position->primitive", position_to_primitive, 1, 1, env);
+  ADD_IMMED_PRIM("primitive-in-category?", primitive_in_category_p, 2, 2, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
   ADD_PRIM_W_ARITY2("compile-linklet", compile_linklet, 1, 5, 2, 2, env);
@@ -252,6 +267,40 @@ static Scheme_Object *position_to_primitive(int argc, Scheme_Object **argv)
   else
     v = NULL;
   return (v ? v : scheme_false);
+}
+
+static Scheme_Object *primitive_in_category_p(int argc, Scheme_Object **argv)
+{
+  Scheme_Object *v, *cat;
+  int r;
+  
+  if (!SCHEME_SYMBOLP(argv[0]))
+    scheme_wrong_contract("primitive-in-category?", "symbol?", 0, argc, argv);
+  cat = argv[1];
+  if (!SCHEME_SYMBOLP(cat))
+    scheme_wrong_contract("primitive-in-category?", "symbol?", 1, argc, argv);
+
+  v = scheme_hash_get(scheme_startup_env->all_primitives_table, argv[0]);
+  if (!v)
+    r = 0;
+  else if (SCHEME_PRIMP(v)) {
+    int opt = ((Scheme_Prim_Proc_Header *)v)->flags & SCHEME_PRIM_OPT_MASK;
+    if (SAME_OBJ(cat, noncm_symbol))
+      r = (opt >= SCHEME_PRIM_OPT_NONCM);
+    else if (SAME_OBJ(cat, immediate_symbol))
+      r  = (opt >= SCHEME_PRIM_OPT_IMMEDIATE);
+    else if (SAME_OBJ(cat, folding_symbol))
+      r = (opt >= SCHEME_PRIM_OPT_FOLDING);
+    else if (SAME_OBJ(cat, omitable_symbol))
+      r = (SCHEME_PRIM_PROC_OPT_FLAGS(v) & (SCHEME_PRIM_IS_OMITABLE_ANY
+                                            | SCHEME_PRIM_IS_UNSAFE_FUNCTIONAL
+                                            | SCHEME_PRIM_IS_UNSAFE_OMITABLE));
+    else
+      r = 0;
+  } else
+    r = 0;
+
+  return (r ? scheme_true : scheme_false);
 }
 
 static Scheme_Object *linklet_p(int argc, Scheme_Object **argv)

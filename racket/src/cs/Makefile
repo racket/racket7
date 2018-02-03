@@ -20,16 +20,7 @@ PRIMITIVES_TABLES = primitive/kernel.ss primitive/unsafe.ss primitive/flfxnum.ss
                     primitive/futures.ss primitive/foreign.ss primitive/place.ss \
                     primitive/linklet.ss primitive/internal.ss
 
-SCHEMIFY_SRC_DEPS = schemify/schemify.rkt schemify/known.rkt schemify/match.rkt \
-                    schemify/find-definition.rkt schemify/left-to-right.rkt schemify/mutated.rkt \
-                    schemify/struct-type-info.rkt schemify/import.rkt schemify/mutated-state.rkt \
-                    schemify/simple.rkt schemify/serialize.rkt schemify/let.rkt schemify/equal.rkt \
-                    schemify/lift.rkt schemify/jitify.rkt schemify/interpret.rkt schemify/size.rkt \
-                    schemify/optimize.rkt schemify/literal.rkt schemify/infer-known.rkt \
-                    schemify/inline.rkt schemify/export.rkt schemify/find-known.rkt schemify/letrec.rkt \
-                    schemify/pthread-parameter.rkt schemify/quoted.rkt schemify/main.rkt
-
-CONVERT_DEPS = convert.rkt $(SCHEMIFY_SRC_DEPS) $(PRIMITIVES_TABLES)
+CONVERT_DEPS = convert.rkt $(PRIMITIVES_TABLES)
 
 CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt
 
@@ -87,16 +78,6 @@ expander.so: expander.sls compiled/expander.scm $(PRIMITIVES_TABLES) $(EXPANDER_
 compiled/expander.scm: ../expander/compiled/expander.rktl $(CONVERT_DEPS)
 	$(CONVERT) ../expander/compiled/expander.rktl compiled/expander.scm
 
-expander-inc:
-	$(RACKET) -l- raco make cify/cify.rkt
-	$(MAKE) ../build/racket/expander.inc
-
-../build/racket/expander.inc: compiled/expander.rktd cify/compiled/cify_rkt.dep
-	$(RACKET) cify/cify.rkt compiled/expander.rktd ../build/racket/expander.inc
-
-compiled/expander.rktd: ../expander/compiled/expander.rktl $(CONVERT_DEPS)
-	$(CONVERT) --for-cify ../expander/compiled/expander.rktl compiled/expander.rktd
-
 ..expander/compiled/expander.rktl:
 	$(MAKE) expander-rktl
 
@@ -122,18 +103,18 @@ compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
 # limitation of the flattener.
 IGNORE = ++knot read - ++direct kernel ++pure ../../collects/racket/private/collect.rkt
 
-compiled/schemify.rktl: $(SCHEMIFY_SRC_DEPS)
+compiled/schemify.rktl:
 	$(RACKET) -N raco -l- raco make ../expander/bootstrap-run.rkt
-	$(RACKET) ../expander/bootstrap-run.rkt -t schemify/main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/schemify.rktl
+	$(RACKET) ../expander/bootstrap-run.rkt -t ../schemify/main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/schemify.rktl
 
 
 # Used by schemify.sls at compile time
 compiled/known.scm: compiled/known.rktl $(CONVERT_DEPS)
 	$(CONVERT) --skip-export compiled/known.rktl compiled/known.scm
 
-compiled/known.rktl: schemify/known.rkt
+compiled/known.rktl: ../schemify/known.rkt
 	$(RACKET) -N raco -l- raco make ../expander/bootstrap-run.rkt
-	$(RACKET) ../expander/bootstrap-run.rkt -t schemify/known.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/known.rktl
+	$(RACKET) ../expander/bootstrap-run.rkt -t ../schemify/known.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/known.rktl
 
 
 regexp-demo: regexp.so

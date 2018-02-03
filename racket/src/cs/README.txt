@@ -117,9 +117,8 @@ The rest of the layers are implemented in Racket:
    schemify
 
 Each of those layers is implemented in a sibling directory of this
-one, except that "schemify" is a subdirectory of this one. Each layer
-is expanded (using "expander", of course) and then compiled to Chez
-Scheme (using "schemify") to implement Racket.
+one. Each layer is expanded (using "expander", of course) and then
+compiled to Chez Scheme (using "schemify") to implement Racket.
 
 The fully expanded form of each layer must not refer to any
 functionality of previous layers. For example, the expander "thread"
@@ -184,9 +183,9 @@ Files in this directory:
          works. For example "demo/regexp.ss" runs the regexp matcher
          on a few examples. To run "demo/*.ss", use `make *-demo`.
 
- schemify/schemify.rkt - Source of "compiled/schemify.scm", which is
-         part of the implementation of linklets --- specifically, for
-         compiling a Racket linklet to a Chez Scheme procedure.
+ ../schemify/schemify.rkt - Source of "compiled/schemify.scm", which
+         is part of the implementation of linklets --- specifically,
+         for compiling a Racket linklet to a Chez Scheme procedure.
 
  other *.rkt - Racket scripts like "convert.rkt" or comparisions like
          "demo/regexp.rkt". For example, you can run "demo/regexp.rkt"
@@ -311,9 +310,9 @@ Status and Thoughts on Various Racket Subsystems
 
  * Applicable structs work by adding an indirection to each function
    call when the target is not obviously a plain procedure; with the
-   analysis in "schemify/schemify.rkt", the indirection is not needed
-   often in a typical program, and the overhead appears to be light
-   when it is needed.
+   analysis in "../schemify/schemify.rkt", the indirection is not
+   needed often in a typical program, and the overhead appears to be
+   light when it is needed.
 
  * Racket's delimited continuations, continuation marks, threads, and
    events are mostly in place (see "rumble/control.ss",
