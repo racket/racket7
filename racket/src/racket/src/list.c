@@ -117,7 +117,6 @@ Scheme_Object *scheme_make_immutable_hasheqv(int argc, Scheme_Object *argv[]);
 static Scheme_Object *direct_hash(int argc, Scheme_Object *argv[]);
 static Scheme_Object *direct_hasheq(int argc, Scheme_Object *argv[]);
 static Scheme_Object *direct_hasheqv(int argc, Scheme_Object *argv[]);
-static Scheme_Object *hash_table_count(int argc, Scheme_Object *argv[]);
 static Scheme_Object *hash_table_copy(int argc, Scheme_Object *argv[]);
 static Scheme_Object *hash_p(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_hash_eq_p(int argc, Scheme_Object *argv[]);
@@ -593,7 +592,7 @@ scheme_init_list (Scheme_Startup_Env *env)
 						      1, 1, 1),
 			     env);
   scheme_addto_prim_instance("hash-count",
-			     scheme_make_immed_prim(hash_table_count,
+			     scheme_make_immed_prim(scheme_checked_hash_count,
 						    "hash-count",
 						    1, 1),
 			     env);
@@ -2238,7 +2237,7 @@ Scheme_Hash_Table *scheme_make_hash_table_eqv()
   return t;
 }
 
-static Scheme_Object *hash_table_count(int argc, Scheme_Object *argv[])
+Scheme_Object *scheme_checked_hash_count(int argc, Scheme_Object *argv[])
 {
   Scheme_Object *v = argv[0];
 
@@ -3111,8 +3110,8 @@ static Scheme_Object *hash_keys_subset_p_slow(int argc, Scheme_Object *argv[])
     return NULL;
   }
 
-  i1 = hash_table_count(1, argv);
-  c2 = hash_table_count(1, b);
+  i1 = scheme_checked_hash_count(1, argv);
+  c2 = scheme_checked_hash_count(1, b);
   if (SCHEME_INT_VAL(i1) > SCHEME_INT_VAL(c2))
     return scheme_false;
 
@@ -3503,7 +3502,15 @@ static Scheme_Object *chaperone_hash_key(const char *name, Scheme_Object *table,
 {
   return chaperone_hash_op(name, table, key, NULL, 3, scheme_null);
 }
-static void chaperone_hash_key_value(const char *name, Scheme_Object *obj, Scheme_Object *key, Scheme_Object **_chap_key, Scheme_Object **_chap_val, int ischap)
+
+Scheme_Object *scheme_chaperone_hash_key(const char *name, Scheme_Object *table, Scheme_Object *key)
+{
+  return chaperone_hash_key(name, table, key);
+}
+
+static void chaperone_hash_key_value(const char *name, Scheme_Object *obj, Scheme_Object *key,
+                                     Scheme_Object **_chap_key, Scheme_Object **_chap_val,
+                                     int ischap)
 {
   Scheme_Object *chap_key, *chap_val;
   chap_key = chaperone_hash_key(name, obj, key);
@@ -3512,6 +3519,13 @@ static void chaperone_hash_key_value(const char *name, Scheme_Object *obj, Schem
     no_post_key(name, chap_key, ischap);
   *_chap_key = chap_key;
   *_chap_val = chap_val;
+}
+
+void scheme_chaperone_hash_key_value(const char *name, Scheme_Object *obj, Scheme_Object *k,
+                                     Scheme_Object **_chap_key, Scheme_Object **_chap_val,
+                                     int ischap)
+{
+  return chaperone_hash_key_value(name, obj, k, _chap_key, _chap_val, ischap);
 }
 
 static Scheme_Object *chaperone_hash_clear(const char *name, Scheme_Object *table)
@@ -4318,7 +4332,7 @@ Scheme_Object *unsafe_hash_tree_iterate_key_value(int argc, Scheme_Object *argv[
   key = subtree->els[i];
 
   if (SCHEME_NP_CHAPERONEP(obj)) {
-    chaperone_hash_key_value("unsafe-immutable-hash-iterate-pair",
+    chaperone_hash_key_value("unsafe-immutable-hash-iterate-key+value",
                              obj, subtree->els[i], &res[0], &res[1], 0);
   } else {
     res[0] = key;

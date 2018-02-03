@@ -251,20 +251,91 @@ static MZ_INLINE Scheme_Object *__int_add(Scheme_Object *a, Scheme_Object *b)
   return scheme_make_integer(SCHEME_INT_VAL(a) + SCHEME_INT_VAL(b));
 }
 
+/* Can GC if not in fixnum range */
+static Scheme_Object *__number_add1(Scheme_Object *a)
+{
+  if (SCHEME_INTP(a)) {
+    intptr_t v;
+    v = SCHEME_INT_VAL(a);
+    if (v < 0x3FFFFFFF)
+      return scheme_make_integer(v + 1);
+  }
+
+  return scheme_bin_plus(a, scheme_make_integer(1));
+}
+
+/* Can GC if not in fixnum range */
+static Scheme_Object *__number_sub1(Scheme_Object *a)
+{
+  if (SCHEME_INTP(a)) {
+    intptr_t v;
+    v = SCHEME_INT_VAL(a);
+    if (v > -0x3FFFFFFF)
+      return scheme_make_integer(v - 1);
+  }
+
+  return scheme_bin_minus(a, scheme_make_integer(1));
+}
+
+#define __SCHEME_BIN_NUMBER_COMP(id, op, scheme_id)             \
+  static MZ_INLINE int id(Scheme_Object *a, Scheme_Object *b) { \
+    if (SCHEME_INTP(a) && SCHEME_INTP(b))                       \
+      return (SCHEME_INT_VAL(a) op SCHEME_INT_VAL(b));          \
+    return scheme_id(a, b);                                     \
+  }
+__SCHEME_BIN_NUMBER_COMP(__number_eq, ==, scheme_bin_eq)
+__SCHEME_BIN_NUMBER_COMP(__number_gt, >, scheme_bin_gt)
+__SCHEME_BIN_NUMBER_COMP(__number_lt, <, scheme_bin_lt)
+__SCHEME_BIN_NUMBER_COMP(__number_gt_eq, >=, scheme_bin_gt_eq)
+__SCHEME_BIN_NUMBER_COMP(__number_lt_eq, <=, scheme_bin_lt_eq)
+
+static int __number_zerop(Scheme_Object *a)
+{
+  if (SCHEME_INTP(a))
+    return SCHEME_INT_VAL(a) == 0;
+  else
+    return scheme_is_zero(a);
+}
+
 #define __SCHEME_PREDFUNC(id, ID) static MZ_INLINE int id(Scheme_Object *v) { return ID(v); }
 
 __SCHEME_PREDFUNC(__scheme_truep, SCHEME_TRUEP)
 __SCHEME_PREDFUNC(__scheme_falsep, SCHEME_FALSEP)
 __SCHEME_PREDFUNC(__scheme_nullp, SCHEME_NULLP)
+__SCHEME_PREDFUNC(__scheme_eof_objectp, SCHEME_EOFP)
+__SCHEME_PREDFUNC(__scheme_voidp, SCHEME_VOIDP)
 __SCHEME_PREDFUNC(__scheme_boolp, SCHEME_BOOLP)
 __SCHEME_PREDFUNC(__scheme_pairp, SCHEME_PAIRP)
 __SCHEME_PREDFUNC(__scheme_numberp, SCHEME_NUMBERP)
+__SCHEME_PREDFUNC(__scheme_charp, SCHEME_CHARP)
 __SCHEME_PREDFUNC(__scheme_chaperone_vectorp, SCHEME_CHAPERONE_VECTORP)
 __SCHEME_PREDFUNC(__scheme_chaperone_boxp, SCHEME_CHAPERONE_BOXP)
 __SCHEME_PREDFUNC(__scheme_symbolp, SCHEME_SYMBOLP)
 __SCHEME_PREDFUNC(__scheme_keywordp, SCHEME_KEYWORDP)
 __SCHEME_PREDFUNC(__scheme_char_stringp, SCHEME_CHAR_STRINGP)
 __SCHEME_PREDFUNC(__scheme_byte_stringp, SCHEME_BYTE_STRINGP)
+
+static MZ_INLINE int __scheme_hashp(Scheme_Object *v)
+{
+  if (SCHEME_NP_CHAPERONEP(v)) v = SCHEME_CHAPERONE_VAL(v);
+  return SCHEME_HASHTRP(v) || SCHEME_HASHTP(v) || SCHEME_BUCKTP(v);
+}
+
+/* GC *not* possible during scheme_is_list */
+static MZ_INLINE int __scheme_listp(Scheme_Object *v)
+{
+  return scheme_is_list(v);
+}
+
+static MZ_INLINE int __scheme_char_eq(Scheme_Object *a, Scheme_Object *b)
+{
+  return SCHEME_CHAR_VAL(a) == SCHEME_CHAR_VAL(b);
+}
+
+static MZ_INLINE int __scheme_char_whitespacep(Scheme_Object *c)
+{
+  return scheme_isspace(SCHEME_CHAR_VAL(c));
+}
 
 static MZ_INLINE Scheme_Object *__authentic_vector_ref(Scheme_Object *v, Scheme_Object *i)
 {
@@ -310,6 +381,24 @@ static MZ_INLINE Scheme_Object *__box_set(Scheme_Object *b, Scheme_Object *a)
   return scheme_void;
 }
 
+static MZ_INLINE Scheme_Object *__weak_box_value(Scheme_Object *o)
+{
+  o = SCHEME_BOX_VAL(o);
+  if (!o)
+    return scheme_false;
+  return o;
+}
+
+#if 0
+static MZ_INLINE Scheme_Object *__weak_box_value2(Scheme_Object *o, Scheme_Object *defval)
+{
+  o = SCHEME_BOX_VAL(o);
+  if (!o)
+    return defval;
+  return o;
+}
+#endif
+
 static MZ_INLINE Scheme_Object *__pair_car(Scheme_Object *p)
 {
   return SCHEME_CAR(p);
@@ -340,7 +429,8 @@ static MZ_INLINE Scheme_Object *__pair_cddr(Scheme_Object *p)
   return SCHEME_CDR(SCHEME_CDR(p));
 }
 
-/* Only when `default` is definitely not a procedure: */
+/* Only when `default` is definitely not a procedure */
+/* Can GC */
 static Scheme_Object *__hash_ref(Scheme_Object *ht, Scheme_Object *key, Scheme_Object *defval)
 {
   Scheme_Object *v;
@@ -385,6 +475,7 @@ static Scheme_Object *__hash_ref(Scheme_Object *ht, Scheme_Object *key, Scheme_O
   }
 }
 
+/* Can GC */
 static Scheme_Object *__hash_ref2(Scheme_Object *ht, Scheme_Object *key)
 {
   Scheme_Object *argv[2], *v;
@@ -404,10 +495,138 @@ static Scheme_Object *__hash_ref2(Scheme_Object *ht, Scheme_Object *key)
   return v;
 }
 
+/* Can GC */
+static Scheme_Object *__hash_set(Scheme_Object *ht, Scheme_Object *key, Scheme_Object *val)
+{
+  Scheme_Object *argv[3], *v;
+  MZ_GC_DECL_REG(3);
+
+  MZ_GC_VAR_IN_REG(0, argv[0]);
+  MZ_GC_VAR_IN_REG(1, argv[1]);
+  MZ_GC_VAR_IN_REG(2, argv[2]);
+  MZ_GC_REG();
+
+  argv[0] = ht;
+  argv[1] = key;
+  argv[2] = val;
+
+  v = scheme_hash_table_put(3, argv);
+
+  MZ_GC_UNREG();
+
+  return v;
+}
+
+/* Can GC in the general case */
+static Scheme_Object *__hash_count(Scheme_Object *ht)
+{
+  if (SCHEME_CHAPERONEP(ht)) 
+    ht = SCHEME_CHAPERONE_VAL(ht);
+
+  if (SCHEME_HASHTP(ht)) {
+    Scheme_Hash_Table *t = (Scheme_Hash_Table *)ht;
+    return scheme_make_integer(t->count);
+  } else if (SCHEME_HASHTRP(ht)) {
+    Scheme_Hash_Tree *t = (Scheme_Hash_Tree *)ht;
+    return scheme_make_integer(t->count);
+  } else {
+    Scheme_Object *argv[1], *v;
+    MZ_GC_DECL_REG(1);
+    
+    MZ_GC_VAR_IN_REG(0, argv[0]);
+    MZ_GC_REG();
+    
+    argv[0] = ht;
+    
+    v = scheme_checked_hash_count(1, argv);
+    
+    MZ_GC_UNREG();
+
+    return v;
+  }
+}
+
+/* Can GC */
+static Scheme_Object *__hash_iterate_first(Scheme_Object *ht)
+{
+  Scheme_Object *argv[1], *v;
+  MZ_GC_DECL_REG(1);
+    
+  MZ_GC_VAR_IN_REG(0, argv[0]);
+  MZ_GC_REG();
+  
+  argv[0] = ht;
+  
+  v = scheme_hash_table_iterate_start(1, argv);
+  
+  MZ_GC_UNREG();
+  
+  return v;
+}
+
+/* Can GC */
+static Scheme_Object *__unsafe_immutable_hash_iterate_first(Scheme_Object *ht)
+{
+  if (SCHEME_NP_CHAPERONEP(ht)) ht = SCHEME_CHAPERONE_VAL(ht);
+  return scheme_unsafe_hash_tree_start((Scheme_Hash_Tree *)ht);
+}
+
+/* Can GC */
 static Scheme_Object *__unsafe_immutable_hash_iterate_next(Scheme_Object *ht, Scheme_Object *i)
 {
   if (SCHEME_NP_CHAPERONEP(ht)) ht = SCHEME_CHAPERONE_VAL(ht);
   return scheme_unsafe_hash_tree_next((Scheme_Hash_Tree *)ht, i);
+}
+
+/* Can GC in case of chaperone */
+static Scheme_Object *__unsafe_immutable_hash_iterate_key(Scheme_Object *ht, Scheme_Object *idx)
+{
+  Scheme_Object *key;
+  Scheme_Hash_Tree *subtree;
+  int i;
+  
+  scheme_unsafe_hash_tree_subtree(ht, idx, &subtree, &i);
+  key = subtree->els[i];
+  
+  if (SCHEME_NP_CHAPERONEP(ht))
+    return scheme_chaperone_hash_key("unsafe-immutable-hash-iterate-key", ht, idx);
+  else
+    return key;
+}
+
+/* Can GC */
+static Scheme_Object *__unsafe_immutable_hash_iterate_key_value(Scheme_Object *ht, Scheme_Object *idx)
+{
+  Scheme_Object *key, *res[2], *v;
+  Scheme_Hash_Tree *subtree;
+  int i;
+  MZ_GC_DECL_REG(2);
+    
+  MZ_GC_VAR_IN_REG(0, res[0]);
+  MZ_GC_VAR_IN_REG(1, res[1]);
+  MZ_GC_REG();
+
+  scheme_unsafe_hash_tree_subtree(ht, idx, &subtree, &i);
+  key = subtree->els[i];
+
+  if (SCHEME_NP_CHAPERONEP(ht)) {
+    scheme_chaperone_hash_key_value("unsafe-immutable-hash-iterate-key+value",
+                                    ht, subtree->els[i], &res[0], &res[1], 0);
+  } else {
+    res[0] = key;
+    res[1] = scheme_unsafe_hash_tree_access(subtree, i);
+  }
+
+  v = scheme_values(2, res);
+
+  MZ_GC_UNREG();
+
+  return v;
+}
+
+static MZ_INLINE Scheme_Object *__prefab_struct_key(Scheme_Object *v)
+{
+  return scheme_prefab_struct_key(v);
 }
 
 static Scheme_Object *__zero_values()

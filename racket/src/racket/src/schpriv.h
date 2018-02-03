@@ -1014,6 +1014,11 @@ int scheme_hash_tree_equal(Scheme_Hash_Tree *t1, Scheme_Hash_Tree *t2);
 int scheme_is_hash_tree_equal(Scheme_Object *o);
 int scheme_is_hash_tree_eqv(Scheme_Object *o);
 
+Scheme_Object *scheme_chaperone_hash_key(const char *name, Scheme_Object *table, Scheme_Object *key);
+void scheme_chaperone_hash_key_value(const char *name, Scheme_Object *obj, Scheme_Object *k,
+                                     Scheme_Object **_chap_key, Scheme_Object **_chap_val,
+                                     int ischap);
+
 /*========================================================================*/
 /*                              structs                                   */
 /*========================================================================*/
@@ -1141,7 +1146,7 @@ Scheme_Struct_Type *scheme_make_prefab_struct_type_raw(Scheme_Object *base,
 					int num_islots,
 					Scheme_Object *uninit_val,
 					char *immutable_pos_list);
-Scheme_Object *scheme_prefab_struct_key(Scheme_Object *s);
+XFORM_NONGCING Scheme_Object *scheme_prefab_struct_key(Scheme_Object *s);
 #ifdef MZ_USE_PLACES
 Scheme_Object *scheme_make_serialized_struct_instance(Scheme_Object *s, int num_slots);
 #endif
@@ -3674,6 +3679,7 @@ Scheme_Object *scheme_checked_char_to_integer(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_integer_to_char(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_make_vector(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_hash_ref(int argc, Scheme_Object *argv[]);
+Scheme_Object *scheme_checked_hash_count(int argc, Scheme_Object *argv[]);
 
 Scheme_Object *scheme_check_not_undefined (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_check_assign_not_undefined (int argc, Scheme_Object *argv[]);
