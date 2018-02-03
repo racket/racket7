@@ -102,30 +102,6 @@
                    [current-namespace (make-kernel-namespace)])
       ((dynamic-require 'setup/private/command-name 'get-names))))
 
-  ;; Poor-man's processing of the command-line flags to drop strings
-  ;; that will not be parsed as flags by "parse-cmdline.rkt". We don't
-  ;; want to load "parse-cmdline.rkt" because it takes a long time with
-  ;; bytecode files disabled, and we're not yet sure whether to trust
-  ;; bytecode files that do exist.
-  (define-values (filter-flags)
-    (lambda (flags)
-      (if (or (null? flags)
-              (not (regexp-match? #rx"^-" (car flags)))
-              (equal? "-l" (car flags)))
-          null
-          (if (equal? "-P" (car flags))
-              (if ((length flags) . > . 5)
-                  (filter-flags (list-tail flags 5))
-                  null)
-              (if (or (equal? "--mode" (car flags))
-                      (equal? "--doc-pdf" (car flags)))
-                  (if (pair? (cdr flags))
-                      (filter-flags (cddr flags))
-                      null)
-                  (cons (car flags) (filter-flags (cdr flags))))))))
-
-  (define-values (flags) (filter-flags (vector->list (current-command-line-arguments))))
-
   (define-values (member)
     (lambda (a l)
       (if (null? l)
@@ -133,6 +109,63 @@
           (if (equal? a (car l))
               l
               (member a (cdr l))))))
+
+  (define-values (go-module) 'setup/setup-go)
+
+  ;; Poor-man's processing of the command-line flags to drop strings
+  ;; that will not be parsed as flags by "parse-cmdline.rkt". We don't
+  ;; want to load "parse-cmdline.rkt" because it takes a long time with
+  ;; bytecode files disabled, and we're not yet sure whether to trust
+  ;; bytecode files that do exist.
+  (define-values (filter-flags)
+    (lambda (queued-flags flags)
+      (let ([flags (if (pair? queued-flags)
+                       (cons (car queued-flags) flags)
+                       flags)]
+            [queued-flags (if (pair? queued-flags)
+                              (cdr queued-flags)
+                              '())])
+        (if (or (null? flags)
+                (not (regexp-match? #rx"^-" (car flags)))
+                (member (car flags)
+                        ;; Flags that end flag processing:
+                        '("-l" "--pkgs" "--")))
+            queued-flags
+            (if (equal? "-P" (car flags))
+                (if ((length flags) . > . 5)
+                    (filter-flags queued-flags (list-tail flags 5))
+                    queued-flags)
+                (if (member (car flags)
+                            ;; Flags that take 1 argument:
+                            '("--mode" "--doc-pdf"
+                              "-j" "--jobs" "--workers"))
+                    (if (pair? (cdr flags))
+                        (filter-flags queued-flags (cddr flags))
+                        queued-flags)
+                    (if (equal? "--boot" (car flags))
+                        ;; Record an alternate boot module and compiled-file root
+                        (if (and (pair? (cdr flags))
+                                 (pair? (cddr flags)))
+                            (begin
+                              (set! go-module (cadr flags))
+                              (let ([root (path->complete-path (caddr flags))])
+                                (current-compiled-file-roots (list root)))
+                              (cons (car flags)
+                                    (filter-flags queued-flags (cddr flags))))
+                            queued-flags)
+                        ;; Check for combined flags and split them apart:
+                        (if (regexp-match? #rx"^-([^-].+)" (car flags))
+                            (filter-flags (append
+                                           (map (lambda (c)
+                                                  (string #\- c))
+                                                (cdr (string->list (car flags))))
+                                           queued-flags)
+                                          (cdr flags))
+                            ;; A flag with no argument:
+                            (cons (car flags)
+                                  (filter-flags queued-flags (cdr flags)))))))))))
+
+  (define-values (flags) (filter-flags '() (vector->list (current-command-line-arguments))))
 
   ;; Checks whether a flag is present:
   (define-values (on?)
@@ -271,4 +304,4 @@
 
   ;; This has to be dynamic, so we get a chance to turn off
   ;;  .zo use and turn on the compilation manager.
-  ((dynamic-require 'setup/setup-go 'go) original-compiled-file-paths))
+  ((dynamic-require go-module 'go) original-compiled-file-paths))

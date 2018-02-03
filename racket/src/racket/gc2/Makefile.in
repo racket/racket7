@@ -43,7 +43,7 @@ DEF_C_DIRS = $(DEF_COLLECTS_DIR) $(DEF_CONFIG_DIR)
 # typically redirects to RUN_THIS_RACKET_CGC:
 RUN_THIS_RACKET_CGC = ../racket@CGC@
 
-XFORM_SETUP = @RUN_RACKET_CGC@ $(SELF_RACKET_FLAGS) -cqu $(srcdir)/xform.rkt --setup . --depends
+XFORM_SETUP = @RUN_RACKET_CGC@ $(SELF_RACKET_FLAGS) -l- setup --boot $(srcdir)/../../setup-go.rkt ../../compiled $(srcdir)/xform-mod.rkt --depends
 XFORM_NOPRECOMP = $(XFORM_SETUP) --cpp "$(CPP) $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o
 XSRCDIR = xsrc
 XFORM = env XFORM_USE_PRECOMP=$(XSRCDIR)/precomp.h $(XFORM_NOPRECOMP)
@@ -189,7 +189,7 @@ xobjects: $(OBJS) main.@LTO@
 # picked up in ".sdep":
 QUIET_DEPS = $(srcdir)/../src/schvers.h $(srcdir)/../sconfig.h ../mzconfig.h
 
-XFORMDEP_NOPRE = $(srcdir)/xform.rkt $(srcdir)/xform-mod.rkt $(QUIET_DEPS)
+XFORMDEP_NOPRE = $(srcdir)/xform-mod.rkt $(QUIET_DEPS)
 XFORMDEP = $(XFORMDEP_NOPRE) $(XSRCDIR)/precomp.h
 
 MZRTDEP = $(srcdir)/../src/schpriv.h $(srcdir)/../include/scheme.h \
@@ -567,7 +567,6 @@ MW_RACKET_LIBS = gc2/libracket3m.dll.a @LDFLAGS@ @LIBS@ -ldelayimp -static-libgc
 
 clean:
 	/bin/rm -f ../racket@MMM@ *.@LTO@ $(XSRCDIR)/*
-	/bin/rm -rf xform-collects
 	/bin/rm -rf Racket.framework
 
 # If "cstartup.inc" hasn't been built, yet, create it as

@@ -108,6 +108,9 @@
      [("--unused-pkg-deps") "Check for unused package-dependency declarations"
       (add-flags '((check-dependencies #t)
                    (check-unused-dependencies #t)))]
+     [("--boot") path dir "Select a continuation other than `setup/setup-go`"
+      ;; This flag is handled by `setup/main`
+      (void)]
      #:help-labels
      " ------------------------------ users ------------------------------ "
      #:once-each
