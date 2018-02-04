@@ -145,7 +145,7 @@
 (define (read-boxenv v)
   (make-boxenv (car v) (cdr v)))
 (define (read-#%variable-ref v)
-  (make-varref (car v) (cdr v)))
+  (make-varref (car v) (cadr v) (cddr v)))
 (define (read-apply-values v)
   (make-apply-values (car v) (cdr v)))
 (define (read-with-immed-mark v)

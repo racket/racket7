@@ -623,9 +623,9 @@
                         (protect-quote val)
                         (protect-quote body))
                        out)]
-       [(struct varref (expr dummy))
+       [(struct varref (constant? expr dummy))
         (out-marshaled varref-form-type-num
-                       (cons expr dummy)
+                       (cons constant? (cons expr dummy))
                        out)]
        [(protected-symref v)
         (out-anything ((out-shared-index out) v #:error? #t) out)]

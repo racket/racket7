@@ -162,10 +162,12 @@
   (match expr
     [(struct toplevel (depth pos const? ready?))
      (decompile-tl expr globs stack closed #f)]
-    [(struct varref (tl dummy))
-     `(#%variable-reference ,(if (eq? tl #t)
-                                 '<constant-local>
-                                 (decompile-tl tl globs stack closed #t)))]
+    [(struct varref (constant? tl dummy))
+     `(#%variable-reference . ,(cond
+                                 [(not tl) '()]
+                                 [(eq? tl #t) '(<constant-local>)]
+                                 [(symbol? tl) (list tl)] ; primitive
+                                 [else (list (decompile-tl tl globs stack closed #t))]))]
     [(struct primval (id))
      (hash-ref primitive-table id (lambda () (error "unknown primitive: " id)))]
     [(struct assign (id rhs undef-ok?))

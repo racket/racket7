@@ -112,7 +112,7 @@
                                            [val (or/c expr? seq? any/c)] 
                                            [body (or/c expr? seq? any/c)])) ; `with-continuation-mark'
 (define-form-struct (beg0 expr) ([seq (listof (or/c expr? seq? any/c))])) ; `begin0'
-(define-form-struct (varref expr) ([toplevel (or/c toplevel? #t)] [dummy (or/c toplevel? #f)])) ; `#%variable-reference'
+(define-form-struct (varref expr) ([constant? boolean?] [toplevel (or/c toplevel? #f #t symbol?)] [dummy (or/c toplevel? #f)])) ; `#%variable-reference'
 (define-form-struct (assign expr) ([id toplevel?] [rhs (or/c expr? seq? any/c)] [undef-ok? boolean?])) ; top-level or module-level set!
 (define-form-struct (apply-values expr) ([proc (or/c expr? seq? any/c)] [args-expr (or/c expr? seq? any/c)])) ; `(call-with-values (lambda () ,args-expr) ,proc)
 (define-form-struct (with-immed-mark expr) ([key (or/c expr? seq? any/c)] 
