@@ -45,7 +45,7 @@
 (define (top-ref in-lam id)
   (when in-lam
     (set-vehicle-uses-top?! (lam-vehicle in-lam) #t))
-  (format "__top->~a" (cify id)))
+  (format "c_top->~a" (cify id)))
 
 (define (lam-add-transitive-tail-apply! lam target-lam)
   (set-lam-transitive-tail-applies!
@@ -66,7 +66,7 @@
       (unless (eq? vehicle old-vehicle)
         (define lams (vehicle-lams vehicle))
         (when (null? (cdr lams))
-          (set-vehicle-id! vehicle (genid '__vehicle)))
+          (set-vehicle-id! vehicle (genid 'c_vehicle)))
         (set-lam-index! lam (length lams))
         (set-vehicle-lams! vehicle (cons lam lams))
         (set-vehicle-uses-top?! vehicle (or (vehicle-uses-top? vehicle)

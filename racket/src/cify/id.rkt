@@ -1,11 +1,28 @@
 #lang racket/base
 
-(provide cify
+(provide no-c-prefix
+         cify
          genid
          reset-genid-counters!)
 
+;; The "c_" prefix is reserved for names that are provided
+;; by the Racket glue or that we make up, where we choose
+;; a prefix for any made-up name that won't conflict with
+;; the Racket-glue names.
+(define (no-c-prefix s)
+  (if (regexp-match? #rx"c_" (symbol->string s))
+      (string->symbol (format "o_~a" s))
+      s))
+
 (define c-names (make-hasheq))
 (define used-names (make-hasheq))
+
+;; Count reserved names as used, as well as anything
+;; that doesn't fit the "c_..." or "scheme_..." pattern.
+(for ([n (in-list '(void int long double short
+                         if else return const goto switch case
+                         SAME_OBJ))])
+  (hash-set! used-names n #t))
 
 (define replacements
   '((#rx"!" "_B_")
@@ -30,13 +47,10 @@
       (let* ([c-name
               (string->symbol
                (regexp-replace*
-                #rx"^([0-9])"
+                #rx"^(?=[0-9]|_[_A-Z]|scheme|SCHEME|Scheme|MZ_)" ; c_ prefix is avoided via `no-c-prefix`
                 (for/fold ([s (symbol->string name)]) ([r (in-list replacements)])
                   (regexp-replace* (car r) s (cadr r)))
-                "_\\1"))]
-             [c-name (case c-name
-                       [(void) '__void]
-                       [else c-name])]
+                "o_"))]
              [c-name (if (not (hash-ref used-names c-name #f))
                          c-name
                          ;; collisions should be very rare

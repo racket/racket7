@@ -228,7 +228,7 @@ typedef struct Thread_Local_Variables {
   intptr_t stack_copy_size_cache_[STACK_COPY_CACHE_SIZE];
   int scc_pos_;
   struct Scheme_Instance *scheme_startup_instance_;
-  struct startup_instance_top_t *__startup_instance_top_;
+  struct startup_instance_top_t *c_startup_instance_top_;
   struct Scheme_Thread *scheme_current_thread_;
   struct Scheme_Thread *scheme_main_thread_;
   struct Scheme_Thread *scheme_first_thread_;
@@ -603,7 +603,7 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define stack_copy_size_cache XOA (scheme_get_thread_local_variables()->stack_copy_size_cache_)
 #define scc_pos XOA (scheme_get_thread_local_variables()->scc_pos_)
 #define scheme_startup_instance XOA (scheme_get_thread_local_variables()->scheme_startup_instance_)
-#define __startup_instance_top XOA (scheme_get_thread_local_variables()->__startup_instance_top_)
+#define c_startup_instance_top XOA (scheme_get_thread_local_variables()->c_startup_instance_top_)
 #define scheme_current_thread XOA (scheme_get_thread_local_variables()->scheme_current_thread_)
 #define scheme_main_thread XOA (scheme_get_thread_local_variables()->scheme_main_thread_)
 #define scheme_first_thread XOA (scheme_get_thread_local_variables()->scheme_first_thread_)

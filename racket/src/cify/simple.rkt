@@ -43,7 +43,7 @@
               (hash-ref knowns e #f))
           (format "~a" (top-ref in-lam e))]
          [(hash-ref prim-names e #f)
-          (format "__prims.~a" (cify e))]
+          (format "c_prims.~a" (cify e))]
          [else (runstack-ref runstack e)])]
       [else
        (define inliner (inline-function (car e) (length (cdr e)) (cdr e) in-lam knowns))

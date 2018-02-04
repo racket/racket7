@@ -19,10 +19,10 @@
     [`(begin0 ,es ...)
      (extract-lambdas! lambdas `(begin . ,es))]
     [`(lambda ,ids . ,body)
-     (hash-set! lambdas e (make-lam (genid '__lambda) e))
+     (hash-set! lambdas e (make-lam (genid 'c_lambda) e))
      (extract-lambdas! lambdas `(begin . ,body))]
     [`(case-lambda [,idss . ,bodys] ...)
-     (hash-set! lambdas e (make-lam (genid '__case_lambda) e))
+     (hash-set! lambdas e (make-lam (genid 'c_case_lambda) e))
      (for ([ids (in-list idss)]
            [body (in-list bodys)])
        (extract-lambdas! lambdas `(begin . ,body)))]

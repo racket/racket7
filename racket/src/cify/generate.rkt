@@ -50,9 +50,9 @@
 
 (define (generate-prototype vehicle #:open? open?)
   ((if open? out-open out)
-   "static Scheme_Object *~a(int __argc, Scheme_Object **__argv~a)~a"
+   "static Scheme_Object *~a(int c_argc, Scheme_Object **c_argv~a)~a"
    (cify (vehicle-id vehicle))
-   (if (vehicle-closure? vehicle) ", Scheme_Object *__self" "")
+   (if (vehicle-closure? vehicle) ", Scheme_Object *c_self" "")
    (if open? " {" ";")))
 
 (define (generate-vehicles vehicles lambdas knowns top-names state prim-names prim-knowns)
@@ -67,31 +67,31 @@
     (when leaf? (out "/* leaf */"))
     (generate-prototype vehicle #:open? #t)
     (when (or (not leaf?) (vehicle-uses-top? vehicle))
-      (out "__LINK_THREAD_LOCAL"))
+      (out "c_LINK_THREAD_LOCAL"))
     (unless leaf?
-      (out "Scheme_Object **__runbase, **__orig_runstack = __current_runstack;")
-      (out-open "if (__check_~arunstack_space(~a, __orig_runstack, __current_runstack_start))"
+      (out "Scheme_Object **c_runbase, **c_orig_runstack = c_current_runstack;")
+      (out-open "if (c_check_~arunstack_space(~a, c_orig_runstack, c_current_runstack_start))"
                 (if (vehicle-overflow-check? vehicle) "overflow_or_" "")
                 (vehicle-max-runstack-depth vehicle))
-      (out "return __handle_overflow_or_space(~a, __argc, __argv, ~a);"
-           (if (vehicle-closure? vehicle) "__self" (format "__top->~a" (cify (vehicle-id vehicle))))
+      (out "return c_handle_overflow_or_space(~a, c_argc, c_argv, ~a);"
+           (if (vehicle-closure? vehicle) "c_self" (format "c_top->~a" (cify (vehicle-id vehicle))))
            (vehicle-max-runstack-depth vehicle))
       (out-close!)
-      (out-open "if (__argv == __orig_runstack)")
-      (out "__runbase = __argv + __argc;")
+      (out-open "if (c_argv == c_orig_runstack)")
+      (out "c_runbase = c_argv + c_argc;")
       (out-close+open "else")
-      (out "__runbase = __orig_runstack;")
+      (out "c_runbase = c_orig_runstack;")
       (out-close!))
     (cond
       [multi?
-       (out-open "switch(SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(__self)[0])) {")
+       (out-open "switch(SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(c_self)[0])) {")
        (out "default:")
        (for ([lam (in-list lams)]
              [i (in-naturals)])
          (out-open "case ~a:" i)
          (when (lam-no-rest-args? lam)
            (ensure-lambda-args-in-place leaf? lam))
-         (out "goto __entry_~a;" (cify (lam-id lam)))
+         (out "goto c_entry_~a;" (cify (lam-id lam)))
          (out-close!))
        (out-close "}")]
       [else
@@ -99,7 +99,7 @@
          (ensure-lambda-args-in-place leaf? (car lams)))])
     (for ([lam (in-list lams)])
       (when (or multi? (lam-need-entry? lam))
-        (out-margin "__entry_~a:" (cify (lam-id lam))))
+        (out-margin "c_entry_~a:" (cify (lam-id lam))))
       (generate-lambda lam multi? leaf? (or multi? (vehicle-overflow-check? vehicle))))
     (out-close "}"))
 
@@ -115,7 +115,7 @@
        (for ([ids (in-list idss)]
              [body (in-list bodys)]
              [i (in-naturals)])
-         (out-open "~aif (__argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
+         (out-open "~aif (c_argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
          (generate-lambda-case lam leaf? `(lambda ,ids . ,body) free-var-refs closure-offset)
          (out-close "}"))
        (out "else return NULL;")])
@@ -135,7 +135,7 @@
        (unless (null? ids) (out-open "{"))
        (when (and leaf? (for/or ([id (in-list ids)])
                           (referenced? (hash-ref state id #f))))
-         (out "Scheme_Object **__runbase = __argv + ~a;" n))
+         (out "Scheme_Object **c_runbase = c_argv + ~a;" n))
        ;; At this point, for a non-leaf, runstack == runbase - argument-count (including rest)
        (define runstack (make-runstack state))
        (define pushed-arg-count
@@ -155,9 +155,9 @@
        (for ([ref (in-list free-var-refs)]
              [i (in-naturals)])
          (define id (ref-id ref))
-         (out "~a = SCHEME_PRIM_CLOSURE_ELS(__self)[~a];" (runstack-assign runstack id) (+ closure-offset i)))
+         (out "~a = SCHEME_PRIM_CLOSURE_ELS(c_self)[~a];" (runstack-assign runstack id) (+ closure-offset i)))
        (when (hash-ref (lam-loop-targets lam) n #f)
-         (out-margin "__recur_~a_~a:" (cify name) n))
+         (out-margin "c_recur_~a_~a:" (cify name) n))
        (clear-unused-ids ids runstack state)
        (box-mutable-ids ids runstack lam state top-names)
        (generate (tail-return name lam ids leaf?) `(begin . ,body) lam (add-args (lam-env lam) ids) runstack
@@ -189,31 +189,31 @@
     [`(lambda ,ids . ,_)
      (ensure-args-in-place leaf? (length ids) #:rest-arg? #f (lam-free-var-refs lam))]
     [`,_
-     (ensure-args-in-place leaf? "__argc" #:rest-arg? #f (lam-free-var-refs lam))]))
+     (ensure-args-in-place leaf? "c_argc" #:rest-arg? #f (lam-free-var-refs lam))]))
 
 (define (ensure-args-in-place leaf? expected-n free-var-refs
                               #:rest-arg? rest-arg?
                               #:rest-arg-used? [rest-arg-used? #t])
-  ;; Generate code to make sure that `__runbase` minus the number of
+  ;; Generate code to make sure that `c_runbase` minus the number of
   ;; argument variables (including a "rest" args) holds arguments,
   ;; converting "rest" args to a list as needed. We don't need to
-  ;; perform this check (or set `__argv` and `__argc`) for a call
+  ;; perform this check (or set `c_argv` and `c_argc`) for a call
   ;; within a vehicle for a non-`case-lambda`, because it will
   ;; definitely hold then.
   (unless leaf?
     (cond
       [rest-arg?
-       (out "~a__ensure_args_in_place_rest(__argc, __argv, __runbase, ~a, 1, ~a, ~a);"
-            (if (null? free-var-refs) "(void)" "__self = ")
+       (out "~ac_ensure_args_in_place_rest(c_argc, c_argv, c_runbase, ~a, 1, ~a, ~a);"
+            (if (null? free-var-refs) "(void)" "c_self = ")
             expected-n
-            (if rest-arg-used? "__rest_arg_used" "__rest_arg_unused")
-            (if (null? free-var-refs) "NULL" "__self"))]
+            (if rest-arg-used? "c_rest_arg_used" "c_rest_arg_unused")
+            (if (null? free-var-refs) "NULL" "c_self"))]
       [(eqv? 0 expected-n)
        ;; No args; we can always assume that 0 arguments are at `_runbase`
        (void)]
       [else
        ;; No rest arg
-       (out "__ensure_args_in_place(~a, __argv, __runbase);" expected-n)])))
+       (out "c_ensure_args_in_place(~a, c_argv, c_runbase);" expected-n)])))
 
 (define (box-mutable-ids ids runstack in-lam state top-names)
   (let loop ([ids ids])
@@ -260,7 +260,7 @@
        (generate (multiple-return "") e env)
        (generate ret `(begin . ,r) env)]
       [`(begin0 ,e . ,r)
-       (define vals-id (genid '__vals))
+       (define vals-id (genid 'c_vals))
        (out-open "{")
        (runstack-push! runstack vals-id)
        (out "int ~a_count;" vals-id)
@@ -268,10 +268,10 @@
                                     (out "~a = ~a;" (runstack-assign runstack vals-id) s)
                                     (out-open "if (~a == SCHEME_MULTIPLE_VALUES) {" (runstack-ref runstack vals-id #:values-ok? #t))
                                     (out "Scheme_Object **~a_vals;" vals-id)
-                                    (out "~a_vals = __current_thread->ku.multiple.array;" vals-id)
-                                    (out "~a_count = __current_thread->ku.multiple.count;" vals-id)
-                                    (out "if (SAME_OBJ(~a_vals, __current_thread->values_buffer))" vals-id)
-                                    (out "  __current_thread->values_buffer = NULL;")
+                                    (out "~a_vals = c_current_thread->ku.multiple.array;" vals-id)
+                                    (out "~a_count = c_current_thread->ku.multiple.count;" vals-id)
+                                    (out "if (SAME_OBJ(~a_vals, c_current_thread->values_buffer))" vals-id)
+                                    (out "  c_current_thread->values_buffer = NULL;")
                                     (out "~a = (Scheme_Object *)~a_vals;" (runstack-assign runstack vals-id) vals-id)
                                     (out-close+open "} else")
                                     (out "~a_count = 1;" vals-id)
@@ -292,7 +292,7 @@
        (define tst-ids (for/list ([tst (in-list tsts)])
                          (if (simple? tst in-lam state knowns)
                              #f
-                             (genid '__if))))
+                             (genid 'c_if))))
        (define all-simple? (for/and ([tst-id (in-list tst-ids)])
                              (not tst-id)))
        ;; The last `tst-id` doesn't need to be on the runstack
@@ -346,9 +346,9 @@
        (runstack-pop! runstack tst-id-count)
        (unless all-simple? (out-close "}"))]
       [`(with-continuation-mark ,key ,val ,body)
-       (define wcm-id (genid '__wcm))
-       (define wcm-key-id (genid '__wcm_key))
-       (define wcm-val-id (genid '__wcm_val))
+       (define wcm-id (genid 'c_wcm))
+       (define wcm-key-id (genid 'c_wcm_key))
+       (define wcm-val-id (genid 'c_wcm_val))
        (out-open "{")
        (runstack-push! runstack wcm-key-id)
        (runstack-push! runstack wcm-val-id)
@@ -399,7 +399,7 @@
        (define target
          (cond
            [top? (top-ref in-lam ref)]
-           [else (genid '__set)]))
+           [else (genid 'c_set)]))
        (unless top?
          (out-open "{")
          (out "Scheme_Object *~a;" target))
@@ -438,7 +438,7 @@
                           (adjust-state! state id -1))
                         (runstack-ref runstack id #:ref e)])]
                     [(hash-ref top-names id #f) (top-ref in-lam id)]
-                    [else (format "__prims.~a" (cify id))]))]
+                    [else (format "c_prims.~a" (cify id))]))]
          [else (generate-quote ret e)])]))
   
   (define (generate-let ret e env)
@@ -466,7 +466,7 @@
                              (referenced? (hash-ref state (car ids) #f))
                              (not (hash-ref top-names (car ids) #f))))
        (define pre-bind-count (if let-one? 0 (push-binds)))
-       (define let-one-id (and let-one? (genid '__let)))
+       (define let-one-id (and let-one? (genid 'c_let)))
        (when let-one?
          (out "Scheme_Object *~a;" (cify let-one-id)))
        (when (eq? let-id 'letrec*)
@@ -529,7 +529,7 @@
     (define tmp-ids (for/list ([rand (in-list rands)]
                                [i (in-naturals)])
                       (and (not (simple? rand in-lam state knowns))
-                           (genid (format "__arg_~a_" i)))))
+                           (genid (format "c_arg_~a_" i)))))
     (define all-simple? (for/and ([tmp-id (in-list tmp-ids)])
                           (not tmp-id)))
     (unless all-simple? (out-open "{"))
@@ -556,21 +556,21 @@
   (define (generate-inline-construct ret k rands n env)
     (define si (struct-constructor-si k))
     (out-open "{")
-    (define struct-tmp-id (genid '__structtmp))
+    (define struct-tmp-id (genid 'c_structtmp))
     (out "Scheme_Object *~a;" (cify struct-tmp-id))
     (runstack-sync! runstack)
-    (out "~a = __malloc_struct(~a);" (cify struct-tmp-id) (struct-info-field-count si))
-    (out "__struct_set_type(~a, ~a);" (cify struct-tmp-id) (top-ref in-lam (struct-info-struct-id si)))
+    (out "~a = c_malloc_struct(~a);" (cify struct-tmp-id) (struct-info-field-count si))
+    (out "c_struct_set_type(~a, ~a);" (cify struct-tmp-id) (top-ref in-lam (struct-info-struct-id si)))
     (define all-simple? (for/and ([rand (in-list rands)])
                           (simple? rand in-lam state knowns)))
-    (define struct-id (and (not all-simple?) (genid '__struct)))
+    (define struct-id (and (not all-simple?) (genid 'c_struct)))
     (unless all-simple?
       (out-open "{")
       (runstack-push! runstack struct-id #:track-local? #t)
       (out "~a = ~a;" (runstack-assign runstack struct-id) (cify struct-tmp-id)))
     (for ([rand (in-list rands)]
           [i (in-naturals)])
-      (define to-struct-s (format "__STRUCT_ELS(~a)[~a] ="
+      (define to-struct-s (format "c_STRUCT_ELS(~a)[~a] ="
                                   (if all-simple?
                                       (cify struct-tmp-id)
                                       (runstack-ref runstack struct-id))
@@ -611,7 +611,7 @@
     (define rator-id (cond
                        [direct? #f]
                        [(simple? rator in-lam state knowns) #f]
-                       [else (genid '__rator)]))
+                       [else (genid 'c_rator)]))
     ;; For a non-tail call, make a runstack id for every argument;
     ;; that part of the runstack will be argv.
     ;; For a tail call, we only need an arg-id for a non-simple
@@ -621,7 +621,7 @@
                       (if (and direct-tail?
                                (simple? rand in-lam state knowns))
                           #f
-                          (genid (format "__arg_~a_" i)))))
+                          (genid (format "c_arg_~a_" i)))))
     (define last-non-simple-arg-id
       (and direct-tail? (for/last ([arg-id (in-list arg-ids)])
                           arg-id)))
@@ -638,7 +638,7 @@
               [(simple? (car rands) in-lam state knowns) (loop (cdr arg-ids) (cdr rands))]
               [else (values (car arg-ids) (car rands))]))))
     (define first-tmp-id (and first-non-simple-id
-                              (genid '__argtmp)))
+                              (genid 'c_argtmp)))
     (when first-non-simple-id
       (out "Scheme_Object *~a;" (cify first-tmp-id))
       (generate (format "~a =" (cify first-tmp-id))
@@ -694,8 +694,8 @@
        (runstack-sync! runstack) ; now argv == runstack
        (return ret runstack #:can-omit? #t
                (if (zero? n)
-                   "__zero_values()"
-                   (format "scheme_values(~a, __current_runstack)" n)))]
+                   "c_zero_values()"
+                   (format "scheme_values(~a, c_current_runstack)" n)))]
       ;; Call to a non-inlined primitive or to an unknown target
       [(not direct?)
        (define rator-s (if rator-id
@@ -710,7 +710,7 @@
                                         (not direct-prim?))))
        (define template (cond
                           [use-tail-apply? "_scheme_tail_apply(~a, ~a, ~a)"]
-                          [direct-prim? "__extract_prim(~a)(~a, ~a)"]
+                          [direct-prim? "c_extract_prim(~a)(~a, ~a)"]
                           [(or (multiple-return? ret) (tail-return? ret)) "_scheme_apply_multi(~a, ~a, ~a)"]
                           [else "_scheme_apply(~a, ~a, ~a)"]))
        (when use-tail-apply?
@@ -738,7 +738,7 @@
                                   (adjust-state! state (unref rand) -1))
                                 #f]
                                [else
-                                (genid '__argtmp)])))
+                                (genid 'c_argtmp)])))
        (when any-simple?
          (out-open "{")
          (for ([arg-tmp-id (in-list arg-tmp-ids)]
@@ -755,7 +755,7 @@
        (for ([i (in-range n 0 -1)]
              [arg-id (in-list (reverse arg-ids))])
          (when arg-id
-           (out "__runbase[~a] = ~a;"
+           (out "c_runbase[~a] = ~a;"
                 (- i (add1 n))
                 (if (eq? arg-id last-non-simple-arg-id)
                     (cify arg-id)
@@ -764,7 +764,7 @@
        (for ([i (in-range n)]
              [arg-tmp-id (in-list arg-tmp-ids)])
          (when arg-tmp-id
-           (out "__runbase[~a] = ~a;" (- i n) (cify arg-tmp-id))))
+           (out "c_runbase[~a] = ~a;" (- i n) (cify arg-tmp-id))))
        ;; For any argument that was skipped because it's already in
        ;; place, record that we need it live to here:
        (for ([arg-id (in-list arg-ids)]
@@ -778,29 +778,29 @@
        (when any-simple?
          (out-close "}"))
        ;; Set the runstack pointer to the argument start, then jump
-       (out "__current_runstack = __runbase - ~a;" n)
+       (out "c_current_runstack = c_runbase - ~a;" n)
        (when (if (eq? in-lam known-target-lam)
                  (n . <= . (args-length (tail-return-self-args ret)))
                  (symbol<? (lam-id known-target-lam) (lam-id in-lam))) ; direction is arbitrary
          ;; ... after checking for a break or thread swap
-         (out "__use_fuel();"))
+         (out "c_use_fuel();"))
        (cond
          [(and (eq? known-target-lam (tail-return-lam ret))
                (= n (args-length (tail-return-self-args ret))))
           (hash-set! (lam-loop-targets (tail-return-lam ret)) n #t)
           (for ([free-var-ref (in-list (lam-free-var-refs known-target-lam))])
             (ref-implicit-use! (ref-id free-var-ref) state))
-          (out "goto __recur_~a_~a;" (cify (lam-id known-target-lam)) n)]
+          (out "goto c_recur_~a_~a;" (cify (lam-id known-target-lam)) n)]
          [else
           (set-lam-need-entry?! known-target-lam #t)
           (set-lam-max-jump-argc! known-target-lam (max n (lam-max-jump-argc known-target-lam)))
           (unless (lam-constant-args-count? known-target-lam)
-            (out "__argc = ~a;" n)
+            (out "c_argc = ~a;" n)
             (unless (lam-no-rest-args? known-target-lam)
-              (out "__argv = __runbase - ~a;" n)))
+              (out "c_argv = c_runbase - ~a;" n)))
           (unless (null? (lam-free-var-refs known-target-lam))
-            (out "__self = ~a;" (top-ref in-lam (lam-id known-target-lam))))
-          (out "goto __entry_~a;" (cify (lam-id known-target-lam)))])
+            (out "c_self = ~a;" (top-ref in-lam (lam-id known-target-lam))))
+          (out "goto c_entry_~a;" (cify (lam-id known-target-lam)))])
        (lam-add-transitive-tail-apply! in-lam known-target-lam)]
       ;; Non-tail call to a known-target:
       [else
@@ -844,7 +844,7 @@
           (define len (+ (length free-var-refs) (if index-in-closure? 1 0)))
           (out-open "{")
           (define clo-ids (for/list ([i (in-range len)])
-                            (genid '__clo)))
+                            (genid 'c_clo)))
           (for ([id (in-list (reverse clo-ids))])
             (runstack-push! runstack id))
           (when index-in-closure?
@@ -873,7 +873,7 @@
          [(or simple-car?
               (simple-quote? (cdr e)))
           (out-open "{")
-          (define pair-id (genid '__pair))
+          (define pair-id (genid 'c_pair))
           (out "Scheme_Object *~a;" (cify pair-id))
           (generate-quote (format "~a =" (cify pair-id)) (if simple-car?
                                                              (cdr e)
@@ -884,8 +884,8 @@
                       (format "scheme_make_pair(~a, ~a)" (cify pair-id) (generate-single-quote (cdr e)))))
           (out-close "}")]
          [else
-          (define car-id (genid '__car))
-          (define cdr-id (genid '__cdr))
+          (define car-id (genid 'c_car))
+          (define cdr-id (genid 'c_cdr))
           (out-open "{")
           (runstack-push! runstack car-id)
           (runstack-push! runstack cdr-id)
@@ -899,7 +899,7 @@
                           (runstack-ref runstack cdr-id)))
           (out-close "}")])]
       [(vector? e)
-       (define vec-id (genid '__vec))
+       (define vec-id (genid 'c_vec))
        (out-open "{")
        (runstack-push! runstack vec-id)
        (unless (zero? (vector-length e))
@@ -960,24 +960,24 @@
   (define (generate-tops e)
     (generate-init-prims)
     (out-next)
-    (out-open "void scheme_init_startup_instance(Scheme_Instance *__instance) {")
-    (out "__LINK_THREAD_LOCAL")
-    (out "Scheme_Object **__runbase = __current_runstack;")
+    (out-open "void scheme_init_startup_instance(Scheme_Instance *c_instance) {")
+    (out "c_LINK_THREAD_LOCAL")
+    (out "Scheme_Object **c_runbase = c_current_runstack;")
     (out "MZ_GC_DECL_REG(1);")
-    (out "MZ_GC_VAR_IN_REG(0, __instance);")
+    (out "MZ_GC_VAR_IN_REG(0, c_instance);")
     (out "MZ_GC_REG();")
 
-    (out "REGISTER_SO(__top);")
-    (out "__top = scheme_malloc(sizeof(struct startup_instance_top_t));")
+    (out "REGISTER_SO(c_top);")
+    (out "c_top = scheme_malloc(sizeof(struct startup_instance_top_t));")
 
-    (out "__check_top_runstack_depth(~a);" max-runstack-depth)
+    (out "c_check_top_runstack_depth(~a);" max-runstack-depth)
     (generate-moved-to-top lambdas)
     (generate-top e)
     ;; Expects `([<int-id> <ext-id>] ...)` for `exports`
     (for ([ex (in-list exports)])
-      (out "scheme_instance_add(__instance, ~s, ~a);"
+      (out "scheme_instance_add(c_instance, ~s, ~a);"
            (format "~a" (cadr ex))
-           (top-ref #f (car ex))))
+           (top-ref #f (no-c-prefix (car ex)))))
 
     (out "MZ_GC_UNREG();")
     (out-close "}")
@@ -1031,9 +1031,9 @@
   (define (generate-init-prims)
     (out-next)
     (out-open "void scheme_init_startup() {")
-    (out "REGISTER_SO(__prims);")
+    (out "REGISTER_SO(c_prims);")
     (for ([id (in-sorted-hash-keys prim-names symbol<?)])
-      (out "__prims.~a = scheme_builtin_value(~s);" (cify id) (format "~a" id)))
+      (out "c_prims.~a = scheme_builtin_value(~s);" (cify id) (format "~a" id)))
     (out-close "}"))
 
   (generate-tops e))
@@ -1048,4 +1048,4 @@
     (define s (if (hash-ref top-names id #f)
                   (top-ref in-lam id)
                   (runstack-assign runstack id)))
-    (out "~a = __current_thread->ku.multiple.array[~a];" s i)))
+    (out "~a = c_current_thread->ku.multiple.array[~a];" s i)))

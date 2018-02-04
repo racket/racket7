@@ -1,9 +1,10 @@
 #lang racket/base
-(require "match.rkt")
+(require "match.rkt"
+         "id.rkt")
 
-;; Some passes reuse identiers, breaking the original input's property
-;; of having a unique symbol for every binding. The `re-unique` function
-;; recovers that property.
+;; Some schemify passes reuse identifiers, breaking the original
+;; input's property of having a unique symbol for every binding. The
+;; `re-unique` function recovers that property.
 
 (provide re-unique)
 
@@ -15,10 +16,10 @@
   (define (get-top-names e)
     (match e
       [`(define ,id ,rhs)
-       (hash-set! all-ids id id)]
+       (hash-set! all-ids id (no-c-prefix id))]
       [`(define-values ,ids ,rhs)
        (for ([id (in-list ids)])
-         (hash-set! all-ids id id))]
+         (hash-set! all-ids id (no-c-prefix id)))]
       [`(begin . ,es)
        (for ([e (in-list es)])
          (get-top-names e))]
@@ -31,10 +32,10 @@
        (cond
          [(hash-ref all-ids ids #f)
           (define new-id (gensym ids))
-          (hash-set! all-ids ids new-id)
+          (hash-set! all-ids ids (no-c-prefix new-id))
           new-id]
          [else
-          (hash-set! all-ids ids ids)
+          (hash-set! all-ids ids (no-c-prefix ids))
           ids])]
       [else
        (cons (select-unique (car ids))
@@ -43,9 +44,9 @@
   (define (re-unique e env)
     (match e
       [`(define ,id ,rhs)
-       `(define ,id ,(re-unique rhs env))]
+       `(define ,(no-c-prefix id) ,(re-unique rhs env))]
       [`(define-values ,ids ,rhs)
-       `(define-values ,ids ,(re-unique rhs env))]
+       `(define-values ,(map no-c-prefix ids) ,(re-unique rhs env))]
       [`(begin . ,body)
        `(begin . ,(re-unique-body body env))]
       [`(begin0 . ,body)

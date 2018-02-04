@@ -85,7 +85,7 @@
         (generate-tops e 0 exports knowns top-names state lambdas prim-names prim-knowns))
       (generate-vehicles vehicles lambdas knowns top-names state prim-names prim-knowns)
       (hash-set! state '#:done? #t)
-      (reset-genid-counters! '(__args))
+      (reset-genid-counters! '(c_args))
       max-top-runstack-depth))
 
   ;; Now we know if a function that isn't already in `functions`
@@ -95,7 +95,7 @@
     (for/hash ([lam (in-hash-values lambdas)]
                #:when (and (null? (lam-free-var-refs lam))
                            ;; No need if it's only formed at the top, unless
-                           ;; `__self` isn't available for overflow handling:
+                           ;; `c_self` isn't available for overflow handling:
                            (or (lam-under-lambda? lam)
                                (not (vehicle-closure? (lam-vehicle lam))))
                            (not (hash-ref functions (lam-id lam) #f))
@@ -104,14 +104,14 @@
       (values (lam-id lam) lam)))
 
   ;; Generate prim record:
-  (generate-struct "__prims" prim-names)
-  (out "static struct __prims_t __prims;")
+  (generate-struct "c_prims" prim-names)
+  (out "static struct c_prims_t c_prims;")
 
   ;; Generate top-variable record:
   (generate-struct "startup_instance_top" (hash-union (hash-union top-names functions)
                                                       closed-anonymous-functions))
-  (out "THREAD_LOCAL_DECL(static struct startup_instance_top_t *__startup_instance_top);")
-  (out "#define __top ___startup_instance_top")
+  (out "THREAD_LOCAL_DECL(static struct startup_instance_top_t *c_startup_instance_top);")
+  (out "#define c_top c__startup_instance_top")
   
   (define vehicles (merge-vehicles! lambdas state))
 

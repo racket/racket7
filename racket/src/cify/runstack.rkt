@@ -123,11 +123,11 @@
       [(eq? 'local (hash-ref (runstack-var-depths rs) id #f))
        (format "~a" (cify id))]
       [(and ref (ref-last-use? ref))
-       (format "__last_use(__runbase, ~a)" (cify id))]
+       (format "c_last_use(c_runbase, ~a)" (cify id))]
       [else
-       (format "__runbase[~a]"  (cify id))]))
+       (format "c_runbase[~a]"  (cify id))]))
   (if (and #f (not values-ok?) (not assign?)) ; <- enable for debugging
-      (format "__validate(~a)" s)
+      (format "c_validate(~a)" s)
       s))
 
 (define (runstack-ref-use! rs ref)
@@ -141,7 +141,7 @@
   (lambda (s) (out "~a = ~a;" (runstack-assign rs id) s)))
 
 (define (runstack-stack-ref rs)
-  (format "(__runbase-~a)" (runstack-depth rs)))
+  (format "(c_runbase-~a)" (runstack-depth rs)))
 
 (define (runstack-ref-pos rs id)
   (hash-ref (runstack-var-depths rs) id #f))
@@ -153,9 +153,9 @@
   (runstack-generate-staged-clears! rs)
   (define vars (sort (hash-keys (runstack-need-inits rs)) symbol<?))
   (for ([var (in-list vars)])
-    (out "~a = __RUNSTACK_INIT_VAL;" (runstack-assign rs var)))
+    (out "~a = c_RUNSTACK_INIT_VAL;" (runstack-assign rs var)))
   (unless (eqv? (runstack-depth rs) (runstack-sync-depth rs))
-    (out "__current_runstack = ~a;" (runstack-stack-ref rs))
+    (out "c_current_runstack = ~a;" (runstack-stack-ref rs))
     (set-runstack-sync-depth! rs (runstack-depth rs))))
 
 (define (runstack-synced! rs)
@@ -282,5 +282,5 @@
 
 (define (runstack-generate-staged-clears! rs)
   (for ([(id get-pos) (in-sorted-hash (runstack-staged-clears rs) symbol<?)])
-    (out "__no_use(__runbase, ~a);" (get-pos)))
+    (out "c_no_use(c_runbase, ~a);" (get-pos)))
   (set-runstack-staged-clears! rs #hasheq()))
