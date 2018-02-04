@@ -19,13 +19,18 @@ THREAD_LOCAL_DECL(static struct startup_instance_top_t *__startup_instance_top);
 # define __current_runstack_start (__racket_tls)->scheme_current_runstack_start_
 # define __current_thread         (__racket_tls)->scheme_current_thread_
 # define ___startup_instance_top  (__racket_tls)->__startup_instance_top_
+# define __scheme_fuel_counter    (__racket_tls)->scheme_fuel_counter_
 #else
 # define __LINK_THREAD_LOCAL /* empty */
 # define __current_runstack       MZ_RUNSTACK
 # define __current_runstack_start MZ_RUNSTACK_START
 # define __current_thread         scheme_current_thread
 # define ___startup_instance_top  __startup_instance_top
+# define __scheme_fuel_counter    scheme_fuel_counter
 #endif
+
+#define __use_fuel() if (DECREMENT_FUEL(__scheme_fuel_counter, 1) <= 0) scheme_out_of_fuel();
+
 
 #define __RUNSTACK_INIT_VAL NULL
 

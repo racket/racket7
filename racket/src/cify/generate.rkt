@@ -777,8 +777,13 @@
            (state-implicit-reference! state (ref-id rand))))
        (when any-simple?
          (out-close "}"))
-       ;; Set the runstack pointer to the argument start, then jump:
+       ;; Set the runstack pointer to the argument start, then jump
        (out "__current_runstack = __runbase - ~a;" n)
+       (when (if (eq? in-lam known-target-lam)
+                 (n . <= . (args-length (tail-return-self-args ret)))
+                 (symbol<? (lam-id known-target-lam) (lam-id in-lam))) ; direction is arbitrary
+         ;; ... after checking for a break or thread swap
+         (out "__use_fuel();"))
        (cond
          [(and (eq? known-target-lam (tail-return-lam ret))
                (= n (args-length (tail-return-self-args ret))))
