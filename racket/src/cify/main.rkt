@@ -71,7 +71,7 @@
   (define functions (extract-functions #hasheq() e lambdas))
   (for ([(id f) (in-sorted-hash functions symbol<?)])
     (define e (function-e f))
-    (hash-set! lambdas e (make-lam id e #:can-call-direct? #t)))
+    (hash-set! lambdas e (make-lam id e)))
 
   (define knowns (hash-directed-union struct-knowns functions))
 

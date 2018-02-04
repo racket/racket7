@@ -68,10 +68,12 @@
     (generate-prototype vehicle #:open? #t)
     (when (or (not leaf?) (vehicle-uses-top? vehicle))
       (out "c_LINK_THREAD_LOCAL"))
+    (define overflow-check?
+      (and (vehicle-called-direct? vehicle) (vehicle-calls-non-immediate? vehicle)))
     (unless leaf?
       (out "Scheme_Object **c_runbase, **c_orig_runstack = c_current_runstack;")
       (out-open "if (c_check_~arunstack_space(~a, c_orig_runstack, c_current_runstack_start))"
-                (if (vehicle-overflow-check? vehicle) "overflow_or_" "")
+                (if overflow-check? "overflow_or_" "")
                 (vehicle-max-runstack-depth vehicle))
       (out "return c_handle_overflow_or_space(~a, c_argc, c_argv, ~a);"
            (if (vehicle-closure? vehicle) "c_self" (format "c_top->~a" (cify (vehicle-id vehicle))))
@@ -100,7 +102,7 @@
     (for ([lam (in-list lams)])
       (when (or multi? (lam-need-entry? lam))
         (out-margin "c_entry_~a:" (cify (lam-id lam))))
-      (generate-lambda lam multi? leaf? (or multi? (vehicle-overflow-check? vehicle))))
+      (generate-lambda lam multi? leaf? (or multi? overflow-check?)))
     (out-close "}"))
 
   (define (generate-lambda lam multi? leaf? bracket?)
@@ -713,6 +715,9 @@
                           [direct-prim? "c_extract_prim(~a)(~a, ~a)"]
                           [(or (multiple-return? ret) (tail-return? ret)) "_scheme_apply_multi(~a, ~a, ~a)"]
                           [else "_scheme_apply(~a, ~a, ~a)"]))
+       (unless (or use-tail-apply?
+                   (and direct-prim? (immediate-primitive? rator prim-knowns)))
+         (lam-calls-non-immediate! in-lam))
        (when use-tail-apply?
          (if known-target-lam
              (lam-add-transitive-tail-apply! in-lam known-target-lam)
@@ -804,6 +809,8 @@
        (lam-add-transitive-tail-apply! in-lam known-target-lam)]
       ;; Non-tail call to a known-target:
       [else
+       (lam-called-direct! known-target-lam)
+       (lam-calls-non-immediate! in-lam)
        (runstack-sync! runstack) ; now argv == runstack
        (return ret runstack
                (let ([s (format "~a(~a, ~a~a)"

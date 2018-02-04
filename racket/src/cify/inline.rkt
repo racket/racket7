@@ -91,6 +91,7 @@
     [`(keyword? ,e) (simple "c_scheme_keywordp(~a)" e)]
     [`(string? ,e) (simple "c_scheme_char_stringp(~a)" e)]
     [`(bytes? ,e) (simple "c_scheme_byte_stringp(~a)" e)]
+    [`(path? ,e) (simple "c_scheme_pathp(~a)" e)]
     [`(char? ,e) (simple "c_scheme_charp(~a)" e)]
     [`(hash? ,e) (simple "c_scheme_hashp(~a)" e)]
     [`(eq? ,e1 ,e2) (simple "c_same_obj(~a)" e1 e2)]

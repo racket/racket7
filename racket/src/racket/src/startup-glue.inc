@@ -322,6 +322,7 @@ c_SCHEME_PREDFUNC(c_scheme_symbolp, SCHEME_SYMBOLP)
 c_SCHEME_PREDFUNC(c_scheme_keywordp, SCHEME_KEYWORDP)
 c_SCHEME_PREDFUNC(c_scheme_char_stringp, SCHEME_CHAR_STRINGP)
 c_SCHEME_PREDFUNC(c_scheme_byte_stringp, SCHEME_BYTE_STRINGP)
+c_SCHEME_PREDFUNC(c_scheme_pathp, SCHEME_PATHP)
 
 static MZ_INLINE int c_scheme_hashp(Scheme_Object *v)
 {
