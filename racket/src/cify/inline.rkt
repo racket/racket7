@@ -16,6 +16,8 @@
     [(cddr) (and (= n 1) 'c_pair_cddr)]
     [(caar) (and (= n 1) 'c_pair_caar)]
     [(cons) (and (= n 2) can-gc? 'scheme_make_pair)]
+    [(list*) (and (= n 2) can-gc? 'scheme_make_pair)]
+    [(list) (and (or (= n 1) (= n 2)) can-gc? (if (= n 1) 'c_make_list1 'c_make_list2))]
     [(unbox unsafe-unbox unsafe-unbox*) (and (= n 1) 'c_box_ref)]
     [(weak-box-value) (and (or (= n 1) (= n 2)) 'c_weak_box_value)]
     [(set-box! unsafe-set-box! unsafe-set-box*!) (and (= n 2) 'c_box_set)]

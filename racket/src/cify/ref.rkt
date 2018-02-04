@@ -146,6 +146,7 @@
        (wrap-ref `(call-with-values (lambda () ,e) ,target) env)]
       [`(call-with-values (lambda () (begin ,e . ,r)) ,target)
        (wrap-ref `(begin ,e (call-with-values (lambda () (begin . ,r)) ,target)) env)]
+      [`(list) 'null]
       [`(#%app . ,r)
        (wrap-ref r env)]
       [`(,rator ,rands ...)

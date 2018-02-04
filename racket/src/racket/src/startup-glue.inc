@@ -407,6 +407,21 @@ static MZ_INLINE Scheme_Object *c_weak_box_value2(Scheme_Object *o, Scheme_Objec
 }
 #endif
 
+static Scheme_Object *c_make_list1(Scheme_Object *v)
+{
+  return scheme_make_pair(v, scheme_null);
+}
+
+static Scheme_Object *c_make_list2(Scheme_Object *v1, Scheme_Object *v2)
+{
+  /* A trick to avoid GC registration: put v1 in the wrong place, then move it */
+  Scheme_Object *p = scheme_make_pair(v2, v1);
+  p = scheme_make_pair(scheme_null, p);
+  SCHEME_CAR(p) = SCHEME_CDR(SCHEME_CDR(p));
+  SCHEME_CDR(SCHEME_CDR(p)) = scheme_null;
+  return p;
+}
+
 static MZ_INLINE Scheme_Object *c_pair_car(Scheme_Object *p)
 {
   return SCHEME_CAR(p);
