@@ -3,7 +3,7 @@
 
 (provide prune-unused)
 
-;; Inlining by schemify make function and constant definitions unused
+;; Inlining by schemify can make function and constant definitions unused
 
 (define (prune-unused e exports)
   (define candidate-ids (make-hasheq))

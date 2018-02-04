@@ -16,7 +16,8 @@
 ;; lift as a last resort.
 
 (define (convert-for-serialize bodys for-cify?)
-  (define lifted-constants (make-hasheq))
+  (define lifted-eq-constants (make-hasheq))
+  (define lifted-equal-constants (make-hash))
   (define lift-bindings null)
   (define lifts-count 0)
   (define (add-lifted rhs)
@@ -34,7 +35,7 @@
              [`(quote ,q)
               (cond
                 [(lift-quoted? q for-cify?)
-                 (make-construct q add-lifted lifted-constants for-cify?)]
+                 (make-construct q add-lifted lifted-eq-constants lifted-equal-constants for-cify?)]
                 [else v])]
              [`(lambda ,formals ,body ...)
               `(lambda ,formals ,@(map convert body))]
@@ -120,9 +121,12 @@
                 (lift-quoted? v for-cify?))])))
 
 ;; Construct an expression to be lifted
-(define (make-construct q add-lifted lifted-constants for-cify?)
+(define (make-construct q add-lifted lifted-eq-constants lifted-equal-constants for-cify?)
   (define (quote? e) (and (pair? e) (eq? 'quote (car e))))
   (let make-construct ([q q])
+    (define lifted-constants (if (or (string? q) (bytes? q))
+                                 lifted-equal-constants
+                                 lifted-eq-constants))
     (cond
       [(hash-ref lifted-constants q #f)
        => (lambda (id) id)]
