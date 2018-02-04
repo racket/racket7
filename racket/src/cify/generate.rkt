@@ -944,10 +944,10 @@
           (format "scheme_make_integer(~a)" e)]
          [(eqv? e +inf.0) "scheme_inf_object"]
          [(eqv? e -inf.0) "scheme_minus_inf_object"]
-         [(eqv? e +nan.0) "scheme_minus_inf_object"]
+         [(eqv? e +nan.0) "scheme_nan_object"]
          [(eqv? e +inf.f) "scheme_single_inf_object"]
          [(eqv? e -inf.f) "scheme_single_minus_inf_object"]
-         [(eqv? e +nan.f) "scheme_single_minus_inf_object"]
+         [(eqv? e +nan.f) "scheme_single_nan_object"]
          [else
           (format "scheme_make_double(~a)" e)])]
       [(boolean? e) (if e "scheme_true" "scheme_false")]
