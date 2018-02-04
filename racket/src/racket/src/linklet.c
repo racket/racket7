@@ -285,9 +285,12 @@ static Scheme_Object *primitive_in_category_p(int argc, Scheme_Object **argv)
     r = 0;
   else if (SCHEME_PRIMP(v)) {
     int opt = ((Scheme_Prim_Proc_Header *)v)->flags & SCHEME_PRIM_OPT_MASK;
-    if (SAME_OBJ(cat, noncm_symbol))
+    if (SAME_OBJ(cat, noncm_symbol)) {
       r = (opt >= SCHEME_PRIM_OPT_NONCM);
-    else if (SAME_OBJ(cat, immediate_symbol))
+      /* Remove closures from noncm */
+      if (((Scheme_Prim_Proc_Header *)v)->flags & SCHEME_PRIM_IS_CLOSURE)
+        r = 0;
+    } else if (SAME_OBJ(cat, immediate_symbol))
       r  = (opt >= SCHEME_PRIM_OPT_IMMEDIATE);
     else if (SAME_OBJ(cat, folding_symbol))
       r = (opt >= SCHEME_PRIM_OPT_FOLDING);

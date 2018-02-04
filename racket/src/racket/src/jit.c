@@ -543,6 +543,10 @@ int scheme_is_noncm(Scheme_Object *a, mz_jit_state *jitter, int depth, int stack
       if ((((Scheme_Prim_Proc_Header *)a)->flags & SCHEME_PRIM_OTHER_TYPE_MASK)
           == SCHEME_PRIM_STRUCT_TYPE_PRED)
         return 0;
+      /* Closures need a 3rd argument, so don't claim NONCM for them, either.
+         (Currently, all of those are predicates, anyway.) */
+      if (((Scheme_Prim_Proc_Header *)a)->flags & SCHEME_PRIM_IS_CLOSURE)
+        return 0;
       return 1;
     }
   }

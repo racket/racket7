@@ -174,6 +174,8 @@ static Scheme_Object *scheme_make_prim_closure_w_case_arity(Scheme_Primitive_Clo
   return p;
 }
 
+#define __extract_prim(o) ((Scheme_Prim *)((Scheme_Primitive_Proc *)o)->prim_val)
+
 static MZ_INLINE int __same_obj(Scheme_Object *a, Scheme_Object *b)
 {
   return SAME_OBJ(a, b);

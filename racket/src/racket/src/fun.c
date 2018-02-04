@@ -830,7 +830,8 @@ scheme_make_noncm_prim(Scheme_Prim *fun, const char *name,
 {
   /* A non-cm primitive leaves the mark stack unchanged when it returns,
      it can't return multiple values or a tail call, and it cannot
-     use its third argument (i.e., the closure pointer). */
+     use its third argument (i.e., the closure pointer) unless
+     SCHEME_PRIM_IS_CLOSURE is also set. */
   return make_prim_closure(fun, 1, name, mina, maxa,
 			   SCHEME_PRIM_OPT_NONCM,
 			   1, 1,

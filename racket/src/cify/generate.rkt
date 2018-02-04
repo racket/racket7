@@ -701,13 +701,16 @@
        (define rator-s (if rator-id
                            (runstack-ref runstack rator-id)
                            (generate-simple rator env runstack in-lam state top-names knowns prim-names)))
+       (define direct-prim? (and (symbol? rator)
+                                 (direct-call-primitive? rator prim-knowns)))
        (define use-tail-apply? (and (tail-return? ret)
                                     (or (not (symbol? rator))
                                         (hash-ref env rator #f)
                                         (hash-ref top-names rator #f)
-                                        (not (direct-call-primitive? rator e prim-knowns)))))
+                                        (not direct-prim?))))
        (define template (cond
                           [use-tail-apply? "_scheme_tail_apply(~a, ~a, ~a)"]
+                          [direct-prim? "__extract_prim(~a)(~a, ~a)"]
                           [(or (multiple-return? ret) (tail-return? ret)) "_scheme_apply_multi(~a, ~a, ~a)"]
                           [else "_scheme_apply(~a, ~a, ~a)"]))
        (when use-tail-apply?
