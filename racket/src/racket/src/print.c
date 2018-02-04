@@ -2830,6 +2830,20 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
 	cannot_print(pp, notdisplay, obj, ht, compact);
       }
     }
+  else if (compact && (SAME_TYPE(SCHEME_TYPE(obj), scheme_toplevel_type)))
+    {
+      int flags, pos, depth;
+
+      print_compact(pp, CPT_TOPLEVEL);
+
+      flags = (SCHEME_TOPLEVEL_FLAGS(obj) & SCHEME_TOPLEVEL_FLAGS_MASK);
+      pos = SCHEME_TOPLEVEL_POS(obj);
+      depth = SCHEME_TOPLEVEL_DEPTH(obj);
+
+      print_compact_number(pp, flags);
+      print_compact_number(pp, pos);
+      print_compact_number(pp, depth);
+    }
   else if (compact 
 	   && (SAME_TYPE(SCHEME_TYPE(obj), scheme_local_type)
 	       || SAME_TYPE(SCHEME_TYPE(obj), scheme_local_unbox_type)))
@@ -2901,6 +2915,61 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
       print(scheme_protect_quote(app->rand1), notdisplay, 1, NULL, mt, pp);
       closed = print(scheme_protect_quote(app->rand2), notdisplay, 1, NULL, mt, pp);
     }
+  else if (compact && (SAME_TYPE(SCHEME_TYPE(obj), scheme_sequence_type)
+                       || SAME_TYPE(SCHEME_TYPE(obj), scheme_begin0_sequence_type)))
+    {
+      int i, count;
+      
+      print_compact(pp, (SAME_TYPE(SCHEME_TYPE(obj), scheme_sequence_type)
+                         ? CPT_BEGIN
+                         : CPT_BEGIN0));
+      count = ((Scheme_Sequence *)obj)->count;
+      print_compact_number(pp, count);
+
+      for (i = 0; i < count; i++) {
+        closed = print(scheme_protect_quote(((Scheme_Sequence *)obj)->array[i]), notdisplay, 1, NULL, mt, pp);
+      }
+    }
+  else if (compact && (SAME_TYPE(SCHEME_TYPE(obj), scheme_let_value_type)))
+    {
+      Scheme_Let_Value *lv;
+      
+      lv = (Scheme_Let_Value *)obj;
+
+      print_compact(pp, CPT_LET_VALUE);
+      print_compact_number(pp, lv->count);
+      print_compact_number(pp, lv->position);
+      print_compact_number(pp, (SCHEME_LET_VALUE_AUTOBOX(lv) ? 1 : 0));
+      print(scheme_protect_quote(lv->value), notdisplay, 1, NULL, mt, pp);
+      closed = print(scheme_protect_quote(lv->body), notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && (SAME_TYPE(SCHEME_TYPE(obj), scheme_let_void_type)))
+    {
+      Scheme_Let_Void *lv;
+      
+      lv = (Scheme_Let_Void *)obj;
+
+      print_compact(pp, CPT_LET_VOID);
+      print_compact_number(pp, lv->count);
+      print_compact_number(pp, (SCHEME_LET_VOID_AUTOBOX(lv) ? 1 : 0));
+      closed = print(scheme_protect_quote(lv->body), notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && (SAME_TYPE(SCHEME_TYPE(obj), scheme_letrec_type)))
+    {
+      Scheme_Letrec *lr = (Scheme_Letrec *)obj;
+      int i, count;
+
+      count = lr->count;
+
+      print_compact(pp, CPT_LETREC);
+      print_compact_number(pp, count);
+
+      for (i = 0; i < count; i++) {
+        print(scheme_protect_quote(lr->procs[i]), notdisplay, 1, NULL, mt, pp);
+      }
+
+      closed = print(scheme_protect_quote(lr->body), notdisplay, 1, NULL, mt, pp);
+    }
   else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_let_one_type))
     {
       Scheme_Let_One *lo;
@@ -2928,6 +2997,116 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
       print(scheme_protect_quote(b->test), notdisplay, 1, NULL, mt, pp);
       print(scheme_protect_quote(b->tbranch), notdisplay, 1, NULL, mt, pp);
       closed = print(scheme_protect_quote(b->fbranch), notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_with_cont_mark_type))
+    {
+      Scheme_With_Continuation_Mark *wcm = (Scheme_With_Continuation_Mark *)obj;
+
+      print_compact(pp, CPT_WCM);
+      print(scheme_protect_quote(wcm->key), notdisplay, 1, NULL, mt, pp);
+      print(scheme_protect_quote(wcm->val), notdisplay, 1, NULL, mt, pp);
+      closed = print(scheme_protect_quote(wcm->body), notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_define_values_type))
+    {
+      Scheme_Object *e;
+
+      print_compact(pp, CPT_DEFINE_VALUES);
+
+      obj = scheme_clone_vector(obj, 0, 0);
+      e = scheme_protect_quote(SCHEME_VEC_ELS(obj)[0]);
+      SCHEME_VEC_ELS(obj)[0] = e;
+
+      closed = print(obj, notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_set_bang_type))
+    {
+      Scheme_Set_Bang *sb = (Scheme_Set_Bang *)obj;
+
+      print_compact(pp, CPT_SET_BANG);
+      print_compact_number(pp, sb->set_undef ? 1 : 0);
+      print(sb->var, notdisplay, 1, NULL, mt, pp);
+      closed = print(scheme_protect_quote(sb->val), notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_boxenv_type))
+    {
+      print_compact(pp, CPT_OTHER_FORM);
+      print_compact_number(pp, scheme_boxenv_type);
+
+      print(SCHEME_PTR1_VAL(obj), notdisplay, 1, NULL, mt, pp);
+      closed = print(SCHEME_PTR2_VAL(obj), notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_varref_form_type))
+    {
+      print_compact(pp, CPT_VARREF);
+
+      print_compact_number(pp, (SCHEME_VARREF_FLAGS(obj) & 0x1) ? 1 : 0);
+      print(SCHEME_PTR1_VAL(obj), notdisplay, 1, NULL, mt, pp);
+      closed = print(SCHEME_PTR2_VAL(obj), notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_apply_values_type))
+    {
+      print_compact(pp, CPT_APPLY_VALUES);
+
+      print(scheme_protect_quote(SCHEME_PTR1_VAL(obj)), notdisplay, 1, NULL, mt, pp);
+      closed = print(scheme_protect_quote(SCHEME_PTR2_VAL(obj)), notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_with_immed_mark_type))
+    {
+      Scheme_With_Continuation_Mark *wcm = (Scheme_With_Continuation_Mark *)obj;
+
+      print_compact(pp, CPT_OTHER_FORM);
+      print_compact_number(pp, scheme_with_immed_mark_type);
+
+      print(wcm->key, notdisplay, 1, NULL, mt, pp);
+      print(wcm->val, notdisplay, 1, NULL, mt, pp);
+      closed = print(wcm->body, notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_inline_variant_type))
+    {
+      print_compact(pp, CPT_OTHER_FORM);
+      print_compact_number(pp, scheme_inline_variant_type);
+
+      print(SCHEME_VEC_ELS(obj)[0], notdisplay, 1, NULL, mt, pp);
+      closed = print(SCHEME_VEC_ELS(obj)[1], notdisplay, 1, NULL, mt, pp);
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_case_lambda_sequence_type))
+    {
+      Scheme_Case_Lambda *cl = (Scheme_Case_Lambda *)obj;
+      int i, count;
+
+      print_compact(pp, CPT_OTHER_FORM);
+      print_compact_number(pp, scheme_case_lambda_sequence_type);
+
+      count = cl->count;
+      print_compact_number(pp, count);
+
+      print(scheme_closure_marshal_name(cl->name), notdisplay, 1, NULL, mt, pp);
+        
+      for (i = 0; i < count; i++) {
+        closed = print(cl->array[i], notdisplay, 1, NULL, mt, pp);
+      }
+    }
+  else if (compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_lambda_type))
+    {
+      Scheme_Lambda *data = (Scheme_Lambda *)obj;
+      Scheme_Object *name, *ds, *closure_map, *tl_map;
+
+      print_compact(pp, CPT_OTHER_FORM);
+      print_compact_number(pp, scheme_lambda_type);
+
+      scheme_write_lambda(obj, &name, &ds, &closure_map, &tl_map);
+
+      print_compact_number(pp, SCHEME_LAMBDA_FLAGS(data) & 0x7F);
+      if (SCHEME_LAMBDA_FLAGS(data) & LAMBDA_HAS_TYPED_ARGS)
+        print_compact_number(pp, data->closure_size);
+      print_compact_number(pp, data->num_params);
+      print_compact_number(pp, data->max_let_depth);
+
+      print(name, notdisplay, 1, NULL, mt, pp);
+      print(ds, notdisplay, 1, NULL, mt, pp);
+      print(closure_map, notdisplay, 1, NULL, mt, pp);
+      closed = print(tl_map, notdisplay, 1, NULL, mt, pp);
     }
 #ifdef MZ_PRECISE_GC
   else if (SAME_TYPE(SCHEME_TYPE(obj), scheme_rt_delay_load_info))
@@ -3094,26 +3273,15 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
                           SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(a[i].bundle)));
       }
     }
-  else if ((SCHEME_TYPE(obj) <= _scheme_last_type_)
-           && ((compact && scheme_type_writers[SCHEME_TYPE(obj)])
-               || SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_bundle_type)))
+  else if (SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_type)
+           || SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_bundle_type))
     {
       if (compact) {
-        Scheme_Type t = SCHEME_TYPE(obj);
         Scheme_Object *v;
-        Scheme_Type_Writer writer;
 
-        if (t < CPT_RANGE(SMALL_MARSHALLED)) {
-	  unsigned char s[1];
-	  s[0] = t + CPT_SMALL_MARSHALLED_START;
-	  print_this_string(pp, (char *)s, 0, 1);
-	} else {
-	  print_compact(pp, CPT_MARSHALLED);
-	  print_compact_number(pp, t);
-	}
+        print_compact(pp, CPT_LINKLET);
+	v = scheme_write_linklet(obj);
         
-	writer = scheme_type_writers[t];
-	v = writer(obj);
 	closed = print(v, notdisplay, 1, NULL, mt, pp);
       } else {
         Scheme_Hash_Table *st_refs, *symtab, *intern_map, *path_cache;

@@ -25,554 +25,12 @@
 
 #include "schpriv.h"
 
-#define cons(a,b) scheme_make_pair(a,b)
 #define CONS(a,b) scheme_make_pair(a,b)
-
-static Scheme_Object *write_let_value(Scheme_Object *obj);
-static Scheme_Object *read_let_value(Scheme_Object *obj);
-static Scheme_Object *write_let_void(Scheme_Object *obj);
-static Scheme_Object *read_let_void(Scheme_Object *obj);
-static Scheme_Object *write_letrec(Scheme_Object *obj);
-static Scheme_Object *read_letrec(Scheme_Object *obj);
-static Scheme_Object *write_let_one(Scheme_Object *obj);
-static Scheme_Object *read_let_one(Scheme_Object *obj);
-static Scheme_Object *write_case_lambda(Scheme_Object *obj);
-static Scheme_Object *read_case_lambda(Scheme_Object *obj);
-
-static Scheme_Object *read_define_values(Scheme_Object *obj);
-static Scheme_Object *write_define_values(Scheme_Object *obj);
-static Scheme_Object *read_set_bang(Scheme_Object *obj);
-static Scheme_Object *write_set_bang(Scheme_Object *obj);
-static Scheme_Object *read_boxenv(Scheme_Object *obj);
-static Scheme_Object *write_boxenv(Scheme_Object *obj);
-static Scheme_Object *read_varref(Scheme_Object *obj);
-static Scheme_Object *write_varref(Scheme_Object *obj);
-static Scheme_Object *read_apply_values(Scheme_Object *obj);
-static Scheme_Object *write_apply_values(Scheme_Object *obj);
-static Scheme_Object *read_with_immed_mark(Scheme_Object *obj);
-static Scheme_Object *write_with_immed_mark(Scheme_Object *obj);
-static Scheme_Object *read_inline_variant(Scheme_Object *obj);
-static Scheme_Object *write_inline_variant(Scheme_Object *obj);
-
-static Scheme_Object *write_application(Scheme_Object *obj);
-static Scheme_Object *read_application(Scheme_Object *obj);
-static Scheme_Object *write_sequence(Scheme_Object *obj);
-static Scheme_Object *read_sequence(Scheme_Object *obj);
-static Scheme_Object *read_sequence_save_first(Scheme_Object *obj);
-static Scheme_Object *write_branch(Scheme_Object *obj);
-static Scheme_Object *read_branch(Scheme_Object *obj);
-static Scheme_Object *write_with_cont_mark(Scheme_Object *obj);
-static Scheme_Object *read_with_cont_mark(Scheme_Object *obj);
-
-static Scheme_Object *write_toplevel(Scheme_Object *obj);
-static Scheme_Object *read_toplevel(Scheme_Object *obj);
-static Scheme_Object *write_local(Scheme_Object *obj);
-static Scheme_Object *read_local(Scheme_Object *obj);
-static Scheme_Object *read_local_unbox(Scheme_Object *obj);
-
-static Scheme_Object *write_lambda(Scheme_Object *obj);
-static Scheme_Object *read_lambda(Scheme_Object *obj);
-
-static Scheme_Object *write_linklet(Scheme_Object *obj);
-static Scheme_Object *read_linklet(Scheme_Object *obj);
-
-static Scheme_Object *closure_marshal_name(Scheme_Object *name);
 
 void scheme_init_marshal(Scheme_Startup_Env *env) 
 {
-  scheme_install_type_writer(scheme_application_type, write_application);
-  scheme_install_type_reader(scheme_application_type, read_application);
-  scheme_install_type_writer(scheme_application2_type, write_application);
-  scheme_install_type_reader(scheme_application2_type, read_application);
-  scheme_install_type_writer(scheme_application3_type, write_application);
-  scheme_install_type_reader(scheme_application3_type, read_application);
-  scheme_install_type_writer(scheme_sequence_type, write_sequence);
-  scheme_install_type_reader(scheme_sequence_type, read_sequence);
-  scheme_install_type_writer(scheme_branch_type, write_branch);
-  scheme_install_type_reader(scheme_branch_type, read_branch);
-  scheme_install_type_writer(scheme_with_cont_mark_type, write_with_cont_mark);
-  scheme_install_type_reader(scheme_with_cont_mark_type, read_with_cont_mark);
-  scheme_install_type_writer(scheme_begin0_sequence_type, write_sequence);
-  scheme_install_type_reader(scheme_begin0_sequence_type, read_sequence_save_first);
-  
- scheme_install_type_writer(scheme_let_value_type, write_let_value);
-  scheme_install_type_reader(scheme_let_value_type, read_let_value);
-  scheme_install_type_writer(scheme_let_void_type, write_let_void);
-  scheme_install_type_reader(scheme_let_void_type, read_let_void);
-  scheme_install_type_writer(scheme_letrec_type, write_letrec);
-  scheme_install_type_reader(scheme_letrec_type, read_letrec);
-  scheme_install_type_writer(scheme_let_one_type, write_let_one);
-  scheme_install_type_reader(scheme_let_one_type, read_let_one);
-  scheme_install_type_writer(scheme_case_lambda_sequence_type, write_case_lambda);
-  scheme_install_type_reader(scheme_case_lambda_sequence_type, read_case_lambda);
-
-  scheme_install_type_writer(scheme_define_values_type, write_define_values);
-  scheme_install_type_reader(scheme_define_values_type, read_define_values);
-  scheme_install_type_writer(scheme_set_bang_type, write_set_bang);
-  scheme_install_type_reader(scheme_set_bang_type, read_set_bang);
-  scheme_install_type_writer(scheme_boxenv_type, write_boxenv);
-  scheme_install_type_reader(scheme_boxenv_type, read_boxenv);
-  scheme_install_type_writer(scheme_varref_form_type, write_varref);
-  scheme_install_type_reader(scheme_varref_form_type, read_varref);
-  scheme_install_type_writer(scheme_apply_values_type, write_apply_values);
-  scheme_install_type_reader(scheme_apply_values_type, read_apply_values);
-  scheme_install_type_writer(scheme_with_immed_mark_type, write_with_immed_mark);
-  scheme_install_type_reader(scheme_with_immed_mark_type, read_with_immed_mark);
-  scheme_install_type_writer(scheme_inline_variant_type, write_inline_variant);
-  scheme_install_type_reader(scheme_inline_variant_type, read_inline_variant);
-
-  scheme_install_type_writer(scheme_lambda_type, write_lambda);
-  scheme_install_type_reader(scheme_lambda_type, read_lambda);
-
-  scheme_install_type_writer(scheme_toplevel_type, write_toplevel);
-  scheme_install_type_reader(scheme_toplevel_type, read_toplevel);
-  scheme_install_type_writer(scheme_local_type, write_local);
-  scheme_install_type_reader(scheme_local_type, read_local);
-  scheme_install_type_writer(scheme_local_unbox_type, write_local);
-  scheme_install_type_reader(scheme_local_unbox_type, read_local_unbox);
-
-  scheme_install_type_writer(scheme_linklet_type, write_linklet);
-  scheme_install_type_reader(scheme_linklet_type, read_linklet);
+  /* nothing */
 }
-
-
-static Scheme_Object *write_let_value(Scheme_Object *obj)
-{
-  Scheme_Let_Value *lv;
- 
-  lv = (Scheme_Let_Value *)obj;
-
-  return cons(scheme_make_integer(lv->count),
-	      cons(scheme_make_integer(lv->position),
-		   cons(SCHEME_LET_VALUE_AUTOBOX(lv) ? scheme_true : scheme_false,
-			cons(scheme_protect_quote(lv->value), 
-			     scheme_protect_quote(lv->body)))));
-}
-
-static Scheme_Object *read_let_value(Scheme_Object *obj)
-{
-  Scheme_Let_Value *lv;
- 
-  lv = (Scheme_Let_Value *)scheme_malloc_tagged(sizeof(Scheme_Let_Value));
-  lv->iso.so.type = scheme_let_value_type;
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  lv->count = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  lv->position = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  SCHEME_LET_VALUE_AUTOBOX(lv) = SCHEME_TRUEP(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  lv->value = SCHEME_CAR(obj);
-  lv->body = SCHEME_CDR(obj);
-
-  return (Scheme_Object *)lv;
-}
-
-static Scheme_Object *write_let_void(Scheme_Object *obj)
-{
-  Scheme_Let_Void *lv;
- 
-  lv = (Scheme_Let_Void *)obj;
-
-  return cons(scheme_make_integer(lv->count), 
-	      cons(SCHEME_LET_VOID_AUTOBOX(lv) ? scheme_true : scheme_false,
-		   scheme_protect_quote(lv->body)));
-}
-
-static Scheme_Object *read_let_void(Scheme_Object *obj)
-{
-  Scheme_Let_Void *lv;
- 
-  lv = (Scheme_Let_Void *)scheme_malloc_tagged(sizeof(Scheme_Let_Void));
-  lv->iso.so.type = scheme_let_void_type;
-  
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  lv->count = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  SCHEME_LET_VOID_AUTOBOX(lv) = SCHEME_TRUEP(SCHEME_CAR(obj));
-  lv->body = SCHEME_CDR(obj);
-
-  return (Scheme_Object *)lv;
-}
-
-static Scheme_Object *write_let_one(Scheme_Object *obj)
-{
-  scheme_signal_error("let-one writer shouldn't be used");
-  return NULL;
-}
-
-static Scheme_Object *read_let_one(Scheme_Object *obj)
-{
-  return NULL;
-}
-
-static Scheme_Object *write_letrec(Scheme_Object *obj)
-{
-  Scheme_Letrec *lr = (Scheme_Letrec *)obj;
-  Scheme_Object *l = scheme_null;
-  int i = lr->count;
-  
-  while (i--) {
-    l = cons(scheme_protect_quote(lr->procs[i]), l);
-  }
-
-  return cons(scheme_make_integer(lr->count), 
-	      cons(scheme_protect_quote(lr->body), l));
-}
-
-static Scheme_Object *read_letrec(Scheme_Object *obj)
-{
-  Scheme_Letrec *lr;
-  int i, c;
-  Scheme_Object **sa;
-
-  lr = MALLOC_ONE_TAGGED(Scheme_Letrec);
-
-  lr->so.type = scheme_letrec_type;
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  c = lr->count = SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  lr->body = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
-
-  if (c < 0) return NULL;
-  if (c < 4096)
-    sa = MALLOC_N(Scheme_Object*, c);
-  else {
-    sa = scheme_malloc_fail_ok(scheme_malloc, scheme_check_overflow(c, sizeof(Scheme_Object *), 0));
-    if (!sa) scheme_signal_error("out of memory allocating letrec bytecode");
-  }
-  lr->procs = sa;
-  for (i = 0; i < c; i++) {
-    if (!SCHEME_PAIRP(obj)) return NULL;
-    lr->procs[i] = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-  }
-
-  return (Scheme_Object *)lr;
-}
-
-static Scheme_Object *write_case_lambda(Scheme_Object *obj)
-{
-  Scheme_Case_Lambda *cl = (Scheme_Case_Lambda *)obj;
-  int i;
-  Scheme_Object *l;
-
-  i = cl->count;
-
-  l = scheme_null;
-  for (; i--; ) {
-    l = cons(cl->array[i], l);
-  }
-  
-  return cons(closure_marshal_name(cl->name),
-	      l);
-}
-
-static Scheme_Object *read_case_lambda(Scheme_Object *obj)
-{
-  Scheme_Object *s, *a;
-  int count, i, all_closed = 1;
-  Scheme_Case_Lambda *cl;
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  s = SCHEME_CDR(obj);
-  for (count = 0; SCHEME_PAIRP(s); s = SCHEME_CDR(s)) {
-    count++;
-  }
-
-  cl = (Scheme_Case_Lambda *)
-    scheme_malloc_tagged(sizeof(Scheme_Case_Lambda)
-			 + (count - mzFLEX_DELTA) * sizeof(Scheme_Object *));
-
-  cl->so.type = scheme_case_lambda_sequence_type;
-  cl->count = count;
-  cl->name = SCHEME_CAR(obj);
-  if (SCHEME_NULLP(cl->name))
-    cl->name = NULL;
-
-  s = SCHEME_CDR(obj);
-  for (i = 0; i < count; i++, s = SCHEME_CDR(s)) {
-    a = SCHEME_CAR(s);
-    cl->array[i] = a;
-    if (!SCHEME_PROCP(a)) {
-      if (!SAME_TYPE(SCHEME_TYPE(a), scheme_lambda_type))
-        return NULL;
-      all_closed = 0;
-    }
-    else {
-      if (!SAME_TYPE(SCHEME_TYPE(a), scheme_closure_type))
-        return NULL;
-    }
-  }
-
-  if (all_closed) {
-    /* Empty closure: produce procedure value directly.
-       (We assume that this was generated by a direct write of
-        a case-lambda data record in print.c, and that it's not
-	in a CASE_LAMBDA_EXPD syntax record.) */
-    return scheme_case_lambda_execute((Scheme_Object *)cl);
-  }
-
-  return (Scheme_Object *)cl;
-}
-
-static Scheme_Object *read_define_values(Scheme_Object *obj)
-{
-  if (!SCHEME_VECTORP(obj)) return NULL;
-
-  obj = scheme_clone_vector(obj, 0, 0);
-  obj->type = scheme_define_values_type;
-  return obj;
-}
-
-static Scheme_Object *write_define_values(Scheme_Object *obj)
-{
-  Scheme_Object *e;
-
-  obj = scheme_clone_vector(obj, 0, 0);
-  e = scheme_protect_quote(SCHEME_VEC_ELS(obj)[0]);
-  SCHEME_VEC_ELS(obj)[0] = e;
-
-  return obj;
-}
-
-static Scheme_Object *read_set_bang(Scheme_Object *obj)
-{
-  Scheme_Set_Bang *sb;
-
-  sb = MALLOC_ONE_TAGGED(Scheme_Set_Bang);
-  sb->so.type = scheme_set_bang_type;
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  sb->set_undef = SCHEME_TRUEP(SCHEME_CAR(obj));
-
-  obj = SCHEME_CDR(obj);
-  if (!SCHEME_PAIRP(obj)) return NULL;
-
-  sb->var = SCHEME_CAR(obj);
-  sb->val = SCHEME_CDR(obj);
-
-  return (Scheme_Object *)sb;
-}
-
-static Scheme_Object *write_set_bang(Scheme_Object *obj)
-{
-  Scheme_Set_Bang *sb = (Scheme_Set_Bang *)obj;
-  return scheme_make_pair((sb->set_undef ? scheme_true : scheme_false),
-                          scheme_make_pair(sb->var, 
-                                           scheme_protect_quote(sb->val)));
-}
-
-Scheme_Object *write_varref(Scheme_Object *o)
-{
-  int is_const = (SCHEME_VARREF_FLAGS(o) & 0x1);
-  
-  return scheme_make_pair((is_const ? scheme_true : scheme_false),
-                          scheme_make_pair(SCHEME_PTR1_VAL(o), SCHEME_PTR2_VAL(o)));
-}
-
-Scheme_Object *read_varref(Scheme_Object *o)
-{
-  Scheme_Object *data;
-  int is_const = 0;
-
-  if (!SCHEME_PAIRP(o)) return NULL;
-
-  is_const = SCHEME_TRUEP(SCHEME_CAR(o));
-  o = SCHEME_CDR(o);
-  if (!SCHEME_PAIRP(o)) return NULL;
-  
-  data = scheme_alloc_object();
-  data->type = scheme_varref_form_type;
-  SCHEME_PTR1_VAL(data) = SCHEME_CAR(o);
-  SCHEME_PTR2_VAL(data) = SCHEME_CDR(o);
-  if (is_const)
-    SCHEME_VARREF_FLAGS(data) |= 0x1;
-  
-  return data;
-}
-
-Scheme_Object *write_apply_values(Scheme_Object *o)
-{
-  return scheme_make_pair(scheme_protect_quote(SCHEME_PTR1_VAL(o)), 
-                          scheme_protect_quote(SCHEME_PTR2_VAL(o)));
-}
-
-Scheme_Object *read_apply_values(Scheme_Object *o)
-{
-  Scheme_Object *data;
-
-  if (!SCHEME_PAIRP(o)) return NULL;
-
-  data = scheme_alloc_object();
-  data->type = scheme_apply_values_type;
-  SCHEME_PTR1_VAL(data) = SCHEME_CAR(o);
-  SCHEME_PTR2_VAL(data) = SCHEME_CDR(o);
-  
-  return data;
-}
-
-Scheme_Object *write_with_immed_mark(Scheme_Object *o)
-{
-  Scheme_With_Continuation_Mark *wcm = (Scheme_With_Continuation_Mark *)o;
-  Scheme_Object *vec, *v;
-
-  vec = scheme_make_vector(3, NULL);
-
-  v = scheme_protect_quote(wcm->key);
-  SCHEME_VEC_ELS(vec)[0] = v;
-  v = scheme_protect_quote(wcm->val);
-  SCHEME_VEC_ELS(vec)[1] = v;
-  v = scheme_protect_quote(wcm->body);
-  SCHEME_VEC_ELS(vec)[2] = v;
-  
-  return vec;
-}
-
-Scheme_Object *read_with_immed_mark(Scheme_Object *o)
-{
-  Scheme_With_Continuation_Mark *wcm;
-
-  if (!SCHEME_VECTORP(o)) return NULL;
-  if (SCHEME_VEC_SIZE(o) != 3) return NULL;
-
-  wcm = MALLOC_ONE_TAGGED(Scheme_With_Continuation_Mark);
-  wcm->so.type = scheme_with_immed_mark_type;
-  
-  wcm->key = SCHEME_VEC_ELS(o)[0];
-  wcm->val = SCHEME_VEC_ELS(o)[1];
-  wcm->body = SCHEME_VEC_ELS(o)[2];
-
-  return (Scheme_Object *)wcm;
-}
-
-Scheme_Object *write_boxenv(Scheme_Object *o)
-{
-  return scheme_make_pair(SCHEME_PTR1_VAL(o), SCHEME_PTR2_VAL(o));
-}
-
-Scheme_Object *read_boxenv(Scheme_Object *o)
-{
-  Scheme_Object *data;
-
-  if (!SCHEME_PAIRP(o)) return NULL;
-
-  data = scheme_alloc_object();
-  data->type = scheme_boxenv_type;
-  SCHEME_PTR1_VAL(data) = SCHEME_CAR(o);
-  SCHEME_PTR2_VAL(data) = SCHEME_CDR(o);
-  
-  return data;
-}
-
-static Scheme_Object *read_inline_variant(Scheme_Object *obj)
-{
-  Scheme_Object *data;
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-
-  data = scheme_make_vector(3, scheme_false);
-  data->type = scheme_inline_variant_type;
-  SCHEME_VEC_ELS(data)[0] = SCHEME_CAR(obj);
-  SCHEME_VEC_ELS(data)[1] = SCHEME_CDR(obj);
-  /* third slot is filled when linklet->accessible table is made */
-  
-  return data;
-}
-
-static Scheme_Object *write_inline_variant(Scheme_Object *obj)
-{
-  return scheme_make_pair(SCHEME_VEC_ELS(obj)[0],
-                          SCHEME_VEC_ELS(obj)[1]);
-}
-
-
-#define BOOL(x) (x ? scheme_true : scheme_false)
-
-static Scheme_Object *write_application(Scheme_Object *obj)
-{
-  scheme_signal_error("app writer shouldn't be used");
-  return NULL;
-}
-
-static Scheme_Object *read_application(Scheme_Object *obj)
-{
-  return NULL;
-}
-
-static Scheme_Object *write_sequence(Scheme_Object *obj)
-{
-  Scheme_Object *l;
-  int i;
-
-  i = ((Scheme_Sequence *)obj)->count;
-
-  l = scheme_null;
-  for (; i--; ) {
-    l = cons(scheme_protect_quote(((Scheme_Sequence *)obj)->array[i]), l);
-  }
-  
-  return l;
-}
-
-static Scheme_Object *read_sequence(Scheme_Object *obj)
-{
-  return scheme_make_sequence_compilation(obj, 1, 1);
-}
-
-static Scheme_Object *read_sequence_save_first(Scheme_Object *obj)
-{
-  return scheme_make_sequence_compilation(obj, -2, 1);
-}
-
-static Scheme_Object *write_branch(Scheme_Object *obj)
-{
-  scheme_signal_error("branch writer shouldn't be used");
-  return NULL;
-}
-
-static Scheme_Object *read_branch(Scheme_Object *obj)
-{
-  return NULL;
-}
-
-static Scheme_Object *write_with_cont_mark(Scheme_Object *obj)
-{
-  Scheme_With_Continuation_Mark *wcm;
-
-  wcm = (Scheme_With_Continuation_Mark *)obj;
-
-  return cons(scheme_protect_quote(wcm->key),
-	      cons(scheme_protect_quote(wcm->val),
-		   scheme_protect_quote(wcm->body)));
-}
-
-static Scheme_Object *read_with_cont_mark(Scheme_Object *obj)
-{
-  Scheme_With_Continuation_Mark *wcm;
-
-  if (!SCHEME_PAIRP(obj) || !SCHEME_PAIRP(SCHEME_CDR(obj)))
-    return NULL; /* bad .zo */
-
-  wcm = MALLOC_ONE_TAGGED(Scheme_With_Continuation_Mark);
-  wcm->so.type = scheme_with_cont_mark_type;
-  wcm->key = SCHEME_CAR(obj);
-  wcm->val = SCHEME_CADR(obj);
-  wcm->body = SCHEME_CDR(SCHEME_CDR(obj));
-
-  return (Scheme_Object *)wcm;
-}
-
-#define BOOL(x) (x ? scheme_true : scheme_false)
 
 static int not_relative_path(Scheme_Object *p, Scheme_Hash_Table *cache)
 {
@@ -589,7 +47,7 @@ static int not_relative_path(Scheme_Object *p, Scheme_Hash_Table *cache)
   return 0;
 }
 
-static Scheme_Object *closure_marshal_name(Scheme_Object *name)
+Scheme_Object *scheme_closure_marshal_name(Scheme_Object *name)
 {
   if (name) {
     if (SCHEME_VECTORP(name)) {
@@ -614,16 +72,20 @@ static Scheme_Object *closure_marshal_name(Scheme_Object *name)
   return name;
 }
 
-static Scheme_Object *write_lambda(Scheme_Object *obj)
+void scheme_write_lambda(Scheme_Object *obj,
+                         Scheme_Object **_name,
+                         Scheme_Object **_ds,
+                         Scheme_Object **_closure_map,
+                         Scheme_Object **_tl_map)
 {
   Scheme_Lambda *data;
-  Scheme_Object *name, *l, *code, *ds, *tl_map;
+  Scheme_Object *name, *code, *ds, *tl_map, *closure_map;
   int svec_size, pos;
   Scheme_Marshal_Tables *mt;
 
   data = (Scheme_Lambda *)obj;
 
-  name = closure_marshal_name(data->name);
+  name = scheme_closure_marshal_name(data->name);
 
   svec_size = data->closure_size;
   if (SCHEME_LAMBDA_FLAGS(data) & LAMBDA_HAS_TYPED_ARGS) {
@@ -752,53 +214,35 @@ static Scheme_Object *write_lambda(Scheme_Object *obj)
     }
   }
 
-  l = CONS(scheme_make_svector(svec_size,
-                               data->closure_map),
-           ds);
-
-  if (SCHEME_LAMBDA_FLAGS(data) & LAMBDA_HAS_TYPED_ARGS)
-    l = CONS(scheme_make_integer(data->closure_size),
-             l);
-
-  return CONS(scheme_make_integer(SCHEME_LAMBDA_FLAGS(data) & 0x7F),
-	      CONS(scheme_make_integer(data->num_params),
-		   CONS(scheme_make_integer(data->max_let_depth),
-                        CONS(tl_map,
-                             CONS(name,
-                                  l)))));
+  *_name = name;
+  *_ds = ds;
+  closure_map = scheme_make_svector(svec_size, data->closure_map);
+  *_closure_map = closure_map;
+  *_tl_map = tl_map;
 }
 
-static Scheme_Object *read_lambda(Scheme_Object *obj)
+Scheme_Object *scheme_read_lambda(int flags, int closure_size, int num_params, int max_let_depth,
+                                  Scheme_Object *name,
+                                  Scheme_Object *ds,
+                                  Scheme_Object *closure_map,
+                                  Scheme_Object *tl_map)
 {
   Scheme_Lambda *data;
-  Scheme_Object *v, *tl_map;
 
 #define BAD_CC "bad compiled closure"
 #define X_SCHEME_ASSERT(x, y)
 
   data  = (Scheme_Lambda *)scheme_malloc_tagged(sizeof(Scheme_Lambda));
-
   data->iso.so.type = scheme_lambda_type;
 
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  v = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
-  SCHEME_LAMBDA_FLAGS(data) = (short)(SCHEME_INT_VAL(v));
+  SCHEME_LAMBDA_FLAGS(data) = (short)flags;
 
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  v = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
-  data->num_params = SCHEME_INT_VAL(v);
+  data->num_params = num_params;
   if (data->num_params < 0) return NULL;
 
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  data->max_let_depth = SCHEME_INT_VAL(SCHEME_CAR(obj));
+  data->max_let_depth = max_let_depth;
   if (data->max_let_depth < 0) return NULL;
-  obj = SCHEME_CDR(obj);
 
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  tl_map = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
   if (!SCHEME_FALSEP(tl_map)) {
     if (SCHEME_INTP(tl_map))
       data->tl_map = (void *)tl_map;
@@ -823,116 +267,27 @@ static Scheme_Object *read_lambda(Scheme_Object *obj)
       return NULL;
   }
 
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  data->name = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
+  data->name = name;
   if (SCHEME_NULLP(data->name))
     data->name = NULL;
 
-  if (!SCHEME_PAIRP(obj)) return NULL;
-  v = SCHEME_CAR(obj);
-  obj = SCHEME_CDR(obj);
+  data->body = ds;
 
-  /* v is an svector or an integer... */
+  if (!SAME_TYPE(scheme_svector_type, SCHEME_TYPE(closure_map))) return NULL;
+  data->closure_map = SCHEME_SVEC_VEC(closure_map);
+
   if (SCHEME_LAMBDA_FLAGS(data) & LAMBDA_HAS_TYPED_ARGS) {
-    if (!SCHEME_INTP(v)) return NULL;
-    data->closure_size = SCHEME_INT_VAL(v);
-    
-    if (!SCHEME_PAIRP(obj)) return NULL;
-    v = SCHEME_CAR(obj);
-    obj = SCHEME_CDR(obj);
-  }
-
-  data->body = obj;
-
-  if (!SAME_TYPE(scheme_svector_type, SCHEME_TYPE(v))) return NULL;
-
-  if (!(SCHEME_LAMBDA_FLAGS(data) & LAMBDA_HAS_TYPED_ARGS))
-    data->closure_size = SCHEME_SVEC_LEN(v);
-
-  if ((SCHEME_LAMBDA_FLAGS(data) & LAMBDA_HAS_TYPED_ARGS))
-    if (data->closure_size + scheme_boxmap_size(data->closure_size + data->num_params) != SCHEME_SVEC_LEN(v))
+    data->closure_size = closure_size;
+    if (data->closure_size + scheme_boxmap_size(data->closure_size + data->num_params) != SCHEME_SVEC_LEN(closure_map))
       return NULL;
-
-  data->closure_map = SCHEME_SVEC_VEC(v);
+  } else
+    data->closure_size = SCHEME_SVEC_LEN(closure_map);
 
   /* If the closure is empty, create the closure now */
   if (!data->closure_size)
     return scheme_make_closure(NULL, (Scheme_Object *)data, 0);
   else
     return (Scheme_Object *)data;
-}
-
-
-static Scheme_Object *write_toplevel(Scheme_Object *obj)
-{
-  int pos, flags;
-  Scheme_Object *pr;
-
-  pos = SCHEME_TOPLEVEL_POS(obj);
-  flags = (SCHEME_TOPLEVEL_FLAGS(obj) & SCHEME_TOPLEVEL_FLAGS_MASK);
-
-  pr = (flags
-	? scheme_make_pair(scheme_make_integer(pos),
-			   scheme_make_integer(flags))
-	: scheme_make_integer(pos));
-
-  return scheme_make_pair(scheme_make_integer(SCHEME_TOPLEVEL_DEPTH(obj)),
-			  pr);
-}
-
-static Scheme_Object *read_toplevel(Scheme_Object *obj)
-{
-  int pos, depth, flags;
-
-  if (!SCHEME_PAIRP(obj)) return NULL;
-
-  depth = (int)SCHEME_INT_VAL(SCHEME_CAR(obj));
-  obj = SCHEME_CDR(obj);
-
-  if (SCHEME_PAIRP(obj)) {
-    pos = (int)SCHEME_INT_VAL(SCHEME_CAR(obj));
-    flags = SCHEME_INT_VAL(SCHEME_CDR(obj)) & SCHEME_TOPLEVEL_FLAGS_MASK;
-  } else {
-    pos = (int)SCHEME_INT_VAL(obj);
-    flags = 0;
-  }
-
-  if (depth < 0) return NULL;
-  if (pos < 0) return NULL;
-
-  return scheme_make_toplevel(depth, pos, flags);
-}
-
-static Scheme_Object *write_local(Scheme_Object *obj)
-{
-  return scheme_make_integer(SCHEME_LOCAL_POS(obj));
-}
-
-static Scheme_Object *do_read_local(Scheme_Type t, Scheme_Object *obj)
-{
-  int n, flags;
-
-  if (SCHEME_PAIRP(obj)) {
-    flags = (int)SCHEME_INT_VAL(SCHEME_CAR(obj));
-    obj = SCHEME_CDR(obj);
-  } else
-    flags = 0;
-
-  n = (int)SCHEME_INT_VAL(obj);
-  if (n < 0) return NULL;
-
-  return scheme_make_local(t, n, flags);
-}
-
-static Scheme_Object *read_local(Scheme_Object *obj)
-{
-  return do_read_local(scheme_local_type, obj);
-}
-
-static Scheme_Object *read_local_unbox(Scheme_Object *obj)
-{
-  return do_read_local(scheme_local_unbox_type, obj);
 }
 
 static Scheme_Object *hash_tree_to_vector(Scheme_Hash_Tree *ht)
@@ -955,7 +310,7 @@ static Scheme_Object *hash_tree_to_vector(Scheme_Hash_Tree *ht)
   return vec;
 }
 
-static Scheme_Object *write_linklet(Scheme_Object *obj)
+Scheme_Object *scheme_write_linklet(Scheme_Object *obj)
 {
   Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
   Scheme_Object *l;
@@ -1067,7 +422,7 @@ static Scheme_Object *vector_to_hash_tree(Scheme_Object *vec)
   return (Scheme_Object *)ht;
 }
 
-static Scheme_Object *read_linklet(Scheme_Object *obj)
+Scheme_Object *scheme_read_linklet(Scheme_Object *obj)
 {
   Scheme_Linklet *linklet = (Scheme_Linklet *)obj;
   Scheme_Object *e, *a;

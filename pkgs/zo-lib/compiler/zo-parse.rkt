@@ -13,21 +13,18 @@
 ;; ----------------------------------------
 ;; Bytecode unmarshalers for various forms
 
-(define (read-toplevel v)
+(define (read-toplevel flags pos depth)
   (define SCHEME_TOPLEVEL_CONST #x02)
   (define SCHEME_TOPLEVEL_READY #x01)
-  (match v
-    [(cons depth (cons pos flags))
-     ;; In the VM, the two flag bits are actually interpreted
-     ;; as a number when the toplevel is a reference, but we
-     ;; interpret the bits as flags here for backward compatibility.
-     (make-toplevel depth pos 
-                    (positive? (bitwise-and flags SCHEME_TOPLEVEL_CONST))
-                    (positive? (bitwise-and flags SCHEME_TOPLEVEL_READY)))]
-    [(cons depth pos)
-     (make-toplevel depth pos #f #f)]))
+  ;; In the VM, the two flag bits are actually interpreted
+  ;; as a number when the toplevel is a reference, but we
+  ;; interpret the bits as flags here for backward compatibility.
+  (make-toplevel depth pos 
+                 (positive? (bitwise-and flags SCHEME_TOPLEVEL_CONST))
+                 (positive? (bitwise-and flags SCHEME_TOPLEVEL_READY))))
 
-(define (read-unclosed-procedure v)
+(define (read-unclosed-procedure flags maybe-closure-size num-params max-let-depth
+                                 name body closed-over tl-map)
   (define CLOS_HAS_REST 1)
   (define CLOS_HAS_REF_ARGS 2)
   (define CLOS_PRESERVES_MARKS 4)
@@ -36,120 +33,77 @@
   (define CLOS_SINGLE_RESULT 32)
   (define BITS_PER_MZSHORT 32)
   (define BITS_PER_ARG 4)
-  (match v
-    [`(,flags ,num-params ,max-let-depth ,tl-map ,name ,v . ,rest)
-     (let ([rest? (positive? (bitwise-and flags CLOS_HAS_REST))])
-       (let*-values ([(closure-size closed-over body)
-                      (if (zero? (bitwise-and flags CLOS_HAS_REF_ARGS))
-                          (values (vector-length v) v rest)
-                          (values v (car rest) (cdr rest)))]
-                     [(get-flags) (lambda (i)
-                                    (if (zero? (bitwise-and flags CLOS_HAS_REF_ARGS))
-                                        0
-                                        (let ([byte (vector-ref closed-over
-                                                                (+ closure-size (quotient (* BITS_PER_ARG i) BITS_PER_MZSHORT)))])
-                                          (bitwise-and (arithmetic-shift byte (- (remainder (* BITS_PER_ARG i) BITS_PER_MZSHORT)))
-                                                       (sub1 (arithmetic-shift 1 BITS_PER_ARG))))))]
-                     [(num->type) (lambda (n)
-                                    (case n
-                                      [(2) 'flonum]
-                                      [(3) 'fixnum]
-                                      [(4) 'extflonum]
-                                      [else (error "invaid type flag")]))]
-                     [(arg-types) (let ([num-params ((if rest? sub1 values) num-params)])
-                                    (for/list ([i (in-range num-params)]) 
-                                      (define v (get-flags i))
-                                      (case v
-                                        [(0) 'val]
-                                        [(1) 'ref]
-                                        [else (num->type v)])))]
-                     [(closure-types) (for/list ([i (in-range closure-size)]
-                                                 [j (in-naturals num-params)])
-                                        (define v (get-flags j))
-                                        (case v
-                                          [(0) 'val/ref]
-                                          [(1) (error "invalid 'ref closure variable")]
-                                          [else (num->type v)]))])
-         (make-lam name
-                   (append
-                    (if (zero? (bitwise-and flags flags CLOS_PRESERVES_MARKS)) null '(preserves-marks))
-                    (if (zero? (bitwise-and flags flags CLOS_IS_METHOD)) null '(is-method))
-                    (if (zero? (bitwise-and flags flags CLOS_SINGLE_RESULT)) null '(single-result))
-                    (if (zero? (bitwise-and flags flags CLOS_NEED_REST_CLEAR)) null '(sfs-clear-rest-args))
-                    (if (and rest? (zero? num-params)) '(only-rest-arg-not-used) null))
-                   (if (and rest? (num-params . > . 0))
-                       (sub1 num-params)
-                       num-params)
-                   arg-types
-                   rest?
-                   (if (= closure-size (vector-length closed-over))
-                       closed-over
-                       (let ([v2 (make-vector closure-size)])
-                         (vector-copy! v2 0 closed-over 0 closure-size)
-                         v2))
-                   closure-types
-                   (and tl-map
-                        (let* ([bits (if (exact-integer? tl-map)
-                                         tl-map
-                                         (for/fold ([i 0]) ([v (in-vector tl-map)]
-                                                            [s (in-naturals)])
-                                           (bitwise-ior i (arithmetic-shift v (* s 16)))))]
-                               [len (integer-length bits)])
-                          (list->set
-                           (let loop ([bit 0])
-                             (cond
-                              [(bit . >= . len) null]
-                              [(bitwise-bit-set? bits bit)
-                               (cons bit (loop (add1 bit)))]
-                              [else (loop (add1 bit))])))))
-                   max-let-depth
-                   body)))]))
-
-(define (read-let-value v)
-  (match v
-    [`(,count ,pos ,boxes? ,rhs . ,body)
-     (make-install-value count pos boxes? rhs body)]))
-
-(define (read-let-void v)
-  (match v
-    [`(,count ,boxes? . ,body)
-     (make-let-void count boxes? body)]))
-
-(define (read-letrec v)
-  (match v
-    [`(,count ,body . ,procs)
-     (make-let-rec procs body)]))
-
-(define (read-with-cont-mark v)
-  (match v
-    [`(,key ,val . ,body)
-     (make-with-cont-mark key val body)]))
-
-(define (read-sequence v) 
-  (make-seq v))
+  (let ([rest? (positive? (bitwise-and flags CLOS_HAS_REST))])
+    (let*-values ([(closure-size)
+                   (if (zero? (bitwise-and flags CLOS_HAS_REF_ARGS))
+                       (vector-length closed-over)
+                       maybe-closure-size)]
+                  [(get-flags) (lambda (i)
+                                 (if (zero? (bitwise-and flags CLOS_HAS_REF_ARGS))
+                                     0
+                                     (let ([byte (vector-ref closed-over
+                                                             (+ closure-size (quotient (* BITS_PER_ARG i) BITS_PER_MZSHORT)))])
+                                       (bitwise-and (arithmetic-shift byte (- (remainder (* BITS_PER_ARG i) BITS_PER_MZSHORT)))
+                                                    (sub1 (arithmetic-shift 1 BITS_PER_ARG))))))]
+                  [(num->type) (lambda (n)
+                                 (case n
+                                   [(2) 'flonum]
+                                   [(3) 'fixnum]
+                                   [(4) 'extflonum]
+                                   [else (error "invaid type flag")]))]
+                  [(arg-types) (let ([num-params ((if rest? sub1 values) num-params)])
+                                 (for/list ([i (in-range num-params)]) 
+                                   (define v (get-flags i))
+                                   (case v
+                                     [(0) 'val]
+                                     [(1) 'ref]
+                                     [else (num->type v)])))]
+                  [(closure-types) (for/list ([i (in-range closure-size)]
+                                              [j (in-naturals num-params)])
+                                     (define v (get-flags j))
+                                     (case v
+                                       [(0) 'val/ref]
+                                       [(1) (error "invalid 'ref closure variable")]
+                                       [else (num->type v)]))])
+      (make-lam name
+                (append
+                 (if (zero? (bitwise-and flags flags CLOS_PRESERVES_MARKS)) null '(preserves-marks))
+                 (if (zero? (bitwise-and flags flags CLOS_IS_METHOD)) null '(is-method))
+                 (if (zero? (bitwise-and flags flags CLOS_SINGLE_RESULT)) null '(single-result))
+                 (if (zero? (bitwise-and flags flags CLOS_NEED_REST_CLEAR)) null '(sfs-clear-rest-args))
+                 (if (and rest? (zero? num-params)) '(only-rest-arg-not-used) null))
+                (if (and rest? (num-params . > . 0))
+                    (sub1 num-params)
+                    num-params)
+                arg-types
+                rest?
+                (if (= closure-size (vector-length closed-over))
+                    closed-over
+                    (let ([v2 (make-vector closure-size)])
+                      (vector-copy! v2 0 closed-over 0 closure-size)
+                      v2))
+                closure-types
+                (and tl-map
+                     (let* ([bits (if (exact-integer? tl-map)
+                                      tl-map
+                                      (for/fold ([i 0]) ([v (in-vector tl-map)]
+                                                         [s (in-naturals)])
+                                        (bitwise-ior i (arithmetic-shift v (* s 16)))))]
+                            [len (integer-length bits)])
+                       (list->set
+                        (let loop ([bit 0])
+                          (cond
+                            [(bit . >= . len) null]
+                            [(bitwise-bit-set? bits bit)
+                             (cons bit (loop (add1 bit)))]
+                            [else (loop (add1 bit))])))))
+                max-let-depth
+                body))))
 
 (define (read-define-values v)
   (make-def-values
    (cdr (vector->list v))
    (vector-ref v 0)))
-
-(define (read-set! v)
-  (make-assign (cadr v) (cddr v) (car v)))
-
-(define (read-case-lambda v)
-  (make-case-lam (car v) (cdr v)))
-
-(define (read-begin0 v) 
-  (make-beg0 v))
-
-(define (read-boxenv v)
-  (make-boxenv (car v) (cdr v)))
-(define (read-#%variable-ref v)
-  (make-varref (car v) (cadr v) (cddr v)))
-(define (read-apply-values v)
-  (make-apply-values (car v) (cdr v)))
-(define (read-with-immed-mark v)
-  (make-with-immed-mark (vector-ref v 0) (vector-ref v 1) (vector-ref v 2)))
 
 (define (in-list* l n)
   (make-do-sequence
@@ -182,15 +136,12 @@
             (take defns num-exports)
             (take (list-tail defns num-exports) (- (length defns) num-exports num-lifts))
             (drop defns (- (length defns) num-lifts))
-            (for/hash ([i (in-range 0 (vector-length source-names) 2)])
+            (for/hasheq ([i (in-range 0 (vector-length source-names) 2)])
               (values (vector-ref source-names i)
                       (vector-ref source-names (add1 i))))
             (vector->list body)
             max-let-depth
             need-instance-access?)]))
-
-(define (read-inline-variant v)
-  (make-inline-variant (car v) (cdr v)))
 
 (define (parse-shape shape)
   (cond
@@ -255,32 +206,6 @@
     [(24) 'linklet-type]
     [else (error 'int->type "unknown type: ~e" i)]))
 
-(define type-readers
-  (make-immutable-hash
-   (list
-    (cons 'linklet-type read-linklet)
-    (cons 'toplevel-type read-toplevel)
-    (cons 'sequence-type read-sequence)
-    (cons 'unclosed-procedure-type read-unclosed-procedure)
-    (cons 'let-value-type read-let-value)
-    (cons 'let-void-type read-let-void)
-    (cons 'letrec-type read-letrec)
-    (cons 'with-cont-mark-type read-with-cont-mark)
-    (cons 'case-lambda-sequence-type read-case-lambda)
-    (cons 'begin0-sequence-type read-begin0)
-    (cons 'inline-variant-type read-inline-variant)
-    (cons 'define-values-type read-define-values)
-    (cons 'set-bang-type read-set!)
-    (cons 'boxenv-type read-boxenv)
-    (cons 'varref-form-type read-#%variable-ref)
-    (cons 'apply-values-type read-apply-values)
-    (cons 'with-immed-mark-type read-with-immed-mark))))
-
-(define (get-reader type)
-  (hash-ref type-readers type
-            (λ ()
-              (error 'read-marshalled "reader for ~a not implemented" type))))
-
 ;; ----------------------------------------
 ;; Lowest layer of bytecode parsing
 
@@ -338,7 +263,7 @@
     [16 vector]
     [17 hash-table]
     [18 let-one-typed]
-    [19 marshalled]
+    [19 linklet]
     [20 quote]
     [21 reference]
     [22 local]
@@ -353,9 +278,20 @@
     [31 prefab]
     [32 let-one-unused]
     [33 shared]
-    [34 62 small-number]
-    [62 80 small-symbol]
-    [80 92 small-marshalled]
+    [34 toplevel]
+    [35 begin]
+    [36 begin0]
+    [37 let-value]
+    [38 let-void]
+    [39 letrec]
+    [40 wcm]
+    [41 define-values]
+    [42 set-bang]
+    [43 varref]
+    [44 apply-values]
+    [45 other-form]
+    [46 74 small-number]
+    [74 92 small-symbol]
     [92 ,(+ 92 small-list-max) small-proper-list]
     [,(+ 92 small-list-max) 192 small-list]
     [192 207 small-local]
@@ -412,12 +348,6 @@
   (for ([i (in-range n)])
     (vector-set! v (sub1 (- n i)) (read-compact-number port)))
   v)
-
-(define (read-marshalled type port)
-  (let* ([type (if (number? type) (int->type type) type)]
-         [l (read-compact port)]
-         [reader (get-reader type)])
-    (reader l)))
 
 (define SCHEME_LOCAL_TYPE_FLONUM 1)
 (define SCHEME_LOCAL_TYPE_FIXNUM 2)
@@ -570,7 +500,8 @@
             (for/list ([i (in-range len)])
               (cons (read-compact cp)
                     (read-compact cp)))))]
-        [(marshalled) (read-marshalled (read-compact-number cp) cp)]
+        [(linklet)
+         (read-linklet (read-compact cp))]
         [(local local-unbox)
          (let ([c (read-compact-number cp)]
                [unbox? (eq? cpt-tag 'local-unbox)])
@@ -624,8 +555,6 @@
              (string->uninterned-symbol str)
              ; unreadable is equivalent to parallel in the C implementation
              (string->unreadable-symbol str)))]
-        [(small-marshalled)
-         (read-marshalled (- ch cpt-start) cp)]
         [(small-application2)
          (make-application (read-compact cp)
                            (list (read-compact cp)))]
@@ -666,6 +595,75 @@
         [(shared)
          (let ([pos (read-compact-number cp)])
            (read-cyclic cp pos 'shared))]
+        [(toplevel)
+         (read-toplevel (read-compact-number cp) (read-compact-number cp) (read-compact-number cp))]
+        [(begin begin0)
+         (define len  (read-compact-number cp))
+         (define l (for/list ([i (in-range len)]) (read-compact cp)))
+         (if (eq? cpt-tag 'begin)
+             (make-seq l)
+             (make-beg0 l))]
+        [(let-value)
+         (define count (read-compact-number cp))
+         (define pos (read-compact-number cp))
+         (define boxes? (not (zero? (read-compact-number cp))))
+         (define rhs (read-compact cp))
+         (define body (read-compact cp))
+         (make-install-value count pos boxes? rhs body)]
+        [(let-void)
+         (define count (read-compact-number cp))
+         (define boxes? (not (zero? (read-compact-number cp))))
+         (define body (read-compact cp))
+         (make-let-void count boxes? body)]
+        [(letrec)
+         (define len  (read-compact-number cp))
+         (define procs (for/list ([i (in-range len)]) (read-compact cp)))
+         (define body (read-compact cp))
+         (make-let-rec procs body)]
+        [(wcm)
+         (make-with-cont-mark (read-compact cp) (read-compact cp) (read-compact cp))]
+        [(define-values)
+         (define v (read-compact cp))
+         (make-def-values
+          (cdr (vector->list v))
+          (vector-ref v 0))]
+        [(set-bang)
+         (define undef-ok? (not (zero? (read-compact-number cp))))
+         (make-assign (read-compact cp) (read-compact cp) undef-ok?)]
+        [(varref)
+         (make-varref (not (zero? (read-compact-number cp))) (read-compact cp) (read-compact cp))]
+        [(apply-values)
+         (make-apply-values (read-compact cp) (read-compact cp))]
+        [(other-form)
+         (define type (read-compact-number cp))
+         (case (int->type type)
+           [(boxenv-type)
+            (make-boxenv (read-compact cp) (read-compact cp))]
+           [(with-immed-mark-type)
+            (make-with-immed-mark (read-compact cp) (read-compact cp) (read-compact cp))]
+           [(inline-variant-type)
+            (make-inline-variant (read-compact cp) (read-compact cp))]
+           [(case-lambda-sequence-type)
+            (define count (read-compact-number cp))
+            (define name (read-compact cp))
+            (define l (for/list ([i (in-range count)]) (read-compact cp)))
+            (make-case-lam name l)]
+           [(unclosed-procedure-type)
+            (define flags (read-compact-number cp))
+            (define CLOS_HAS_TYPED_ARGS 2)
+            (define maybe-closure-size (if (positive? (bitwise-and flags CLOS_HAS_TYPED_ARGS))
+                                           (read-compact-number cp)
+                                           -1))
+            (define num-params (read-compact-number cp))
+            (define max-let-depth (read-compact-number cp))
+            (define name (read-compact cp))
+            (define body (read-compact cp))
+            (define closure-map (read-compact cp))
+            (define tl-map (read-compact cp))
+            (read-unclosed-procedure flags maybe-closure-size num-params max-let-depth
+                                     name body closure-map tl-map)]
+           [else
+            (error 'read-compact "unknown other-form type ~a" type)])]
         [else (error 'read-compact "unknown tag ~a" cpt-tag)]))
     (cond
       [(zero? need-car) v]
@@ -753,7 +751,7 @@
         <
         #:key sub-info-start))
      (linkl-directory
-      (for/hash ([sub-info (in-list sub-infos)])
+      (for/hasheq ([sub-info (in-list sub-infos)])
         (define pos (file-position port))
         (unless (= (- pos init-pos) (sub-info-start sub-info))
           (error 'zo-parse 

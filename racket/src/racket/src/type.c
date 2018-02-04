@@ -28,8 +28,6 @@
 
 /* types should all be registered before invoking places */
 
-SHARED_OK Scheme_Type_Reader *scheme_type_readers;
-SHARED_OK Scheme_Type_Writer *scheme_type_writers;
 SHARED_OK Scheme_Equal_Proc *scheme_type_equals;
 SHARED_OK Scheme_Primary_Hash_Proc *scheme_type_hash1s;
 SHARED_OK Scheme_Secondary_Hash_Proc *scheme_type_hash2s;
@@ -56,8 +54,6 @@ static void init_type_arrays()
 #endif
 
   REGISTER_SO(type_names);
-  REGISTER_SO(scheme_type_readers);
-  REGISTER_SO(scheme_type_writers);
   REGISTER_SO(scheme_type_equals);
   REGISTER_SO(scheme_type_hash1s);
   REGISTER_SO(scheme_type_hash2s);
@@ -67,18 +63,11 @@ static void init_type_arrays()
 
   type_names = RAW_MALLOC_N(char *, allocmax);
   memset(type_names, 0, allocmax * sizeof(char *));
-  scheme_type_readers = RAW_MALLOC_N(Scheme_Type_Reader, allocmax);
-  n = allocmax * sizeof(Scheme_Type_Reader);
-  memset(scheme_type_readers, 0, n);
 
 #ifdef MEMORY_COUNTING_ON
   scheme_type_table_count += n;
   scheme_misc_count += (allocmax * sizeof(char *));
 #endif
-
-  scheme_type_writers = RAW_MALLOC_N(Scheme_Type_Writer, allocmax);
-  n = allocmax * sizeof(Scheme_Type_Writer);
-  memset(scheme_type_writers, 0, n);
 
 #ifdef MEMORY_COUNTING_ON
   scheme_type_table_count += n;
@@ -373,18 +362,6 @@ Scheme_Type scheme_make_type(const char *name)
     free(type_names);
     type_names = (char **)naya;
 
-    naya = malloc(n = allocmax * sizeof(Scheme_Type_Reader));
-    memset(naya, 0, n);
-    memcpy(naya, scheme_type_readers, maxtype * sizeof(Scheme_Type_Reader));
-    free(scheme_type_readers);
-    scheme_type_readers = (Scheme_Type_Reader *)naya;
-
-    naya = malloc(n = allocmax * sizeof(Scheme_Type_Writer));
-    memset(naya, 0, n);
-    memcpy(naya, scheme_type_writers, maxtype * sizeof(Scheme_Type_Writer));
-    free(scheme_type_writers);
-    scheme_type_writers = (Scheme_Type_Writer *)naya;
-
     naya = malloc(n = allocmax * sizeof(Scheme_Equal_Proc));
     memset(naya, 0, n);
     memcpy(naya, scheme_type_equals, maxtype * sizeof(Scheme_Equal_Proc));
@@ -404,8 +381,6 @@ Scheme_Type scheme_make_type(const char *name)
     scheme_type_hash2s = (Scheme_Secondary_Hash_Proc *)naya;
 
 #ifdef MEMORY_COUNTING_ON
-    scheme_type_table_count += 20 * (sizeof(Scheme_Type_Reader)
-                                     + sizeof(Scheme_Type_Writer));
     scheme_misc_count += (20 * sizeof(char *));
 #endif
   }
@@ -442,23 +417,6 @@ char *scheme_get_type_name(Scheme_Type t)
   s = scheme_get_type_name_or_null(t);
   return s ? s : "???";
 }
-
-void scheme_install_type_reader(Scheme_Type t, Scheme_Type_Reader f)
-{
-  if (t < 0 || t >= maxtype)
-    return;
-
-  scheme_type_readers[t] = f;
-}
-
-void scheme_install_type_writer(Scheme_Type t, Scheme_Type_Writer f)
-{
-  if (t < 0 || t >= maxtype)
-    return;
-
-  scheme_type_writers[t] = f;
-}
-
 
 void scheme_set_type_equality(Scheme_Type t, 
                               Scheme_Equal_Proc f,

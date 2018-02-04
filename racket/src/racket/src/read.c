@@ -242,7 +242,6 @@ void scheme_init_read(Scheme_Startup_Env *env)
     }
     FILL_IN(SMALL_NUMBER);
     FILL_IN(SMALL_SYMBOL);
-    FILL_IN(SMALL_MARSHALLED);
     FILL_IN(SMALL_LIST);
     FILL_IN(SMALL_PROPER_LIST);
     FILL_IN(SMALL_LOCAL);
@@ -2326,7 +2325,6 @@ typedef struct CPort {
 #define CP_GETC(cp) ((int)(cp->start[cp->pos++]))
 #define CP_TELL(port) (port->pos + port->base)
 
-static Scheme_Object *read_marshalled(int type, CPort *port);
 static Scheme_Object *read_compact_list(int c, int proper, int use_stack, CPort *port);
 static Scheme_Object *read_compact_quote(CPort *port, int embedded);
 
@@ -2780,8 +2778,13 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
 	v = (Scheme_Object *)ht;
       }
       break;
-    case CPT_MARSHALLED:
-      v = read_marshalled(read_compact_number(port), port);
+    case CPT_LINKLET:
+      {
+        v = read_compact(port, 1);
+        v = scheme_read_linklet(v);
+        if (!v) scheme_ill_formed_code(port);
+        return v;
+      }
       break;
     case CPT_QUOTE:
       v = read_compact_quote(port, 1);
@@ -2793,6 +2796,20 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
           && !port->unsafe_ok)
         unsafe_disallowed(port);
       return variable_references[l];
+      break;
+    case CPT_TOPLEVEL:
+      {
+        int flags, pos, depth;
+
+        flags = read_compact_number(port);
+        pos = read_compact_number(port);
+        depth = read_compact_number(port);
+
+        if ((depth < 0) || (pos < 0))
+          scheme_ill_formed_code(port);
+
+        return scheme_make_toplevel(depth, pos, flags);
+      }
       break;
     case CPT_LOCAL:
       {
@@ -2842,6 +2859,102 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
 	return (Scheme_Object *)a;
       }
       break;
+    case CPT_BEGIN:
+    case CPT_BEGIN0:
+      {
+        Scheme_Sequence *seq;
+        int i, count;
+
+        count = read_compact_number(port);
+        if (count <= 0) scheme_ill_formed_code(port);
+        seq = scheme_malloc_sequence(count);
+        seq->so.type = ((ch == CPT_BEGIN) ? scheme_sequence_type : scheme_begin0_sequence_type);
+        seq->count = count;
+
+        for (i = 0; i < count; i++) {
+          v = read_compact(port, 1);
+          seq->array[i] = v;
+        }
+
+        return (Scheme_Object *)seq;
+      }
+      break;
+    case CPT_LET_VALUE:
+      {
+        Scheme_Let_Value *lv;
+        int c, p;
+ 
+        lv = (Scheme_Let_Value *)scheme_malloc_tagged(sizeof(Scheme_Let_Value));
+        lv->iso.so.type = scheme_let_value_type;
+
+        c = read_compact_number(port);
+        p = read_compact_number(port);
+        if ((c < 0) || (p < 0)) scheme_ill_formed_code(port);
+        
+        lv->count = c;
+        lv->position = p;
+        if (read_compact_number(port))
+          SCHEME_LET_VALUE_AUTOBOX(lv) = 1;
+        v = read_compact(port, 1);
+        lv->value = v;
+        v = read_compact(port, 1);
+        lv->body = v;
+        
+        return (Scheme_Object *)lv;
+      }
+      break;
+    case CPT_LET_VOID:
+      {
+        Scheme_Let_Void *lv;
+        int c;
+ 
+        lv = (Scheme_Let_Void *)scheme_malloc_tagged(sizeof(Scheme_Let_Void));
+        lv->iso.so.type = scheme_let_void_type;
+
+        c = read_compact_number(port);
+        if (c < 0) scheme_ill_formed_code(port);
+
+        lv->count = c;
+        if (read_compact_number(port))
+          SCHEME_LET_VOID_AUTOBOX(lv) = 1;
+        v = read_compact(port, 1);
+        lv->body = v;
+        
+        return (Scheme_Object *)lv;
+      }
+      break;
+    case CPT_LETREC:
+      {
+        Scheme_Letrec *lr;
+        Scheme_Object **sa;
+        int i, c;
+
+        lr = MALLOC_ONE_TAGGED(Scheme_Letrec);
+        lr->so.type = scheme_letrec_type;
+
+        c = read_compact_number(port);
+        if (c < 0) scheme_ill_formed_code(port);
+        
+        lr->count = c;
+        if (c < 4096)
+          sa = MALLOC_N(Scheme_Object*, c);
+        else {
+          sa = scheme_malloc_fail_ok(scheme_malloc, scheme_check_overflow(c, sizeof(Scheme_Object *), 0));
+          if (!sa) scheme_signal_error("out of memory allocating letrec bytecode");
+        }
+        lr->procs = sa;
+
+        for (i = 0; i < c; i++) {
+          v = read_compact(port, 1);
+          sa[i] = v;
+        }
+
+        v = read_compact(port, 1);
+        lr->body = v;
+
+        return (Scheme_Object *)lr;
+      }
+      break;
     case CPT_LET_ONE:
     case CPT_LET_ONE_TYPED:
     case CPT_LET_ONE_UNUSED:
@@ -2875,6 +2988,204 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
 	tbranch = read_compact(port, 1);
 	fbranch = read_compact(port, 1);
 	return scheme_make_branch(test, tbranch, fbranch);
+      }
+      break;
+    case CPT_WCM:
+      {
+        Scheme_With_Continuation_Mark *wcm;
+        
+        wcm = MALLOC_ONE_TAGGED(Scheme_With_Continuation_Mark);
+        wcm->so.type = scheme_with_cont_mark_type;
+
+        v = read_compact(port, 1);
+        wcm->key = v;
+        v = read_compact(port, 1);
+        wcm->val = v;
+        v = read_compact(port, 1);
+        wcm->body = v;
+
+	return (Scheme_Object *)wcm;
+      }
+      break;
+    case CPT_DEFINE_VALUES:
+      {
+        v = read_compact(port, 1);
+        if (!SCHEME_VECTORP(v)) scheme_ill_formed_code(port);
+        v->type = scheme_define_values_type;
+        return v;
+      }
+      break;
+    case CPT_SET_BANG:
+      {
+        Scheme_Set_Bang *sb;
+
+        sb = MALLOC_ONE_TAGGED(Scheme_Set_Bang);
+        sb->so.type = scheme_set_bang_type;
+
+        if (read_compact_number(port))
+          sb->set_undef = 1;
+
+        v = read_compact(port, 1);
+        sb->var = v;
+        v = read_compact(port, 1);
+        sb->val = v;
+
+        return (Scheme_Object *)sb;
+      }
+      break;
+    case CPT_OTHER_FORM:
+      {
+        switch (read_compact_number(port)) {
+        case scheme_boxenv_type:
+          {
+            Scheme_Object *data;
+            
+            data = scheme_alloc_object();
+            data->type = scheme_boxenv_type;
+            
+            v = read_compact(port, 1);
+            SCHEME_PTR1_VAL(data) = v;
+            v = read_compact(port, 1);
+            SCHEME_PTR2_VAL(data) = v;
+            
+            return data;
+          }
+          break;
+        case scheme_with_immed_mark_type:
+          {
+            Scheme_With_Continuation_Mark *wcm;
+            
+            wcm = MALLOC_ONE_TAGGED(Scheme_With_Continuation_Mark);
+            wcm->so.type = scheme_with_immed_mark_type;
+            
+            v = read_compact(port, 1);
+            wcm->key = v;
+            v = read_compact(port, 1);
+            wcm->val = v;
+            v = read_compact(port, 1);
+            wcm->body = v;
+            
+            return (Scheme_Object *)wcm;
+          }
+        case scheme_inline_variant_type:
+          {
+            Scheme_Object *data;
+            
+            data = scheme_make_vector(3, scheme_false);
+            data->type = scheme_inline_variant_type;
+
+            v = read_compact(port, 1);
+            SCHEME_VEC_ELS(data)[0] = v;
+            v = read_compact(port, 1);
+            SCHEME_VEC_ELS(data)[1] = v;
+            /* third slot is filled when linklet->accessible table is made */
+
+            return data;
+          }
+        case scheme_case_lambda_sequence_type:
+          {
+            int count, i, all_closed = 1;
+            Scheme_Case_Lambda *cl;
+
+            count = read_compact_number(port);
+            if (count < 0) scheme_ill_formed_code(port);
+        
+            cl = (Scheme_Case_Lambda *)
+              scheme_malloc_tagged(sizeof(Scheme_Case_Lambda)
+                                   + (count - mzFLEX_DELTA) * sizeof(Scheme_Object *));
+            cl->so.type = scheme_case_lambda_sequence_type;
+            cl->count = count;
+
+            v = read_compact(port, 1);
+            if (SCHEME_NULLP(v))
+              cl->name = NULL;
+            else
+              cl->name = v;
+
+            for (i = 0; i < count; i++) {
+              v = read_compact(port, 1);
+              cl->array[i] = v;
+              if (!SCHEME_PROCP(v)) {
+                if (!SAME_TYPE(SCHEME_TYPE(v), scheme_lambda_type))
+                  scheme_ill_formed_code(port);
+                all_closed = 0;
+              } else if (!SAME_TYPE(SCHEME_TYPE(v), scheme_closure_type))
+                scheme_ill_formed_code(port);
+            }
+
+            if (all_closed) {
+              /* Empty closure: produce procedure value directly.
+                 (We assume that this was generated by a direct write of
+                 a case-lambda data record in print.c, and that it's not
+                 in a CASE_LAMBDA_EXPD syntax record.) */
+              return scheme_case_lambda_execute((Scheme_Object *)cl);
+            }
+            
+            return (Scheme_Object *)cl;
+          }
+          break;
+        case scheme_lambda_type:
+          {
+            Scheme_Object *name, *ds, *closure_map, *tl_map;
+            int flags, closure_size, num_params, max_let_depth;
+
+            flags = read_compact_number(port);
+            if (flags & LAMBDA_HAS_TYPED_ARGS)
+              closure_size = read_compact_number(port);
+            else
+              closure_size = -1;
+            num_params = read_compact_number(port);
+            max_let_depth = read_compact_number(port);
+
+            name = read_compact(port, 1);
+            ds = read_compact(port, 1);
+            closure_map = read_compact(port, 1);
+            tl_map = read_compact(port, 1);
+
+            v = scheme_read_lambda(flags, closure_size, num_params, max_let_depth,
+                                   name, ds, closure_map, tl_map);
+            if (!v) scheme_ill_formed_code(port);
+
+            return v;
+          }
+        default:
+          scheme_ill_formed_code(port);
+          return NULL;
+          break;
+        }
+      }
+      break;
+    case CPT_VARREF:
+      {
+        Scheme_Object *data;
+
+        data = scheme_alloc_object();
+        data->type = scheme_varref_form_type;
+
+        if (read_compact_number(port))
+          SCHEME_VARREF_FLAGS(data) |= 0x1;
+
+        v = read_compact(port, 1);
+        SCHEME_PTR1_VAL(data) = v;
+        v = read_compact(port, 1);
+        SCHEME_PTR2_VAL(data) = v;
+
+        return data;
+      }
+      break;
+    case CPT_APPLY_VALUES:
+      {
+        Scheme_Object *data;
+
+        data = scheme_alloc_object();
+        data->type = scheme_apply_values_type;
+
+        v = read_compact(port, 1);
+        SCHEME_PTR1_VAL(data) = v;
+        v = read_compact(port, 1);
+        SCHEME_PTR2_VAL(data) = v;
+
+        return data;
       }
       break;
     case CPT_PATH:
@@ -2972,12 +3283,6 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
 	  ch -= CPT_SMALL_LOCAL_START;
 	}
 	return scheme_make_local(type, ch, 0);
-      }
-      break;
-    case CPT_SMALL_MARSHALLED_START:
-      {
-	l = ch - CPT_SMALL_MARSHALLED_START;
-	v = read_marshalled(l, port);
       }
       break;
     case CPT_SMALL_SYMBOL_START:
@@ -3174,31 +3479,6 @@ static Scheme_Object *read_compact_quote(CPort *port, int embedded)
                            0, 0);
 
   return v;
-}
-
-static Scheme_Object *read_marshalled(int type, CPort *port)
-{
-  Scheme_Object *l;
-  Scheme_Type_Reader reader;
-
-  l = read_compact(port, 1);
-
-  if ((type < 0) || (type >= _scheme_last_type_)) {
-    scheme_ill_formed_code(port);
-  }
-  
-  reader = scheme_type_readers[type];
-
-  if (!reader) {
-    scheme_ill_formed_code(port);
-  }
-
-  l = reader(l);
-
-  if (!l)
-    scheme_ill_formed_code(port);
-
-  return l;
 }
 
 static intptr_t read_simple_number_from_port(Scheme_Object *port)

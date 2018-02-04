@@ -446,12 +446,19 @@ void scheme_free_all_code(void);
 
 XFORM_NONGCING int scheme_is_multithreaded(int now);
 
-/* Type readers & writers for compiled code data */
-typedef Scheme_Object *(*Scheme_Type_Reader)(Scheme_Object *list);
-typedef Scheme_Object *(*Scheme_Type_Writer)(Scheme_Object *obj);
-
-extern Scheme_Type_Reader *scheme_type_readers;
-extern Scheme_Type_Writer *scheme_type_writers;
+Scheme_Object *scheme_closure_marshal_name(Scheme_Object *name);
+void scheme_write_lambda(Scheme_Object *obj,
+                         Scheme_Object **_name,
+                         Scheme_Object **_ds,
+                         Scheme_Object **_closure_map,
+                         Scheme_Object **_tl_map);
+Scheme_Object *scheme_read_lambda(int flags, int closure_size, int num_params, int max_let_depth,
+                                  Scheme_Object *name,
+                                  Scheme_Object *ds,
+                                  Scheme_Object *closure_map,
+                                  Scheme_Object *tl_map);
+Scheme_Object *scheme_write_linklet(Scheme_Object *obj);
+Scheme_Object *scheme_read_linklet(Scheme_Object *obj);
 
 extern Scheme_Equal_Proc *scheme_type_equals;
 extern Scheme_Primary_Hash_Proc *scheme_type_hash1s;
@@ -2577,10 +2584,6 @@ Scheme_Object *scheme_default_read_handler(int argc, Scheme_Object *[]);
 
 extern Scheme_Object *scheme_eof_object_p_proc;
 extern Scheme_Object *scheme_default_global_print_handler;
-
-/* Type readers & writers for compiled code data */
-void scheme_install_type_reader(Scheme_Type type, Scheme_Type_Reader f);
-void scheme_install_type_writer(Scheme_Type type, Scheme_Type_Writer f);
 
 Scheme_Object *scheme_make_default_readtable(void);
 Scheme_Object *scheme_read_intern(Scheme_Object *o);

@@ -303,7 +303,7 @@
   CPT_VECTOR
   CPT_HASH_TABLE
   CPT_LET_ONE_TYPED
-  CPT_MARSHALLED
+  CPT_LINKLET
   CPT_QUOTE
   CPT_REFERENCE
   CPT_LOCAL
@@ -317,16 +317,25 @@
   CPT_DELAY_REF ; used to delay loading of syntax objects and lambda bodies
   CPT_PREFAB
   CPT_LET_ONE_UNUSED
-  CPT_SHARED)
+  CPT_SHARED
+  CPT_TOPLEVEL
+  CPT_BEGIN
+  CPT_BEGIN0
+  CPT_LET_VALUE
+  CPT_LET_VOID
+  CPT_LETREC
+  CPT_WCM
+  CPT_DEFINE_VALUES
+  CPT_SET_BANG
+  CPT_VARREF
+  CPT_APPLY_VALUES
+  CPT_OTHER_FORM)
 
-(define CPT_SMALL_NUMBER_START 34)
-(define CPT_SMALL_NUMBER_END 62)
+(define CPT_SMALL_NUMBER_START 46)
+(define CPT_SMALL_NUMBER_END 74)
 
-(define CPT_SMALL_SYMBOL_START 62)
-(define CPT_SMALL_SYMBOL_END 80)
-
-(define CPT_SMALL_MARSHALLED_START 80)
-(define CPT_SMALL_MARSHALLED_END 92)
+(define CPT_SMALL_SYMBOL_START 74)
+(define CPT_SMALL_SYMBOL_END 92)
 
 (define CPT_SMALL_LIST_MAX 50)
 (define CPT_SMALL_PROPER_LIST_START 92)
@@ -415,14 +424,6 @@
      (out-byte #xF0 out)
      (out-bytes (int->bytes n) out)]))
 
-(define (out-marshaled type-num val out)
-  (if (type-num . < . (- CPT_SMALL_MARSHALLED_END CPT_SMALL_MARSHALLED_START))
-      (out-byte (+ CPT_SMALL_MARSHALLED_START type-num) out)
-      (begin
-        (out-byte CPT_MARSHALLED out)
-        (out-number type-num out)))
-  (out-anything val out))
-
 (define (or-pred? v . ps)
   (ormap (lambda (?) (? v)) ps))
 
@@ -499,31 +500,32 @@
        [(? linkl?)
         (out-linklet v out)]
        [(struct def-values (ids rhs))
-        (out-marshaled define-values-type-num
-                       (list->vector (cons (protect-quote rhs) ids))
-                       out)]
+        (out-byte CPT_DEFINE_VALUES out)
+        (out-anything (list->vector (cons (protect-quote rhs) ids)) out)]
        [(struct beg0 (forms))
-        (out-marshaled begin0-sequence-type-num (map protect-quote forms) out)]
+        (out-byte CPT_BEGIN0 out)
+        (out-number (length forms) out)
+        (for ([form (in-list forms)]) (out-anything (protect-quote form) out))]
        [(struct seq (forms))
-        (out-marshaled sequence-type-num (map protect-quote forms) out)]
+        (out-byte CPT_BEGIN out)
+        (out-number (length forms) out)
+        (for ([form (in-list forms)]) (out-anything (protect-quote form) out))]
        [(struct toplevel (depth pos const? ready?))
-        (out-marshaled toplevel-type-num
-                       (cons
-                        depth
-                        (if (or const? ready?)
-                            (cons pos
-                                  (bitwise-ior 
-                                   (if const? #x2 0)
-                                   (if ready? #x1 0)))
-                            pos))
-                       out)]
+        (out-byte CPT_TOPLEVEL out)
+        (out-number (bitwise-ior 
+                     (if const? #x2 0)
+                     (if ready? #x1 0))
+                    out)
+        (out-number pos out)
+        (out-number depth out)]
        [(struct primval (id))
         (out-byte CPT_REFERENCE out)
         (out-number id out)]
        [(struct assign (id rhs undef-ok?))
-        (out-marshaled set-bang-type-num
-                       (cons undef-ok? (cons id (protect-quote rhs)))
-                       out)]
+        (out-byte CPT_SET_BANG out)
+        (out-number (if undef-ok? 1 0) out)
+        (out-anything id out)
+        (out-anything (protect-quote rhs) out)]
        [(struct localref (unbox? offset clear? other-clears? type))
         (if (and (not clear?) (not other-clears?) (not flonum?)
                  (offset . < . (- CPT_SMALL_LOCAL_END CPT_SMALL_LOCAL_START)))
@@ -546,10 +548,11 @@
        [(? lam?)
         (out-lam v out)]
        [(struct case-lam (name lams))
-        (out-marshaled case-lambda-sequence-type-num
-                       (cons (or name null)
-                             lams)
-                       out)]
+        (out-byte CPT_OTHER_FORM out)
+        (out-number case-lambda-sequence-type-num out)
+        (out-number (length lams) out)
+        (out-anything name out)
+        (for ([lam (in-list lams)]) (out-anything lam out))]
        [(struct let-one (rhs body type unused?))
         (out-byte (cond
                     [type CPT_LET_ONE_TYPED]
@@ -561,34 +564,27 @@
         (when type
           (out-number (type->index type) out))]
        [(struct let-void (count boxes? body))
-        (out-marshaled let-void-type-num
-                       (list*
-                        count
-                        boxes?
-                        (protect-quote body))
-                       out)]
+        (out-byte CPT_LET_VOID out)
+        (out-number count out)
+        (out-number (if boxes? 1 0) out)
+        (out-anything (protect-quote body) out)]
        [(struct let-rec (procs body))
-        (out-marshaled letrec-type-num
-                       (list*
-                        (length procs)
-                        (protect-quote body)
-                        procs)
-                       out)]
+        (out-byte CPT_LETREC out)
+        (out-number count out)
+        (for ([proc (in-list procs)]) (out-anything proc out))
+        (out-anything (protect-quote body) out)]
        [(struct install-value (count pos boxes? rhs body))
-        (out-marshaled let-value-type-num
-                       (list*
-                        count
-                        pos
-                        boxes?
-                        (protect-quote rhs)
-                        (protect-quote body))
-                       out)]
+        (out-byte CPT_LET_VALUE out)
+        (out-number count out)
+        (out-number pos out)
+        (out-number (if boxes? 1 0) out)
+        (out-anything (protect-quote rhs) out)
+        (out-anything (protect-quote body) out)]
        [(struct boxenv (pos body))
-        (out-marshaled boxenv-type-num
-                       (cons
-                        pos
-                        (protect-quote body))
-                       out)]
+        (out-byte CPT_OTHER_FORM out)
+        (out-number boxenv-type-num out)
+        (out-anything pos out)
+        (out-anything (protect-quote body) out)]
        [(struct branch (test then else))
         (out-byte CPT_BRANCH out)
         (out-anything (protect-quote test) out)
@@ -605,28 +601,25 @@
                       (out-anything (protect-quote e) out))
                     (cons rator rands)))]
        [(struct apply-values (proc args-expr))
-        (out-marshaled apply-values-type-num
-                       (cons (protect-quote proc)
-                             (protect-quote args-expr))
-                       out)]
+        (out-byte CPT_APPLY_VALUES out)
+        (out-anything (protect-quote proc) out)
+        (out-anything (protect-quote args-expr) out)]
        [(struct with-immed-mark (key val body))
-        (out-marshaled with-immed-mark-type-num
-                       (vector
-                        (protect-quote key)
-                        (protect-quote val)
-                        (protect-quote body))
-                       out)]
+        (out-byte CPT_OTHER_FORM out)
+        (out-number with-immed-mark-type-num out)
+        (out-anything (protect-quote key) out)
+        (out-anything (protect-quote val) out)
+        (out-anything (protect-quote body) out)]
        [(struct with-cont-mark (key val body))
-        (out-marshaled wcm-type-num
-                       (list*
-                        (protect-quote key)
-                        (protect-quote val)
-                        (protect-quote body))
-                       out)]
+        (out-byte CPT_WCM out)
+        (out-anything (protect-quote key) out)
+        (out-anything (protect-quote val) out)
+        (out-anything (protect-quote body) out)]
        [(struct varref (constant? expr dummy))
-        (out-marshaled varref-form-type-num
-                       (cons constant? (cons expr dummy))
-                       out)]
+        (out-byte CPT_VARREF out)
+        (out-number (if constant? 1 0) out)
+        (out-anything expr out)
+        (out-anything dummy out)]
        [(protected-symref v)
         (out-anything ((out-shared-index out) v #:error? #t) out)]
        [(and (? symbol?) (not (? symbol-interned?)))
@@ -803,9 +796,8 @@
        [else (error 'out-anything "~s" (current-type-trace))])))))
 
 (define (out-linklet linklet-form out)
-  (out-marshaled linklet-type-num
-                 (convert-linklet linklet-form)
-                 out))
+  (out-byte CPT_LINKLET out)
+  (out-anything (convert-linklet linklet-form) out))
 
 (define (convert-linklet linklet-form)
   (match linklet-form
@@ -834,68 +826,67 @@
 (define (out-lam expr out)  
   (match expr
     [(struct lam (name flags num-params param-types rest? closure-map closure-types toplevel-map max-let-depth body))
-     (let* ([l (protect-quote body)]
-            [any-refs? (or (not (andmap (lambda (t) (eq? t 'val)) param-types))
+     (let* ([any-refs? (or (not (andmap (lambda (t) (eq? t 'val)) param-types))
                            (not (andmap (lambda (t) (eq? t 'val/ref)) closure-types)))]
             [num-all-params (if (and rest? (not (memq 'only-rest-arg-not-used flags)))
                                 (add1 num-params)
                                 num-params)]
-            [l (cons (make-svector (if any-refs?
-                                       (list->vector
-                                        (append
-                                         (vector->list closure-map)
-                                         (let* ([v (make-vector (ceiling 
-                                                                 (/ (* BITS_PER_ARG (+ num-all-params (vector-length closure-map)))
-                                                                    BITS_PER_MZSHORT)))]
-                                                [set-bit! (lambda (i bit)
-                                                            (let ([pos (quotient (* BITS_PER_ARG i) BITS_PER_MZSHORT)])
-                                                              (vector-set! v pos
-                                                                           (bitwise-ior (vector-ref v pos)
-                                                                                        (arithmetic-shift 
-                                                                                         bit
-                                                                                         (modulo (* BITS_PER_ARG i) BITS_PER_MZSHORT))))))])
-                                           (for ([t (in-list param-types)]
-                                                 [i (in-naturals)])
-                                             (case t
-                                               [(val) (void)]
-                                               [(ref) (set-bit! i 1)]
-                                               [else (set-bit! i (+ 1 (type->index t)))]))
-                                           (for ([t (in-list closure-types)]
-                                                 [i (in-naturals num-all-params)])
-                                             (case t
-                                               [(val/ref) (void)]
-                                               [else (set-bit! i (+ 1 (type->index t)))]))
-                                           (vector->list v))))
-                                       closure-map))
-                     l)]
-            [l (if any-refs?
-                   (cons (vector-length closure-map) l)
-                   l)]
+            [cl-map (make-svector (if any-refs?
+                                      (list->vector
+                                       (append
+                                        (vector->list closure-map)
+                                        (let* ([v (make-vector (ceiling 
+                                                                (/ (* BITS_PER_ARG (+ num-all-params (vector-length closure-map)))
+                                                                   BITS_PER_MZSHORT)))]
+                                               [set-bit! (lambda (i bit)
+                                                           (let ([pos (quotient (* BITS_PER_ARG i) BITS_PER_MZSHORT)])
+                                                             (vector-set! v pos
+                                                                          (bitwise-ior (vector-ref v pos)
+                                                                                       (arithmetic-shift 
+                                                                                        bit
+                                                                                        (modulo (* BITS_PER_ARG i) BITS_PER_MZSHORT))))))])
+                                          (for ([t (in-list param-types)]
+                                                [i (in-naturals)])
+                                            (case t
+                                              [(val) (void)]
+                                              [(ref) (set-bit! i 1)]
+                                              [else (set-bit! i (+ 1 (type->index t)))]))
+                                          (for ([t (in-list closure-types)]
+                                                [i (in-naturals num-all-params)])
+                                            (case t
+                                              [(val/ref) (void)]
+                                              [else (set-bit! i (+ 1 (type->index t)))]))
+                                          (vector->list v))))
+                                      closure-map))]
             [tl-map (and toplevel-map
                          (for/fold ([v 0]) ([i (in-set toplevel-map)])
                            (bitwise-ior v (arithmetic-shift 1 i))))])
-       (out-marshaled unclosed-procedure-type-num
-                      (list*
-                       (+ (if rest? CLOS_HAS_REST 0)
-                          (if any-refs? CLOS_HAS_REF_ARGS 0)
-                          (if (memq 'preserves-marks flags) CLOS_PRESERVES_MARKS 0)
-                          (if (memq 'sfs-clear-rest-args flags) CLOS_NEED_REST_CLEAR 0)
-                          (if (memq 'is-method flags) CLOS_IS_METHOD 0)
-                          (if (memq 'single-result flags) CLOS_SINGLE_RESULT 0))
-                       num-all-params
-                       max-let-depth
-                       (and tl-map
-                            (if (tl-map . <= . #xFFFFFFF)
-                                ;; Encode as a fixnum:
-                                tl-map
-                                ;; Encode as an even-sized vector of 16-bit integers:
-                                (let ([len (* 2 (quotient (+ (integer-length tl-map) 31) 32))])
-                                  (for/vector ([i (in-range len)])
-                                    (let ([s (* i 16)])
-                                      (bitwise-bit-field tl-map s (+ s 16)))))))
-                       name
-                       l)
-                      out))]))
+       (out-byte CPT_OTHER_FORM out)
+       (out-number unclosed-procedure-type-num out)
+       (out-number (+ (if rest? CLOS_HAS_REST 0)
+                      (if any-refs? CLOS_HAS_REF_ARGS 0)
+                      (if (memq 'preserves-marks flags) CLOS_PRESERVES_MARKS 0)
+                      (if (memq 'sfs-clear-rest-args flags) CLOS_NEED_REST_CLEAR 0)
+                      (if (memq 'is-method flags) CLOS_IS_METHOD 0)
+                      (if (memq 'single-result flags) CLOS_SINGLE_RESULT 0))
+                   out)
+       (when any-refs?
+         (out-number (vector-length closure-map) out))
+       (out-number num-all-params out)
+       (out-number max-let-depth out)
+       (out-anything name out)
+       (out-anything (protect-quote body) out)
+       (out-anything cl-map out)
+       (out-anything (and tl-map
+                          (if (tl-map . <= . #xFFFFFFF)
+                              ;; Encode as a fixnum:
+                              tl-map
+                              ;; Encode as an even-sized vector of 16-bit integers:
+                              (let ([len (* 2 (quotient (+ (integer-length tl-map) 31) 32))])
+                                (for/vector ([i (in-range len)])
+                                  (let ([s (* i 16)])
+                                    (bitwise-bit-field tl-map s (+ s 16)))))))
+                     out))]))
 
 (define (out-as-bytes expr ->bytes CPT len2 out #:before-length [before-length #f])
   (define s (->bytes expr))
