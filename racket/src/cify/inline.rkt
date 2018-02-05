@@ -54,12 +54,12 @@
            (lambda (s)
              (if (struct-info-authentic? (struct-accessor-si k))
                  (format "c_authentic_struct_ref(~a, ~a)" s (struct-accessor-pos k))
-                 (format "c_struct_ref(~a, ~a)" s (struct-accessor-pos k))))]
+                 (and can-gc? (format "c_struct_ref(~a, ~a)" s (struct-accessor-pos k)))))]
           [(and (struct-mutator? k) (= n 2))
            (lambda (s)
              (if (struct-info-authentic? (struct-mutator-si k))
                  (format "c_authentic_struct_set(~a, ~a)" s (struct-mutator-pos k))
-                 (format "c_struct_set(~a, ~a)" s (struct-mutator-pos k))))]
+                 (and can-gc? (format "c_struct_set(~a, ~a)" s (struct-mutator-pos k)))))]
           [else #f])])]))
 
 (define (extract-inline-predicate e in-lam knowns #:compose? [compose? #f])
