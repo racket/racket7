@@ -51,11 +51,11 @@ static c_saved_mark_stack_t c_push_mark_stack()
 {
   c_saved_mark_stack_t s;
   s.pos = MZ_CONT_MARK_POS;
-  s.stack = MS_CONT_MARK_STACK;
+  s.stack = MZ_CONT_MARK_STACK;
   MZ_CONT_MARK_POS = s.pos + 2;
   return s;
 }
-static void c_push_mark_stack(c_saved_mark_stack_t s)
+static void c_pop_mark_stack(c_saved_mark_stack_t s)
 {
   MZ_CONT_MARK_POS = s.pos;
   MZ_CONT_MARK_STACK = s.stack;

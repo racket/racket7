@@ -317,35 +317,42 @@
                    tst env))
        (when sync-for-gc?
          (runstack-sync! runstack))
-       (out-open "if (~a) {"
-                 (wrapper (apply string-append
-                                 (add-between
-                                  (for/list ([tst-id (in-list tst-ids)]
-                                             [tst (in-list tsts)])
-                                    (format "~a"
-                                            (cond
-                                              [(not tst-id) (generate-simple tst env runstack in-lam state top-names knowns prim-names)]
-                                              [(eq? tst-id immediate-tst-id) (cify tst-id)]
-                                              [tst-id (runstack-ref runstack tst-id)])))
-                                  ", "))))
-       (define-values (thn-refs els-refs) (let ([p (hash-ref state e '(#hasheq() . #hasheq()))])
-                                            (values (car p) (cdr p))))
-       (define pre-branch (runstack-branch-before! runstack))
-       (define pre-ref-use (ref-use-branch-before! state))
-       (runstack-stage-clear-unused! runstack thn-refs els-refs state)
-       (generate ret thn env)
-       (out-close+open "} else {")
-       (runstack-stage-clear-unused! runstack els-refs thn-refs state)
-       (define post-branch (runstack-branch-other! runstack pre-branch))
-       (define post-ref-use (ref-use-branch-other! state pre-ref-use))
-       (generate ret els env)
-       (when (state-first-pass? state)
-         (define-values (thn-refs els-refs) (runstack-branch-refs runstack pre-branch post-branch))
-         (hash-set! state e (cons thn-refs els-refs)))
-       (runstack-branch-merge! runstack pre-branch post-branch)
-       (ref-use-branch-merge! state pre-ref-use post-ref-use)
-       (out-close "}")
-       (runstack-pop! runstack tst-id-count)
+       (call-with-simple-shared
+        (cons 'begin (for/list ([tst-id (in-list tst-ids)]
+                                [tst (in-list tsts)]
+                                #:when (not tst-id))
+                       tst))
+        runstack state
+        (lambda (shared)
+          (out-open "if (~a) {"
+                    (wrapper (apply string-append
+                                    (add-between
+                                     (for/list ([tst-id (in-list tst-ids)]
+                                                [tst (in-list tsts)])
+                                       (format "~a"
+                                               (cond
+                                                 [(not tst-id) (generate-simple tst shared env runstack in-lam state top-names knowns prim-names)]
+                                                 [(eq? tst-id immediate-tst-id) (cify tst-id)]
+                                                 [tst-id (runstack-ref runstack tst-id)])))
+                                     ", "))))
+          (define-values (thn-refs els-refs) (let ([p (hash-ref state e '(#hasheq() . #hasheq()))])
+                                               (values (car p) (cdr p))))
+          (define pre-branch (runstack-branch-before! runstack))
+          (define pre-ref-use (ref-use-branch-before! state))
+          (runstack-stage-clear-unused! runstack thn-refs els-refs state)
+          (generate ret thn env)
+          (out-close+open "} else {")
+          (runstack-stage-clear-unused! runstack els-refs thn-refs state)
+          (define post-branch (runstack-branch-other! runstack pre-branch))
+          (define post-ref-use (ref-use-branch-other! state pre-ref-use))
+          (generate ret els env)
+          (when (state-first-pass? state)
+            (define-values (thn-refs els-refs) (runstack-branch-refs runstack pre-branch post-branch))
+            (hash-set! state e (cons thn-refs els-refs)))
+          (runstack-branch-merge! runstack pre-branch post-branch)
+          (ref-use-branch-merge! state pre-ref-use post-ref-use)
+          (out-close "}")
+          (runstack-pop! runstack tst-id-count)))
        (unless all-simple? (out-close "}"))]
       [`(with-continuation-mark ,key ,val ,body)
        (define wcm-id (genid 'c_wcm))
@@ -556,12 +563,16 @@
                   rand env)))
     (when need-sync?
       (runstack-sync! runstack))
-    (define s (generate-simple (cons rator (for/list ([tmp-id (in-list tmp-ids)]
-                                                      [rand (in-list rands)])
-                                             (or tmp-id rand)))
-                               env runstack in-lam state top-names knowns prim-names))
-    (return ret runstack #:can-pre-pop? #t s)
-    (runstack-pop! runstack tmp-count)
+    (define inline-app (cons rator (for/list ([tmp-id (in-list tmp-ids)]
+                                              [rand (in-list rands)])
+                                     (or tmp-id rand))))
+    (call-with-simple-shared
+     inline-app
+     runstack state
+     (lambda (shared)
+       (define s (generate-simple inline-app shared env runstack in-lam state top-names knowns prim-names))
+       (return ret runstack #:can-pre-pop? #t s)
+       (runstack-pop! runstack tmp-count)))
     (unless all-simple? (out-close "}")))
 
   (define (generate-inline-construct ret k rands n env)
@@ -709,28 +720,32 @@
                    (format "scheme_values(~a, c_current_runstack)" n)))]
       ;; Call to a non-inlined primitive or to an unknown target
       [(not direct?)
-       (define rator-s (if rator-id
-                           (runstack-ref runstack rator-id)
-                           (generate-simple rator env runstack in-lam state top-names knowns prim-names)))
-       (define direct-prim? (and (symbol? rator)
-                                 (direct-call-primitive? rator prim-knowns)))
-       (define use-tail-apply? (and (tail-return? ret)
-                                    (or (not (symbol? rator))
-                                        (hash-ref env rator #f)
-                                        (hash-ref top-names rator #f)
-                                        (not direct-prim?))))
-       (define template (cond
-                          [use-tail-apply? "_scheme_tail_apply(~a, ~a, ~a)"]
-                          [direct-prim? "c_extract_prim(~a)(~a, ~a)"]
-                          [(or (multiple-return? ret) (tail-return? ret)) "_scheme_apply_multi(~a, ~a, ~a)"]
-                          [else "_scheme_apply(~a, ~a, ~a)"]))
-       (unless (or use-tail-apply?
-                   (and direct-prim? (immediate-primitive? rator prim-knowns)))
-         (lam-calls-non-immediate! in-lam))
-       (when use-tail-apply?
-         (set-lam-can-tail-apply?! in-lam #t))
-       (runstack-sync! runstack) ; now argv == runstack
-       (return ret runstack (format template rator-s n (if (zero? n) "NULL" (runstack-stack-ref runstack))))]
+       (call-with-simple-shared
+        (if rator-id #f rator)
+        runstack state
+        (lambda (shared)
+          (define rator-s (if rator-id
+                              (runstack-ref runstack rator-id)
+                              (generate-simple rator shared env runstack in-lam state top-names knowns prim-names)))
+          (define direct-prim? (and (symbol? rator)
+                                    (direct-call-primitive? rator prim-knowns)))
+          (define use-tail-apply? (and (tail-return? ret)
+                                       (or (not (symbol? rator))
+                                           (hash-ref env rator #f)
+                                           (hash-ref top-names rator #f)
+                                           (not direct-prim?))))
+          (define template (cond
+                             [use-tail-apply? "_scheme_tail_apply(~a, ~a, ~a)"]
+                             [direct-prim? "c_extract_prim(~a)(~a, ~a)"]
+                             [(or (multiple-return? ret) (tail-return? ret)) "_scheme_apply_multi(~a, ~a, ~a)"]
+                             [else "_scheme_apply(~a, ~a, ~a)"]))
+          (unless (or use-tail-apply?
+                      (and direct-prim? (immediate-primitive? rator prim-knowns)))
+            (lam-calls-non-immediate! in-lam))
+          (when use-tail-apply?
+            (set-lam-can-tail-apply?! in-lam #t))
+          (runstack-sync! runstack) ; now argv == runstack
+          (return ret runstack (format template rator-s n (if (zero? n) "NULL" (runstack-stack-ref runstack))))))]
       ;; Tail call to a known target:
       [(tail-return? ret)
        ;; Put simple arguments in temporaries:
