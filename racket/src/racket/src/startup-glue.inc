@@ -10,6 +10,11 @@ START_XFORM_SKIP;
 
 THREAD_LOCAL_DECL(static struct startup_instance_top_t *c_startup_instance_top);
 
+typedef struct c_saved_mark_stack_t {
+  MZ_MARK_POS_TYPE pos;
+  MZ_MARK_STACK_TYPE stack;
+} c_saved_mark_stack_t;
+
 /* Pulling the address of the thread-local table into a local variable
    can have a big effect on compile time (not so much on run time) if
    the the thread-local implementation is opqaue to the compiler. */
@@ -20,6 +25,21 @@ THREAD_LOCAL_DECL(static struct startup_instance_top_t *c_startup_instance_top);
 # define c_current_thread         (c_racket_tls)->scheme_current_thread_
 # define c__startup_instance_top  (c_racket_tls)->c_startup_instance_top_
 # define c_scheme_fuel_counter    (c_racket_tls)->scheme_fuel_counter_
+static c_saved_mark_stack_t c__push_mark_stack(Thread_Local_Variables *c_racket_tls)
+{
+  c_saved_mark_stack_t s;
+  s.pos = c_racket_tls->scheme_current_cont_mark_pos_;
+  s.stack = c_racket_tls->scheme_current_cont_mark_stack_;
+  c_racket_tls->scheme_current_cont_mark_pos_ = s.pos + 2;
+  return s;
+}
+# define c_push_mark_stack()     c__push_mark_stack(c_racket_tls)
+static void c__pop_mark_stack(Thread_Local_Variables *c_racket_tls, c_saved_mark_stack_t s)
+{
+  c_racket_tls->scheme_current_cont_mark_pos_ = s.pos;
+  c_racket_tls->scheme_current_cont_mark_stack_ = s.stack;
+}
+# define c_pop_mark_stack(s)     c__pop_mark_stack(c_racket_tls, s)
 #else
 # define c_LINK_THREAD_LOCAL /* empty */
 # define c_current_runstack       MZ_RUNSTACK
@@ -27,6 +47,19 @@ THREAD_LOCAL_DECL(static struct startup_instance_top_t *c_startup_instance_top);
 # define c_current_thread         scheme_current_thread
 # define c__startup_instance_top  c_startup_instance_top
 # define c_scheme_fuel_counter    scheme_fuel_counter
+static c_saved_mark_stack_t c_push_mark_stack()
+{
+  c_saved_mark_stack_t s;
+  s.pos = MZ_CONT_MARK_POS;
+  s.stack = MS_CONT_MARK_STACK;
+  MZ_CONT_MARK_POS = s.pos + 2;
+  return s;
+}
+static void c_push_mark_stack(c_saved_mark_stack_t s)
+{
+  MZ_CONT_MARK_POS = s.pos;
+  MZ_CONT_MARK_STACK = s.stack;
+}
 #endif
 
 #define c_use_fuel() if (DECREMENT_FUEL(c_scheme_fuel_counter, 1) <= 0) scheme_out_of_fuel();

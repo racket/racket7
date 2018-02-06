@@ -352,23 +352,31 @@
        (define wcm-key-id (genid 'c_wcm_key))
        (define wcm-val-id (genid 'c_wcm_val))
        (out-open "{")
-       (runstack-push! runstack wcm-key-id)
-       (runstack-push! runstack wcm-val-id)
+       (define simple-key? (simple? key in-lam state knowns))
+       (define simple-val? (simple? val in-lam state knowns))
+       (define simple-either? (or simple-key? simple-val?))
+       (runstack-push! runstack wcm-key-id #:local? simple-either?)
+       (runstack-push! runstack wcm-val-id #:local? simple-either?)
        (unless (tail-return? ret)
-         (out "Scheme_Cont_Frame_Data ~a_frame;" wcm-id)
-         (out "scheme_push_continuation_frame(&~a_frame);" wcm-id))
-       (generate (make-runstack-assign runstack wcm-key-id)
-                 key env)
-       (generate (make-runstack-assign runstack wcm-val-id)
-                 val env)
-       (runstack-sync! runstack)
-       (out "scheme_set_cont_mark(~a, ~a);"
-            (runstack-ref runstack wcm-key-id)
-            (runstack-ref runstack wcm-val-id))
+         (out "c_saved_mark_stack_t ~a_frame = c_push_mark_stack();" wcm-id))
+       (cond
+         [(and simple-key? (not simple-val?))
+          ;; Value first
+          (generate (make-runstack-assign runstack wcm-val-id) val env)
+          (generate (make-runstack-assign runstack wcm-key-id) key env)]
+         [else
+          ;; Key first
+          (generate (make-runstack-assign runstack wcm-key-id) key env)
+          (generate (make-runstack-assign runstack wcm-val-id) val env)])
+       (define set-cont-mark (format "scheme_set_cont_mark(~a, ~a);"
+                                     (runstack-ref runstack wcm-key-id)
+                                     (runstack-ref runstack wcm-val-id)))
        (runstack-pop! runstack 2)
+       (runstack-sync! runstack)
+       (out set-cont-mark)
        (generate ret body env)
        (unless (tail-return? ret)
-         (out "scheme_pop_continuation_frame(&~a_frame);" wcm-id))
+         (out "c_pop_mark_stack(~a_frame);" wcm-id))
        (out-close "}")]
       [`(let () . ,body) (generate ret `(begin . ,body) env)]
       [`(let (,_) . ,_) (generate-let ret e env)]
