@@ -25,6 +25,8 @@
     [(vector*-set! unsafe-vector*-set! unsafe-vector*-set!) (and (= n 3) 'c_vector_set)]
     [(unsafe-vector*-ref) (and (= n 2) 'c_authentic_vector_ref)]
     [(vector-length unsafe-vector-length unsafe-vector*-length) (and (= n 1) 'c_vector_length)]
+    [(string-ref unsafe-string-ref) (and (= n 2) can-gc? 'c_string_ref)]
+    [(bytes-ref unsafe-bytes-ref) (and (= n 2) 'c_bytes_ref)]
     [(fx+ unsafe-fx+) (and (= n 2) 'c_int_add)]
     [(add1) (and (= n 1) can-gc? 'c_number_add1)]
     [(sub1) (and (= n 1) can-gc? 'c_number_sub1)]

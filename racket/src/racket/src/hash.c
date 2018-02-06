@@ -2761,6 +2761,21 @@ Scheme_Object *scheme_hash_tree_next_pos(Scheme_Hash_Tree *tree, mzlonglong pos)
 
 #define mzHAMT_MAX_INDEX_LEVEL 4 /* For the compressed form of the index */
 
+Scheme_Object *make_index_frame(Scheme_Hash_Tree *ht, intptr_t i, Scheme_Object *rest)
+{
+  Scheme_Object *vec;
+  vec = scheme_make_vector(3, NULL);
+  SCHEME_VEC_ELS(vec)[0] = (Scheme_Object *)ht;
+  SCHEME_VEC_ELS(vec)[1] = scheme_make_integer(i);
+  SCHEME_VEC_ELS(vec)[2] = rest;
+  return vec;
+}
+
+#define INDEX_FRAMEP(o) SCHEME_VECTORP(o)
+#define INDEX_FRAME_SUBTREE(o) ((Scheme_Hash_Tree *)(SCHEME_VEC_ELS(o)[0]))
+#define INDEX_FRAME_INDEX(o) (SCHEME_INT_VAL(SCHEME_VEC_ELS(o)[1]))
+#define INDEX_FRAME_REST(o) (SCHEME_VEC_ELS(o)[2])
+
 /* instead of returning a pos, these unsafe iteration ops */
 /* return a view into the tree consisting of a: */
 /*   - subtree */
@@ -2792,9 +2807,7 @@ Scheme_Object *scheme_unsafe_hash_tree_start(Scheme_Hash_Tree *ht)
           || HASHTR_COLLISIONP(ht->els[i]))) {
     /* go down tree but save return point */
     if (level == -1) {
-      stack = scheme_make_pair((Scheme_Object *)ht,
-                               scheme_make_pair(scheme_make_integer(i),
-                                                stack));
+      stack = make_index_frame(ht, i, stack);
     } else if (level < mzHAMT_MAX_INDEX_LEVEL) {
       ht_n[level] = ht;
       i_n[level] = i;
@@ -2802,13 +2815,9 @@ Scheme_Object *scheme_unsafe_hash_tree_start(Scheme_Hash_Tree *ht)
     } else {
       stack = scheme_null;
       for (j = 0; j < mzHAMT_MAX_INDEX_LEVEL; j++) {
-        stack = scheme_make_pair((Scheme_Object *)ht_n[j],
-                                  scheme_make_pair(scheme_make_integer(i_n[j]),
-                                                   stack));
+        stack = make_index_frame(ht_n[j], i_n[j], stack);
       }
-      stack = scheme_make_pair((Scheme_Object *)ht,
-                               scheme_make_pair(scheme_make_integer(i),
-                                                stack));
+      stack = make_index_frame(ht, i, stack);
       level = -1;
     }
     ht = (Scheme_Hash_Tree *)ht->els[i];
@@ -2816,9 +2825,7 @@ Scheme_Object *scheme_unsafe_hash_tree_start(Scheme_Hash_Tree *ht)
   }
 
   if (level == -1) {
-    stack = scheme_make_pair((Scheme_Object *)ht,
-                             scheme_make_pair(scheme_make_integer(i),
-                                              stack));
+    stack = make_index_frame(ht, i, stack);
     return stack;
   } else {
     i = (1<<mzHAMT_LOG_WORD_SIZE) + i;
@@ -2837,9 +2844,9 @@ XFORM_NONGCING void scheme_unsafe_hash_tree_subtree(Scheme_Object *obj, Scheme_O
   Scheme_Hash_Tree *subtree;
   int i;
 
-  if (SCHEME_PAIRP(args)) {
-    subtree = (Scheme_Hash_Tree *)SCHEME_CAR(args);
-    i = SCHEME_INT_VAL(SCHEME_CADR(args));
+  if (INDEX_FRAMEP(args)) {
+    subtree = INDEX_FRAME_SUBTREE(args);
+    i = INDEX_FRAME_INDEX(args);
   } else {
     if (SCHEME_NP_CHAPERONEP(obj))
       subtree = (Scheme_Hash_Tree *)SCHEME_CHAPERONE_VAL(obj);
@@ -2871,10 +2878,10 @@ Scheme_Object *scheme_unsafe_hash_tree_next(Scheme_Hash_Tree *ht, Scheme_Object 
   int j, i, i_n[mzHAMT_MAX_INDEX_LEVEL], level;
   Scheme_Hash_Tree *ht_n[mzHAMT_MAX_INDEX_LEVEL];
 
-  if (SCHEME_PAIRP(args)) {
-    ht = (Scheme_Hash_Tree *)SCHEME_CAR(args);
-    i = SCHEME_INT_VAL(SCHEME_CADR(args));
-    stack = SCHEME_CDDR(args);
+  if (INDEX_FRAMEP(args)) {
+    ht = INDEX_FRAME_SUBTREE(args);
+    i = INDEX_FRAME_INDEX(args);
+    stack = INDEX_FRAME_REST(args);
     level = -1; /* -1 = too big */
   } else {
     ht = resolve_placeholder(ht);
@@ -2893,9 +2900,9 @@ Scheme_Object *scheme_unsafe_hash_tree_next(Scheme_Hash_Tree *ht, Scheme_Object 
   while (1) {
     if (!i) { /* pop up the tree */
       if (level == -1) {
-        ht = (Scheme_Hash_Tree *)SCHEME_CAR(stack);
-        i = SCHEME_INT_VAL(SCHEME_CADR(stack));
-        stack = SCHEME_CDDR(stack);
+        ht = INDEX_FRAME_SUBTREE(stack);
+        i = INDEX_FRAME_INDEX(stack);
+        stack = INDEX_FRAME_REST(stack);
         if (SCHEME_NULLP(stack))
           level = 0;
       } else if (!level) {
@@ -2910,9 +2917,7 @@ Scheme_Object *scheme_unsafe_hash_tree_next(Scheme_Hash_Tree *ht, Scheme_Object 
       if (!(HASHTR_SUBTREEP(ht->els[i])
             || HASHTR_COLLISIONP(ht->els[i]))) {
         if (level == -1) {
-          stack = scheme_make_pair((Scheme_Object *)ht,
-                                   scheme_make_pair(scheme_make_integer(i),
-                                                    stack));
+          stack = make_index_frame(ht, i, stack);
           return stack;
         } else {
           i = (1<<mzHAMT_LOG_WORD_SIZE) + i;
@@ -2923,9 +2928,7 @@ Scheme_Object *scheme_unsafe_hash_tree_next(Scheme_Hash_Tree *ht, Scheme_Object 
         }
       } else { /* go down tree but save return point */
         if (level == -1) {
-          stack = scheme_make_pair((Scheme_Object *)ht,
-                                   scheme_make_pair(scheme_make_integer(i),
-                                                    stack));
+          stack = make_index_frame(ht, i, stack);
         } else if (level < mzHAMT_MAX_INDEX_LEVEL) {
           ht_n[level] = ht;
           i_n[level] = i;
@@ -2933,13 +2936,9 @@ Scheme_Object *scheme_unsafe_hash_tree_next(Scheme_Hash_Tree *ht, Scheme_Object 
         } else {
           stack = scheme_null;
           for (j = 0; j < mzHAMT_MAX_INDEX_LEVEL; j++) {
-            stack = scheme_make_pair((Scheme_Object *)ht_n[j],
-                                     scheme_make_pair(scheme_make_integer(i_n[j]),
-                                                      stack));
+            stack = make_index_frame(ht_n[j], i_n[j], stack);
           }
-          stack = scheme_make_pair((Scheme_Object *)ht,
-                                   scheme_make_pair(scheme_make_integer(i),
-                                                    stack));
+          stack = make_index_frame(ht, i, stack);
           level = -1;
         }
         ht = (Scheme_Hash_Tree *)ht->els[i];

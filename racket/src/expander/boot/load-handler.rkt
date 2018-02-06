@@ -29,13 +29,15 @@
       (raise-argument-error 'default-load-handler
                             "(or/c #f symbol? (cons/c (or/c #f symbol?) (non-empty-listof symbol?)))"
                             expected-mod))
+    (define (maybe-count-lines! i)
+      (unless (regexp-match? #rx"[.]zo$" path)
+        (port-count-lines! i)))
     (cond
      [expected-mod
       ((call-with-input-module-file
         path
         (lambda (i)
-          (unless (regexp-match? #rx"[.]zo$" path)
-            (port-count-lines! i))
+          (maybe-count-lines! i)
           (with-module-reading-parameterization+delay-source
               path
               (lambda ()
@@ -96,7 +98,7 @@
       (call-with-input-file*
        path
        (lambda (i)
-         (port-count-lines! i)
+         (maybe-count-lines! i)
          (let loop ([vals (list (void))])
            (define s
              (parameterize ([read-accept-compiled #t]

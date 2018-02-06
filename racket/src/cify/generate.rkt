@@ -120,7 +120,7 @@
          (out-open "~aif (c_argc ~a ~a) {" (if (zero? i) "" "else ") (if (list? ids) "==" ">=") (args-length ids))
          (generate-lambda-case lam leaf? `(lambda ,ids . ,body) free-var-refs closure-offset)
          (out-close "}"))
-       (out "else return NULL;")])
+       (out "else return c_wrong_arity(~s, c_argc, c_argv);" (format "~a" id))])
     (when bracket? (out-close "}")))
 
   ;; Returns a boolean indicating whether the functon can be a leaf
@@ -407,6 +407,7 @@
          (out "Scheme_Object *~a;" target))
        (generate (format "~a =" target) rhs env)
        (unless top?
+         (when (ref? ref) (ref-use! ref state))
          (out "SCHEME_UNBOX_VARIABLE_LHS(~a) = ~a;"
               (runstack-ref runstack (unref ref) #:ref (and (ref? ref) ref))
               target)
@@ -719,9 +720,7 @@
                    (and direct-prim? (immediate-primitive? rator prim-knowns)))
          (lam-calls-non-immediate! in-lam))
        (when use-tail-apply?
-         (if known-target-lam
-             (lam-add-transitive-tail-apply! in-lam known-target-lam)
-             (set-lam-can-tail-apply?! in-lam #t)))
+         (set-lam-can-tail-apply?! in-lam #t))
        (runstack-sync! runstack) ; now argv == runstack
        (return ret runstack (format template rator-s n (if (zero? n) "NULL" (runstack-stack-ref runstack))))]
       ;; Tail call to a known target:
@@ -953,7 +952,7 @@
       [(boolean? e) (if e "scheme_true" "scheme_false")]
       [(null? e) "scheme_null"]
       [(void? e) "scheme_void"]
-      [(char? e) (format "scheme_make_char(~a)" (char->integer e))]
+      [(char? e) (format "scheme_make_character(~a)" (char->integer e))]
       [else
        (error 'generate-quote "not handled: ~e" e)]))
 

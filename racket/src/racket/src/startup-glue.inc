@@ -120,7 +120,7 @@ static Scheme_Object *c_ensure_args_in_place_rest(int argc, Scheme_Object **argv
     for (i = 0; i < direct_args; i++)
       runstack[i] = argv[i];
     if (rest_args)
-      argv[direct_args] = scheme_null;
+      runstack[direct_args] = scheme_null;
   } else {
     /* Need to build a list and then copy or shift up */
     Scheme_Object *l = scheme_null;
@@ -147,6 +147,13 @@ static Scheme_Object *c_ensure_args_in_place_rest(int argc, Scheme_Object **argv
   if (argv != (runbase - argc)) (void)c_ensure_args_in_place_rest(argc, argv, runbase, argc, 0, 0, NULL)
 #define c_rest_arg_used   1
 #define c_rest_arg_unused 0
+
+
+static Scheme_Object *c_wrong_arity(const char *name, int argc, Scheme_Object **argv)
+{
+  scheme_wrong_count(name, -2, 0, argc, argv);
+  return NULL;
+}
 
 static mzshort *convert_arities(int mina, const char *a)
 {
@@ -371,6 +378,18 @@ static MZ_INLINE Scheme_Object *c_vector_length(Scheme_Object *v)
 {
   if (SCHEME_NP_CHAPERONEP(v)) v = SCHEME_CHAPERONE_VAL(v);
   return scheme_make_integer(SCHEME_VEC_SIZE(v));
+}
+
+static MZ_INLINE Scheme_Object *c_string_ref(Scheme_Object *v, Scheme_Object *i)
+{
+  mzchar c = SCHEME_CHAR_STR_VAL(v)[SCHEME_INT_VAL(i)];
+  return scheme_make_character(c);
+}
+
+static MZ_INLINE Scheme_Object *c_bytes_ref(Scheme_Object *v, Scheme_Object *i)
+{
+  int c = SCHEME_BYTE_STR_VAL(v)[SCHEME_INT_VAL(i)];
+  return scheme_make_integer(c);
 }
 
 static MZ_INLINE Scheme_Object *c_box_ref(Scheme_Object *b)

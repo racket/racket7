@@ -39,7 +39,8 @@
     ;; imports
     ()
     ;; exports
-    ,(for/list ([(ex-sym var) (in-hash exports)])
+    ,(for/list ([ex-sym (in-list (sort (hash-keys exports) symbol<?))])
+       (define var (hash-ref exports ex-sym))
        (define int-sym (hash-ref variable-names var #f))
        (unless int-sym
          (error 'flatten "export does not map to an instance variable: ~s" ex-sym))
