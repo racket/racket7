@@ -251,6 +251,11 @@ static MZ_INLINE Scheme_Object *c_authentic_struct_set(Scheme_Object *v, Scheme_
   return scheme_void;
 }
 
+static MZ_INLINE Scheme_Object *c_struct_property_ref(Scheme_Object *v, Scheme_Object *prop)
+{
+  return scheme_chaperone_struct_type_property_ref(prop, v);
+}
+
 static MZ_INLINE int c_int_lt(Scheme_Object *a, Scheme_Object *b)
 {
   return SCHEME_INT_VAL(a) < SCHEME_INT_VAL(b);

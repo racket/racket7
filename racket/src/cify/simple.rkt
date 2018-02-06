@@ -54,7 +54,9 @@
                                (format "~a" (generate-simple e)))
                              ", "))))
        (cond
-         [(procedure? inliner) (inliner args)]
+         [(procedure? inliner) (if (procedure-arity-includes? inliner 2)
+                                   (inliner args (lambda (id) (top-ref in-lam id)))
+                                   (inliner args))]
          [else
           (format "~a(~a)" inliner args)])]))
   (generate-simple e))

@@ -7,13 +7,16 @@
          (struct-out struct-constructor)
          (struct-out struct-predicate)
          (struct-out struct-accessor)
-         (struct-out struct-mutator))
+         (struct-out struct-mutator)
+         (struct-out struct-property-accessor))
 
 (struct struct-info (struct-id field-count authentic? pure-constructor?))
 (struct struct-constructor (si))
 (struct struct-predicate (si))
 (struct struct-accessor (si pos))
 (struct struct-mutator (si pos))
+
+(struct struct-property-accessor (property-id))
 
 (define (extract-structs e)
   (let loop ([e e] [knowns #hasheq()])
@@ -74,6 +77,9 @@
                    [`,_ knowns])))]
             [else knowns]))
         (lambda () knowns))]
+      [`(define-values (,prop:p ,p? ,p-ref)
+          (make-struct-type-property ,name))
+       (hash-set knowns p-ref (struct-property-accessor prop:p))]
       [`(define ,id ,rhs)
        (match rhs
          [`(quote ,s)
