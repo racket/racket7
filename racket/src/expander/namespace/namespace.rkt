@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/promise
          "../common/phase.rkt"
+         "../common/small-hash.rkt"
          "../syntax/scope.rkt"
          "../syntax/bulk-binding.rkt"
          "../common/module-path.rkt"
@@ -95,15 +96,15 @@
                (box root-expand-ctx)
                phase
                phase
-               (make-hasheqv)    ; phase-to-namespace
-               (make-hasheqv)    ; phase-level-to-definitions
+               (make-small-hasheqv)    ; phase-to-namespace
+               (make-small-hasheqv)    ; phase-level-to-definitions
                (if share-from-ns
                    (namespace-module-registry share-from-ns)
                    (make-module-registry))
                (if share-from-ns
                    (namespace-bulk-binding-registry share-from-ns)
                    (make-bulk-binding-registry))
-               (make-hasheq)     ; submodule-declarations
+               (make-small-hasheq)     ; submodule-declarations
                (and share-from-ns
                     (or (namespace-root-namespace share-from-ns)
                         share-from-ns))
@@ -116,7 +117,7 @@
                    (namespace-module-instances share-from-ns)
                    (make-hasheqv))))
   (when register?
-    (hash-set! (namespace-phase-to-namespace ns) phase ns))
+    (small-hash-set! (namespace-phase-to-namespace ns) phase ns))
   ns)
 
 (define current-namespace (make-parameter (make-namespace)
@@ -134,14 +135,14 @@
   (set-box! (namespace-root-expand-ctx ns) root-ctx))
 
 (define (namespace->module ns name)
-  (or (hash-ref (namespace-submodule-declarations ns) name #f)
+  (or (small-hash-ref (namespace-submodule-declarations ns) name #f)
       (hash-ref (module-registry-declarations (namespace-module-registry ns)) name #f)))
 
 (define (namespace->namespace-at-phase ns phase)
-  (or (hash-ref (namespace-phase-to-namespace ns) phase #f)
+  (or (small-hash-ref (namespace-phase-to-namespace ns) phase #f)
       (let ([p-ns (struct-copy namespace ns
                                [phase phase])])
-        (hash-set! (namespace-phase-to-namespace ns) phase p-ns)
+        (small-hash-set! (namespace-phase-to-namespace ns) phase p-ns)
         p-ns)))
 
 (define (namespace->name ns)
@@ -157,13 +158,13 @@
       s))
   
 (define (namespace->definitions ns phase-level)
-  (define d (hash-ref (namespace-phase-level-to-definitions ns) phase-level #f))
+  (define d (small-hash-ref (namespace-phase-level-to-definitions ns) phase-level #f))
   (or d
       (let ()
         (define p-ns (namespace->namespace-at-phase ns (phase+ (namespace-0-phase ns)
                                                                phase-level)))
         (define d (definitions (make-instance (namespace->name p-ns) p-ns) (make-hasheq)))
-        (hash-set! (namespace-phase-level-to-definitions ns) phase-level d)
+        (small-hash-set! (namespace-phase-level-to-definitions ns) phase-level d)
         d)))
 
 (define (namespace-set-variable! ns phase-level name val [as-constant? #f])
@@ -198,9 +199,9 @@
   (definitions-variables (namespace->definitions ns phase-shift)))
 
 (define (namespace-same-instance? a-ns b-ns)
-  (eq? (hash-ref (namespace-phase-level-to-definitions a-ns)
-                 0
-                 'no-a)
-       (hash-ref (namespace-phase-level-to-definitions b-ns)
-                 0
-                 'no-b)))
+  (eq? (small-hash-ref (namespace-phase-level-to-definitions a-ns)
+                       0
+                       'no-a)
+       (small-hash-ref (namespace-phase-level-to-definitions b-ns)
+                       0
+                       'no-b)))

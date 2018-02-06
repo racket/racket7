@@ -1,5 +1,6 @@
 #lang racket/base
 (require "../common/phase.rkt"
+         "../common/small-hash.rkt"
          "../common/performance.rkt"
          "../syntax/bulk-binding.rkt"
          "../syntax/module-binding.rkt"
@@ -133,7 +134,7 @@
   (module-instance m-ns           ; namespace
                    m              ; module
                    #f             ; shifted-requires (not yet computed)
-                   (make-hasheqv) ; phase-level-to-state
+                   (make-small-hasheqv) ; phase-level-to-state
                    #f             ; made-available?
                    #f             ; attached?
                    (box #f)))     ; data-box
@@ -160,11 +161,11 @@
                                              ;; Same set of submodules:
                                              (namespace-submodule-declarations ns)
                                              ;; Fresh set of submodules:
-                                             (make-hash))]
+                                             (make-small-hasheq))]
                  [available-module-instances (make-hasheqv)]
                  [module-instances (make-hasheqv)]
                  [declaration-inspector (current-code-inspector)]))
-  (hash-set! (namespace-phase-to-namespace m-ns) phase m-ns)
+  (small-hash-set! (namespace-phase-to-namespace m-ns) phase m-ns)
   (define at-phase (make-hasheq))
   (hash-set! (namespace-module-instances m-ns) phase at-phase)
   (hash-set! at-phase name (make-module-instance m-ns #f))
@@ -182,11 +183,9 @@
                         (namespace->module-instance ns mod-name (namespace-phase ns))))
   (when (and prior-m (not (eq? m prior-m)))
     (check-redeclaration-ok prior-m prior-mi mod-name))
-  (hash-set! (if with-submodules?
-                 (module-registry-declarations (namespace-module-registry ns))
-                 (namespace-submodule-declarations ns))
-             mod-name
-             m)
+  (if with-submodules?
+      (hash-set! (module-registry-declarations (namespace-module-registry ns)) mod-name m)
+      (small-hash-set! (namespace-submodule-declarations ns) mod-name m))
   (when with-submodules?
     ;; Register this module's exports for use in resolving bulk
     ;; bindings, so that bulk bindings can be shared among other
@@ -202,8 +201,8 @@
     (define m-ns (module-instance-namespace prior-mi))
     (define states (module-instance-phase-level-to-state prior-mi))
     (define phase (namespace-phase ns))
-    (define visit? (eq? 'started (hash-ref states (add1 phase) #f)))
-    (define run? (eq? 'started (hash-ref states phase #f)))
+    (define visit? (eq? 'started (small-hash-ref states (add1 phase) #f)))
+    (define run? (eq? 'started (small-hash-ref states phase #f)))
 
     (define at-phase (hash-ref (namespace-module-instances ns) phase))
     (hash-set! at-phase mod-name (make-module-instance m-ns m))
@@ -261,33 +260,33 @@
                             [root-expand-ctx (box (unbox (namespace-root-expand-ctx existing-m-ns)))]
                             [phase (namespace-phase existing-m-ns)]
                             [0-phase (namespace-0-phase existing-m-ns)]
-                            [phase-to-namespace (make-hasheqv)]
+                            [phase-to-namespace (make-small-hasheqv)]
                             [phase-level-to-definitions (if (module-cross-phase-persistent? m)
                                                             (namespace-phase-level-to-definitions existing-m-ns)
-                                                            (make-hasheqv))]
+                                                            (make-small-hasheqv))]
                             [declaration-inspector (module-inspector m)]
                             [inspector (namespace-inspector existing-m-ns)]))
   (define mi (make-module-instance m-ns m))
   (cond
    [(module-cross-phase-persistent? m)
-    (hash-set! (namespace-phase-to-namespace m-ns) 0 m-ns)
-    (hash-set! (namespace-phase-level-to-definitions m-ns)
-               0
-               (namespace->definitions existing-m-ns 0))
-    (hash-set! (namespace-phase-to-namespace m-ns) 1 (namespace->namespace-at-phase m-ns 1))
-    (hash-set! (namespace-phase-level-to-definitions m-ns)
-               1
-               (namespace->definitions existing-m-ns 1))
+    (small-hash-set! (namespace-phase-to-namespace m-ns) 0 m-ns)
+    (small-hash-set! (namespace-phase-level-to-definitions m-ns)
+                     0
+                     (namespace->definitions existing-m-ns 0))
+    (small-hash-set! (namespace-phase-to-namespace m-ns) 1 (namespace->namespace-at-phase m-ns 1))
+    (small-hash-set! (namespace-phase-level-to-definitions m-ns)
+                     1
+                     (namespace->definitions existing-m-ns 1))
     (hash-set! (namespace-module-instances (or (namespace-root-namespace ns) ns))
                name
                mi)
-    (hash-set! (module-instance-phase-level-to-state mi) 0 'started)]
+    (small-hash-set! (module-instance-phase-level-to-state mi) 0 'started)]
    [else
-    (hash-set! (namespace-phase-to-namespace m-ns) 0-phase m-ns)
-    (hash-set! (namespace-phase-level-to-definitions m-ns)
-               0
-               (namespace->definitions existing-m-ns 0))
-    (hash-set! (module-instance-phase-level-to-state mi) 0 'started)
+    (small-hash-set! (namespace-phase-to-namespace m-ns) 0-phase m-ns)
+    (small-hash-set! (namespace-phase-level-to-definitions m-ns)
+                     0
+                     (namespace->definitions existing-m-ns 0))
+    (small-hash-set! (module-instance-phase-level-to-state mi) 0 'started)
     (define at-phase (or (hash-ref (namespace-module-instances ns) 0-phase #f)
                          (let ([at-phase (make-hasheq)])
                            (hash-set! (namespace-module-instances ns) 0-phase at-phase)
@@ -303,11 +302,11 @@
                             [root-expand-ctx (box #f)] ; maybe set to non-#f by running
                             [phase 0-phase]
                             [0-phase 0-phase]
-                            [phase-to-namespace (make-hasheqv)]
-                            [phase-level-to-definitions (make-hasheqv)]
+                            [phase-to-namespace (make-small-hasheqv)]
+                            [phase-level-to-definitions (make-small-hasheqv)]
                             [declaration-inspector (module-inspector m)]
                             [inspector (make-inspector (module-inspector m))]))
-  (hash-set! (namespace-phase-to-namespace m-ns) 0-phase m-ns)
+  (small-hash-set! (namespace-phase-to-namespace m-ns) 0-phase m-ns)
   (define mi (make-module-instance m-ns m))
   (if (module-cross-phase-persistent? m)
       (hash-set! (namespace-module-instances ns) name mi)
@@ -322,7 +321,7 @@
   (define m (module-instance-module mi))
   (if (and m
            (<= (module-min-phase-level m) (add1 check-available-at-phase-level) (module-max-phase-level m))
-           (not (hash-ref (module-instance-phase-level-to-state mi) (add1 check-available-at-phase-level) #f)))
+           (not (small-hash-ref (module-instance-phase-level-to-state mi) (add1 check-available-at-phase-level) #f)))
       (unavailable-callback mi)
       mi))
 
@@ -401,7 +400,7 @@
    (define instance-phase (namespace-0-phase m-ns))
    (define run-phase-level (phase- run-phase instance-phase))
    (unless (and (or skip-run?
-                    (eq? 'started (hash-ref (module-instance-phase-level-to-state mi) run-phase-level #f)))
+                    (eq? 'started (small-hash-ref (module-instance-phase-level-to-state mi) run-phase-level #f)))
                 (or (not otherwise-available?)
                     (module-instance-made-available? mi)))
      ;; Something to do...
@@ -442,8 +441,8 @@
           [(and (not skip-run?)
                 (eqv? phase run-phase))
            ;; This is the phase to make sure that we've run
-           (unless (eq? 'started (hash-ref (module-instance-phase-level-to-state mi) phase-level #f))
-             (hash-set! (module-instance-phase-level-to-state mi) phase-level 'started)
+           (unless (eq? 'started (small-hash-ref (module-instance-phase-level-to-state mi) phase-level #f))
+             (small-hash-set! (module-instance-phase-level-to-state mi) phase-level 'started)
              (void (namespace->definitions m-ns phase-level))
              (define p-ns (namespace->namespace-at-phase m-ns phase))
              (define insp (module-inspector m))
@@ -454,13 +453,13 @@
              (go data-box p-ns phase-shift phase-level mpi bulk-binding-registry insp))]
           [(and otherwise-available?
                 (not (negative? run-phase))
-                (not (hash-ref (module-instance-phase-level-to-state mi) phase-level #f)))
+                (not (small-hash-ref (module-instance-phase-level-to-state mi) phase-level #f)))
            ;; This is a phase to merely make available
            (hash-update! (namespace-available-module-instances ns)
                          phase
                          (lambda (l) (cons mi l))
                          null)
-           (hash-set! (module-instance-phase-level-to-state mi) phase-level 'available)])))
+           (small-hash-set! (module-instance-phase-level-to-state mi) phase-level 'available)])))
 
      (when otherwise-available?
        (set-module-instance-made-available?! mi #t))
@@ -468,7 +467,7 @@
      (unless skip-run?
        ;; In case there's no such phase for this module instance, claim 'started
        ;; to short-circuit future attempts:
-       (hash-set! (module-instance-phase-level-to-state mi) run-phase-level 'started)))))
+       (small-hash-set! (module-instance-phase-level-to-state mi) run-phase-level 'started)))))
 
 (define (namespace-visit-available-modules! ns [run-phase (namespace-phase ns)])
   (namespace-run-available-modules! ns (add1 run-phase)))
@@ -508,7 +507,7 @@
                                 phase-shift
                                 #:complain-on-failure? #t))
   (define m-ns (module-instance-namespace mi))
-  (define d (hash-ref (namespace-phase-level-to-definitions m-ns) (module-use-phase mu) #f))
+  (define d (small-hash-ref (namespace-phase-level-to-definitions m-ns) (module-use-phase mu) #f))
   (if d
       (values mi (definitions-variables d))
       (error "namespace mismatch: phase level not found" mu)))
