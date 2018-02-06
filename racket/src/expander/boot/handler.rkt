@@ -189,7 +189,7 @@
              reg
              (make-ephemeron reg v)))
 
-;; weak map from `lib' path + corrent-library-paths to symbols:
+;; weak map from `lib' path + current-library-paths to symbols:
 ;;  We'd like to use a weak `equal?'-based hash table here,
 ;;  but that's not kill-safe. Instead, we use a non-thread-safe
 ;;  custom hash table; a race could lose cache entries, but
