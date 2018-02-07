@@ -296,8 +296,8 @@ com_glue.@LTO@: $(srcdir)/../mzcom/com_glue.c $(MZCOM_DEPS)
 	$(CC) -I$(builddir) -I$(srcdir)/include $(CFLAGS) $(CPPFLAGS) @OPTIONS@ @MZOPTIONS@ -c $(srcdir)/../mzcom/com_glue.c -o com_glue.@LTO@
 
 exn:
-	$(MAKE) $(srcdir)/src/schexn.h
-	$(MAKE) $(collectsdir)/racket/private/kernstruct.rkt
+	$(RACKET) -um $(srcdir)/src/makeexn > $(srcdir)/src/schexn.h
+	$(RACKET) -um $(srcdir)/src/makeexn kernstruct $(collectsdir)/racket/private/kernstruct.rkt
 
 CSTARTUPDEST = cstartup.inc
 
@@ -307,11 +307,6 @@ MZCONFIGDIR@MINGW@ = "$(srcdir)/../worksp"
 headers:
 	@RUN_RACKET_CGC@ -cqu $(srcdir)/mkincludes.rkt @DIRCVTPRE@"$(DESTDIR)$(includepltdir)"@DIRCVTPOST@ "$(srcdir)" $(MZCONFIGDIR)
 	cd ..; cp racket/system.rktd "$(DESTDIR)$(libpltdir)/system.rktd"
-
-$(srcdir)/src/schexn.h: $(srcdir)/src/makeexn
-	$(RACKET) -um $(srcdir)/src/makeexn > $(srcdir)/src/schexn.h
-$(collectsdir)/racket/private/kernstruct.rkt: $(srcdir)/src/makeexn
-	$(RACKET) -um $(srcdir)/src/makeexn kernstruct $(collectsdir)/racket/private/kernstruct.rkt
 
 # This target may update "cstartup.inc", either replacing a stub
 # "cstartup.inc" that redirects to "startup.inc" or rebuilding because
