@@ -44,8 +44,8 @@ DEF_C_DIRS = $(DEF_COLLECTS_DIR) $(DEF_CONFIG_DIR)
 RUN_THIS_RACKET_CGC = ../racket@CGC@
 
 SETUP_BOOT = -W "info@compiler/cm error" -l- setup --boot $(srcdir)/../../setup-go.rkt ../../compiled
-XFORM_SETUP = @RUN_RACKET_CGC@ $(SELF_RACKET_FLAGS) $(SETUP_BOOT) $(srcdir)/xform-mod.rkt --depends
-XFORM_NOPRECOMP = $(XFORM_SETUP) --cpp "$(CPP) $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o
+XFORM_SETUP = @RUN_RACKET_CGC@ $(SELF_RACKET_FLAGS) $(SETUP_BOOT) --tag ++out $(srcdir)/xform-mod.rkt --depends
+XFORM_NOPRECOMP = $(XFORM_SETUP) --cpp "$(CPP) $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o ++out
 XSRCDIR = xsrc
 XFORM = env XFORM_USE_PRECOMP=$(XSRCDIR)/precomp.h $(XFORM_NOPRECOMP)
 SRCDIR = $(srcdir)/../src
@@ -319,6 +319,66 @@ $(XSRCDIR)/foreign.c: $(XFORMDEP)
 	$(XFORM_SETUP) --cpp "$(CPP) $(ALL_CPPFLAGS) $(LIBFFI_INCLUDE_@OWN_LIBFFI@) -I${SRCDIR}/../../racket/src" @XFORMFLAGS@ -o $(XSRCDIR)/foreign.c $(SRCDIR)/../../foreign/foreign.c
 $(XSRCDIR)/main.c: $(XFORMDEP)
 	$(XFORM_NOPRECOMP) $(XSRCDIR)/main.c $(DEF_C_DIRS) $(srcdir)/../main.c
+
+@INCLUDEDEP@ salloc.d
+@INCLUDEDEP@ bignum.d
+@INCLUDEDEP@ bool.d
+@INCLUDEDEP@ char.d
+@INCLUDEDEP@ compenv.d
+@INCLUDEDEP@ compile.d
+@INCLUDEDEP@ complex.d
+@INCLUDEDEP@ dynext.d
+@INCLUDEDEP@ env.d
+@INCLUDEDEP@ error.d
+@INCLUDEDEP@ eval.d
+@INCLUDEDEP@ file.d
+@INCLUDEDEP@ fun.d
+@INCLUDEDEP@ future.d
+@INCLUDEDEP@ gmp.d
+@INCLUDEDEP@ hash.d
+@INCLUDEDEP@ jit.d
+@INCLUDEDEP@ jitalloc.d
+@INCLUDEDEP@ jitarith.d
+@INCLUDEDEP@ jitcall.d
+@INCLUDEDEP@ jitcommon.d
+@INCLUDEDEP@ jitinline.d
+@INCLUDEDEP@ jitprep.d
+@INCLUDEDEP@ jitstack.d
+@INCLUDEDEP@ jitstate.d
+@INCLUDEDEP@ letrec_check.d
+@INCLUDEDEP@ linklet.d
+@INCLUDEDEP@ list.d
+@INCLUDEDEP@ marshal.d
+@INCLUDEDEP@ mzrt.d
+@INCLUDEDEP@ network.d
+@INCLUDEDEP@ numarith.d
+@INCLUDEDEP@ number.d
+@INCLUDEDEP@ numcomp.d
+@INCLUDEDEP@ numstr.d
+@INCLUDEDEP@ optimize.d
+@INCLUDEDEP@ place.d
+@INCLUDEDEP@ port.d
+@INCLUDEDEP@ portfun.d
+@INCLUDEDEP@ print.d
+@INCLUDEDEP@ rational.d
+@INCLUDEDEP@ read.d
+@INCLUDEDEP@ regexp.d
+@INCLUDEDEP@ resolve.d
+@INCLUDEDEP@ sema.d
+@INCLUDEDEP@ setjmpup.d
+@INCLUDEDEP@ sfs.d
+@INCLUDEDEP@ sort.d
+@INCLUDEDEP@ startup.d
+@INCLUDEDEP@ string.d
+@INCLUDEDEP@ struct.d
+@INCLUDEDEP@ symbol.d
+@INCLUDEDEP@ syntax.d
+@INCLUDEDEP@ thread.d
+@INCLUDEDEP@ type.d
+@INCLUDEDEP@ validate.d
+@INCLUDEDEP@ vector.d
+@INCLUDEDEP@ foreign.d
+@INCLUDEDEP@ main.d
 
 $(XSRCDIR)/mzobj.cxx: $(XFORMDEP)
 	$(XFORM_NOPRECOMP) $(XSRCDIR)/mzobj.cxx $(DEF_C_DIRS) $(srcdir)/../../mzcom/mzobj.cxx

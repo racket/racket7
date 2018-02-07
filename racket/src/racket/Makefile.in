@@ -323,7 +323,12 @@ cstartup@STARTUP_AS_BYTECODE@:
 
 # Similar to above, but when compiling to C instead of bytecode
 cstartup@STARTUP_AS_C@:
-	@RUN_RACKET_CGC@ $(SELF_RACKET_FLAGS) $(SETUP_BOOT) $(srcdir)/src/cify-startup.rkt $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
+	@RUN_RACKET_CGC@ -cu $(srcdir)/src/cify-check.rkt $(CSTARTUPDEST)
+	$(MAKE) cstartup.inc
+
+$(CSTARTUPDEST)@STARTUP_AS_C@: $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
+	@RUN_RACKET_CGC@ $(SELF_RACKET_FLAGS) $(SETUP_BOOT) cstartup.inc cstartup.d $(srcdir)/src/cify-startup.rkt $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
+@INCLUDEDEP@ cstartup.d
 
 mark:
 	racket -cu $(srcdir)/src/mkmark.rkt $(srcdir)/src < $(srcdir)/src/mzmarksrc.c

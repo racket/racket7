@@ -11,9 +11,8 @@
   (define-values (vers) (vector-ref (current-command-line-arguments) 2))
   (define-values (other-files) (cdddr (vector->list (current-command-line-arguments))))
 
-  (define-values (linklet) (compile-linklet (get-linklet src)))
   (define-values (version-comparisons) (get-version-comparisons vers))
-
+  
   ;; Bail out if we don't need to do anything:
   (if (file-exists? dest)
       (if (call-with-input-file dest (lambda (i)
@@ -29,7 +28,9 @@
               (void))
           (void))
       (void))
-    
+
+  (define-values (linklet) (compile-linklet (get-linklet src)))
+
   (define-values (DIGS-PER-LINE) 20)
   
   (call-with-output-file

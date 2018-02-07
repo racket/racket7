@@ -111,6 +111,7 @@
               (member a (cdr l))))))
 
   (define-values (go-module) 'setup/setup-go)
+  (define-values (print-loading-sources?) #f)
 
   ;; Poor-man's processing of the command-line flags to drop strings
   ;; that will not be parsed as flags by "parse-cmdline.rkt". We don't
@@ -148,6 +149,7 @@
                                  (pair? (cddr flags)))
                             (begin
                               (set! go-module (cadr flags))
+                              (set! print-loading-sources? #t)
                               (let ([root (path->complete-path (caddr flags))])
                                 (current-compiled-file-roots (list root)))
                               (cons (car flags)
@@ -241,7 +243,11 @@
 					[current-load 
 					 (let ([orig-load (current-load)])
 					   (if skip-zo/reason
-					       orig-load
+                                               (if print-loading-sources?
+                                                   (lambda (path modname)
+                                                     (log-message (current-logger) 'info 'compiler/cm (format "loading ~a" path))
+                                                     (orig-load path modname))
+                                                   orig-load)
 					       (lambda (path modname)
 						 (if (regexp-match? #rx#"[.]zo$" (path->bytes path))
 						     ;; It's a .zo:

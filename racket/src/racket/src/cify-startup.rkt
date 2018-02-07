@@ -18,16 +18,6 @@
    #:args (src-file vers-file . dep)
    (values src-file vers-file dep)))
 
-(when (and (let ([dest-timestamp (file-or-directory-modify-seconds dest #f (lambda () -inf.0))])
-             (for/and ([dep (cons src deps)])
-               (dest-timestamp . > . (file-or-directory-modify-seconds dep #f (lambda () +inf.0)))))
-           (call-with-input-file*
-            dest
-            (lambda (i)
-              (equal? (read-line i) version-line))))
-  ;; No need to rebuild
-  (exit 0))
-
 (define content (get-linklet src))
 (define version-comparisons (get-version-comparisons vers))
                        

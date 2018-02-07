@@ -1,11 +1,26 @@
 #lang racket/base
-(require compiler/cm)
+(require compiler/cm
+         compiler/depend)
 
 ;; This module is loaded via `setup/main` with a `--boot` argument
 ;; that selects this module and sets the compile-file root directory
-;; to be within the build directory. The first argument should be a
-;; module to load, and the rest of the arguments are delivered to that
-;; module.
+;; to be within the build directory.
+;;
+;; Overall arguments:
+;;
+;;   --boot <this-file> <compiled-dir>
+;;          <target-file> <dep-file/tag> <mod-file>
+;;          <arg> ...
+;;
+;; where <mod-file> is the file to load (bootstrapping as needed), and
+;; the <arg>s are made the command-line argument for <mod-file>. The
+;; <target-file> is the output file that <mod-file> generates. The
+;; <dep-file/tag> is written as makefile rule for <target-file>.
+;;
+;; If <target-file> is `--tag`, then <dep-file/tag> specifies a tag to
+;; get stripped form <arg>, there the target file is immediately after
+;; the tag. In that case, the dependency file name is formed by using
+;; just the file name of the target, replacing the suffix with ".d".
 ;;
 ;; The point of going through `setup/main` is that the Racket module
 ;; gets compiled as needed, so that it doesn't have to be loaded from
@@ -16,10 +31,32 @@
 (provide go)
 
 (define (go orig-compile-file-paths)
-  (define mod-file (vector-ref (current-command-line-arguments) 3))
+  (define SETUP-ARGS 6)
+  (define prog-args (list-tail (vector->list (current-command-line-arguments)) SETUP-ARGS))
+  (define target-file-spec (vector-ref (current-command-line-arguments) 3))
+  (define target-tag (and (equal? target-file-spec "--tag")
+                          (vector-ref (current-command-line-arguments) 4)))
+  (define target-file (if target-tag
+                          (let loop ([l prog-args])
+                            (cond
+                              [(or (null? l) (null? (cdr l)))
+                               (error 'setup-go "could not find target")]
+                              [(equal? (car l) target-tag) (cadr l)]
+                              [else (loop (cdr l))]))
+                          target-file-spec))
+  (define make-dep-file (if target-tag
+                            (let-values ([(base name dir?) (split-path target-file)])
+                              (path-replace-suffix name #".d"))
+                            (vector-ref (current-command-line-arguments) 4)))
+  (define mod-file (vector-ref (current-command-line-arguments) 5))
   (parameterize ([current-command-line-arguments
-                  ;; Discard --boot, this mod, compiled-file dir, and name of file to load:
-                  (list->vector (list-tail (vector->list (current-command-line-arguments)) 4))])
+                  ;; Discard `--boot` through arguments to this
+                  ;; module, and also strip `target-tag` (if any).
+                  (list->vector (let loop ([l prog-args])
+                                  (cond
+                                    [(null? l) '()]
+                                    [(equal? (car l) target-tag) (cdr l)]
+                                    [else (cons (car l) (loop (cdr l)))])))])
     ;; In case multiple xforms run in parallel, use a lock file so
     ;;  that only one is building.
     (define lock-file (build-path (car (current-compiled-file-roots)) "SETUP-LOCK"))
@@ -31,13 +68,30 @@
           (sleep 0.1)
           (loop (add1 n)))))
 
-    (dynamic-wind
-     void
-     (lambda ()
-       ;; Load the requested module, but don't instantiate:
-       (dynamic-require mod-file (void)))
-     (lambda ()
-       (port-file-unlock lock-port)))
+    (with-handlers ([exn? (lambda (exn)
+                            ;; On any execption, try to delete the target file
+                            (with-handlers ([exn:fail:filesystem?
+                                             (lambda (exn) (log-error "~s" exn))])
+                              (when (file-exists? target-file)
+                                (delete-file target-file)))
+                            (raise exn))])
+      (dynamic-wind
+       void
+       (lambda ()
+         ;; Load the requested module, but don't instantiate:
+         (dynamic-require mod-file (void)))
+       (lambda ()
+         (port-file-unlock lock-port)))
+      
+      ;; Now that the lock is released, instantiate:
+      (dynamic-require mod-file #f)
 
-    ;; Now that the lock is released, instantiate:
-    (dynamic-require mod-file #f)))
+      ;; Record dependencies:
+      (define deps (module-recorded-dependencies mod-file))
+      (call-with-output-file make-dep-file
+        #:exists 'truncate
+        (lambda (o)
+          (fprintf o "~a: " target-file)
+          (for ([dep (in-list deps)])
+            (fprintf o " \\\n ~a" dep))
+          (newline o))))))
