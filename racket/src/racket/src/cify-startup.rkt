@@ -13,6 +13,8 @@
 (define dest "cstartup.inc")
 (define version-line (format "/* version: ~a */" (version)))
 
+(define debug? #t)
+
 (define-values (src vers deps)
   (command-line
    #:args (src-file vers-file . dep)
@@ -80,9 +82,13 @@
           lifted-body))
 
 (cify dest (caddr content) `(begin . ,converted-body) prim-knowns
-      #:preamble (list version-line
-                       (format "#if 0 ~a" version-comparisons)
-                       "#include \"startup.inc\""
-                       "#else"
-                       "# include \"startup-glue.inc\"")
+      #:debug? debug?
+      #:preamble (append (list version-line
+                               (format "#if 0 ~a" version-comparisons)
+                               "#include \"startup.inc\""
+                               "#else")
+                         (if debug?
+                             (list "# define c_VALIDATE_DEBUG")
+                             (list))
+                         (list "# include \"startup-glue.inc\""))
       #:postamble (list (format "#endif")))

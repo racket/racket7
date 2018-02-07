@@ -87,7 +87,8 @@
       (dynamic-require mod-file #f)
 
       ;; Record dependencies:
-      (define deps (module-recorded-dependencies mod-file))
+      (define deps (cons mod-file
+                         (module-recorded-dependencies mod-file)))
       (call-with-output-file make-dep-file
         #:exists 'truncate
         (lambda (o)

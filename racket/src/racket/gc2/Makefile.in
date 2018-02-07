@@ -298,9 +298,9 @@ $(XSRCDIR)/sfs.c: $(XFORMDEP)
 $(XSRCDIR)/sort.c: $(XFORMDEP)
 	$(XFORM) $(XSRCDIR)/sort.c $(SRCDIR)/sort.c
 $(XSRCDIR)/startup.c: $(XFORMDEP) ../cstartup.inc $(SRCDIR)/startup-glue.inc
-	$(XFORM_SETUP) --cpp "$(CPP) -I.. -I$(SRCDIR)/../src $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o $(XSRCDIR)/startup.c $(SRCDIR)/startup.c
+	$(XFORM_SETUP) --cpp "$(CPP) -I.. -I$(SRCDIR)/../src $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o ++out $(XSRCDIR)/startup.c $(SRCDIR)/startup.c
 $(XSRCDIR)/string.c: $(XFORMDEP)  $(SRCDIR)/systype.inc
-	$(XFORM_SETUP) --cpp "$(CPP) -I../src $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o $(XSRCDIR)/string.c $(SRCDIR)/string.c
+	$(XFORM_SETUP) --cpp "$(CPP) -I../src $(ALL_CPPFLAGS)" @XFORMFLAGS@ -o ++out $(XSRCDIR)/string.c $(SRCDIR)/string.c
 $(XSRCDIR)/struct.c: $(XFORMDEP)
 	$(XFORM) $(XSRCDIR)/struct.c $(SRCDIR)/struct.c
 $(XSRCDIR)/symbol.c: $(XFORMDEP)
@@ -316,7 +316,7 @@ $(XSRCDIR)/validate.c: $(XFORMDEP)
 $(XSRCDIR)/vector.c: $(XFORMDEP)
 	$(XFORM) $(XSRCDIR)/vector.c $(SRCDIR)/vector.c
 $(XSRCDIR)/foreign.c: $(XFORMDEP)
-	$(XFORM_SETUP) --cpp "$(CPP) $(ALL_CPPFLAGS) $(LIBFFI_INCLUDE_@OWN_LIBFFI@) -I${SRCDIR}/../../racket/src" @XFORMFLAGS@ -o $(XSRCDIR)/foreign.c $(SRCDIR)/../../foreign/foreign.c
+	$(XFORM_SETUP) --cpp "$(CPP) $(ALL_CPPFLAGS) $(LIBFFI_INCLUDE_@OWN_LIBFFI@) -I${SRCDIR}/../../racket/src" @XFORMFLAGS@ -o ++out $(XSRCDIR)/foreign.c $(SRCDIR)/../../foreign/foreign.c
 $(XSRCDIR)/main.c: $(XFORMDEP)
 	$(XFORM_NOPRECOMP) $(XSRCDIR)/main.c $(DEF_C_DIRS) $(srcdir)/../main.c
 

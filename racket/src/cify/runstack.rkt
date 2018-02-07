@@ -4,7 +4,8 @@
          "ref.rkt"
          "state.rkt"
          "union.rkt"
-         "sort.rkt")
+         "sort.rkt"
+         "debug.rkt")
 
 (provide make-runstack
          runstack-push!
@@ -126,7 +127,7 @@
        (format "c_last_use(c_runbase, ~a)" (cify id))]
       [else
        (format "c_runbase[~a]"  (cify id))]))
-  (if (and #f (not values-ok?) (not assign?)) ; <- enable for debugging
+  (if (and (current-debug) (not values-ok?) (not assign?))
       (format "c_validate(~a)" s)
       s))
 

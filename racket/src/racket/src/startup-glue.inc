@@ -8,6 +8,10 @@ START_XFORM_SKIP;
 /* Disable the use of source or bytecode: */
 #define SCHEME_STARTUP_DEFINED
 
+#ifdef c_VALIDATE_DEBUG
+static Scheme_Object *c_validate(Scheme_Object *s);
+#endif
+
 THREAD_LOCAL_DECL(static struct startup_instance_top_t *c_startup_instance_top);
 
 typedef struct c_saved_mark_stack_t {
@@ -109,7 +113,16 @@ static Scheme_Object *do_apply_k(void)
   } else {
     Scheme_Object *o = (Scheme_Object *)p->ku.k.p1;
     Scheme_Object **argv = (Scheme_Object **)p->ku.k.p2;
-    
+
+#ifdef c_VALIDATE_DEBUG
+    {
+      int i;
+      c_validate(o);
+      for (i = 0; i < p->ku.k.i1; i++)
+        c_validate(argv[i]);
+    }
+#endif
+
     p->ku.k.p1 = NULL;
     p->ku.k.p2 = NULL;
     
@@ -119,14 +132,25 @@ static Scheme_Object *do_apply_k(void)
 
 static Scheme_Object *c_handle_overflow_or_space(Scheme_Object *proc, int argc, Scheme_Object **argv, int runstack_space)
 {
-  Scheme_Thread *p = scheme_current_thread;
+  Scheme_Thread *p;
   Scheme_Object **argv2;
-  argv2 = MALLOC_N(Scheme_Object*, argc);
-  memcpy(argv2, argv, sizeof(Scheme_Object *) * argc);
-  memset(argv, 0, sizeof(Scheme_Object *) * argc); /* space safety */
+
+  /* stash before allocation: */
+  p = scheme_current_thread;
   p->ku.k.p1 = (void *)proc;
   p->ku.k.i1 = argc;
   p->ku.k.i2 = runstack_space;
+  p->ku.k.p2 = (void *)argv;
+  
+  argv2 = MALLOC_N(Scheme_Object*, argc);
+
+  p = scheme_current_thread;
+  argv = (Scheme_Object **)p->ku.k.p2;
+  
+  memcpy(argv2, argv, sizeof(Scheme_Object *) * argc);
+  if (argv == MZ_RUNSTACK)
+    memset(argv, 0, sizeof(Scheme_Object *) * argc); /* space safety */
+
   p->ku.k.p2 = (void *)argv2;
   
 #ifdef DO_STACK_CHECK

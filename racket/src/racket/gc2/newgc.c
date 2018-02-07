@@ -1508,6 +1508,10 @@ static int stress_counter = 0;
 int scheme_gc_slow_path_started = 1;
 static int TAKE_SLOW_PATH()
 {
+#ifdef MZ_USE_PLACES
+  if (!MASTERGC) return 0;
+#endif
+
   if (!scheme_gc_slow_path_started) return 0;
   stress_counter++;
   if (stress_counter > GC_TRIGGER_COUNT)

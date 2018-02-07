@@ -16,13 +16,16 @@
          "generate.rkt"
          "lambda.rkt"
          "struct.rkt"
-         "union.rkt")
+         "union.rkt"
+         "debug.rkt")
 
 (provide (rename-out [main-cify cify]))
 
 (define (main-cify out-file exports in-e prim-knowns
+                   #:debug? [debug? #f]
                    #:preamble [preamble '()]
                    #:postamble [postamble '()])
+  (current-debug debug?)
   (call-with-output-file*
    out-file
    #:exists 'truncate/replace
