@@ -557,7 +557,7 @@ For @tech{callouts} to foreign functions with the generated type:
        value of @racket[blocking?] affects only the @tech[#:doc
        guide.scrbl]{CS} variant of Racket, where it enable activity
        such as garbage collection in other OS threads while the
-       @tech{clalout} blocks. If the blocking @tech{callout} can
+       @tech{callout} blocks. If the blocking @tech{callout} can
        invoke any @tech{callbacks} back to Racket, those
        @tech{callbacks} must be constructed with a non-@racket[#f]
        value of @racket[async-apply], even if they are always applied
