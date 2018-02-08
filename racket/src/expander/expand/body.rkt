@@ -28,7 +28,7 @@
 (define (expand-body bodys ctx
                      #:source s
                      #:stratified? [stratified? #f])
-  (log-expand ctx 'enter-block)
+  (log-expand ctx 'enter-block (datum->syntax #f bodys))
   ;; In principle, we have an outside-edge scope that identifies the
   ;; original content of the definition context --- but a body always
   ;; exists inside some binding form, so that form's scope will do;
@@ -75,15 +75,15 @@
              [val-rhss null]   ; accumulated binding right-hand sides
              [track-stxs null] ; accumulated syntax for tracking
              [trans-idss null] ; accumulated `define-syntaxes` identifiers that have disappeared
+             [stx-clauses null] ; accumulated syntax-binding clauses, used when observing
              [dups (make-check-no-duplicate-table)])
     (cond
      [(null? bodys)
       ;; Partial expansion is complete, so finish by rewriting to
       ;; `letrec-values`
-      (log-expand body-ctx (if (null? val-idss) 'block->list 'block->letrec))
       (finish-expanding-body body-ctx frame-id def-ctx-scopes
                              (reverse val-idss) (reverse val-keyss) (reverse val-rhss) (reverse track-stxs)
-                             (reverse done-bodys)
+                             (reverse stx-clauses) (reverse done-bodys)
                              #:source s
                              #:stratified? stratified?
                              #:name name
@@ -112,6 +112,7 @@
                val-rhss
                track-stxs
                trans-idss
+               stx-clauses
                dups)]
         [(define-values)
          ;; Found a variable definition; add bindings, extend the
@@ -154,6 +155,7 @@
                                  #f)
                                track-stxs))
                trans-idss
+               stx-clauses
                new-dups)]
         [(define-syntaxes)
          ;; Found a macro definition; add bindings, evaluate the
@@ -167,13 +169,14 @@
          (define counter (root-expand-context-counter ctx))
          (define keys (for/list ([id (in-list ids)])
                         (add-local-binding! id phase counter #:frame-id frame-id #:in exp-body)))
-         (log-expand body-ctx 'prepare-env)
+         (log-expand* body-ctx ['prepare-env] ['enter-bind])
          (define vals (eval-for-syntaxes-binding (m 'rhs) ids body-ctx))
          (define extended-env (for/fold ([env (expand-context-env body-ctx)]) ([key (in-list keys)]
                                                                                [val (in-list vals)]
                                                                                [id (in-list ids)])
                                 (maybe-install-free=id! val id phase)
                                 (env-extend env key val)))
+         (log-expand body-ctx 'exit-bind)
          (loop (struct*-copy expand-context body-ctx
                              [env extended-env]
                              [binding-layer (maybe-increment-binding-layer ids body-ctx)])
@@ -184,19 +187,25 @@
                val-rhss
                track-stxs
                (cons ids trans-idss)
+               (cons (datum->syntax #f (list ids (m 'rhs)) (m 'rhs)) stx-clauses)
                new-dups)]
         [else
          (cond
           [stratified?
            ;; Found an expression, so no more definitions are allowed
+           (unless (null? done-bodys) (error "internal error: accumulated expressions not empty"))
            (loop body-ctx
                  null
-                 (append (reverse rest-bodys) (cons exp-body done-bodys))
+                 (if (and (null? val-idss) (null? trans-idss))
+                     (reverse (cons exp-body rest-bodys))
+                     (list (datum->syntax #f (cons (core-id '#%stratified-body phase)
+                                                   (cons exp-body rest-bodys)))))
                  val-idss
                  val-keyss
                  val-rhss
                  track-stxs
                  trans-idss
+                 stx-clauses
                  dups)]
           [else
            ;; Found an expression; accumulate it and continue
@@ -208,13 +217,14 @@
                  val-rhss
                  track-stxs
                  trans-idss
+                 stx-clauses
                  dups)])])])))
 
 ;; Partial expansion is complete, so assumble the result as a
 ;; `letrec-values` form and continue expanding
 (define (finish-expanding-body body-ctx frame-id def-ctx-scopes
                                val-idss val-keyss val-rhss track-stxs
-                               done-bodys
+                               stx-clauses done-bodys
                                #:source s
                                #:stratified? stratified?
                                #:name name
@@ -235,9 +245,8 @@
   (define (finish-bodys)
     (define block->list? (null? val-idss))
     (unless block->list? (log-expand body-ctx 'next-group)) ; to go with 'block->letrec
-    (unless block->list? (log-expand body-ctx 'prim-begin))
     (define last-i (sub1 (length done-bodys)))
-    (log-expand body-ctx 'enter-list done-bodys)
+    (log-expand body-ctx 'enter-list (datum->syntax #f done-bodys))
     (define exp-bodys
       (for/list ([done-body (in-list done-bodys)]
                  [i (in-naturals)])
@@ -246,23 +255,29 @@
                               (struct*-copy expand-context finish-ctx
                                             [name name])
                               finish-ctx))))
-    (log-expand body-ctx 'exit-list exp-bodys)
+    (log-expand body-ctx 'exit-list (datum->syntax #f exp-bodys))
     (reference-record-clear! frame-id)
     exp-bodys)
   (cond
    [(and (null? val-idss)
          (null? disappeared-transformer-bindings))
     ;; No definitions, so just return the body list
+    (log-expand finish-ctx 'block->list (datum->syntax s done-bodys))
     (finish-bodys)]
    [else
+    (log-expand... finish-ctx (lambda (obs)
+                                ;; Simulate old expansion steps
+                                (log-letrec-values obs finish-ctx s val-idss val-rhss track-stxs
+                                                   stx-clauses done-bodys)))
     ;; Roughly, finish expanding the right-hand sides, finish the body
     ;; expression, then add a `letrec-values` wrapper:
     (define exp-s (expand-and-split-bindings-by-reference
                    val-idss val-keyss val-rhss track-stxs
                    #:split? (not stratified?)
                    #:frame-id frame-id #:ctx finish-ctx
-                   #:source s
+                   #:source s #:had-stxes? (pair? stx-clauses)
                    #:get-body finish-bodys #:track? #f))
+    (log-expand* body-ctx ['exit-prim exp-s] ['return exp-s])
     (if (expand-context-to-parsed? body-ctx)
         (list exp-s)
         (list (attach-disappeared-transformer-bindings
@@ -278,12 +293,12 @@
 (define (expand-and-split-bindings-by-reference idss keyss rhss track-stxs
                                                 #:split? split?
                                                 #:frame-id frame-id #:ctx ctx 
-                                                #:source s
+                                                #:source s #:had-stxes? had-stxes?
                                                 #:get-body get-body #:track? track?)
   (define phase (expand-context-phase ctx))
   (let loop ([idss idss] [keyss keyss] [rhss rhss] [track-stxs track-stxs]
              [accum-idss null] [accum-keyss null] [accum-rhss null] [accum-track-stxs null]
-             [track? track?] [get-list? #f])
+             [track? track?] [get-list? #f] [can-log? #t])
     (cond
      [(null? idss)
       (cond
@@ -308,8 +323,7 @@
                       (core-id 'letrec-values phase))
                  ,(build-clauses accum-idss accum-rhss accum-track-stxs)
                  ,@exp-body))))
-        (when track?
-          (log-expand ctx 'tag result-s))
+        (log-expand* ctx #:when (and can-log? (log-tag? had-stxes? ctx)) ['tag result-s])
         (if get-list? (list result-s) result-s)])]
      [else
       (log-expand ctx 'next)
@@ -327,9 +341,9 @@
         (unless (null? accum-idss) (error "internal error: accumulated ids not empty"))
         (define exp-rest (loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
                                null null null null
-                               #f #t))
-        ((if get-list? list values)
-         (if (expand-context-to-parsed? ctx)
+                               #f #t #f))
+        (define result-s
+          (if (expand-context-to-parsed? ctx)
              (parsed-let-values (keep-properties-only s)
                                 (list ids)
                                 (list (list (car keyss) expanded-rhs))
@@ -339,13 +353,15 @@
               s
               `(,(core-id 'let-values phase)
                 (,(build-clause ids expanded-rhs track-stx))
-                ,@exp-rest))))]
+                ,@exp-rest))))
+        (log-expand* ctx #:when (and can-log? (log-tag? had-stxes? ctx)) ['tag result-s])
+        (if get-list? (list result-s) result-s)]
        [(and (not forward-references?)
              (or split? (null? (cdr idss))))
         (define exp-rest (loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
                                null null null null
-                               #f #t))
-        ((if get-list? list values)
+                               #f #t #f))
+        (define result-s
          (if (expand-context-to-parsed? ctx)
              (parsed-letrec-values (keep-properties-only s)
                                    (reverse (cons ids accum-idss))
@@ -360,12 +376,14 @@
                 ,(build-clauses (cons ids accum-idss)
                                 (cons expanded-rhs accum-rhss)
                                 (cons track-stx accum-track-stxs))
-                ,@exp-rest))))]
+                ,@exp-rest))))
+        (log-expand* ctx #:when (and can-log? (log-tag? had-stxes? ctx)) ['tag result-s])
+        (if get-list? (list result-s) result-s)]
        [else
         (loop (cdr idss) (cdr keyss) (cdr rhss) (cdr track-stxs)
               (cons ids accum-idss) (cons (car keyss) accum-keyss)
               (cons expanded-rhs accum-rhss) (cons track-stx accum-track-stxs)
-              track? get-list?)])])))
+              track? get-list? can-log?)])])))
 
 (define (build-clauses accum-idss accum-rhss accum-track-stxs)
   (map build-clause
@@ -383,9 +401,48 @@
 ;; bindings
 (define (no-binds expr s phase)
   (define s-runtime-stx (syntax-shift-phase-level runtime-stx phase))
-  (datum->syntax #f
+  (datum->syntax (core-id '#%app phase) ; for `values` application
                  `(,(core-id 'begin phase)
                    ,expr
-                   (,(core-id '#%app phase)
-                    ,(datum->syntax s-runtime-stx 'values)))
+                   (,(datum->syntax s-runtime-stx 'values)))
                  s))
+
+(define (log-tag? had-stxes? ctx)
+  (and had-stxes?
+       (not (expand-context-only-immediate? ctx))))
+
+;; Generate observer actions that simulate the old expander
+;; going back through `letre-values`:
+(define (log-letrec-values obs ctx s val-idss val-rhss track-stxs
+                           stx-clauses done-bodys)
+  (define phase (expand-context-phase ctx))
+  (define clauses (for/list ([val-ids (in-list val-idss)]
+                             [val-rhs (in-list val-rhss)]
+                             [track-stx (in-list track-stxs)])
+                    (datum->syntax #f `[,val-ids ,val-rhs] track-stx)))
+  (define had-stxes? (not (null? stx-clauses)))
+  (define lv-id (core-id (if had-stxes? 'letrec-syntaxes+values 'letrec-values) phase))
+  (define lv-s (datum->syntax #f (if had-stxes?
+                                     `(,lv-id ,stx-clauses ,clauses ,@done-bodys)
+                                     `(,lv-id ,clauses ,@done-bodys))
+                              s))
+  (...log-expand obs
+                 ['block->letrec (list lv-s)]
+                 ['visit lv-s]
+                 ['resolve lv-id]
+                 ['enter-prim lv-s])
+  (cond
+    [had-stxes?
+     (...log-expand obs
+                    ['prim-letrec-syntaxes+values #f]
+                    ['letrec-syntaxes-renames stx-clauses clauses (datum->syntax #f done-bodys s)]
+                    ['prepare-env]
+                    ['next-group])
+     (unless (null? val-idss)
+       (...log-expand obs
+                      ['prim-letrec-values]
+                      ['let-renames clauses (datum->syntax #f done-bodys s)]))]
+    [else
+     (...log-expand obs
+                    ['prim-letrec-values #f]
+                    ['let-renames clauses (datum->syntax #f done-bodys s)])]))

@@ -35,7 +35,9 @@
          "reference-record.rkt"
          "log.rkt"
          "../common/performance.rkt"
-         "parsed.rkt")
+         "rebuild.rkt"
+         "parsed.rkt"
+         "expanded+parsed.rkt")
 
 (provide expand
          lookup
@@ -64,8 +66,12 @@
 (define (expand s ctx
                 ;; Aplying a rename transformer substitutes
                 ;; an id without changing `s`
-                #:alternate-id [alternate-id #f])
-  (log-expand ctx (if (expand-context-only-immediate? ctx) 'enter-check 'visit) s)
+                #:alternate-id [alternate-id #f]
+                ;; For `only-immediate?`
+                #:recurring? [recurring? #f])
+  (log-expand* ctx #:unless (and (expand-context-only-immediate? ctx)
+                                 recurring?)
+               [(if (expand-context-only-immediate? ctx) 'enter-check 'visit) s])
   (cond
    [(identifier? s)
     (expand-identifier s ctx alternate-id)]
@@ -139,48 +145,51 @@
 ;; differences: the binding must be a core form or transformer,
 ;; an implicit `#%top` is handled specially, and so on
 (define (expand-implicit sym s ctx trigger-id)
-  (define disarmed-s (syntax-disarm s))
-  (define id (datum->syntax disarmed-s sym))
-  (guard-stop
-   id ctx s
-   (define b (resolve+shift id (expand-context-phase ctx)
-                            #:ambiguous-value 'ambiguous
-                            #:immediate? #t))
-   (cond
-    [(eq? b 'ambiguous)
-     (raise-ambiguous-error id ctx)]
+  (cond
+    [(expand-context-only-immediate? ctx)
+     (log-expand* ctx ['exit-check s])
+     s]
     [else
-     (define-values (t primitive? insp-of-t) (if b (lookup b ctx id) (values #f #f #f)))
-     (cond
-      [(transformer? t)
-       (dispatch-transformer t insp-of-t (make-explicit sym s disarmed-s) id ctx b)]
-      [(expand-context-only-immediate? ctx)
-       (log-expand ctx 'exit-check s)
-       s]
-      [(core-form? t)
-       (cond
-        [(and (eq? sym '#%top)
-              (eq? (core-form-name t) '#%top)
-              (expand-context-in-local-expand? ctx))
-         (dispatch-implicit-#%top-core-form t s ctx)]
+     (define disarmed-s (syntax-disarm s))
+     (define id (datum->syntax disarmed-s sym))
+     (guard-stop
+      id ctx s
+      (log-expand* ctx ['resolve id])
+      (define b (resolve+shift id (expand-context-phase ctx)
+                               #:ambiguous-value 'ambiguous
+                               #:immediate? #t))
+      (cond
+        [(eq? b 'ambiguous)
+         (raise-ambiguous-error id ctx)]
         [else
-         (dispatch-core-form t (make-explicit sym s disarmed-s) ctx)])]
-      [else
-       (define tl-id
-         (and (eq? sym '#%top)
-              (root-expand-context-top-level-bind-scope ctx)
-              (add-scope s (root-expand-context-top-level-bind-scope ctx))))
-       (define tl-b (and tl-id (resolve tl-id (expand-context-phase ctx))))
-       (cond
-        [tl-b
-         ;; Special case: the identifier is not bound and its scopes don't
-         ;; have a binding for `#%top`, but it's bound temporaily for compilation;
-         ;; treat the identifier as a variable reference
-         (if (expand-context-to-parsed? ctx)
-             (parsed-id tl-id tl-b #f)
-             tl-id)]
-        [else
-         (raise-syntax-implicit-error s sym trigger-id ctx)])])])))
+         (define-values (t primitive? insp-of-t) (if b (lookup b ctx id) (values #f #f #f)))
+         (cond
+           [(transformer? t)
+            (dispatch-transformer t insp-of-t (make-explicit ctx sym s disarmed-s) id ctx b)]
+           [(core-form? t)
+            (cond
+              [(and (eq? sym '#%top)
+                    (eq? (core-form-name t) '#%top)
+                    (expand-context-in-local-expand? ctx))
+               (dispatch-implicit-#%top-core-form t s ctx)]
+              [else
+               (dispatch-core-form t (make-explicit ctx sym s disarmed-s) ctx)])]
+           [else
+            (define tl-id
+              (and (eq? sym '#%top)
+                   (root-expand-context-top-level-bind-scope ctx)
+                   (add-scope s (root-expand-context-top-level-bind-scope ctx))))
+            (define tl-b (and tl-id (resolve tl-id (expand-context-phase ctx))))
+            (cond
+              [tl-b
+               ;; Special case: the identifier is not bound and its scopes don't
+               ;; have a binding for `#%top`, but it's bound temporaily for compilation;
+               ;; treat the identifier as a variable reference
+               (if (expand-context-to-parsed? ctx)
+                   (parsed-id tl-id tl-b #f)
+                   tl-id)]
+              [else
+               (raise-syntax-implicit-error s sym trigger-id ctx)])])]))]))
 
 ;; An expression that is already fully expanded via `local-expand-expression`
 (define (expand-already-expanded s ctx)
@@ -193,13 +202,15 @@
                                        " extra bindings or scopes in the current context")
                         (already-expanded-s ae)))
   (define result-s (syntax-track-origin (already-expanded-s ae) s))
-  (log-expand* ctx ['tag result-s] ['opaque-expr result-s])
+  (log-expand ctx 'opaque-expr result-s)
   (if (expand-context-to-parsed? ctx)
       (expand result-s ctx) ; fully expanded to compiled
       result-s))
 
-(define (make-explicit sym s disarmed-s)
-  (syntax-rearm (datum->syntax disarmed-s (cons sym disarmed-s) s s) s))
+(define (make-explicit ctx sym s disarmed-s)
+  (define new-s (syntax-rearm (datum->syntax disarmed-s (cons sym disarmed-s) s s) s))
+  (log-expand ctx 'tag new-s)
+  new-s)
 
 ;; ----------------------------------------
 
@@ -224,12 +235,12 @@
 (define (dispatch-core-form t s ctx)
   (cond
    [(expand-context-only-immediate? ctx)
-    (log-expand ctx 'exit-check s)
+    (log-expand* ctx ['exit-check s])
     s]
    [(expand-context-observer ctx)
     (log-expand ctx 'enter-prim s)
     (define result-s ((core-form-expander t) s ctx))
-    (log-expand* ctx ['exit-prim result-s] ['return result-s])
+    (log-expand* ctx ['exit-prim (extract-syntax result-s)] ['return (extract-syntax result-s)])
     result-s]
    [else
     ;; As previous case, but as a tail call:
@@ -253,7 +264,7 @@
     (log-expand ctx 'exit-macro s)
     (expand adj-s ctx)]
    [else
-    (log-expand* ctx #:when (expand-context-only-immediate? ctx) ['visit s] ['resolves id])
+    (log-expand* ctx #:when (expand-context-only-immediate? ctx) ['visit s] ['resolve id])
     ;; Apply transformer and expand again
     (define-values (exp-s re-ctx)
       (if (rename-transformer? t)
@@ -266,16 +277,17 @@
                    #:alternate-id (and (rename-transformer? t)
                                        (syntax-track-origin (rename-transformer-target-in-context t ctx)
                                                             id
-                                                            id)))])]))
+                                                            id))
+                   #:recurring? #t)])]))
 
 ;; Handle the expansion of a variable to itself
 (define (dispatch-variable t s id ctx binding primitive?)
   (cond
    [(expand-context-only-immediate? ctx)
-    (log-expand ctx 'exit-check s)
+    (log-expand* ctx ['exit-check s])
     id]
    [else
-    (log-expand ctx 'variable s)
+    (log-expand ctx 'variable s id)
     ;; A reference to a variable expands to itself
     (register-variable-referenced-if-local! binding)
     ;; If the variable is locally bound, replace the use's scopes with the binding's scopes
@@ -368,7 +380,7 @@
        (lambda ()
          ;; Call the transformer!
          ((transformer->procedure t) cleaned-s)))))
-  (log-expand ctx 'macro-post-x transformed-s)
+  (log-expand ctx 'macro-post-x transformed-s cleaned-s)
   (unless (syntax? transformed-s)
     (raise-arguments-error (syntax-e id)
                            "received value from syntax expander was not syntax"
@@ -533,18 +545,21 @@
                             #:begin-form? [begin-form? #f]
                             #:expand-lifts? [expand-lifts? #t]
                             #:lift-key [lift-key (generate-lift-key)]
-                            #:always-wrap? [always-wrap? #f])
+                            #:always-wrap? [always-wrap? #f]
+                            #:keep-stops? [keep-stops? #f])
   (performance-region
    ['expand 'transformer]
 
-   (define trans-ctx (context->transformer-context ctx context))
+   (define trans-ctx (context->transformer-context ctx context
+                                                   #:keep-stops? keep-stops?))
    (expand/capture-lifts s trans-ctx
                          #:expand-lifts? expand-lifts?
                          #:begin-form? begin-form?
                          #:lift-key lift-key
                          #:always-wrap? always-wrap?)))
 
-(define (context->transformer-context ctx [context 'expression])
+(define (context->transformer-context ctx [context 'expression]
+                                      #:keep-stops? [keep-stops? #f])
   (define phase (add1 (expand-context-phase ctx)))
    (define ns (namespace->namespace-at-phase (expand-context-namespace ctx)
                                              phase))
@@ -555,20 +570,25 @@
                  [phase phase]
                  [namespace ns]
                  [env empty-env]
-                 [only-immediate? #f]
+                 [only-immediate? (and keep-stops? (expand-context-only-immediate? ctx))]
+                 [stops (if keep-stops?
+                            (expand-context-stops ctx)
+                            empty-free-id-set)]
                  [def-ctx-scopes #f]
                  [post-expansion-scope #:parent root-expand-context #f]))
 
 ;; Expand and evaluate `s` as a compile-time expression, ensuring that
 ;; the number of returned values matches the number of target
 ;; identifiers; return the expanded form as well as its values
-(define (expand+eval-for-syntaxes-binding rhs ids ctx)
+(define (expand+eval-for-syntaxes-binding rhs ids ctx
+                                          #:log-next? [log-next? #t])
   (define exp-rhs (expand-transformer rhs (as-named-context ctx ids)))
   (define phase (add1 (expand-context-phase ctx)))
   (define parsed-rhs (if (expand-context-to-parsed? ctx)
                          exp-rhs
                          (expand exp-rhs (context->transformer-context
                                           (as-to-parsed-context ctx)))))
+  (when log-next? (log-expand ctx 'next))
   (values exp-rhs
           parsed-rhs
           (eval-for-bindings ids
@@ -643,14 +663,6 @@
    [else
     (syntax-rearm (datum->syntax (syntax-disarm s) keep-e s s)
                   s)]))
-
-;; A helper for forms to reconstruct syntax while preserving source
-;; locations, properties, and arming; if `track?` is #f, then don't keep
-;; properties, because we've kept them in a surrounding form
-(define (rebuild orig-s new
-                 #:track? [track? #t])
-  (syntax-rearm (datum->syntax (syntax-disarm orig-s) new orig-s (and track? orig-s))
-                orig-s))
 
 (define (attach-disappeared-transformer-bindings s trans-idss)
    (cond

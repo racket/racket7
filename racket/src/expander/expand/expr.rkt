@@ -154,136 +154,149 @@
     (define-match stx-m disarmed-s #:when syntaxes?
       '(letrec-syntaxes+values
         ([(id:trans ...) trans-rhs] ...)
-        ([(id:val ...) val-rhs] ...)
+           ([(id:val ...) val-rhs] ...)
         body ...+))
     (define-match val-m disarmed-s #:unless syntaxes?
       '(let-values ([(id:val ...) val-rhs] ...)
-        body ...+))
-   (define sc (new-scope 'local))
-   (define phase (expand-context-phase ctx))
-   (define frame-id (and syntaxes?
-                         (make-reference-record))) ; accumulates info on referenced variables
-   ;; Add the new scope to each binding identifier:
-   (define trans-idss (for/list ([ids (in-list (if syntaxes? (stx-m 'id:trans) null))])
-                        (for/list ([id (in-list ids)])
-                          (add-scope id sc))))
-   (define val-idss (for/list ([ids (in-list (if syntaxes? (stx-m 'id:val) (val-m 'id:val)))])
-                      (for/list ([id (in-list ids)])
-                        (add-scope id sc))))
-   (check-no-duplicate-ids (list trans-idss val-idss) phase s)
-   ;; Bind each left-hand identifier and generate a corresponding key
-   ;; fo the expand-time environment:
-   (define counter (root-expand-context-counter ctx))
-   (define trans-keyss (for/list ([ids (in-list trans-idss)])
+         body ...+))
+    (define sc (new-scope 'local))
+    (define phase (expand-context-phase ctx))
+    (define frame-id (and syntaxes?
+                          (make-reference-record))) ; accumulates info on referenced variables
+    ;; Add the new scope to each binding identifier:
+    (define trans-idss (for/list ([ids (in-list (if syntaxes? (stx-m 'id:trans) null))])
                          (for/list ([id (in-list ids)])
-                           (add-local-binding! id phase counter #:frame-id frame-id #:in s))))
-   (define val-keyss (for/list ([ids (in-list val-idss)])
+                           (add-scope id sc))))
+    (define val-idss (for/list ([ids (in-list (if syntaxes? (stx-m 'id:val) (val-m 'id:val)))])
                        (for/list ([id (in-list ids)])
-                         (add-local-binding! id phase counter #:frame-id frame-id #:in s))))
-   ;; Add new scope to body:
-   (define bodys (for/list ([body (in-list (if syntaxes? (stx-m 'body) (val-m 'body)))])
-                   (add-scope body sc)))
-   (log-expand ctx renames-log-tag val-idss (datum->syntax #f bodys))
-   ;; Evaluate compile-time expressions (if any):
-   (when syntaxes?
-     (log-expand ctx 'prepare-env)
-     (log-expand ctx 'enter-bind))
-   (define trans-valss (for/list ([rhs (in-list (if syntaxes? (stx-m 'trans-rhs) '()))]
-                                  [ids (in-list trans-idss)])
-                         (log-expand ctx 'next)
-                         (eval-for-syntaxes-binding (add-scope rhs sc) ids ctx)))
-   ;; Fill expansion-time environment:
-   (define rec-val-env
-     (for/fold ([env (expand-context-env ctx)]) ([keys (in-list val-keyss)]
-                                                 [ids (in-list val-idss)]
-                                                 #:when #t
-                                                 [key (in-list keys)]
-                                                 [id (in-list ids)])
-       (env-extend env key (local-variable id))))
-   (define rec-env (for/fold ([env rec-val-env]) ([keys (in-list trans-keyss)]
-                                                  [vals (in-list trans-valss)]
-                                                  [ids (in-list trans-idss)])
-                     (for/fold ([env env]) ([key (in-list keys)]
-                                            [val (in-list vals)]
-                                            [id (in-list ids)])
-                       (maybe-install-free=id! val id phase)
-                       (env-extend env key val))))
-   (when syntaxes?
-     (log-expand ctx 'exit-bind))
-   ;; Expand right-hand sides and body
-   (define expr-ctx (as-expression-context ctx))
-   (define orig-rrs (expand-context-reference-records expr-ctx))
-   (define rec-ctx (struct*-copy expand-context expr-ctx
-                                 [env rec-env]
-                                 [scopes (cons sc (expand-context-scopes ctx))]
-                                 [reference-records (if split-by-reference?
-                                                        (cons frame-id orig-rrs)
-                                                        orig-rrs)]
-                                 [binding-layer (increment-binding-layer
-                                                 (cons trans-idss val-idss)
-                                                 ctx
-                                                 sc)]))
-   (define letrec-values-id
-     (and (not (expand-context-to-parsed? ctx))
-          (if syntaxes?
-              (core-id 'letrec-values phase)
-              (val-m 'let-values))))
-   
-   (define rebuild-s (keep-as-needed ctx s #:keep-for-error? #t))
-   (define val-name-idss (if (expand-context-to-parsed? ctx)
-                             (for/list ([val-ids (in-list val-idss)])
-                               (for/list ([val-id (in-list val-ids)])
-                                 (datum->syntax #f (syntax-e val-id) val-id val-id)))
-                             val-idss))
+                         (add-scope id sc))))
+    (define val-rhss (if rec?
+                         (for/list ([rhs (in-list (if syntaxes? (stx-m 'val-rhs) (val-m 'val-rhs)))])
+                           (add-scope rhs sc))
+                         (if syntaxes? (stx-m 'val-rhs) (val-m 'val-rhs))))
+    (check-no-duplicate-ids (list trans-idss val-idss) phase s)
+    ;; Bind each left-hand identifier and generate a corresponding key
+    ;; fo the expand-time environment:
+    (define counter (root-expand-context-counter ctx))
+    (define trans-keyss (for/list ([ids (in-list trans-idss)])
+                          (for/list ([id (in-list ids)])
+                            (add-local-binding! id phase counter #:frame-id frame-id #:in s))))
+    (define val-keyss (for/list ([ids (in-list val-idss)])
+                        (for/list ([id (in-list ids)])
+                          (add-local-binding! id phase counter #:frame-id frame-id #:in s))))
+    ;; Add new scope to body:
+    (define bodys (for/list ([body (in-list (if syntaxes? (stx-m 'body) (val-m 'body)))])
+                    (add-scope body sc)))
+    (log-expand... ctx (lambda (obs)
+                         (log-let-renames obs renames-log-tag val-idss val-rhss bodys
+                                          trans-idss (and syntaxes? (stx-m 'trans-rhs)) sc)))
+    ;; Evaluate compile-time expressions (if any):
+    (when syntaxes? (log-expand ctx 'prepare-env))
+    (define trans-valss (for/list ([rhs (in-list (if syntaxes? (stx-m 'trans-rhs) '()))]
+                                   [ids (in-list trans-idss)])
+                          (log-expand ctx 'next)
+                          (when syntaxes? (log-expand ctx 'enter-bind))
+                          (define trans-val (eval-for-syntaxes-binding (add-scope rhs sc) ids ctx))
+                          (when syntaxes? (log-expand ctx 'exit-bind))
+                          trans-val))
+    ;; Fill expansion-time environment:
+    (define rec-val-env
+      (for/fold ([env (expand-context-env ctx)]) ([keys (in-list val-keyss)]
+                                                  [ids (in-list val-idss)]
+                                                  #:when #t
+                                                  [key (in-list keys)]
+                                                  [id (in-list ids)])
+        (env-extend env key (local-variable id))))
+    (define rec-env (for/fold ([env rec-val-env]) ([keys (in-list trans-keyss)]
+                                                   [vals (in-list trans-valss)]
+                                                   [ids (in-list trans-idss)])
+                      (for/fold ([env env]) ([key (in-list keys)]
+                                             [val (in-list vals)]
+                                             [id (in-list ids)])
+                        (maybe-install-free=id! val id phase)
+                        (env-extend env key val))))
+    ;; Expand right-hand sides and body
+    (define expr-ctx (as-expression-context ctx))
+    (define orig-rrs (expand-context-reference-records expr-ctx))
+    (define rec-ctx (struct*-copy expand-context expr-ctx
+                                  [env rec-env]
+                                  [scopes (cons sc (expand-context-scopes ctx))]
+                                  [reference-records (if split-by-reference?
+                                                         (cons frame-id orig-rrs)
+                                                         orig-rrs)]
+                                  [binding-layer (increment-binding-layer
+                                                  (cons trans-idss val-idss)
+                                                  ctx
+                                                  sc)]))
+    (define letrec-values-id
+      (and (not (expand-context-to-parsed? ctx))
+           (if syntaxes?
+               (core-id 'letrec-values phase)
+               (val-m 'let-values))))
+    
+    (define rebuild-s (keep-as-needed ctx s #:keep-for-error? #t))
+    (define val-name-idss (if (expand-context-to-parsed? ctx)
+                              (for/list ([val-ids (in-list val-idss)])
+                                (for/list ([val-id (in-list val-ids)])
+                                  (datum->syntax #f (syntax-e val-id) val-id val-id)))
+                              val-idss))
+    
+    (define (get-body)
+      (log-expand ctx 'next-group)
+      (define body-ctx (struct*-copy expand-context rec-ctx
+                                     [reference-records orig-rrs]))
+      (expand-body bodys (as-tail-context body-ctx #:wrt ctx) #:source rebuild-s))
+    
+    (define result-s
+      (cond
+        [(not split-by-reference?)
+         (define clauses
+           (for/list ([ids (in-list val-name-idss)]
+                      [keys (in-list val-keyss)]
+                      [rhs (in-list val-rhss)])
+             (log-expand ctx 'next)
+             (define exp-rhs (expand rhs (if rec?                               
+                                             (as-named-context rec-ctx ids)
+                                             (as-named-context expr-ctx ids))))
+             (if (expand-context-to-parsed? ctx)
+                 (list keys exp-rhs)
+                 `[,ids ,exp-rhs])))
+         (define exp-body (get-body))
+         (when frame-id
+           (reference-record-clear! frame-id))
+         (if (expand-context-to-parsed? ctx)
+             (if rec?
+                 (parsed-letrec-values rebuild-s val-name-idss clauses exp-body)
+                 (parsed-let-values rebuild-s val-name-idss clauses exp-body))
+             (rebuild
+              rebuild-s
+              `(,letrec-values-id ,clauses ,@exp-body)))]
+        [else
+         (expand-and-split-bindings-by-reference
+          val-idss val-keyss val-rhss (for/list ([rhs (in-list val-idss)])
+                                        #f)
+          #:split? #t
+          #:frame-id frame-id #:ctx rec-ctx
+          #:source rebuild-s #:had-stxes? syntaxes?
+          #:get-body get-body #:track? #t)]))
+    
+    (if (expand-context-to-parsed? ctx)
+        result-s
+        (attach-disappeared-transformer-bindings result-s trans-idss))))
 
-   (define (get-body)
-     (log-expand ctx 'next-group)
-     (define body-ctx (struct*-copy expand-context rec-ctx
-                                    [reference-records orig-rrs]))
-     (expand-body bodys (as-tail-context body-ctx #:wrt ctx) #:source rebuild-s))
-   
-   (define result-s
-     (cond
-      [(not split-by-reference?)
-       (define clauses
-         (for/list ([ids (in-list val-name-idss)]
-                    [keys (in-list val-keyss)]
-                    [rhs (in-list (if syntaxes? (stx-m 'val-rhs) (val-m 'val-rhs)))])
-           (log-expand ctx 'next)
-           (define exp-rhs (if rec?
-                               (expand (add-scope rhs sc)
-                                       (as-named-context rec-ctx ids))
-                               (expand rhs
-                                       (as-named-context expr-ctx ids))))
-           (if (expand-context-to-parsed? ctx)
-               (list keys exp-rhs)
-               `[,ids ,exp-rhs])))
-       (define exp-body (get-body))
-       (when frame-id
-         (reference-record-clear! frame-id))
-       (if (expand-context-to-parsed? ctx)
-           (if rec?
-               (parsed-letrec-values rebuild-s val-name-idss clauses exp-body)
-               (parsed-let-values rebuild-s val-name-idss clauses exp-body))
-           (rebuild
-            rebuild-s
-            `(,letrec-values-id ,clauses ,@exp-body)))]
-      [else
-       (log-expand ctx 'next-group)
-       (log-expand ctx 'letrec-values)
-       (define val-rhss (for/list ([rhs (in-list (if syntaxes? (stx-m 'val-rhs) (val-m 'val-rhs)))])
-                          (add-scope rhs sc)))
-       (expand-and-split-bindings-by-reference
-        val-idss val-keyss val-rhss (for/list ([rhs (in-list val-idss)])
-                                      #f)
-        #:split? #t
-        #:frame-id frame-id #:ctx rec-ctx
-        #:source rebuild-s
-        #:get-body get-body #:track? #t)]))
-
-   (if (expand-context-to-parsed? ctx)
-       result-s
-       (attach-disappeared-transformer-bindings result-s trans-idss))))
+(define (log-let-renames obs renames-log-tag val-idss val-rhss bodys
+                         trans-idss trans-rhss sc)
+  (define vals+body (cons (for/list ([val-ids (in-list val-idss)]
+                                     [val-rhs (in-list val-rhss)])
+                            (datum->syntax #f `[,val-ids ,val-rhs]))
+                          (datum->syntax #f bodys)))
+  (...log-expand obs [renames-log-tag (if (not trans-rhss)
+                                          vals+body
+                                          (cons
+                                           (for/list ([trans-ids (in-list trans-idss)]
+                                                      [trans-rhs (in-list trans-rhss)])
+                                             (datum->syntax #f `[,trans-ids ,(add-scope trans-rhs sc)]))
+                                           vals+body))]))
 
 (add-core-form!
  'let-values
@@ -313,8 +326,10 @@
        (parsed-begin rebuild-s exp-body)
        (rebuild
         rebuild-s
-        `(,(core-id 'begin (expand-context-phase ctx))
-          ,@exp-body)))))
+        (if (null? (cdr exp-body))
+            (car exp-body)
+            `(,(core-id 'begin (expand-context-phase ctx))
+              ,@exp-body))))))
 
 ;; ----------------------------------------
 
@@ -347,6 +362,7 @@
    (cond
     [(null? es)
      (define phase (expand-context-phase ctx))
+     (log-expand* ctx ['enter-list (datum->syntax #f es s)] ['next] ['exit-list (datum->syntax #f es s)])
      (if (expand-context-to-parsed? ctx)
          (parsed-quote (keep-properties-only~ s) null)
          (rebuild
@@ -360,19 +376,23 @@
      (define rebuild-prefixless (and (syntax? prefixless)
                                      (keep-as-needed ctx prefixless #:keep-for-parsed? keep-for-parsed?)))
      (define expr-ctx (as-expression-context ctx))
+     (log-expand* expr-ctx ['enter-list (datum->syntax #f es s)] ['next])
      (define rest-es (cdr es))
      (define exp-rator (expand (car es) expr-ctx))
      (define exp-es (for/list ([e (in-list rest-es)])
+                      (log-expand expr-ctx 'next)
                       (expand e expr-ctx)))
-     (if (expand-context-to-parsed? ctx)
-         (parsed-app (or rebuild-prefixless rebuild-s) exp-rator exp-es)
-         (rebuild
-          rebuild-s
-          (let ([exp-es (cons exp-rator exp-es)])
-            (cons (m '#%app)
-                  (if rebuild-prefixless
-                      (rebuild rebuild-prefixless exp-es)
-                      exp-es)))))])))
+     (cond
+       [(expand-context-to-parsed? ctx)
+        (parsed-app (or rebuild-prefixless rebuild-s) exp-rator exp-es)]
+       [else
+        (define es (let ([exp-es (cons exp-rator exp-es)])
+                     (if rebuild-prefixless
+                         (rebuild rebuild-prefixless exp-es)
+                         exp-es)))
+        (log-expand expr-ctx 'exit-list (datum->syntax #f es rebuild-s))
+        (rebuild rebuild-s (cons (m '#%app) es))])])))
+
 
 (add-core-form!
  'quote
@@ -420,7 +440,6 @@
    (define expr-ctx (as-expression-context ctx))
    (define tail-ctx (as-tail-context expr-ctx #:wrt ctx))
    (define rebuild-s (keep-as-needed ctx s))
-   (log-expand ctx 'next-group)
    (define exp-tst (expand (m 'tst) expr-ctx))
    (log-expand ctx 'next)
    (define exp-thn (expand (m 'thn) tail-ctx))
@@ -463,9 +482,13 @@
                         (as-expression-context ctx)))
    (define rebuild-s (keep-as-needed ctx s))
    (define exp-es
-     (let loop ([es (m 'e)] [list-start-index list-start-index])
-       (when (zero? list-start-index)
-         (log-expand ctx 'enter-list es))
+     (let loop ([es (m 'e)] [index list-start-index])
+       (when (zero? index)
+         (log-expand... ctx
+                        (lambda (obs)
+                          (unless (zero? list-start-index)
+                            (...log-expand obs ['next]))
+                          (...log-expand obs ['enter-list (datum->syntax #f es rebuild-s)]))))
        (cond
         [(null? es) null]
         [else
@@ -474,8 +497,8 @@
          (cons (expand (car es) (if (and last-is-tail? (null? rest-es))
                                     (as-tail-context expr-ctx #:wrt ctx)
                                     expr-ctx))
-               (loop rest-es (sub1 list-start-index)))])))
-   (log-expand ctx 'exit-list (list-tail exp-es list-start-index))
+               (loop rest-es (sub1 index)))])))
+   (log-expand ctx 'exit-list (datum->syntax #f (list-tail exp-es list-start-index) rebuild-s))
    (if (expand-context-to-parsed? ctx)
        (parsed-begin rebuild-s exp-es)
        (rebuild
@@ -484,7 +507,7 @@
 
 (add-core-form!
  'begin
- (let ([nonempty-begin (make-begin 'prim-begin0 parsed-begin #:list-start-index 0 #:last-is-tail? #t)])
+ (let ([nonempty-begin (make-begin 'prim-begin parsed-begin #:list-start-index 0 #:last-is-tail? #t)])
    (lambda (s ctx)
      ;; Empty `begin` allowed in 'top-level and 'module contexts,
      ;; which might get here via `local-expand`:

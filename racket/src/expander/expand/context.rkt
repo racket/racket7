@@ -190,4 +190,5 @@
 ;; Adjust `ctx` to to generate a parsed result
 (define (as-to-parsed-context ctx)
   (struct*-copy expand-context ctx
-                [to-parsed? #t]))
+                [to-parsed? #t]
+                [observer #f]))

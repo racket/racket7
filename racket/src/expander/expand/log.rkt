@@ -3,16 +3,29 @@
 
 (provide log-expand
          log-expand*
+         log-expand...
+         ...log-expand
          log-expand-start)
+
+(define-syntax log-expand...
+  (syntax-rules (lambda)
+    [(_ ctx (lambda (obs) body ...))
+     (let ([obs (expand-context-observer ctx)])
+       (when obs
+         body ...))]))
+
+(define-syntax-rule (...log-expand obs [key arg ...] ...)
+  (begin
+    (call-expand-observe obs key arg ...)
+    ...))
 
 (define-syntax log-expand*
   (syntax-rules ()
     [(_ ctx #:when guard [key arg ...] ...)
-     (let ([obs (expand-context-observer ctx)])
-       (when obs
-         (when guard
-           (call-expand-observe obs key arg ...)
-           ...)))]
+     (log-expand... ctx
+                    (lambda (obs)
+                      (when guard
+                        (...log-expand obs [key arg ...] ...))))]
     [(_ ctx #:unless guard [key arg ...] ...)
      (log-expand* ctx #:when (not guard) [key arg ...] ...)]
     [(_ ctx [key arg ...] ...)
@@ -67,7 +80,7 @@
         (prim-define-syntaxes  . 103)
         (prim-define-values . 104)
         (prim-if            . 105)
-        (prim-with-continaution-mark . 106)
+        (prim-with-continuation-mark . 106)
         (prim-begin         . 107)
         (prim-begin0        . 108)
         (prim-#%app         . 109)
@@ -75,7 +88,7 @@
         (prim-case-lambda   . 111)
         (prim-let-values    . 112)
         (prim-letrec-values . 113)
-        (prim-letrec-syntaxes-values . 114)
+        (prim-letrec-syntaxes+values . 114)
         (prim-#%datum         . 115)
         (prim-#%top         . 116)
         (prim-quote         . 117)
@@ -84,7 +97,7 @@
         (prim-provide       . 122)
 
         (prim-set!          . 123)
-        (prim-expression    . 138)
+        (prim-#%expression  . 138)
         (prim-#%variable-reference . 149)
 
         (prim-#%stratified  . 155)

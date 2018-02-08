@@ -138,10 +138,10 @@
 
 (define (expand-single s ns to-parsed? serializable?)
   (define rebuild-s (keep-properties-only s))
-  (define-values (require-lifts lifts exp-s)
-    (expand-capturing-lifts s (make-expand-context ns
-                                                   #:to-parsed? to-parsed?
-                                                   #:for-serializable? serializable?)))
+  (define ctx (make-expand-context ns
+                                   #:to-parsed? to-parsed?
+                                   #:for-serializable? serializable?))
+  (define-values (require-lifts lifts exp-s) (expand-capturing-lifts s ctx))
   (cond
    [(and (null? require-lifts) (null? lifts)) exp-s]
    [to-parsed?
@@ -151,11 +151,25 @@
                                        #:adjust-form (lambda (form)
                                                        (expand-single form ns to-parsed? serializable?)))]
    [else
-    (wrap-lifts-as-begin (append require-lifts lifts)
-                         #:adjust-form (lambda (form)
-                                         (expand-single form ns to-parsed? serializable?))
-                         exp-s
-                         (namespace-phase ns))]))
+    (log-top-lift-begin-before ctx require-lifts lifts exp-s ns)
+    (define new-s
+      (wrap-lifts-as-begin (append require-lifts lifts)
+                           #:adjust-form (lambda (form)
+                                           (log-expand ctx 'next)
+                                           (expand-single form ns to-parsed? serializable?))
+                           #:adjust-body (lambda (form)
+                                           (cond
+                                             [to-parsed? form]
+                                             [else
+                                              (log-expand ctx 'next)
+                                              ;; This re-expansion should be unnecessary, but we do it
+                                              ;; for a kind of consistentcy with `expand/capture-lifts`
+                                              ;; and for expansion observers
+                                              (expand-single form ns to-parsed? serializable?)]))
+                           exp-s
+                           (namespace-phase ns)))
+    (log-top-begin-after ctx new-s)
+    new-s]))
 
 (define (expand-once s [ns (current-namespace)])
   (per-top-level s ns
@@ -178,7 +192,8 @@
 (define (expand-to-top-form s [ns (current-namespace)])
   ;; Use `per-top-level` for immediate expansion and lift handling,
   ;; but `#:single #f` makes it return immediately
-  (per-top-level s ns #:single #f))
+  (log-expand-start)
+  (per-top-level s ns #:single #f #:quick-immediate? #f))
 
 ;; ----------------------------------------
 
@@ -190,6 +205,7 @@
                        #:combine [combine #f] ; how to cons a recur result, or not
                        #:wrap [wrap #f]       ; how to wrap a list of recur results, or not
                        #:just-once? [just-once? #f] ; single expansion step
+                       #:quick-immediate? [quick-immediate? #t]
                        #:serializable? [serializable? #f]) ; for module+submodule expansion
   (define s (maybe-intro given-s ns))
   (define ctx (make-expand-context ns))
@@ -202,11 +218,16 @@
                                  [for-serializable? serializable?]))
     (define wb-s (and just-once? s))
     (define-values (require-lifts lifts exp-s)
-      (expand-capturing-lifts s (struct*-copy expand-context tl-ctx
-                                              [only-immediate? #t]
-                                              [def-ctx-scopes (box null)] ; discarding is ok
-                                              [phase phase]
-                                              [namespace ns])))
+      (if (and quick-immediate?
+               ;; To avoid annoying the macro stepper, bail out quietly
+               ;; if the input is obviously a core form
+               (core-form-sym s phase))
+          (values null null s)
+          (expand-capturing-lifts s (struct*-copy expand-context tl-ctx
+                                                  [only-immediate? #t]
+                                                  [def-ctx-scopes (box null)] ; discarding is ok
+                                                  [phase phase]
+                                                  [namespace ns]))))
     (define disarmed-exp-s (raw:syntax-disarm exp-s))
     (cond
      [(or (pair? require-lifts) (pair? lifts))
@@ -214,6 +235,7 @@
       (define new-s (wrap-lifts-as-begin (append require-lifts lifts)
                                          exp-s
                                          phase))
+      (log-expand tl-ctx 'lift-loop new-s)
       (if just-once?
           new-s
           (loop new-s phase ns as-tail?))]
@@ -222,6 +244,7 @@
      [else
       (case (core-form-sym disarmed-exp-s phase)
         [(begin)
+         (log-top-begin-before ctx exp-s)
          (define-match m disarmed-exp-s '(begin e ...))
          ;; Map `loop` over the `e`s, but in the case of `eval`,
          ;; tail-call for last one:
@@ -231,6 +254,7 @@
             [(and (not combine) (null? (cdr es)))
              (loop (car es) phase ns as-tail?)]
             [else
+             (log-expand tl-ctx 'next)
              (define a (if combine
                            (loop (car es) phase ns #f)
                            (begin
@@ -240,9 +264,12 @@
              (if combine
                  (combine a (begin-loop (cdr es)))
                  (begin-loop (cdr es)))]))
-         (if wrap
-             (wrap (m 'begin) exp-s (begin-loop (m 'e)))
-             (begin-loop (m 'e)))]
+         (cond
+           [wrap
+            (define new-s (wrap (m 'begin) exp-s (begin-loop (m 'e))))
+            (log-top-begin-after tl-ctx new-s)
+            new-s]
+           [else (begin-loop (m 'e))])]
         [(begin-for-syntax)
          (define-match m disarmed-exp-s '(begin-for-syntax e ...))
          (define next-phase (add1 phase))
@@ -327,3 +354,33 @@
                                            [last dv])
                               dv)))
                        exp-s))
+
+(define (log-top-lift-begin-before ctx require-lifts lifts exp-s ns)
+  (log-expand...
+   ctx
+   (lambda (obs)
+     (define new-s (wrap-lifts-as-begin (append require-lifts lifts)
+                                        exp-s
+                                        (namespace-phase ns)))
+     (...log-expand obs ['lift-loop new-s])
+     (log-top-begin-before ctx new-s))))
+
+(define (log-top-begin-before ctx new-s)
+  (log-expand...
+   ctx
+   (lambda (obs)
+     (define-match m new-s '(begin e ...))
+     (...log-expand obs
+                    ['visit new-s] ['resolve (m 'begin)]
+                    ['enter-prim new-s] ['prim-begin]
+                    ['enter-list (datum->syntax #f (m 'e) new-s)]))))
+
+(define (log-top-begin-after ctx new-s)
+  (log-expand...
+   ctx
+   (lambda (obs)
+     (define-match m new-s '(begin e ...))
+     (log-expand* ctx
+                  ['exit-list (datum->syntax #f (m 'e) new-s)]
+                  ['exit-prim new-s]
+                  ['return new-s]))))

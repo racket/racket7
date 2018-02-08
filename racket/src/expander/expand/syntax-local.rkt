@@ -272,7 +272,7 @@
                     (shift-wrap s (sub1 phase) lift-ctx)))
   (define post-s (post-wrap shift-s wrt-phase lift-ctx)) ; post-wrap at lift-context phase
   (add-lifted! lift-ctx post-s wrt-phase) ; record lift for the target phase
-  (values ctx added-s))
+  (values ctx post-s))
 
 (define (syntax-local-lift-require s use-s)
   (define sc (new-scope 'macro))
@@ -300,7 +300,7 @@
 
 (define (syntax-local-lift-provide s)
   (define-values (ctx result-s)
-    (do-local-lift-to-module 'syntax-local-lift-module-end-declaration
+    (do-local-lift-to-module 'syntax-local-lift-provide
                              s
                              #:get-lift-ctx expand-context-to-module-lifts
                              #:get-wrt-phase to-module-lift-context-wrt-phase

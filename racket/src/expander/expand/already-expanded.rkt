@@ -5,4 +5,5 @@
 
 (provide (struct-out already-expanded))
 
-(struct already-expanded (s binding-layer))
+(struct already-expanded (s binding-layer)
+  #:reflection-name 'expanded-syntax)

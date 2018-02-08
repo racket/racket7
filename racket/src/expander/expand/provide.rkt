@@ -15,6 +15,7 @@
          "binding-for-transformer.rkt"
          "../namespace/core.rkt"
          "../common/module-path.rkt"
+         "free-id-set.rkt"
          "main.rkt")
 
 (provide parse-and-expand-provides!)
@@ -151,7 +152,7 @@
            (define-match ex-m disarmed-spec '(expand (id . datum))) ; just check syntax
            (define-match m disarmed-spec '(expand form)) ; get form to expand
            (define exp-spec (expand (m 'form) (struct*-copy expand-context ctx
-                                                            [only-immediate? #t]
+                                                            [stops (free-id-set at-phase (list (core-id 'begin at-phase)))]
                                                             ;; Discarding definition-context scopes is ok,
                                                             ;; because the scopes won't be captured by
                                                             ;; any `quote-syntax`:

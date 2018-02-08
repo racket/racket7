@@ -107,7 +107,8 @@
            body))))
 
 (define (wrap-lifts-as-begin lifts body phase
-                             #:adjust-form [adjust-form values])
+                             #:adjust-form [adjust-form values]
+                             #:adjust-body [adjust-body values])
   (datum->syntax
    #f
    (cons (datum->syntax
@@ -126,7 +127,7 @@
                       (lifted-bind-ids lift)
                       (lifted-bind-rhs lift)))]
               [else lift])))
-          (list body)))))
+          (list (adjust-body body))))))
 
 (define (get-lifts-as-lists lifts)
    (for/list ([lift (in-list lifts)])

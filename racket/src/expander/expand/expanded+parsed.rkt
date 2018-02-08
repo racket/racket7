@@ -3,11 +3,12 @@
          "../syntax/taint.rkt"
          "../syntax/match.rkt"
          "parsed.rkt"
-         "main.rkt")
+         "rebuild.rkt")
 
 (provide (struct-out expanded+parsed)
          (struct-out semi-parsed-define-values)
          (struct-out semi-parsed-begin-for-syntax)
+         extract-syntax
          parsed-only
          syntax-only)
 
@@ -20,6 +21,11 @@
 ;; some passes.
 (struct semi-parsed-define-values (s syms ids rhs) #:authentic)
 (struct semi-parsed-begin-for-syntax (s body) #:authentic)
+
+(define (extract-syntax s)
+  (if (expanded+parsed? s)
+      (expanded+parsed-s s)
+      s))
 
 (define (parsed-only l)
   (for/list ([i (in-list l)]
