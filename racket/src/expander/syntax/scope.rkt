@@ -767,7 +767,7 @@
      [(and (not exactly?)
            (not get-scopes?)
            (resolve-cache-get sym phase (syntax-scopes s) (fallback-first smss)))
-      => (lambda (b) b)]
+      => (lambda (b) (if (eq? b '#:none) #f b))]
      [else
       (define scopes (scope-set-at-fallback s (fallback-first smss) phase))
       ;; As we look through all scopes, if we find two where neither
@@ -814,6 +814,7 @@
                  best-scopes
                  best-binding))]
        [else
+        (resolve-cache-set! sym phase (syntax-scopes s) (fallback-first smss) '#:none)
         (if (fallback? smss)
             (fallback-loop (fallback-rest smss))
             #f)])])))
