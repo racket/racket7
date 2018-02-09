@@ -5,6 +5,7 @@
 
 (provide free-id-set
          empty-free-id-set
+         free-id-set-empty?
          free-id-set-member?
          free-id-set-empty-or-just-module*?)
 
@@ -16,6 +17,9 @@
     (hash-set ht sym (cons-ish id (hash-ref ht sym null)))))
 
 (define empty-free-id-set (free-id-set 0 null))
+
+(define (free-id-set-empty? fs)
+  (eq? fs empty-free-id-set))
 
 (define (free-id-set-member? fs phase given-id)
   (if (zero? (hash-count fs))

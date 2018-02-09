@@ -285,10 +285,11 @@
          ;; Need to accumulate definition contexts created during
          ;; partial expansion:
          (define def-ctx-scopes (box null))
+         (define to-parsed? (expand-context-to-parsed? ctx))
          
          (define partial-body-ctx (struct*-copy expand-context ctx
                                                 [context 'module]
-                                                [phase phase]
+                                                [phase phase]                                                
                                                 [namespace (namespace->namespace-at-phase m-ns phase)]
                                                 [stops (free-id-set phase (module-expand-stop-ids phase))]
                                                 [def-ctx-scopes def-ctx-scopes]

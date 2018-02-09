@@ -38,4 +38,5 @@
 
 (define module-stop-syms (append auto-stop-syms
                                  '(define-values define-syntaxes begin-for-syntax
-                                    #%require #%provide module module* #%declare)))
+                                    #%require #%provide module module* #%declare
+                                    #%stratified-body)))

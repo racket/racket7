@@ -344,7 +344,8 @@
               (keyword? (syntax-e datum)))
      (raise-syntax-error '#%datum "keyword misused as an expression" #f datum))
    (define phase (expand-context-phase ctx))
-   (if (expand-context-to-parsed? ctx)
+   (if (and (expand-context-to-parsed? ctx)
+            (free-id-set-empty? (expand-context-stops ctx)))
        (parsed-quote (keep-properties-only~ s) (syntax->datum datum))
        (rebuild
         s
