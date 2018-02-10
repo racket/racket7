@@ -27,6 +27,7 @@
          "require.rkt"
          "provide.rkt"
          "def-id.rkt"
+         "prepare.rkt"
          "log.rkt"
          "../compile/main.rkt"
          "../eval/top.rkt"
@@ -313,7 +314,6 @@
          ;; contain `compile-form` or `expanded+parsed` structures:
          (define partially-expanded-bodys
            (partially-expand-bodys bodys
-                                   #:tail? (zero? phase)
                                    #:phase phase
                                    #:ctx partial-body-ctx
                                    #:namespace m-ns
@@ -344,7 +344,6 @@
                                                                                       #:end-as-expressions? #t)]))
          
          (finish-expanding-body-expressons partially-expanded-bodys
-                                           #:tail? (zero? phase)
                                            #:phase phase
                                            #:ctx body-ctx
                                            #:self self
@@ -662,7 +661,6 @@
 ;; Pass 1 of `module` expansion, which uncovers definitions,
 ;; requires, and `module` submodules
 (define (partially-expand-bodys bodys
-                                #:tail? tail?
                                 #:phase phase
                                 #:ctx partial-body-ctx
                                 #:namespace m-ns
@@ -679,10 +677,13 @@
                                 #:mpis-to-reset mpis-to-reset
                                 #:loop pass-1-and-2-loop)
   (namespace-visit-available-modules! m-ns phase)
-  (let loop ([tail? tail?] [bodys bodys])
+  (let loop ([tail? #t] [bodys bodys])
     (cond
      [(null? bodys)
       (cond
+       [(and tail? (not (zero? phase)))
+        (log-expand partial-body-ctx 'module-lift-end-loop '())
+        null]
        [tail?
         ;; Were at the very end of the module; if there are any lifted-to-end
         ;; declarations, keep going
@@ -722,16 +723,20 @@
           (log-expand partial-body-ctx 'splice spliced-bodys)
           (loop tail? spliced-bodys)]
          [(begin-for-syntax)
-          (log-expand* partial-body-ctx ['enter-prim exp-body] ['prim-begin-for-syntax]
-                       ['prepare-env] ['phase-up])
+          (log-expand* partial-body-ctx ['enter-prim exp-body] ['prim-begin-for-syntax] ['prepare-env])
+          (define ct-m-ns (namespace->namespace-at-phase m-ns (add1 phase)))
+          (prepare-next-phase-namespace partial-body-ctx)
+          (log-expand partial-body-ctx 'phase-up)
           (define-match m disarmed-exp-body '(begin-for-syntax e ...))
           (define nested-bodys (pass-1-and-2-loop (m 'e) (add1 phase)))
-          (define ct-m-ns (namespace->namespace-at-phase m-ns (add1 phase)))
+          (log-expand partial-body-ctx 'next-group)
           (namespace-run-available-modules! m-ns (add1 phase)) ; to support running `begin-for-syntax`
           (eval-nested-bodys nested-bodys (add1 phase) ct-m-ns self partial-body-ctx)
           (namespace-visit-available-modules! m-ns phase) ; since we're shifting back a phase
           (log-expand partial-body-ctx 'exit-prim
-                      (datum->syntax #f (cons (m 'begin-for-syntax) nested-bodys) exp-body))
+                      (let ([s-nested-bodys (for/list ([nested-body (in-list nested-bodys)])
+                                              (extract-syntax nested-body))])
+                        (datum->syntax #f (cons (m 'begin-for-syntax) s-nested-bodys) exp-body)))
           (cons
            (semi-parsed-begin-for-syntax exp-body nested-bodys)
            (loop tail? rest-bodys))]
@@ -753,8 +758,9 @@
            (semi-parsed-define-values exp-body syms ids (m 'rhs))
            (loop tail? rest-bodys))]
          [(define-syntaxes)
-          (log-expand* partial-body-ctx ['enter-prim exp-body] ['prim-define-syntaxes]
-                       ['prepare-env] ['phase-up])
+          (log-expand* partial-body-ctx ['enter-prim exp-body] ['prim-define-syntaxes] ['prepare-env])
+          (prepare-next-phase-namespace partial-body-ctx)
+          (log-expand partial-body-ctx 'phase-up)
           (define-match m disarmed-exp-body '(define-syntaxes (id ...) rhs))
           (define ids (remove-use-site-scopes (m 'id) partial-body-ctx))
           (check-no-duplicate-ids ids phase exp-body)
@@ -818,6 +824,8 @@
                 (loop tail? rest-bodys))]
          [(module*)
           ;; Submodule to save for after this module
+          (log-expand* partial-body-ctx ['enter-prim exp-body] ['prim-submodule*]
+                       ['exit-prim exp-body])
           (cons exp-body
                 (loop tail? rest-bodys))]
          [(#%declare)
@@ -871,7 +879,6 @@
 
 ;; Pass 2 of `module` expansion, which expands all expressions
 (define (finish-expanding-body-expressons partially-expanded-bodys
-                                          #:tail? tail?
                                           #:phase phase
                                           #:ctx body-ctx
                                           #:self self
@@ -879,24 +886,27 @@
                                           #:compiled-submodules compiled-submodules
                                           #:modules-being-compiled modules-being-compiled
                                           #:mpis-to-reset mpis-to-reset)
-  (let loop ([tail? tail?] [bodys partially-expanded-bodys])
+  (let loop ([tail? #t] [bodys partially-expanded-bodys])
     (cond
      [(null? bodys)
       (cond
-       [tail? 
-        ;; Were at the very end of the module, again, so check for lifted-to-end
-        ;; declarations
-        (define bodys
-          (append
-           (get-and-clear-end-lifts! (expand-context-to-module-lifts body-ctx))
-           (get-and-clear-provide-lifts! (expand-context-to-module-lifts body-ctx))))
-        (cond
-          [(null? bodys)
-           (log-expand body-ctx 'module-lift-end-loop '())
-           null]
-          [else
-           (loop #t bodys)])]
-       [else bodys])]
+        [(and tail? (not (zero? phase)))
+         (log-expand body-ctx 'module-lift-end-loop '())
+         null]
+        [tail? 
+         ;; We're at the very end of the module, again, so check for lifted-to-end
+         ;; declarations
+         (define bodys
+           (append
+            (get-and-clear-end-lifts! (expand-context-to-module-lifts body-ctx))
+            (get-and-clear-provide-lifts! (expand-context-to-module-lifts body-ctx))))
+         (cond
+           [(null? bodys)
+            (log-expand body-ctx 'module-lift-end-loop '())
+            null]
+           [else
+            (loop #t bodys)])]
+        [else null])]
      [else
       (log-expand body-ctx 'next)
       (define body (car bodys))
@@ -916,9 +926,11 @@
           (define-match m (syntax-disarm s) #:unless (expand-context-to-parsed? rhs-ctx)
             '(define-values _ _))
           (define rebuild-s (keep-as-needed rhs-ctx s #:keep-for-parsed? #t))
+          (log-defn-enter body-ctx body)
           (define exp-rhs (performance-region
                            ['expand 'form-in-module/2]
                            (expand (semi-parsed-define-values-rhs body) rhs-ctx)))
+          (log-defn-exit body-ctx body exp-rhs)
           (define comp-form
             (parsed-define-values rebuild-s ids syms
                                   (if (expand-context-to-parsed? rhs-ctx)
@@ -955,11 +967,11 @@
         ;; Get any requires and provides, keeping them as-is
         (get-and-clear-require-lifts! (expand-context-require-lifts body-ctx)))
       (define lifted-modules (get-and-clear-module-lifts! (expand-context-module-lifts body-ctx)))
-      (unless (and (null? lifted-defns) (null? lifted-modules) (null? lifted-requires))
-        (log-expand body-ctx 'module-lift-loop (append lifted-requires lifted-defns lifted-modules)))
-      (define exp-lifted-defns
-        ;; If there were any lifts, the right-hand sides need to be expanded
-        (loop #f lifted-defns))
+      (define no-lifts? (and (null? lifted-defns) (null? lifted-modules) (null? lifted-requires)))
+      (unless no-lifts?
+        (log-expand body-ctx 'module-lift-loop (append lifted-requires
+                                                       (lifted-defns-extract-syntax lifted-defns)
+                                                       lifted-modules)))
       (define exp-lifted-modules
         ;; If there were any module lifts, the `module` forms need to
         ;; be expanded
@@ -971,6 +983,10 @@
                                        #:declared-submodule-names declared-submodule-names
                                        #:compiled-submodules compiled-submodules
                                        #:modules-being-compiled modules-being-compiled))
+      (define exp-lifted-defns
+        ;; If there were any lifts, the right-hand sides need to be expanded
+        (loop #f lifted-defns))
+      (unless no-lifts? (log-expand body-ctx 'next))
       (append
        lifted-requires
        exp-lifted-defns
@@ -1347,17 +1363,23 @@
                                  requires+provides
                                  #:declared-submodule-names declared-submodule-names
                                  #:who 'require)))
+
 ;; ----------------------------------------
+
+(define (defn-extract-syntax defn)
+  (datum->syntax #f `(define-values ,(semi-parsed-define-values-ids defn)
+                       ,(semi-parsed-define-values-rhs defn))
+                 (semi-parsed-define-values-s defn)))
+
+(define (lifted-defns-extract-syntax lifted-defns)
+  (for/list ([lifted-defn (in-list lifted-defns)])
+    (defn-extract-syntax lifted-defn)))
 
 (define (log-lifted-defns partial-body-ctx lifted-defns exp-body rest-bodys)
   (log-expand...
    partial-body-ctx
    (lambda (obs)
-     (define s-lifted-defns
-       (for/list ([lifted-defn (in-list lifted-defns)])
-         (datum->syntax #f `(define-values ,(semi-parsed-define-values-ids lifted-defn)
-                              ,(semi-parsed-define-values-rhs lifted-defn))
-                        (semi-parsed-define-values-s lifted-defn))))
+     (define s-lifted-defns (lifted-defns-extract-syntax lifted-defns))
      (...log-expand obs ['rename-list (cons exp-body rest-bodys)] ['module-lift-loop s-lifted-defns])
      ;; The old expander retried expanding the lifted definitions.
      ;; We know that they immediately stop, so we don't do that here,
@@ -1388,3 +1410,27 @@
                     ['prim-stop]
                     ['exit-prim exp-body]
                     ['return exp-body]))))
+
+(define (log-defn-enter ctx defn)
+  (log-expand...
+   ctx
+   (lambda (obs)
+     (define s-defn (defn-extract-syntax defn))
+     (define-match m s-defn '(define-values _ ...))
+     (...log-expand obs
+                    ['visit s-defn]
+                    ['resolve (m 'define-values)]
+                    ['enter-prim s-defn]
+                    ['prim-define-values]))))
+
+(define (log-defn-exit ctx defn exp-rhs)
+  (log-expand...
+   ctx
+   (lambda (obs)
+     (define s-defn
+       (datum->syntax #f `(define-values ,(semi-parsed-define-values-ids defn)
+                            ,exp-rhs)
+                      (semi-parsed-define-values-s defn)))
+     (...log-expand obs
+                    ['exit-prim s-defn]
+                    ['return s-defn]))))

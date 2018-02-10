@@ -17,6 +17,7 @@
          "context.rkt"
          "liberal-def-ctx.rkt"
          "reference-record.rkt"
+         "prepare.rkt"
          "log.rkt"
          "main.rkt")
 
@@ -169,7 +170,9 @@
          (define counter (root-expand-context-counter ctx))
          (define keys (for/list ([id (in-list ids)])
                         (add-local-binding! id phase counter #:frame-id frame-id #:in exp-body)))
-         (log-expand* body-ctx ['prepare-env] ['enter-bind])
+         (log-expand body-ctx 'prepare-env)
+         (prepare-next-phase-namespace ctx)
+         (log-expand body-ctx 'enter-bind)
          (define vals (eval-for-syntaxes-binding (m 'rhs) ids body-ctx))
          (define extended-env (for/fold ([env (expand-context-env body-ctx)]) ([key (in-list keys)]
                                                                                [val (in-list vals)]
@@ -412,7 +415,7 @@
        (not (expand-context-only-immediate? ctx))))
 
 ;; Generate observer actions that simulate the old expander
-;; going back through `letre-values`:
+;; going back through `letrec-values`:
 (define (log-letrec-values obs ctx s val-idss val-rhss track-stxs
                            stx-clauses done-bodys)
   (define phase (expand-context-phase ctx))

@@ -67,11 +67,8 @@
                 ;; Aplying a rename transformer substitutes
                 ;; an id without changing `s`
                 #:alternate-id [alternate-id #f]
-                ;; For `only-immediate?`
-                #:recurring? [recurring? #f])
-  (log-expand* ctx #:unless (and (expand-context-only-immediate? ctx)
-                                 recurring?)
-               [(if (expand-context-only-immediate? ctx) 'enter-check 'visit) s])
+                #:skip-log? [skip-log? #f])
+  (log-expand* ctx #:unless skip-log? [(if (expand-context-only-immediate? ctx) 'enter-check 'visit) s])
   (cond
    [(identifier? s)
     (expand-identifier s ctx alternate-id)]
@@ -266,13 +263,19 @@
     (log-expand ctx 'exit-macro s)
     (expand adj-s ctx)]
    [else
-    (log-expand* ctx #:when (expand-context-only-immediate? ctx) ['visit s] ['resolve id])
+    (log-expand* ctx #:when (and (expand-context-only-immediate? ctx)
+                                 (not (rename-transformer? t)))
+                 ;; The old expander would emit 'resolve for a rename transformer
+                 ;; as long as it's not the first one encountered in immediate mode
+                 ['visit s] ['resolve id])
     ;; Apply transformer and expand again
     (define-values (exp-s re-ctx)
       (if (rename-transformer? t)
           (values s ctx)
           (apply-transformer t insp-of-t s id ctx binding)))
-    (log-expand* ctx #:when (expand-context-only-immediate? ctx) ['return exp-s])
+    (log-expand* ctx #:when (and (expand-context-only-immediate? ctx)
+                                 (not (rename-transformer? t)))
+                 ['return exp-s])
     (cond
      [(expand-context-just-once? ctx) exp-s]
      [else (expand exp-s re-ctx
@@ -280,7 +283,8 @@
                                        (syntax-track-origin (rename-transformer-target-in-context t ctx)
                                                             id
                                                             id))
-                   #:recurring? #t)])]))
+                   #:skip-log? (or (expand-context-only-immediate? ctx)
+                                   (rename-transformer? t)))])]))
 
 ;; Handle the expansion of a variable to itself
 (define (dispatch-variable t s id ctx binding primitive?)
@@ -452,7 +456,7 @@
                          (expand-context-phase ctx)
                          id)
     (log-expand* ctx #:unless (expand-context-only-immediate? ctx)
-                 ['enter-prim s] ['prim-stop] ['exit-prim s] ['return s])
+                 ['resolve id] ['enter-prim s] ['prim-stop] ['exit-prim s] ['return s])
     s]
    [else
     otherwise ...]))
@@ -530,7 +534,7 @@
       with-lifts-s]
      [else
       ;; Expand again...
-      (log-expand ctx 'lift-loop with-lifts-s)
+      (log-expand ctx 'letlift-loop with-lifts-s)
       (loop with-lifts-s #f ctx)])))
 
 ;; [*] Although `(memq context '(top-level module))` makes more sense
@@ -564,21 +568,21 @@
 (define (context->transformer-context ctx [context 'expression]
                                       #:keep-stops? [keep-stops? #f])
   (define phase (add1 (expand-context-phase ctx)))
-   (define ns (namespace->namespace-at-phase (expand-context-namespace ctx)
-                                             phase))
-   (namespace-visit-available-modules! ns phase)
-   (struct*-copy expand-context ctx
-                 [context context]
-                 [scopes null]
-                 [phase phase]
-                 [namespace ns]
-                 [env empty-env]
-                 [only-immediate? (and keep-stops? (expand-context-only-immediate? ctx))]
-                 [stops (if keep-stops?
-                            (expand-context-stops ctx)
-                            empty-free-id-set)]
-                 [def-ctx-scopes #f]
-                 [post-expansion-scope #:parent root-expand-context #f]))
+  (define ns (namespace->namespace-at-phase (expand-context-namespace ctx)
+                                            phase))
+  (namespace-visit-available-modules! ns phase)
+  (struct*-copy expand-context ctx
+                [context context]
+                [scopes null]
+                [phase phase]
+                [namespace ns]
+                [env empty-env]
+                [only-immediate? (and keep-stops? (expand-context-only-immediate? ctx))]
+                [stops (if keep-stops?
+                           (expand-context-stops ctx)
+                           empty-free-id-set)]
+                [def-ctx-scopes #f]
+                [post-expansion-scope #:parent root-expand-context #f]))
 
 ;; Expand and evaluate `s` as a compile-time expression, ensuring that
 ;; the number of returned values matches the number of target

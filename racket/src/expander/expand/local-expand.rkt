@@ -46,12 +46,14 @@
   ;; its wrapper. The expander will later check that the wrapper ends up
   ;; with an empty set of scopes, and then the already-expanded inside has
   ;; the scopes suitably flipped
-  (define ae (already-expanded
-              (flip-introduction-scopes exp-s ctx)
-              (expand-context-binding-layer ctx)))
+  (define ae (flip-introduction-scopes
+              (datum->syntax #f (already-expanded
+                                 (flip-introduction-scopes exp-s ctx)
+                                 (expand-context-binding-layer ctx)))
+              ctx))
   (log-expand ctx 'opaque-expr ae)
   (log-expand ctx 'exit-local exp-s)
-  (values exp-s (flip-introduction-scopes (datum->syntax #f ae) ctx)))
+  (values exp-s ae))
 
 ;; ----------------------------------------
 
@@ -126,7 +128,7 @@
                                             #:always-wrap? #t)]
                      [else
                       (expand input-s local-ctx)]))
-   
+
    (log-expand local-ctx 'local-post output-s)
    
    (define result-s (flip-introduction-scopes output-s ctx))

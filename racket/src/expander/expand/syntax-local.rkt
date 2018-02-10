@@ -190,7 +190,8 @@
             (failure-thunk)
             (error 'syntax-local-value "identifier is not bound to syntax: ~v" id))]
        [else
-        (log-expand ctx 'local-value-result #t)
+        (log-expand* ctx #:unless (and (rename-transformer? v) (not immediate?))
+                     ['local-value-result #t])
         (cond
          [(rename-transformer? v)
           (if immediate?

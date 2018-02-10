@@ -82,11 +82,15 @@
                                                 ctx))
       (define tmp-env (for/fold ([env intdef-env]) ([sym (in-list syms)])
                         (hash-set env sym variable)))
-      (eval-for-syntaxes-binding input-s ids
-                                 (make-local-expand-context (struct*-copy expand-context ctx
-                                                                          [env tmp-env])
-                                                            #:context 'expression
-                                                            #:intdefs intdef))]
+      (log-expand ctx 'enter-bind)
+      (define vals
+        (eval-for-syntaxes-binding input-s ids
+                                   (make-local-expand-context (struct*-copy expand-context ctx
+                                                                            [env tmp-env])
+                                                              #:context 'expression
+                                                              #:intdefs intdef)))
+      (log-expand ctx 'exit-bind)
+      vals]
      [else
       (for/list ([id (in-list ids)]) variable)]))
   (define env-mixins (internal-definition-context-env-mixins intdef))

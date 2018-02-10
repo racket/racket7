@@ -23,8 +23,8 @@
          "set-bang-trans.rkt"
          "rename-trans.rkt"
          "reference-record.rkt"
+         "prepare.rkt"
          "log.rkt"
-         "already-expanded.rkt"
          "parsed.rkt")
 
 ;; ----------------------------------------
@@ -191,13 +191,14 @@
                          (log-let-renames obs renames-log-tag val-idss val-rhss bodys
                                           trans-idss (and syntaxes? (stx-m 'trans-rhs)) sc)))
     ;; Evaluate compile-time expressions (if any):
-    (when syntaxes? (log-expand ctx 'prepare-env))
+    (when syntaxes?
+      (log-expand ctx 'prepare-env)
+      (prepare-next-phase-namespace ctx))
     (define trans-valss (for/list ([rhs (in-list (if syntaxes? (stx-m 'trans-rhs) '()))]
                                    [ids (in-list trans-idss)])
-                          (log-expand ctx 'next)
-                          (when syntaxes? (log-expand ctx 'enter-bind))
+                          (log-expand* ctx ['next] ['enter-bind])
                           (define trans-val (eval-for-syntaxes-binding (add-scope rhs sc) ids ctx))
-                          (when syntaxes? (log-expand ctx 'exit-bind))
+                          (log-expand ctx 'exit-bind)
                           trans-val))
     ;; Fill expansion-time environment:
     (define rec-val-env
@@ -240,13 +241,16 @@
                                 (for/list ([val-id (in-list val-ids)])
                                   (datum->syntax #f (syntax-e val-id) val-id val-id)))
                               val-idss))
-    
+
+    (when syntaxes?
+      (log-expand... ctx (lambda (obs) (log-letrec-values obs val-idss val-rhss bodys))))
+
     (define (get-body)
-      (log-expand ctx 'next-group)
+      (log-expand* ctx #:unless (and syntaxes? (null? val-idss)) ['next-group])
       (define body-ctx (struct*-copy expand-context rec-ctx
                                      [reference-records orig-rrs]))
       (expand-body bodys (as-tail-context body-ctx #:wrt ctx) #:source rebuild-s))
-    
+
     (define result-s
       (cond
         [(not split-by-reference?)
@@ -297,6 +301,13 @@
                                                       [trans-rhs (in-list trans-rhss)])
                                              (datum->syntax #f `[,trans-ids ,(add-scope trans-rhs sc)]))
                                            vals+body))]))
+
+(define (log-letrec-values obs val-idss val-rhss bodys)
+  (...log-expand obs ['next-group])
+  (unless (null? val-idss)
+    (...log-expand obs ['prim-letrec-values])
+    (log-let-renames obs 'let-renames val-idss val-rhss bodys
+                     #f #f #f)))
 
 (add-core-form!
  'let-values
@@ -363,7 +374,6 @@
    (cond
     [(null? es)
      (define phase (expand-context-phase ctx))
-     (log-expand* ctx ['enter-list (datum->syntax #f es s)] ['next] ['exit-list (datum->syntax #f es s)])
      (if (expand-context-to-parsed? ctx)
          (parsed-quote (keep-properties-only~ s) null)
          (rebuild
@@ -425,7 +435,8 @@
     [else
      ;; otherwise, prune scopes up to transformer boundary:
      (define datum-s (remove-scopes (m 'datum) (expand-context-scopes ctx)))
-     (if (expand-context-to-parsed? ctx)
+     (if (and (expand-context-to-parsed? ctx)
+              (free-id-set-empty? (expand-context-stops ctx)))
          (parsed-quote-syntax (keep-properties-only~ s) datum-s)
          (rebuild
           s
