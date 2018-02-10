@@ -1065,7 +1065,7 @@
                                             (wrapper v))))
                         (|#%app| proc default-v))))]))]))
 
-(define/no-lift/who continuation-mark-set-first
+(define/who continuation-mark-set-first
   (case-lambda
     [(marks key) (continuation-mark-set-first marks key #f)]
     [(marks key none-v)
@@ -1087,31 +1087,8 @@
                                          (continuation-mark-set-mark-chain marks))
                                     (current-mark-chain))
                                 key
-                                ;; elem-stop?:
-                                (lambda (mcf)
-                                  (eq? (mark-chain-frame-tag mcf) prompt-tag))
-                                ;; elem-ref:
-                                (lambda (mcf key none)
-                                  ;; Search within a metacontinuation frame
-                                  (let ([marks (mark-chain-frame-marks mcf)])
-                                    (marks-search marks
-                                                  key
-                                                  ;; elem-stop?:
-                                                  (lambda (t) #f)
-                                                  ;; elem-ref:
-                                                  intmap-ref
-                                                  ;; fail-k:
-                                                  (lambda () none)
-                                                  ;; strip & combine:
-                                                  (lambda (v) v)
-                                                  (lambda (v old) v))))
-                                ;; fail-k:
-                                (lambda () none)
-                                ;; strip & combine --- cache results at the metacontinuation
-                                ;; level should depend on the prompt tag, so make the cache
-                                ;; value another table level mapping the prompt tag to the value:
-                                (lambda (v) (hash-ref v prompt-tag none2))
-                                (lambda (v old) (intmap-set (if (eq? old none2) empty-hasheq old) prompt-tag v)))])
+                                #t ; at-outer?
+                                prompt-tag)])
            (cond
             [(eq? v none)
              ;; More special treatment of built-in keys
@@ -1126,20 +1103,25 @@
 
 ;; To make `continuation-mark-set-first` constant-time, if we traverse
 ;; N elements to get an answer, then cache the answer at N/2 elements.
-(define/no-lift (marks-search elems key elem-stop? elem-ref fail-k
-                              strip-cache-result combine-cache-result)
+(define (marks-search elems key at-outer? prompt-tag)
   (let loop ([elems elems] [elems/cache-pos elems] [cache-step? #f] [depth 0])
     (cond
      [(or (null? elems)
-          (elem-stop? (elem+cache-strip (car elems))))
+          (and at-outer?
+               (eq? (mark-chain-frame-tag (elem+cache-strip (car elems))) prompt-tag)))
       ;; Not found
-      (cache-result! elems elems/cache-pos depth key none combine-cache-result)
-      (fail-k)]
+      (cache-result! elems elems/cache-pos depth key none at-outer? prompt-tag)
+      none]
      [else
       (let ([t (car elems)]
             [check-elem
              (lambda (t)
-               (let ([v (elem-ref t key none)])
+               (let ([v (if at-outer?
+                            ;; Search within the metacontinuation frame:
+                            (let ([marks (mark-chain-frame-marks t)])
+                              (marks-search marks key #f #f))
+                            ;; We're looking at just one frame:
+                            (intmap-ref t key none))])
                  (cond
                   [(eq? v none)
                    ;; Not found at this point; keep looking
@@ -1149,7 +1131,7 @@
                          (fx+ 1 depth))]
                   [else
                    ;; Found it
-                   (cache-result! elems elems/cache-pos depth key v combine-cache-result)
+                   (cache-result! elems elems/cache-pos depth key v at-outer? prompt-tag)
                    v])))])
         (cond
          [(elem+cache? t)
@@ -1159,18 +1141,23 @@
               ;; No mapping in cache, so try the element and continue:
               (check-elem (elem+cache-elem t))]
              [else
-              (let ([v (strip-cache-result v)])
+              (let ([v (if at-outer?
+                           ;; strip & combine --- cache results at the metacontinuation
+                           ;; level should depend on the prompt tag, so make the cache
+                           ;; value another table level mapping the prompt tag to the value:
+                           (hash-ref v prompt-tag none2)
+                           v)])
                 (cond
                  [(eq? v none2)
                   ;; Strip filtered this cache entry away, so try the element:
                   (check-elem (elem+cache-elem t))]
                  [(eq? v none)
                   ;; The cache records that it's not in the rest:
-                  (cache-result! elems elems/cache-pos depth key none combine-cache-result)
-                  (fail-k)]
+                  (cache-result! elems elems/cache-pos depth key none at-outer? prompt-tag)
+                  none]
                  [else
                   ;; The cache provides a value from the rest:
-                  (cache-result! elems elems/cache-pos depth key v combine-cache-result)
+                  (cache-result! elems elems/cache-pos depth key v at-outer? prompt-tag)
                   v]))]))]
          [else
           ;; Try the element:
@@ -1178,7 +1165,7 @@
 
 ;; To make `continuation-mark-set-first` constant-time, cache
 ;; a key--value mapping at a point that's half-way in
-(define (cache-result! marks marks/cache-pos depth key v combine-cache-result)
+(define (cache-result! marks marks/cache-pos depth key v at-outer? prompt-tag)
   (unless (< depth 16)
     (let* ([t (car marks/cache-pos)]
            [new-t (if (elem+cache? t)
@@ -1186,10 +1173,14 @@
                       (make-elem+cache t empty-hasheq))])
       (unless (eq? t new-t)
         (set-car! marks/cache-pos new-t))
-      (let ([old (intmap-ref (elem+cache-cache new-t) key none2)])
-        (set-elem+cache-cache! new-t (intmap-set (elem+cache-cache new-t)
+      (set-elem+cache-cache! new-t (intmap-set (elem+cache-cache new-t)
                                                key
-                                               (combine-cache-result v old)))))))
+                                               (if at-outer?
+                                                   ;; At the metacontinuation level, cache depends on the
+                                                   ;; prompt tag:
+                                                   (let ([old (intmap-ref (elem+cache-cache new-t) key none2)])
+                                                     (intmap-set (if (eq? old none2) empty-hasheq old) prompt-tag v))
+                                                   v))))))
 
 (define/who continuation-mark-set->list
   (case-lambda
