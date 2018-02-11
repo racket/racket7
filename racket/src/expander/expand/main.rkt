@@ -570,7 +570,7 @@
   (define phase (add1 (expand-context-phase ctx)))
   (define ns (namespace->namespace-at-phase (expand-context-namespace ctx)
                                             phase))
-  (namespace-visit-available-modules! ns phase)
+  (namespace-visit-available-modules! ns phase) ; redundant?
   (struct*-copy expand-context ctx
                 [context context]
                 [scopes null]

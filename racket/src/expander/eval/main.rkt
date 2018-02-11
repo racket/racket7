@@ -56,7 +56,8 @@
    [else
     (per-top-level s ns 
                    #:single (lambda (s ns tail?)
-                              (eval-compiled (compile s ns) ns tail?)))]))
+                              (eval-compiled (compile s ns) ns tail?))
+                   #:observable? #f)]))
 
 (define (eval-compiled c ns [as-tail? #t])
   (cond
@@ -86,7 +87,8 @@
                                 (list (compile-single s ns expand
                                                       serializable?
                                                       to-source?)))
-                     #:combine append)]))
+                     #:combine append
+                     #:observable? #f)]))
   (if (and (= 1 (length cs))
            (not (compiled-multiple-top? (car cs))))
       (car cs)
@@ -129,18 +131,20 @@
 ;; existed) to be called by `expand` and `expand-syntax`.
 ;; [Don't use keyword arguments here, because the function is
 ;;  exported for use by an embedding runtime system.]
-(define (expand s [ns (current-namespace)] [log-expand? #f] [to-parsed? #f] [serializable? #f])
-  (when log-expand? (log-expand-start))
+(define (expand s [ns (current-namespace)] [observable? #f] [to-parsed? #f] [serializable? #f])
+  (when observable? (log-expand-start))
   (per-top-level s ns
-                 #:single (lambda (s ns as-tail?) (expand-single s ns to-parsed? serializable?))
+                 #:single (lambda (s ns as-tail?) (expand-single s ns observable? to-parsed? serializable?))
                  #:combine cons
-                 #:wrap re-pair))
+                 #:wrap re-pair
+                 #:observable? observable?))
 
-(define (expand-single s ns to-parsed? serializable?)
+(define (expand-single s ns observable? to-parsed? serializable?)
   (define rebuild-s (keep-properties-only s))
   (define ctx (make-expand-context ns
                                    #:to-parsed? to-parsed?
-                                   #:for-serializable? serializable?))
+                                   #:for-serializable? serializable?
+                                   #:observable? observable?))
   (define-values (require-lifts lifts exp-s) (expand-capturing-lifts s ctx))
   (cond
    [(and (null? require-lifts) (null? lifts)) exp-s]
@@ -149,14 +153,14 @@
                                        lifts
                                        exp-s rebuild-s
                                        #:adjust-form (lambda (form)
-                                                       (expand-single form ns to-parsed? serializable?)))]
+                                                       (expand-single form ns observable? to-parsed? serializable?)))]
    [else
     (log-top-lift-begin-before ctx require-lifts lifts exp-s ns)
     (define new-s
       (wrap-lifts-as-begin (append require-lifts lifts)
                            #:adjust-form (lambda (form)
                                            (log-expand ctx 'next)
-                                           (expand-single form ns to-parsed? serializable?))
+                                           (expand-single form ns observable? to-parsed? serializable?))
                            #:adjust-body (lambda (form)
                                            (cond
                                              [to-parsed? form]
@@ -165,7 +169,7 @@
                                               ;; This re-expansion should be unnecessary, but we do it
                                               ;; for a kind of consistentcy with `expand/capture-lifts`
                                               ;; and for expansion observers
-                                              (expand-single form ns to-parsed? serializable?)]))
+                                              (expand-single form ns observable? to-parsed? serializable?)]))
                            exp-s
                            (namespace-phase ns)))
     (log-top-begin-after ctx new-s)
@@ -176,11 +180,12 @@
                  #:single (lambda (s ns as-tail?) (expand-single-once s ns))
                  #:combine cons
                  #:wrap re-pair
-                 #:just-once? #t))
+                 #:just-once? #t
+                 #:observable? #t))
 
 (define (expand-single-once s ns)
   (define-values (require-lifts lifts exp-s)
-    (expand-capturing-lifts s (struct*-copy expand-context (make-expand-context ns)
+    (expand-capturing-lifts s (struct*-copy expand-context (make-expand-context ns #:observable? #t)
                                             [just-once? #t])))
   (cond
    [(and (null? require-lifts) (null? lifts)) exp-s]
@@ -193,7 +198,10 @@
   ;; Use `per-top-level` for immediate expansion and lift handling,
   ;; but `#:single #f` makes it return immediately
   (log-expand-start)
-  (per-top-level s ns #:single #f #:quick-immediate? #f))
+  (per-top-level s ns
+                 #:single #f
+                 #:quick-immediate? #f
+                 #:observable? #t))
 
 ;; ----------------------------------------
 
@@ -206,9 +214,10 @@
                        #:wrap [wrap #f]       ; how to wrap a list of recur results, or not
                        #:just-once? [just-once? #f] ; single expansion step
                        #:quick-immediate? [quick-immediate? #t]
-                       #:serializable? [serializable? #f]) ; for module+submodule expansion
+                       #:serializable? [serializable? #f] ; for module+submodule expansion
+                       #:observable? observable?)
   (define s (maybe-intro given-s ns))
-  (define ctx (make-expand-context ns))
+  (define ctx (make-expand-context ns #:observable? observable?))
   (define phase (namespace-phase ns))
   (let loop ([s s] [phase phase] [ns ns] [as-tail? #t])
     (define tl-ctx (struct*-copy expand-context ctx
