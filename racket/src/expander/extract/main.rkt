@@ -9,6 +9,7 @@
          "flatten.rkt"
          "gc-defn.rkt"
          "simplify-defn.rkt"
+         "prune-name.rkt"
          "decompile.rkt"
          "save-and-report.rkt"
          "underscore.rkt"
@@ -18,7 +19,7 @@
 
 ;; Gather all of the linklets need to run phase 0 of the specified
 ;; module while keeping the module's variables that are provided from
-;; phase 0. In other words, keep enogh to produce any value or affect
+;; phase 0. In other words, keep enogh to produce any value or effect
 ;; that `dynamic-require` would produce.
 (define (extract start-mod-path cache
                  #:print-extracted-to print-extracted-to
@@ -132,10 +133,15 @@
     ;; expansion
     (define re-renamed-linklet-expr
       (simplify-underscore-numbers gced-linklet-expr))
-    
+
+    ;; Prune any explicit function names (using a `quote` pattern in
+    ;; the body) when they still match a name that would be inferred
+    (define pruned-linklet-expr
+      (prune-names re-renamed-linklet-expr))
+
     (cond
      [as-decompiled?
-      (compile-and-decompile re-renamed-linklet-expr print-extracted-to)]
+      (compile-and-decompile pruned-linklet-expr print-extracted-to)]
      [else
-      (save-and-report-flattened! re-renamed-linklet-expr print-extracted-to
+      (save-and-report-flattened! pruned-linklet-expr print-extracted-to
                                   #:as-c? as-c?)])))

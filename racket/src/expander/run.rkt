@@ -169,7 +169,7 @@
                            (eval m))]
                      [(and (pair? expected-module)
                            (not (car expected-module)))
-                      ;; shouldn't load from source when `expected-module` start with #f
+                      ;; shouldn't load from source when `expected-module` starts with #f
                       (void)]
                      [else
                       (unless quiet-load?

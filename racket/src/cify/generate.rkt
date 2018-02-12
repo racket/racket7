@@ -857,7 +857,8 @@
        (return ret runstack #:can-pre-pop? #t (top-ref in-lam (lam-id lam)))]
       [else
        (when in-lam (set-lam-under-lambda?! lam #t))
-       (define name (format "~a" (lam-id lam)))
+       (define name (format "~a" (or (extract-lambda-name (lam-e lam))
+                                     (lam-id lam))))
        (define free-var-refs (get-free-vars e env lambdas knowns top-names state))
        (define index-in-closure? (pair? (cdr (vehicle-lams (lam-vehicle lam)))))
        (define-values (min-a max-a) (lambda-arity e #:precise-cases? #t))
@@ -1078,3 +1079,32 @@
                   (top-ref in-lam id)
                   (runstack-assign runstack id)))
     (out "~a = c_current_thread->ku.multiple.array[~a];" s i)))
+
+;; ----------------------------------------
+
+;; Recognize the patterns that the linklet flattener uses to record a
+;; function's name within an S-expression, taking into account that lifting
+;; may have pushed the pattern under a `let`:
+(define (extract-lambda-name e)
+  (define (extract body)
+    (match body
+      [`(,e ,e2 . ,_)
+       (extract-one e)]
+      [`((begin . ,body))
+       (extract body)]
+      [`((let ,binds . ,body)) (extract body)]
+      [`((letrec ,binds . ,body)) (extract body)]
+      [`((letrec* ,binds . ,body)) (extract body)]
+      [`,_ #f]))
+  (define (extract-one e)
+    (match e
+      [`(quote ,id) (and (symbol? id) id)]
+      [`(begin ,e . ,_) (extract-one e)]
+      [`,_ #f]))
+  (match e
+    [`(lambda ,_ . ,body)
+     (extract body)]
+    [`(case-lambda [,_ . ,body] . ,_)
+     (extract body)]
+    [`,_ #f]))
+

@@ -13,7 +13,7 @@
 (define dest "cstartup.inc")
 (define version-line (format "/* version: ~a */" (version)))
 
-(define debug? #t)
+(define debug? #f)
 
 (define-values (src vers deps)
   (command-line

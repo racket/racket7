@@ -59,10 +59,15 @@
        (pure-body? self-id arity args body seen-defns))]
     [_ #f]))
 
-(define (pure-body? self-id self-arity args body seen-defns)
+(define (pure-body? self-id self-arity args orig-body seen-defns)
   (define locals
     (for/hash ([arg (in-list args)])
       (values arg (known-defined))))
+  (define body
+    ;; Strip away a `begin` that's there to record a function name:
+    (match orig-body
+      [`(begin (quote ,_) ,e) e]
+      [else orig-body]))
   (cond
    [(and (pair? body)
          (eq? (car body) self-id)

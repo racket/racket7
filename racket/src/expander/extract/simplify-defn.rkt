@@ -67,10 +67,10 @@
        (seteq)]
     [(list app ...) (apply union-all (map frees app))]))
 
-(define (simplify-expr e ;; expression to simplify
-                       vars ;; set of all mutated variables (for variable-reference-constant?)
-                       safe-ref? ;; predicate for whether referencing a variable is safe
-                       seen-defns) ;; known definitions
+(define (simplify-expr e           ; expression to simplify
+                       vars        ; set of all mutated variables (for variable-reference-constant?)
+                       safe-ref?   ; predicate for whether referencing a variable is safe
+                       seen-defns) ; known definitions
   (define (simp e) (simplify-expr e vars safe-ref? seen-defns))
   (match e
     [`(if ,e0 ,e1 ,e2)

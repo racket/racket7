@@ -29,7 +29,61 @@
           (void))
       (void))
 
-  (define-values (linklet) (compile-linklet (get-linklet src)))
+  ;; Startup code as an S-expression uses the pattern
+  ;;   (lambda <formals> (begin '<id> <expr>))
+  ;; or
+  ;;   (case-lambda [<formals> (begin '<id> <expr>)] <clause> ...)
+  ;; to record a name for a function. Detect that pattern and
+  ;; shift to an 'inferred-name property. We rely on the fact
+  ;; that the names `lambda`, `case-lambda`, and `quote` are
+  ;; never shadowed, so we don't have to parse expression forms
+  ;; in general.
+  (define-values (rename-functions)
+    (lambda (e)
+      (if (if (pair? e)
+              (eq? 'quote (car e))
+              #f)
+          e
+          (let-values ([(name)
+                        (if (pair? e)
+                            (let-values ([(begin-name)
+                                          (lambda (b)
+                                            (if (pair? b)
+                                                (if (eq? 'begin (car b))
+                                                    (if (pair? (cdr b))
+                                                        (if (pair? (cddr b))
+                                                            (let-values ([(a) (cadr b)])
+                                                              (if (pair? a)
+                                                                  (if (eq? 'quote (car a))
+                                                                      (cadr a)
+                                                                      #f)
+                                                                  #f))
+                                                            #f)
+                                                        #f)
+                                                    #f)
+                                                #f))])
+                              (if (eq? 'lambda (car e))
+                                  (let-values ([(b) (caddr e)])
+                                    (begin-name b))
+                                  (if (eq? 'case-lambda (car e))
+                                      (if (pair? (cdr e))
+                                          (let-values ([(clause) (cadr e)])
+                                            (begin-name (cadr clause)))
+                                          #f)
+                                      #f)))
+                            #f)])
+            (if name
+                (correlated-property (datum->correlated #f (cons (car e) (rename-functions (cdr e))))
+                                     'inferred-name
+                                     name)
+                (if (pair? e)
+                    (cons (rename-functions (car e))
+                          (rename-functions (cdr e)))
+                    e))))))
+  (define-values (datum->correlated) (hash-ref (primitive-table '#%kernel) 'datum->syntax))
+  (define-values (correlated-property) (hash-ref (primitive-table '#%kernel) 'syntax-property))
+
+  (define-values (linklet) (compile-linklet (rename-functions (get-linklet src))))
 
   (define-values (DIGS-PER-LINE) 20)
   

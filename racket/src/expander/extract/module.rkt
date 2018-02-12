@@ -22,7 +22,7 @@
                              #:cache cache)
   (or (hash-ref compiled-modules name #f)
       (let ([local-name name])
-                                        ;: Seeing this module for the first time
+        ;: Seeing this module for the first time
         (define cd (get-cached-compiled cache root-name void))
         (unless cd
           (error "unavailable in cache:" name))

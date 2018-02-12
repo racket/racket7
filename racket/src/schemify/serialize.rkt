@@ -30,7 +30,7 @@
     (for/list ([v (in-list bodys)])
       (cond
         [(convert-any? v for-cify?)
-         (let convert ([v v])
+         (define (convert v)
            (match v
              [`(quote ,q)
               (cond
@@ -38,44 +38,57 @@
                  (make-construct q add-lifted lifted-eq-constants lifted-equal-constants for-cify?)]
                 [else v])]
              [`(lambda ,formals ,body ...)
-              `(lambda ,formals ,@(map convert body))]
+              `(lambda ,formals ,@(convert-function-body body))]
              [`(case-lambda [,formalss ,bodys ...] ...)
               `(case-lambda ,@(for/list ([formals (in-list formalss)]
                                          [body (in-list bodys)])
-                                `[,formals ,@(map convert body)]))]
+                                `[,formals ,@(convert-function-body body)]))]
              [`(define-values ,ids ,rhs)
               `(define-values ,ids ,(convert rhs))]
              [`(let-values ([,idss ,rhss] ...) ,bodys ...)
               `(let-values ,(for/list ([ids (in-list idss)]
                                        [rhs (in-list rhss)])
                               `[,ids ,(convert rhs)])
-                 ,@(map convert bodys))]
+                 ,@(convert-body bodys))]
              [`(letrec-values ([,idss ,rhss] ...) ,bodys ...)
               `(letrec-values ,(for/list ([ids (in-list idss)]
                                           [rhs (in-list rhss)])
                                  `[,ids ,(convert rhs)])
-                 ,@(map convert bodys))]
+                 ,@(convert-body bodys))]
              [`(if ,tst ,thn ,els)
               `(if ,(convert tst) ,(convert thn) ,(convert els))]
              [`(with-continuation-mark ,key ,val ,body)
               `(with-continuation-mark ,(convert key) ,(convert val) ,(convert body))]
              [`(begin ,exps ...)
-              `(begin . ,(map convert exps))]
+              `(begin . ,(convert-body exps))]
              [`(begin0 ,exps ...)
-              `(begin0 . ,(map convert exps))]
+              `(begin0 . ,(convert-body exps))]
              [`(set! ,id ,rhs)
               `(set! ,id ,(convert rhs))]
              [`(#%variable-reference) v]
              [`(#%variable-reference ,_) v]
              [`(,rator ,exps ...)
-              `(,(convert rator) ,@(map convert exps))]
+              `(,(convert rator) ,@(convert-body exps))]
              [`,_
               (cond
                 [(and for-cify?
                       (not (symbol? v))
                       (lift-quoted? v for-cify?))
                  (convert `(quote ,v))]
-                [else v])]))]
+                [else v])]))
+         (define (convert-body body)
+           (for/list ([e (in-list body)])
+             (convert e)))
+         (define (convert-function-body body)
+           (if for-cify?
+               ;; Detect the function-name pattern and avoid
+               ;; mangling it:
+               (match body
+                 [`((begin (quote ,name) ,body . ,bodys))
+                  `((begin (quote ,name) ,@(convert-body (cons body bodys))))]
+                 [`,_ (convert-body body)])
+               (convert-body body)))
+         (convert v)]
         [else v])))
   (values new-bodys
           (reverse lift-bindings)))

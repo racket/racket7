@@ -161,7 +161,7 @@
 
 ;; ----------------------------------------
 
-;; Compile a `linklet` for to a plain `lambda`. Also, convert from the
+;; Compile a `linklet` to a plain `lambda`. Also, convert from the
 ;; notion of correlated that works for `compile-linklet` to the notion
 ;; of host syntax objects that works for `compile`.
 (define (desugar-linklet c)
@@ -229,8 +229,8 @@
         [(case-lambda)
          (define-correlated-match m e '(case-lambda [formals body] ...))
          `(case-lambda ,@(for/list ([formals (in-list (m 'formals))]
-                               [body (in-list (m 'body))])
-                      `[,formals ,(desugar body)]))]
+                                    [body (in-list (m 'body))])
+                           `[,formals ,(desugar body)]))]
         [(#%variable-reference)
          (if (and (pair? (correlated-e (cdr (correlated-e e))))
                   (set-member? box-syms (correlated-e (correlated-cadr e))))
@@ -294,18 +294,18 @@
 (define (compile-linklet c [name #f] [import-keys #f] [get-import (lambda (key) (values #f #f))] [serializable? #t])
   (define l
     (cond
-     [(linklet-compile-to-s-expr)
-      (marshal (correlated->datum c))]
-     [else
-      (define plain-c (desugar-linklet c))
-      (parameterize ([current-namespace cu-namespace]
-                     [current-eval orig-eval]
-                     [current-compile orig-compile])
-        ;; Use a vector to list the exported variables
-        ;; with the compiled bytecode
-        (linklet (compile plain-c)
-                 (marshal (extract-import-variables-from-expression c #:pairs? #f))
-                 (marshal (extract-export-variables-from-expression c #:pairs? #f))))]))
+      [(linklet-compile-to-s-expr)
+       (marshal (correlated->datum/lambda-name c))]
+      [else
+       (define plain-c (desugar-linklet c))
+       (parameterize ([current-namespace cu-namespace]
+                      [current-eval orig-eval]
+                      [current-compile orig-compile])
+         ;; Use a vector to list the exported variables
+         ;; with the compiled bytecode
+         (linklet (compile plain-c)
+                  (marshal (extract-import-variables-from-expression c #:pairs? #f))
+                  (marshal (extract-export-variables-from-expression c #:pairs? #f))))]))
   (if import-keys
       (values l import-keys) ; no imports added or removed
       l))
@@ -424,3 +424,77 @@
                 [(unreadable? c) (string->unreadable-symbol (unreadable-str c))]
                 [(void-value? c) (void)]
                 [else c]))))
+
+;; Like `correlated->datum`, but preserves 'inferred-name information
+;; by encoding it as a symbol in a `lambda` or `case-lambda` body.
+;; Remove any existing symbol in the name position that might
+;; otherwise be confused for the name. This conversion avoids parsing
+;; expressions in general by relying on the fact that bindings are
+;; renamed to avoid shadowing, `lambda`, `case-lambda`, or `quote`.
+(define (correlated->datum/lambda-name c)
+  (define (strip-potential-name-from-body body)
+    (define-correlated-match m body #:try '(begin (quote _) body bodys ...))
+    (cond
+      [(and (m)
+            (eq? 'begin (m 'begin))
+            (eq? 'quote (m 'quote)))
+       (strip-potential-name-from-body 
+        (if (null? (m 'bodys))
+            (m 'body)
+            `(begin ,@(m 'bodys))))]
+      [else body]))
+  (let correlated->datum/lambda-name ([c c])
+    (cond
+      [(and (pair? c)
+            (eq? (car c) 'lambda))
+       (define-correlated-match m c '(lambda args body))
+       `(lambda ,(correlated->datum (m 'args))
+          ,(correlated->datum/lambda-name
+            (strip-potential-name-from-body (m 'body))))]
+      [(and (pair? c)
+            (eq? (car c) 'case-lambda))
+       (define-correlated-match m c '(case-lambda [argss bodys] ...))
+       `(case-lambda
+          ,@(for/list ([args (in-list (m 'argss))]
+                       [body (in-list (m 'bodys))])
+              `[,(correlated->datum args)
+                ,(correlated->datum/lambda-name
+                  (strip-potential-name-from-body body))]))]
+      [(and (pair? c)
+            (eq? (car c) 'quote))
+       (correlated->datum c)]
+      [(pair? c)
+       (cons (correlated->datum/lambda-name (car c))
+             (correlated->datum/lambda-name (cdr c)))]
+      [(and (correlated? c)
+            (let ([e (correlated-e c)])
+              (and (pair? e)
+                   (or (eq? 'lambda (car e))
+                       (eq? 'case-lambda (car e)))))
+            (correlated-property c 'inferred-name))
+       => (lambda (name)
+            (cond
+              [(void? name)
+               ;; Don't try to hide the name after all
+               (correlated->datum/lambda-name (correlated-e c))]
+              [else
+               ;; Encode `name` as a symbol in the function body:
+               (define lam (correlated->datum/lambda-name (correlated-e c)))
+               (cond
+                 [(eq? 'lambda (car lam))
+                  (define-correlated-match m lam '(lambda args body))
+                  `(lambda ,(m 'args) (begin (quote ,name) ,(m 'body)))]
+                 [else
+                  (define-correlated-match m lam '(case-lambda [argss bodys] ...))
+                  (cond
+                    [(null? (m 'argss))
+                     ;; give up on naming an empty `case-lambda`
+                     lam]
+                    [else
+                     `(case-lambda
+                        [,(car (m 'argss)) (begin (quote ,name) ,(car (m 'bodys)))]
+                        ,@(cddr lam))])])]))]
+      [(correlated? c)
+       (correlated->datum/lambda-name (correlated-e c))]
+      [else
+       (correlated->datum c)])))
