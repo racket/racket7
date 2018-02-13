@@ -3683,6 +3683,7 @@ Scheme_Object *scheme_checked_integer_to_char(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_make_vector(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_hash_ref(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_hash_count(int argc, Scheme_Object *argv[]);
+Scheme_Object *scheme_checked_hash_count(int argc, Scheme_Object *argv[]);
 
 Scheme_Object *scheme_check_not_undefined (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_check_assign_not_undefined (int argc, Scheme_Object *argv[]);
@@ -3693,6 +3694,8 @@ Scheme_Object *scheme_chaperone_hash_table_copy(Scheme_Object *obj);
 void scheme_bad_vec_index(char *name, Scheme_Object *i, 
                           const char *what, Scheme_Object *vec, 
                           intptr_t bottom, intptr_t len);
+
+Scheme_Object *scheme_weak_box_value(Scheme_Object *obj);
 
 Scheme_Bucket_Table *scheme_make_weak_equal_table(void);
 Scheme_Bucket_Table *scheme_make_weak_eqv_table(void);

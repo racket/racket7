@@ -1867,8 +1867,12 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       jit_fixnum_l(dest, JIT_R0);
       
       return 1;
-    } else if (IS_NAMED_PRIM(rator, "unbox")) {
+    } else if (IS_NAMED_PRIM(rator, "unbox")
+               || IS_NAMED_PRIM(rator, "weak-box-value")) {
       GC_CAN_IGNORE jit_insn *reffail, *ref, *refdone;
+      int for_weak;
+
+      for_weak = IS_NAMED_PRIM(rator, "weak-box-value");
 
       LOG_IT(("inlined unbox\n"));
 
@@ -1886,20 +1890,35 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       __END_TINY_JUMPS__(1);
 
       reffail = jit_get_ip();
-      (void)jit_calli(sjc.unbox_code);
-      jit_movr_p(dest, JIT_R0);
+      if (for_weak)
+        (void)jit_calli(sjc.weak_box_value_code); /* always raises an exception */
+      else
+        (void)jit_calli(sjc.unbox_code);
+      if (!for_weak)
+        jit_movr_p(dest, JIT_R0);
 
       __START_TINY_JUMPS__(1);
-      refdone = jit_jmpi(jit_forward());
+      if (!for_weak)
+        refdone = jit_jmpi(jit_forward());
       mz_patch_branch(ref);
-      (void)mz_bnei_t(reffail, JIT_R0, scheme_box_type, JIT_R1);
+      (void)mz_bnei_t(reffail, JIT_R0, (for_weak ? scheme_weak_box_type : scheme_box_type), JIT_R1);
       __END_TINY_JUMPS__(1);
 
       (void)jit_ldxi_p(dest, JIT_R0, &SCHEME_BOX_VAL(0x0));
-      
-      __START_TINY_JUMPS__(1);
-      mz_patch_ucbranch(refdone);
-      __END_TINY_JUMPS__(1);
+
+      if (for_weak) {
+        __START_TINY_JUMPS__(1);
+        ref = jit_bnei_p(jit_forward(), dest, NULL);
+        jit_movi_p(dest, scheme_false);
+        mz_patch_branch(ref);
+        __END_TINY_JUMPS__(1);
+      }
+
+      if (!for_weak) {
+        __START_TINY_JUMPS__(1);
+        mz_patch_ucbranch(refdone);
+        __END_TINY_JUMPS__(1);
+      }
 
       return 1;
     } else if (IS_NAMED_PRIM(rator, "unsafe-unbox*")) {

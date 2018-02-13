@@ -719,11 +719,11 @@ scheme_init_list (Scheme_Startup_Env *env)
 						    "make-weak-box",
 						    1, 1),
 			     env);
-  scheme_addto_prim_instance("weak-box-value",
-			     scheme_make_immed_prim(weak_box_value,
-						    "weak-box-value",
-						    1, 2),
-			     env);
+  
+  p = scheme_make_immed_prim(weak_box_value, "weak-box-value", 1, 2);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  scheme_addto_prim_instance("weak-box-value", p, env);
+
   scheme_addto_prim_instance("weak-box?",
 			     scheme_make_folding_prim(weak_boxp,
 						      "weak-box?",
@@ -2561,7 +2561,7 @@ static Scheme_Object *gen_hash_table_get(int argc, Scheme_Object *argv[])
     return hash_failed(argc, argv);
 }
 
-Scheme_Object *scheme_checked_hash_ref(int argc, Scheme_Object *argv[])
+Scheme_Object *scheme_checked_hash_ref(int argc, Scheme_Object *argv[]) XFORM_ASSERT_NO_CONVERSION
 {
   Scheme_Object *v;
 
@@ -3701,6 +3701,13 @@ static Scheme_Object *weak_box_value(int argc, Scheme_Object *argv[])
     return ((argc > 1) ? argv[1] : scheme_false);
   else
     return o;
+}
+
+Scheme_Object *scheme_weak_box_value(Scheme_Object *obj)
+{
+  Scheme_Object *a[1];
+  a[0] = obj;
+  return weak_box_value(1, a);
 }
 
 static Scheme_Object *weak_boxp(int argc, Scheme_Object *argv[])

@@ -647,7 +647,7 @@ int scheme_is_simple(Scheme_Object *obj, int depth, int just_markless, mz_jit_st
     {
       Scheme_Object *rator;
       rator = scheme_specialize_to_constant(((Scheme_App_Rec *)obj)->args[0], jitter,
-                                            stack_start +  ((Scheme_App_Rec *)obj)->num_args);
+                                            stack_start + ((Scheme_App_Rec *)obj)->num_args);
       if (scheme_inlined_nary_prim(rator, obj, jitter)
           && !SAME_OBJ(rator, scheme_values_proc))
         return 1;

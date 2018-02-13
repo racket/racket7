@@ -93,6 +93,7 @@ define_ts_s_s(scheme_byte_string_length, FSRC_MARKS)
 define_ts_ss_s(scheme_string_eq_2, FSRC_MARKS)
 define_ts_ss_s(scheme_byte_string_eq_2, FSRC_MARKS)
 define_ts_s_s(scheme_unbox, FSRC_MARKS)
+define_ts_s_s(scheme_weak_box_value, FSRC_MARKS)
 define_ts_si_s(scheme_struct_ref, FSRC_MARKS)
 define_ts_sis_v(scheme_struct_set, FSRC_MARKS)
 define_ts_Sii_s(unsafe_struct_refs, FSRC_MARKS)
@@ -206,6 +207,7 @@ define_ts_s_s(scheme_box, FSRC_OTHER)
 # define ts_scheme_checked_make_flrectangular scheme_checked_make_flrectangular
 # define ts_scheme_make_complex scheme_make_complex
 # define ts_scheme_unbox scheme_unbox
+# define ts_scheme_weak_box_value scheme_weak_box_value
 # define ts_scheme_set_box scheme_set_box
 # define ts_scheme_box_cas scheme_box_cas
 # define ts_scheme_checked_vector_cas scheme_checked_vector_cas
