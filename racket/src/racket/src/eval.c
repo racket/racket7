@@ -3551,6 +3551,51 @@ Scheme_Object *scheme_tail_eval_expr(Scheme_Object *obj)
   return scheme_tail_eval(obj);
 }
 
+Scheme_Env *scheme_primitive_module(Scheme_Object *name, Scheme_Env *for_env)
+{
+  Scheme_Env *env;
+  Scheme_Instance *inst;
+  Scheme_Hash_Tree *protected;
+
+  /* An environment wrapper just for filling in the instance: */
+  env = MALLOC_ONE_TAGGED(Scheme_Env);
+  env->so.type = scheme_env_type;
+  env->namespace = for_env->namespace; /* records target namespace, not instance's namespace! */
+
+  inst = scheme_make_instance(name, NULL);
+  env->instance = (Scheme_Instance *)inst;
+
+  protected = scheme_make_hash_tree(0);
+  env->protected = protected;
+
+  return env;
+}
+
+void scheme_finish_primitive_module(Scheme_Env *env)
+{
+  Scheme_Object *proc, *a[5];
+  
+  proc = scheme_get_startup_export("declare-primitive-module!");
+  a[0] = env->instance->name;
+  a[1] = (Scheme_Object *)env->instance;
+  a[2] = env->namespace; /* target namespace */
+  a[3] = (Scheme_Object *)env->protected;
+  a[4] = (env->cross_phase ? scheme_true : scheme_false);
+  scheme_apply(proc, 5, a);
+}
+
+void scheme_set_primitive_module_phaseless(Scheme_Env *env, int phaseless)
+{
+  env->cross_phase = phaseless;
+}
+
+void scheme_protect_primitive_provide(Scheme_Env *env, Scheme_Object *name)
+{
+  Scheme_Hash_Tree *protected;
+  protected = scheme_hash_tree_set(env->protected, name, scheme_true);
+  env->protected = protected;
+}
+
 /* local functions */
 
 static Scheme_Object *read_syntax(Scheme_Object *port, Scheme_Object *src)

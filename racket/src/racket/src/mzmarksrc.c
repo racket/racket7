@@ -917,6 +917,7 @@ env_val {
 
   gcMARK2(e->namespace, gc);
   gcMARK2(e->instance, gc);
+  gcMARK2(e->protected, gc);
  size:
   gcBYTES_TO_WORDS(sizeof(Scheme_Env));
 }

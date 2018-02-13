@@ -15,6 +15,7 @@
          "namespace/attach.rkt"
          "namespace/api-module.rkt"
          "namespace/core.rkt"
+         "namespace/primitive-module.rkt"
          "expand/missing-module.rkt"
          "boot/kernel.rkt"
          "boot/read-primitive.rkt"
@@ -93,7 +94,9 @@
          module-path-index-join
          resolved-module-path?
          module-path?
-         
+
+         declare-primitive-module! ; to support "extensions"
+
          embedded-load ; for -k
          
          ;; This functions are provided for basic testing

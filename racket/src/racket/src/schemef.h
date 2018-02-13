@@ -1026,6 +1026,11 @@ MZ_EXTERN Scheme_Object *scheme_builtin_value(const char *name); /* convenience 
 MZ_EXTERN void scheme_set_global_bucket(char *proc, Scheme_Bucket *var, Scheme_Object *val,
                                         int set_undef);
 
+MZ_EXTERN Scheme_Env *scheme_primitive_module(Scheme_Object *name, Scheme_Env *for_env);
+MZ_EXTERN void scheme_finish_primitive_module(Scheme_Env *env);
+MZ_EXTERN void scheme_set_primitive_module_phaseless(Scheme_Env *env, int phaseless);
+MZ_EXTERN void scheme_protect_primitive_provide(Scheme_Env *env, Scheme_Object *name);
+
 MZ_EXTERN Scheme_Object *scheme_make_modidx(Scheme_Object *path,
                                             Scheme_Object *base,
                                             Scheme_Object *resolved);

@@ -3205,6 +3205,7 @@ static int env_val_MARK(void *p, struct NewGC *gc) {
 
   gcMARK2(e->namespace, gc);
   gcMARK2(e->instance, gc);
+  gcMARK2(e->protected, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else
@@ -3220,6 +3221,7 @@ static int env_val_FIXUP(void *p, struct NewGC *gc) {
 
   gcFIXUP2(e->namespace, gc);
   gcFIXUP2(e->instance, gc);
+  gcFIXUP2(e->protected, gc);
 # ifdef GC_NO_SIZE_NEEDED_FROM_PROCS
   return 0;
 # else

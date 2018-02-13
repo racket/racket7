@@ -3174,6 +3174,9 @@ struct Scheme_Env {
   Scheme_Object so; /* scheme_env_type */
   Scheme_Object *namespace;
   Scheme_Instance *instance;
+  /* Used for setting up "extensions" */
+  int cross_phase;
+  Scheme_Hash_Tree *protected;
 };
 
 /* A Scheme_Startup_Env holds tables of primitives */
