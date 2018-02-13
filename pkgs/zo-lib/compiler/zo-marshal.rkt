@@ -75,7 +75,7 @@
   (define pre-bundle-bytess
     (sort unsorted-pre-bundle-bytess
           (lambda (a b)
-            (let loop ([a a] [b b])
+            (let loop ([a (bundle-bytes-name-list a)] [b (bundle-bytes-name-list b)])
               (cond
                [(null? a) #f]
                [(null? b) #t]
@@ -819,9 +819,9 @@
                               [import-shape (in-list import-shapes)])
                       import-shape))
                #f
-               (for/vector ([import-shapes (in-list import-shapess)])
-                 (for/vector ([import-shape (in-list import-shapes)])
-                   (encode-shape import-shape)))))]))
+               (for*/vector ([import-shapes (in-list import-shapess)]
+                             [import-shape (in-list import-shapes)])
+                 (encode-shape import-shape))))]))
 
 (define (out-lam expr out)  
   (match expr

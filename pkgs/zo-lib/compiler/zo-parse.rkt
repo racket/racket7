@@ -751,7 +751,7 @@
         <
         #:key sub-info-start))
      (linkl-directory
-      (for/hasheq ([sub-info (in-list sub-infos)])
+      (for/hash ([sub-info (in-list sub-infos)])
         (define pos (file-position port))
         (unless (= (- pos init-pos) (sub-info-start sub-info))
           (error 'zo-parse 

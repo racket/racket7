@@ -143,14 +143,14 @@
   (lambda (stx)
     (syntax-case stx ()
       [(_ max-let-depth binding-namess prefix code)
-       #'(linkl-directory (hasheq '() (linkl-bundle
-                                       (hasheq 0 (linkl 'top
-                                                        '()
-                                                        '()
-                                                        '()
-                                                        '()
-                                                        '()
-                                                        #hasheq()
-                                                        (list code)
-                                                        (add1 max-let-depth)
-                                                        #f)))))])))
+       #'(linkl-directory (hash '() (linkl-bundle
+                                     (hasheq 0 (linkl 'top
+                                                      '()
+                                                      '()
+                                                      '()
+                                                      '()
+                                                      '()
+                                                      #hasheq()
+                                                      (list code)
+                                                      (add1 max-let-depth)
+                                                      #f)))))])))
