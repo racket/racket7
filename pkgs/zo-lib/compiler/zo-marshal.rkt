@@ -570,7 +570,7 @@
         (out-anything (protect-quote body) out)]
        [(struct let-rec (procs body))
         (out-byte CPT_LETREC out)
-        (out-number count out)
+        (out-number (length procs) out)
         (for ([proc (in-list procs)]) (out-anything proc out))
         (out-anything (protect-quote body) out)]
        [(struct install-value (count pos boxes? rhs body))
@@ -915,6 +915,8 @@
 (define (encode-shape constantness)
   (define (to-sym #:prefix [prefix "struct"] n)
     (string->symbol (format "~a~a" prefix n)))
+  (define (struct-count-shift n) (arithmetic-shift n 5))
+  (define (add-authentic n authentic?) (bitwise-ior n (if authentic? #x10 0)))
   (cond
    [(eq? constantness 'constant) #t]
    [(eq? constantness 'fixed) (void)]
@@ -938,18 +940,19 @@
         (bitwise-ior (arithmetic-shift a 1) 
                      (if (function-shape-preserves-marks? constantness) 1 0))]))]
    [(struct-type-shape? constantness)
-    (to-sym (arithmetic-shift (struct-type-shape-field-count constantness)
-                              3))]
+    (to-sym (add-authentic (struct-count-shift (struct-type-shape-field-count constantness))
+                           (struct-type-shape-authentic? constantness)))]
    [(constructor-shape? constantness)
-    (to-sym (bitwise-ior 1 (arithmetic-shift (constructor-shape-arity constantness)
-                                             3)))]
-   [(predicate-shape? constantness) (to-sym 2)]
+    (to-sym (bitwise-ior 1 (struct-count-shift (constructor-shape-arity constantness))))]
+   [(predicate-shape? constantness) (to-sym (add-authentic 2 (predicate-shape-authentic? constantness)))]
    [(accessor-shape? constantness)
-    (to-sym (bitwise-ior 3 (arithmetic-shift (accessor-shape-field-count constantness)
-                                             3)))]
+    (to-sym (bitwise-ior 3 (add-authentic
+                            (struct-count-shift (accessor-shape-field-count constantness))
+                            (accessor-shape-authentic? constantness))))]
    [(mutator-shape? constantness)
-    (to-sym (bitwise-ior 4 (arithmetic-shift (mutator-shape-field-count constantness)
-                                             3)))]
+    (to-sym (bitwise-ior 4 (add-authentic
+                            (struct-count-shift (mutator-shape-field-count constantness))
+                            (mutator-shape-authentic? constantness))))]
    [(struct-type-property-shape? constantness)
     (to-sym #:prefix "prop" 
             (if (struct-type-property-shape-has-guard? constantness)

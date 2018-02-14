@@ -157,12 +157,14 @@
    [(and (symbol? shape)
          (regexp-match? #rx"^struct" (symbol->string shape)))
     (define n (string->number (substring (symbol->string shape) 6)))
+    (define (authentic-shape? n) (bitwise-bit-set? n 4))
+    (define (shape-count-shift n) (arithmetic-shift n -5))
     (case (bitwise-and n #x7)
-      [(0) (make-struct-type-shape (arithmetic-shift n -3))]
-      [(1) (make-constructor-shape (arithmetic-shift n -3))]
-      [(2) (make-predicate-shape)]
-      [(3) (make-accessor-shape (arithmetic-shift n -3))]
-      [(4) (make-mutator-shape (arithmetic-shift n -3))]
+      [(0) (make-struct-type-shape (shape-count-shift n) (authentic-shape? n))]
+      [(1) (make-constructor-shape (shape-count-shift n))]
+      [(2) (make-predicate-shape (authentic-shape? n))]
+      [(3) (make-accessor-shape (shape-count-shift n) (authentic-shape? n))]
+      [(4) (make-mutator-shape (shape-count-shift n) (authentic-shape? n))]
       [else (make-struct-other-shape)])]
    [(and (symbol? shape)
          (regexp-match? #rx"^prop" (symbol->string shape)))

@@ -38,7 +38,7 @@
      (apply
       append
       (for/list ([(k v) (in-hash (linkl-directory-table top))])
-        (list '#:name k '#:bundle (decompile v)))))]
+        (list '#:name k '#:bundle (decompile v #:to-linklets? to-linklets?)))))]
    [(linkl-bundle? top)
     (cons
      'linklet-bundle
@@ -49,7 +49,7 @@
           [(stx-data)
            (list '#:stx-data (decompile-data-linklet v))]
           [else
-           (list '#:key k '#:value (decompile v))]))))]
+           (list '#:key k '#:value (decompile v #:to-linklets? to-linklets?))]))))]
    [(linkl? top)
     (decompile-linklet top)]
    [else `(quote ,top)]))
@@ -68,6 +68,13 @@
      `(linklet
        ,importss
        ,exports
+       '(import-shapes: ,@(for/list ([imports (in-list importss)]
+                                     [import-shapes (in-list import-shapess)]
+                                     #:when #t
+                                     [import (in-list imports)]
+                                     [import-shape (in-list import-shapes)]
+                                     #:when import-shape)
+                            `[,import ,import-shape]))
        ,@(for/list ([form (in-list body)])
            (decompile-form form globs '(#%globals) closed)))]))
 

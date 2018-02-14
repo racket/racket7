@@ -148,11 +148,11 @@ Consumes the result of parsing bytecode and returns an S-expression
 
 @defmodule[compiler/zo-marshal]
 
-@defproc[(zo-marshal-to [top compilation-top?] [out output-port?]) void?]{
+@defproc[(zo-marshal-to [top (or/c linkl-directory? linkl-bundle?)] [out output-port?]) void?]{
 
 Consumes a representation of bytecode and writes it to @racket[out].}
 
-@defproc[(zo-marshal [top compilation-top?]) bytes?]{
+@defproc[(zo-marshal [top (or/c linkl-directory? linkl-bundle?)]) bytes?]{
 
 Consumes a representation of bytecode and generates a byte string for
 the marshaled bytecode.}
@@ -160,4 +160,3 @@ the marshaled bytecode.}
 @; ------------------------------------------------------------
 
 @include-section["zo-struct.scrbl"]
-

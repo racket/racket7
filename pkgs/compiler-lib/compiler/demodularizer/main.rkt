@@ -1,6 +1,9 @@
 #lang racket/base
 (require compiler/cm
-         compiler/zo-marshal)
+         "find.rkt"
+         "name.rkt"
+         "merge.rkt"
+         "write.rkt")
 
 (provide current-excluded-modules
          garbage-collect-toplevels-enabled
@@ -13,5 +16,22 @@
 
 (define logger (make-logger 'demodularizer (current-logger)))
 
-(define (demodularize file-to-batch [output-file #f])
-  (error "not yet reimplemented"))
+(define (demodularize input-file [output-file #f])
+  (parameterize ([current-logger logger])
+
+    (log-info "Compiling module")
+    (parameterize ([current-namespace (make-base-empty-namespace)])
+      (managed-compile-zo input-file))
+
+    (log-info "Finding modules")
+    (define runs (find-modules input-file))
+
+    (log-info "Selecting names")
+    (define-values (names internals lifts imports) (select-names runs))
+
+    (log-info "Merging linklets")
+    (define bundle (merge-linklets runs names internals lifts imports))
+
+    (log-info "Writing bytecode")
+    (define output-file (path-replace-suffix input-file #"_rkt_merged.zo"))
+    (write-module output-file bundle)))

@@ -29,10 +29,13 @@
 
 (define-form-struct struct-shape ())
 (define-form-struct (constructor-shape struct-shape) ([arity exact-nonnegative-integer?]))
-(define-form-struct (predicate-shape struct-shape) ())
-(define-form-struct (accessor-shape struct-shape) ([field-count exact-nonnegative-integer?]))
-(define-form-struct (mutator-shape struct-shape) ([field-count exact-nonnegative-integer?]))
-(define-form-struct (struct-type-shape struct-shape) ([field-count exact-nonnegative-integer?]))
+(define-form-struct (predicate-shape struct-shape) ([authentic? boolean?]))
+(define-form-struct (accessor-shape struct-shape) ([field-count exact-nonnegative-integer?]
+                                                   [authentic? boolean?]))
+(define-form-struct (mutator-shape struct-shape) ([field-count exact-nonnegative-integer?]
+                                                  [authentic? boolean?]))
+(define-form-struct (struct-type-shape struct-shape) ([field-count exact-nonnegative-integer?]
+                                                      [authentic? boolean?]))
 (define-form-struct (struct-type-property-shape struct-shape) ([has-guard? boolean?]))
 (define-form-struct (property-predicate-shape struct-shape) ())
 (define-form-struct (property-accessor-shape struct-shape) ())
