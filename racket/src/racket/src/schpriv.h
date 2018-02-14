@@ -3923,7 +3923,8 @@ Scheme_Object *scheme_place_make_async_channel();
 void scheme_place_async_channel_send(Scheme_Object *ch, Scheme_Object *uo);
 Scheme_Object *scheme_place_async_channel_receive(Scheme_Object *ch);
 #endif
-
+int scheme_is_predefined_module_path(Scheme_Object *v);
+  
 void scheme_process_global_lock(void);
 void scheme_process_global_unlock(void);
 

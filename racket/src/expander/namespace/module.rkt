@@ -31,6 +31,7 @@
          module-requires
          module-provides
          module-primitive?
+         module-is-predefined?
          module-cross-phase-persistent?
          module-no-protected?
          module-inspector
@@ -70,7 +71,7 @@
                 prepare-instance  ; box namespace phase-shift bulk-binding-registry inspector -> any
                 instantiate-phase ; box namespace phase-shift phase-level bulk-binding-registry inspector -> any
                 primitive?      ; inline variable values in compiled code?
-                predefined?     ; always defined on startup?
+                is-predefined?  ; always defined on startup?
                 cross-phase-persistent?
                 no-protected?   ; short cut for checking protected access
                 inspector       ; declaration-time inspector

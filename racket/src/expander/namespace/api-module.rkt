@@ -34,7 +34,7 @@
   (define ns (current-namespace))
   (define name (reference->resolved-module-path mod #:load? #f))
   (define m (namespace->module ns name))
-  (and m (module-primitive? m)))
+  (and m (module-is-predefined? m)))
 
 (define (module-> extract who mod [load? #f])
   (unless (module-reference? mod)

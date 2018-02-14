@@ -24,7 +24,13 @@
 (provide eval-module
          compiled-module->declaration-instance
          compiled-module->h+declaration-instance
-         compiled-module->h)
+         compiled-module->h
+         current-module-declare-as-predefined)
+
+;; Modules that are defined via `embedded-load` can be "predefined",
+;; because they can be defined in every place as the embedded load
+;; is replayed in each place
+(define current-module-declare-as-predefined (make-parameter #f))
 
 (define (eval-module c
                      #:namespace [ns (current-namespace)]
@@ -128,6 +134,7 @@
                               #:min-phase-level min-phase
                               #:max-phase-level max-phase
                               #:cross-phase-persistent? cross-phase-persistent?
+                              #:predefined? (current-module-declare-as-predefined)
                               #:submodule-names (append pre-submodule-names post-submodule-names)
                               #:supermodule-name supermodule-name
                               #:get-all-variables (lambda () (get-all-variables phases-h))

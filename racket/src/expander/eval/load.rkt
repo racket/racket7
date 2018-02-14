@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/private/check
          racket/private/executable-path
+         "module.rkt"
          "parameter.rkt")
 
 (provide load
@@ -37,7 +38,7 @@
   ((current-load/use-compiled) f #f))
 
 ;; used for the -k command-line argument:
-(define (embedded-load start end str)
+(define (embedded-load start end str as-predefined?)
   (let* ([s (if str
                 str
                 (let* ([sp (find-system-path 'exec-file)] 
@@ -56,5 +57,6 @@
                               [read-on-demand-source #t])
                  (read p))])
         (unless (eof-object? e)
-          ((current-eval) e)
+          (parameterize ([current-module-declare-as-predefined as-predefined?])
+            ((current-eval) e))
           (loop))))))

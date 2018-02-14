@@ -82,6 +82,7 @@
          namespace-require
          dynamic-require         
          module-declared?
+         module-predefined?
          module->language-info
          maybe-raise-missing-module
          
