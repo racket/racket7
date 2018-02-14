@@ -3723,7 +3723,7 @@ Scheme_Object *scheme_eval_string_multi_with_prompt(const char *str, Scheme_Env 
 
 void scheme_embedded_load(intptr_t len, const char *desc, int predefined)
 {
-  Scheme_Object *s, *e, *a[4], *eload, *mods;
+  Scheme_Object *s, *e, *a[4], *eload;
   eload = scheme_get_startup_export("embedded-load");
   if (len < 0) {
     /* description mode */
@@ -3740,7 +3740,7 @@ void scheme_embedded_load(intptr_t len, const char *desc, int predefined)
     a[2] = s;
   }
   a[3] = (predefined ? scheme_true : scheme_false);
-  mods = scheme_apply(eload, 4, a);
+  (void)scheme_apply(eload, 4, a);
 }
 
 int scheme_is_predefined_module_path(Scheme_Object *m)
