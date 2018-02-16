@@ -441,7 +441,7 @@
                    [scope-ops (hash-set (propagation-scope-ops prop)
                                         sc
                                         'add)])
-      (propagation prev-scs prev-smss (hasheq sc 'add) 
+      (propagation prev-scs prev-smss (hasheq sc 'add)
                    prev-mss #f #f
                    prop)))
 
@@ -576,6 +576,8 @@
                        base-prop))])]
    [else
     (define new-ops
+      ;; [could call `cache-or-reuse-hash` here (or a copy for propagations),
+      ;;  but that doesn't seem to same time or space overall]
       (for/fold ([ops (propagation-scope-ops base-prop)]) ([(sc op) (in-immutable-hash (propagation-scope-ops prop))])
         (case op
           [(add) (hash-set ops sc 'add)]
@@ -713,7 +715,7 @@
 ;; a phase-specific representative from each multi-scope.
 (define (syntax-scope-set s phase)
   (scope-set-at-fallback s (fallback-first (syntax-shifted-multi-scopes s)) phase))
-  
+
 (define (scope-set-at-fallback s smss phase)
   (for*/fold ([scopes (syntax-scopes s)]) ([sms (in-set smss)]
                                            #:when (or (label-phase? phase)
