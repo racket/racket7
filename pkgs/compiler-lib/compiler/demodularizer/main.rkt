@@ -51,4 +51,13 @@
     (log-info "Writing bytecode")
     (define output-file (or given-output-file
                             (path-add-suffix input-file #"_merged.zo")))
-    (write-module output-file bundle)))
+    (write-module output-file bundle)
+
+    (when (recompile-enabled)
+      (log-info "Recompiling and rewriting bytecode")
+      (define zo (compiled-expression-recompile
+                  (parameterize ([read-accept-compiled #t])
+                    (call-with-input-file* output-file read))))
+      (call-with-output-file* output-file
+                              #:exists 'replace
+                              (lambda (out) (write zo out))))))

@@ -2272,6 +2272,7 @@ static Scheme_Object *generate_lifted_name(Scheme_Hash_Table *used_names, int se
       scheme_hash_set(used_names, n, scheme_true);
       return n;
     }
+    search_start++;
   }
 }
 
@@ -2802,7 +2803,7 @@ typedef struct Unresolve_Info {
 
   Scheme_IR_Toplevel **toplevels;
   Scheme_Object *definitions;
-  int lift_offset, lift_to_local;
+  int lift_offset;
   Scheme_Hash_Table *ref_lifts;
 } Unresolve_Info;
 
@@ -2842,6 +2843,8 @@ static Unresolve_Info *new_unresolve_info(Scheme_Linklet *linklet, Scheme_Object
   ui->num_toplevels = (SCHEME_LINKLET_PREFIX_PREFIX
                        + linklet->num_total_imports
                        + ui->num_defns);
+  ui->lift_offset = (ui->num_toplevels
+                     - linklet->num_lifts);
 
   return ui;
 }
@@ -3102,24 +3105,23 @@ static Scheme_Object *unresolve_apply_values(Scheme_Object *e, Unresolve_Info *u
 
 static Scheme_Object *unresolve_define_values(Scheme_Object *e, Unresolve_Info *ui)
 {
-  Scheme_Object *vars = scheme_null;
   Scheme_Object *vec, *val, *tl;
   int i;
+
+  vec = scheme_make_vector(SCHEME_VEC_SIZE(e), NULL);
+  vec->type = scheme_define_values_type;
 
   LOG_UNRESOLVE(printf("define-values-size!!!: %d\n", (int)SCHEME_VEC_SIZE(e)));
   for (i = SCHEME_VEC_SIZE(e); --i;) {
     LOG_UNRESOLVE(printf("define-values: %d\n", SCHEME_TYPE(SCHEME_VEC_ELS(e)[i])));
     tl = unresolve_toplevel(SCHEME_VEC_ELS(e)[i], ui);
     if (!tl) return_NULL;
-    vars = cons(tl, vars);
+    SCHEME_VEC_ELS(vec)[i] = tl;
   }
   val = unresolve_expr(SCHEME_VEC_ELS(e)[0], ui, 0);
   if (!val) return_NULL;
+  SCHEME_VEC_ELS(vec)[0] = val;
 
-  vec = scheme_make_vector(2, NULL);
-  vec->type = scheme_define_values_type;
-  SCHEME_VEC_ELS(vec)[0] = vars;
-  SCHEME_VEC_ELS(vec)[1] = val;
   return vec;
 }
 
@@ -3848,8 +3850,13 @@ static Scheme_Object *unresolve_expr(Scheme_Object *e, Unresolve_Info *ui, int a
       }
 
       b = SCHEME_PTR2_VAL(e);
+      MZ_ASSERT(SCHEME_FALSEP(b) || (SAME_TYPE(SCHEME_TYPE(b), scheme_toplevel_type)
+                                     && !SCHEME_TOPLEVEL_POS(b)));
       b = unresolve_expr(b, ui, 0);
       if (!b) return_NULL;
+      MZ_ASSERT(SCHEME_FALSEP(b) || (SAME_TYPE(SCHEME_TYPE(b), scheme_ir_toplevel_type)
+                                     && (((Scheme_IR_Toplevel *)b)->instance_pos == -1)
+                                     && (((Scheme_IR_Toplevel *)b)->variable_pos == -1)));
       LOG_UNRESOLVE(printf(" (b) %d\n", b->type));
 
       o = scheme_alloc_object();
@@ -4096,7 +4103,7 @@ void locate_cyclic_closures(Scheme_Object *e, Unresolve_Info *ui)
 
 static void convert_closures_to_definitions(Unresolve_Info *ui)
 {
-  Scheme_Object *d, *vars, *val;
+  Scheme_Object *d, *var, *val;
   Scheme_Lambda *lam;
   int i;
   
@@ -4105,11 +4112,11 @@ static void convert_closures_to_definitions(Unresolve_Info *ui)
       MZ_ASSERT(SAME_TYPE(SCHEME_TYPE(ui->closures->vals[i]), scheme_ir_toplevel_type));
       d = scheme_make_vector(2, NULL);
       d->type = scheme_define_values_type;
-      vars = cons(ui->closures->vals[i], scheme_null);
+      var = ui->closures->vals[i];
       lam = SCHEME_CLOSURE_CODE(ui->closures->keys[i]);
       val = unresolve_lambda(lam, ui);
-      SCHEME_VEC_ELS(d)[0] = vars;
-      SCHEME_VEC_ELS(d)[1] = val;
+      SCHEME_VEC_ELS(d)[0] = val;
+      SCHEME_VEC_ELS(d)[1] = var;
       d = cons(d, ui->definitions);
       ui->definitions = d;
     }
@@ -4122,21 +4129,32 @@ Scheme_Linklet *scheme_unresolve_linklet(Scheme_Linklet *linklet, int comp_flags
    (for top levels and syntax literals) in addition to the code. */
 {
   Scheme_Linklet *new_linklet;
-  Scheme_Object *bs, *bs2, *ds;
+  Scheme_Object *bs, *bs2, *ds, *imports;
   Unresolve_Info *ui;
   Scheme_IR_Toplevel **toplevels, *tl;
-  int i, cnt, len;
+  int i, j, cnt, len;
 
   new_linklet = MALLOC_ONE_TAGGED(Scheme_Linklet);
   memcpy(new_linklet, linklet, sizeof(Scheme_Linklet));
 
   ui = new_unresolve_info(new_linklet, NULL, NULL, comp_flags);
 
-  cnt = SCHEME_VEC_SIZE(linklet->defns);
+  cnt = ui->num_toplevels;
   toplevels = MALLOC_N(Scheme_IR_Toplevel *, cnt);
-  for (i = 0; i < cnt; i++) {
-    tl = scheme_make_ir_toplevel(-1, i, 0);
-    toplevels[i] = tl;
+  tl = scheme_make_ir_toplevel(-1, -1, 0);
+  i = 0;
+  toplevels[i++] = tl;
+  for (j = 0; j < SCHEME_VEC_SIZE(linklet->importss); j++) {
+    int k;
+    imports = SCHEME_VEC_ELS(linklet->importss)[j];
+    for (k = 0; k < SCHEME_VEC_SIZE(imports); k++) {
+      tl = scheme_make_ir_toplevel(j, k, 0);
+      toplevels[i++] = tl;
+    }
+  }
+  for (j = 0; i < cnt; j++) {
+    tl = scheme_make_ir_toplevel(-1, j, 0);
+    toplevels[i++] = tl;
   }
   ui->toplevels = toplevels;
   

@@ -6,6 +6,7 @@
          "../eval/parameter.rkt"
          "../eval/collection.rkt"
          (prefix-in wrapper: "../eval/api.rkt")
+         "../compile/recompile.rkt"
          "../namespace/namespace.rkt"
          "../namespace/api.rkt"
          "../namespace/attach.rkt"
@@ -56,7 +57,9 @@
           'module-compiled-imports module-compiled-imports
           'module-compiled-exports module-compiled-exports
           'module-compiled-indirect-exports module-compiled-indirect-exports
-                    
+
+          'compiled-expression-recompile compiled-expression-recompile
+
           'make-empty-namespace make-empty-namespace
 
           'namespace-attach-module namespace-attach-module

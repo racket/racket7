@@ -2,7 +2,8 @@
 (require "context.rkt"
          "top.rkt"
          "multi-top.rkt"
-         "module.rkt")
+         "module.rkt"
+         "recompile.rkt")
 
 ;; Compilation of expanded code produces an S-expression (but enriched
 ;; with source locations and properties) where run-time primitive are
@@ -66,4 +67,6 @@
          compile-top
          compiled-tops->compiled-top
 
-         compile-module)
+         compile-module
+
+         compiled-expression-recompile)

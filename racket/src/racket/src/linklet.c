@@ -79,7 +79,6 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
                                                        Scheme_Object *name,
                                                        Scheme_Object **_import_keys,
                                                        Scheme_Object *get_import);
-static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet);
 
 static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
                                                  int num_instances, Scheme_Instance **instances,
@@ -1094,7 +1093,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
     linklet = scheme_compile_linklet(form, set_undef, (_import_keys ? *_import_keys : NULL));
     linklet = scheme_letrec_check_linklet(linklet);
   } else {
-    linklet = clone_linklet(linklet);
+    linklet = scheme_unresolve_linklet(linklet, (set_undef ? COMP_ALLOW_SET_UNDEFINED : 0));
   }
   linklet->name = name;
   linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, _import_keys, get_import);
@@ -1123,16 +1122,6 @@ Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form, Scheme_
   return compile_and_or_optimize_linklet(form, NULL, name, NULL, NULL);
 }
 
-static Scheme_Linklet *clone_linklet(Scheme_Linklet *linklet)
-{
-  Scheme_Linklet *linklet2;
-
-  linklet2 = MALLOC_ONE_TAGGED(Scheme_Linklet);
-  memcpy(linklet2, linklet, sizeof(Scheme_Linklet));
-
-  return linklet2;
-}
-  
 /*========================================================================*/
 /*                          instantiating linklets                        */
 /*========================================================================*/
