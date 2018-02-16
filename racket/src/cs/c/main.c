@@ -63,6 +63,12 @@ static char *get_self_path()
 }
 #endif
 
+#ifdef NO_GET_SEGMENT_OFFSET
+static long get_segment_offset()
+{
+  return 0;
+}
+#endif
 
 #ifndef do_pre_filter_cmdline_arguments
 # define do_pre_filter_cmdline_arguments(argc, argv) /* empty */

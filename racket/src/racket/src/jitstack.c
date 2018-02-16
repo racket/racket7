@@ -198,7 +198,8 @@ Scheme_Object *scheme_native_stack_trace(void)
   }
 
 #ifdef MZ_USE_DWARF_LIBUNWIND
-  unw_getcontext(&cx);
+  if (unw_getcontext(&cx) != 0)
+    return NULL;
   unw_init_local(&c, &cx);
   unw_set_safe_pointer_range(&c, stack_start, real_stack_end);
   use_unw = 1;

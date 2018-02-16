@@ -454,8 +454,5 @@ static char *extract_configdir()
 }
 
 #if !defined(OS_X) && !defined(DOS_FILE_SYSTEM)
-static long get_segment_offset()
-{
-  return 0;
-}
+# define NO_GET_SEGMENT_OFFSET
 #endif
