@@ -53,6 +53,10 @@ READ_ONLY Scheme_Object *scheme_unsafe_unbox_proc;
 ROSYM static Scheme_Object *weak_symbol;
 ROSYM static Scheme_Object *equal_symbol;
 
+ROSYM static Scheme_Hash_Tree *empty_hash;
+ROSYM static Scheme_Hash_Tree *empty_hasheq;
+ROSYM static Scheme_Hash_Tree *empty_hasheqv;
+
 /* locals */
 static Scheme_Object *pair_p_prim (int argc, Scheme_Object *argv[]);
 static Scheme_Object *mpair_p_prim (int argc, Scheme_Object *argv[]);
@@ -802,6 +806,13 @@ scheme_init_list (Scheme_Startup_Env *env)
 
   weak_symbol = scheme_intern_symbol("weak");
   equal_symbol = scheme_intern_symbol("equal");
+
+  REGISTER_SO(empty_hash);
+  REGISTER_SO(empty_hasheq);
+  REGISTER_SO(empty_hasheqv);
+  empty_hash = scheme_make_hash_tree(1);
+  empty_hasheq = scheme_make_hash_tree(0);
+  empty_hasheqv = scheme_make_hash_tree(2);
 }
 
 void
@@ -2173,7 +2184,7 @@ Scheme_Object *scheme_make_immutable_hasheqv(int argc, Scheme_Object *argv[])
   return make_immutable_table("make-immutable-hasheqv", 2, argc, argv);
 }
 
-static Scheme_Object *direct_table(const char *who, int kind, int argc, Scheme_Object *argv[])
+static Scheme_Object *direct_table(const char *who, int kind, Scheme_Hash_Tree *empty, int argc, Scheme_Object *argv[])
 {
   int i;
   Scheme_Hash_Tree *ht;
@@ -2186,7 +2197,10 @@ static Scheme_Object *direct_table(const char *who, int kind, int argc, Scheme_O
     return NULL;
   }
 
-  ht = scheme_make_hash_tree(kind);
+  if (!argc)
+    ht = scheme_make_hash_tree(kind);
+  else
+    ht = empty;
 
   for (i = 0; i < argc; i += 2) {
     ht = scheme_hash_tree_set(ht, argv[i], argv[i+1]);
@@ -2197,17 +2211,17 @@ static Scheme_Object *direct_table(const char *who, int kind, int argc, Scheme_O
 
 static Scheme_Object *direct_hash(int argc, Scheme_Object *argv[])
 {
-  return direct_table("hash", 1, argc, argv);
+  return direct_table("hash", 1, empty_hash, argc, argv);
 }
 
 static Scheme_Object *direct_hasheq(int argc, Scheme_Object *argv[])
 {
-  return direct_table("hasheq", 0, argc, argv);
+  return direct_table("hasheq", 0, empty_hasheq, argc, argv);
 }
 
 static Scheme_Object *direct_hasheqv(int argc, Scheme_Object *argv[])
 {
-  return direct_table("hasheqv", 2, argc, argv);
+  return direct_table("hasheqv", 2, empty_hasheqv, argc, argv);
 }
 
 Scheme_Hash_Table *scheme_make_hash_table_equal()
