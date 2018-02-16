@@ -16,7 +16,7 @@
 
 (define logger (make-logger 'demodularizer (current-logger)))
 
-(define (demodularize input-file [output-file #f])
+(define (demodularize input-file [given-output-file #f])
   (parameterize ([current-logger logger])
 
     (log-info "Compiling module")
@@ -33,5 +33,6 @@
     (define bundle (merge-linklets runs names internals lifts imports))
 
     (log-info "Writing bytecode")
-    (define output-file (path-replace-suffix input-file #"_rkt_merged.zo"))
+    (define output-file (or given-output-file
+                            (path-add-suffix input-file #"_merged.zo")))
     (write-module output-file bundle)))

@@ -16,4 +16,16 @@
         [else
          (module-path-index-join mod-path
                                  (and base (loop base)))])))
-  (resolve-module-path-index mpi path))
+  (define p (resolve-module-path-index mpi path))
+
+  ;; Make sure a path name is normalized
+  (define p-path (if (pair? p) (cadr p) p))
+  (define p-submod (if (pair? p) (cddr p) '()))
+  (define p-simple-path (if (path? p-path)
+                            (normal-case-path (simplify-path p-path))
+                            p-path))
+
+  ;; Combine path back with submod
+  (if (null? p-submod)
+      p-simple-path
+      (cons p-simple-path p-submod)))

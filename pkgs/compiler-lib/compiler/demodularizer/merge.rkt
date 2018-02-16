@@ -10,8 +10,24 @@
 (provide merge-linklets)
 
 (define (merge-linklets runs names internals lifts imports)
-  (define import-keys (hash-keys imports))
-  (define import-counter 1)
+  (define (syntax-literals-import? path/submod+phase)
+    (eq? (cdr path/submod+phase) 'syntax-literals))
+
+  ;; Pick an order for the remaining imports:
+  (define import-keys (for/list ([path/submod+phase (in-hash-keys imports)]
+                                 ;; References to a 'syntax-literals "phase" are
+                                 ;; references to the implicit syntax-literals
+                                 ;; module; drop those:
+                                 #:unless (syntax-literals-import? path/submod+phase))
+                        path/submod+phase))
+
+  (define any-syntax-literals?
+    (for/or ([path/submod+phase (in-hash-keys imports)])
+      (syntax-literals-import? path/submod+phase)))
+  (define syntax-literals-pos (and any-syntax-literals? 1))
+  (define import-counter (if any-syntax-literals? 2 1))
+
+  ;; Map each remaining import to its position
   (define ordered-importss
     (for/list ([key (in-list import-keys)])
       (define ordered-imports (hash-ref imports key))
@@ -20,16 +36,30 @@
         (set-import-pos! i import-counter)
         (set! import-counter (add1 import-counter)))
       ordered-imports))
+  ;; Keep all the same import shapes
   (define import-shapess
     (for/list ([key (in-list import-keys)])
       (for/list ([name (in-list (hash-ref imports key))])
         (import-shape (hash-ref names (cons key name))))))
 
+  ;; Map all syntax-literal references to the same import.
+  ;; We'll update a call to the access to use a suitable
+  ;; vector index.
+  (for ([(path/submod+phase imports) (in-hash imports)]
+        #:when (syntax-literals-import? path/submod+phase)
+        [name (in-list imports)])
+    (define i (hash-ref names (cons path/submod+phase name)))
+    (set-import-pos! i syntax-literals-pos))
+
+  ;; Map internals and lifts to positions
   (define positions
     (for/hash ([name (in-list (append internals lifts))]
                [i (in-naturals import-counter)])
       (values name i)))
 
+  ;; For each linklet that we merge, make a mapping from
+  ;; the linklet's old position to new names (which can
+  ;; then be mapped to new positions):
   (define (make-position-mapping r)
     (define h (make-hasheqv))
     (define linkl (run-linkl r))
@@ -48,6 +78,9 @@
       (hash-set! h pos (find-name names path/submod+phase name)))
     h)
 
+  ;; Do we need the implicit initial variable for `(#%variable-reference)`?
+  ;; The slot will be reserved whether we use it or not, but the
+  ;; slot is not necessarily initialized if we don't need it.
   (define saw-zero-pos-toplevel? #f)
 
   (define body
@@ -56,23 +89,24 @@
      (for/list ([r (in-list runs)])
        (define pos-to-name/import (make-position-mapping r))
        (define (remap-pos pos)
-         (define new-name/import (hash-ref pos-to-name/import pos))
-         (if (import? new-name/import)
-             (import-pos new-name/import)
-             (hash-ref positions new-name/import)))
+         (cond
+           [(zero? pos)
+            ;; Implicit variable for `(#%variable-reference)` stays in place:
+            (set! saw-zero-pos-toplevel? #t)
+            0]
+           [else
+            (define new-name/import (hash-ref pos-to-name/import pos))
+            (if (import? new-name/import)
+                (import-pos new-name/import)
+                (hash-ref positions new-name/import))]))
        (define graph (make-hasheq))
        (make-reader-graph
         (for/list ([b (in-list (linkl-body (run-linkl r)))])
           (let remap ([b b])
             (match b
               [(toplevel depth pos const? ready?)
-               (cond
-                 [(zero? pos)
-                  (set! saw-zero-pos-toplevel? #t)
-                  b]
-                 [else
-                  (define new-pos (remap-pos pos))
-                  (toplevel depth new-pos const? ready?)])]
+               (define new-pos (remap-pos pos))
+               (toplevel depth new-pos const? ready?)]
               [(def-values ids rhs)
                (def-values (map remap ids) (remap rhs))]
               [(inline-variant direct inline)
@@ -98,7 +132,19 @@
               [(boxenv pos body)
                (boxenv pos (remap body))]
               [(application rator rands)
-               (application (remap rator) (map remap rands))]
+               ;; Check for a `(.get-syntax-literal! '<pos>)` call
+               (cond
+                 [(and (toplevel? rator)
+                       (let ([i (hash-ref pos-to-name/import (toplevel-pos rator))])
+                         (and (import? i)
+                              (eqv? syntax-literals-pos (import-pos i)))))
+                  ;; This is a `(.get-syntax-literal! '<pos>)` call
+                  (application (remap rator)
+                               ;; FIXME: change the offset
+                               rands)]
+                 [else
+                  ;; Any other application
+                  (application (remap rator) (map remap rands))])]
               [(branch tst thn els)
                (branch (remap tst) (remap thn) (remap els))]
               [(with-cont-mark key val body)
@@ -137,8 +183,12 @@
   
   (define new-linkl
     (linkl module-name
-           (list* '() '() ordered-importss)
-           (list* '() '() import-shapess)
+           (list* (if any-syntax-literals? '(.get-syntax-literal!) '())
+                  '()
+                  ordered-importss)
+           (list* (if any-syntax-literals? (list (function-shape 1 #f)) '())
+                  '()
+                  import-shapess)
            '() ; exports
            internals
            lifts
@@ -226,6 +276,9 @@
                                                                       '0)))))))))))
              (+ 32 (length import-keys))
              #f)))
+
+  ;; By not including a 'stx-data linklet, we get a default
+  ;; linklet that supplies #f for any syntax-literal reference.
 
   (linkl-bundle (hasheq 0 new-linkl
                         'data data-linkl

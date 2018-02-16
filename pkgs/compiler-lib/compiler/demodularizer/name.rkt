@@ -13,6 +13,9 @@
   (define lifts (box '()))
   (define imports (make-hash)) ; path/submod+phase -> list-of-sym
 
+  ;; Reserve the syntax-literals name:
+  (hash-set! used-names '.get-syntax-literal! #t)
+
   (define (pick-name name)
     (let loop ([try-name name] [i 0])
       (cond

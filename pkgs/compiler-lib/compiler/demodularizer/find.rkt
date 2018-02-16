@@ -100,6 +100,7 @@
     (define orig-path (if (pair? orig-path+submod) (car orig-path+submod) orig-path+submod))
     (define submod (if (pair? orig-path+submod) (cdr orig-path+submod) '()))
     (define path (normal-case-path (simplify-path (path->complete-path orig-path))))
+    (define path/submod (if (pair? submod) (cons path submod) path))
 
     (unless (hash-ref runs-done (cons (cons path submod) phase) #f)
       (define one-m (hash-ref one-mods (cons path submod) #f))
@@ -107,14 +108,18 @@
 
       (define linkl (hash-ref (linkl-bundle-table (one-mod-zo one-m)) phase #f))
       (define uses
-        (list* '(#%syntax-literals . 0)
-               '(#%module-body . 0)
-               (for/list ([u (hash-ref (instance-variable-value decl 'phase-to-link-modules)
-                                       phase
-                                       null)])
-                 (cons (module-path-index->path (module-use-module u) path submod)
-                       (module-use-phase u)))))
-        
+        (list*
+         ;; The first implicit import might get used for syntax literals;
+         ;; recognize it with a 'syntax-literals "phase"
+         (cons path/submod 'syntax-literals)
+         ;; second implciit import should not get used:
+         '(#%transformer-register . 0)
+         (for/list ([u (hash-ref (instance-variable-value decl 'phase-to-link-modules)
+                                 phase
+                                 null)])
+           (cons (module-path-index->path (module-use-module u) path submod)
+                 (module-use-phase u)))))
+
       (define r (run (if (null? submod) path (cons path submod)) phase linkl uses))
       (hash-set! runs-done (cons (cons path submod) phase) #t)
 
