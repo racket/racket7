@@ -112,8 +112,9 @@
          ;; The first implicit import might get used for syntax literals;
          ;; recognize it with a 'syntax-literals "phase"
          (cons path/submod 'syntax-literals)
-         ;; second implciit import should not get used:
-         '(#%transformer-register . 0)
+         ;; The second implicit import might get used to register a macro;
+         ;; we'll map those registrations to the same implicit import:
+         '(#%transformer-register . transformer-register)
          (for/list ([u (hash-ref (instance-variable-value decl 'phase-to-link-modules)
                                  phase
                                  null)])

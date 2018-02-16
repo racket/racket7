@@ -12,20 +12,29 @@
 (define (merge-linklets runs names internals lifts imports)
   (define (syntax-literals-import? path/submod+phase)
     (eq? (cdr path/submod+phase) 'syntax-literals))
+  (define (transformer-register-import? path/submod+phase)
+    (eq? (cdr path/submod+phase) 'transformer-register))
 
   ;; Pick an order for the remaining imports:
   (define import-keys (for/list ([path/submod+phase (in-hash-keys imports)]
                                  ;; References to a 'syntax-literals "phase" are
                                  ;; references to the implicit syntax-literals
                                  ;; module; drop those:
-                                 #:unless (syntax-literals-import? path/submod+phase))
+                                 #:unless (or (syntax-literals-import? path/submod+phase)
+                                              (transformer-register-import? path/submod+phase)))
                         path/submod+phase))
 
   (define any-syntax-literals?
     (for/or ([path/submod+phase (in-hash-keys imports)])
       (syntax-literals-import? path/submod+phase)))
-  (define syntax-literals-pos (and any-syntax-literals? 1))
-  (define import-counter (if any-syntax-literals? 2 1))
+  (define any-transformer-registers?
+    (for/or ([path/submod+phase (in-hash-keys imports)])
+      (transformer-register-import? path/submod+phase)))
+  (define syntax-literals-pos 1)
+  (define transformer-register-pos (+ (if any-syntax-literals? 1 0)
+                                      syntax-literals-pos))
+  (define import-counter (+ (if any-transformer-registers? 1 0)
+                            transformer-register-pos))
 
   ;; Map each remaining import to its position
   (define ordered-importss
@@ -43,13 +52,20 @@
         (import-shape (hash-ref names (cons key name))))))
 
   ;; Map all syntax-literal references to the same import.
-  ;; We'll update a call to the access to use a suitable
+  ;; We could update each call to the access to use a suitable
   ;; vector index.
   (for ([(path/submod+phase imports) (in-hash imports)]
         #:when (syntax-literals-import? path/submod+phase)
         [name (in-list imports)])
     (define i (hash-ref names (cons path/submod+phase name)))
     (set-import-pos! i syntax-literals-pos))
+
+  ;; Map the transformer-register import, if any
+  (let* ([path/submod+phase '(#%transformer-register . transformer-register)]
+         [imports (hash-ref imports path/submod+phase null)])
+    (for ([name (in-list imports)])
+      (define i (hash-ref names (cons path/submod+phase name)))
+      (set-import-pos! i transformer-register-pos)))
 
   ;; Map internals and lifts to positions
   (define positions
@@ -184,10 +200,10 @@
   (define new-linkl
     (linkl module-name
            (list* (if any-syntax-literals? '(.get-syntax-literal!) '())
-                  '()
+                  (if any-transformer-registers? '(.set-transformer!) '())
                   ordered-importss)
            (list* (if any-syntax-literals? (list (function-shape 1 #f)) '())
-                  '()
+                  (if any-transformer-registers? (list (function-shape 2 #f)) '())
                   import-shapess)
            '() ; exports
            internals

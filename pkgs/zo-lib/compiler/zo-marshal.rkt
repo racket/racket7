@@ -620,6 +620,11 @@
         (out-number (if constant? 1 0) out)
         (out-anything expr out)
         (out-anything dummy out)]
+       [(struct inline-variant (direct inline))
+        (out-byte CPT_OTHER_FORM out)
+        (out-number inline-variants-type-num out)
+        (out-anything (protect-quote direct) out)
+        (out-anything (protect-quote inline) out)]
        [(protected-symref v)
         (out-anything ((out-shared-index out) v #:error? #t) out)]
        [(and (? symbol?) (not (? symbol-interned?)))
