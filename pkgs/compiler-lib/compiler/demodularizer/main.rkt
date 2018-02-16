@@ -1,5 +1,6 @@
 #lang racket/base
-(require compiler/cm
+(require racket/set
+         compiler/cm
          "find.rkt"
          "name.rkt"
          "merge.rkt"
@@ -7,26 +8,28 @@
          "bundle.rkt"
          "write.rkt")
 
-(provide current-excluded-modules
-         garbage-collect-toplevels-enabled
-         recompile-enabled
-         demodularize)
+(provide demodularize
 
-(define current-excluded-modules (make-parameter null))
+         garbage-collect-toplevels-enabled
+         current-excluded-modules
+         recompile-enabled)
+
 (define garbage-collect-toplevels-enabled (make-parameter #f))
 (define recompile-enabled (make-parameter #f))
 
 (define logger (make-logger 'demodularizer (current-logger)))
 
 (define (demodularize input-file [given-output-file #f])
-  (parameterize ([current-logger logger])
+  (parameterize ([current-logger logger]
+                 [current-excluded-modules (for/set ([path (in-set (current-excluded-modules))])
+                                             (normal-case-path (simplify-path (path->complete-path path))))])
 
     (log-info "Compiling module")
     (parameterize ([current-namespace (make-base-empty-namespace)])
       (managed-compile-zo input-file))
 
     (log-info "Finding modules")
-    (define runs (find-modules input-file))
+    (define-values (runs excluded-module-mpis) (find-modules input-file))
 
     (log-info "Selecting names")
     (define-values (names internals lifts imports) (select-names runs))
@@ -41,7 +44,9 @@
                       #:assume-pure? (garbage-collect-toplevels-enabled)))
 
     (log-info "Bundling linklet")
-    (define bundle (wrap-bundle new-body new-internals new-lifts get-merge-info))
+    (define bundle (wrap-bundle new-body new-internals new-lifts
+                                excluded-module-mpis
+                                get-merge-info))
 
     (log-info "Writing bytecode")
     (define output-file (or given-output-file

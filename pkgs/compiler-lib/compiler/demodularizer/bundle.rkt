@@ -1,12 +1,13 @@
 #lang racket/base
 (require (only-in '#%linklet primitive->compiled-position)
+         racket/set
          compiler/zo-structs
          "run.rkt"
          "name.rkt")
 
 (provide wrap-bundle)
 
-(define (wrap-bundle body internals lifts get-merge-info)
+(define (wrap-bundle body internals lifts excluded-module-mpis get-merge-info)
   (define-values (runs
                   import-keys
                   ordered-importss
@@ -49,14 +50,47 @@
            (list
             (def-values (list (toplevel 0 2 #f #f)) ; .mpi-vector
               (application (toplevel 2 1 #f #f) ; deserialize-module-path-indexes
-                           (list
-                            (list->vector
-                             (cons
-                              (box module-name)
-                              (for/list ([path/submod+phase (in-list import-keys)])
-                                (vector `(quote ,(car path/submod+phase))))))
-                            (for/vector ([i (in-range (add1 (length import-keys)))])
-                              i)))))
+                           ;; Construct two vectors: one for mpi construction, and
+                           ;; another for selecting the slots that are externally referenced
+                           ;; mpis (where the selection vector matches th `import-keys` order).
+                           ;; If all import keys are primitive modules, then we just make
+                           ;; a vector with those specs in order, but if there's a more
+                           ;; complex mpi, then we have to insert extra slots in the first
+                           ;; vector to hold intermediate mpi constructions.
+                           ;; We could do better here by sharing common tails.
+                           (let loop ([import-keys import-keys]
+                                      [specs (list (box module-name))]
+                                      [results (list 0)])
+                             (cond
+                               [(null? import-keys)
+                                (list (list->vector (reverse specs))
+                                      (list->vector (reverse results)))]
+                               [else
+                                (define path/submod+phase (car import-keys))
+                                (define path (car path/submod+phase))
+                                (cond
+                                  [(symbol? path)
+                                   (loop (cdr import-keys)
+                                         (cons (vector `(quote ,path)) specs)
+                                         (cons (length specs) results))]
+                                  [(path? path)
+                                   (define-values (i new-specs)
+                                     (begin
+                                     (let mpi-loop ([mpi (hash-ref excluded-module-mpis path)])
+                                       (define-values (name base) (module-path-index-split mpi))
+                                       (cond
+                                         [(and (not name) (not base))
+                                          (values 0 specs)]
+                                         [(not base)
+                                          (values (length specs) (cons (vector name) specs))]
+                                         [else
+                                          (define-values (next-i next-specs) (mpi-loop base))
+                                          (values (length next-specs) (cons (vector name next-i) next-specs))]))))
+                                   (loop (cdr import-keys)
+                                         new-specs
+                                         (cons i results))]
+                                  [else
+                                   (error 'wrap-bundle "unrecognized import path shape: ~s" path)])])))))
            16
            #f))
 
@@ -87,14 +121,24 @@
                                 (toplevel arg-count mpi-vector-pos #f #f)
                                 #f #f 0 '#() 0 '#() '#()
                                 (list->vector
-                                 (append
-                                  `(#:cons #:list ,(add1 (length import-keys)) 0)
-                                  (apply
-                                   append
-                                   (for/list ([k (in-list import-keys)]
-                                              [i (in-naturals 1)])
-                                     `(#:mpi ,i)))
-                                  '(())))))))
+                                 (let loop ([phases (sort (set->list
+                                                           (for/set ([path/submod+phase (in-list import-keys)])
+                                                             (cdr path/submod+phase)))
+                                                          <)])
+                                   (cond
+                                     [(null? phases) (list '())]
+                                     [else
+                                      (define phase (car phases))
+                                      (define n (for/sum ([path/submod+phase (in-list import-keys)])
+                                                  (if (eqv? phase (cdr path/submod+phase)) 1 0)))
+                                      (append `(#:cons #:list ,(add1 n) ,(- 0 phase))
+                                              (apply
+                                               append
+                                               (for/list ([path/submod+phase (in-list import-keys)]
+                                                          [i (in-naturals 1)]
+                                                          #:when (eqv? phase (cdr path/submod+phase)))
+                                                 `(#:mpi ,i)))
+                                              (loop (cdr phases)))])))))))
               (def-values (list (toplevel 0 (+ exports-pos 2) #f #f)) ; provides
                 (application (primitive hasheqv) null))
               (def-values (list (toplevel 0 (+ exports-pos 3) #f #f)) ; phase-to-link-modules
@@ -103,7 +147,7 @@
                                (list 0
                                      (let ([depth (+ depth (length import-keys))])
                                        (application (primitive list)
-                                                    (for/list ([k (in-list import-keys)]
+                                                    (for/list ([path/submod+phase (in-list import-keys)]
                                                                [i (in-naturals 1)])
                                                       (let ([depth (+ depth 2)])
                                                         (application (toplevel depth module-use-pos #f #f)
@@ -113,7 +157,7 @@
                                                                                      (list
                                                                                       (toplevel depth mpi-vector-pos #f #f)
                                                                                       i)))
-                                                                      '0)))))))))))
+                                                                      (cdr path/submod+phase))))))))))))
              (+ 32 (length import-keys))
              #f)))
 
