@@ -1,13 +1,12 @@
 #lang racket/base
-(require syntax/modresolve
-         (prefix-in expander: expander/common/module-path))
+(require syntax/modresolve)
 
 (provide module-path-index->path)
 
 (define (module-path-index->path req path submod)
   (define mpi
     (let loop ([req req])
-      (define-values (mod-path base) (expander:module-path-index-split req))
+      (define-values (mod-path base) (module-path-index-split req))
       (cond
         [(not mod-path) (if (null? submod)
                             (module-path-index-join #f #f)

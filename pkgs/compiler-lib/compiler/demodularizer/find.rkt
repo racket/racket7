@@ -1,9 +1,8 @@
 #lang racket/base
 (require compiler/zo-parse
          syntax/modcode
-         expander/compile/serialize
-         expander/compile/module-use
          racket/linklet
+         "deserialize.rkt"
          "module-path.rkt"
          "run.rkt")
 
