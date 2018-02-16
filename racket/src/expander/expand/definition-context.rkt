@@ -194,7 +194,8 @@
                                    #:context context
                                    #:phase [phase (expand-context-phase ctx)]
                                    #:intdefs intdefs
-                                   #:stop-ids [stop-ids #f])
+                                   #:stop-ids [stop-ids #f]
+                                   #:to-parsed-ok? [to-parsed-ok? #f])
   (define same-kind? (or (eq? context
                               (expand-context-context ctx))
                          (and (list? context)
@@ -241,7 +242,9 @@
                  (append def-ctx-scopes
                          (expand-context-scopes ctx))]
                 [only-immediate? (not stop-ids)] ; def-ctx-scopes is set for the enclosing transformer call
-                [to-parsed? #f]
+                [to-parsed? (if to-parsed-ok?
+                                (expand-context-to-parsed? ctx)
+                                #f)]
                 [just-once? #f]
                 [in-local-expand? #t]
                 [stops (free-id-set phase (or all-stop-ids null))]

@@ -1,5 +1,6 @@
 #lang racket/base
-(require "../common/struct-star.rkt"
+(require "../common/performance.rkt"
+         "../common/struct-star.rkt"
          "../syntax/syntax.rkt"
          "../common/phase.rkt"
          "../syntax/scope.rkt"
@@ -12,7 +13,7 @@
          "already-expanded.rkt"
          "lift-key.rkt"
          "log.rkt"
-         "../common/performance.rkt")
+         "parsed.rkt")
 
 (provide local-expand
          local-expand/capture-lifts
@@ -38,8 +39,9 @@
                    #:capture-lifts? #t
                    #:lift-key lift-key))
 
-(define (syntax-local-expand-expression s)
+(define (syntax-local-expand-expression s [opaque-only? #f])
   (define exp-s (do-local-expand 'syntax-local-expand-expression s 'expression null #f
+                                 #:to-parsed-ok? opaque-only?
                                  #:skip-log-exit? #t))
   (define ctx (get-current-expand-context))
   ;; Move introduction scope from the already-expanded syntax object to
@@ -48,18 +50,21 @@
   ;; the scopes suitably flipped
   (define ae (flip-introduction-scopes
               (datum->syntax #f (already-expanded
-                                 (flip-introduction-scopes exp-s ctx)
+                                 (if (parsed? exp-s)
+                                     exp-s
+                                     (flip-introduction-scopes exp-s ctx))
                                  (expand-context-binding-layer ctx)))
               ctx))
   (log-expand ctx 'opaque-expr ae)
   (log-expand ctx 'exit-local exp-s)
-  (values exp-s ae))
+  (values (and (not opaque-only?) exp-s) ae))
 
 ;; ----------------------------------------
 
 (define (do-local-expand who s-or-s-exp context stop-ids [intdefs #f]
                          #:capture-lifts? [capture-lifts? #f]
                          #:as-transformer? [as-transformer? #f]
+                         #:to-parsed-ok? [to-parsed-ok? #f]
                          #:lift-key [lift-key (and (or capture-lifts?
                                                        as-transformer?)
                                                    (generate-lift-key))]
@@ -96,7 +101,8 @@
                                                 #:context context
                                                 #:phase phase
                                                 #:intdefs intdefs
-                                                #:stop-ids stop-ids))
+                                                #:stop-ids stop-ids
+                                                #:to-parsed-ok? to-parsed-ok?))
 
    (log-expand local-ctx 'enter-local s)
    (define input-s (add-intdef-scopes (flip-introduction-scopes s ctx) intdefs))
@@ -131,7 +137,9 @@
 
    (log-expand local-ctx 'local-post output-s)
    
-   (define result-s (flip-introduction-scopes output-s ctx))
+   (define result-s (if (parsed? output-s)
+                        output-s
+                        (flip-introduction-scopes output-s ctx)))
    
    (unless skip-log-exit?
      (log-expand local-ctx 'exit-local result-s))

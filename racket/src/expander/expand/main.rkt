@@ -192,19 +192,26 @@
 ;; An expression that is already fully expanded via `local-expand-expression`
 (define (expand-already-expanded s ctx)
   (define ae (syntax-e s))
+  (define exp-s (already-expanded-s ae))
   (when (or (syntax-any-macro-scopes? s)
             (not (eq? (expand-context-binding-layer ctx)
-                      (already-expanded-binding-layer ae))))
+                      (already-expanded-binding-layer ae)))
+            (and (parsed? exp-s)
+                 (not (and (expand-context-to-parsed? ctx)
+                           (free-id-set-empty? (expand-context-stops ctx))))))
     (raise-syntax-error #f
                         (string-append "expanded syntax not in its original lexical context;\n"
                                        " extra bindings or scopes in the current context")
-                        (already-expanded-s ae)))
-  (define result-s (syntax-track-origin (already-expanded-s ae) s))
-  (log-expand ctx 'opaque-expr result-s)
-  (if (and (expand-context-to-parsed? ctx)
-           (free-id-set-empty? (expand-context-stops ctx)))
-      (expand result-s ctx) ; fully expanded to compiled
-      result-s))
+                        (and (not (parsed? exp-s)) exp-s)))
+  (cond
+    [(parsed? exp-s) exp-s]
+    [else
+     (define result-s (syntax-track-origin exp-s s))
+     (log-expand ctx 'opaque-expr result-s)
+     (if (and (expand-context-to-parsed? ctx)
+              (free-id-set-empty? (expand-context-stops ctx)))
+         (expand result-s ctx) ; fully expanded to compiled
+         result-s)]))
 
 (define (make-explicit ctx sym s disarmed-s)
   (define new-s (syntax-rearm (datum->syntax disarmed-s (cons sym disarmed-s) s s) s))

@@ -69,7 +69,8 @@
                                             (current-parameter-environment)
                                             #'([local-key id] ...))])
                            (syntax-local-expand-expression
-                             #'(let-values () body ...)))])])
+                            #'(let-values () body ...)
+                            #t))])])
           opaque-expr)
         (with-syntax ([stx stx])
           #'(#%expression stx)))))
