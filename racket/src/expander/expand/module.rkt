@@ -214,7 +214,7 @@
 
    ;; To detect whether the body is expanded multiple times:
    (define again? #f)
-   
+
    ;; The primitive `#%module-body` form calls this function to expand the
    ;; current module's body
    (define (module-begin-k mb-s mb-init-ctx)
@@ -236,7 +236,7 @@
                                                           [compiled-submodules (make-hasheq)]
                                                           [compiled-module-box (box #f)])
                                     (module-begin-k s ctx)))]))
-     
+
      ;; In case `#%module-begin` expansion is forced on syntax that
      ;; that wasn't already introduced into the mdoule's inside scope,
      ;; add it to all the given body forms
@@ -872,8 +872,10 @@
 
 (define (add-post-expansion-scope bodys ctx)
   (define sc (root-expand-context-post-expansion-scope ctx))
-  (for/list ([body (in-list bodys)])
-    (add-scope body sc)))
+  (if sc
+      (for/list ([body (in-list bodys)])
+        (add-scope body sc))
+      bodys))
 
 ;; ----------------------------------------
 
