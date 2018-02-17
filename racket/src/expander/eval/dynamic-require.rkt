@@ -111,7 +111,8 @@
           (define tmp-ns (new-namespace ns))
           (define mod-path (resolved-module-path->module-path mod-name))
           (namespace-require mod-path tmp-ns)
-          (eval sym tmp-ns)])])])]))
+          (parameterize ([current-namespace tmp-ns])
+            (eval sym tmp-ns))])])])]))
 
 ;; The `dynamic-require` function cheats by recognizing this failure
 ;; thunk and substituting a more specific error:

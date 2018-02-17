@@ -77,7 +77,8 @@
   (cond
    [(and maybe-module-id
          (free-identifier=? maybe-module-id
-                            (namespace-module-identifier ns)))
+                            (namespace-module-identifier ns)
+                            (namespace-phase ns)))
     ;; The given syntax object starts `module`, so only add scope to `module`:
     (datum->syntax s (cons maybe-module-id (cdr (syntax-e s))) s s)]
    [else
