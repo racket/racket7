@@ -311,12 +311,8 @@ installers: build a server on the current machine, run clients on
 hosts specified via CONFIG, and start/stop VirtualBox virtual machines
 that act as client machines.
 
-See
-
- pkgs/distro-build-pkgs/distro-build-client/doc.txt
-
-for a description of the site-configuration module and requirements on
-client hosts.
+See the documentation of the "distro-build" package for a description
+of the site-configuration module and requirements on client hosts.
 
 If "my-site-config.rkt" is a configuration module, then
 
@@ -328,9 +324,10 @@ installer filenames in "build/installer/table.rktd". A log file
 for each client is written to "build/log".
 
 The default CONFIG path is "build/site.rkt", so you could put your
-configuration file there and omit the `CONFIG' argument to
-`make'. Supply `CONFIG_MODE=...' to pass a configuration mode on to
-your site-configuration module (accessible via the `current-mode'
+configuration file there and omit the `CONFIG' argument to `make'. A
+default configuration file is created there automatically. Supply
+`CONFIG_MODE=...' to pass a configuration mode on to your
+site-configuration module (accessible via the `current-mode'
 parameter). Supply `CLEAN_MODE=--clean' to make the default `#:clean?'
 configuration for a client #t instead of #f, supply
 `RELEASE_MODE=--release' to make the default `#:release?'
