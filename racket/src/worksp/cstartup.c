@@ -10,10 +10,9 @@ int main(int argc, char **argv) {
   in = fopen(argv[1], "r");
   out = fopen(argv[2], "w");
 
-  fprintf(out, "{\nSHARED_OK static unsigned char expr[] = {\n");
+  fprintf(out, "#define EVAL_STARTUP EVAL_ONE_STR((char *)startup_source)\n");
+  fprintf(out, "static unsigned char startup_source[] = {\n");
   
-  while (fgetc(in) != '(') { }
-
   while (1) {
     while (1) {
       c = fgetc(in);
@@ -22,7 +21,6 @@ int main(int argc, char **argv) {
 
       if (c == EOF) {
         fprintf(out, "\n 0 };\n");
-        fprintf(out, "EVAL_ONE_STR((char *)expr);\n }\n");
         return 0;
       }
     }

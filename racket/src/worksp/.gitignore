@@ -31,3 +31,5 @@ rbuildmode.obj
 rbuildmode.exe
 cstartup.obj
 cstartup.exe
+
+/compiled

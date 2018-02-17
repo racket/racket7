@@ -1,8 +1,6 @@
 #lang racket/base
-
-(use-compiled-file-paths null)
-
-(require racket/system)
+(require racket/system
+	 (for-label "../../racket/gc2/xform-mod.rkt"))
 
 (define (system- s)
   (eprintf "~a\n" s)
@@ -116,13 +114,10 @@
       (sync
        (thread
         (lambda ()
-          (parameterize ([use-compiled-file-paths (list "compiled")]
-                         [current-namespace (make-base-namespace)]
+          (parameterize ([current-namespace (make-base-namespace)]
                          [current-command-line-arguments
                           (list->vector 
                            (append
-                            (list "--setup"
-                                  ".")
                             (if objdest
                                 (if use-precomp
                                     (list "--precompiled" use-precomp)
@@ -142,7 +137,7 @@
                              "-o"
                              dest
                              src)))])
-            (dynamic-require "../../racket/gc2/xform.rkt" #f)
+            (dynamic-require "../../racket/gc2/xform-mod.rkt" #f)
             (set! success? #t)))))
       (unless success? 
         (when (file-exists? dest)
@@ -169,8 +164,7 @@
     (unless (system- (format "~a ~a /MT /Zi /GS- ~a /c ~a /Fdxsrc/ /Fo~a" cl.exe flags opt-flags c o))
       (error "failed compile"))))
 
-(define common-deps (list "../../racket/gc2/xform.rkt"
-			  "../../racket/gc2/xform-mod.rkt"))
+(define common-deps (list "../../racket/gc2/xform-mod.rkt"))
 
 (define (find-build-file d f)
   (define (find-release d2)

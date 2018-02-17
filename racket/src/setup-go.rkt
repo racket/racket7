@@ -63,10 +63,10 @@
     (define lock-port (open-output-file #:exists 'truncate/replace lock-file))
     (let loop ([n 0])
       (when (= n 3)
-        (printf "Waiting on lock: ~a" lock-file)
-        (unless (port-try-file-lock? lock-port 'exclusive)
-          (sleep 0.1)
-          (loop (add1 n)))))
+        (printf "Waiting on lock: ~a" lock-file))
+      (unless (port-try-file-lock? lock-port 'exclusive)
+        (sleep 0.1)
+        (loop (add1 n))))
 
     (with-handlers ([exn? (lambda (exn)
                             ;; On any execption, try to delete the target file
