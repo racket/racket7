@@ -214,7 +214,7 @@
                       (for/fold ([env env]) ([key (in-list keys)]
                                              [val (in-list vals)]
                                              [id (in-list ids)])
-                        (maybe-install-free=id! val id phase)
+                        (maybe-install-free=id-in-context! val id phase ctx)
                         (env-extend env key val))))
     ;; Expand right-hand sides and body
     (define expr-ctx (as-expression-context ctx))

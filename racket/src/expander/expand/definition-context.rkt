@@ -97,7 +97,7 @@
   (set-box! env-mixins (append (for/list ([intdef-id (in-list intdef-ids)]
                                           [sym (in-list syms)]
                                           [val (in-list vals)])
-                                 (maybe-install-free=id! val intdef-id phase)
+                                 (maybe-install-free=id-in-context! val intdef-id phase ctx)
                                  (env-mixin intdef-id sym val (make-weak-hasheq)))
                                (unbox env-mixins)))
   (log-expand ctx 'exit-local-bind))

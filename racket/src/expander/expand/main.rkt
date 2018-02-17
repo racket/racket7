@@ -58,7 +58,8 @@
          attach-disappeared-transformer-bindings
          increment-binding-layer
          accumulate-def-ctx-scopes
-         rename-transformer-target-in-context)
+         rename-transformer-target-in-context
+         maybe-install-free=id-in-context!)
 
 ;; ----------------------------------------
 
@@ -729,3 +730,11 @@
 (define (rename-transformer-target-in-context t ctx)
   (parameterize ([current-expand-context ctx])
     (rename-transformer-target t)))
+
+;; In case the rename-transformer has a callback, ensure that the
+;; current expansion context is available while installing a
+;; `free-identifier=?` equivalence
+(define (maybe-install-free=id-in-context! val id phase ctx)
+  (when (rename-transformer? val)
+    (parameterize ([current-expand-context ctx])
+      (maybe-install-free=id! val id phase))))

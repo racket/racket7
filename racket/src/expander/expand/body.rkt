@@ -177,7 +177,7 @@
          (define extended-env (for/fold ([env (expand-context-env body-ctx)]) ([key (in-list keys)]
                                                                                [val (in-list vals)]
                                                                                [id (in-list ids)])
-                                (maybe-install-free=id! val id phase)
+                                (maybe-install-free=id-in-context! val id phase body-ctx)
                                 (env-extend env key val)))
          (log-expand body-ctx 'exit-bind)
          (loop (struct*-copy expand-context body-ctx

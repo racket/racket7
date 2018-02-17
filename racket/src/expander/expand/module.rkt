@@ -782,7 +782,7 @@
           (for ([sym (in-list syms)]
                 [val (in-list vals)]
                 [id (in-list ids)])
-            (maybe-install-free=id! val id phase)
+            (maybe-install-free=id-in-context! val id phase partial-body-ctx)
             (namespace-set-transformer! m-ns phase sym val))
           (log-expand partial-body-ctx 'exit-prim (datum->syntax #f `(,(m 'define-syntaxes) ,ids ,exp-rhs)))
           (define parsed-body (parsed-define-syntaxes (keep-properties-only exp-body) ids syms parsed-rhs))

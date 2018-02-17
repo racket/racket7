@@ -39,7 +39,9 @@
                                        val
                                        (datum->syntax #f '?)))]
                                 [else (lambda (t)
-                                        (define id (v t))
+                                        (define id (call-with-continuation-prompt
+                                                    (lambda ()
+                                                      (v t))))
                                         (unless (identifier? id)
                                           (raise-arguments-error 'prop:rename-transformer
                                                                  "contract violation for given value; expected an identifier"
