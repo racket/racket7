@@ -283,6 +283,9 @@
          (define-match m disarmed-exp-s '(begin-for-syntax e ...))
          (define next-phase (add1 phase))
          (define next-ns (namespace->namespace-at-phase ns next-phase))
+         (when quick-immediate?
+           ;; In case `expand-capturing-lifts` didn't already:
+           (namespace-visit-available-modules! ns))
          (namespace-visit-available-modules! next-ns) ; to match old behavior for empty body
          (define l
            (for/list ([s (in-list (m 'e))])

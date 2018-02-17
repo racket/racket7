@@ -513,7 +513,13 @@
   (define d (small-hash-ref (namespace-phase-level-to-definitions m-ns) (module-use-phase mu) #f))
   (if d
       (values mi (definitions-variables d))
-      (error "namespace mismatch: phase level not found" mu)))
+      (error 'eval (string-append "namespace mismatch: phase level not found;\n"
+                                  "  module: ~a\n"
+                                  "  phase level: ~a\n"
+                                  "  found phase levels: ~a")
+             mod
+             (module-use-phase mu)
+             (small-hash-keys (namespace-phase-level-to-definitions m-ns)))))
 
 ;; ----------------------------------------
 

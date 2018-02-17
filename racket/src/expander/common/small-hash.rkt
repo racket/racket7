@@ -6,7 +6,8 @@
 (provide make-small-hasheq
          make-small-hasheqv
          small-hash-ref
-         small-hash-set!)
+         small-hash-set!
+         small-hash-keys)
 
 (define (make-small-hasheq)
   (box #hasheq()))
@@ -20,4 +21,5 @@
 (define (small-hash-set! small-ht key val)
   (set-box! small-ht (hash-set (unbox small-ht) key val)))
 
-
+(define (small-hash-keys small-ht)
+  (hash-keys (unbox small-ht)))
