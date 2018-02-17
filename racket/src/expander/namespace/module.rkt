@@ -190,7 +190,9 @@
   (when with-submodules?
     ;; Register this module's exports for use in resolving bulk
     ;; bindings, so that bulk bindings can be shared among other
-    ;; modules when unmarshaling:
+    ;; modules when unmarshaling; we don't do this without
+    ;; `with-submodules?` to avoid loeaking submodules being
+    ;; expanded, but see also `bind-all-provides!`
     (register-bulk-provide! (namespace-bulk-binding-registry ns)
                             mod-name
                             (module-self m)

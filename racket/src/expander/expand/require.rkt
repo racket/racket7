@@ -254,7 +254,7 @@
    (define update-nominals-box (and can-bulk-bind? (box null)))
    (bind-all-provides!
     m
-    bind-in-stx phase-shift m-ns interned-mpi
+    bind-in-stx phase-shift m-ns interned-mpi module-name
     #:in orig-s
     #:only (cond
             [(adjust-only? adjust) (set->list (adjust-only-syms adjust))]
@@ -354,7 +354,7 @@
 
 ;; ----------------------------------------
 
-(define (bind-all-provides! m in-stx phase-shift ns mpi
+(define (bind-all-provides! m in-stx phase-shift ns mpi module-name
                             #:in orig-s
                             #:only only-syms
                             #:just-meta just-meta
@@ -386,13 +386,22 @@
               (add-binding! (datum->syntax in-stx sym) b phase))))))
     ;; Add bulk binding after all filtering
     (when can-bulk?
+      (define bulk-binding-registry (namespace-bulk-binding-registry ns))
       (add-bulk-binding! in-stx
-                         (bulk-binding (and (not bulk-prefix)
-                                            (zero? (hash-count bulk-excepts))
-                                            provides)
+                         (bulk-binding (or (and (not bulk-prefix)
+                                                (zero? (hash-count bulk-excepts))
+                                                provides)
+                                           ;; During expansion, the submodules aren't be registered in
+                                           ;; the bulk-binding registry for use by other submodules,
+                                           ;; so do the work to compute bulk provides now if the module
+                                           ;; isn't registered
+                                           (and (not (registered-bulk-provide? bulk-binding-registry
+                                                                               module-name))
+                                                (bulk-provides-add-prefix-remove-exceptions
+                                                 provides bulk-prefix bulk-excepts)))
                                        bulk-prefix bulk-excepts
                                        self mpi provide-phase-level phase-shift
-                                       (namespace-bulk-binding-registry ns))
+                                       bulk-binding-registry)
                          phase
                          #:in orig-s))))
 

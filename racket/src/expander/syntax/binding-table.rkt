@@ -143,7 +143,7 @@
    [else
     (binding-table-add-bulk (table-with-bulk-bindings bt bt null) scopes bulk)]))
 
-;; The bindings of `bulk at `scopes` should shadow any existing
+;; The bindings of `bulk` at `scopes` should shadow any existing
 ;; mappings in `sym-bindings`
 (define (remove-matching-bindings syms scopes bulk)
   (define bulk-symbols (bulk-binding-symbols bulk #f null))

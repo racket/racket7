@@ -2146,5 +2146,22 @@ case of module-leve bindings; it doesn't cover local bindings.
   (expand (expand m)))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure that prefixing a submodule require doesn't
+;; run into trouble related to the expand-time submodule
+;; instance not being registered in the bulk-binding
+;; provides table
+
+(module check-prefixed-bulk-provides-from-submodules racket/base
+  (module a racket/base
+    (provide a1 a2 a3)
+    (define a1 'a1)
+    (define a2 'a2)
+    (define a3 'a3))
+  
+  (require (prefix-in a: 'a))
+
+  (define another 'x))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)

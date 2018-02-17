@@ -11,9 +11,11 @@
 
          make-bulk-binding-registry
          register-bulk-provide!
+         registered-bulk-provide?
 
          bulk-binding
          
+         bulk-provides-add-prefix-remove-exceptions
          deserialize-bulk-binding)
 
 ;; When a require is something like `(require racket/base)`, then
@@ -105,14 +107,9 @@
                  (define prefix (bulk-binding-prefix b))
                  (define adjusted-provides
                    (cond
-                    [(or prefix (positive? (hash-count excepts)))
-                     (for/hash ([(sym val) (in-hash provides)]
-                                #:unless (hash-ref excepts sym #f))
-                       (values (if prefix
-                                   (string->symbol (format "~a~a" prefix sym))
-                                   sym)
-                               val))]
-                    [else provides]))
+                     [(or prefix (positive? (hash-count excepts)))
+                      (bulk-provides-add-prefix-remove-exceptions provides prefix excepts)]
+                     [else provides]))
                  ;; Record the adjusted `provides` table for quick future access:
                  (set-bulk-binding-provides! b adjusted-provides)
                  adjusted-provides)))
@@ -143,6 +140,14 @@
 (define (deserialize-bulk-binding prefix excepts mpi provide-phase-level phase-shift bulk-binding-registry)
   (bulk-binding #f prefix excepts #f mpi provide-phase-level phase-shift bulk-binding-registry))
 
+(define (bulk-provides-add-prefix-remove-exceptions provides prefix excepts)
+  (for/hash ([(sym val) (in-hash provides)]
+             #:unless (hash-ref excepts sym #f))
+    (values (if prefix
+                (string->symbol (format "~a~a" prefix sym))
+                sym)
+            val)))
+
 ;; ----------------------------------------
 
 ;; A blk binding registry has just the provde part of a module, for
@@ -158,8 +163,15 @@
 (define (make-bulk-binding-registry)
   (bulk-binding-registry (make-hasheq)))
 
-;; Called when a module is instantiated to register iits provides:
+;; Called when a module is instantiated to register its provides:
 (define (register-bulk-provide! bulk-binding-registry mod-name self provides)
   (hash-set! (bulk-binding-registry-table bulk-binding-registry)
              mod-name
              (bulk-provide self provides)))
+
+;; Called when a module is imported to make sure that it's in the
+;; registry (as opposed to a temporary module instance during
+;; expansion):
+(define (registered-bulk-provide? bulk-binding-registry mod-name)
+  (and (hash-ref (bulk-binding-registry-table bulk-binding-registry) mod-name #f)
+       #t))
