@@ -221,7 +221,10 @@
    (define (module-begin-k mb-s mb-init-ctx)
      ;; In case the module body is expanded multiple times, we clear
      ;; the requires, provides and definitions information each time.
-     ;; Be careful not to change the current bindings, though.
+     ;; Don't discard accumulated requires, though, since those may be
+     ;; needed by pieces from a previous expansion. Also, be careful
+     ;; not to change the current bindings when re-establishing the
+     ;; requires.
      (when again?
        (requires+provides-reset! requires+provides)
        (initial-require! #:bind? #f)
@@ -234,7 +237,15 @@
      (define ctx (struct*-copy expand-context mb-init-ctx
                                [module-begin-k 
                                 (lambda (s ctx)
-                                  (with-save-and-restore ([requires+provides (make-requires+provides self)] 
+                                  (define new-requires+provides
+                                    ;; Copy old `require` dependencies, which allows a
+                                    ;; synthesized nested `#%module-begin` to use pieces
+                                    ;; that depend on bindings introduced outside the
+                                    ;; synthesized part --- a questionable practice,
+                                    ;; but support for backward compatibility, at least.
+                                    (make-requires+provides self
+                                                            #:copy-requires requires+provides))
+                                  (with-save-and-restore ([requires+provides new-requires+provides]
                                                           [compiled-submodules (make-hasheq)]
                                                           [compiled-module-box (box #f)])
                                     (module-begin-k s ctx)))]))
@@ -488,7 +499,7 @@
    ;; Assemble the `module` result
 
    (define-values (requires provides) (extract-requires-and-provides requires+provides self self))
-   
+
    (define result-form
      (and (or (expand-context-to-parsed? init-ctx)
               always-produce-compiled?)

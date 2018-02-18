@@ -68,10 +68,17 @@
                        can-be-shadowed?)  ; shadowed because, e.g., an initial import
   #:authentic)
 
-(define (make-requires+provides self)
+(define (make-requires+provides self
+                                #:copy-requires [copy-r+p #f])
   (requires+provides self
-                     (make-module-path-index-intern-table)
-                     (make-hasheqv) ; require-mpis-in-order
+                     ;; require-mpis:
+                     (if copy-r+p
+                         (requires+provides-require-mpis copy-r+p)
+                         (make-module-path-index-intern-table))
+                     ;; require-mpis-in-order:
+                     (if copy-r+p
+                         (hash-copy (requires+provides-require-mpis-in-order copy-r+p))
+                         (make-hasheqv))
                      (make-hasheq)  ; requires
                      (make-hasheqv) ; provides
                      (make-hasheqv) ; phase-to-defined-syms
@@ -79,7 +86,8 @@
                      #t))
 
 (define (requires+provides-reset! r+p)
-  (hash-clear! (requires+provides-require-mpis-in-order r+p))
+  ;; Don't clear `require-mpis-in-order`, since we want to accumulate
+  ;; all previously required modules
   (hash-clear! (requires+provides-requires r+p))
   (hash-clear! (requires+provides-provides r+p))
   (hash-clear! (requires+provides-phase-to-defined-syms r+p)))
