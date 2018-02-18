@@ -1,9 +1,8 @@
 #lang racket/base
 (require "../common/set.rkt"
          "../common/performance.rkt"
-         "../syntax/syntax.rkt"
-         "../syntax/scope.rkt"
          "../common/phase.rkt"
+         "../syntax/syntax.rkt"
          "../syntax/scope.rkt"
          "../syntax/binding.rkt"
          "../syntax/error.rkt"
@@ -191,6 +190,7 @@
 (define (perform-initial-require! mod-path self
                                   in-stx m-ns
                                   requires+provides
+                                  #:bind? bind?
                                   #:who who)
   (perform-require! (module-path->mpi mod-path self) #f self
                     in-stx m-ns
@@ -199,6 +199,7 @@
                     #:requires+provides requires+provides
                     #:can-be-shadowed? #t
                     #:initial-require? #t
+                    #:bind? bind?
                     #:who who))
 
 ;; ----------------------------------------
@@ -218,6 +219,7 @@
                           #:copy-variable-phase-level [copy-variable-phase-level #f]
                           #:copy-variable-as-constant? [copy-variable-as-constant? #f]
                           #:skip-variable-phase-level [skip-variable-phase-level #f]
+                          #:bind? [bind? #t]
                           #:who who)
   (performance-region
    ['expand 'require]
@@ -261,6 +263,7 @@
             [(adjust-rename? adjust) (list (adjust-rename-from-sym adjust))]
             [else #f])
     #:just-meta just-meta
+    #:bind? bind?
     #:can-bulk? can-bulk-bind?
     #:bulk-prefix bulk-prefix
     #:bulk-excepts bulk-excepts
@@ -358,6 +361,7 @@
                             #:in orig-s
                             #:only only-syms
                             #:just-meta just-meta
+                            #:bind? bind?
                             #:can-bulk? can-bulk?
                             #:bulk-prefix bulk-prefix
                             #:bulk-excepts bulk-excepts
@@ -370,40 +374,41 @@
     (define phase (phase+ phase-shift provide-phase-level))
     (when bulk-callback
       (bulk-callback provides provide-phase-level))
-    (when filter
-      (for ([sym (in-list (or only-syms (hash-keys provides)))])
-        (define binding/p (hash-ref provides sym #f))
-        (when binding/p
-          (define b (provide-binding-to-require-binding binding/p sym
-                                                        #:self self
-                                                        #:mpi mpi
-                                                        #:provide-phase-level provide-phase-level
-                                                        #:phase-shift phase-shift))
-          (let-values ([(sym) (filter b (provided-as-transformer? binding/p))])
-            (when (and sym
-                       (not can-bulk?)) ;; bulk binding added later
-              ;; Add a non-bulk binding, since `filter` has checked/adjusted it
-              (add-binding! (datum->syntax in-stx sym) b phase))))))
-    ;; Add bulk binding after all filtering
-    (when can-bulk?
-      (define bulk-binding-registry (namespace-bulk-binding-registry ns))
-      (add-bulk-binding! in-stx
-                         (bulk-binding (or (and (not bulk-prefix)
-                                                (zero? (hash-count bulk-excepts))
-                                                provides)
-                                           ;; During expansion, the submodules aren't be registered in
-                                           ;; the bulk-binding registry for use by other submodules,
-                                           ;; so do the work to compute bulk provides now if the module
-                                           ;; isn't registered
-                                           (and (not (registered-bulk-provide? bulk-binding-registry
-                                                                               module-name))
-                                                (bulk-provides-add-prefix-remove-exceptions
-                                                 provides bulk-prefix bulk-excepts)))
-                                       bulk-prefix bulk-excepts
-                                       self mpi provide-phase-level phase-shift
-                                       bulk-binding-registry)
-                         phase
-                         #:in orig-s))))
+    (when bind?
+      (when filter
+        (for ([sym (in-list (or only-syms (hash-keys provides)))])
+          (define binding/p (hash-ref provides sym #f))
+          (when binding/p
+            (define b (provide-binding-to-require-binding binding/p sym
+                                                          #:self self
+                                                          #:mpi mpi
+                                                          #:provide-phase-level provide-phase-level
+                                                          #:phase-shift phase-shift))
+            (let-values ([(sym) (filter b (provided-as-transformer? binding/p))])
+              (when (and sym
+                         (not can-bulk?)) ;; bulk binding added later
+                ;; Add a non-bulk binding, since `filter` has checked/adjusted it
+                (add-binding! (datum->syntax in-stx sym) b phase))))))
+      ;; Add bulk binding after all filtering
+      (when can-bulk?
+        (define bulk-binding-registry (namespace-bulk-binding-registry ns))
+        (add-bulk-binding! in-stx
+                           (bulk-binding (or (and (not bulk-prefix)
+                                                  (zero? (hash-count bulk-excepts))
+                                                  provides)
+                                             ;; During expansion, the submodules aren't be registered in
+                                             ;; the bulk-binding registry for use by other submodules,
+                                             ;; so do the work to compute bulk provides now if the module
+                                             ;; isn't registered
+                                             (and (not (registered-bulk-provide? bulk-binding-registry
+                                                                                 module-name))
+                                                  (bulk-provides-add-prefix-remove-exceptions
+                                                   provides bulk-prefix bulk-excepts)))
+                                         bulk-prefix bulk-excepts
+                                         self mpi provide-phase-level phase-shift
+                                         bulk-binding-registry)
+                           phase
+                           #:in orig-s)))))
 
 ;; ----------------------------------------
 

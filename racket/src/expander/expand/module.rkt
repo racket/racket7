@@ -187,7 +187,7 @@
    (define mpis-to-reset (box null))
 
    ;; Initial require
-   (define (initial-require!)
+   (define (initial-require! #:bind? bind?)
      (cond
       [(not keep-enclosing-scope-at-phase)
        ;; Install the initial require
@@ -195,6 +195,7 @@
                                  all-scopes-s
                                  m-ns
                                  requires+provides
+                                 #:bind? bind?
                                  #:who 'module)]
       [else
        ;; For `(module* name #f ....)`, just register the enclosing module
@@ -210,7 +211,7 @@
        (namespace-module-visit! m-ns enclosing-mod
                                 keep-enclosing-scope-at-phase)]))
    (log-expand init-ctx 'prepare-env)
-   (initial-require!)
+   (initial-require! #:bind? #t)
 
    ;; To detect whether the body is expanded multiple times:
    (define again? #f)
@@ -219,10 +220,11 @@
    ;; current module's body
    (define (module-begin-k mb-s mb-init-ctx)
      ;; In case the module body is expanded multiple times, we clear
-     ;; the requires, provides and definitions information each time
+     ;; the requires, provides and definitions information each time.
+     ;; Be careful not to change the current bindings, though.
      (when again?
        (requires+provides-reset! requires+provides)
-       (initial-require!)
+       (initial-require! #:bind? #f)
        (hash-clear! compiled-submodules)
        (set-box! compiled-module-box #f))
      (set! again? #t)
