@@ -329,7 +329,8 @@ scheme_init_port_fun(Scheme_Startup_Env *env)
   REGISTER_SO(scheme_eof_object_p_proc);
   scheme_eof_object_p_proc = scheme_make_folding_prim(eof_object_p, "eof-object?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(scheme_eof_object_p_proc) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                                                   | SCHEME_PRIM_IS_OMITABLE);
+                                                                                   | SCHEME_PRIM_IS_OMITABLE
+                                                                                   | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("eof-object?", scheme_eof_object_p_proc, env);
 
   scheme_addto_prim_instance("write",   scheme_write_proc,    env);

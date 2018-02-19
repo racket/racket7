@@ -314,7 +314,7 @@ headers:
 # again after building this target to potentially update the CGC build
 # to a compiled-startup build
 cstartup@STARTUP_AS_BYTECODE@:
-	@RUN_RACKET_CGC@ -cu $(srcdir)/src/compile-startup.rkt $(CSTARTUPDEST) $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
+	@RUN_RACKET_CGC@ -cu $(srcdir)/src/compile-startup.rkt $(CSTARTUPDEST) cstartup.zo $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
 
 # Similar to above, but when compiling to C instead of bytecode
 cstartup@STARTUP_AS_C@:

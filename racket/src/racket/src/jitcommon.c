@@ -2339,7 +2339,7 @@ static int common4c(mz_jit_state *jitter, void *_data)
       } else
         num_args = 0;
     
-      scheme_generate_struct_alloc(jitter, num_args, 1, 1, ii == 2, ii == 1, JIT_R0);
+      scheme_generate_struct_alloc(jitter, num_args, 1, 1, 1, ii == 2, ii == 1, JIT_R0);
 
       CHECK_LIMIT();
 
@@ -4067,6 +4067,39 @@ static int more_common1(mz_jit_state *jitter, void *_data)
 
       scheme_jit_register_sub_func(jitter, code, scheme_false);
     }
+  }
+
+  /* hash_ref_code */
+  /* args are in R0, R1, R2 */
+  {
+    GC_CAN_IGNORE jit_insn *ref USED_ONLY_FOR_FUTURES;
+
+    sjc.hash_ref_code = jit_get_ip();
+
+    mz_prolog(JIT_R2);
+    jit_subi_p(JIT_RUNSTACK, JIT_RUNSTACK, WORDS_TO_BYTES(3));
+    CHECK_RUNSTACK_OVERFLOW();
+    jit_str_p(JIT_RUNSTACK, JIT_R0);
+    jit_stxi_p(WORDS_TO_BYTES(1), JIT_RUNSTACK, JIT_R1);
+    jit_stxi_p(WORDS_TO_BYTES(2), JIT_RUNSTACK, JIT_R2);
+    JIT_UPDATE_THREAD_RSPTR();
+    CHECK_LIMIT();
+
+    jit_movi_i(JIT_R1, 3);
+    jit_prepare(2);
+    jit_pusharg_p(JIT_RUNSTACK);
+    jit_pusharg_i(JIT_R1);
+    (void)mz_finish_lwe(ts_scheme_checked_hash_ref, ref);
+    CHECK_LIMIT();
+    jit_retval(JIT_R0);
+
+    jit_addi_p(JIT_RUNSTACK, JIT_RUNSTACK, WORDS_TO_BYTES(3));
+    JIT_UPDATE_THREAD_RSPTR();
+    
+    mz_epilog(JIT_V1);
+    CHECK_LIMIT();
+    
+    scheme_jit_register_sub_func(jitter, sjc.hash_ref_code, scheme_false);
   }
 
 #ifdef MZ_USE_LWC

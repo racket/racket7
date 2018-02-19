@@ -479,65 +479,77 @@ scheme_init_number (Scheme_Startup_Env *env)
   p = scheme_make_folding_prim(number_p, "number?", 1, 1, 1);
   scheme_number_p_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("number?", p, env);
 
   p = scheme_make_folding_prim(complex_p, "complex?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("complex?", p, env);
 
   REGISTER_SO(scheme_real_p_proc);
   p = scheme_make_folding_prim(real_p, "real?", 1, 1, 1);
   scheme_real_p_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("real?", p, env);
   
   p = scheme_make_folding_prim(rational_p, "rational?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("rational?", p, env);
 
   p = scheme_make_folding_prim(integer_p, "integer?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("integer?", p, env);
 
   p = scheme_make_folding_prim(exact_integer_p, "exact-integer?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("exact-integer?", p, env);
 
   p = scheme_make_folding_prim(exact_nonnegative_integer_p, "exact-nonnegative-integer?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("exact-nonnegative-integer?", p, env);
 
   p = scheme_make_folding_prim(exact_positive_integer_p, "exact-positive-integer?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("exact-positive-integer?", p, env);
 
   REGISTER_SO(scheme_fixnum_p_proc);
   p = scheme_make_immed_prim(fixnum_p, "fixnum?", 1, 1);
   scheme_fixnum_p_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("fixnum?", p, env);
 
   p = scheme_make_folding_prim(inexact_real_p, "inexact-real?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("inexact-real?", p, env);
 
   REGISTER_SO(scheme_flonum_p_proc);
   p = scheme_make_folding_prim(flonum_p, "flonum?", 1, 1, 1);
   scheme_flonum_p_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("flonum?", p, env);
 
   p = scheme_make_folding_prim(single_flonum_p, "single-flonum?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("single-flonum?", p, env);
 
   p = scheme_make_folding_prim(real_to_single_flonum, "real->single-flonum", 1, 1, 1);
@@ -572,21 +584,25 @@ scheme_init_number (Scheme_Startup_Env *env)
 
   p = scheme_make_folding_prim(scheme_bitwise_and, "bitwise-and", 0, -1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_IS_NARY_INLINED);
+                                                            | SCHEME_PRIM_IS_NARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("bitwise-and", p, env);
 
   p = scheme_make_folding_prim(bitwise_or, "bitwise-ior", 0, -1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_IS_NARY_INLINED);
+                                                            | SCHEME_PRIM_IS_NARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("bitwise-ior", p, env);
 
   p = scheme_make_folding_prim(bitwise_xor, "bitwise-xor", 0, -1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_IS_NARY_INLINED);
+                                                            | SCHEME_PRIM_IS_NARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("bitwise-xor", p, env);
 
   p = scheme_make_folding_prim(bitwise_not, "bitwise-not", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("bitwise-not", p, env);
 
   p = scheme_make_folding_prim(bitwise_bit_set_p, "bitwise-bit-set?", 2, 2, 1);
@@ -854,22 +870,26 @@ void scheme_init_flfxnum_number(Scheme_Startup_Env *env)
 
   p = scheme_make_folding_prim(fx_and, "fxand", 2, 2, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            | SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("fxand", p, env);
 
   p = scheme_make_folding_prim(fx_or, "fxior", 2, 2, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            | SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("fxior", p, env);
 
   p = scheme_make_folding_prim(fx_xor, "fxxor", 2, 2, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            | SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("fxxor", p, env);
 
   p = scheme_make_folding_prim(fx_not, "fxnot", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            | SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("fxnot", p, env);
 
   p = scheme_make_folding_prim(fx_lshift, "fxlshift", 2, 2, 1);
@@ -1056,7 +1076,8 @@ void scheme_init_extfl_number(Scheme_Startup_Env *env)
   p = scheme_make_folding_prim(extflonum_p, "extflonum?", 1, 1, 1);
   scheme_extflonum_p_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("extflonum?", p, env);
 
   scheme_addto_prim_instance("extflonum-available?",

@@ -105,35 +105,42 @@ void scheme_init_char (Scheme_Startup_Env *env)
   REGISTER_SO(scheme_char_p_proc);
   p = scheme_make_folding_prim(char_p, "char?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_char_p_proc = p;
   scheme_addto_prim_instance("char?", p, env);
 
   REGISTER_SO(scheme_interned_char_p_proc);
   p = scheme_make_folding_prim(interned_char_p, "interned-char?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_interned_char_p_proc = p;
   scheme_addto_prim_instance("interned-char?", p, env);
 
   p = scheme_make_folding_prim(char_eq, "char=?", 2, -1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("char=?", p, env);
 
   p = scheme_make_folding_prim(char_lt, "char<?", 2, -1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("char<?", p, env);
 
   p = scheme_make_folding_prim(char_gt, "char>?", 2, -1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("char>?", p, env);
 
   p = scheme_make_folding_prim(char_lt_eq, "char<=?", 2, -1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("char<=?", p, env);
 
   p = scheme_make_folding_prim(char_gt_eq, "char>=?", 2, -1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("char>=?", p, env);
 
   ADD_FOLDING_PRIM("char-ci=?",             char_eq_ci,            2, -1, 1, env);
@@ -147,7 +154,8 @@ void scheme_init_char (Scheme_Startup_Env *env)
   ADD_FOLDING_PRIM("char-graphic?",         char_graphic,          1, 1, 1, env);
 
   p = scheme_make_folding_prim(char_whitespace, "char-whitespace?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("char-whitespace?", p, env);
   
   ADD_FOLDING_PRIM("char-blank?",           char_blank,            1, 1, 1, env);

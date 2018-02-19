@@ -313,7 +313,8 @@ scheme_init_string (Scheme_Startup_Env *env)
   REGISTER_SO(scheme_string_p_proc);
   p = scheme_make_folding_prim(string_p, "string?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("string?", p, env);
   scheme_string_p_proc = p;
 
@@ -330,21 +331,25 @@ scheme_init_string (Scheme_Startup_Env *env)
   
   p = scheme_make_folding_prim(string_length, "string-length", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            |SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            |SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("string-length", p,
 			     env);
 
   p = scheme_make_immed_prim(scheme_checked_string_ref, "string-ref", 2, 2);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("string-ref", p, env);
 
-
   p = scheme_make_immed_prim(scheme_checked_string_set, "string-set!", 3, 3);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("string-set!", p, env);
 
   p = scheme_make_immed_prim(string_eq, "string=?", 2, -1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("string=?", p, env);
 
   scheme_addto_prim_instance("string-locale=?",
@@ -428,11 +433,11 @@ scheme_init_string (Scheme_Startup_Env *env)
 						    "substring",
 						    2, 3),
 			     env);
-  scheme_addto_prim_instance("string-append",
-			     scheme_make_immed_prim(string_append,
-						    "string-append",
-						    0, -1),
-			     env);
+
+  p = scheme_make_immed_prim(string_append, "string-append", 0, -1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("string-append", p, env);
+
   scheme_addto_prim_instance("string->list",
 			     scheme_make_immed_prim(string_to_list,
 						    "string->list",
@@ -458,11 +463,11 @@ scheme_init_string (Scheme_Startup_Env *env)
 						    "string-fill!",
 						    2, 2),
 			     env);
-  scheme_addto_prim_instance("string->immutable-string",
-			     scheme_make_immed_prim(string_to_immutable,
-						    "string->immutable-string",
-						    1, 1),
-			     env);
+
+  p = scheme_make_immed_prim(string_to_immutable, "string->immutable-string", 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("string->immutable-string", p, env);
+  
   scheme_addto_prim_instance("string-normalize-nfc",
 			     scheme_make_immed_prim(string_normalize_c,
 						    "string-normalize-nfc",
@@ -590,7 +595,8 @@ scheme_init_string (Scheme_Startup_Env *env)
   REGISTER_SO(scheme_byte_string_p_proc);
   p = scheme_make_folding_prim(byte_string_p, "bytes?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("bytes?", p, env);
   scheme_byte_string_p_proc = p;
 
@@ -610,20 +616,24 @@ scheme_init_string (Scheme_Startup_Env *env)
 
   p = scheme_make_folding_prim(byte_string_length, "bytes-length", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            |SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            | SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("bytes-length", p, env);
 
   p = scheme_make_immed_prim(scheme_checked_byte_string_ref, "bytes-ref", 2, 2);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            | SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("bytes-ref", p, env);
 
   p = scheme_make_immed_prim(scheme_checked_byte_string_set, "bytes-set!", 3, 3);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("bytes-set!", p, env);
 
   p = scheme_make_immed_prim(byte_string_eq, "bytes=?", 2, -1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("bytes=?", p, env);
 
   scheme_addto_prim_instance("bytes<?",
@@ -642,11 +652,11 @@ scheme_init_string (Scheme_Startup_Env *env)
 						    "subbytes",
 						    2, 3),
 			     env);
-  scheme_addto_prim_instance("bytes-append",
-			     scheme_make_immed_prim(byte_string_append,
-						    "bytes-append",
-						    0, -1),
-			     env);
+
+  p = scheme_make_immed_prim(byte_string_append, "bytes-append", 0, -1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("bytes-append", p, env);
+  
   scheme_addto_prim_instance("bytes->list",
 			     scheme_make_immed_prim(byte_string_to_list,
 						    "bytes->list",
@@ -672,11 +682,10 @@ scheme_init_string (Scheme_Startup_Env *env)
 						    "bytes-fill!",
 						    2, 2),
 			     env);
-  scheme_addto_prim_instance("bytes->immutable-bytes",
-			     scheme_make_immed_prim(byte_string_to_immutable,
-						    "bytes->immutable-bytes",
-						    1, 1),
-			     env);
+
+  p = scheme_make_immed_prim(byte_string_to_immutable, "bytes->immutable-bytes", 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("bytes->immutable-bytes", p, env);
 
   p = scheme_make_immed_prim(byte_string_utf8_index, "bytes-utf-8-index", 2, 4);
   /* Incorrect, since the result can be #f:

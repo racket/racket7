@@ -1,5 +1,6 @@
 #lang racket/base
 (require racket/list
+         racket/unsafe/undefined
          "out.rkt"
          "match.rkt"
          "sort.rkt"
@@ -434,6 +435,8 @@
       [`(values ,r)
        (generate ret r env)]
       [`null (return ret runstack #:can-omit? #t #:can-pre-pop? #t "scheme_null")]
+      [`eof-object (return ret runstack #:can-omit? #t #:can-pre-pop? #t "scheme_eof")]
+      [`unsafe-undefined (return ret runstack #:can-omit? #t #:can-pre-pop? #t "scheme_undefined")]
       [`(,rator ,rands ...)
        (generate-app ret rator rands env)]
       [`,_
@@ -976,6 +979,7 @@
       [(boolean? e) (if e "scheme_true" "scheme_false")]
       [(null? e) "scheme_null"]
       [(void? e) "scheme_void"]
+      [(eq? unsafe-undefined e) "scheme_undefined"]
       [(char? e) (format "scheme_make_character(~a)" (char->integer e))]
       [else
        (error 'generate-quote "not handled: ~e" e)]))

@@ -222,7 +222,8 @@ void scheme_init_file(Scheme_Startup_Env *env)
 
   p = scheme_make_immed_prim(path_p, "path?", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("path?", p, env);
 
   scheme_addto_prim_instance("path-for-some-system?", 

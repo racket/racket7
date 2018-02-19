@@ -502,7 +502,8 @@ static Scheme_Object *sfs_one_branch(SFS_Info *info, int ip,
     else_end_abs = SCHEME_INT_VAL(o);
     SFS_LOG(printf(" %d %d %d %d %d\n", nt, ip, b_end, else_end_abs, info->abs_max_nontail));
     if (((nt > (ip + 1)) && (nt < b_end)) /* => non-tail call in branch */
-        || (else_end_abs < info->abs_max_nontail)) { /* => non-tail call after branches */
+        || (!info->tail_pos
+            && (else_end_abs < info->abs_max_nontail))) { /* => non-tail call after branches */
       SFS_LOG(printf(" other\n"));
       o = SCHEME_VEC_ELS(vec)[(1 - delta) * SFS_BRANCH_W];
       t_min_t = SCHEME_INT_VAL(o);

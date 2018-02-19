@@ -80,7 +80,11 @@
               (hash-ref knowns e #f))
           (format "~a" (top-ref in-lam e))]
          [(hash-ref prim-names e #f)
-          (format "c_prims.~a" (cify e))]
+          (cond
+            [(eq? e 'null) "scheme_null"]
+            [(eq? e 'eof-object) "scheme_eof"]
+            [(eq? e 'unsafe-undefined) "scheme_undefined"]
+            [else (format "c_prims.~a" (cify e))])]
          [else (runstack-ref runstack e)])]
       [else
        (define inliner (inline-function (car e) (length (cdr e)) (cdr e) in-lam knowns))

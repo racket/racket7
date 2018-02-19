@@ -36,7 +36,7 @@ static Scheme_Object *equal_as_bool(Scheme_Object *a, Scheme_Object *b);
 #endif
 #include "jit_ts.c"
 
-static Scheme_Object *equal_as_bool(Scheme_Object *a, Scheme_Object *b)
+static Scheme_Object *equal_as_bool(Scheme_Object *a, Scheme_Object *b) XFORM_ASSERT_NO_CONVERSION
 {
   if (scheme_equal(a, b))
     return scheme_true;
@@ -743,7 +743,9 @@ static int generate_inlined_struct_op(int kind, mz_jit_state *jitter,
       (void)jit_calli(sjc.struct_prop_pred_code);
     }
   } else if (kind == INLINE_STRUCT_PROC_CONSTR) {
-    scheme_generate_struct_alloc(jitter, rand2 ? 2 : 1, 0, 0, is_tail, multi_ok, JIT_R0);
+    int check_proc;
+    check_proc = !extract_struct_constant(jitter, rator);
+    scheme_generate_struct_alloc(jitter, rand2 ? 2 : 1, 0, 0, check_proc, is_tail, multi_ok, JIT_R0);
     CHECK_LIMIT();
   } else {
     scheme_signal_error("internal error: unknown struct-op mode");
@@ -909,6 +911,8 @@ static int generate_inlined_nary_struct_op(int kind, mz_jit_state *jitter,
                                            int is_tail, int multi_ok, int dest)
 /* de-sync'd ok; for branch, sync'd before */
 {
+  int check_proc;
+
   /* generate code to evaluate the arguments */
   scheme_generate_app(app, NULL, app->num_args, app->num_args, jitter, 0, 0, 0, 1);
   CHECK_LIMIT();
@@ -916,8 +920,10 @@ static int generate_inlined_nary_struct_op(int kind, mz_jit_state *jitter,
 
   jit_movr_l(JIT_R0, JIT_V1); /* move rator to R0 */
 
+  check_proc = !extract_struct_constant(jitter, rator);
+
   /* arguments are now on the runstack, rator is in R0 */
-  scheme_generate_struct_alloc(jitter, app->num_args, 0, 0, is_tail, multi_ok, dest);
+  scheme_generate_struct_alloc(jitter, app->num_args, 0, 0, check_proc, is_tail, multi_ok, dest);
 
   CHECK_LIMIT();
 
@@ -930,7 +936,7 @@ static int generate_inlined_nary_struct_op(int kind, mz_jit_state *jitter,
 }
 
 int scheme_generate_struct_alloc(mz_jit_state *jitter, int num_args, 
-                                 int inline_slow, int pop_and_jump,
+                                 int inline_slow, int pop_and_jump, int check_proc,
                                  int is_tail, int multi_ok, int dest)
 /* Rator is in R0.
    For unary case, R1 is argument.
@@ -1052,27 +1058,31 @@ int scheme_generate_struct_alloc(mz_jit_state *jitter, int num_args,
 
   /* Continue trying fast path: check proc */
   mz_patch_branch(ref);
-  (void)mz_bnei_t(refslow, JIT_R0, scheme_prim_type, JIT_R2);
-  jit_ldxi_s(JIT_R2, JIT_R0, &((Scheme_Primitive_Proc *)0x0)->pp.flags);
-  jit_andi_i(JIT_R2, JIT_R2, SCHEME_PRIM_OTHER_TYPE_MASK);
-  (void)jit_bnei_i(refslow, JIT_R2, SCHEME_PRIM_STRUCT_TYPE_SIMPLE_CONSTR);
-  CHECK_LIMIT();
+  if (check_proc) {
+    (void)mz_bnei_t(refslow, JIT_R0, scheme_prim_type, JIT_R2);
+    jit_ldxi_s(JIT_R2, JIT_R0, &((Scheme_Primitive_Proc *)0x0)->pp.flags);
+    jit_andi_i(JIT_R2, JIT_R2, SCHEME_PRIM_OTHER_TYPE_MASK);
+    (void)jit_bnei_i(refslow, JIT_R2, SCHEME_PRIM_STRUCT_TYPE_SIMPLE_CONSTR);
+    CHECK_LIMIT();
+  }
 
   jit_ldxi_p(JIT_R2, JIT_R0, &(SCHEME_PRIM_CLOSURE_ELS(0x0)[0]));
   /* R2 now has the Scheme_Struct_Type* */
 
-  if (num_args != 2) {
-    /* V1 is available */
-    jit_ldxi_i(JIT_V1, JIT_R2, &((Scheme_Struct_Type *)0x0)->num_slots);
-    if (num_args == -1)
-      (void)jit_bner_i(refslow, JIT_V1, JIT_R1);
-    else
-      (void)jit_bnei_i(refslow, JIT_V1, num_args);
-  } else {
-    /* No registers available, so we'll have to re-extract to R2 */
-    jit_ldxi_i(JIT_R2, JIT_R2, &((Scheme_Struct_Type *)0x0)->num_slots);
-    (void)jit_bnei_i(refslow, JIT_R2, num_args);
-    jit_ldxi_p(JIT_R2, JIT_R0, &(SCHEME_PRIM_CLOSURE_ELS(0x0)[0]));
+  if (check_proc) {
+    if (num_args != 2) {
+      /* V1 is available */
+      jit_ldxi_i(JIT_V1, JIT_R2, &((Scheme_Struct_Type *)0x0)->num_slots);
+      if (num_args == -1)
+        (void)jit_bner_i(refslow, JIT_V1, JIT_R1);
+      else
+        (void)jit_bnei_i(refslow, JIT_V1, num_args);
+    } else {
+      /* No registers available, so we'll have to re-extract to R2 */
+      jit_ldxi_i(JIT_R2, JIT_R2, &((Scheme_Struct_Type *)0x0)->num_slots);
+      (void)jit_bnei_i(refslow, JIT_R2, num_args);
+      jit_ldxi_p(JIT_R2, JIT_R0, &(SCHEME_PRIM_CLOSURE_ELS(0x0)[0]));
+    }
   }
 
   CHECK_LIMIT();
@@ -1909,6 +1919,8 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       __START_TINY_JUMPS__(1);
       if (!for_weak && !for_star)
         refdone = jit_jmpi(jit_forward());
+      else
+        refdone = NULL;
       mz_patch_branch(ref);
       (void)mz_bnei_t(reffail, JIT_R0, (for_weak ? scheme_weak_box_type : scheme_box_type), JIT_R1);
       __END_TINY_JUMPS__(1);
@@ -3017,7 +3029,9 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
       if (!SCHEME_INTP(a1)
 	  && !SCHEME_FALSEP(a1)
 	  && !SCHEME_VOIDP(a1)
-	  && !SAME_OBJ(a1, scheme_true)) {
+	  && !SAME_OBJ(a1, scheme_true)
+	  && !SAME_OBJ(a1, scheme_null)
+	  && !SAME_OBJ(a1, scheme_undefined)) {
 	scheme_mz_load_retained(jitter, JIT_R1, a1);
 	ref = jit_bner_p(jit_forward(), JIT_R0, JIT_R1);
         /* In case true is a fall-through, note that the test 
@@ -4465,7 +4479,12 @@ int scheme_generate_inlined_nary(mz_jit_state *jitter, Scheme_App_Rec *app, int 
   if (!SCHEME_PRIMP(rator))
     return 0;
 
-  if (!(SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_IS_NARY_INLINED))
+  if (SAME_OBJ(rator, scheme_hash_ref_proc)) {
+    if ((app->num_args != 3)
+        || (SCHEME_TYPE(app->args[3]) < _scheme_values_types_)
+        || SCHEME_PROCP(app->args[3]))
+      return 0;
+  } else if (!(SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_IS_NARY_INLINED))
     return 0;
 
   if (app->num_args < ((Scheme_Primitive_Proc *)rator)->mina)
@@ -5465,6 +5484,51 @@ int scheme_generate_inlined_nary(mz_jit_state *jitter, Scheme_App_Rec *app, int 
 
       if (!is_ref && !result_ignored)
         (void)jit_movi_p(dest, scheme_void);
+
+      return 1;
+    } else if (IS_NAMED_PRIM(rator, "hash-ref")) {
+      GC_CAN_IGNORE jit_insn *refdone0, *refdone, *refslow;
+      
+      /* We only get here is we have three arguments with the last as a
+         non-procedure constant */
+
+      scheme_generate_two_args(app->args[1], app->args[2], jitter, 1, 3);
+      CHECK_LIMIT();
+ 
+      mz_rs_sync();
+
+      /* Jump to slow path for anything other than an immutable hasheq */
+      __START_SHORT_JUMPS__(1);
+      refslow = mz_bnei_t(jit_forward(), JIT_R0, scheme_eq_hash_tree_type, JIT_R2);
+      __END_SHORT_JUMPS__(1);
+
+      /* scheme_eq_hash_tree_get doesn't trigger a GC */
+      jit_prepare(2);
+      jit_pusharg_p(JIT_R1);
+      jit_pusharg_p(JIT_R0);
+      (void)jit_finish(scheme_eq_hash_tree_get);
+      jit_retval(dest);
+
+      __START_SHORT_JUMPS__(1);
+      refdone0 = jit_bnei_p(jit_forward(), dest, NULL);
+      scheme_mz_load_retained(jitter, dest, app->args[3]);
+      CHECK_LIMIT();
+
+      refdone = jit_jmpi(jit_forward());
+ 
+      /* slow path */
+      mz_patch_branch(refslow);
+      __END_SHORT_JUMPS__(1);
+
+      scheme_mz_load_retained(jitter, JIT_R2, app->args[3]);
+      (void)jit_calli(sjc.hash_ref_code);
+      jit_movr_p(dest, JIT_R0);
+      CHECK_LIMIT();
+
+      __START_SHORT_JUMPS__(1);
+      mz_patch_branch(refdone0);
+      mz_patch_ucbranch(refdone);
+      __END_SHORT_JUMPS__(1);
 
       return 1;
     }

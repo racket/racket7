@@ -347,6 +347,7 @@ struct scheme_jit_common_record {
   void *list_p_code, *list_p_branch_code;
   void *list_length_code;
   void *list_ref_code, *list_tail_code;
+  void *hash_ref_code;
   void *finish_tail_call_code, *finish_tail_call_fixup_code;
   void *linklet_run_start_code;
   void *thread_start_child_code;
@@ -1420,7 +1421,7 @@ int scheme_generate_inlined_test(mz_jit_state *jitter, Scheme_Object *obj, int b
                                  Branch_Info *for_branch);
 int scheme_generate_cons_alloc(mz_jit_state *jitter, int rev, int inline_retry, int known_list, int dest);
 int scheme_generate_struct_alloc(mz_jit_state *jitter, int num_args, 
-                                 int inline_slow, int pop_and_jump,
+                                 int inline_slow, int pop_and_jump, int check_proc, 
                                  int is_tail, int multi_ok, int dest);
 int scheme_generate_two_args(Scheme_Object *rand1, Scheme_Object *rand2, mz_jit_state *jitter, 
                              int order_matters, int skipped);

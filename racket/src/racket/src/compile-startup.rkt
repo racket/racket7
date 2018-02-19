@@ -7,9 +7,10 @@
   ;; the build directory)
   
   (define-values (dest) (vector-ref (current-command-line-arguments) 0))
-  (define-values (src) (vector-ref (current-command-line-arguments) 1))
-  (define-values (vers) (vector-ref (current-command-line-arguments) 2))
-  (define-values (other-files) (cdddr (vector->list (current-command-line-arguments))))
+  (define-values (zo-dest) (vector-ref (current-command-line-arguments) 1))
+  (define-values (src) (vector-ref (current-command-line-arguments) 2))
+  (define-values (vers) (vector-ref (current-command-line-arguments) 3))
+  (define-values (other-files) (list-tail (vector->list (current-command-line-arguments)) 4))
 
   (define-values (version-comparisons) (get-version-comparisons vers))
   
@@ -90,9 +91,9 @@
 
   (define-values (DIGS-PER-LINE) 20)
 
-  #;
+  ;; In case someone wants to inspect the output with `raco decompile`:
   (call-with-output-file
-   "/tmp/startup.zo"
+   zo-dest
    (lambda (outfile) (write (hash->linklet-bundle (hasheq 'startup linklet)) outfile))
    'truncate)
   

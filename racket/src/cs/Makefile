@@ -65,6 +65,7 @@ rktl:
 	$(MAKE) thread-rktl
 	$(MAKE) io-rktl
 	$(MAKE) regexp-rktl
+	$(MAKE) schemify-rktl
 	$(MAKE) expander-rktl
 
 # For running without an enclosing build of the traditional Racket VM:
@@ -104,6 +105,9 @@ compiled/schemify.scm: compiled/schemify.rktl $(CONVERT_DEPS)
 IGNORE = ++knot read - ++direct kernel ++pure ../../collects/racket/private/collect.rkt
 
 compiled/schemify.rktl:
+	$(MAKE) schemify-rktl
+
+schemify-rktl:
 	$(RACKET) -N raco -l- raco make ../expander/bootstrap-run.rkt
 	$(RACKET) ../expander/bootstrap-run.rkt -t ../schemify/main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/schemify.rktl
 

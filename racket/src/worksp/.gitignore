@@ -20,8 +20,9 @@
 */*X.vcxproj
 */*X.sln
 
-/libracket/cstartup.inc
 /libracket/startup.inc
+/libracket/cstartup.inc
+/libracket/cstartup.zo
 
 checkvs9.obj
 checkvs9.exe

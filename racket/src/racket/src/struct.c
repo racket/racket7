@@ -3452,8 +3452,17 @@ intptr_t scheme_get_or_check_structure_shape(Scheme_Object *e, Scheme_Object *ex
       want_v = (STRUCT_PROC_SHAPE_PRED
                 | (st->authentic ? STRUCT_PROC_SHAPE_AUTHENTIC : 0));
     } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_SETTER) {
+      int pos = SCHEME_INT_VAL(SCHEME_PRIM_CLOSURE_ELS(e)[1]);
+      int parent_slots;
       st = (Scheme_Struct_Type *)SCHEME_PRIM_CLOSURE_ELS(e)[0];
-      want_v = ((st->num_slots << STRUCT_PROC_SHAPE_SHIFT)
+      parent_slots = ((st->name_pos > 0)
+                      ? st->parent_types[st->name_pos - 1]->num_slots
+                      : 0);
+      if ((pos - parent_slots) < (31 - STRUCT_PROC_SHAPE_SHIFT))
+        pos++;
+      else
+        pos = 0; /* => unknown, since simple struct info can't track it */
+      want_v = ((pos << STRUCT_PROC_SHAPE_SHIFT)
                 | STRUCT_PROC_SHAPE_SETTER
                 | (st->authentic ? STRUCT_PROC_SHAPE_AUTHENTIC : 0));
     } else if (i == SCHEME_PRIM_STRUCT_TYPE_INDEXED_GETTER) {

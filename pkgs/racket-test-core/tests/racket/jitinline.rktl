@@ -47,7 +47,9 @@
                                                          thing? rock? stone?
                                                          continuation-mark-set-first))
 				  (let ([s (with-handlers ([exn? exn-message])
-                                             (let ([bad bad-value])
+                                             (let ([bad (if (eq? bad-value 'unsafe-undefined)
+                                                            unsafe-undefined
+                                                            bad-value)])
                                                (cond
                                                 [first-arg (proc first-arg bad)]
                                                 [second-arg (proc bad second-arg)]
@@ -843,7 +845,7 @@
       (bin-exact 3.3t0 'extflvector-ref (extflvector 1.1t0 2.2t0 3.3t0) 2)
       (un-exact 3 'extflvector-length (extflvector 1.1t0 2.2t0 3.3t0) #t)
 
-      (bin-exact 5 'check-not-unsafe-undefined 5 'check-not-unsafe-undefined #:bad-value unsafe-undefined)
+      (bin-exact 5 'check-not-unsafe-undefined 5 'check-not-unsafe-undefined #:bad-value 'unsafe-undefined)
       )
     
     (let ([test-setter

@@ -2976,18 +2976,20 @@ int scheme_generate(Scheme_Object *obj, mz_jit_state *jitter, int is_tail, int w
           mz_patch_branch(ref2);
           __END_SHORT_JUMPS__(1);
           (void)jit_movi_p(JIT_R0, NULL);
-          jit_stxi_p(&((Scheme_Thread *)0x0)->ku.multiple.array, JIT_V1, JIT_R0);
-          for (i = 0; i < lv->count; i++) {
-            jit_ldxi_p(JIT_R1, JIT_R2, WORDS_TO_BYTES(i));
-            if (ab) {
-              pos = mz_remap(lv->position + i);
-              jit_ldxi_p(JIT_R0, JIT_RUNSTACK, WORDS_TO_BYTES(pos));
-              jit_str_p(JIT_R0, JIT_R1);
-            } else {
-              pos = mz_remap(lv->position + i);
-              jit_stxi_p(WORDS_TO_BYTES(pos), JIT_RUNSTACK, JIT_R1);
+          if (lv->count) {
+            jit_stxi_p(&((Scheme_Thread *)0x0)->ku.multiple.array, JIT_V1, JIT_R0);
+            for (i = 0; i < lv->count; i++) {
+              jit_ldxi_p(JIT_R1, JIT_R2, WORDS_TO_BYTES(i));
+              if (ab) {
+                pos = mz_remap(lv->position + i);
+                jit_ldxi_p(JIT_R0, JIT_RUNSTACK, WORDS_TO_BYTES(pos));
+                jit_str_p(JIT_R0, JIT_R1);
+              } else {
+                pos = mz_remap(lv->position + i);
+                jit_stxi_p(WORDS_TO_BYTES(pos), JIT_RUNSTACK, JIT_R1);
+              }
+              CHECK_LIMIT();
             }
-            CHECK_LIMIT();
           }
         }
       }

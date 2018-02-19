@@ -1239,6 +1239,8 @@ static int is_values_with_accessors_and_mutators(Scheme_Object *e, int vals, int
         && is_local_ref(app->args[2], delta+1, 1, vars)
         && is_local_ref(app->args[3], delta+2, 1, vars)) {
       int i, num_gets = 0, num_sets = 0, normal_ops = 1;
+      int setter_fields = 0, normal_sets = 1;
+      int prev_setter_pos = app->num_args; /* bigger than any setter index can be */
       for (i = app->num_args; i > 3; i--) {
         if (is_local_ref(app->args[i], delta, 5, vars)) {
           normal_ops = 0;
@@ -1251,10 +1253,21 @@ static int is_values_with_accessors_and_mutators(Scheme_Object *e, int vals, int
                                       delta2, _stinfo->field_count, vars))
               break;
             if (SAME_OBJ(app3->args[0], scheme_make_struct_field_mutator_proc)) {
+              int pos = SCHEME_INT_VAL(app3->args[2]);
               if (num_gets) {
-                /* Since we're alking backwards, it's not normal to hit a mutator
+                /* Since we're walking backwards, it's not normal to hit a mutator
                    after (i.e., before in argument order) a selector */
                 normal_ops = 0;
+              }
+              if (normal_sets) {
+                if (pos >= prev_setter_pos) {
+                  /* setters are not in the usual order; zero out the mask */
+                  normal_sets = 0;
+                  setter_fields = 0;
+                } else if (pos < (31 - STRUCT_PROC_SHAPE_SHIFT)) {
+                  setter_fields |= (1 << pos);
+                  prev_setter_pos = pos;
+                }
               }
               num_sets++;
             } else {
@@ -1288,6 +1301,7 @@ static int is_values_with_accessors_and_mutators(Scheme_Object *e, int vals, int
         _stinfo->indexed_ops = 1;
         _stinfo->num_gets = num_gets;
         _stinfo->num_sets = num_sets;
+        _stinfo->setter_fields = setter_fields;
         return 1;
       }
     }
@@ -1825,10 +1839,30 @@ intptr_t scheme_get_struct_proc_shape(int k, Simple_Struct_Type_Info *stinfo)
         return (STRUCT_PROC_SHAPE_GETTER
                 | (stinfo->authentic ? STRUCT_PROC_SHAPE_AUTHENTIC : 0)
                 | ((stinfo->super_field_count + (k - 3)) << STRUCT_PROC_SHAPE_SHIFT));
-      } else
+      } else {
+        int idx = (k - 3 - stinfo->num_gets), setter_fields = stinfo->setter_fields, pos = 0;
+
+        /* setter_fields is a bitmap for first (31-STRUCT_PROC_SHAPE_SHIFT) fields that may have a setter */
+        while ((idx > 0) || !(setter_fields & 1)) {
+          if (setter_fields & 1) {
+            idx--;
+          }
+          setter_fields = setter_fields >> 1;
+          pos++;
+          if (!setter_fields) break;
+        }
+
+        if (!idx && (setter_fields & 1))
+          pos += stinfo->super_field_count + 1;
+        else {
+          /* represent "unknown" by zero */
+          pos = 0;
+        }
+
         return (STRUCT_PROC_SHAPE_SETTER
                 | (stinfo->authentic ? STRUCT_PROC_SHAPE_AUTHENTIC : 0)
-                | (stinfo->field_count << STRUCT_PROC_SHAPE_SHIFT));
+                | (pos << STRUCT_PROC_SHAPE_SHIFT));
+      }
     }
   }
 
@@ -2859,40 +2893,43 @@ Scheme_Object *optimize_for_inline(Optimize_Info *info, Scheme_Object *le, int a
       if (le) {
         LOG_INLINE(fprintf(stderr, "Inline %d[%d]<=%d@%d %d %s\n", sz, is_leaf, threshold, info->inline_fuel,
                            single_use, scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL)));
-        scheme_log(info->logger,
-                   SCHEME_LOG_DEBUG,
-                   0,
-                   "inlining %s size: %d threshold: %d#<separator>%s",
-                   scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
-                   sz,
-                   threshold,
-                   scheme_optimize_context_to_string(info->context));
+        if (scheme_log_level_p(info->logger, SCHEME_LOG_DEBUG))
+          scheme_log(info->logger,
+                     SCHEME_LOG_DEBUG,
+                     0,
+                     "inlining %s size: %d threshold: %d#<separator>%s",
+                     scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
+                     sz,
+                     threshold,
+                     scheme_optimize_context_to_string(info->context));
         le = apply_inlined((Scheme_Lambda *)le, sub_info, argc, app, app2, app3, context,
                            orig_le, prev, single_use);
         return le;
       } else {
         LOG_INLINE(fprintf(stderr, "No inline %s\n", scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL)));
-        scheme_log(info->logger,
-                   SCHEME_LOG_DEBUG,
-                   0,
-                   "no-inlining %s size: %d threshold: %d#<separator>%s",
-                   scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
-                   sz,
-                   threshold,
-                   scheme_optimize_context_to_string(info->context));
+        if (scheme_log_level_p(info->logger, SCHEME_LOG_DEBUG))
+          scheme_log(info->logger,
+                     SCHEME_LOG_DEBUG,
+                     0,
+                     "no-inlining %s size: %d threshold: %d#<separator>%s",
+                     scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
+                     sz,
+                     threshold,
+                     scheme_optimize_context_to_string(info->context));
       }
     } else {
       LOG_INLINE(fprintf(stderr, "No fuel %s %d[%d]>%d@%d %d\n", scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
                          sz, is_leaf, threshold,
                          info->inline_fuel, info->use_psize));
-      scheme_log(info->logger,
-                 SCHEME_LOG_DEBUG,
-                 0,
-                 "out-of-fuel %s size: %d threshold: %d#<separator>%s",
-                 scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
-                 sz,
-                 threshold,
-                 scheme_optimize_context_to_string(info->context));
+      if (scheme_log_level_p(info->logger, SCHEME_LOG_DEBUG))
+        scheme_log(info->logger,
+                   SCHEME_LOG_DEBUG,
+                   0,
+                   "out-of-fuel %s size: %d threshold: %d#<separator>%s",
+                   scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
+                   sz,
+                   threshold,
+                   scheme_optimize_context_to_string(info->context));
     }
   }
 
@@ -3220,6 +3257,8 @@ static Scheme_Object *rator_implies_predicate(Scheme_Object *rator, Optimize_Inf
       return scheme_real_p_proc;
     else if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_PRODUCES_NUMBER)
       return scheme_number_p_proc;
+    else if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_PRODUCES_BOOL)
+      return scheme_boolean_p_proc;
     else if (SAME_OBJ(rator, scheme_cons_proc))
       return scheme_pair_p_proc;
     else if (SAME_OBJ(rator, scheme_unsafe_cons_list_proc))
@@ -3266,65 +3305,12 @@ static Scheme_Object *rator_implies_predicate(Scheme_Object *rator, Optimize_Inf
              || IS_NAMED_PRIM(rator, "bytes-set!")
              || IS_NAMED_PRIM(rator, "set-box!"))
       return scheme_void_p_proc;
-    else if (IS_NAMED_PRIM(rator, "vector-set!")
-             || IS_NAMED_PRIM(rator, "string-set!")
-             || IS_NAMED_PRIM(rator, "bytes-set!"))
-      return scheme_void_p_proc;
     else if (IS_NAMED_PRIM(rator, "string->symbol")
              || IS_NAMED_PRIM(rator, "gensym"))
       return scheme_symbol_p_proc;
     else if (IS_NAMED_PRIM(rator, "string->keyword"))
       return scheme_keyword_p_proc;
-    else if (IS_NAMED_PRIM(rator, "pair?")
-             || IS_NAMED_PRIM(rator, "mpair?")
-             || IS_NAMED_PRIM(rator, "list?")
-             || IS_NAMED_PRIM(rator, "list-pair?")
-             || IS_NAMED_PRIM(rator, "vector?")
-             || IS_NAMED_PRIM(rator, "box?")
-             || IS_NAMED_PRIM(rator, "number?")
-             || IS_NAMED_PRIM(rator, "real?")
-             || IS_NAMED_PRIM(rator, "complex?")
-             || IS_NAMED_PRIM(rator, "rational?")
-             || IS_NAMED_PRIM(rator, "integer?")
-             || IS_NAMED_PRIM(rator, "exact-integer?")
-             || IS_NAMED_PRIM(rator, "exact-nonnegative-integer?")
-             || IS_NAMED_PRIM(rator, "exact-positive-integer?")
-             || IS_NAMED_PRIM(rator, "inexact-real?")
-             || IS_NAMED_PRIM(rator, "fixnum?")
-             || IS_NAMED_PRIM(rator, "flonum?")
-             || IS_NAMED_PRIM(rator, "single-flonum?")
-             || IS_NAMED_PRIM(rator, "null?")
-             || IS_NAMED_PRIM(rator, "void?")
-             || IS_NAMED_PRIM(rator, "symbol?")
-             || IS_NAMED_PRIM(rator, "keyword?")
-             || IS_NAMED_PRIM(rator, "string?")
-             || IS_NAMED_PRIM(rator, "bytes?")
-             || IS_NAMED_PRIM(rator, "path?")
-             || IS_NAMED_PRIM(rator, "char?")
-             || IS_NAMED_PRIM(rator, "interned-char?")
-             || IS_NAMED_PRIM(rator, "boolean?")
-             || IS_NAMED_PRIM(rator, "chaperone?")
-             || IS_NAMED_PRIM(rator, "impersonator?")
-             || IS_NAMED_PRIM(rator, "procedure?")
-             || IS_NAMED_PRIM(rator, "eof-object?")
-             || IS_NAMED_PRIM(rator, "immutable?")
-             || IS_NAMED_PRIM(rator, "not")
-             || IS_NAMED_PRIM(rator, "true-object?")
-             || IS_NAMED_PRIM(rator, "zero?")
-             || IS_NAMED_PRIM(rator, "procedure-arity-includes?")
-             || IS_NAMED_PRIM(rator, "variable-reference-constant?")
-             || IS_NAMED_PRIM(rator, "eq?")
-             || IS_NAMED_PRIM(rator, "eqv?")
-             || IS_NAMED_PRIM(rator, "equal?")
-             || IS_NAMED_PRIM(rator, "string=?")
-             || IS_NAMED_PRIM(rator, "bytes=?")
-             || IS_NAMED_PRIM(rator, "char=?")
-             || IS_NAMED_PRIM(rator, "free-identifier=?")
-             || IS_NAMED_PRIM(rator, "bound-identifier=?")
-             || IS_NAMED_PRIM(rator, "procedure-closure-contents-eq?")) {
-      return scheme_boolean_p_proc;
-    }
-
+    
     {
       Scheme_Object *p;
       p = local_type_to_predicate(produces_local_type(rator, argc));
@@ -3366,7 +3352,7 @@ static Scheme_Object *do_expr_implies_predicate(Scheme_Object *expr, Optimize_In
   switch (SCHEME_TYPE(expr)) {
   case scheme_ir_local_type:
     {
-      if (scheme_hash_tree_get(ignore_vars, expr))
+      if (scheme_eq_hash_tree_get(ignore_vars, expr))
         return NULL;
       
       if (!SCHEME_VAR(expr)->mutated) {
@@ -3418,7 +3404,7 @@ static Scheme_Object *do_expr_implies_predicate(Scheme_Object *expr, Optimize_In
     break;
   case scheme_application3_type:
     {
-    Scheme_App3_Rec *app = (Scheme_App3_Rec *)expr;
+      Scheme_App3_Rec *app = (Scheme_App3_Rec *)expr;
       if (SCHEME_PRIMP(app->rator)
           && (SCHEME_PRIM_PROC_OPT_FLAGS(app->rator) & SCHEME_PRIM_IS_BINARY_INLINED)
           && IS_NAMED_PRIM(app->rator, "bitwise-and")) {
@@ -3566,24 +3552,26 @@ static Scheme_Object *do_expr_implies_predicate(Scheme_Object *expr, Optimize_In
     return scheme_box_p_proc;
     break;
   default:
-    if (SCHEME_FLOATP(expr))
-      return scheme_flonum_p_proc;
-    if (SCHEME_LONG_DBLP(expr))
-      return scheme_extflonum_p_proc;
-    if (SCHEME_INTP(expr)
-        && IN_FIXNUM_RANGE_ON_ALL_PLATFORMS(SCHEME_INT_VAL(expr)))
-      return scheme_fixnum_p_proc;
-    if (SCHEME_REALP(expr))
-      return scheme_real_p_proc;
-    if (SCHEME_NUMBERP(expr))
+    if (SCHEME_NUMBERP(expr)) {
+      if (SCHEME_FLOATP(expr))
+        return scheme_flonum_p_proc;
+      if (SCHEME_LONG_DBLP(expr))
+        return scheme_extflonum_p_proc;
+      if (SCHEME_INTP(expr)
+          && IN_FIXNUM_RANGE_ON_ALL_PLATFORMS(SCHEME_INT_VAL(expr)))
+        return scheme_fixnum_p_proc;
+      if (SCHEME_REALP(expr))
+        return scheme_real_p_proc;
       return scheme_number_p_proc;
+    }
 
     if (SCHEME_NULLP(expr))
       return scheme_null_p_proc;
-    if (scheme_is_list(expr))
-      return scheme_list_pair_p_proc;
-    if (SCHEME_PAIRP(expr))
+    if (SCHEME_PAIRP(expr)) {
+      if (scheme_is_list(expr))
+        return scheme_list_pair_p_proc;
       return scheme_pair_p_proc;
+    }
     if (SCHEME_MPAIRP(expr))
       return scheme_mpair_p_proc;
     if (SCHEME_CHAR_STRINGP(expr))
@@ -3598,10 +3586,11 @@ static Scheme_Object *do_expr_implies_predicate(Scheme_Object *expr, Optimize_In
       return scheme_keyword_p_proc;
     if (SCHEME_SYMBOLP(expr))
       return scheme_symbol_p_proc;
-    if (SCHEME_CHARP(expr) && SCHEME_CHAR_VAL(expr) < 256)
-      return scheme_interned_char_p_proc;
-    if (SCHEME_CHARP(expr))
+    if (SCHEME_CHARP(expr)) {
+      if (SCHEME_CHAR_VAL(expr) < 256)
+        return scheme_interned_char_p_proc;
       return scheme_char_p_proc;
+    }
     if (SAME_OBJ(expr, scheme_true))
       return scheme_true_object_p_proc;
     if (SCHEME_FALSEP(expr))
@@ -3878,6 +3867,8 @@ static int appn_flags(Scheme_Object *rator, Optimize_Info *info)
   return 0;
 }
 
+#define CHECK_PRIM_AD_HOC_OPT_FLAGS 0
+
 static int check_known_variant(Optimize_Info *info, Scheme_Object *app,
                                Scheme_Object *rator, Scheme_Object *rand,
                                const char *who, Scheme_Object *expect_pred,
@@ -3893,7 +3884,23 @@ static int check_known_variant(Optimize_Info *info, Scheme_Object *app,
    generate an error. If unsafe is NULL then rator has no unsafe
    version, so only check the type. */
 {
-  if (SCHEME_PRIMP(rator) && (!who || IS_NAMED_PRIM(rator, who))) {
+#if CHECK_PRIM_AD_HOC_OPT_FLAGS
+  if (who) {
+    Scheme_Object *p;
+    p = scheme_builtin_value(who);
+    if (!p) {
+      printf("bad primitive name: %s\n", who);
+      abort();
+    }
+    if (!(SCHEME_PRIM_PROC_OPT_FLAGS(p) & SCHEME_PRIM_AD_HOC_OPT)) {
+      printf("missing SCHEME_PRIM_AD_HOC_OPT: %s\n", who);
+      abort();
+    }
+  }
+#endif
+
+  MZ_ASSERT(SCHEME_PRIMP(rator));
+  if (!who || IS_NAMED_PRIM(rator, who)) {
     Scheme_Object *pred;
 
     if (unsafe_mode)
@@ -3953,7 +3960,8 @@ static void check_known_both_try(Optimize_Info *info, Scheme_Object *app,
 /* Replace the rator with an unsafe version if both rands have the right type.
    If not, don't save the type, nor mark this as an error */
 {
-  if (SCHEME_PRIMP(rator) && (!who || IS_NAMED_PRIM(rator, who))) {
+  MZ_ASSERT(SCHEME_PRIMP(rator));
+  if (!who || IS_NAMED_PRIM(rator, who)) {
     Scheme_Object *pred1, *pred2;
 
     if (info->unsafe_mode) {
@@ -3976,7 +3984,8 @@ static void check_known_both_variant(Optimize_Info *info, Scheme_Object *app,
                                      Scheme_Object *unsafe, int unsafe_mode,
                                      Scheme_Object *implies_pred)
 {
-  if (SCHEME_PRIMP(rator) && (!who || IS_NAMED_PRIM(rator, who))) {
+  MZ_ASSERT(SCHEME_PRIMP(rator));
+  if (!who || IS_NAMED_PRIM(rator, who)) {
     int ok1;
     ok1 = check_known_variant(info, app, rator, rand1, who, expect_pred, NULL, unsafe_mode, implies_pred);
     check_known_variant(info, app, rator, rand2, who, expect_pred, (ok1 ? unsafe : NULL), unsafe_mode, implies_pred);
@@ -4119,36 +4128,38 @@ static Scheme_Object *finish_optimize_application(Scheme_App_Rec *app, Optimize_
     if (app->num_args >= 3)
       rand3 = app->args[3];
 
-    check_known(info, app_o, rator, rand1, "vector-set!", scheme_vector_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "vector-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "vector-set*!", scheme_vector_p_proc,
-                (info->unsafe_mode ? scheme_unsafe_vector_star_set_proc : NULL), info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "vector-set*!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_AD_HOC_OPT) {
+      check_known(info, app_o, rator, rand1, "vector-set!", scheme_vector_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "vector-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "vector*-set!", scheme_vector_p_proc,
+                  (info->unsafe_mode ? scheme_unsafe_vector_star_set_proc : NULL), info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "vector*-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known_all(info, app_o, 1, 0, "map", scheme_list_p_proc, NULL, info->unsafe_mode);
-    check_known_all(info, app_o, 1, 0, "for-each", scheme_list_p_proc, NULL, info->unsafe_mode);
-    check_known_all(info, app_o, 1, 0, "andmap", scheme_list_p_proc, NULL, info->unsafe_mode);
-    check_known_all(info, app_o, 1, 0, "ormap", scheme_list_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known_all(info, app_o, 1, 0, "map", scheme_list_p_proc, NULL, info->unsafe_mode);
+      check_known_all(info, app_o, 1, 0, "for-each", scheme_list_p_proc, NULL, info->unsafe_mode);
+      check_known_all(info, app_o, 1, 0, "andmap", scheme_list_p_proc, NULL, info->unsafe_mode);
+      check_known_all(info, app_o, 1, 0, "ormap", scheme_list_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "string-set!", scheme_string_p_proc,
-                (info->unsafe_mode ? scheme_unsafe_string_set_proc : NULL), info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "string-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand3, "string-set!", scheme_char_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "bytes-set!", scheme_byte_string_p_proc,
-                (info->unsafe_mode ? scheme_unsafe_bytes_set_proc : NULL), info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "bytes-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand3, "bytes-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "string-set!", scheme_string_p_proc,
+                  (info->unsafe_mode ? scheme_unsafe_string_set_proc : NULL), info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "string-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand3, "string-set!", scheme_char_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "bytes-set!", scheme_byte_string_p_proc,
+                  (info->unsafe_mode ? scheme_unsafe_bytes_set_proc : NULL), info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "bytes-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand3, "bytes-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
     
-    check_known_all(info, app_o, 0, 0, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
-    check_known_all(info, app_o, 0, 0, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known_all(info, app_o, 0, 0, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known_all(info, app_o, 0, 0, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
 
-    check_known_all(info, app_o, 0, 1, "append", scheme_list_p_proc, scheme_true, info->unsafe_mode);
+      check_known_all(info, app_o, 0, 1, "append", scheme_list_p_proc, scheme_true, info->unsafe_mode);
+    }
 
     if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
       check_known_all(info, app_o, 0, 0, NULL, scheme_real_p_proc,
@@ -4506,13 +4517,24 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
       return replace_tail_inside(result, inside, app->rand);
     }
 
-    if (SCHEME_PRIMP(rator) && IS_NAMED_PRIM(rator, "zero?")) {
+    if (SCHEME_PRIMP(rator)
+        && (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_PRODUCES_BOOL)
+        && (IS_NAMED_PRIM(rator, "zero?")
+            || IS_NAMED_PRIM(rator, "positive?")
+            || IS_NAMED_PRIM(rator, "negative?"))) {
       Scheme_Object* pred;
       Scheme_App3_Rec *new;
    
       pred = expr_implies_predicate(rand, info); 
       if (pred && SAME_OBJ(pred, scheme_fixnum_p_proc)) {
-        new = (Scheme_App3_Rec *)make_application_3(scheme_unsafe_fx_eq_proc, app->rand, scheme_make_integer(0), info);
+        Scheme_Object *cmp;
+        if (IS_NAMED_PRIM(rator, "positive?"))
+          cmp = scheme_unsafe_fx_gt_proc;
+        else if (IS_NAMED_PRIM(rator, "negative?"))
+          cmp = scheme_unsafe_fx_lt_proc;
+        else
+          cmp = scheme_unsafe_fx_eq_proc;
+        new = (Scheme_App3_Rec *)make_application_3(cmp, app->rand, scheme_make_integer(0), info);
         SCHEME_APPN_FLAGS(new) |= (APPN_FLAG_IMMED | APPN_FLAG_SFS_TAIL);
         return finish_optimize_application3(new, info, context);
       }
@@ -4531,41 +4553,43 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
       /* Try to check the argument's type, and use the unsafe versions if possible. */ 
       Scheme_Object *app_o = (Scheme_Object *)app;
 
-      check_known_variant(info, app_o, rator, rand, "bitwise-not", scheme_fixnum_p_proc, scheme_unsafe_fxnot_proc, 0, scheme_real_p_proc);
-      check_known_variant(info, app_o, rator, rand, "fxnot", scheme_fixnum_p_proc, scheme_unsafe_fxnot_proc, info->unsafe_mode, scheme_real_p_proc);
+      if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_AD_HOC_OPT) {
+        check_known_variant(info, app_o, rator, rand, "bitwise-not", scheme_fixnum_p_proc, scheme_unsafe_fxnot_proc, 0, scheme_real_p_proc);
+        check_known_variant(info, app_o, rator, rand, "fxnot", scheme_fixnum_p_proc, scheme_unsafe_fxnot_proc, info->unsafe_mode, scheme_real_p_proc);
 
-      check_known(info, app_o, rator, rand, "car", scheme_pair_p_proc, scheme_unsafe_car_proc, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "unsafe-car", scheme_pair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "cdr", scheme_pair_p_proc, scheme_unsafe_cdr_proc, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "unsafe-cdr", scheme_pair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "mcar", scheme_mpair_p_proc, scheme_unsafe_mcar_proc, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "unsafe-mcar", scheme_mpair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "mcdr", scheme_mpair_p_proc, scheme_unsafe_mcdr_proc, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "unsafe-mcdr", scheme_mpair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "string-length", scheme_string_p_proc, scheme_unsafe_string_length_proc, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "bytes-length", scheme_byte_string_p_proc, scheme_unsafe_byte_string_length_proc, info->unsafe_mode);
-      /* It's not clear that these are useful, since a chaperone check is needed anyway: */
-      check_known(info, app_o, rator, rand, "unbox", scheme_box_p_proc, scheme_unsafe_unbox_proc, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "unbox*", scheme_box_p_proc,
-                  (info->unsafe_mode ? scheme_unsafe_unbox_star_proc : NULL), info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "unsafe-unbox", scheme_box_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "unsafe-unbox*", scheme_box_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "vector-length", scheme_vector_p_proc, scheme_unsafe_vector_length_proc, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "vector*-length", scheme_vector_p_proc,
-                  (info->unsafe_mode ? scheme_unsafe_vector_star_length_proc : NULL), info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "car", scheme_pair_p_proc, scheme_unsafe_car_proc, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "unsafe-car", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "cdr", scheme_pair_p_proc, scheme_unsafe_cdr_proc, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "unsafe-cdr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "mcar", scheme_mpair_p_proc, scheme_unsafe_mcar_proc, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "unsafe-mcar", scheme_mpair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "mcdr", scheme_mpair_p_proc, scheme_unsafe_mcdr_proc, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "unsafe-mcdr", scheme_mpair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "string-length", scheme_string_p_proc, scheme_unsafe_string_length_proc, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "bytes-length", scheme_byte_string_p_proc, scheme_unsafe_byte_string_length_proc, info->unsafe_mode);
+        /* It's not clear that these are useful, since a chaperone check is needed anyway: */
+        check_known(info, app_o, rator, rand, "unbox", scheme_box_p_proc, scheme_unsafe_unbox_proc, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "unbox*", scheme_box_p_proc,
+                    (info->unsafe_mode ? scheme_unsafe_unbox_star_proc : NULL), info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "unsafe-unbox", scheme_box_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "unsafe-unbox*", scheme_box_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "vector-length", scheme_vector_p_proc, scheme_unsafe_vector_length_proc, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "vector*-length", scheme_vector_p_proc,
+                    (info->unsafe_mode ? scheme_unsafe_vector_star_length_proc : NULL), info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "length", scheme_list_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "length", scheme_list_p_proc, scheme_true, info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "string->immutable-string", scheme_string_p_proc, scheme_true, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "bytes->immutable-bytes", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "string->immutable-string", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "bytes->immutable-bytes", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "string->symbol", scheme_string_p_proc, scheme_true, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "symbol->string", scheme_symbol_p_proc, scheme_true, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "string->keyword", scheme_string_p_proc, scheme_true, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "keyword->string", scheme_keyword_p_proc, scheme_true, info->unsafe_mode);
-
+        check_known(info, app_o, rator, rand, "string->symbol", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "symbol->string", scheme_symbol_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "string->keyword", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "keyword->string", scheme_keyword_p_proc, scheme_true, info->unsafe_mode);
+      }
+      
       if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
         check_known(info, app_o, rator, rand, NULL, scheme_real_p_proc,
                     (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
@@ -4575,22 +4599,24 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
                     (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
                     info->unsafe_mode);
 
-      /* These operation don't have an unsafe replacement. Check to record types and detect errors: */
-      check_known(info, app_o, rator, rand, "caar", scheme_pair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "cadr", scheme_pair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "cdar", scheme_pair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "cddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_AD_HOC_OPT) {
+        /* These operation don't have an unsafe replacement. Check to record types and detect errors: */
+        check_known(info, app_o, rator, rand, "caar", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "cadr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "cdar", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "cddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "caddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "cdddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "cadddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "cddddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "caddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "cdddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "cadddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "cddddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "list->vector", scheme_list_p_proc, scheme_true, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "vector->list", scheme_vector_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "vector->values", scheme_vector_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "vector->immutable-vector", scheme_vector_p_proc, NULL, info->unsafe_mode);
-      check_known(info, app_o, rator, rand, "make-vector", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "list->vector", scheme_list_p_proc, scheme_true, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "vector->list", scheme_vector_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "vector->values", scheme_vector_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "vector->immutable-vector", scheme_vector_p_proc, NULL, info->unsafe_mode);
+        check_known(info, app_o, rator, rand, "make-vector", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      }
       
       /* Some of these may have changed app->rator. */
       rator = app->rator; 
@@ -4675,12 +4701,13 @@ static Scheme_Object *optimize_application3(Scheme_Object *o, Optimize_Info *inf
 
   if (SAME_OBJ(app->rator, scheme_check_not_undefined_proc)
       && SCHEME_SYMBOLP(app->rand2)) {
-    scheme_log(info->logger,
-               SCHEME_LOG_DEBUG,
-               0,
-               "warning%s: use-before-definition check inserted on variable: %S",
-               scheme_optimize_context_to_string(info->context),
-               app->rand2);
+    if (scheme_log_level_p(info->logger, SCHEME_LOG_DEBUG))
+      scheme_log(info->logger,
+                 SCHEME_LOG_DEBUG,
+                 0,
+                 "warning%s: use-before-definition check inserted on variable: %S",
+                 scheme_optimize_context_to_string(info->context),
+                 app->rand2);
   }
 
   /* Check for (apply ... (list ...)) early: */
@@ -5005,50 +5032,52 @@ static Scheme_Object *finish_optimize_application3(Scheme_App3_Rec *app, Optimiz
 
   if (SCHEME_PRIMP(app->rator)) {
     Scheme_Object *app_o = (Scheme_Object *)app, *rator = app->rator, *rand1 = app->rand1, *rand2 = app->rand2;
-    
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-and", scheme_fixnum_p_proc,
-                             scheme_unsafe_fxand_proc, info->unsafe_mode, scheme_real_p_proc);
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-ior", scheme_fixnum_p_proc,
-                             scheme_unsafe_fxior_proc, info->unsafe_mode, scheme_real_p_proc);
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-xor", scheme_fixnum_p_proc,
-                             scheme_unsafe_fxxor_proc, info->unsafe_mode, scheme_real_p_proc);
 
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxand", scheme_fixnum_p_proc,
-                             scheme_unsafe_fxand_proc, info->unsafe_mode, scheme_real_p_proc);
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxior", scheme_fixnum_p_proc,
-                             scheme_unsafe_fxior_proc, info->unsafe_mode, scheme_real_p_proc);
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxxor", scheme_fixnum_p_proc,
-                             scheme_unsafe_fxxor_proc, info->unsafe_mode, scheme_real_p_proc);
+    if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_AD_HOC_OPT) {
+      check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-and", scheme_fixnum_p_proc,
+                               scheme_unsafe_fxand_proc, info->unsafe_mode, scheme_real_p_proc);
+      check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-ior", scheme_fixnum_p_proc,
+                               scheme_unsafe_fxior_proc, info->unsafe_mode, scheme_real_p_proc);
+      check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-xor", scheme_fixnum_p_proc,
+                               scheme_unsafe_fxxor_proc, info->unsafe_mode, scheme_real_p_proc);
 
-    check_known_both_try(info, app_o, rator, rand1, rand2, "=", scheme_fixnum_p_proc, scheme_unsafe_fx_eq_proc, 0);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "<", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_proc, 0);
-    check_known_both_try(info, app_o, rator, rand1, rand2, ">", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_proc, 0);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "<=", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_eq_proc, 0);
-    check_known_both_try(info, app_o, rator, rand1, rand2, ">=", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_eq_proc, 0);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "min", scheme_fixnum_p_proc, scheme_unsafe_fx_min_proc, 0);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "max", scheme_fixnum_p_proc, scheme_unsafe_fx_max_proc, 0);
+      check_known_both_variant(info, app_o, rator, rand1, rand2, "fxand", scheme_fixnum_p_proc,
+                               scheme_unsafe_fxand_proc, info->unsafe_mode, scheme_real_p_proc);
+      check_known_both_variant(info, app_o, rator, rand1, rand2, "fxior", scheme_fixnum_p_proc,
+                               scheme_unsafe_fxior_proc, info->unsafe_mode, scheme_real_p_proc);
+      check_known_both_variant(info, app_o, rator, rand1, rand2, "fxxor", scheme_fixnum_p_proc,
+                               scheme_unsafe_fxxor_proc, info->unsafe_mode, scheme_real_p_proc);
 
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx=", scheme_fixnum_p_proc, scheme_unsafe_fx_eq_proc, info->unsafe_mode);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx<", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_proc, info->unsafe_mode);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx>", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_proc, info->unsafe_mode);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx<=", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_eq_proc, info->unsafe_mode);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx>=", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_eq_proc, info->unsafe_mode);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fxmin", scheme_fixnum_p_proc, scheme_unsafe_fx_min_proc, info->unsafe_mode);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fxmax", scheme_fixnum_p_proc, scheme_unsafe_fx_max_proc, info->unsafe_mode);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "=", scheme_fixnum_p_proc, scheme_unsafe_fx_eq_proc, 0);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "<", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_proc, 0);
+      check_known_both_try(info, app_o, rator, rand1, rand2, ">", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_proc, 0);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "<=", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_eq_proc, 0);
+      check_known_both_try(info, app_o, rator, rand1, rand2, ">=", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_eq_proc, 0);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "min", scheme_fixnum_p_proc, scheme_unsafe_fx_min_proc, 0);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "max", scheme_fixnum_p_proc, scheme_unsafe_fx_max_proc, 0);
 
-    rator = app->rator; /* in case it was updated */
+      check_known_both_try(info, app_o, rator, rand1, rand2, "fx=", scheme_fixnum_p_proc, scheme_unsafe_fx_eq_proc, info->unsafe_mode);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "fx<", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_proc, info->unsafe_mode);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "fx>", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_proc, info->unsafe_mode);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "fx<=", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_eq_proc, info->unsafe_mode);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "fx>=", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_eq_proc, info->unsafe_mode);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "fxmin", scheme_fixnum_p_proc, scheme_unsafe_fx_min_proc, info->unsafe_mode);
+      check_known_both_try(info, app_o, rator, rand1, rand2, "fxmax", scheme_fixnum_p_proc, scheme_unsafe_fx_max_proc, info->unsafe_mode);
 
-    check_known_both(info, app_o, rator, rand1, rand2, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
-    check_known_both(info, app_o, rator, rand1, rand2, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "string-ref", scheme_string_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "string-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "bytes-ref", scheme_byte_string_p_proc,
-                (info->unsafe_mode ? scheme_unsafe_bytes_ref_proc : NULL), info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "bytes-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      rator = app->rator; /* in case it was updated */
 
-    check_known(info, app_o, rator, rand1, "append", scheme_list_p_proc, scheme_true, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "list-ref", scheme_pair_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "list-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      check_known_both(info, app_o, rator, rand1, rand2, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known_both(info, app_o, rator, rand1, rand2, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "string-ref", scheme_string_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "string-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "bytes-ref", scheme_byte_string_p_proc,
+                  (info->unsafe_mode ? scheme_unsafe_bytes_ref_proc : NULL), info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "bytes-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+
+      check_known(info, app_o, rator, rand1, "append", scheme_list_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "list-ref", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "list-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    }
 
     if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
       check_known_both(info, app_o, rator, rand1, rand2, NULL, scheme_real_p_proc,
@@ -5059,33 +5088,85 @@ static Scheme_Object *finish_optimize_application3(Scheme_App3_Rec *app, Optimiz
                        (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
                        info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "vector-ref", scheme_vector_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "vector-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "vector*-ref", scheme_vector_p_proc,
-                (info->unsafe_mode ? scheme_unsafe_vector_star_ref_proc: NULL), info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "vector*-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "make-vector", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_AD_HOC_OPT) {
+      check_known(info, app_o, rator, rand1, "vector-ref", scheme_vector_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "vector-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "vector*-ref", scheme_vector_p_proc,
+                  (info->unsafe_mode ? scheme_unsafe_vector_star_ref_proc: NULL), info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "vector*-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "make-vector", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "set-box!", scheme_box_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "set-box*!", scheme_box_p_proc,
-                (info->unsafe_mode ? scheme_unsafe_set_box_star_proc : NULL), info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "unsafe-set-box!", scheme_box_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "unsafe-set-box*!", scheme_box_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "set-box!", scheme_box_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "set-box*!", scheme_box_p_proc,
+                  (info->unsafe_mode ? scheme_unsafe_set_box_star_proc : NULL), info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "unsafe-set-box!", scheme_box_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "unsafe-set-box*!", scheme_box_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
     
-    check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "map", scheme_list_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "for-each", scheme_list_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "andmap", scheme_list_p_proc, NULL, info->unsafe_mode);
-    check_known(info, app_o, rator, rand2, "ormap", scheme_list_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "map", scheme_list_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "for-each", scheme_list_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "andmap", scheme_list_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand2, "ormap", scheme_list_p_proc, NULL, info->unsafe_mode);
+    }
 
     rator = app->rator; /* in case it was updated */
+  }
+
+  /* Using a struct mutator? */
+  {
+    Scheme_Object *alt;
+    alt = get_struct_proc_shape(app->rator, info, 0);
+    if (alt) {
+      int mode = (SCHEME_PROC_SHAPE_MODE(alt) & STRUCT_PROC_SHAPE_MASK);
+
+      if (mode == STRUCT_PROC_SHAPE_SETTER) {
+        Scheme_Object *pred;
+        int unsafe = 0;
+        
+        if (info->unsafe_mode) {
+          pred = NULL;
+          unsafe = 1;
+        } else
+          pred = expr_implies_predicate(app->rand1, info);
+        
+        if ((unsafe
+             || (pred
+                 && SAME_TYPE(SCHEME_TYPE(pred), scheme_struct_proc_shape_type)
+                 && is_struct_identity_subtype(SCHEME_PROC_SHAPE_IDENTITY(pred),
+                                               SCHEME_PROC_SHAPE_IDENTITY(alt))))
+            /* Only if the field position is known: */
+            && ((SCHEME_PROC_SHAPE_MODE(alt) >> STRUCT_PROC_SHAPE_SHIFT) != 0)) {
+          /* Struct type matches, so use `unsafe-struct-set!` */
+          Scheme_Object *l;
+          Scheme_App_Rec *new_app;
+          int pos = (SCHEME_PROC_SHAPE_MODE(alt) >> STRUCT_PROC_SHAPE_SHIFT) - 1;
+          l = scheme_make_pair(scheme_make_integer(pos),
+                               scheme_make_pair(app->rand2,
+                                                scheme_null));
+          l = scheme_make_pair(app->rand1, l);
+          l = scheme_make_pair(((SCHEME_PROC_SHAPE_MODE(alt) & STRUCT_PROC_SHAPE_AUTHENTIC)
+                                ? scheme_unsafe_struct_star_set_proc
+                                : scheme_unsafe_struct_set_proc),
+                               l);
+          new_app = (Scheme_App_Rec *)scheme_make_application(l, info);
+          SCHEME_APPN_FLAGS(new_app) |= (APPN_FLAG_IMMED | APPN_FLAG_SFS_TAIL);
+          return finish_optimize_application(new_app, info, context);
+        }
+      }
+
+      /* Register type based on setter succeeding: */
+      if (!SCHEME_NULLP(SCHEME_PROC_SHAPE_IDENTITY(alt))
+          && SAME_TYPE(SCHEME_TYPE(rand), scheme_ir_local_type))
+        add_type(info, app->rand1, scheme_make_struct_proc_shape(STRUCT_PROC_SHAPE_PRED,
+                                                                 SCHEME_PROC_SHAPE_IDENTITY(alt)));
+    }
   }
   
   increment_clocks_for_application(info, app->rator, 2);
@@ -5540,7 +5621,7 @@ static void merge_branchs_types(Optimize_Info *t_info, Optimize_Info *f_info,
   i = scheme_hash_tree_next(f_types, -1);
   while (i != -1) {
     scheme_hash_tree_index(f_types, i, &var, &f_pred);
-    t_pred = scheme_hash_tree_get(t_types, var);
+    t_pred = scheme_eq_hash_tree_get(t_types, var);
     if (t_pred) {
       if (predicate_implies(f_pred, t_pred))
         add_type(base_info, var, t_pred);
@@ -6650,7 +6731,7 @@ int scheme_is_liftable(Scheme_Object *o, Scheme_Hash_Tree *exclude_vars, int fue
   case scheme_ir_toplevel_type:
     return 1;
   case scheme_ir_local_type:
-    if (!scheme_hash_tree_get(exclude_vars, o))
+    if (!scheme_eq_hash_tree_get(exclude_vars, o))
       return 1;
     break;
   case scheme_branch_type:
@@ -6740,27 +6821,29 @@ int ir_propagate_ok(Scheme_Object *value, Optimize_Info *info, int used_once, Sc
       }
       return 1;
     } else {
-      Scheme_Lambda *lam = (Scheme_Lambda *)value;
-      if (sz < 0)
-        scheme_log(info->logger,
-                   SCHEME_LOG_DEBUG,
-                   0,
-                   /* contains non-copyable body elements that prevent inlining */
-                   "non-copyable %s size: %d threshold: %d#<separator>%s",
-                   scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
-                   sz,
-                   0, /* no sensible threshold here */
-                   scheme_optimize_context_to_string(info->context));
-      else
-        scheme_log(info->logger,
-                   SCHEME_LOG_DEBUG,
-                   0,
-                   /* too large to be an inlining candidate */
-                   "too-large %s size: %d threshold: %d#<separator>%s",
-                   scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
-                   sz,
-                   0, /* no sensible threshold here */
-                   scheme_optimize_context_to_string(info->context));
+      if (scheme_log_level_p(info->logger, SCHEME_LOG_DEBUG)) {
+        Scheme_Lambda *lam = (Scheme_Lambda *)value;
+        if (sz < 0)
+          scheme_log(info->logger,
+                     SCHEME_LOG_DEBUG,
+                     0,
+                     /* contains non-copyable body elements that prevent inlining */
+                     "non-copyable %s size: %d threshold: %d#<separator>%s",
+                     scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
+                     sz,
+                     0, /* no sensible threshold here */
+                     scheme_optimize_context_to_string(info->context));
+        else
+          scheme_log(info->logger,
+                     SCHEME_LOG_DEBUG,
+                     0,
+                     /* too large to be an inlining candidate */
+                     "too-large %s size: %d threshold: %d#<separator>%s",
+                     scheme_write_to_string(lam->name ? lam->name : scheme_false, NULL),
+                     sz,
+                     0, /* no sensible threshold here */
+                     scheme_optimize_context_to_string(info->context));
+      }
       return 0;
     }
   }
@@ -6893,7 +6976,7 @@ static int is_values_apply(Scheme_Object *e, int n, Optimize_Info *info, Scheme_
   } else if (fuel && SAME_TYPE(SCHEME_TYPE(e), scheme_branch_type)) {
     Scheme_Branch_Rec *b = (Scheme_Branch_Rec *)e;
     if (SAME_TYPE(SCHEME_TYPE(b->test), scheme_ir_local_type)
-        && !scheme_hash_tree_get(except_vars, b->test)
+        && !scheme_eq_hash_tree_get(except_vars, b->test)
         && !SCHEME_VAR(b->test)->mutated) {
       return (is_values_apply(b->tbranch, n, info, except_vars, 0)
               && is_values_apply(b->fbranch, n, info, except_vars, 0));
@@ -7313,6 +7396,47 @@ static void end_transitive_use_record(Optimize_Info *info)
   }
 }
 
+/* Convert up to `c` clauses for `let-values` into a `begin`, where
+   the converted clauses have zero bindings. The `head` argument will
+   be non-NULL if there's a possibility of remaining clauses. */
+static Scheme_Object *convert_leading_zero_bindings_to_begin(Scheme_IR_Let_Header *head,
+                                                             Scheme_Object *start_body,
+                                                             int c)
+{
+  Scheme_Object *body;
+  Scheme_IR_Let_Value *irlv;
+  Scheme_Sequence *seq;
+  int i, n = 0;
+  
+  body = start_body;
+  for (i = 0; i < c; i++) {
+    irlv = (Scheme_IR_Let_Value *)body;
+    if (irlv->count)
+      break;
+    n++;
+    body = irlv->body;
+  }
+
+  seq = scheme_malloc_sequence(n + 1);
+  seq->so.type = scheme_sequence_type;
+  seq->count = n + 1;
+  body = start_body;
+  for (i = 0; i < n; i++) {
+    irlv = (Scheme_IR_Let_Value *)body;
+    seq->array[i] = irlv->value;
+    body = irlv->body;
+  }
+
+  if (n < c) {
+    head->num_clauses -= n;
+    head->body = body;
+    seq->array[n] = (Scheme_Object *)head;
+  } else
+    seq->array[n] = body;
+
+  return (Scheme_Object *)seq;
+}
+
 static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, int context)
 /* This is the main entry point for optimizing a `let[rec]-values` form. */
 {
@@ -7379,6 +7503,14 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
       body = ensure_single_value_noncm(body, info);
       return optimize_expr(body, info, context);
     }
+  }
+
+  /* Zero leading bindings in unsafe mode => convert to `begin`, since
+     we can unsafely drop the check on the number of results */
+  if (!is_rec && info->unsafe_mode && head->num_clauses
+      && !((Scheme_IR_Let_Value *)head->body)->count) {
+    body = convert_leading_zero_bindings_to_begin(head, head->body, head->num_clauses);
+    return optimize_expr(body, info, context);
   }
 
   if (!is_rec) {
@@ -8204,6 +8336,36 @@ static Scheme_Object *optimize_lets(Scheme_Object *form, Optimize_Info *info, in
       form = optimize_sequence(form, info, context, 0);
   }
 
+  if (!is_rec && info->unsafe_mode) {
+    /* Peel zero-binding clauses off the end in unsafe mode? */
+    if (SAME_TYPE(SCHEME_TYPE(form), scheme_ir_let_header_type)) {
+      int i, c, n;
+      head = (Scheme_IR_Let_Header *)form;
+      c = head->num_clauses;
+      n = head->count;
+      prev_body = NULL;
+      body = head->body;
+      for (i = 0; i < c; i++) {
+        if (!n) {
+          /* We've seen as many bindings as exist, to the rest
+             must be clauses with zero bindings */
+          body = convert_leading_zero_bindings_to_begin(NULL, body, c - i);
+          if (prev_body) {
+            prev_body->body = body;
+            head->num_clauses = i;
+          } else
+            form = body;
+          break;
+        } else {
+          irlv = (Scheme_IR_Let_Value *)body;
+          n -= irlv->count;
+          prev_body = irlv;
+          body = irlv->body;
+        }
+      }
+    }
+  }
+
   return form;
 }
 
@@ -8441,7 +8603,7 @@ static Scheme_Object *clone_lambda(int single_use, Scheme_Object *_lam, Optimize
     ht = scheme_make_hash_table(SCHEME_hash_ptr);
     for (i = 0; i < cl->base_closure->size; i++) {
       if (cl->base_closure->vals[i]) {
-        var = scheme_hash_tree_get(var_map, cl->base_closure->keys[i]);
+        var = scheme_eq_hash_tree_get(var_map, cl->base_closure->keys[i]);
         scheme_hash_set(ht,
                         (var
                          ? var
@@ -9454,7 +9616,7 @@ Scheme_Object *optimize_clone(int single_use, Scheme_Object *expr, Optimize_Info
   case scheme_ir_local_type:
     {
       Scheme_Object *v;
-      v = scheme_hash_tree_get(var_map, expr);
+      v = scheme_eq_hash_tree_get(var_map, expr);
       if (v)
         return v;
       else if (!single_use)
@@ -9961,7 +10123,7 @@ Scheme_Object *optimize_get_predicate(Optimize_Info *info, Scheme_Object *var, i
 
   while (info) {
     if (info->types) {
-      pred = scheme_hash_tree_get(info->types, var);
+      pred = scheme_eq_hash_tree_get(info->types, var);
       if (pred)
         return pred;
     }

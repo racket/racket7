@@ -229,7 +229,8 @@ scheme_init_fun (Scheme_Startup_Env *env)
 
   o = scheme_make_folding_prim(procedure_p, "procedure?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("procedure?", o, env);
 
   scheme_procedure_p_proc = o;
@@ -240,26 +241,22 @@ scheme_init_fun (Scheme_Startup_Env *env)
                                                 2, -1,
                                                 0, -1);
   scheme_addto_prim_instance("apply", scheme_apply_proc, env);
-  scheme_addto_prim_instance("map",
-			     scheme_make_noncm_prim(map,
-                                                    "map",
-                                                    2, -1),
-			     env);
-  scheme_addto_prim_instance("for-each",
-			     scheme_make_noncm_prim(for_each,
-                                                    "for-each",
-                                                    2, -1),
-			     env);
-  scheme_addto_prim_instance("andmap",
-			     scheme_make_prim_w_arity(andmap,
-						      "andmap",
-						      2, -1),
-			     env);
-  scheme_addto_prim_instance("ormap",
-			     scheme_make_prim_w_arity(ormap,
-						      "ormap",
-						      2, -1),
-			     env);
+
+  o = scheme_make_noncm_prim(map, "map", 2, -1);
+  SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("map", o, env);
+
+  o = scheme_make_noncm_prim(for_each, "for-each", 2, -1);
+  SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("for-each", o, env);
+
+  o = scheme_make_prim_w_arity(andmap, "andmap", 2, -1);
+  SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("andmap", o, env);
+
+  o = scheme_make_prim_w_arity(ormap, "ormap", 2, -1);
+  SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("ormap", o, env);
 
   REGISTER_SO(scheme_call_with_values_proc);
   scheme_call_with_values_proc = scheme_make_prim_w_arity2(call_with_values,
@@ -471,7 +468,8 @@ scheme_init_fun (Scheme_Startup_Env *env)
   REGISTER_SO(scheme_void_p_proc);
   scheme_void_p_proc = scheme_make_folding_prim(void_p, "void?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(scheme_void_p_proc) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                                             | SCHEME_PRIM_IS_OMITABLE);
+                                                                             | SCHEME_PRIM_IS_OMITABLE
+                                                                             | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("void?", scheme_void_p_proc, env);
 
   scheme_addto_prim_instance("time-apply",
@@ -537,7 +535,9 @@ scheme_init_fun (Scheme_Startup_Env *env)
   o = scheme_make_folding_prim(scheme_procedure_arity_includes,
                                "procedure-arity-includes?",
                                2, 3, 1);
-  SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_procedure_arity_includes_proc = o;
   scheme_addto_prim_instance("procedure-arity-includes?", o, env);
 
@@ -556,11 +556,13 @@ scheme_init_fun (Scheme_Startup_Env *env)
 						      "procedure->method",
 						      1, 1),
 			     env);
-  scheme_addto_prim_instance("procedure-closure-contents-eq?",
-			     scheme_make_folding_prim(procedure_equal_closure_p,
-						      "procedure-closure-contents-eq?",
-						      2, 2, 1),
-			     env);
+
+  o = scheme_make_folding_prim(procedure_equal_closure_p,
+                               "procedure-closure-contents-eq?",
+                               2, 2, 1);
+  SCHEME_PRIM_PROC_FLAGS(o) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
+  scheme_addto_prim_instance("procedure-closure-contents-eq?", o, env);
 
   REGISTER_SO(scheme_procedure_specialize_proc);
   o = scheme_make_prim_w_arity(procedure_specialize,

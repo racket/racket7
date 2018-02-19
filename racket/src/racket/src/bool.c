@@ -95,35 +95,41 @@ void scheme_init_bool (Scheme_Startup_Env *env)
   p = scheme_make_folding_prim(not_prim, "not", 1, 1, 1);
   scheme_not_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("not", p, env);
 
   p = scheme_make_folding_prim(true_object_p_prim, "true-object?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_true_object_p_proc = p;
   scheme_addto_prim_instance("true-object?", p, env);
 
   p = scheme_make_folding_prim(boolean_p_prim, "boolean?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_boolean_p_proc = p;
   scheme_addto_prim_instance("boolean?", p, env);
 
   p = scheme_make_folding_prim(eq_prim, "eq?", 2, 2, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_eq_proc = p;
   scheme_addto_prim_instance("eq?", p, env);
 
   p = scheme_make_folding_prim(eqv_prim, "eqv?", 2, 2, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_eqv_proc = p;
   scheme_addto_prim_instance("eqv?", scheme_eqv_proc, env);
   
   p = scheme_make_noncm_prim(equal_prim, "equal?", 2, 2);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_equal_proc = p;
   scheme_addto_prim_instance("equal?", scheme_equal_proc, env);
 
@@ -133,15 +139,18 @@ void scheme_init_bool (Scheme_Startup_Env *env)
 
   p = scheme_make_immed_prim(chaperone_p, "chaperone?", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("chaperone?", p, env);
 
   p = scheme_make_immed_prim(impersonator_p, "impersonator?", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("impersonator?", p, env);
   p = scheme_make_immed_prim(procedure_impersonator_star_p, "procedure-impersonator*?", 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("procedure-impersonator*?", p, env);
 
   scheme_addto_prim_instance("chaperone-of?",
@@ -448,7 +457,7 @@ int is_slow_equal (Scheme_Object *obj1, Scheme_Object *obj2)
   return is_equal(obj1, obj2, &eql);
 }
 
-int scheme_equal (Scheme_Object *obj1, Scheme_Object *obj2)
+int scheme_equal (Scheme_Object *obj1, Scheme_Object *obj2) XFORM_ASSERT_NO_CONVERSION
 {
   int v;
 

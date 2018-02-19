@@ -123,8 +123,13 @@
 /* indicates a primitive that produces a real number when
    given real-number arguments: */
 #define SCHEME_PRIM_CLOSED_ON_REALS        (1 << 21)
+/* indicates the presence of an ad-hoc optimization
+   in one of the application optimization passes */
+#define SCHEME_PRIM_AD_HOC_OPT             (1 << 22)
+/* a primitive that produces a booeal or errors: */
+#define SCHEME_PRIM_PRODUCES_BOOL          (1 << 23)
 
-#define SCHEME_PRIM_OPT_TYPE_SHIFT           22
+#define SCHEME_PRIM_OPT_TYPE_SHIFT           24
 #define SCHEME_PRIM_OPT_TYPE_MASK            (SCHEME_MAX_LOCAL_TYPE_MASK << SCHEME_PRIM_OPT_TYPE_SHIFT)
 #define SCHEME_PRIM_OPT_TYPE(x) ((x & SCHEME_PRIM_OPT_TYPE_MASK) >> SCHEME_PRIM_OPT_TYPE_SHIFT)
 
@@ -569,6 +574,8 @@ extern Scheme_Object *scheme_unsafe_vector_length_proc;
 extern Scheme_Object *scheme_unsafe_vector_star_length_proc;
 extern Scheme_Object *scheme_unsafe_struct_ref_proc;
 extern Scheme_Object *scheme_unsafe_struct_star_ref_proc;
+extern Scheme_Object *scheme_unsafe_struct_set_proc;
+extern Scheme_Object *scheme_unsafe_struct_star_set_proc;
 extern Scheme_Object *scheme_hash_ref_proc;
 extern Scheme_Object *scheme_box_p_proc;
 extern Scheme_Object *scheme_box_proc;
@@ -3033,6 +3040,7 @@ typedef struct {
   int indexed_ops; /* do selectors have the index built in (as opposed to taking an index argument)? */
   int authentic; /* conservatively 0 is ok */
   int num_gets, num_sets;
+  int setter_fields; /* if indexed, bitmap for first 32 fields to indicate which have setters */
 } Simple_Struct_Type_Info;
 
 Scheme_Object *scheme_is_simple_make_struct_type(Scheme_Object *app, int vals, int flags,

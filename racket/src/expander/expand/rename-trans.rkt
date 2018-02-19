@@ -48,14 +48,14 @@
                                                                  "given" id))
                                         id)]))))
 
-(define make-rename-transformer
-  (let ()
-    (struct rename-transformer (id)
-            #:property prop:rename-transformer 0)
-    (lambda (id)
-      (unless (identifier? id)
-        (raise-argument-error 'make-rename-transformer "identifier?" id))
-      (rename-transformer id))))
+(struct id-rename-transformer (id)
+  #:property prop:rename-transformer 0
+  #:reflection-name 'rename-transformer)
+
+(define (make-rename-transformer id)
+  (unless (identifier? id)
+    (raise-argument-error 'make-rename-transformer "identifier?" id))
+  (id-rename-transformer id))
 
 (define (rename-transformer-target t)
   ((rename-transformer-value t) t))

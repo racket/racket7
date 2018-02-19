@@ -51,6 +51,8 @@ READ_ONLY Scheme_Object *scheme_unsafe_bytes_ref_proc;
 READ_ONLY Scheme_Object *scheme_unsafe_bytes_set_proc;
 READ_ONLY Scheme_Object *scheme_unsafe_struct_ref_proc;
 READ_ONLY Scheme_Object *scheme_unsafe_struct_star_ref_proc;
+READ_ONLY Scheme_Object *scheme_unsafe_struct_set_proc;
+READ_ONLY Scheme_Object *scheme_unsafe_struct_star_set_proc;
 
 /* locals */
 static Scheme_Object *vector_p (int argc, Scheme_Object *argv[]);
@@ -98,14 +100,16 @@ scheme_init_vector (Scheme_Startup_Env *env)
   REGISTER_SO(scheme_vector_p_proc);
   p = scheme_make_folding_prim(vector_p, "vector?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_OMITABLE);
+                                                            | SCHEME_PRIM_IS_OMITABLE
+                                                            | SCHEME_PRIM_PRODUCES_BOOL);
   scheme_addto_prim_instance("vector?", p, env);
   scheme_vector_p_proc = p;
 
   REGISTER_SO(scheme_make_vector_proc);
   p = scheme_make_immed_prim(scheme_checked_make_vector, "make-vector", 1, 2);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_IS_BINARY_INLINED);
+                                                            | SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("make-vector", p, env);
   scheme_make_vector_proc = p;
 
@@ -131,14 +135,16 @@ scheme_init_vector (Scheme_Startup_Env *env)
   REGISTER_SO(scheme_vector_length_proc);
   p = scheme_make_folding_prim(vector_length, "vector-length", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            | SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("vector-length", p, env);
   scheme_vector_length_proc = p;
 
   REGISTER_SO(scheme_vector_star_length_proc);
   p = scheme_make_folding_prim(vector_star_length, "vector*-length", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
-                                                            | SCHEME_PRIM_PRODUCES_FIXNUM);
+                                                            | SCHEME_PRIM_PRODUCES_FIXNUM
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("vector*-length", p, env);
   scheme_vector_star_length_proc = p;
 
@@ -147,7 +153,8 @@ scheme_init_vector (Scheme_Startup_Env *env)
                              "vector-ref", 
                              2, 2);
   scheme_vector_ref_proc = p;
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("vector-ref", p, env);
 
   REGISTER_SO(scheme_vector_star_ref_proc);
@@ -155,7 +162,8 @@ scheme_init_vector (Scheme_Startup_Env *env)
                              "vector*-ref", 
                              2, 2);
   scheme_vector_star_ref_proc = p;
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("vector*-ref", p, env);
 
   REGISTER_SO(scheme_vector_set_proc);
@@ -163,7 +171,8 @@ scheme_init_vector (Scheme_Startup_Env *env)
                              "vector-set!", 
                              3, 3);
   scheme_vector_set_proc = p;
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("vector-set!", p, env);
 
   REGISTER_SO(scheme_vector_star_set_proc);
@@ -171,7 +180,8 @@ scheme_init_vector (Scheme_Startup_Env *env)
                              "vector*-set!", 
                              3, 3);
   scheme_vector_star_set_proc = p;
-  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
   scheme_addto_prim_instance("vector*-set!", p, env);
 
   REGISTER_SO(scheme_vector_cas_proc);
@@ -182,16 +192,14 @@ scheme_init_vector (Scheme_Startup_Env *env)
   scheme_addto_prim_instance("vector-cas!", p, env);
   scheme_vector_cas_proc = p;
 
-  scheme_addto_prim_instance("vector->list", 
-			     scheme_make_immed_prim(vector_to_list, 
-						    "vector->list", 
-						    1, 1), 
-			     env);
+  p = scheme_make_immed_prim(vector_to_list, "vector->list", 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED
+                                                            | SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("vector->list", p, env);
 
   REGISTER_SO(scheme_list_to_vector_proc);
-  p = scheme_make_immed_prim(list_to_vector, 
-                             "list->vector", 
-                             1, 1);
+  p = scheme_make_immed_prim(list_to_vector, "list->vector", 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
   scheme_list_to_vector_proc = p;
   scheme_addto_prim_instance("list->vector", p, env);
   
@@ -205,17 +213,16 @@ scheme_init_vector (Scheme_Startup_Env *env)
 						    "vector-copy!", 
 						    3, 5), 
 			     env);
-  scheme_addto_prim_instance("vector->immutable-vector", 
-			     scheme_make_immed_prim(vector_to_immutable, 
-						    "vector->immutable-vector", 
-						    1, 1), 
-			     env);
-  scheme_addto_prim_instance("vector->values", 
-			     scheme_make_prim_w_arity2(vector_to_values, 
-                                                       "vector->values", 
-                                                       1, 3,
-                                                       0, -1), 
-			     env);
+
+  p = scheme_make_immed_prim(vector_to_immutable, "vector->immutable-vector", 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("vector->immutable-vector", p, env);
+
+  p = scheme_make_prim_w_arity2(vector_to_values, "vector->values", 
+                                1, 3,
+                                0, -1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_AD_HOC_OPT);
+  scheme_addto_prim_instance("vector->values", p, env);
 
   scheme_addto_prim_instance("chaperone-vector",
                              scheme_make_prim_w_arity(chaperone_vector,
@@ -307,13 +314,17 @@ scheme_init_unsafe_vector (Scheme_Startup_Env *env)
                                                             | SCHEME_PRIM_IS_OMITABLE);
   scheme_addto_prim_instance("unsafe-struct*-ref", p, env);
 
+  REGISTER_SO(scheme_unsafe_struct_set_proc);
   p = scheme_make_immed_prim(unsafe_struct_set, "unsafe-struct-set!", 3, 3);
+  scheme_unsafe_struct_set_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
-  scheme_addto_prim_instance("unsafe-struct-set!", p, env);  
+  scheme_addto_prim_instance("unsafe-struct-set!", p, env);
 
+  REGISTER_SO(scheme_unsafe_struct_star_set_proc);
   p = scheme_make_immed_prim(unsafe_struct_star_set, "unsafe-struct*-set!", 3, 3);
+  scheme_unsafe_struct_star_set_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
-  scheme_addto_prim_instance("unsafe-struct*-set!", p, env);  
+  scheme_addto_prim_instance("unsafe-struct*-set!", p, env);
 
   p = scheme_make_immed_prim(unsafe_struct_star_cas, "unsafe-struct*-cas!", 4, 4);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
