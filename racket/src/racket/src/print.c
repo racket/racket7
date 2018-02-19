@@ -3040,7 +3040,7 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
     {
       print_compact(pp, CPT_VARREF);
 
-      print_compact_number(pp, (SCHEME_VARREF_FLAGS(obj) & 0x1) ? 1 : 0);
+      print_compact_number(pp, SCHEME_VARREF_FLAGS(obj) & VARREF_FLAGS_MASK);
       print(SCHEME_PTR1_VAL(obj), notdisplay, 1, NULL, mt, pp);
       closed = print(SCHEME_PTR2_VAL(obj), notdisplay, 1, NULL, mt, pp);
     }

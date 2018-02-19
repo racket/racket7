@@ -169,7 +169,7 @@
   (match expr
     [(struct toplevel (depth pos const? ready?))
      (decompile-tl expr globs stack closed #f)]
-    [(struct varref (constant? tl dummy))
+    [(struct varref (tl dummy constant? from-unsafe?))
      `(#%variable-reference . ,(cond
                                  [(not tl) '()]
                                  [(eq? tl #t) '(<constant-local>)]

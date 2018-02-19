@@ -11,4 +11,4 @@
     [else
      ;; Using an unsafe operation doesn't work with
      ;; bytecode loading in no-unsafe-operation mode
-     'vector-ref]))
+     'vector*-ref]))

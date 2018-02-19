@@ -280,10 +280,10 @@
 
 (define (deserialize-syntax content context-triple srcloc props tamper inspector)
   (syntax content
-          (vector-ref context-triple 0)
-          (vector-ref context-triple 1)
+          (vector*-ref context-triple 0)
+          (vector*-ref context-triple 1)
           (deserialize-tamper tamper)
-          (vector-ref context-triple 2)
+          (vector*-ref context-triple 2)
           srcloc
           (if props
               (for/hasheq ([(k v) (in-immutable-hash props)])

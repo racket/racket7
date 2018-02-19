@@ -388,6 +388,9 @@
     (raise-syntax-error #f
       "illegal outside of a loop or comprehension binding" stx))
 
+  (define-syntax-rule (unless-unsafe e)
+    (unless (variable-reference-from-unsafe? (#%variable-reference)) e))
+
   ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;  streams & sequences
 
@@ -807,7 +810,7 @@
                             ;;outer bindings
                             ([(ht) ht-expr])
                             ;; outer check
-                            (CHECK-SEQ ht)
+                            (unless-unsafe (CHECK-SEQ ht))
                             ;; loop bindings
                             ([i (-first ht)])
                             ;; pos check
@@ -1901,7 +1904,7 @@
                   ([(start) a] [(end) b] [(inc) step])
                   ;; outer check:
                   ;; let `check-range' report the error:
-                  (check-range start end inc)
+                  (unless-unsafe (check-range start end inc))
                   ;; loop bindings:
                   ([pos start])
                   ;; pos check
@@ -1942,7 +1945,7 @@
                 ([(start) start-expr])
                 ;; outer check:
                 ;; let `check-naturals' report the error:
-                (check-naturals start)
+                (unless-unsafe (check-naturals start))
                 ;; loop bindings:
                 ([pos start])
                 ;; pos check
@@ -1971,7 +1974,7 @@
               ;;outer bindings
               ([(lst) lst-expr])
               ;; outer check
-              (check-list lst)
+              (unless-unsafe (check-list lst))
               ;; loop bindings
               ([lst lst])
               ;; pos check
@@ -2025,7 +2028,7 @@
               ;;outer bindings
               ([(lst) lst-expr])
               ;; outer check
-              (unless (stream? lst) (in-stream lst))
+              (unless (unless-unsafe (stream? lst)) (in-stream lst))
               ;; loop bindings
               ([lst lst])
               ;; pos check

@@ -43,4 +43,5 @@
               
               variable-reference?
               variable-reference->instance
-              variable-reference-constant?)))]))
+              variable-reference-constant?
+              variable-reference-from-unsafe?)))]))

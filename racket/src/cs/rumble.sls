@@ -317,6 +317,9 @@
           vector-fill!
           vector->immutable-vector
           vector->list
+          vector*-length
+          vector*-ref
+          vector*-set!
 
           impersonate-vector
           impersonate-vector*
@@ -328,6 +331,7 @@
           box?
           (rename [inline:unbox unbox]
                   [inline:set-box! set-box!])
+          unbox* set-box*!
           make-weak-box weak-box? weak-box-value
           impersonate-box
           chaperone-box

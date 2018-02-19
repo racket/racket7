@@ -541,6 +541,8 @@ extern Scheme_Object *scheme_unsafe_cdr_proc;
 extern Scheme_Object *scheme_unsafe_mcar_proc;
 extern Scheme_Object *scheme_unsafe_mcdr_proc;
 extern Scheme_Object *scheme_unsafe_unbox_proc;
+extern Scheme_Object *scheme_unsafe_unbox_star_proc;
+extern Scheme_Object *scheme_unsafe_set_box_star_proc;
 extern Scheme_Object *scheme_car_proc;
 extern Scheme_Object *scheme_cdr_proc;
 extern Scheme_Object *scheme_cons_proc;
@@ -551,12 +553,20 @@ extern Scheme_Object *scheme_list_star_proc;
 extern Scheme_Object *scheme_list_pair_p_proc;
 extern Scheme_Object *scheme_vector_proc;
 extern Scheme_Object *scheme_vector_p_proc;
+extern Scheme_Object *scheme_vector_length_proc;
+extern Scheme_Object *scheme_vector_star_length_proc;
 extern Scheme_Object *scheme_make_vector_proc;
 extern Scheme_Object *scheme_vector_immutable_proc;
 extern Scheme_Object *scheme_vector_ref_proc;
+extern Scheme_Object *scheme_vector_star_ref_proc;
+extern Scheme_Object *scheme_unsafe_vector_star_ref_proc;
+extern Scheme_Object *scheme_unsafe_vector_star_set_proc;
 extern Scheme_Object *scheme_vector_set_proc;
+extern Scheme_Object *scheme_vector_star_set_proc;
+extern Scheme_Object *scheme_vector_cas_proc;
 extern Scheme_Object *scheme_list_to_vector_proc;
 extern Scheme_Object *scheme_unsafe_vector_length_proc;
+extern Scheme_Object *scheme_unsafe_vector_star_length_proc;
 extern Scheme_Object *scheme_unsafe_struct_ref_proc;
 extern Scheme_Object *scheme_unsafe_struct_star_ref_proc;
 extern Scheme_Object *scheme_hash_ref_proc;
@@ -574,16 +584,22 @@ extern Scheme_Object *scheme_struct_type_p_proc;
 extern Scheme_Object *scheme_current_inspector_proc;
 extern Scheme_Object *scheme_make_inspector_proc;
 extern Scheme_Object *scheme_varref_const_p_proc;
+extern Scheme_Object *scheme_varref_unsafe_p_proc;
 extern Scheme_Object *scheme_unsafe_fxnot_proc;
 extern Scheme_Object *scheme_unsafe_fxand_proc;
 extern Scheme_Object *scheme_unsafe_fxior_proc;
 extern Scheme_Object *scheme_unsafe_fxxor_proc;
 extern Scheme_Object *scheme_unsafe_fxrshift_proc;
+extern Scheme_Object *scheme_unsafe_pure_proc;
 
 extern Scheme_Object *scheme_string_p_proc;
 extern Scheme_Object *scheme_unsafe_string_length_proc;
+extern Scheme_Object *scheme_unsafe_string_set_proc;
+extern Scheme_Object *scheme_unsafe_string_ref_proc;
 extern Scheme_Object *scheme_byte_string_p_proc;
 extern Scheme_Object *scheme_unsafe_byte_string_length_proc;
+extern Scheme_Object *scheme_unsafe_bytes_ref_proc;
+extern Scheme_Object *scheme_unsafe_bytes_set_proc;
 
 extern Scheme_Object *scheme_unsafe_real_add1_proc;
 extern Scheme_Object *scheme_unsafe_real_sub1_proc;
@@ -2893,7 +2909,8 @@ Scheme_Object *scheme_protect_quote(Scheme_Object *expr);
 
 Scheme_Linklet *scheme_letrec_check_linklet(Scheme_Linklet *linklet);
 
-Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline,
+Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet,
+                                        int enforce_const, int can_inline, int unsafe_mode,
                                         Scheme_Object **_import_keys, Scheme_Object *get_import);
 
 /* Context uses result as a boolean: */
@@ -3264,6 +3281,9 @@ struct Scheme_Linklet
 #define SCHEME_SET_DEFN_CAN_OMIT(d) SHARED_ALLOCATED_SET(d)
 
 #define SCHEME_VARREF_FLAGS(pr) MZ_OPT_HASH_KEY(&((Scheme_Simple_Object *)pr)->iso)
+#define VARREF_IS_CONSTANT 0x1
+#define VARREF_FROM_UNSAFE 0x2
+#define VARREF_FLAGS_MASK (VARREF_IS_CONSTANT | VARREF_FROM_UNSAFE)
 
 void scheme_addto_prim_instance(const char *name, Scheme_Object *obj, Scheme_Startup_Env *env);
 void scheme_addto_primitive_instance_by_symbol(Scheme_Object *name, Scheme_Object *obj, Scheme_Startup_Env *env);
@@ -3654,6 +3674,8 @@ Scheme_Object *scheme_checked_set_mcar (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_set_mcdr (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_vector_ref(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_checked_vector_set(int argc, Scheme_Object **argv);
+Scheme_Object *scheme_checked_vector_star_ref(int argc, Scheme_Object **argv);
+Scheme_Object *scheme_checked_vector_star_set(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_checked_vector_cas(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_string_length(Scheme_Object *v);
 Scheme_Object *scheme_string_eq_2(Scheme_Object *str1, Scheme_Object *str2);
@@ -3664,6 +3686,7 @@ Scheme_Object *scheme_byte_string_eq_2(Scheme_Object *str1, Scheme_Object *str2)
 Scheme_Object *scheme_checked_byte_string_ref(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_byte_string_set(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_vector_length(Scheme_Object *v);
+Scheme_Object *scheme_vector_star_length(Scheme_Object *v);
 Scheme_Object *scheme_checked_flvector_ref(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_checked_flvector_set(int argc, Scheme_Object **argv);
 Scheme_Object *scheme_flvector_length(Scheme_Object *v);
@@ -3687,6 +3710,8 @@ Scheme_Object *scheme_checked_make_vector(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_hash_ref(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_hash_count(int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_checked_hash_count(int argc, Scheme_Object *argv[]);
+Scheme_Object *scheme_unbox_star(Scheme_Object *b);
+void scheme_set_box_star(Scheme_Object *b, Scheme_Object *v);
 
 Scheme_Object *scheme_check_not_undefined (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_check_assign_not_undefined (int argc, Scheme_Object *argv[]);

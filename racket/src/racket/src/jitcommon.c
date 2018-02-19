@@ -502,6 +502,29 @@ static int common1b(mz_jit_state *jitter, void *_data)
   mz_epilog(JIT_R2);
   scheme_jit_register_sub_func(jitter, sjc.set_box_code, scheme_false);
 
+  /* *** unbox_star_fail_code *** */
+  /* R0 is argument */
+  sjc.unbox_star_fail_code = jit_get_ip();
+  mz_prolog(JIT_R1);
+  JIT_UPDATE_THREAD_RSPTR();
+  jit_prepare(1);
+  jit_pusharg_p(JIT_R0);
+  (void)mz_finish_lwe(ts_scheme_unbox_star, ref);
+  CHECK_LIMIT();
+  scheme_jit_register_sub_func(jitter, sjc.unbox_star_fail_code, scheme_false);
+
+  /* *** set_box_star_fail_code *** */
+  /* R0 is box, R1 is value */
+  sjc.set_box_star_fail_code = jit_get_ip();
+  mz_prolog(JIT_R2);
+  JIT_UPDATE_THREAD_RSPTR();
+  jit_prepare(2);
+  jit_pusharg_p(JIT_R1);
+  jit_pusharg_p(JIT_R0);
+  (void)mz_finish_lwe(ts_scheme_set_box_star, ref);
+  CHECK_LIMIT();
+  scheme_jit_register_sub_func(jitter, sjc.set_box_star_fail_code, scheme_false);
+
   /* *** {box,vector}_cas_fail_code *** */
   /* Arguments are on runstack; */
   /* call scheme_{box,vector}_cas to raise the exception,
@@ -561,6 +584,17 @@ static int common1b(mz_jit_state *jitter, void *_data)
   (void)mz_finish_lwe(ts_scheme_vector_length, ref);
   CHECK_LIMIT();
   scheme_jit_register_sub_func(jitter, sjc.bad_vector_length_code, scheme_false);
+
+  /* *** bad_vector_star_length_code *** */
+  /* R0 is argument */
+  sjc.bad_vector_star_length_code = jit_get_ip();
+  mz_prolog(JIT_R1);
+  JIT_UPDATE_THREAD_RSPTR();
+  jit_prepare(1);
+  jit_pusharg_p(JIT_R0);
+  (void)mz_finish_lwe(ts_scheme_vector_star_length, ref);
+  CHECK_LIMIT();
+  scheme_jit_register_sub_func(jitter, sjc.bad_vector_star_length_code, scheme_false);
 
   /* *** bad_flvector_length_code *** */
   /* R0 is argument */
@@ -1139,7 +1173,7 @@ static int common3(mz_jit_state *jitter, void *_data)
      vector, it includes the offset to the start of the elements array).
      In set mode, value is on run stack. */
   for (iii = 0; iii < 2; iii++) { /* ref, set */
-    for (ii = -1; ii < 4; ii++) { /* chap-vector, vector, string, bytes, fx */
+    for (ii = -1; ii < 5; ii++) { /* chap-vector, vector, string, bytes, fx, vector* */
       for (i = 0; i < 2; i++) { /* check index? */
 	GC_CAN_IGNORE jit_insn *ref, *reffail;
 	GC_CAN_IGNORE jit_insn *refrts USED_ONLY_FOR_FUTURES;
@@ -1152,6 +1186,7 @@ static int common3(mz_jit_state *jitter, void *_data)
 	switch (ii) {
 	case -1:
 	case 0:
+        case 4:
 	  ty = scheme_vector_type;
 	  offset = (int)(intptr_t)&SCHEME_VEC_ELS(0x0);
 	  count_offset = (int)(intptr_t)&SCHEME_VEC_SIZE(0x0);
@@ -1168,6 +1203,20 @@ static int common3(mz_jit_state *jitter, void *_data)
                 sjc.chap_vector_set_code = code;
               } else {
                 sjc.chap_vector_set_check_index_code = code;
+              }
+            }
+          } else if (ii == 4) {
+            if (!iii) {
+              if (!i) {
+                sjc.vector_star_ref_code = code;
+              } else {
+                sjc.vector_star_ref_check_index_code = code;
+              }
+            } else {
+              if (!i) {
+                sjc.vector_star_set_code = code;
+              } else {
+                sjc.vector_star_set_check_index_code = code;
               }
             }
           } else if (!iii) {
@@ -1302,6 +1351,14 @@ static int common3(mz_jit_state *jitter, void *_data)
             jit_retval(JIT_R0);
           mz_epilog(JIT_R2);
 	  break;
+	case 4:
+	  if (!iii) {
+	    (void)mz_finish_lwe(ts_scheme_checked_vector_star_ref, refrts);
+	  } else {
+	    (void)mz_finish_lwe(ts_scheme_checked_vector_star_set, refrts);
+	  }
+          /* doesn't return */
+	  break;
 	case 1:
 	  if (!iii) {
 	    (void)mz_finish_lwe(ts_scheme_checked_string_ref, refrts);
@@ -1371,7 +1428,7 @@ static int common3(mz_jit_state *jitter, void *_data)
 	  (void)jit_bler_ul(reffail, JIT_R2, JIT_V1);
 	  if (log_elem_size)
 	    jit_lshi_ul(JIT_V1, JIT_V1, log_elem_size);
-	  if (!ii || (ii == -1)) /* vector */
+	  if (!ii || (ii == -1) || (ii == 4)) /* vector */
 	    jit_addi_p(JIT_V1, JIT_V1, offset);
 	} else {
 	  /* constant index supplied: */
@@ -1383,6 +1440,7 @@ static int common3(mz_jit_state *jitter, void *_data)
 	  case -1: /* chap-vector */
 	  case 0: /* vector */
 	  case 3: /* fxvector */
+	  case 4: /* vector* */
 	    jit_ldxr_p(JIT_R0, JIT_R0, JIT_V1);
 	    break;
 	  case 1: /* string */
@@ -1432,6 +1490,7 @@ static int common3(mz_jit_state *jitter, void *_data)
             (void)jit_bmci_l(reffail, JIT_R2, 0x1);
 	  case -1: /* chap-vector, fall-though from fxvector */
 	  case 0: /* vector, fall-though from fxvector */
+          case 4: /* vector*, fall-through from fxvector */
 	    jit_stxr_p(JIT_V1, JIT_R0, JIT_R2);
 	    break;
 	  case 1: /* string */

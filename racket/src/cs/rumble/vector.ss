@@ -136,6 +136,9 @@
 (define (unsafe-vector-length vec)
   (vector-length vec))
 
+(define (vector*-length vec)
+  (#2%vector-length vec))
+
 (define (impersonate-vector-length vec)
   (if (and (impersonator? vec)
            (#%vector? (impersonator-val vec)))
@@ -160,6 +163,9 @@
   (if (#%vector? vec)
       (#3%vector-ref vec idx)
       (pariah (impersonate-vector-ref vec idx))))
+
+(define (vector*-ref vec idx)
+  (#2%vector-ref vec idx))
 
 (define (impersonate-vector-ref orig idx)
   (if (and (impersonator? orig)
@@ -204,6 +210,9 @@
   (if (#%vector? vec)
       (#3%vector-set! vec idx val)
       (pariah (impersonate-vector-set! vec idx val))))
+
+(define (vector*-set! vec idx val)
+  (#2%vector-set! vec idx val))
 
 (define (impersonate-vector-set! orig idx val)
   (cond

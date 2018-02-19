@@ -12,6 +12,7 @@
 
 (define skip-export? #f)
 (define for-cify? #f)
+(define unsafe-mode? #f)
 
 (define-values (in-file out-file)
   (command-line
@@ -20,6 +21,8 @@
     (set! skip-export? #t)]
    [("--for-cify") "Keep `make-struct-type` as-is, etc."
     (set! for-cify? #t)]
+   [("--unsafe") "Compile for unsafe mode"
+    (set! unsafe-mode? #t)]
    #:args
    (in-file out-file)
    (values in-file out-file)))
@@ -121,7 +124,7 @@
     (printf "Schemify...\n")
     (define body
       (time
-       (schemify-body bodys/constants-lifted (lambda (old-v new-v) new-v) prim-knowns #hasheq() #hasheq() for-cify?)))
+       (schemify-body bodys/constants-lifted (lambda (old-v new-v) new-v) prim-knowns #hasheq() #hasheq() for-cify? unsafe-mode?)))
     (printf "Lift...\n")
     ;; Lift functions to aviod closure creation:
     (define lifted-body

@@ -104,7 +104,7 @@ struct Optimize_Info
   int sclock; /* virtual clock that ticks when space consumption is potentially observed */
   int psize;
   short inline_fuel, flatten_fuel;
-  char letrec_not_twice, enforce_const, use_psize, has_nonleaf;
+  char letrec_not_twice, enforce_const, unsafe_mode, use_psize, has_nonleaf;
   Scheme_Hash_Table *top_level_consts;
 
   int maybe_values_argument; /* triggers an approximation for clock increments */
@@ -169,7 +169,8 @@ static int env_uses_toplevel(Optimize_Info *frame);
 static Scheme_IR_Local *clone_variable(Scheme_IR_Local *var);
 static void increment_use_count(Scheme_IR_Local *var, int as_rator);
 
-static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_const, int can_inline);
+static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet,
+                                           int enforce_const, int can_inline, int unsafe_mode);
 static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int flags);
 static void optimize_info_done(Optimize_Info *info, Optimize_Info *parent);
 
@@ -3879,7 +3880,8 @@ static int appn_flags(Scheme_Object *rator, Optimize_Info *info)
 
 static int check_known_variant(Optimize_Info *info, Scheme_Object *app,
                                Scheme_Object *rator, Scheme_Object *rand,
-                               const char *who, Scheme_Object *expect_pred, Scheme_Object *unsafe,
+                               const char *who, Scheme_Object *expect_pred,
+                               Scheme_Object *unsafe, int unsafe_mode,
                                Scheme_Object *implies_pred)
 /* Replace the rator with an unsafe version if we know that it's ok:
    if the argument is consistent with `expect_pred`; if `unsafe` is
@@ -3894,7 +3896,11 @@ static int check_known_variant(Optimize_Info *info, Scheme_Object *app,
   if (SCHEME_PRIMP(rator) && (!who || IS_NAMED_PRIM(rator, who))) {
     Scheme_Object *pred;
 
-    pred = expr_implies_predicate(rand, info);
+    if (unsafe_mode)
+      pred = expect_pred;
+    else
+      pred = expr_implies_predicate(rand, info);
+
     if (pred) {
       if (predicate_implies(pred, expect_pred)) {
         if (unsafe) {
@@ -3918,10 +3924,11 @@ static int check_known_variant(Optimize_Info *info, Scheme_Object *app,
 
 static void check_known(Optimize_Info *info, Scheme_Object *app,
                         Scheme_Object *rator, Scheme_Object *rand,
-                        const char *who, Scheme_Object *expect_pred, Scheme_Object *unsafe)
+                        const char *who, Scheme_Object *expect_pred,
+                        Scheme_Object *unsafe, int unsafe_mode)
 /* When the expected predicate for unsafe substitution is the same as the implied predicate. */
 {
-  (void)check_known_variant(info, app, rator, rand, who, expect_pred, unsafe, expect_pred);
+  (void)check_known_variant(info, app, rator, rand, who, expect_pred, unsafe, unsafe_mode, expect_pred);
 }
 
 static void check_known_rator(Optimize_Info *info, Scheme_Object *rator)
@@ -3941,18 +3948,23 @@ static void check_known_rator(Optimize_Info *info, Scheme_Object *rator)
 
 static void check_known_both_try(Optimize_Info *info, Scheme_Object *app,
                                  Scheme_Object *rator, Scheme_Object *rand1, Scheme_Object *rand2,
-                                 const char *who, Scheme_Object *expect_pred, Scheme_Object *unsafe)
+                                 const char *who, Scheme_Object *expect_pred,
+                                 Scheme_Object *unsafe, int unsafe_mode)
 /* Replace the rator with an unsafe version if both rands have the right type.
    If not, don't save the type, nor mark this as an error */
 {
   if (SCHEME_PRIMP(rator) && (!who || IS_NAMED_PRIM(rator, who))) {
     Scheme_Object *pred1, *pred2;
-      
-    pred1 = expr_implies_predicate(rand1, info); 
-    if (pred1 && SAME_OBJ(pred1, expect_pred)) { 
-      pred2 = expr_implies_predicate(rand2, info);
-      if (pred2 && SAME_OBJ(pred2, expect_pred)) { 
+
+    if (info->unsafe_mode) {
+      reset_rator(app, unsafe);
+    } else {
+      pred1 = expr_implies_predicate(rand1, info); 
+      if (pred1 && SAME_OBJ(pred1, expect_pred)) { 
+        pred2 = expr_implies_predicate(rand2, info);
+        if (pred2 && SAME_OBJ(pred2, expect_pred)) { 
           reset_rator(app, unsafe);
+        }
       }
     }
   }
@@ -3960,26 +3972,29 @@ static void check_known_both_try(Optimize_Info *info, Scheme_Object *app,
 
 static void check_known_both_variant(Optimize_Info *info, Scheme_Object *app,
                                      Scheme_Object *rator, Scheme_Object *rand1, Scheme_Object *rand2,
-                                     const char *who, Scheme_Object *expect_pred, Scheme_Object *unsafe,
+                                     const char *who, Scheme_Object *expect_pred,
+                                     Scheme_Object *unsafe, int unsafe_mode,
                                      Scheme_Object *implies_pred)
 {
   if (SCHEME_PRIMP(rator) && (!who || IS_NAMED_PRIM(rator, who))) {
     int ok1;
-    ok1 = check_known_variant(info, app, rator, rand1, who, expect_pred, NULL, implies_pred);
-    check_known_variant(info, app, rator, rand2, who, expect_pred, (ok1 ? unsafe : NULL), implies_pred);
+    ok1 = check_known_variant(info, app, rator, rand1, who, expect_pred, NULL, unsafe_mode, implies_pred);
+    check_known_variant(info, app, rator, rand2, who, expect_pred, (ok1 ? unsafe : NULL), unsafe_mode, implies_pred);
   }
 }
 
 static void check_known_both(Optimize_Info *info, Scheme_Object *app,
                              Scheme_Object *rator, Scheme_Object *rand1, Scheme_Object *rand2,
-                             const char *who, Scheme_Object *expect_pred, Scheme_Object *unsafe)
+                             const char *who, Scheme_Object *expect_pred,
+                             Scheme_Object *unsafe, int unsafe_mode)
 {
-  check_known_both_variant(info, app, rator, rand1, rand2, who, expect_pred, unsafe, expect_pred);
+  check_known_both_variant(info, app, rator, rand1, rand2, who, expect_pred, unsafe, unsafe_mode, expect_pred);
 }
 
 
 static void check_known_all(Optimize_Info *info, Scheme_Object *_app, int skip_head, int skip_tail,
-                            const char *who, Scheme_Object *expect_pred, Scheme_Object *unsafe)
+                            const char *who, Scheme_Object *expect_pred,
+                            Scheme_Object *unsafe, int unsafe_mode)
 {
   Scheme_App_Rec *app = (Scheme_App_Rec *)_app;
   if (SCHEME_PRIMP(app->args[0]) && (!who || IS_NAMED_PRIM(app->args[0], who))) {
@@ -3987,7 +4002,7 @@ static void check_known_all(Optimize_Info *info, Scheme_Object *_app, int skip_h
 
     for (i = skip_head; i < app->num_args - skip_tail; i++) {
       if (!check_known_variant(info, _app, app->args[0], app->args[i+1], who, expect_pred,
-                               NULL, expect_pred))
+                               NULL, unsafe_mode, expect_pred))
         ok_so_far = 0;
     }
     
@@ -4104,40 +4119,47 @@ static Scheme_Object *finish_optimize_application(Scheme_App_Rec *app, Optimize_
     if (app->num_args >= 3)
       rand3 = app->args[3];
 
-    check_known(info, app_o, rator, rand1, "vector-set!", scheme_vector_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "vector-set!", scheme_fixnum_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "vector-set!", scheme_vector_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "vector-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "vector-set*!", scheme_vector_p_proc,
+                (info->unsafe_mode ? scheme_unsafe_vector_star_set_proc : NULL), info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "vector-set*!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL);
-    check_known_all(info, app_o, 1, 0, "map", scheme_list_p_proc, NULL);
-    check_known_all(info, app_o, 1, 0, "for-each", scheme_list_p_proc, NULL);
-    check_known_all(info, app_o, 1, 0, "andmap", scheme_list_p_proc, NULL);
-    check_known_all(info, app_o, 1, 0, "ormap", scheme_list_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known_all(info, app_o, 1, 0, "map", scheme_list_p_proc, NULL, info->unsafe_mode);
+    check_known_all(info, app_o, 1, 0, "for-each", scheme_list_p_proc, NULL, info->unsafe_mode);
+    check_known_all(info, app_o, 1, 0, "andmap", scheme_list_p_proc, NULL, info->unsafe_mode);
+    check_known_all(info, app_o, 1, 0, "ormap", scheme_list_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "string-set!", scheme_string_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "string-set!", scheme_fixnum_p_proc, NULL);
-    check_known(info, app_o, rator, rand3, "string-set!", scheme_char_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "bytes-set!", scheme_byte_string_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "bytes-set!", scheme_fixnum_p_proc, NULL);
-    check_known(info, app_o, rator, rand3, "bytes-set!", scheme_fixnum_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "string-set!", scheme_string_p_proc,
+                (info->unsafe_mode ? scheme_unsafe_string_set_proc : NULL), info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "string-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand3, "string-set!", scheme_char_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "bytes-set!", scheme_byte_string_p_proc,
+                (info->unsafe_mode ? scheme_unsafe_bytes_set_proc : NULL), info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "bytes-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand3, "bytes-set!", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
     
-    check_known_all(info, app_o, 0, 0, "string-append", scheme_string_p_proc, scheme_true);
-    check_known_all(info, app_o, 0, 0, "bytes-append", scheme_byte_string_p_proc, scheme_true);
+    check_known_all(info, app_o, 0, 0, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+    check_known_all(info, app_o, 0, 0, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
 
-    check_known_all(info, app_o, 0, 1, "append", scheme_list_p_proc, scheme_true);
+    check_known_all(info, app_o, 0, 1, "append", scheme_list_p_proc, scheme_true, info->unsafe_mode);
 
     if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
       check_known_all(info, app_o, 0, 0, NULL, scheme_real_p_proc,
-                      (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
+                      (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
+                      info->unsafe_mode);
     if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_NUMBER)
       check_known_all(info, app_o, 0, 0, NULL, scheme_number_p_proc,
-                      (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
+                      (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
+                      info->unsafe_mode);
 
-      /* Some of these may have changed app->rator. */
+    /* Some of these may have changed app->rator. */
     rator = app->args[0];
   }
 
@@ -4476,6 +4498,13 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
       }
     }
 
+    /* We can resolve (variable-reference-from-unsafe (#%variable-reference))
+       to a specific boolean result */
+    if (SAME_OBJ(scheme_varref_unsafe_p_proc, rator)
+        && SAME_TYPE(SCHEME_TYPE(rand), scheme_varref_form_type)) {
+      Scheme_Object *result = (info->unsafe_mode ? scheme_true : scheme_false);
+      return replace_tail_inside(result, inside, app->rand);
+    }
 
     if (SCHEME_PRIMP(rator) && IS_NAMED_PRIM(rator, "zero?")) {
       Scheme_Object* pred;
@@ -4502,60 +4531,66 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
       /* Try to check the argument's type, and use the unsafe versions if possible. */ 
       Scheme_Object *app_o = (Scheme_Object *)app;
 
-      check_known_variant(info, app_o, rator, rand, "bitwise-not", scheme_fixnum_p_proc, scheme_unsafe_fxnot_proc, scheme_real_p_proc);
-      check_known_variant(info, app_o, rator, rand, "fxnot", scheme_fixnum_p_proc, scheme_unsafe_fxnot_proc, scheme_real_p_proc);
+      check_known_variant(info, app_o, rator, rand, "bitwise-not", scheme_fixnum_p_proc, scheme_unsafe_fxnot_proc, 0, scheme_real_p_proc);
+      check_known_variant(info, app_o, rator, rand, "fxnot", scheme_fixnum_p_proc, scheme_unsafe_fxnot_proc, info->unsafe_mode, scheme_real_p_proc);
 
-      check_known(info, app_o, rator, rand, "car", scheme_pair_p_proc, scheme_unsafe_car_proc);
-      check_known(info, app_o, rator, rand, "unsafe-car", scheme_pair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "cdr", scheme_pair_p_proc, scheme_unsafe_cdr_proc);
-      check_known(info, app_o, rator, rand, "unsafe-cdr", scheme_pair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "mcar", scheme_mpair_p_proc, scheme_unsafe_mcar_proc);
-      check_known(info, app_o, rator, rand, "unsafe-mcar", scheme_mpair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "mcdr", scheme_mpair_p_proc, scheme_unsafe_mcdr_proc);
-      check_known(info, app_o, rator, rand, "unsafe-mcdr", scheme_mpair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "string-length", scheme_string_p_proc, scheme_unsafe_string_length_proc);
-      check_known(info, app_o, rator, rand, "bytes-length", scheme_byte_string_p_proc, scheme_unsafe_byte_string_length_proc);
+      check_known(info, app_o, rator, rand, "car", scheme_pair_p_proc, scheme_unsafe_car_proc, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "unsafe-car", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "cdr", scheme_pair_p_proc, scheme_unsafe_cdr_proc, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "unsafe-cdr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "mcar", scheme_mpair_p_proc, scheme_unsafe_mcar_proc, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "unsafe-mcar", scheme_mpair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "mcdr", scheme_mpair_p_proc, scheme_unsafe_mcdr_proc, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "unsafe-mcdr", scheme_mpair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "string-length", scheme_string_p_proc, scheme_unsafe_string_length_proc, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "bytes-length", scheme_byte_string_p_proc, scheme_unsafe_byte_string_length_proc, info->unsafe_mode);
       /* It's not clear that these are useful, since a chaperone check is needed anyway: */
-      check_known(info, app_o, rator, rand, "unbox", scheme_box_p_proc, scheme_unsafe_unbox_proc);
-      check_known(info, app_o, rator, rand, "unsafe-unbox", scheme_box_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "unsafe-unbox*", scheme_box_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "vector-length", scheme_vector_p_proc, scheme_unsafe_vector_length_proc);
+      check_known(info, app_o, rator, rand, "unbox", scheme_box_p_proc, scheme_unsafe_unbox_proc, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "unbox*", scheme_box_p_proc,
+                  (info->unsafe_mode ? scheme_unsafe_unbox_star_proc : NULL), info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "unsafe-unbox", scheme_box_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "unsafe-unbox*", scheme_box_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "vector-length", scheme_vector_p_proc, scheme_unsafe_vector_length_proc, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "vector*-length", scheme_vector_p_proc,
+                  (info->unsafe_mode ? scheme_unsafe_vector_star_length_proc : NULL), info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "length", scheme_list_p_proc, scheme_true);
+      check_known(info, app_o, rator, rand, "length", scheme_list_p_proc, scheme_true, info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "string-append", scheme_string_p_proc, scheme_true);
-      check_known(info, app_o, rator, rand, "bytes-append", scheme_byte_string_p_proc, scheme_true);
-      check_known(info, app_o, rator, rand, "string->immutable-string", scheme_string_p_proc, scheme_true);
-      check_known(info, app_o, rator, rand, "bytes->immutable-bytes", scheme_byte_string_p_proc, scheme_true);
+      check_known(info, app_o, rator, rand, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "string->immutable-string", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "bytes->immutable-bytes", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "string->symbol", scheme_string_p_proc, scheme_true);
-      check_known(info, app_o, rator, rand, "symbol->string", scheme_symbol_p_proc, scheme_true);
-      check_known(info, app_o, rator, rand, "string->keyword", scheme_string_p_proc, scheme_true);
-      check_known(info, app_o, rator, rand, "keyword->string", scheme_keyword_p_proc, scheme_true);
+      check_known(info, app_o, rator, rand, "string->symbol", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "symbol->string", scheme_symbol_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "string->keyword", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "keyword->string", scheme_keyword_p_proc, scheme_true, info->unsafe_mode);
 
       if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
         check_known(info, app_o, rator, rand, NULL, scheme_real_p_proc,
-                    (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
+                    (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
+                    info->unsafe_mode);
       if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_NUMBER)
         check_known(info, app_o, rator, rand, NULL, scheme_number_p_proc,
-                    (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
+                    (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
+                    info->unsafe_mode);
 
       /* These operation don't have an unsafe replacement. Check to record types and detect errors: */
-      check_known(info, app_o, rator, rand, "caar", scheme_pair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "cadr", scheme_pair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "cdar", scheme_pair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "cddr", scheme_pair_p_proc, NULL);
+      check_known(info, app_o, rator, rand, "caar", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "cadr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "cdar", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "cddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "caddr", scheme_pair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "cdddr", scheme_pair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "cadddr", scheme_pair_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "cddddr", scheme_pair_p_proc, NULL);
+      check_known(info, app_o, rator, rand, "caddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "cdddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "cadddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "cddddr", scheme_pair_p_proc, NULL, info->unsafe_mode);
 
-      check_known(info, app_o, rator, rand, "list->vector", scheme_list_p_proc, scheme_true);
-      check_known(info, app_o, rator, rand, "vector->list", scheme_vector_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "vector->values", scheme_vector_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "vector->immutable-vector", scheme_vector_p_proc, NULL);
-      check_known(info, app_o, rator, rand, "make-vector", scheme_fixnum_p_proc, NULL);
+      check_known(info, app_o, rator, rand, "list->vector", scheme_list_p_proc, scheme_true, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "vector->list", scheme_vector_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "vector->values", scheme_vector_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "vector->immutable-vector", scheme_vector_p_proc, NULL, info->unsafe_mode);
+      check_known(info, app_o, rator, rand, "make-vector", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
       
       /* Some of these may have changed app->rator. */
       rator = app->rator; 
@@ -4570,12 +4605,19 @@ static Scheme_Object *finish_optimize_application2(Scheme_App2_Rec *app, Optimiz
     if ((mode == STRUCT_PROC_SHAPE_PRED)
         || (mode == STRUCT_PROC_SHAPE_GETTER)) {
       Scheme_Object *pred;
-      pred = expr_implies_predicate(rand, info);
+      int unsafe = 0;
 
-      if (pred
-          && SAME_TYPE(SCHEME_TYPE(pred), scheme_struct_proc_shape_type)
-          && is_struct_identity_subtype(SCHEME_PROC_SHAPE_IDENTITY(pred),
-                                        SCHEME_PROC_SHAPE_IDENTITY(alt))) {
+      if (info->unsafe_mode && (mode == STRUCT_PROC_SHAPE_GETTER)) {
+        pred = NULL;
+        unsafe = 1;
+      } else
+        pred = expr_implies_predicate(rand, info);
+
+      if (unsafe
+          || (pred
+              && SAME_TYPE(SCHEME_TYPE(pred), scheme_struct_proc_shape_type)
+              && is_struct_identity_subtype(SCHEME_PROC_SHAPE_IDENTITY(pred),
+                                            SCHEME_PROC_SHAPE_IDENTITY(alt)))) {
         if (mode == STRUCT_PROC_SHAPE_PRED) {
           /* We know that the predicate will succeed */
           return replace_tail_inside(make_discarding_sequence(rand, scheme_true, info),
@@ -4964,70 +5006,84 @@ static Scheme_Object *finish_optimize_application3(Scheme_App3_Rec *app, Optimiz
   if (SCHEME_PRIMP(app->rator)) {
     Scheme_Object *app_o = (Scheme_Object *)app, *rator = app->rator, *rand1 = app->rand1, *rand2 = app->rand2;
     
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-and", scheme_fixnum_p_proc, scheme_unsafe_fxand_proc, scheme_real_p_proc);
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-ior", scheme_fixnum_p_proc, scheme_unsafe_fxior_proc, scheme_real_p_proc);
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-xor", scheme_fixnum_p_proc, scheme_unsafe_fxxor_proc, scheme_real_p_proc);
+    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-and", scheme_fixnum_p_proc,
+                             scheme_unsafe_fxand_proc, info->unsafe_mode, scheme_real_p_proc);
+    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-ior", scheme_fixnum_p_proc,
+                             scheme_unsafe_fxior_proc, info->unsafe_mode, scheme_real_p_proc);
+    check_known_both_variant(info, app_o, rator, rand1, rand2, "bitwise-xor", scheme_fixnum_p_proc,
+                             scheme_unsafe_fxxor_proc, info->unsafe_mode, scheme_real_p_proc);
 
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxand", scheme_fixnum_p_proc, scheme_unsafe_fxand_proc, scheme_real_p_proc);
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxior", scheme_fixnum_p_proc, scheme_unsafe_fxior_proc, scheme_real_p_proc);
-    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxxor", scheme_fixnum_p_proc, scheme_unsafe_fxxor_proc, scheme_real_p_proc);
+    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxand", scheme_fixnum_p_proc,
+                             scheme_unsafe_fxand_proc, info->unsafe_mode, scheme_real_p_proc);
+    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxior", scheme_fixnum_p_proc,
+                             scheme_unsafe_fxior_proc, info->unsafe_mode, scheme_real_p_proc);
+    check_known_both_variant(info, app_o, rator, rand1, rand2, "fxxor", scheme_fixnum_p_proc,
+                             scheme_unsafe_fxxor_proc, info->unsafe_mode, scheme_real_p_proc);
 
-    check_known_both_try(info, app_o, rator, rand1, rand2, "=", scheme_fixnum_p_proc, scheme_unsafe_fx_eq_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "<", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, ">", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "<=", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_eq_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, ">=", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_eq_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "min", scheme_fixnum_p_proc, scheme_unsafe_fx_min_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "max", scheme_fixnum_p_proc, scheme_unsafe_fx_max_proc);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "=", scheme_fixnum_p_proc, scheme_unsafe_fx_eq_proc, 0);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "<", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_proc, 0);
+    check_known_both_try(info, app_o, rator, rand1, rand2, ">", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_proc, 0);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "<=", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_eq_proc, 0);
+    check_known_both_try(info, app_o, rator, rand1, rand2, ">=", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_eq_proc, 0);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "min", scheme_fixnum_p_proc, scheme_unsafe_fx_min_proc, 0);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "max", scheme_fixnum_p_proc, scheme_unsafe_fx_max_proc, 0);
 
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx=", scheme_fixnum_p_proc, scheme_unsafe_fx_eq_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx<", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx>", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx<=", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_eq_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fx>=", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_eq_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fxmin", scheme_fixnum_p_proc, scheme_unsafe_fx_min_proc);
-    check_known_both_try(info, app_o, rator, rand1, rand2, "fxmax", scheme_fixnum_p_proc, scheme_unsafe_fx_max_proc);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "fx=", scheme_fixnum_p_proc, scheme_unsafe_fx_eq_proc, info->unsafe_mode);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "fx<", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_proc, info->unsafe_mode);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "fx>", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_proc, info->unsafe_mode);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "fx<=", scheme_fixnum_p_proc, scheme_unsafe_fx_lt_eq_proc, info->unsafe_mode);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "fx>=", scheme_fixnum_p_proc, scheme_unsafe_fx_gt_eq_proc, info->unsafe_mode);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "fxmin", scheme_fixnum_p_proc, scheme_unsafe_fx_min_proc, info->unsafe_mode);
+    check_known_both_try(info, app_o, rator, rand1, rand2, "fxmax", scheme_fixnum_p_proc, scheme_unsafe_fx_max_proc, info->unsafe_mode);
 
     rator = app->rator; /* in case it was updated */
 
-    check_known_both(info, app_o, rator, rand1, rand2, "string-append", scheme_string_p_proc, scheme_true);
-    check_known_both(info, app_o, rator, rand1, rand2, "bytes-append", scheme_byte_string_p_proc, scheme_true);
-    check_known(info, app_o, rator, rand1, "string-ref", scheme_string_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "string-ref", scheme_fixnum_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "bytes-ref", scheme_byte_string_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "bytes-ref", scheme_fixnum_p_proc, NULL);
+    check_known_both(info, app_o, rator, rand1, rand2, "string-append", scheme_string_p_proc, scheme_true, info->unsafe_mode);
+    check_known_both(info, app_o, rator, rand1, rand2, "bytes-append", scheme_byte_string_p_proc, scheme_true, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "string-ref", scheme_string_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "string-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "bytes-ref", scheme_byte_string_p_proc,
+                (info->unsafe_mode ? scheme_unsafe_bytes_ref_proc : NULL), info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "bytes-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "append", scheme_list_p_proc, scheme_true);
-    check_known(info, app_o, rator, rand1, "list-ref", scheme_pair_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "list-ref", scheme_fixnum_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "append", scheme_list_p_proc, scheme_true, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "list-ref", scheme_pair_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "list-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
 
     if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_REAL)
       check_known_both(info, app_o, rator, rand1, rand2, NULL, scheme_real_p_proc,
-                       (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
+                       (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
+                       info->unsafe_mode);
     if (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_WANTS_NUMBER)
       check_known_both(info, app_o, rator, rand1, rand2, NULL, scheme_number_p_proc,
-                       (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL);
+                       (SCHEME_PRIM_PROC_OPT_FLAGS(rator) & SCHEME_PRIM_OMITTABLE_ON_GOOD_ARGS) ? scheme_true : NULL,
+                       info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "vector-ref", scheme_vector_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "vector-ref", scheme_fixnum_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "make-vector", scheme_fixnum_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "vector-ref", scheme_vector_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "vector-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "vector*-ref", scheme_vector_p_proc,
+                (info->unsafe_mode ? scheme_unsafe_vector_star_ref_proc: NULL), info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "vector*-ref", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "make-vector", scheme_fixnum_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "set-box!", scheme_box_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "unsafe-set-box!", scheme_box_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "unsafe-set-box*!", scheme_box_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "set-box!", scheme_box_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "set-box*!", scheme_box_p_proc,
+                (info->unsafe_mode ? scheme_unsafe_set_box_star_proc : NULL), info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "unsafe-set-box!", scheme_box_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "unsafe-set-box*!", scheme_box_p_proc, NULL, info->unsafe_mode);
 
-    check_known(info, app_o, rator, rand1, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "procedure-closure-contents-eq?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "procedure-arity-includes?", scheme_procedure_p_proc, NULL, info->unsafe_mode);
     
-    check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "map", scheme_list_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "for-each", scheme_list_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "andmap", scheme_list_p_proc, NULL);
-    check_known(info, app_o, rator, rand2, "ormap", scheme_list_p_proc, NULL);
+    check_known(info, app_o, rator, rand1, "map", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "for-each", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "andmap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand1, "ormap", scheme_procedure_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "map", scheme_list_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "for-each", scheme_list_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "andmap", scheme_list_p_proc, NULL, info->unsafe_mode);
+    check_known(info, app_o, rator, rand2, "ormap", scheme_list_p_proc, NULL, info->unsafe_mode);
 
     rator = app->rator; /* in case it was updated */
   }
@@ -8626,7 +8682,8 @@ static Scheme_Hash_Table *set_as_fixed(Scheme_Hash_Table *fixed_table, Optimize_
   return fixed_table;
 }
 
-Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_const, int can_inline,
+Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet,
+                                        int enforce_const, int can_inline, int unsafe_mode,
                                         Scheme_Object **_import_keys, Scheme_Object *get_import)
 {
   Scheme_Object *e;
@@ -8640,7 +8697,7 @@ Scheme_Linklet *scheme_optimize_linklet(Scheme_Linklet *linklet, int enforce_con
   Optimize_Info_Sequence info_seq;
   Scheme_Hash_Tree **iu;
 
-  info = optimize_info_create(linklet, enforce_const, can_inline);
+  info = optimize_info_create(linklet, enforce_const, can_inline, unsafe_mode);
   info->context = (Scheme_Object *)linklet;
 
   /* Less inlining for a large module: */
@@ -9622,7 +9679,8 @@ Scheme_Object *optimize_clone(int single_use, Scheme_Object *expr, Optimize_Info
 /*                 compile-time env for optimization                      */
 /*========================================================================*/
 
-static Optimize_Info *optimize_info_allocate(Scheme_Linklet *linklet, int enforce_const, int can_inline)
+static Optimize_Info *optimize_info_allocate(Scheme_Linklet *linklet,
+                                             int enforce_const, int can_inline, int unsafe_mode)
 {
   Optimize_Info *info;
 
@@ -9637,16 +9695,18 @@ static Optimize_Info *optimize_info_allocate(Scheme_Linklet *linklet, int enforc
   info->enforce_const = enforce_const;
   if (!can_inline)
     info->inline_fuel = -1;
+  info->unsafe_mode = unsafe_mode;
 
   return info;
 }
 
-static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet, int enforce_const, int can_inline)
+static Optimize_Info *optimize_info_create(Scheme_Linklet *linklet,
+                                           int enforce_const, int can_inline, int unsafe_mode)
 {
   Optimize_Info *info;
   Scheme_Logger *logger;
 
-  info = optimize_info_allocate(linklet, enforce_const, can_inline);
+  info = optimize_info_allocate(linklet, enforce_const, can_inline, unsafe_mode);
 
   logger = (Scheme_Logger *)scheme_get_param(scheme_current_config(), MZCONFIG_LOGGER);
   logger = scheme_make_logger(logger, scheme_intern_symbol("optimizer"));
@@ -9915,13 +9975,14 @@ static Optimize_Info *optimize_info_add_frame(Optimize_Info *info, int flags)
 {
   Optimize_Info *naya;
 
-  naya = optimize_info_allocate(info->linklet, 0, 0);
+  naya = optimize_info_allocate(info->linklet, 0, 0, 0);
   naya->flags = (short)flags;
   naya->next = info;
   naya->inline_fuel = info->inline_fuel;
   naya->flatten_fuel = info->flatten_fuel;
   naya->letrec_not_twice = info->letrec_not_twice;
   naya->enforce_const = info->enforce_const;
+  naya->unsafe_mode = info->unsafe_mode;
   naya->top_level_consts = info->top_level_consts;
   naya->context = info->context;
   naya->vclock = info->vclock;

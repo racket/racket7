@@ -3,6 +3,7 @@
          "../compile/serialize-property.rkt"
          "../compile/serialize-state.rkt"
          "../common/memo.rkt"
+         "../common/inline.rkt"
          "syntax.rkt"
          "binding-table.rkt"
          "tamper.rkt"
@@ -292,7 +293,7 @@
 
 ;; Adding, removing, or flipping a scope is propagated
 ;; lazily to subforms
-(define (apply-scope s sc op prop-op)
+(define-inline (apply-scope s sc op prop-op)
   (if (shifted-multi-scope? sc)
       (struct-copy syntax s
                    [shifted-multi-scopes (fallback-update-first (syntax-shifted-multi-scopes s)

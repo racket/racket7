@@ -55,8 +55,8 @@
           (beg0 (map remap forms))]
          [(seq forms)
           (seq (map remap forms))]
-         [(varref constant? toplevel dummy)
-          (varref constant? (remap toplevel) (remap dummy))]
+         [(varref toplevel dummy constant? unsafe?)
+          (varref (remap toplevel) (remap dummy) constant? unsafe?)]
          [(assign id rhs undef-ok?)
           (assign (remap id) (remap rhs) undef-ok?)]
          [(apply-values proc args-expr)

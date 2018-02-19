@@ -22,7 +22,7 @@ PRIMITIVES_TABLES = primitive/kernel.ss primitive/unsafe.ss primitive/flfxnum.ss
 
 CONVERT_DEPS = convert.rkt $(PRIMITIVES_TABLES)
 
-CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt
+CONVERT = $(RACKET) -l- raco make convert.rkt && $(RACKET) convert.rkt $(UNSAFE_COMP)
 
 THREAD_DEPS = chezpart.so rumble.so
 IO_DEPS = $(THREAD_DEPS) thread.so

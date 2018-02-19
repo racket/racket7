@@ -69,7 +69,11 @@
 (printf "Schemify...\n")
 (define body
   (time
-   (schemify-body bodys/constants-lifted (lambda (old-v new-v) new-v) prim-knowns #hasheq() #hasheq() #t)))
+   (schemify-body bodys/constants-lifted (lambda (old-v new-v) new-v) prim-knowns #hasheq() #hasheq()
+                  ;; for cify:
+                  #t
+                  ;; unsafe mode:
+                  #t)))
 
 (printf "Lift...\n")
 (define lifted-body

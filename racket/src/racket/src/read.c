@@ -3158,12 +3158,13 @@ static Scheme_Object *read_compact(CPort *port, int use_stack)
     case CPT_VARREF:
       {
         Scheme_Object *data;
+        int flags;
 
         data = scheme_alloc_object();
         data->type = scheme_varref_form_type;
 
-        if (read_compact_number(port))
-          SCHEME_VARREF_FLAGS(data) |= 0x1;
+        flags = read_compact_number(port);
+        SCHEME_VARREF_FLAGS(data) |= (flags & VARREF_FLAGS_MASK);
 
         v = read_compact(port, 1);
         SCHEME_PTR1_VAL(data) = v;

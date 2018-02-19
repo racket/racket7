@@ -61,7 +61,7 @@
        (for-each used! forms)]
       [(seq forms)
        (for-each used! forms)]
-      [(varref constant? toplevel dummy)
+      [(varref toplevel dummy constant? unsafe?)
        (used! toplevel)
        (used! dummy)]
       [(assign id rhs undef-ok?)

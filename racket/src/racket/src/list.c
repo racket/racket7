@@ -49,6 +49,9 @@ READ_ONLY Scheme_Object *scheme_unsafe_cdr_proc;
 READ_ONLY Scheme_Object *scheme_unsafe_mcar_proc;
 READ_ONLY Scheme_Object *scheme_unsafe_mcdr_proc;
 READ_ONLY Scheme_Object *scheme_unsafe_unbox_proc;
+READ_ONLY Scheme_Object *scheme_unsafe_unbox_star_proc;
+READ_ONLY Scheme_Object *scheme_unsafe_set_box_star_proc;
+
 /* read only locals */
 ROSYM static Scheme_Object *weak_symbol;
 ROSYM static Scheme_Object *equal_symbol;
@@ -104,7 +107,9 @@ static Scheme_Object *box (int argc, Scheme_Object *argv[]);
 static Scheme_Object *immutable_box (int argc, Scheme_Object *argv[]);
 static Scheme_Object *box_p (int argc, Scheme_Object *argv[]);
 static Scheme_Object *unbox (int argc, Scheme_Object *argv[]);
+static Scheme_Object *unbox_star (int argc, Scheme_Object *argv[]);
 static Scheme_Object *set_box (int argc, Scheme_Object *argv[]);
+static Scheme_Object *set_box_star (int argc, Scheme_Object *argv[]);
 Scheme_Object *scheme_box_cas (int argc, Scheme_Object *argv[]);
 static Scheme_Object *chaperone_box(int argc, Scheme_Object **argv);
 static Scheme_Object *impersonate_box(int argc, Scheme_Object **argv);
@@ -210,11 +215,6 @@ static Scheme_Object *chaperone_hash_key(const char *name, Scheme_Object *table,
 static void chaperone_hash_key_value(const char *name, Scheme_Object *obj, Scheme_Object *k, Scheme_Object **_chap_key, Scheme_Object **_chap_val, int ischap);
 static Scheme_Object *chaperone_hash_tree_set(Scheme_Object *table, Scheme_Object *key, Scheme_Object *val);
 static Scheme_Object *chaperone_hash_clear(const char *name, Scheme_Object *table);
-
-#define BOX "box"
-#define BOXP "box?"
-#define UNBOX "unbox"
-#define SETBOX "set-box!"
 
 void
 scheme_init_list (Scheme_Startup_Env *env)
@@ -478,11 +478,11 @@ scheme_init_list (Scheme_Startup_Env *env)
   scheme_addto_prim_instance ("caaaar", p, env);
 
   REGISTER_SO(scheme_box_proc);
-  p = scheme_make_immed_prim(box, BOX, 1, 1);
+  p = scheme_make_immed_prim(box, "box", 1, 1);
   scheme_box_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE_ALLOCATION);
-  scheme_addto_prim_instance(BOX, p, env);
+  scheme_addto_prim_instance("box", p, env);
 
   REGISTER_SO(scheme_box_immutable_proc);
   p = scheme_make_immed_prim(immutable_box, "box-immutable", 1, 1);
@@ -491,19 +491,27 @@ scheme_init_list (Scheme_Startup_Env *env)
   scheme_addto_prim_instance("box-immutable", p, env);
   
   REGISTER_SO(scheme_box_p_proc);
-  p = scheme_make_folding_prim(box_p, BOXP, 1, 1, 1);
+  p = scheme_make_folding_prim(box_p, "box?", 1, 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_OMITABLE);
-  scheme_addto_prim_instance(BOXP, p, env);
+  scheme_addto_prim_instance("box?", p, env);
   scheme_box_p_proc = p;
 
-  p = scheme_make_noncm_prim(unbox, UNBOX, 1, 1);
+  p = scheme_make_noncm_prim(unbox, "unbox", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);  
-  scheme_addto_prim_instance(UNBOX, p, env);
+  scheme_addto_prim_instance("unbox", p, env);
 
-  p = scheme_make_immed_prim(set_box, SETBOX, 2, 2);
+  p = scheme_make_immed_prim(set_box, "set-box!", 2, 2);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
-  scheme_addto_prim_instance(SETBOX, p, env);
+  scheme_addto_prim_instance("set-box!", p, env);
+
+  p = scheme_make_noncm_prim(unbox_star, "unbox*", 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED);  
+  scheme_addto_prim_instance("unbox*", p, env);
+
+  p = scheme_make_immed_prim(set_box_star, "set-box*!", 2, 2);
+  SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
+  scheme_addto_prim_instance("set-box*!", p, env);
 
   p = scheme_make_immed_prim(scheme_box_cas, "box-cas!", 3, 3);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_NARY_INLINED);
@@ -889,15 +897,19 @@ scheme_init_unsafe_list (Scheme_Startup_Env *env)
   scheme_addto_prim_instance("unsafe-unbox", p, env);
   scheme_unsafe_unbox_proc = p;
 
+  REGISTER_SO(scheme_unsafe_unbox_star_proc);
   p = scheme_make_immed_prim(unsafe_unbox_star, "unsafe-unbox*", 1, 1);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_UNARY_INLINED
                                                             | SCHEME_PRIM_IS_UNSAFE_OMITABLE
                                                             | SCHEME_PRIM_IS_OMITABLE);
   scheme_addto_prim_instance("unsafe-unbox*", p, env);
+  scheme_unsafe_unbox_star_proc = p;
 
+  REGISTER_SO(scheme_unsafe_set_box_star_proc);
   p = scheme_make_immed_prim(unsafe_set_box, "unsafe-set-box!", 2, 2);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
   scheme_addto_prim_instance("unsafe-set-box!", p, env);
+  scheme_unsafe_set_box_star_proc = p;
 
   p = scheme_make_immed_prim(unsafe_set_box_star, "unsafe-set-box*!", 2, 2);
   SCHEME_PRIM_PROC_FLAGS(p) |= scheme_intern_prim_opt_flags(SCHEME_PRIM_IS_BINARY_INLINED);
@@ -1855,10 +1867,18 @@ Scheme_Object *scheme_unbox(Scheme_Object *obj)
         && SCHEME_BOXP(SCHEME_CHAPERONE_VAL(obj)))
       return chaperone_unbox(obj);
 
-    scheme_wrong_contract(UNBOX, "box?", 0, 1, &obj);
+    scheme_wrong_contract("unbox", "box?", 0, 1, &obj);
   }
 
-  return (Scheme_Object *)SCHEME_BOX_VAL(obj);
+  return SCHEME_BOX_VAL(obj);
+}
+
+Scheme_Object *scheme_unbox_star(Scheme_Object *obj)
+{
+  if (!SCHEME_BOXP(obj))
+    scheme_wrong_contract("unbox*", "(and/c box? (not/c impersonator?))", 0, 1, &obj);
+
+  return SCHEME_BOX_VAL(obj);
 }
 
 Scheme_Object *scheme_box_cas(int argc, Scheme_Object *argv[])
@@ -1924,8 +1944,16 @@ void scheme_set_box(Scheme_Object *b, Scheme_Object *v)
       return;
     }
 
-    scheme_wrong_contract(SETBOX, "(and/c box? (not/c immutable?))", 0, 1, &b);
+    scheme_wrong_contract("set-box!", "(and/c box? (not/c immutable?))", 0, 1, &b);
   }
+  SCHEME_BOX_VAL(b) = v;
+}
+
+void scheme_set_box_star(Scheme_Object *b, Scheme_Object *v)
+{
+  if (!SCHEME_MUTABLE_BOXP(b))
+    scheme_wrong_contract("set-box*!", "(and/c box? (not/c immutable?) (not/c impersonator?))", 0, 1, &b);
+
   SCHEME_BOX_VAL(b) = v;
 }
 
@@ -1954,9 +1982,20 @@ static Scheme_Object *unbox(int c, Scheme_Object *p[])
   return scheme_unbox(p[0]);
 }
 
+static Scheme_Object *unbox_star(int c, Scheme_Object *p[])
+{
+  return scheme_unbox_star(p[0]);
+}
+
 static Scheme_Object *set_box(int c, Scheme_Object *p[])
 {
   scheme_set_box(p[0], p[1]);
+  return scheme_void;
+}
+
+static Scheme_Object *set_box_star(int c, Scheme_Object *p[])
+{
+  scheme_set_box_star(p[0], p[1]);
   return scheme_void;
 }
 

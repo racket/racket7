@@ -615,9 +615,11 @@
         (out-anything (protect-quote key) out)
         (out-anything (protect-quote val) out)
         (out-anything (protect-quote body) out)]
-       [(struct varref (constant? expr dummy))
+       [(struct varref (expr dummy constant? from-unsafe?))
         (out-byte CPT_VARREF out)
-        (out-number (if constant? 1 0) out)
+        (out-number (bitwise-ior (if constant? 1 0)
+                                 (if from-unsafe? 2 0))
+                    out)
         (out-anything expr out)
         (out-anything dummy out)]
        [(struct inline-variant (direct inline))

@@ -27,4 +27,5 @@
   [recompile-linklet (known-procedure 30)]
   [variable-reference->instance (known-procedure 6)]
   [variable-reference-constant? (known-procedure 2)]
+  [variable-reference-from-unsafe? (known-procedure 2)]
   [variable-reference? (known-procedure 2)])

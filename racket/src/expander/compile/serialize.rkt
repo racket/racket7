@@ -161,11 +161,11 @@
       [(eq? d 'top) (deserialize-module-path-index)]
       [(box? d) (deserialize-module-path-index (unbox d))]
       [else
-       (deserialize-module-path-index (vector-ref d 0)
-                                      (and ((vector-length d) . > . 1)
-                                           (vector-ref gen (vector-ref d 1))))])))
+       (deserialize-module-path-index (vector*-ref d 0)
+                                      (and ((vector*-length d) . > . 1)
+                                           (vector*-ref gen (vector*-ref d 1))))])))
   (for/vector #:length (vector-length order-vec) ([p (in-vector order-vec)])
-              (vector-ref gen p)))
+              (vector*-ref gen p)))
 
 (define (mpis-as-vector mpis)
   (define positions (module-path-index-table-positions mpis))
@@ -627,9 +627,9 @@
 
 ;; Decode the construction of a mutable variable
 (define (decode-shell vec pos mpis inspector bulk-binding-registry shared)
-  (case (vector-ref vec pos)
+  (case (vector*-ref vec pos)
     [(#:box) (values (box #f) (add1 pos))]
-    [(#:vector) (values (make-vector (vector-ref vec (add1 pos))) (+ pos 2))]
+    [(#:vector) (values (make-vector (vector*-ref vec (add1 pos))) (+ pos 2))]
     [(#:hash) (values (make-hasheq) (add1 pos))]
     [(#:hasheq) (values (make-hasheq) (add1 pos))]
     [(#:hasheqv) (values (make-hasheqv) (add1 pos))]
@@ -642,9 +642,9 @@
       [(_ (id ...) rhs) (decodes #:pos (add1 pos) (id ...) rhs)]
       [(_ #:pos pos () rhs) (values rhs pos)]
       [(_ #:pos pos ([#:ref id0] id ...) rhs)
-       (let-values ([(id0 next-pos) (let ([i (vector-ref vec pos)])
+       (let-values ([(id0 next-pos) (let ([i (vector*-ref vec pos)])
                                       (if (exact-integer? i)
-                                          (values (vector-ref shared i) (add1 pos))
+                                          (values (vector*-ref shared i) (add1 pos))
                                           (decode vec pos mpis inspector bulk-binding-registry shared)))])
          (decodes #:pos next-pos (id ...) rhs))]
       [(_ #:pos pos (id0 id ...) rhs)
@@ -652,9 +652,9 @@
          (decodes #:pos next-pos (id ...) rhs))]))
   (define-syntax-rule (decode* (deser id ...))
     (decodes (id ...) (deser id ...)))
-  (case (vector-ref vec pos)
+  (case (vector*-ref vec pos)
     [(#:ref)
-     (values (vector-ref shared (vector-ref vec (add1 pos)))
+     (values (vector*-ref shared (vector*-ref vec (add1 pos)))
              (+ pos 2))]
     [(#:inspector) (values inspector (add1 pos))]
     [(#:bulk-binding-registry) (values bulk-binding-registry (add1 pos))]
@@ -686,45 +686,45 @@
     [(#:srcloc)
      (decode* (srcloc source line column position span))]
     [(#:quote)
-     (values (vector-ref vec (add1 pos)) (+ pos 2))]
+     (values (vector*-ref vec (add1 pos)) (+ pos 2))]
     [(#:mpi)
-     (values (vector-ref mpis (vector-ref vec (add1 pos)))
+     (values (vector*-ref mpis (vector*-ref vec (add1 pos)))
              (+ pos 2))]
     [(#:box)
      (decode* (box-immutable v))]
     [(#:cons)
      (decode* (cons a d))]
     [(#:list #:vector)
-     (define len (vector-ref vec (add1 pos)))
+     (define len (vector*-ref vec (add1 pos)))
      (define r (make-vector len))
      (define next-pos
        (for/fold ([pos (+ pos 2)]) ([i (in-range len)])
          (define-values (v next-pos) (decodes #:pos pos (v) v))
          (vector-set! r i v)
          next-pos))
-     (values (if (eq? (vector-ref vec pos) '#:list)
+     (values (if (eq? (vector*-ref vec pos) '#:list)
                  (vector->list r)
                  (vector->immutable-vector r))
              next-pos)]
     [(#:hash #:hasheq #:hasheqv)
-     (define ht (case (vector-ref vec pos)
+     (define ht (case (vector*-ref vec pos)
                   [(#:hash) (hash)]
                   [(#:hasheq) (hasheq)]
                   [(#:hasheqv) (hasheqv)]))
-     (define len (vector-ref vec (add1 pos)))
+     (define len (vector*-ref vec (add1 pos)))
      (for/fold ([ht ht] [pos (+ pos 2)]) ([i (in-range len)])
        (decodes #:pos pos (k v) (hash-set ht k v)))]
     [(#:set #:seteq #:seteqv)
-     (define s (case (vector-ref vec pos)
+     (define s (case (vector*-ref vec pos)
                  [(#:set) (set)]
                  [(#:seteq) (seteq)]
                  [(#:seteqv) (seteqv)]))
-     (define len (vector-ref vec (add1 pos)))
+     (define len (vector*-ref vec (add1 pos)))
      (for/fold ([s s] [pos (+ pos 2)]) ([i (in-range len)])
        (decodes #:pos pos (k) (set-add s k)))]
     [(#:prefab)
      (define-values (key next-pos) (decodes #:pos (add1 pos) (k) k))
-     (define len (vector-ref vec next-pos))
+     (define len (vector*-ref vec next-pos))
      (define-values (r done-pos)
        (for/fold ([r null] [pos (add1 next-pos)]) ([i (in-range len)])
          (decodes #:pos pos (v) (cons v r))))
@@ -763,12 +763,12 @@
     [(#:provided)
      (decode* (deserialize-provided binding protected? syntax?))]
     [else
-     (values (vector-ref vec pos) (add1 pos))]))
+     (values (vector*-ref vec pos) (add1 pos))]))
 
 ;; Decode the filling of mutable values, which has its own encoding
 ;; variant
 (define (decode-fill! v vec pos mpis inspector bulk-binding-registry shared)
-  (case (vector-ref vec pos)
+  (case (vector*-ref vec pos)
     [(#f) (add1 pos)]
     [(#:set-box!)
      (define-values (c next-pos)
@@ -776,14 +776,14 @@
      (set-box! v c)
      next-pos]
     [(#:set-vector!)
-     (define len (vector-ref vec (add1 pos)))
+     (define len (vector*-ref vec (add1 pos)))
      (for/fold ([pos (+ pos 2)]) ([i (in-range len)])
        (define-values (c next-pos)
          (decode vec pos mpis inspector bulk-binding-registry shared))
        (vector-set! v i c)
        next-pos)]
     [(#:set-hash!)
-     (define len (vector-ref vec (add1 pos)))
+     (define len (vector*-ref vec (add1 pos)))
      (for/fold ([pos (+ pos 2)]) ([i (in-range len)])
        (define-values (key next-pos)
          (decode vec pos mpis inspector bulk-binding-registry shared))
@@ -804,7 +804,7 @@
      (deserialize-representative-scope-fill! v a d)
      done-pos]
     [else
-     (error 'deserialize "bad fill encoding: ~v" (vector-ref vec pos))]))
+     (error 'deserialize "bad fill encoding: ~v" (vector*-ref vec pos))]))
  
 ;; ----------------------------------------
 ;; For pruning unreachable scopes in serialization

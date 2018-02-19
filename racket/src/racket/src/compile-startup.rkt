@@ -83,9 +83,18 @@
   (define-values (datum->correlated) (hash-ref (primitive-table '#%kernel) 'datum->syntax))
   (define-values (correlated-property) (hash-ref (primitive-table '#%kernel) 'syntax-property))
 
-  (define-values (linklet) (compile-linklet (rename-functions (get-linklet src))))
+  (define-values (linklet) (compile-linklet (rename-functions (get-linklet src))
+                                            #f #f #f #f
+                                            ;; Unsafe mode:
+                                            #t))
 
   (define-values (DIGS-PER-LINE) 20)
+
+  #;
+  (call-with-output-file
+   "/tmp/startup.zo"
+   (lambda (outfile) (write (hash->linklet-bundle (hasheq 'startup linklet)) outfile))
+   'truncate)
   
   (call-with-output-file
    dest

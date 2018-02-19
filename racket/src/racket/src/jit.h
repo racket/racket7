@@ -309,15 +309,16 @@ struct scheme_jit_common_record {
   void *bad_syntax_e_code;
   void *imag_part_code, *real_part_code, *make_rectangular_code;
   void *bad_flimag_part_code, *bad_flreal_part_code, *bad_make_flrectangular_code;
-  void *unbox_code, *set_box_code, *box_cas_fail_code, *weak_box_value_code;
+  void *unbox_code, *set_box_code, *unbox_star_fail_code, *set_box_star_fail_code, *box_cas_fail_code, *weak_box_value_code;
   void *vector_cas_fail_code;
-  void *bad_vector_length_code;
+  void *bad_vector_length_code, *bad_vector_star_length_code;
   void *bad_flvector_length_code;
   void *bad_fxvector_length_code;
   void *bad_string_length_code;
   void *bad_bytes_length_code;
   void *vector_ref_code, *vector_ref_check_index_code, *vector_set_code, *vector_set_check_index_code;
   void *chap_vector_ref_code, *chap_vector_ref_check_index_code, *chap_vector_set_code, *chap_vector_set_check_index_code;
+  void *vector_star_ref_code, *vector_star_ref_check_index_code, *vector_star_set_code, *vector_star_set_check_index_code;
   void *string_ref_code, *string_ref_check_index_code, *string_set_code, *string_set_check_index_code;
   void *bytes_ref_code, *bytes_ref_check_index_code, *bytes_set_code, *bytes_set_check_index_code;
   void *flvector_ref_check_index_code[JIT_NUM_FL_KINDS];

@@ -49,6 +49,7 @@ define_ts_s_s(call_with_values_from_multiple_result, FSRC_MARKS)
 define_ts_S_s(apply_checked_fail, FSRC_MARKS)
 define_ts_b_v(scheme_unbound_global, FSRC_MARKS)
 define_ts_ss_v(scheme_set_box, FSRC_MARKS)
+define_ts_ss_v(scheme_set_box_star, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_car, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_cdr, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_caar, FSRC_MARKS)
@@ -69,6 +70,8 @@ define_ts_iS_s(scheme_checked_flreal_part, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_make_flrectangular, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_vector_ref, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_vector_set, FSRC_MARKS)
+define_ts_iS_s(scheme_checked_vector_star_ref, FSRC_MARKS)
+define_ts_iS_s(scheme_checked_vector_star_set, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_string_ref, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_string_set, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_byte_string_ref, FSRC_MARKS)
@@ -83,6 +86,7 @@ define_ts_iS_s(scheme_checked_extflvector_set, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_fxvector_ref, FSRC_MARKS)
 define_ts_iS_s(scheme_checked_fxvector_set, FSRC_MARKS)
 define_ts_s_s(scheme_vector_length, FSRC_MARKS)
+define_ts_s_s(scheme_vector_star_length, FSRC_MARKS)
 define_ts_s_s(scheme_flvector_length, FSRC_MARKS)
 #ifdef MZ_LONG_DOUBLE
 define_ts_s_s(scheme_extflvector_length, FSRC_MARKS)
@@ -93,6 +97,7 @@ define_ts_s_s(scheme_byte_string_length, FSRC_MARKS)
 define_ts_ss_s(scheme_string_eq_2, FSRC_MARKS)
 define_ts_ss_s(scheme_byte_string_eq_2, FSRC_MARKS)
 define_ts_s_s(scheme_unbox, FSRC_MARKS)
+define_ts_s_s(scheme_unbox_star, FSRC_MARKS)
 define_ts_s_s(scheme_weak_box_value, FSRC_MARKS)
 define_ts_si_s(scheme_struct_ref, FSRC_MARKS)
 define_ts_sis_v(scheme_struct_set, FSRC_MARKS)
@@ -207,13 +212,16 @@ define_ts_s_s(scheme_box, FSRC_OTHER)
 # define ts_scheme_checked_make_flrectangular scheme_checked_make_flrectangular
 # define ts_scheme_make_complex scheme_make_complex
 # define ts_scheme_unbox scheme_unbox
+# define ts_scheme_unbox_star scheme_unbox_star
 # define ts_scheme_weak_box_value scheme_weak_box_value
 # define ts_scheme_set_box scheme_set_box
+# define ts_scheme_set_box scheme_set_box_star
 # define ts_scheme_box_cas scheme_box_cas
 # define ts_scheme_checked_vector_cas scheme_checked_vector_cas
 # define ts_chaperone_set_mark chaperone_set_mark
 # define ts_scheme_chaperone_get_immediate_cc_mark scheme_chaperone_get_immediate_cc_mark
 # define ts_scheme_vector_length scheme_vector_length
+# define ts_scheme_vector_star_length scheme_vector_star_length
 # define ts_scheme_flvector_length scheme_flvector_length
 #ifdef MZ_LONG_DOUBLE
 # define ts_scheme_extflvector_length scheme_extflvector_length
@@ -235,6 +243,8 @@ define_ts_s_s(scheme_box, FSRC_OTHER)
 # define ts_call_with_values_from_multiple_result call_with_values_from_multiple_result
 # define ts_scheme_checked_vector_ref scheme_checked_vector_ref
 # define ts_scheme_checked_vector_set scheme_checked_vector_set
+# define ts_scheme_checked_vector_star_ref scheme_checked_vector_star_ref
+# define ts_scheme_checked_vector_star_set scheme_checked_vector_star_set
 # define ts_scheme_checked_string_ref scheme_checked_string_ref
 # define ts_scheme_checked_string_set scheme_checked_string_set
 # define ts_scheme_checked_byte_string_ref scheme_checked_byte_string_ref

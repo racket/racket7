@@ -1,6 +1,7 @@
 #lang scribble/doc
 @(require "mz.rkt"
-          (for-label racket/linklet))
+          (for-label racket/linklet
+                     racket/unsafe/ops))
 
 @title[#:tag "linklets"]{Linklets and the Core Compiler}
 
@@ -119,7 +120,8 @@ otherwise.}
                              [name any/c #f]
                              [import-keys #f #f]
                              [get-import #f #f]
-                             [serializable? any/c #t])
+                             [serializable? any/c #t]
+                             [unsafe-mode? any/c #f])
             linklet?]
            [(compile-linklet [form (or/c correlated? any/c)]
                              [name any/c]
@@ -127,7 +129,8 @@ otherwise.}
                              [get-import (or/c #f (any/c . -> . (values (or/c linklet? instance? #f)
                                                                         (or/c vector? #f))))
                                          #f]
-                             [serializable? any/c #t])
+                             [serializable? any/c #t]
+                             [unsafe-mode? any/c #f])
             (values linklet? vector?)])]{
 
 Takes an S-expression or @tech{correlated object} for a
@@ -166,7 +169,21 @@ When @racket[import-keys] is not @racket[#f], then the compiler is
 allowed to grow or shrink the set of imported instances for the
 linklet. The result vector specifies the keys of the imports for the
 returned linklet. Any key that is @racket[#f] or a @tech{linklet instance}
-must be preserved intact, however.}
+must be preserved intact, however.
+
+If @racket[unsafe-mode?] is true, then the linklet is compiled in
+@deftech{unsafe mode}: uses of safe operations within the linklet can
+be converted to unsafe operations on the assumption that the relevant
+contracts are satisfied. For example, @racket[car] is converted to
+@racket[unsafe-car]. Some substituted unsafe operations may not have
+directly accessible names, such as the unsafe variant of
+@racket[in-list] that can be substituted in @tech{unsafe mode}. An
+unsafe operation is substituted only if its (unchecked) contract is
+subsumed by the safe operation's contract. The fact that the linklet
+is compiled in @tech{unsafe mode} can be exposed through
+@racket[variable-reference-from-unsafe?] using a variable reference
+produced by a @racket[#%variable-reference] form within the module
+body.}
 
 
 @defproc*[([(recompile-linklet [linklet linklet?]

@@ -633,7 +633,10 @@
          (define undef-ok? (not (zero? (read-compact-number cp))))
          (make-assign (read-compact cp) (read-compact cp) undef-ok?)]
         [(varref)
-         (make-varref (not (zero? (read-compact-number cp))) (read-compact cp) (read-compact cp))]
+         (define flags (read-compact-number cp))
+         (make-varref (read-compact cp) (read-compact cp)
+                      (bitwise-bit-set? flags 1)
+                      (bitwise-bit-set? flags 2))]
         [(apply-values)
          (make-apply-values (read-compact cp) (read-compact cp))]
         [(other-form)

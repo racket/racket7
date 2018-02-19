@@ -33,6 +33,8 @@
 ;; this is not necessary, except to the degree that `compile-linklet`
 ;; needs to be replaced with a variant that "compiles" to source.
 
+(define (variable-reference-from-unsafe? x) #f)
+
 ;; See "linklet-operation.rkt":
 (linklet-operations=> provide)
 
@@ -144,6 +146,13 @@
            (variable-reference-constant? (variable-reference-primitive-varref vr)))])
     variable-reference-constant?))
 
+
+(define variable-reference-from-unsafe?*
+  (let ([variable-reference-from-unsafe?
+         (lambda (vr)
+           (variable-reference-from-unsafe? (variable-reference-primitive-varref vr)))])
+    variable-reference-from-unsafe?))
+
 ;; ----------------------------------------
 
 (define cu-namespace (make-empty-namespace))
@@ -157,7 +166,8 @@
   (namespace-set-variable-value! 'variable-reference variable-reference)
   (namespace-set-variable-value! 'variable-reference? variable-reference? #t)
   (namespace-set-variable-value! 'variable-reference->instance variable-reference->instance #t)
-  (namespace-set-variable-value! 'variable-reference-constant? variable-reference-constant?* #t))
+  (namespace-set-variable-value! 'variable-reference-constant? variable-reference-constant?* #t)
+  (namespace-set-variable-value! 'variable-reference-from-unsafe? variable-reference-from-unsafe?* #t))
 
 ;; ----------------------------------------
 

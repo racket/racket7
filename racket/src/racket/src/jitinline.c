@@ -1717,6 +1717,7 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
 
       return 1;
     } else if (IS_NAMED_PRIM(rator, "vector-length")
+               || IS_NAMED_PRIM(rator, "vector*-length")
                || IS_NAMED_PRIM(rator, "fxvector-length")
                || IS_NAMED_PRIM(rator, "unsafe-vector-length")
                || IS_NAMED_PRIM(rator, "unsafe-fxvector-length")
@@ -1749,7 +1750,7 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
         for_fl = 1;
         extfl = 1;
         unsafe = 1;
-      } else {
+      } else if (IS_NAMED_PRIM(rator, "vector-length")) {
         can_chaperone = 1;
       }
 
@@ -1776,9 +1777,13 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
                          (void)jit_calli(sjc.bad_flvector_length_code));
         } else if (for_fx)
           (void)jit_calli(sjc.bad_fxvector_length_code);
-        else {
+        else if (can_chaperone) {
           (void)jit_calli(sjc.bad_vector_length_code);
           /* can return with updated R0 */
+          jit_retval(JIT_R0);
+        } else {
+          (void)jit_calli(sjc.bad_vector_star_length_code);
+          /* does not return */
         }
         /* bad_vector_length_code may unpack a proxied object */
 
@@ -1868,11 +1873,13 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       
       return 1;
     } else if (IS_NAMED_PRIM(rator, "unbox")
+               || IS_NAMED_PRIM(rator, "unbox*")
                || IS_NAMED_PRIM(rator, "weak-box-value")) {
       GC_CAN_IGNORE jit_insn *reffail, *ref, *refdone;
-      int for_weak;
+      int for_weak, for_star;
 
       for_weak = IS_NAMED_PRIM(rator, "weak-box-value");
+      for_star = IS_NAMED_PRIM(rator, "unbox*");
 
       LOG_IT(("inlined unbox\n"));
 
@@ -1892,13 +1899,15 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
       reffail = jit_get_ip();
       if (for_weak)
         (void)jit_calli(sjc.weak_box_value_code); /* always raises an exception */
+      else if (for_star)
+        (void)jit_calli(sjc.unbox_star_fail_code);
       else
         (void)jit_calli(sjc.unbox_code);
-      if (!for_weak)
+      if (!for_weak && !for_star)
         jit_movr_p(dest, JIT_R0);
 
       __START_TINY_JUMPS__(1);
-      if (!for_weak)
+      if (!for_weak && !for_star)
         refdone = jit_jmpi(jit_forward());
       mz_patch_branch(ref);
       (void)mz_bnei_t(reffail, JIT_R0, (for_weak ? scheme_weak_box_type : scheme_box_type), JIT_R1);
@@ -1914,7 +1923,7 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
         __END_TINY_JUMPS__(1);
       }
 
-      if (!for_weak) {
+      if (!for_weak && !for_star) {
         __START_TINY_JUMPS__(1);
         mz_patch_ucbranch(refdone);
         __END_TINY_JUMPS__(1);
@@ -2768,9 +2777,12 @@ static int generate_vector_op(mz_jit_state *jitter, int set, int int_ready, int 
         (void)jit_calli(sjc.struct_raw_set_code);
       else if (for_fx)
         (void)jit_calli(sjc.fxvector_set_check_index_code);
-      else if (!for_fl)
-        (void)jit_calli(sjc.vector_set_check_index_code);
-      else if (unbox_flonum)
+      else if (!for_fl) {
+        if (can_chaperone)
+          (void)jit_calli(sjc.vector_set_check_index_code);
+        else
+          (void)jit_calli(sjc.vector_star_set_check_index_code);
+      } else if (unbox_flonum)
         (void)jit_calli(sjc.flvector_set_flonum_check_index_code[extfl]);
       else
         (void)jit_calli(sjc.flvector_set_check_index_code[extfl]);
@@ -2779,9 +2791,12 @@ static int generate_vector_op(mz_jit_state *jitter, int set, int int_ready, int 
         (void)jit_calli(sjc.struct_raw_ref_code);
       else if (for_fx)
         (void)jit_calli(sjc.fxvector_ref_check_index_code);
-      else if (!for_fl)
-        (void)jit_calli(sjc.vector_ref_check_index_code);
-      else
+      else if (!for_fl) {
+        if (can_chaperone)
+          (void)jit_calli(sjc.vector_ref_check_index_code);
+        else
+          (void)jit_calli(sjc.vector_star_ref_check_index_code);
+      } else
         (void)jit_calli(sjc.flvector_ref_check_index_code[extfl]);
     }
     CHECK_LIMIT();
@@ -3686,6 +3701,7 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
       return 1;
 #endif
     } else if (IS_NAMED_PRIM(rator, "vector-ref")
+               || IS_NAMED_PRIM(rator, "vector*-ref")
                || IS_NAMED_PRIM(rator, "unsafe-vector-ref")
                || IS_NAMED_PRIM(rator, "unsafe-vector*-ref")
                || IS_NAMED_PRIM(rator, "unsafe-struct-ref")
@@ -3708,6 +3724,9 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
 
       if (IS_NAMED_PRIM(rator, "vector-ref")) {
         which = 0;
+      } else if (IS_NAMED_PRIM(rator, "vector*-ref")) {
+        which = 0;
+        can_chaperone = 0;
       } else if (IS_NAMED_PRIM(rator, "fxvector-ref")) {
 	which = 0;
         for_fx = 1;
@@ -4055,13 +4074,15 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
 
       return 1;
     } else if (IS_NAMED_PRIM(rator, "set-box!")
+               || IS_NAMED_PRIM(rator, "set-box*!")
                || IS_NAMED_PRIM(rator, "unsafe-set-box!")) {
       GC_CAN_IGNORE jit_insn *ref, *ref2, *ref3, *reffail;
-      int unsafe;
+      int unsafe, for_star;
 
       LOG_IT(("inlined set-box!\n"));
 
       unsafe = IS_NAMED_PRIM(rator, "unsafe-set-box!");
+      for_star = IS_NAMED_PRIM(rator, "set-box*!");
 
       scheme_generate_two_args(app->rand1, app->rand2, jitter, 1, 2);
       CHECK_LIMIT();
@@ -4075,9 +4096,15 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
       if (ref3)
         mz_patch_branch(ref3);
       reffail = jit_get_ip();
-      (void)jit_calli(sjc.set_box_code);
-      ref2 = jit_jmpi(jit_forward());
-      mz_patch_branch(ref);
+      if (!for_star)
+        (void)jit_calli(sjc.set_box_code);
+      else
+        (void)jit_calli(sjc.set_box_star_fail_code);
+      if (!for_star) {
+        ref2 = jit_jmpi(jit_forward());
+        mz_patch_branch(ref);
+      } else
+        ref2 = NULL;
       if (!unsafe) {
         jit_ldxi_s(JIT_R2, JIT_R0, &MZ_OPT_HASH_KEY((Scheme_Inclhash_Object *)0x0));
         (void)jit_bmsi_ul(reffail, JIT_R2, 0x1);
@@ -4086,9 +4113,11 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
 
       (void)jit_stxi_p(&SCHEME_BOX_VAL(0x0), JIT_R0, JIT_R1);
 
-      __START_TINY_JUMPS__(1);
-      mz_patch_ucbranch(ref2);
-      __END_TINY_JUMPS__(1);
+      if (!for_star) {
+        __START_TINY_JUMPS__(1);
+        mz_patch_ucbranch(ref2);
+        __END_TINY_JUMPS__(1);
+      }
       
       if (!result_ignored)
         (void)jit_movi_p(dest, scheme_void);
@@ -4599,6 +4628,7 @@ int scheme_generate_inlined_nary(mz_jit_state *jitter, Scheme_App_Rec *app, int 
     return 1;
   } else if (!for_branch) {
     if (IS_NAMED_PRIM(rator, "vector-set!")
+        || IS_NAMED_PRIM(rator, "vector*-set!")
         || IS_NAMED_PRIM(rator, "unsafe-vector-set!")
         || IS_NAMED_PRIM(rator, "unsafe-vector*-set!")
         || IS_NAMED_PRIM(rator, "flvector-set!")
@@ -4621,6 +4651,10 @@ int scheme_generate_inlined_nary(mz_jit_state *jitter, Scheme_App_Rec *app, int 
 
       if (IS_NAMED_PRIM(rator, "vector-set!")) {
 	which = 0;
+        check_mutable = 1;
+      } else if (IS_NAMED_PRIM(rator, "vector*-set!")) {
+	which = 0;
+        can_chaperone = 0;
         check_mutable = 1;
       } else if (IS_NAMED_PRIM(rator, "fxvector-set!")) {
 	which = 0;

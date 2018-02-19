@@ -42,7 +42,6 @@ int scheme_get_allow_set_undefined() { return scheme_allow_set_undefined; }
 THREAD_LOCAL_DECL(int scheme_starting_up);
 
 /* globals READ-ONLY SHARED */
-Scheme_Object *scheme_varref_const_p_proc;
 
 READ_ONLY static Scheme_Object *kernel_symbol;
 

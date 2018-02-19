@@ -29,7 +29,8 @@
                                           (set-union main-ids
                                                      read-ids))
                         #:extras (hasheq 'variable-reference? variable-reference?
-                                         'variable-reference-constant? variable-reference-constant?)
+                                         'variable-reference-constant? variable-reference-constant?
+                                         'variable-reference-from-unsafe? variable-reference-from-unsafe?)
                         #:namespace ns)
   (declare-reexporting-module! '#%kernel '(#%core #%runtime #%main #%read)
                                #:namespace ns))

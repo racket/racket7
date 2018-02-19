@@ -61,7 +61,7 @@
 ;; An import ABI is a list of list of booleans, parallel to the
 ;; linklet imports, where #t to means that a value is expected, and #f
 ;; means that a variable (which boxes a value) is expected
-(define (schemify-linklet lk serializable? for-jitify? allow-set!-undefined?
+(define (schemify-linklet lk serializable? for-jitify? allow-set!-undefined? unsafe-mode?
                           reannotate prim-knowns get-import-knowns import-keys)
   (define (im-int-id id) (unwrap (if (pair? id) (cadr id) id)))
   (define (im-ext-id id) (unwrap (if (pair? id) (car id) id)))
@@ -115,7 +115,7 @@
      ;; Schemify the body, collecting information about defined names:
      (define-values (new-body defn-info mutated)
        (schemify-body* bodys/constants-lifted reannotate prim-knowns imports exports
-                       for-jitify? allow-set!-undefined? add-import! #f))
+                       for-jitify? allow-set!-undefined? add-import! #f unsafe-mode?))
      (define all-grps (append grps (reverse new-grps)))
      (values
       ;; Build `lambda` with schemified body:
@@ -160,16 +160,16 @@
 
 ;; ----------------------------------------
 
-(define (schemify-body l reannotate prim-knowns imports exports for-cify?)
+(define (schemify-body l reannotate prim-knowns imports exports for-cify? unsafe-mode?)
   (define-values (new-body defn-info mutated)
     (schemify-body* l reannotate prim-knowns imports exports
                     #f #f (lambda (im ext-id index) #f)
-                    for-cify?))
+                    for-cify? unsafe-mode?))
   new-body)
 
 (define (schemify-body* l reannotate prim-knowns imports exports
                         for-jitify? allow-set!-undefined? add-import!
-                        for-cify?)
+                        for-cify? unsafe-mode?)
   ;; Various conversion steps need information about mutated variables,
   ;; where "mutated" here includes visible implicit mutation, such as
   ;; a variable that might be used before it is defined:
@@ -204,7 +204,8 @@
                                      prim-knowns knowns mutated imports exports
                                      allow-set!-undefined?
                                      add-import!
-                                     for-cify?))
+                                     for-cify?
+                                     unsafe-mode?))
         (match form
           [`(define-values ,ids ,_)
            (append
@@ -257,7 +258,8 @@
 
 ;; Schemify `let-values` to `let`, etc., and
 ;; reorganize struct bindings.
-(define (schemify v reannotate prim-knowns knowns mutated imports exports allow-set!-undefined? add-import! for-cify?)
+(define (schemify v reannotate prim-knowns knowns mutated imports exports allow-set!-undefined? add-import!
+                  for-cify? unsafe-mode?)
   (let schemify/knowns ([knowns knowns] [inline-fuel init-inline-fuel] [v v])
     (let schemify ([v v])
       (define s-v
@@ -475,6 +477,8 @@
                    (let ([im (hash-ref imports id #f)])
                      (or (not im)
                          (known-constant? (import-lookup im))))))]
+           [`(variable-reference-from-unsafe? (#%variable-reference))
+            unsafe-mode?]
            [`(#%variable-reference)
             'instance-variable-reference]
            [`(#%variable-reference ,id)

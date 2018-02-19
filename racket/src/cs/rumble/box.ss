@@ -23,6 +23,9 @@
   ;; must handle impersonators
   (unbox b))
 
+(define (unbox* b)
+  (#2%unbox b))
+
 (define (set-box! b v)
   (if (#%box? b)
       (#3%set-box! b v)
@@ -31,6 +34,9 @@
 (define (unsafe-set-box! b v)
   ;; must handle impersonators
   (set-box! b v))
+
+(define (set-box*! b v)
+  (#2%set-box! b v))
 
 ;; in schemified:
 (define (unbox/check-undefined b name)

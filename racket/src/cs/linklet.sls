@@ -31,6 +31,7 @@
           variable-reference?
           variable-reference->instance
           variable-reference-constant?
+          variable-reference-from-unsafe?
 
           compile-enforce-module-constants
           compile-context-preservation-enabled
@@ -371,6 +372,7 @@
                            serializable?
                            jitify-mode?
                            (|#%app| compile-allow-set!-undefined)
+                           #f ;; safe mode
                            recorrelate
                            prim-knowns
                            ;; Callback to get a specific linklet for a
@@ -754,6 +756,9 @@
 
   (define (variable-reference-constant? vr)
     (eq? (variable-reference-var-or-info vr) 'constant))
+
+  (define (variable-reference-from-unsafe? vr)
+    #f)
 
   (define (make-instance-variable-reference vr v)
     (make-variable-reference (variable-reference-instance vr) v))

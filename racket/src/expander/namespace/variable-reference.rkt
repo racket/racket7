@@ -7,6 +7,7 @@
 
 (provide variable-reference?          ; provided by linklet layer, along with `#%variable-reference`
          variable-reference-constant? ; provided by linklet layer
+         variable-reference-from-unsafe? ; provided by linklet layer
 
          variable-reference->empty-namespace
          variable-reference->namespace

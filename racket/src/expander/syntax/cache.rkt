@@ -13,11 +13,11 @@
 (define clear-resolve-cache!
   (case-lambda
     [(sym)
-     (define c (weak-box-value (unbox cache)))
+     (define c (weak-box-value (unbox* cache)))
      (when c
        (hash-remove! c sym))]
     [()
-     (define c (weak-box-value (unbox cache)))
+     (define c (weak-box-value (unbox* cache)))
      (when c
        (hash-clear! c))]))
 
@@ -25,7 +25,7 @@
   #:authentic)
 
 (define (resolve-cache-get sym phase scs smss)
-  (define c (weak-box-value (unbox cache)))
+  (define c (weak-box-value (unbox* cache)))
   (and c
        (let ([v (hash-ref c sym #f)])
          (and v
@@ -35,7 +35,7 @@
               (entry-binding v)))))
 
 (define (resolve-cache-set! sym phase scs smss b)
-  (define wb (unbox cache))
+  (define wb (unbox* cache))
   (define c (weak-box-value wb))
   (cond
    [(not c)

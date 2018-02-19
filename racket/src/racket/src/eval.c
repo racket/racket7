@@ -1777,8 +1777,7 @@ static Scheme_Object *ref_execute (Scheme_Object *data)
   SCHEME_PTR1_VAL(o) = (var ? var : scheme_false);
   SCHEME_PTR2_VAL(o) = (home ? (Scheme_Object *)home : scheme_false);
 
-  if (SCHEME_VARREF_FLAGS(data) & 0x1)
-    SCHEME_VARREF_FLAGS(o) |= 0x1;
+  SCHEME_VARREF_FLAGS(data) |= (SCHEME_VARREF_FLAGS(o) & VARREF_FLAGS_MASK);
 
   return o;
 }

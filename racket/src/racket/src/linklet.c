@@ -26,6 +26,9 @@
 #include "schpriv.h"
 #include "schrunst.h"
 
+READ_ONLY Scheme_Object *scheme_varref_const_p_proc;
+READ_ONLY Scheme_Object *scheme_varref_unsafe_p_proc;
+
 SHARED_OK Scheme_Hash_Tree *empty_hash_tree;
 
 SHARED_OK static int validate_compile_result = 0;
@@ -74,11 +77,13 @@ static Scheme_Object *hash_to_linklet_bundle(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_p(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_instance(int argc, Scheme_Object **argv);
 static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv);
+static Scheme_Object *variable_unsafe_p(int argc, Scheme_Object **argv);
 
 static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet,
                                                        Scheme_Object *name,
                                                        Scheme_Object **_import_keys,
-                                                       Scheme_Object *get_import);
+                                                       Scheme_Object *get_import,
+                                                       int unsafe_mode);
 
 static Scheme_Object *_instantiate_linklet_multi(Scheme_Linklet *linklet, Scheme_Instance *instance,
                                                  int num_instances, Scheme_Instance **instances,
@@ -133,7 +138,7 @@ void scheme_init_linklet(Scheme_Startup_Env *env)
   ADD_IMMED_PRIM("primitive-in-category?", primitive_in_category_p, 2, 2, env);
 
   ADD_FOLDING_PRIM("linklet?", linklet_p, 1, 1, 1, env);
-  ADD_PRIM_W_ARITY2("compile-linklet", compile_linklet, 1, 5, 2, 2, env);
+  ADD_PRIM_W_ARITY2("compile-linklet", compile_linklet, 1, 6, 2, 2, env);
   ADD_PRIM_W_ARITY2("recompile-linklet", recompile_linklet, 1, 4, 2, 2, env);
   ADD_IMMED_PRIM("eval-linklet", eval_linklet, 1, 1, env);
   ADD_PRIM_W_ARITY("read-compiled-linklet", read_compiled_linklet, 1, 1, env);
@@ -166,6 +171,12 @@ void scheme_init_linklet(Scheme_Startup_Env *env)
                                                         "variable-reference-constant?", 
                                                         1, 1);
   scheme_addto_prim_instance("variable-reference-constant?", scheme_varref_const_p_proc, env);
+
+  REGISTER_SO(scheme_varref_unsafe_p_proc);
+  scheme_varref_unsafe_p_proc = scheme_make_prim_w_arity(variable_unsafe_p, 
+                                                         "variable-reference-from-unsafe?", 
+                                                         1, 1);
+  scheme_addto_prim_instance("variable-reference-from-unsafe?", scheme_varref_unsafe_p_proc, env);
 
   scheme_restore_prim_instance(env);
 
@@ -345,6 +356,7 @@ void extract_import_info(const char *who, int argc, Scheme_Object **argv,
 static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
 {
   Scheme_Object *name, *e, *import_keys, *get_import, *a[2];
+  int unsafe;
 
   /* Last argument, `serializable?`, is ignored */
 
@@ -359,7 +371,11 @@ static Scheme_Object *compile_linklet(int argc, Scheme_Object **argv)
   if (!SCHEME_STXP(e))
     e = scheme_datum_to_syntax(e, scheme_false, DTS_CAN_GRAPH);
 
-  e = (Scheme_Object *)compile_and_or_optimize_linklet(e, NULL, name, &import_keys, get_import);
+  /* We don't care about `serializable?` at this layer. */
+
+  unsafe = ((argc > 5) && SCHEME_TRUEP(argv[5]));
+
+  e = (Scheme_Object *)compile_and_or_optimize_linklet(e, NULL, name, &import_keys, get_import, unsafe);
 
   if (import_keys) {
     a[0] = e;
@@ -395,7 +411,7 @@ static Scheme_Object *recompile_linklet(int argc, Scheme_Object **argv)
                           NULL);
   }
   
-  linklet = compile_and_or_optimize_linklet(NULL, linklet, name, &import_keys, get_import);
+  linklet = compile_and_or_optimize_linklet(NULL, linklet, name, &import_keys, get_import, 0);
 
   if (import_keys) {
     a[0] = (Scheme_Object *)linklet;
@@ -866,7 +882,7 @@ static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
   if (!SAME_TYPE(SCHEME_TYPE(v), scheme_global_ref_type))
     scheme_wrong_contract("variable-reference-constant?", "variable-reference?", 0, argc, argv);
 
-  if (SCHEME_VARREF_FLAGS(v) & 0x1)
+  if (SCHEME_VARREF_FLAGS(v) & VARREF_IS_CONSTANT)
     return scheme_true;
 
   v = SCHEME_PTR1_VAL(v);
@@ -877,6 +893,21 @@ static Scheme_Object *variable_const_p(int argc, Scheme_Object **argv)
   }
 
   return scheme_false;
+}
+
+static Scheme_Object *variable_unsafe_p(int argc, Scheme_Object **argv)
+{
+  Scheme_Object *v;
+
+  v = argv[0];
+
+  if (!SAME_TYPE(SCHEME_TYPE(v), scheme_global_ref_type))
+    scheme_wrong_contract("variable-reference-from-unsafe?", "variable-reference?", 0, argc, argv);
+
+  if (SCHEME_VARREF_FLAGS(v) & VARREF_FROM_UNSAFE)
+    return scheme_true;
+  else
+    return scheme_false;
 }
 
 /*========================================================================*/
@@ -1076,7 +1107,8 @@ static Scheme_Hash_Tree *update_source_names(Scheme_Hash_Tree *source_names,
 
 static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Scheme_Linklet *linklet,
                                                        Scheme_Object *name,
-                                                       Scheme_Object **_import_keys, Scheme_Object *get_import)
+                                                       Scheme_Object **_import_keys, Scheme_Object *get_import,
+                                                       int unsafe_mode)
 {
   Scheme_Config *config;
   int enforce_const, set_undef, can_inline;
@@ -1096,7 +1128,8 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
     linklet = scheme_unresolve_linklet(linklet, (set_undef ? COMP_ALLOW_SET_UNDEFINED : 0));
   }
   linklet->name = name;
-  linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, _import_keys, get_import);
+  linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, unsafe_mode,
+                                    _import_keys, get_import);
 
   linklet = scheme_resolve_linklet(linklet, enforce_const);
   linklet = scheme_sfs_linklet(linklet);
@@ -1105,7 +1138,8 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
     int i;
     for (i = recompile_every_compile; i--; ) {
       linklet = scheme_unresolve_linklet(linklet, (set_undef ? COMP_ALLOW_SET_UNDEFINED : 0));
-      linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, _import_keys, get_import);
+      linklet = scheme_optimize_linklet(linklet, enforce_const, can_inline, unsafe_mode,
+                                        _import_keys, get_import);
       linklet = scheme_resolve_linklet(linklet, enforce_const);
       linklet = scheme_sfs_linklet(linklet);
     }
@@ -1119,7 +1153,7 @@ static Scheme_Linklet *compile_and_or_optimize_linklet(Scheme_Object *form, Sche
 
 Scheme_Linklet *scheme_compile_and_optimize_linklet(Scheme_Object *form, Scheme_Object *name)
 {
-  return compile_and_or_optimize_linklet(form, NULL, name, NULL, NULL);
+  return compile_and_or_optimize_linklet(form, NULL, name, NULL, NULL, 0);
 }
 
 /*========================================================================*/
