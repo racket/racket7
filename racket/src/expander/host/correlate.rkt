@@ -85,7 +85,7 @@
      [(pair? e) (cons (car e) (loop (cdr e)))]
      [(null? e) null]
      [(syntax? e) (loop (syntax-e e))]
-     [else (error 'correlate->list "not a list")])))
+     [else (error 'correlated->list "not a list")])))
 
 (define (correlated->datum e)
   (datum-map e (lambda (tail? d)

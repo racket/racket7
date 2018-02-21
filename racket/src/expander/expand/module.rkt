@@ -34,7 +34,6 @@
          "../eval/top.rkt"
          "../eval/module.rkt"
          "cross-phase.rkt"
-         "../syntax/debug.rkt"
          "parsed.rkt"
          "expanded+parsed.rkt"
          "append.rkt"

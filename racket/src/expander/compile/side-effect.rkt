@@ -327,7 +327,13 @@
       (and (pair? (correlated-e expr))
            (eq? 'lambda (car (correlated-e expr)))
            (or (not arity)
-               (= arity (length (correlated->list (cadr (correlated->list expr)))))))))
+               (let loop ([args (cadr (correlated->list expr))]
+                          [arity arity])
+                 (cond
+                   [(correlated? args) (loop (correlated-e args) arity)]
+                   [(null? args) (zero? arity)]
+                   [(pair? args) (loop (cdr args) (sub1 arity))]
+                   [else (not (negative? arity))]))))))
 
 (define (arity-includes? a n)
   (or (equal? a n)
