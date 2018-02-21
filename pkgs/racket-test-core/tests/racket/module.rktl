@@ -2198,5 +2198,30 @@ case of module-leve bindings; it doesn't cover local bindings.
                    (m))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure that shadowing in phase 1 doesn't
+;; prevent `all-from-out` from providing the same
+;; binding unshadowed at phase 0
+
+(module check-shadowing-in-other-phase-d racket/base
+  (provide b)
+  (define b 'd))
+
+(module check-shadowing-in-other-phase-c racket/base
+  (require (for-syntax racket/base))
+  (provide b (all-from-out racket/base)
+           (for-syntax b))
+  (define b 'c)
+  (define-for-syntax b 'c1))
+
+(module check-shadowing-in-other-phase-b 'check-shadowing-in-other-phase-c
+  (require (for-syntax 'check-shadowing-in-other-phase-d))
+  (provide (all-from-out 'check-shadowing-in-other-phase-c)
+           (for-syntax (all-from-out 'check-shadowing-in-other-phase-d))))
+  
+(module check-shadowing-in-other-phase-a racket/base
+  (require 'check-shadowing-in-other-phase-b)
+  b)
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)

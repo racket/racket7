@@ -260,7 +260,8 @@
   ;; Ok to produce a list-ish instead of a list, but we don't have `for*/list-ish`:
   (for*/list ([r (in-list-ish reqds)]
               [r (in-value (normalize-required r mpi nominal-phase sym))]
-              #:unless (free-identifier=? (required-id r) id phase phase))
+              #:unless (and (eqv? phase (required-phase r))
+                            (free-identifier=? (required-id r) id phase phase)))
     r))
 
 ;; Check whether an identifier has a binding that is from a non-shadowable
