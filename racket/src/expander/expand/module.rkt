@@ -29,6 +29,7 @@
          "def-id.rkt"
          "prepare.rkt"
          "log.rkt"
+         "syntax-id-error.rkt"
          "../compile/main.rkt"
          "../eval/top.rkt"
          "../eval/module.rkt"
@@ -366,7 +367,7 @@
                                            #:mpis-to-reset mpis-to-reset)))
 
      ;; Check that any tentatively allowed reference at phase >= 1 is ok
-     (check-defined-by-now need-eventually-defined self)
+     (check-defined-by-now need-eventually-defined self ctx)
      
      ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      ;; Pass 3: resolve provides at all phases
@@ -1009,7 +1010,7 @@
        (cons exp-body
              (loop tail? rest-bodys)))])))
 
-(define (check-defined-by-now need-eventually-defined self)
+(define (check-defined-by-now need-eventually-defined self ctx)
   ;; If `need-eventually-defined` is not empty, report an error
   (for ([(phase l) (in-hash need-eventually-defined)])
     (for ([id (in-list l)])
@@ -1019,7 +1020,9 @@
                    (module-binding? b)
                    (eq? (module-binding-sym b) (syntax-e id))
                    (eq? (module-binding-module b) self))
-        (raise-syntax-error #f "reference to an unbound identifier" id)))))
+        (raise-syntax-error #f "reference to an unbound identifier"
+                            id #f null
+                            (syntax-debug-info-string id ctx))))))
 
 ;; ----------------------------------------
 

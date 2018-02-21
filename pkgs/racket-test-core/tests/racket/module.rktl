@@ -2163,5 +2163,40 @@ case of module-leve bindings; it doesn't cover local bindings.
   (define another 'x))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Allow a reference to a never-defined variable in a `local-expand`
+;; or `syntax-local-bind-syntaxes` on the grounds that the result is
+;; not necessarily in the module's expansion. But keep track of
+;; missing variables encountered during
+;; `syntax-local-expand-expression`, since the opqaue result can be
+;; included without further inspection.
+
+(module im-ok-and-your-ok-local-expand racket/base
+  (require (for-syntax racket/base)
+           (for-meta 2 racket/base))
+  (begin-for-syntax
+    (define-syntax (m stx)
+      (local-expand #'(lambda () nonesuch) 'expression '())
+      #''ok)
+    (m)))
+
+(module im-ok-and-your-ok-syntax-local-bind-syntaxes racket/base
+  (require (for-syntax racket/base))
+  (define-syntax (m stx)
+    (syntax-local-bind-syntaxes (list #'x)
+                                #'(lambda () nonesuch)
+                                (syntax-local-make-definition-context))
+     #''ok)
+  (m))
+
+(syntax-test #'(module im-ok-and-your-ok-local-expand racket/base
+                 (require (for-syntax racket/base)
+                          (for-meta 2 racket/base))
+                 (begin-for-syntax
+                   (define-syntax (m stx)
+                     (syntax-local-expand-expression #'(lambda () nonesuch))
+                     #''ok)
+                   (m))))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)

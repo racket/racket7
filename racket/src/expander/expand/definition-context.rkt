@@ -195,7 +195,8 @@
                                    #:phase [phase (expand-context-phase ctx)]
                                    #:intdefs intdefs
                                    #:stop-ids [stop-ids #f]
-                                   #:to-parsed-ok? [to-parsed-ok? #f])
+                                   #:to-parsed-ok? [to-parsed-ok? #f]
+                                   #:track-to-be-defined? [track-to-be-defined? #f])
   (define same-kind? (or (eq? context
                               (expand-context-context ctx))
                          (and (list? context)
@@ -248,7 +249,18 @@
                 [just-once? #f]
                 [in-local-expand? #t]
                 [stops (free-id-set phase (or all-stop-ids null))]
-                [current-introduction-scopes null]))
+                [current-introduction-scopes null]
+                [need-eventually-defined (let ([ht (expand-context-need-eventually-defined ctx)])
+                                           (cond
+                                             [track-to-be-defined?
+                                              ;; maintain status quo and propagate tracking
+                                              ht]
+                                             [ht
+                                              ;; keep allowing unbound references, but don't track them
+                                              (make-hasheqv)]
+                                             [else
+                                              ;; keep disallowing unbound references
+                                              #f]))]))
 
 ;; ----------------------------------------
 

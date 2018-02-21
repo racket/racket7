@@ -42,7 +42,8 @@
 (define (syntax-local-expand-expression s [opaque-only? #f])
   (define exp-s (do-local-expand 'syntax-local-expand-expression s 'expression null #f
                                  #:to-parsed-ok? opaque-only?
-                                 #:skip-log-exit? #t))
+                                 #:skip-log-exit? #t
+                                 #:track-to-be-defined? #t))
   (define ctx (get-current-expand-context))
   ;; Move introduction scope from the already-expanded syntax object to
   ;; its wrapper. The expander will later check that the wrapper ends up
@@ -68,6 +69,7 @@
                          #:lift-key [lift-key (and (or capture-lifts?
                                                        as-transformer?)
                                                    (generate-lift-key))]
+                         #:track-to-be-defined? [track-to-be-defined? #f]
                          #:skip-log-exit? [skip-log-exit? #f])
   (performance-region
    ['expand 'local-expand]
@@ -102,7 +104,8 @@
                                                 #:phase phase
                                                 #:intdefs intdefs
                                                 #:stop-ids stop-ids
-                                                #:to-parsed-ok? to-parsed-ok?))
+                                                #:to-parsed-ok? to-parsed-ok?
+                                                #:track-to-be-defined? track-to-be-defined?))
 
    (log-expand local-ctx 'enter-local s)
    (define input-s (add-intdef-scopes (flip-introduction-scopes s ctx) intdefs))
