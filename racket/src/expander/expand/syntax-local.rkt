@@ -22,8 +22,7 @@
          "../common/module-path.rkt"
          "../namespace/namespace.rkt"
          "../namespace/module.rkt"
-         "../common/contract.rkt"
-         "../syntax/debug.rkt")
+         "../common/contract.rkt")
 
 (provide syntax-transforming?
          syntax-transforming-with-lifts?
@@ -244,7 +243,7 @@
   (define phase (expand-context-phase ctx))
   (case (core-form-sym s phase)
     [(module module*)
-     (add-lifted-module! (expand-context-module-lifts ctx) s phase)]
+     (add-lifted-module! (expand-context-module-lifts ctx) (flip-introduction-scopes s ctx) phase)]
     [else
      (raise-arguments-error 'syntax-local-lift-module "not a module form"
                             "given form" s)])

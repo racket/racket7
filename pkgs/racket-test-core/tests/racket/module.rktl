@@ -1478,6 +1478,46 @@ case of module-leve bindings; it doesn't cover local bindings.
 
 (test 11 dynamic-require ''module-lift-example-3 'out)
 
+(module module-lift-example-4 racket/base
+  (require (for-syntax racket/base))
+
+  (define-syntax (main stx)
+    (syntax-case stx ()
+      [(_ body ...)
+       (syntax-local-lift-module #`(module* main #f (main-method)))
+       #'(define (main-method)
+           body ...)]))
+
+  (provide out)
+  (define out #f)
+
+  (main (set! out 12)))
+
+(test (void) dynamic-require '(submod 'module-lift-example-4 main) #f)
+(test 12 dynamic-require ''module-lift-example-4 'out)
+
+(module module-lift-example-5 racket/base
+  (module a racket/base
+    (require (for-syntax racket/base))
+
+    (provide main)
+
+    (define-syntax (main stx)
+      (syntax-case stx ()
+        [(_ body ...)
+         (syntax-local-lift-module #`(module* main #f (main-method)))
+         #'(define (main-method)
+             body ...)])))
+
+  (module b racket/base
+    (require (submod ".." a))
+    (provide out)
+    (define out #f)
+    (main (set! out 13))))
+
+(test (void) dynamic-require '(submod 'module-lift-example-5 b main) #f)
+(test 13 dynamic-require '(submod 'module-lift-example-5 b) 'out)
+
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Check addition of 'disappeared-use by `provide`
 

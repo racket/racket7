@@ -726,7 +726,9 @@
        ;; Ditto for expressions
        lifted-defns
        ;; Ditto for modules, which need to be processed
-       (loop #f (get-and-clear-module-lifts! (expand-context-module-lifts partial-body-ctx)))
+       (loop #f (add-post-expansion-scope
+                 (get-and-clear-module-lifts! (expand-context-module-lifts partial-body-ctx))
+                 partial-body-ctx))
        ;; Dispatch on form revealed by partial expansion
        (case (core-form-sym disarmed-exp-body phase)
          [(begin)
@@ -920,7 +922,7 @@
             (log-expand body-ctx 'module-lift-end-loop '())
             null]
            [else
-            (loop #t bodys)])]
+            (loop #t (add-post-expansion-scope bodys body-ctx))])]
         [else null])]
      [else
       (log-expand body-ctx 'next)
@@ -986,7 +988,7 @@
       (unless no-lifts?
         (log-expand body-ctx 'module-lift-loop (append lifted-requires
                                                        (lifted-defns-extract-syntax lifted-defns)
-                                                       lifted-modules)))
+                                                       (add-post-expansion-scope lifted-modules body-ctx))))
       (define exp-lifted-modules
         ;; If there were any module lifts, the `module` forms need to
         ;; be expanded
