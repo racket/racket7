@@ -251,13 +251,12 @@
   (syntax-case stx ()
     [(_ var-name lib-name type-expr)
      (with-syntax ([(p) (generate-temporaries (list #'var-name))])
-       (namespace-syntax-introduce
-        #'(begin (define p (make-c-parameter 'var-name lib-name type-expr))
-                 (define-syntax var-name
-                   (syntax-id-rules (set!)
-                     [(set! var val) (p val)]
-                     [(var . xs) ((p) . xs)]
-                     [var (p)])))))]))
+       #'(begin (define p (make-c-parameter 'var-name lib-name type-expr))
+                (define-syntax var-name
+                  (syntax-id-rules (set!)
+                    [(set! var val) (p val)]
+                    [(var . xs) ((p) . xs)]
+                    [var (p)]))))]))
 
 ;; Used to convert strings and symbols to a byte-string that names an object
 (define (get-ffi-obj-name who objname)
