@@ -195,6 +195,7 @@ THREAD_LOCAL_DECL(Scheme_Prefix *scheme_prefix_finalize);
 THREAD_LOCAL_DECL(Scheme_Prefix *scheme_inc_prefix_finalize);
 THREAD_LOCAL_DECL(Scheme_Object *is_syntax_proc);
 THREAD_LOCAL_DECL(Scheme_Object *expander_syntax_to_datum_proc);
+THREAD_LOCAL_DECL(Scheme_Bucket_Table *scheme_namespace_to_env);
 int scheme_get_overflow_count() { return scheme_overflow_count; }
 
 /* read-only globals */
@@ -3452,6 +3453,22 @@ Scheme_Object *scheme_namespace_require(Scheme_Object *mod_path)
   return scheme_apply(proc, 1, a);
 }
 
+static Scheme_Env *namespace_to_env(Scheme_Object *ns)
+{
+  Scheme_Env *env;
+
+  env = scheme_lookup_in_table(scheme_namespace_to_env, (char *)ns);
+
+  if (!env) {
+    env = MALLOC_ONE_TAGGED(Scheme_Env);
+    env->so.type = scheme_env_type;
+    env->namespace = ns;
+    scheme_add_to_table(scheme_namespace_to_env, (char *)ns, (void *)env, 0);
+  }
+
+  return env;
+}
+
 Scheme_Env *scheme_make_empty_env(void)
 {
   Scheme_Object *proc, *ns, *inst, *a[2];
@@ -3460,9 +3477,7 @@ Scheme_Env *scheme_make_empty_env(void)
   proc = scheme_get_startup_export("current-namespace");
   ns = scheme_apply(proc, 0, NULL);
 
-  env = MALLOC_ONE_TAGGED(Scheme_Env);
-  env->so.type = scheme_env_type;
-  env->namespace = ns;
+  env = namespace_to_env(ns);
 
   proc = scheme_get_startup_export("namespace->instance");
   a[0] = ns;
@@ -3472,6 +3487,26 @@ Scheme_Env *scheme_make_empty_env(void)
   env->instance = (Scheme_Instance *)inst;
 
   return env;
+}
+
+Scheme_Env *scheme_get_current_namespace_as_env()
+{
+  Scheme_Object *proc, *ns;
+  
+  proc = scheme_get_startup_export("current-namespace");
+  ns = scheme_apply(proc, 0, NULL);
+  
+  return namespace_to_env(ns);
+}
+
+void scheme_set_current_namespace_as_env(Scheme_Env *env)
+{
+  Scheme_Object *proc, *a[1];
+  
+  proc = scheme_get_startup_export("current-namespace");
+
+  a[0] = env->namespace;
+  (void)scheme_apply(proc, 1, a);
 }
 
 Scheme_Object *scheme_compile(Scheme_Object *form, Scheme_Env *env, int writeable)

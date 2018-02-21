@@ -494,6 +494,30 @@ void scheme_register_extension_global(void *ptr, intptr_t size)
   GC_add_roots((char *)ptr, (char *)(((char *)ptr) + size + 1));
 }
 
+static int submodule_spec_p(Scheme_Object *expected_module)
+{
+  Scheme_Object *a;
+
+  if (SCHEME_PAIRP(expected_module)) {
+    a = SCHEME_CAR(expected_module);
+    if (!SCHEME_FALSEP(a) && !SCHEME_SYMBOLP(a))
+      return 0;
+    expected_module = SCHEME_CDR(expected_module);
+    if (!SCHEME_PAIRP(expected_module))
+      return 0;
+    while (SCHEME_PAIRP(expected_module)) {
+      a = SCHEME_CAR(expected_module);
+      if (!SCHEME_SYMBOLP(a))
+        return 0;
+      expected_module = SCHEME_CDR(expected_module);
+    }
+    if (SCHEME_NULLP(expected_module))
+      return 1;
+  }
+
+  return 0;
+}
+
 Scheme_Object *scheme_default_load_extension(int argc, Scheme_Object **argv)
 {
   char *filename;
@@ -502,8 +526,17 @@ Scheme_Object *scheme_default_load_extension(int argc, Scheme_Object **argv)
   if (!SCHEME_PATH_STRINGP(argv[0]))
     scheme_wrong_contract("default-load-extension-handler", "path-string?", 0, argc, argv);
   expected_module = argv[1];
-  if (!SCHEME_FALSEP(expected_module) && !SCHEME_SYMBOLP(expected_module))
-    scheme_wrong_contract("default-load-extension-handler", "(or/c symbol? #f)", 1, argc, argv);
+  if (!SCHEME_FALSEP(expected_module)
+      && !SCHEME_SYMBOLP(expected_module)
+      && !submodule_spec_p(expected_module))
+    scheme_wrong_contract("default-load-extension-handler",
+                          "(or/c symbol? #f (cons/c (or/c #f symbol?) (non-empty-listof symbol?)))",
+                          1, argc, argv);
+
+  if (SCHEME_PAIRP(expected_module) && SCHEME_FALSEP(SCHEME_CAR(expected_module))) {
+    /* caller requests quiet failure for separate loading of submodule */
+    return scheme_void;
+  }
 
   filename = scheme_expand_string_filename(argv[0],
 					   "default-load-extension-handler",

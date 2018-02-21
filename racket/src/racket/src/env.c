@@ -137,8 +137,8 @@ Scheme_Env *scheme_restart_instance()
   scheme_make_thread(stack_base);
   scheme_init_error_escape_proc(NULL);
 
+  scheme_namespace_to_env = scheme_make_bucket_table(5, SCHEME_hash_weak_ptr);
   env = scheme_make_empty_env();
-  scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 
 
   scheme_init_port_config();
   scheme_init_port_fun_config();
@@ -519,8 +519,9 @@ static Scheme_Env *place_instance_init(void *stack_base, int initial_main_os_thr
   scheme_startup_instance = scheme_make_instance(scheme_intern_symbol("startup"), scheme_false);
   scheme_init_startup_instance(scheme_startup_instance);
 
+  REGISTER_SO(scheme_namespace_to_env);
+  scheme_namespace_to_env = scheme_make_bucket_table(5, SCHEME_hash_weak_ptr);
   env = scheme_make_empty_env();
-  scheme_set_param(scheme_current_config(), MZCONFIG_ENV, (Scheme_Object *)env); 
  
   boot_module_resolver();
 

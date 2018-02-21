@@ -7502,6 +7502,9 @@ Scheme_Object *scheme_get_thread_param(Scheme_Config *c, Scheme_Thread_Cell_Tabl
 
 Scheme_Object *scheme_get_param(Scheme_Config *c, int pos)
 {
+  if (pos == MZCONFIG_ENV)
+    return (Scheme_Object *)scheme_get_current_namespace_as_env();
+  
   return scheme_get_thread_param(c, scheme_current_thread->cell_values, pos);
 }
 
@@ -7512,6 +7515,11 @@ void scheme_set_thread_param(Scheme_Config *c, Scheme_Thread_Cell_Table *cells, 
 
 void scheme_set_param(Scheme_Config *c, int pos, Scheme_Object *o)
 {
+  if (pos == MZCONFIG_ENV) {
+    scheme_set_current_namespace_as_env((Scheme_Env *)o);
+    return;
+  }
+  
   scheme_thread_cell_set(find_param_cell(c, scheme_make_integer(pos), 1), 
 			 scheme_current_thread->cell_values, o);
 }

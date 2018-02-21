@@ -3313,10 +3313,10 @@ void scheme_restore_prim_instance(Scheme_Startup_Env *env);
 } while(0)
 
 
-THREAD_LOCAL_DECL(extern Scheme_Bucket_Table *scheme_module_code_cache);
-Scheme_Object *scheme_module_execute(Scheme_Object *data, Scheme_Env *genv);
+THREAD_LOCAL_DECL(extern Scheme_Bucket_Table *scheme_namespace_to_env);
+Scheme_Env *scheme_get_current_namespace_as_env();
+void scheme_set_current_namespace_as_env(Scheme_Env *env);
 
-void scheme_install_initial_module_set(Scheme_Env *env);
 Scheme_Bucket_Table *scheme_clone_toplevel(Scheme_Bucket_Table *ht, Scheme_Env *home);
 
 Scheme_Object *scheme_string_to_symbol_path(char *_s, intptr_t len);

@@ -284,9 +284,7 @@ typedef struct Thread_Local_Variables {
   void *file_path_wc_buffer_;
   intptr_t scheme_hash_request_count_;
   intptr_t scheme_hash_iteration_count_;
-  struct Scheme_Env *initial_modules_env_;
-  int num_initial_modules_;
-  struct Scheme_Object **initial_modules_;
+  struct Scheme_Bucket_Table *scheme_namespace_to_env_;
   int special_is_ok_;
   int scheme_force_port_closed_;
   int fd_reserved_;
@@ -319,7 +317,6 @@ typedef struct Thread_Local_Variables {
   int gensym_counter_;
   struct Scheme_Object *dummy_input_port_;
   struct Scheme_Object *dummy_output_port_;
-  struct Scheme_Bucket_Table *place_local_modpath_table_;
   struct Scheme_Hash_Table *opened_libs_;
   struct mzrt_mutex *jit_lock_;
   struct free_list_entry *free_list_;
@@ -340,8 +337,6 @@ typedef struct Thread_Local_Variables {
   struct Scheme_Place *all_child_places_;
   struct Scheme_Place_Bi_Channel_Link *place_channel_links_;
   struct Scheme_Object **reusable_ifs_stack_;
-  struct Scheme_Object *empty_self_shift_cache_;
-  struct Scheme_Bucket_Table *scheme_module_code_cache_;
   struct Scheme_Object *group_member_cache_;
   struct Scheme_Prefix *scheme_prefix_finalize_;
   struct Scheme_Prefix *scheme_inc_prefix_finalize_;
@@ -660,9 +655,7 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define file_path_wc_buffer XOA (scheme_get_thread_local_variables()->file_path_wc_buffer_)
 #define scheme_hash_request_count XOA (scheme_get_thread_local_variables()->scheme_hash_request_count_)
 #define scheme_hash_iteration_count XOA (scheme_get_thread_local_variables()->scheme_hash_iteration_count_)
-#define initial_modules_env XOA (scheme_get_thread_local_variables()->initial_modules_env_)
-#define num_initial_modules XOA (scheme_get_thread_local_variables()->num_initial_modules_)
-#define initial_modules XOA (scheme_get_thread_local_variables()->initial_modules_)
+#define scheme_namespace_to_env XOA (scheme_get_thread_local_variables()->scheme_namespace_to_env_)
 #define special_is_ok XOA (scheme_get_thread_local_variables()->special_is_ok_)
 #define scheme_force_port_closed XOA (scheme_get_thread_local_variables()->scheme_force_port_closed_)
 #define fd_reserved XOA (scheme_get_thread_local_variables()->fd_reserved_)
@@ -695,7 +688,6 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define gensym_counter XOA (scheme_get_thread_local_variables()->gensym_counter_)
 #define dummy_input_port XOA (scheme_get_thread_local_variables()->dummy_input_port_)
 #define dummy_output_port XOA (scheme_get_thread_local_variables()->dummy_output_port_)
-#define place_local_modpath_table XOA (scheme_get_thread_local_variables()->place_local_modpath_table_)
 #define opened_libs XOA (scheme_get_thread_local_variables()->opened_libs_)
 #define jit_lock XOA (scheme_get_thread_local_variables()->jit_lock_)
 #define free_list XOA (scheme_get_thread_local_variables()->free_list_)
@@ -716,8 +708,6 @@ XFORM_GC_VARIABLE_STACK_THROUGH_THREAD_LOCAL;
 #define all_child_places XOA (scheme_get_thread_local_variables()->all_child_places_)
 #define place_channel_links XOA (scheme_get_thread_local_variables()->place_channel_links_)
 #define reusable_ifs_stack XOA (scheme_get_thread_local_variables()->reusable_ifs_stack_)
-#define empty_self_shift_cache XOA (scheme_get_thread_local_variables()->empty_self_shift_cache_)
-#define scheme_module_code_cache XOA (scheme_get_thread_local_variables()->scheme_module_code_cache_)
 #define group_member_cache XOA (scheme_get_thread_local_variables()->group_member_cache_)
 #define scheme_prefix_finalize XOA (scheme_get_thread_local_variables()->scheme_prefix_finalize_)
 #define scheme_inc_prefix_finalize XOA (scheme_get_thread_local_variables()->scheme_inc_prefix_finalize_)
