@@ -258,8 +258,8 @@
          [(serialize? v)
           ((serialize-ref v) v 
            (case-lambda
-             [(v) (loop v)]
-             [(kind v) (loop v)])
+             [(sub-v) (loop sub-v)]
+             [(kind sub-v) (loop sub-v)])
            state)]
          [(pair? v)
           (loop (car v))
@@ -860,6 +860,8 @@
        [(prefab-struct-key v)
         (for ([e (in-vector (struct->vector v) 1)])
           (loop e))]
+       [(srcloc? v)
+        (loop (srcloc-source v))]
        [else
         (void)])]))
   
