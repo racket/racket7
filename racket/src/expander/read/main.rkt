@@ -155,11 +155,11 @@
           (consume-char in c)
           (define cdot (wrap '#%dot in (reading-at config dot-line dot-col dot-pos) #\.))
           (define post-v (read-undotted #f in config))
-          (loop (wrap (list '#%dot v post-v) in (reading-at config line col pos) #\.))]
+          (loop (wrap (list cdot v post-v) in (reading-at config line col pos) #\.))]
          [else v]))])]))
 
 ;; ----------------------------------------
-;; The top-level reading layer within `#%cdot` handling --- which is
+;; The top-level reading layer within `#%dot` handling --- which is
 ;; the reader's main dispatch layer.
 
 (define (read-undotted init-c in config)

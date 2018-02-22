@@ -53433,7 +53433,7 @@ static const char *startup_source =
 "(read-undotted #f in_59 config_57)))"
 "(loop_118"
 "(wrap"
-"(list '#%dot v_238 post-v_0)"
+"(list cdot_0 v_238 post-v_0)"
 " in_59"
 "(reading-at config_57 line_10 col_9 pos_98)"
 " '#\\.)))))))"
