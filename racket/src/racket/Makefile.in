@@ -308,20 +308,31 @@ headers:
 	@RUN_RACKET_CGC@ -cqu $(srcdir)/mkincludes.rkt @DIRCVTPRE@"$(DESTDIR)$(includepltdir)"@DIRCVTPOST@ "$(srcdir)" $(MZCONFIGDIR)
 	cd ..; cp racket/system.rktd "$(DESTDIR)$(libpltdir)/system.rktd"
 
-# This target may update "cstartup.inc", either replacing a stub
-# "cstartup.inc" that redirects to "startup.inc" or rebuilding because
-# "startup.inc" or "schvers.h" changed; so, during a CGC build, we try
-# again after building this target to potentially update the CGC build
-# to a compiled-startup build
+# The `cstartup` target may update "cstartup.inc", either replacing a
+# stub "cstartup.inc" that redirects to "startup.inc" or rebuilding
+# because "startup.inc" or "schvers.h" changed; so, during a CGC
+# build, we try again after building this target to potentially update
+# the CGC build to a compiled-startup build. A particular `cstartup`
+# target variant is selected by the `configure` script based on whether
+# `--{en,dis}able-cify` is specified; for example `STARTUP_AS_AUTO`
+# with be the empty string is neither is specified, in which case
+# of the the other targets is selected by a recursive `$(MAKE)`.
+
+cstartup@STARTUP_AS_AUTO@:
+	$(MAKE) `@RUN_RACKET_CGC@ -cu $(srcdir)/src/startup-select.rkt`
+
+# For compiling the startup code to bytecode
 cstartup@STARTUP_AS_BYTECODE@:
 	@RUN_RACKET_CGC@ -cu $(srcdir)/src/compile-startup.rkt $(CSTARTUPDEST) cstartup.zo $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
 
-# Similar to above, but when compiling to C instead of bytecode
+# For compiling the startup code to C
 cstartup@STARTUP_AS_C@:
 	@RUN_RACKET_CGC@ -cu $(srcdir)/src/cify-check.rkt $(CSTARTUPDEST)
 	$(MAKE) cstartup.inc
 
-$(CSTARTUPDEST)@STARTUP_AS_C@: $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
+# Running "cify-startup.rkt" through "$(SETUP_BOOT)" generates more
+# dependencies in "cstartup.d" for `$(CSTARTUPDEST)`
+$(CSTARTUPDEST): $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
 	@RUN_RACKET_CGC@ $(SELF_RACKET_FLAGS) $(SETUP_BOOT) cstartup.inc cstartup.d $(srcdir)/src/cify-startup.rkt $(srcdir)/src/startup.inc $(srcdir)/src/schvers.h
 @INCLUDEDEP@ cstartup.d
 

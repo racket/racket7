@@ -680,9 +680,9 @@ Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet, int step)
 
 #else
 
-static Scheme_Object *scheme_jit_linklet(Scheme_Object *expr)
+Scheme_Linklet *scheme_jit_linklet(Scheme_Linklet *linklet, int step)
 {
-  return expr;
+  return linklet;
 }
 
 #endif

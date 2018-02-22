@@ -326,6 +326,7 @@ show_explicitly_disabled "${enable_sgc}" SGC
 show_explicitly_enabled "${enable_sgcdebug}" "SGC debug mode"
 show_explicitly_enabled "${enable_backtrace}" "3m GC backtraces" "Note that this mode is not intended for normal Racket use"
 show_explicitly_enabled "${enable_cify}" "Startup compiled to C"
+show_explicitly_disabled "${enable_cify}" "Startup compiled to C"
 
 show_explicitly_disabled "${enable_float}" "Single-precision floats"
 show_explicitly_enabled "${enable_floatinstead}" "Single-precision default floats" "Note that this mode is NOT RECOMMENDED"
@@ -483,11 +484,19 @@ check_page_size=yes
 try_no_nullability_completeness=no
 
 if test "${enable_cify}" = "yes" ; then
-  STARTUP_AS_BYTECODE=_no
+  STARTUP_AS_BYTECODE=_bytecode
   STARTUP_AS_C=
+  STARTUP_AS_AUTO=_auto
 else
-  STARTUP_AS_BYTECODE=
-  STARTUP_AS_C=_no
+  if test "${enable_cify}" = "yes" ; then
+    STARTUP_AS_BYTECODE=
+    STARTUP_AS_C=_c
+    STARTUP_AS_AUTO=_auto
+  else
+    STARTUP_AS_BYTECODE=_bytecode
+    STARTUP_AS_C=_c
+    STARTUP_AS_AUTO=
+  fi
 fi
 
 MAKE_LOCAL_RACKET=no-local-racket
@@ -1797,6 +1806,7 @@ AC_SUBST(CGC_IF_NEEDED_FOR_MMM)
 
 AC_SUBST(STARTUP_AS_BYTECODE)
 AC_SUBST(STARTUP_AS_C)
+AC_SUBST(STARTUP_AS_AUTO)
 
 AC_SUBST(MAKE_LOCAL_RACKET)
 

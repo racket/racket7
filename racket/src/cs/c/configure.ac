@@ -16,7 +16,7 @@ AC_ARG_ENABLE(pthread,    [  --enable-pthread        link with pthreads (usually
 AC_ARG_ENABLE(iconv,      [  --enable-iconv          use iconv (usually auto-enabled)])
 AC_ARG_ENABLE(xonx,       [  --enable-xonx           use Unix style (e.g., use Gtk) for Mac OS])
 AC_ARG_ENABLE(racket,     [  --enable-racket=<path>  use <path> as Racket to build; or "auto" to create])
-AC_ARG_ENABLE(scheme,     [  --enable-scheme=<path>  Chez Scheme build dierctory at <path>])
+AC_ARG_ENABLE(scheme,     [  --enable-scheme=<path>  Chez Scheme build directory at <path>])
 AC_ARG_ENABLE(mach,       [  --enable-mach=<mac>     Use Chez Scheme machine type <mach>])
 
 show_explicitly_disabled()

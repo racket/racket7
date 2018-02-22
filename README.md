@@ -1,27 +1,11 @@
-This is a work-in-progress implementation of Racket with
-
- * the macro expander and module system implemented in Racket, and
-
- * a reimplementation of Racket to run on top of Chez Scheme.
-
-When you just `make`, then you get Racket with the new expander and
-the (mostly) old virtual machine.
-
-When you `make cs`, you get Racket-on-Chez as `racket/bin/racketcs`.
-
-Thee "INSTALL.txt" for more information.
-
-----------------------------------------
-
-This is the source code for the core of Racket.  See
-"INSTALL.txt" for full information on building Racket.
+This is the source code for the core of Racket. See "INSTALL.txt" for
+full information on building Racket.
 
 To build the full Racket distribution from this repository, run `make`
-in the top-level directory. To build the Minimal Racket, run `make
-base`.
+in the top-level directory. To build minimal Racket, run `make base`.
 
 The rest of the Racket distribution source code is in other
-repositories under [the Racket GitHub
+repositories, mostly under [the Racket GitHub
 organization](https://github.com/racket).
 
 Contribute to Racket by submitting a pull request, joining the

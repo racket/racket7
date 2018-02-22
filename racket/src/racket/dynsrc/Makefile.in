@@ -66,7 +66,7 @@ dynexmpl.o: $(srcdir)/dynexmpl.c  $(HEADERS)
 ../starter@MINGW@@EXE_SUFFIX@: $(srcdir)/../../start/start.c ../mrstarter@EXE_SUFFIX@ sres.o
 	$(PLAIN_CC) $(ALL_CFLAGS) -o ../starter@EXE_SUFFIX@ $(srcdir)/../../start/start.c sres.o
 ../mrstarter@EXE_SUFFIX@:  smrres.o
-	$(PLAIN_CC) $(ALL_CFLAGS) -mwindows -DMRSTART -o ../mrstarter@EXE_SUFFIX@ $(srcdir)/start.c smrres.o
+	$(PLAIN_CC) $(ALL_CFLAGS) -mwindows -DMRSTART -o ../mrstarter@EXE_SUFFIX@ $(srcdir)/../../start/start.c smrres.o
 
 sres.o:
 	@WINDRES@ -DMZSTART -i $(srcdir)/../../worksp/starters/start.rc -o sres.o

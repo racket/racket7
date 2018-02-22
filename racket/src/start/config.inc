@@ -103,7 +103,7 @@ static int _configdir_offset = 17; /* Skip permanent tag */
 #endif
 #include "delayed.inc"
 
-static char *extract_dlldir()
+static wchar_t *extract_dlldir()
 {
   if (_dlldir[_dlldir_offset] != '<')
     return _dlldir + _dlldir_offset;

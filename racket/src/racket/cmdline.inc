@@ -12,7 +12,7 @@ static void (*console_printf)(char *str, ...);
 #ifdef DOS_FILE_SYSTEM
 static void record_dll_path(void)
 {
-  GC_CAN_IGNORE char *dlldir;
+  GC_CAN_IGNORE wchar_t *dlldir;
   dlldir = extract_dlldir();
   if (dlldir)
     scheme_set_dll_path(dlldir);

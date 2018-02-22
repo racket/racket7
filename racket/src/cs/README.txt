@@ -1,10 +1,8 @@
-Work-in-progress Racket on Chez Scheme.
+If you just want to build the variant of Racket that runs on Chez
+Scheme, then you probably meant to read "./c/README.txt" instead of
+this file.
 
-You can just use `make cs` in the top-level directory of the "racket7"
-repo to build Racket-on-Chez. See "INSTALL.txt" in the top-level
-directory for more information.
-
-I you're working on the implementation of Racket-on-Chez, then it's
+If you're working on the implementation of Racket-on-Chez, then it's
 more convenient to work in this directory, so keep reading here.
 
 
