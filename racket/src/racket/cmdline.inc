@@ -313,7 +313,7 @@ static int finish_cmd_line_run(FinishArgs *fa, Repl_Proc repl)
                                   a[0],
                                   fa->evals_and_loads[i]);
             }
-            /* Use a module path index so that multiple resolutions are no unduly
+            /* Use a module path index so that multiple resolutions are not unduly
                sensitive to changes in the current directory or other configurations: */
             mpi = scheme_make_modidx(a[0], scheme_make_false(), scheme_make_false());
             if (!did_config)

@@ -94,13 +94,16 @@
                              (define b (make-module-binding core-mpi 0 sym))
                              (values sym (if syntax? (provided b #f #t) b))))
                 #:phase-level-linklet-info-callback
-                (lambda (phase-level ns)
+                (lambda (phase-level ns insp)
                   (and (zero? phase-level)
                        (let ([ns (namespace->module-namespace ns core-module-name 0)])
                          (and ns
                               (module-linklet-info (namespace->instance ns 0)
                                                    #f
-                                                   core-mpi)))))
+                                                   core-mpi
+                                                   #f
+                                                   #f
+                                                   #f)))))
                 #:instantiate-phase-callback
                 (lambda (data-box ns phase phase-level self bulk-binding-registry insp)
                   (case phase-level

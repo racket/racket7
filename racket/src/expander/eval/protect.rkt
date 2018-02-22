@@ -4,7 +4,8 @@
          "../compile/module-use.rkt"
          "../common/module-path.rkt"
          "../namespace/namespace.rkt"
-         "../namespace/module.rkt")
+         "../namespace/module.rkt"
+         "../compile/extra-inspector.rkt")
 
 ;; Inspectors guarded access to protected values at expansion time. We
 ;; run code that references portentially protected values, we have to
@@ -35,11 +36,7 @@
     (define m (module-instance-module mi))
     (unless (module-no-protected? m)
       (define access (or (module-access m) (module-compute-access! m)))
-      (for ([import-sym (in-list import-syms)]
-            [extra-inspectors (in-list (or (and extra-inspectorsss
-                                                extra-inspectorss)
-                                           ;; Use `import-syms` just to have the right shape
-                                           import-syms))])
+      (for ([import-sym (in-list import-syms)])
         (define a (hash-ref (hash-ref access (module-use-phase mu) #hasheq())
                             import-sym
                             'unexported))
@@ -54,8 +51,8 @@
                    ;; Allowed by inspectors attached to each referencing syntax object?
                    (and extra-inspectorsss
                         extra-inspectorss
-                        (for/and ([extra-insp (in-set extra-inspectors)])
-                          (inspector-superior? extra-insp guard-insp))))
+                        (extra-inspectors-allow? (hash-ref extra-inspectorss import-sym #f)
+                                                 guard-insp)))
             (error 'link
                    (string-append "access disallowed by code inspector to ~a variable\n"
                                   "  variable: ~s\n"

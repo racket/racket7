@@ -229,8 +229,9 @@
                                          #:defined? [defined? #f])
   (define key (variable-use (module-use mpi phase) sym))
   (define variable-uses (header-require-var-to-import-sym header))
+  (define prev-var-sym (hash-ref variable-uses key #f))
   (define var-sym
-    (or (hash-ref variable-uses key #f)
+    (or prev-var-sym
         (let ([sym (select-fresh (variable-use-sym key) header)])
           (hash-set! variable-uses key sym)
           (set-header-require-vars-in-order! header
@@ -238,7 +239,10 @@
                                                    (header-require-vars-in-order header)))
           (hash-set! (header-define-and-import-syms header) sym (if defined? 'defined 'required))
           sym)))
-  (when extra-inspector
+  (when (and extra-inspector
+             ;; Only track extra inspectors if all references have an inspector;
+             ;; otherwise, the one without an extra inspector has the least access
+             (not prev-var-sym))
     (define extra-inspectors (header-import-sym-to-extra-inspectors header))
     (hash-update! extra-inspectors var-sym (lambda (s) (set-add s extra-inspector)) #hasheq()))
   var-sym)
@@ -253,9 +257,9 @@
 ;;  link-names : a list of sym
 ;;  link-requires : a list of module path indexes
 ;;  imports : a list of S-expressions for imports; refers to `link-names`
-;;  extra-inspectorsss : a list of list of (or/c #f (set/c inspector?))
+;;  extra-inspectorsss : a list of hash of symbol to (or/c #f (set/c inspector?))
 ;;  def-decls : a list of S-expressions for forward-reference declarations
-(define (generate-links+imports header phase cctx)
+(define (generate-links+imports header phase cctx cross-linklet-inlining?)
   ;; Find each distinct module+phase:
   (define mod-use-ht
     (for/fold ([ht #hash()]) ([(vu) (in-list (header-require-vars-in-order header))])
@@ -281,14 +285,19 @@
        (if (eq? var-sym ex-sym)
            var-sym
            `[,ex-sym ,var-sym])))
-   ;; Extra inspectors, in parallel to imports
+   ;; Extra inspectorsss, in parallel to imports
    (for/list ([mu (in-list link-mod-uses)])
      (define extra-inspectorss
-       (for/list ([vu (in-list (header-require-vars-in-order header))]
-                  #:when (equal? mu (variable-use-module-use vu)))
-         (define var-sym (hash-ref (header-require-var-to-import-sym header) vu))
-         (hash-ref (header-import-sym-to-extra-inspectors header) var-sym #f)))
-     (and (ormap values extra-inspectorss)
+       (for*/hash ([vu (in-list (header-require-vars-in-order header))]
+                   #:when (equal? mu (variable-use-module-use vu))
+                   [var-sym (in-value (hash-ref (header-require-var-to-import-sym header) vu))]
+                   [extra-inspectors (in-value (hash-ref (header-import-sym-to-extra-inspectors header) var-sym #f))]
+                   #:when (or extra-inspectors
+                              ;; For inlining purposes, keep track of all referenced,
+                              ;; since formerly unreferenced will mean inlined
+                              cross-linklet-inlining?))
+         (values var-sym extra-inspectors)))
+     (and (hash-count extra-inspectorss)
           extra-inspectorss))
    ;; Declarations (for non-module contexts)
    (for/list ([vu (in-list (header-require-vars-in-order header))]

@@ -56,7 +56,7 @@
                    max-phase
                    phase-to-link-module-uses
                    phase-to-link-module-uses-expr
-                   phase-to-link-extra-inspectorsss
+                   phase-to-link-extra-inspectorss
                    syntax-literals
                    no-root-context-pos)
      (compile-forms (list p) cctx mpis
@@ -151,7 +151,7 @@
                          #f ; provides
                          phase-to-link-module-uses
                          (current-code-inspector)
-                         phase-to-link-extra-inspectorsss
+                         phase-to-link-extra-inspectorss
                          (mpis-as-vector mpis)
                          (syntax-literals-as-vector syntax-literals)
                          null

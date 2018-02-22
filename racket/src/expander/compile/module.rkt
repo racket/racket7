@@ -182,7 +182,11 @@
                   (values phase
                           (module-linklet-info linklet
                                                (hash-ref phase-to-link-module-uses phase #f)
-                                               self)))))
+                                               self
+                                               #f ; inspector is the same as other modules
+                                               #f ; no extra inspector, so far
+                                               (and phase-to-link-extra-inspectorsss
+                                                    (hash-ref phase-to-link-extra-inspectorsss phase #f)))))))
    
    ;; Assemble the declaration linking unit, which includes linking
    ;; information for each phase, is instanted once for a module
@@ -389,6 +393,7 @@
     (define phase-to-link-module-uses (compiled-in-memory-phase-to-link-module-uses cim))
     (define ld (compiled-in-memory-linklet-directory cim))
     (define sm-self (module-path-index-join `(submod "." ,name) self))
+    (define phase-to-extra-inspectorsss (compiled-in-memory-phase-to-link-extra-inspectorsss cim))
     (hash-set! modules-being-compiled
                (module-path-index-resolve sm-self)
                (for/hasheq ([(phase linklet) (in-hash (linklet-bundle->hash
@@ -399,7 +404,11 @@
                  (values phase
                          (module-linklet-info linklet
                                               (hash-ref phase-to-link-module-uses phase #f)
-                                              self))))))
+                                              self
+                                              #f ; inspector is the same as the module being compiled
+                                              (compiled-in-memory-compile-time-inspector cim)
+                                              (and phase-to-extra-inspectorsss
+                                                   (hash-ref phase-to-extra-inspectorsss phase #f))))))))
 
 ;; ----------------------------------------
 

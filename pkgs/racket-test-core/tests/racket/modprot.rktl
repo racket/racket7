@@ -418,4 +418,13 @@
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(parameterize ([current-namespace (make-base-namespace)]
+               [current-code-inspector (make-inspector)])
+  (eval
+   ;; This compilation is intended to inline a call to `gen-for-each`,
+   ;; and the test is meant to ensure that the reference is allowed
+   (compile '(lambda (f) (for-each f '(1 2 3 4 5))))))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (report-errs)

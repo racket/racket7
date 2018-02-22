@@ -22,6 +22,7 @@
          "instance.rkt"
          "namespace-scope.rkt"
          "expr.rkt"
+         "extra-inspector.rkt"
          "correlate.rkt")
 
 (provide compile-forms
@@ -230,20 +231,22 @@
     (for/hash ([phase (in-list phases-in-order)])
       (define header (hash-ref phase-to-header phase #f))
       (define-values (link-module-uses imports extra-inspectorsss def-decls)
-        (generate-links+imports header phase cctx))
+        (generate-links+imports header phase cctx cross-linklet-inlining?))
       (values phase (link-info link-module-uses imports extra-inspectorsss def-decls))))
   
   ;; Generate the phase-specific linking units
-  (define body-linklets+module-uses
+  (define body-linklets+module-use*s
     (for/hasheq ([phase (in-list phases-in-order)])
       (define bodys (hash-ref phase-to-body phase))
       (define li (hash-ref phase-to-link-info phase))
       (define binding-sym-to-define-sym
         (header-binding-sym-to-define-sym (hash-ref phase-to-header phase)))
-      (define module-uses (link-info-link-module-uses li))
+      (define module-use*s
+        (module-uses-add-extra-inspectorsss (link-info-link-module-uses li)
+                                            (link-info-extra-inspectorsss li)))
       ;; Compile the linklet with support for cross-module inlining, which
       ;; means that the set of imports can change:
-      (define-values (linklet new-module-uses)
+      (define-values (linklet new-module-use*s)
         (performance-region
          ['compile '_ 'linklet]
          ((if to-source?
@@ -271,31 +274,37 @@
           ;; as keys, plus #f or an instance (=> cannot be pruned) for
           ;; each boilerplate linklet
           (list->vector (append body-import-instances
-                                (link-info-link-module-uses li)))
+                                module-use*s))
           ;; To complete cross-module support, map a key (which is a `module-use`)
           ;; to a linklet and an optional vector of keys for that linklet's
           ;; imports:
           (make-module-use-to-linklet cross-linklet-inlining?
                                       (compile-context-namespace cctx)
                                       get-module-linklet-info
-                                      (link-info-link-module-uses li)))))
-      (values phase (cons linklet (list-tail (vector->list new-module-uses)
+                                      module-use*s))))
+      (values phase (cons linklet (list-tail (vector->list new-module-use*s)
                                              (length body-imports))))))
   
   (define body-linklets
-    (for/hasheq ([(phase l+mus) (in-hash body-linklets+module-uses)])
-      (values phase (car l+mus))))
+    (for/hasheq ([(phase l+mu*s) (in-hash body-linklets+module-use*s)])
+      (values phase (car l+mu*s))))
 
   (define phase-to-link-module-uses
-    (for/hasheq ([(phase l+mus) (in-hash body-linklets+module-uses)])
-      (values phase (cdr l+mus))))
-  
+    (for/hasheq ([(phase l+mu*s) (in-hash body-linklets+module-use*s)])
+      (values phase (module-uses-strip-extra-inspectorsss (cdr l+mu*s)))))
+
   (define phase-to-link-module-uses-expr
     (serialize-phase-to-link-module-uses phase-to-link-module-uses mpis))
 
   (define phase-to-link-extra-inspectorsss
-    (for/hash ([(phase li) (in-hash phase-to-link-info)])
-      (values phase (link-info-extra-inspectorsss li))))
+    (for*/hash ([(phase l+mu*s) (in-hash body-linklets+module-use*s)]
+                [(extra-inspectorsss) (in-value (module-uses-extract-extra-inspectorsss
+                                                 (cdr l+mu*s)
+                                                 (car l+mu*s)
+                                                 cross-linklet-inlining?
+                                                 (length body-imports)))]
+                #:when extra-inspectorsss)
+      (values phase extra-inspectorsss)))
 
   (values body-linklets   ; main compilation result
           min-phase
@@ -376,51 +385,77 @@
 
 ;; ----------------------------------------
 
-(define (make-module-use-to-linklet cross-linklet-inlining? ns get-module-linklet-info init-mus)
+(define (make-module-use-to-linklet cross-linklet-inlining? ns get-module-linklet-info init-mu*s)
   ;; Inlining might reach the same module though different indirections;
   ;; use a consistent `module-use` value so that the compiler knows to
   ;; collapse them to a single import
-  (define mu-intern-table (make-hash))
-  (define (intern-module-use mu)
-    (define mod-name (module-path-index-resolve (module-use-module mu)))
-    (or (hash-ref mu-intern-table (cons mod-name (module-use-phase mu)) #f)
-        (begin
-          (hash-set! mu-intern-table (cons mod-name (module-use-phase mu)) mu)
-          mu)))
-  (for-each intern-module-use init-mus)
-  ;; The callback function supplied to `compile-linklet`:
-  (lambda (mu)
+  (define mu*-intern-table (make-hash))
+  (define (intern-module-use* mu*)
+    (define mod-name (module-path-index-resolve (module-use-module mu*)))
+    (define existing-mu* (hash-ref mu*-intern-table (cons mod-name (module-use-phase mu*)) #f))
     (cond
-     [(instance? mu)
+      [existing-mu*
+       (module-use-merge-extra-inspectorss! existing-mu* mu*)
+       existing-mu*]
+      [else
+       (hash-set! mu*-intern-table (cons mod-name (module-use-phase mu*)) mu*)
+       mu*]))
+  (for ([mu* (in-list init-mu*s)])
+    (intern-module-use* mu*))
+  ;; The callback function supplied to `compile-linklet`:
+  (lambda (mu*-or-instance)
+    (cond
+     [(instance? mu*-or-instance)
       ;; An instance represents a boilerplate linklet. An instance
       ;; doesn't enable inlining (and we don't want inlining, since
       ;; that would change the overall protocol for module or
-      ;; top-level linklets], but it can describe shapes.
-      (values mu #f)]
+      ;; top-level linklets), but it can describe shapes.
+      (values mu*-or-instance #f)]
      [(not cross-linklet-inlining?)
       ;; Although we let instances through, because that's cheap,
       ;; don't track down linklets and allow inlining of functions
       (values #f #f)]
-     [mu
-      (define mod-name (module-path-index-resolve (module-use-module mu)))
-      (define mli (or (get-module-linklet-info mod-name (module-use-phase mu))
+     [mu*-or-instance
+      (define mu* mu*-or-instance)
+      (define mod-name (module-path-index-resolve (module-use-module mu*)))
+      (define mli (or (get-module-linklet-info mod-name (module-use-phase mu*))
                       (namespace->module-linklet-info ns
                                                       mod-name
-                                                      (module-use-phase mu))))
+                                                      (module-use-phase mu*))))
+      (when mli
+        ;; Record the module's declaration-time inspector, for use
+        ;; later recording extra inspectors for inlined referenced
+        (module-use*-declaration-inspector! mu* (module-linklet-info-inspector mli)))
       (if mli
           ;; Found info for inlining:
           (values (module-linklet-info-linklet-or-instance mli)
-                  (and (module-linklet-info-module-uses mli)
+                  (and (module-linklet-info-module-uses mli) ; => linklet
                        (list->vector
                         (append
                          '(#f #f) ; boilerplate imports common to all modules
-                         (for/list ([sub-mu (in-list (module-linklet-info-module-uses mli))])
-                           (intern-module-use
-                            (module-use (module-path-index-shift
-                                         (module-use-module sub-mu)
-                                         (module-linklet-info-self mli)
-                                         (module-use-module mu))
-                                        (module-use-phase sub-mu))))))))
+                         (let ([mus (module-linklet-info-module-uses mli)]
+                               [extra-inspectorsss (module-linklet-info-extra-inspectorsss mli)])
+                           (for/list ([sub-mu (in-list mus)]
+                                      [imports (in-list
+                                                (linklet-import-variables
+                                                 (module-linklet-info-linklet-or-instance mli)))]
+                                      [extra-inspectorss (in-list (or extra-inspectorsss
+                                                                      ;; a list of the right length:
+                                                                      mus))])
+                             (intern-module-use*
+                              (module-use+extra-inspectors (module-path-index-shift
+                                                            (module-use-module sub-mu)
+                                                            (module-linklet-info-self mli)
+                                                            (module-use-module mu*))
+                                                           (module-use-phase sub-mu)
+                                                           ;; The remaining arguments are used to
+                                                           ;; make an `module-use*` instead of a
+                                                           ;; plain `module-use`
+                                                           imports
+                                                           (module-linklet-info-inspector mli)
+                                                           (module-linklet-info-extra-inspector mli)
+                                                           (and extra-inspectorsss
+                                                                extra-inspectorss)))))))))
           ;; Didn't find info, for some reason:
           (values #f #f))]
      [else

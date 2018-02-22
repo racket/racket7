@@ -81,7 +81,10 @@
 
 (struct module-linklet-info (linklet-or-instance ; #f, linklet, or instance supplied for cross-linking optimization
                              module-uses         ; #f or vector for linklet's imports
-                             self)               ; self modidx
+                             self                ; self modidx
+                             inspector           ; declaration-time inspector
+                             extra-inspector     ; optional extra inspector
+                             extra-inspectorsss) ; optional extra inspector sets per variable per import
         #:transparent)
 
 (define (make-module #:source-name [source-name #f]
@@ -94,7 +97,7 @@
                      #:force-bulk-binding-callback [force-bulk-binding void]
                      #:prepare-instance-callback [prepare-instance void]
                      #:phase-level-linklet-info-callback [phase-level-linklet-info-callback
-                                                          (lambda (phase-level ns) #f)]
+                                                          (lambda (phase-level ns insp) #f)]
                      #:language-info [language-info #f]
                      #:primitive? [primitive? #f]
                      #:predefined? [predefined? #f]
@@ -236,7 +239,7 @@
 (define (namespace->module-linklet-info ns name phase-level)
   (define m (namespace->module ns name))
   (and m
-       ((module-phase-level-linklet-info-callback m) phase-level ns)))
+       ((module-phase-level-linklet-info-callback m) phase-level ns (module-inspector m))))
 
 ;; ----------------------------------------
 
