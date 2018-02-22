@@ -64,7 +64,8 @@
           requires+provides ; enclosing module's requires+provides during `provide`
           * name       ; #f or identifier to name the expression
           observer   ; logging observer (for the macro debugger)
-          for-serializable?)) ; accumulate submodules as serializable?
+          for-serializable? ; accumulate submodules as serializable?
+          should-not-encounter-macros?)) ; #t when "expanding" to parse
 
 (define (make-expand-context ns
                              #:to-parsed? [to-parsed? #f]
@@ -107,7 +108,8 @@
                   #f   ; requires+provides
                   #f   ; name
                   (and observable? (current-expand-observe))
-                  for-serializable?))
+                  for-serializable?
+                  #f))
 
 (define (copy-root-expand-context ctx root-ctx)
   (struct*-copy expand-context ctx
@@ -192,4 +194,5 @@
 (define (as-to-parsed-context ctx)
   (struct*-copy expand-context ctx
                 [to-parsed? #t]
-                [observer #f]))
+                [observer #f]
+                [should-not-encounter-macros? #t]))

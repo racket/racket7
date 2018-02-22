@@ -791,6 +791,10 @@
           (define-values (exp-rhs parsed-rhs vals)
             (expand+eval-for-syntaxes-binding (m 'rhs) ids
                                               (struct*-copy expand-context partial-body-ctx
+                                                            [lifts #f]
+                                                            ;; require lifts ok, others disallowed
+                                                            [module-lifts #f]
+                                                            [to-module-lifts #f]
                                                             [need-eventually-defined need-eventually-defined])
                                               #:log-next? #f))
           ;; Install transformers in the namespace for expansion:
@@ -1290,7 +1294,7 @@
                           #:modules-being-compiled modules-being-compiled)
   (unless is-star?
     (log-expand* ctx ['enter-prim s] [(if is-star? 'prim-submodule* 'prim-submodule)]))
-  
+
   ;; Register name and check for duplicates
   (define-match m s '(module name . _))
   (define name (syntax-e (m 'name)))

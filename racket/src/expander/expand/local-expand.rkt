@@ -6,6 +6,7 @@
          "../syntax/scope.rkt"
          "../syntax/binding.rkt"
          "../namespace/core.rkt"
+         "../namespace/module.rkt"
          "context.rkt"
          "main.rkt"
          "syntax-local.rkt"
@@ -106,6 +107,8 @@
                                                 #:stop-ids stop-ids
                                                 #:to-parsed-ok? to-parsed-ok?
                                                 #:track-to-be-defined? track-to-be-defined?))
+
+   (namespace-visit-available-modules! (expand-context-namespace ctx) phase)
 
    (log-expand local-ctx 'enter-local s)
    (define input-s (add-intdef-scopes (flip-introduction-scopes s ctx) intdefs))

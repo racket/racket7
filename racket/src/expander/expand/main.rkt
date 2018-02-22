@@ -270,6 +270,10 @@
     (define adj-s (avoid-current-expand-context (substitute-alternate-id s id) t ctx))
     (log-expand ctx 'exit-macro s)
     (expand adj-s ctx)]
+   [(expand-context-should-not-encounter-macros? ctx)
+    (raise-syntax-error #f
+                        "encountered a macro binding in form that should be fully expanded"
+                        s)]
    [else
     (log-expand* ctx #:when (and (expand-context-only-immediate? ctx)
                                  (not (rename-transformer? t)))

@@ -212,6 +212,7 @@
   (check who exact-nonnegative-integer? n)
   (define ctx (get-current-expand-context who))
   (define lifts (expand-context-lifts ctx))
+  (unless lifts (raise-arguments-error who "no lift target"))
   (define counter (root-expand-context-counter ctx))
   (define ids (for/list ([i (in-range n)])
                 (set-box! counter (add1 (unbox counter)))
@@ -264,6 +265,7 @@
   (more-checks)
   (define ctx (get-current-expand-context who))
   (define lift-ctx (get-lift-ctx ctx))
+  (unless lift-ctx (raise-arguments-error who "no lift target"))
   (define phase (expand-context-phase ctx))   ; we're currently at this phase
   (define wrt-phase (get-wrt-phase lift-ctx)) ; lift context is at this phase
   (define added-s (if intro? (flip-introduction-scopes s ctx) s))
@@ -294,6 +296,8 @@
                              #:post-wrap
                              (lambda (s phase require-lift-ctx)
                                (wrap-form '#%require (add-scope s sc) phase))))
+  (namespace-visit-available-modules! (expand-context-namespace ctx)
+                                      (expand-context-phase ctx))
   (define result-s (add-scope use-s sc))
   (log-expand ctx 'lift-require added-s use-s result-s)
   result-s)
