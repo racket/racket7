@@ -244,7 +244,12 @@
   (define phase (expand-context-phase ctx))
   (case (core-form-sym s phase)
     [(module module*)
-     (add-lifted-module! (expand-context-module-lifts ctx) (flip-introduction-scopes s ctx) phase)]
+     (define lifts (expand-context-module-lifts ctx))
+     (unless lifts
+       (raise-arguments-error 'syntax-local-lift-module
+                              "not currently transforming within a module declaration or top level"
+                              "form to lift" s))
+     (add-lifted-module! lifts (flip-introduction-scopes s ctx) phase)]
     [else
      (raise-arguments-error 'syntax-local-lift-module "not a module form"
                             "given form" s)])
@@ -253,6 +258,7 @@
 ;; ----------------------------------------
 
 (define (do-local-lift-to-module who s
+                                 #:no-target-msg no-target-msg
                                  #:intro? [intro? #t]
                                  #:more-checks [more-checks void]
                                  #:get-lift-ctx get-lift-ctx
@@ -265,7 +271,8 @@
   (more-checks)
   (define ctx (get-current-expand-context who))
   (define lift-ctx (get-lift-ctx ctx))
-  (unless lift-ctx (raise-arguments-error who "no lift target"))
+  (unless lift-ctx (raise-arguments-error who no-target-msg
+                                          "form to lift" s))
   (define phase (expand-context-phase ctx))   ; we're currently at this phase
   (define wrt-phase (get-wrt-phase lift-ctx)) ; lift context is at this phase
   (define added-s (if intro? (flip-introduction-scopes s ctx) s))
@@ -280,7 +287,8 @@
   (define sc (new-scope 'macro))
   (define-values (ctx added-s)
     (do-local-lift-to-module 'syntax-local-lift-require
-                             (datum->syntax #f s) 
+                             (datum->syntax #f s)
+                             #:no-target-msg "could not find target context"
                              #:intro? #f
                              #:more-checks
                              (lambda ()
@@ -306,6 +314,7 @@
   (define-values (ctx result-s)
     (do-local-lift-to-module 'syntax-local-lift-provide
                              s
+                             #:no-target-msg "not expanding in a module run-time body"
                              #:get-lift-ctx expand-context-to-module-lifts
                              #:get-wrt-phase to-module-lift-context-wrt-phase
                              #:add-lifted! add-lifted-to-module-provide!
@@ -321,6 +330,7 @@
   (define-values (ctx also-s)
     (do-local-lift-to-module 'syntax-local-lift-module-end-declaration
                              s
+                             #:no-target-msg "not currently transforming an expression within a module declaration"
                              #:get-lift-ctx expand-context-to-module-lifts
                              #:get-wrt-phase (lambda (lift-ctx) 0) ; always relative to 0
                              #:add-lifted! add-lifted-to-module-end!
