@@ -161,7 +161,7 @@
       (parameterize ([current-read-config config])
         (if (procedure-arity-includes? handler 2)
             (handler c in)
-            (handler c in #f #f #f #f)))]
+            (handler c in #f line col pos)))]
      [else
       (parameterize ([current-read-config config])
         (handler c in (read-config-source config) line col pos))]))

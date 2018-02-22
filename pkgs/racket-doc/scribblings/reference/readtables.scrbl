@@ -150,7 +150,7 @@ already-consumed character(s): the source name, a line number or
 @racket[#f]. When the reader macro is triggered by @racket[read] (or
 @racket[read/recursive]), the procedure is passed only two arguments
 if it accepts two arguments, otherwise it is passed six arguments
-where the last four are all @racket[#f]. See @secref["reader-procs"]
+where the third is always @racket[#f]. See @secref["reader-procs"]
 for information on the procedure's results.
 
 A reader macro normally reads characters from the given input port to

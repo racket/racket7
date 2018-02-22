@@ -46628,7 +46628,7 @@ static const char *startup_source =
 "(let-values()"
 "(if(procedure-arity-includes? handler_0 2)"
 "(handler_0 c_59 in_3)"
-"(handler_0 c_59 in_3 #f #f #f #f)))))"
+"(handler_0 c_59 in_3 #f line_3 col_2 pos_106)))))"
 "(let-values()"
 "(with-continuation-mark"
 " parameterization-key"
