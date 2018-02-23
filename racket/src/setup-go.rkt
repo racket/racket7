@@ -1,6 +1,9 @@
 #lang racket/base
-(require compiler/cm
-         compiler/depend)
+(require compiler/depend
+         ;; This dependency on `compiler/private/cm-minimal`
+         ;; ensure that it's compiled so that the next use
+         ;; of "setup-go.rkt" doesn't have to start from source
+         compiler/private/cm-minimal)
 
 ;; This module is loaded via `setup/main` with a `--boot` argument
 ;; that selects this module and sets the compile-file root directory

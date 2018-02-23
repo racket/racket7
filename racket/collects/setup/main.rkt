@@ -301,10 +301,10 @@
                                                                        (format "uncaught exn: ~s" exn)))))))])
 			     ;; Here's the main dynamic load of "cm.rkt":
 			     (let ([mk
-				    (dynamic-require 'compiler/cm
+				    (dynamic-require 'compiler/private/cm-minimal
 						     'make-compilation-manager-load/use-compiled-handler)]
 				   [trust-zos
-				    (dynamic-require 'compiler/cm 'trust-existing-zos)])
+				    (dynamic-require 'compiler/private/cm-minimal 'trust-existing-zos)])
 			       ;; Return the two extracted functions:
 			       (lambda () (values mk trust-zos)))))))))])
 	(if (on? "--trust-zos")
