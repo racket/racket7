@@ -494,39 +494,69 @@ Directories in "src":
 
  "racket" --- starting point for the traditional Racket implementation
 
+        This implementation can build from "scratch" with a C
+        compiler, but first by building a CGC variant of Racket to
+        transform the C sourses to build a (normal) 3m variant.
+
  "cs" --- starting point for the Racket-on-Chez implementation
 
+        Building the implementation requires both an existing Racket
+        (possibly created from the "racket" sources) and an existing
+        Chez Scheme build.
+
  "rktio" --- portability layer for low-level I/O, used by "racket" and
-             "cs"
+        "cs"
+
+        If you change "rktio.h", then be sure to regenerate
+        "rktio.rktl" and "rktio.inc" using an existing Racket
+        implementation that has the "parser-tools" package installed.
 
  "start" --- main-executable wrapper, used by "racket" and "cs"
 
  "foreign" --- the FFI implementation for "racket", including "libffi"
-               (as needed for some platforms)
+        (as needed for some platforms)
 
- "expander" --- the macro expander's implementation, used by "racket"
-                and "cs"; doubles as the "expander" package
+ "expander" --- the macro expander implementation, used by "racket"
+        and "cs"; doubles as the "expander" package
 
- "thread" --- the thread scheduler's implementation, used by "cs"
+        This expander is both included in Racket builds and used to
+        expand itself for including in "racket" or "cs". It's also
+        used to expand other libraries included in "cs".
 
- "io" --- the Racket I/O implementation, used by "cs"
+        If you change the expander, run `make` in its directory to
+        generate the "startup.inc" file that holds the expander's
+        implementation for inclusion in the traditional Racket
+        variant. The "cs" build (which needs an existing Racket to
+        build, anyway) picks up changes automatically.
 
- "regexp" --- the regexp matcher's implementation, used by "cs"
+ "thread" --- the thread scheduler implementation, used by "cs"
+
+ "io" --- the I/O implementation, used by "cs"
+
+ "regexp" --- the regexp matcher implementation, used by "cs"
 
  "schemify" --- a Racket-to-Scheme compiler, used by "cs" and "cify"
 
- "cify" --- a Racket-to-C compiler, used by "racket" when embedding
-            the expander as C code instead of Racket bytecode
+        Similar to "expander", this layer is applied to itself and
+        other libraries for inclusion in "cs".
+
+ "cify" --- a Racket-to-C compiler, used by "racket"
+
+        This compiler is used only when embedding the expander as C
+        code, instead of Racket bytecode, which is the default for
+        platforms where the Racket JIT is not supported.
 
  "common" --- Racket libraries used by "thread", "io", etc.
 
- "gracket" --- implementation of the GRacket layer
+ "gracket" --- implementation of the GRacket layer for the traditional
+        Racket implementation
 
- "mzcom" --- implementation of the MzCOM layer (for Windows)
+ "mzcom" --- implementation of the MzCOM layer (for Windows)for the
+        traditional Racket implementation
 
  "mysink" --- `ffi/unsafe/com` helper DLL implementation (for Windows)
 
- "mac" --- scripts for Mac OS ".app"s, used by "gracket"
+ "mac" --- scripts for Mac OS ".app"s, used by "gracket" and "cs"
 
  "worksp" --- Windows projects and build scripts for "racket"
 
@@ -537,4 +567,4 @@ Directories in "src":
  "utils" --- miscellaneous
  
  "setup-go.rkt" --- helper script used by parts of the build that need
-                    to run substantial Racket programs
+        to run substantial Racket programs
