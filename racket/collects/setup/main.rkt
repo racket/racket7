@@ -143,15 +143,19 @@
                     (if (pair? (cdr flags))
                         (filter-flags queued-flags (cddr flags))
                         queued-flags)
-                    (if (equal? "--boot" (car flags))
-                        ;; Record an alternate boot module and compiled-file root
+                    (if (or (equal? "--boot" (car flags))
+                            (equal? "--chain" (car flags)))
+                        ;; Record an alternate boot module and [additional] compiled-file root
                         (if (and (pair? (cdr flags))
                                  (pair? (cddr flags)))
                             (begin
                               (set! go-module (list 'file (cadr flags)))
                               (set! print-loading-sources? #t)
                               (let ([root (path->complete-path (caddr flags))])
-                                (current-compiled-file-roots (list root)))
+                                (current-compiled-file-roots
+                                 (if (equal? "--boot" (car flags))
+                                     (list root)
+                                     (cons root (current-compiled-file-roots)))))
                               (cons (car flags)
                                     (filter-flags queued-flags (cddr flags))))
                             queued-flags)

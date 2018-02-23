@@ -186,6 +186,10 @@ if test "${enable_scheme}" != "" ; then
   SCHEME_SRC="${enable_scheme}"
 fi
 
+if test "${enable_racket}" != "" ; then
+  RACKET="${enable_racket}"
+fi
+
 if test "${enable_mach}" != "" ; then
   MACH="${enable_mach}"
 fi

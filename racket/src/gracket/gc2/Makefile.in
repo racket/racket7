@@ -56,7 +56,7 @@ MZMMM_wx_xt = @RUN_RACKET_MMM@
 MZMMM_wx_mac = @RUN_RACKET_MMM@
 MZMMM = $(MZMMM_@WXVARIANT@)
 
-SETUP_BOOT = -l- setup --boot $(srcdir)/../../setup-go.rkt ../../compiled
+SETUP_BOOT = -l- setup @BOOT_MODE@ $(srcdir)/../../setup-go.rkt ../../compiled
 
 XFORM_CMD = $(MZMMM) $(SELF_RACKET_FLAGS) $(SETUP_BOOT) --tag ++out $(srcdir)/../../racket/gc2/xform-mod.rkt
 XFORM_CPP_ARGS = -I$(srcdir)/../../racket/gc2 $(NOGCINC) $(OPTIONS) @PREFLAGS@ $(XFORM_INC_@WXVARIANT@)

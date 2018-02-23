@@ -628,6 +628,7 @@ MAKE_LOCAL_RACKET
 STARTUP_AS_AUTO
 STARTUP_AS_C
 STARTUP_AS_BYTECODE
+BOOT_MODE
 CGC_IF_NEEDED_FOR_MMM
 RUN_RACKET_MAIN_VARIANT
 RUN_RACKET_MMM
@@ -6637,11 +6638,13 @@ if test "${enable_racket}" = "" ; then
   RUN_RACKET_MMM='$(RUN_THIS_RACKET_MMM)'
   RUN_RACKET_MAIN_VARIANT='$(RUN_THIS_RACKET_MAIN_VARIANT)'
   CGC_IF_NEEDED_FOR_MMM="cgc"
+  BOOT_MODE="--boot"
 else
   RUN_RACKET_CGC="${enable_racket}"
   RUN_RACKET_MMM="${enable_racket}"
   RUN_RACKET_MAIN_VARIANT="${enable_racket}"
   CGC_IF_NEEDED_FOR_MMM="no-cgc-needed"
+  BOOT_MODE="--chain"
 fi
 
 ############## libtool ################
@@ -6725,6 +6728,7 @@ fi
 ############## final output ################
 
 LIBS="$LIBS $EXTRALIBS"
+
 
 
 

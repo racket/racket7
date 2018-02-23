@@ -83,11 +83,9 @@
          (dynamic-require mod-file (void)))
        (lambda ()
          (port-file-unlock lock-port)))
-      
-      ;; Now that the lock is released, instantiate:
-      (dynamic-require mod-file #f)
 
-      ;; Record dependencies:
+      ;; Record dependencies (before running `mod-file`, in case
+      ;; it mangles parameters)
       (define deps (cons mod-file
                          (module-recorded-dependencies mod-file)))
       (call-with-output-file make-dep-file
@@ -98,4 +96,7 @@
                                 target-file))
           (for ([dep (in-list deps)])
             (fprintf o " \\\n ~a" dep))
-          (newline o))))))
+          (newline o)))
+
+      ;; Now that the lock is released, instantiate:
+      (dynamic-require mod-file #f))))

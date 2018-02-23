@@ -1337,7 +1337,7 @@ Optional Features:
   --enable-iconv          use iconv (usually auto-enabled)
   --enable-xonx           use Unix style (e.g., use Gtk) for Mac OS
   --enable-racket=<path>  use <path> as Racket to build; or "auto" to create
-  --enable-scheme=<path>  Chez Scheme build dierctory at <path>
+  --enable-scheme=<path>  Chez Scheme build directory at <path>
   --enable-mach=<mac>     Use Chez Scheme machine type <mach>
 
 Some influential environment variables:
@@ -3289,6 +3289,10 @@ SCHEME_SRC=../ChezScheme
 
 if test "${enable_scheme}" != "" ; then
   SCHEME_SRC="${enable_scheme}"
+fi
+
+if test "${enable_racket}" != "" ; then
+  RACKET="${enable_racket}"
 fi
 
 if test "${enable_mach}" != "" ; then

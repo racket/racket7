@@ -1592,11 +1592,13 @@ if test "${enable_racket}" = "" ; then
   RUN_RACKET_MMM='$(RUN_THIS_RACKET_MMM)'
   RUN_RACKET_MAIN_VARIANT='$(RUN_THIS_RACKET_MAIN_VARIANT)'
   CGC_IF_NEEDED_FOR_MMM="cgc"
+  BOOT_MODE="--boot"
 else
   RUN_RACKET_CGC="${enable_racket}"
   RUN_RACKET_MMM="${enable_racket}"
   RUN_RACKET_MAIN_VARIANT="${enable_racket}"
   CGC_IF_NEEDED_FOR_MMM="no-cgc-needed"
+  BOOT_MODE="--chain"
 fi
 
 ############## libtool ################
@@ -1803,6 +1805,7 @@ AC_SUBST(RUN_RACKET_CGC)
 AC_SUBST(RUN_RACKET_MMM)
 AC_SUBST(RUN_RACKET_MAIN_VARIANT)
 AC_SUBST(CGC_IF_NEEDED_FOR_MMM)
+AC_SUBST(BOOT_MODE)
 
 AC_SUBST(STARTUP_AS_BYTECODE)
 AC_SUBST(STARTUP_AS_C)

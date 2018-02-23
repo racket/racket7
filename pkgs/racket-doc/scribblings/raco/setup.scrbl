@@ -286,6 +286,28 @@ flags:
   location.}
 
 ]}
+@item{Bootstrapping:
+@itemize[
+
+ @item{@DFlag{boot} @nonterm{module-file} @nonterm{build-dir} --- For
+       use by directly running @racketmodname[setup] instead of
+       through @exec{raco setup}, loads @nonterm{module-file} in the
+       same way that @exec{raco setup} normally loads itself,
+       auto-detecting the need to start from sources and rebuild the
+       compiled files---even for the compilation manager itself. The
+       @nonterm{build-dir} path is installed as the only path in
+       @racket[current-compiled-file-roots], so all compiled files
+       go there.}
+
+ @item{@DFlag{chain} @nonterm{module-file} @nonterm{build-dir} ---
+       Like @DFlag{boot}, but adds @nonterm{build-dir} to the start of
+       @racket[current-compiled-file-roots] instead of replacing the
+       current value, which means that libraries already built in the
+       normal location (including the compilation manager itself) will
+       be used instead of rebuilt. This mode makes sense for
+       cross-compilation.}
+
+]}
 
 ]
 
@@ -1173,6 +1195,19 @@ form.}
   multiple times. @defaults[@racket[(lambda (preferred main-parent-dir choices) preferred)]]}
 
 }
+
+@; ----------------------------------------
+
+@subsection{Setup Start Module}
+
+@defmodule[setup]{The @racketmodname[setup] library implements
+@exec{raco setup}, including the part that bootstraps @exec{raco setup}
+if its own implementation needs to be compiled.}
+
+When running @racketmodname[setup] via @exec{racket}, supply the
+@exec{@Flag{N} raco} to ensure that command-line arguments are parsed
+the same way as for @exec{raco setup}, as opposed to a legacy
+command-line mode.
 
 @; ------------------------------------------------------------------------
 

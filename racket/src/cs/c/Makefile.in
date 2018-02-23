@@ -47,7 +47,7 @@ ABS_SCHEME_SRC = "`$(RACKET) $(srcdir)/../absify.rkt $(SCHEME_SRC)`"
 ABS_SRCDIR = "`$(RACKET) $(srcdir)/../absify.rkt $(srcdir)`"
 ABS_BUILDDIR = "`$(RACKET) $(srcdir)/../absify.rkt $(builddir)`"
 
-SETUP_BOOT = -W 'info@compiler/cm error' -l- setup --boot $(srcdir)/../../setup-go.rkt $(builddir)/compiled
+SETUP_BOOT = -W 'info@compiler/cm error' -l- setup --chain $(srcdir)/../../setup-go.rkt $(builddir)/compiled
 
 # The "expander", "thread", "io", "regexp", and "schemify" makefiles
 # all use "expander.d", but they set `GENERATED_RKTL` so it refers to
