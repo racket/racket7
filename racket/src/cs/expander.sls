@@ -71,7 +71,8 @@
 
   ;; ----------------------------------------
 
-  (include "compiled/expander.scm")
+  (include "include.ss")
+  (include-generated "expander.scm")
 
   ;; ----------------------------------------
 

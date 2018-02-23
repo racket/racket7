@@ -33,12 +33,13 @@
   (define syntax-e rumble:correlated-e)
   (define syntax-property rumble:correlated-property)
 
-  (include "compiled/schemify.scm")
+  (include "include.ss")
+  (include-generated "schemify.scm")
 
   (define prim-knowns
     (let-syntax ([gen
                   (lambda (stx)
-                    (include "compiled/known.scm")
+                    (include-generated "known.scm")
                     ;; Constructed a quoted literal hash table that
                     ;; maps symbols to `known` prefabs
                     (let ([known-l '()])

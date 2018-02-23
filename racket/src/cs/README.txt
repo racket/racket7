@@ -143,11 +143,11 @@ Files in this directory:
          structures, immutable hash tables, structs, delimited
          continuations, engines, impersonators, etc.
 
- ../*/compiled/*.rktl (generated) - A Racket library (e.g., to
-         implement regexps) that has been fully macro expanded and
-         flattened into a linklet from its source in "../*". A
-         linklet's only free variables are primitives that will be
-         implemented by various ".sls" libraries in lower layers.
+ compiled/*.rktl (generated) - A Racket library (e.g., to implement
+         regexps) that has been fully macro expanded and flattened
+         into a linklet from its source in "../*". A linklet's only
+         free variables are primitives that will be implemented by
+         various ".sls" libraries in lower layers.
 
          For example, "../thread" contains the implementation (in
          Racket) of the thread and event subsystem.
@@ -180,10 +180,6 @@ Files in this directory:
  demo/*.ss - Chez Scheme scripts to check that a library basically
          works. For example "demo/regexp.ss" runs the regexp matcher
          on a few examples. To run "demo/*.ss", use `make *-demo`.
-
- ../schemify/schemify.rkt - Source of "compiled/schemify.scm", which
-         is part of the implementation of linklets --- specifically,
-         for compiling a Racket linklet to a Chez Scheme procedure.
 
  other *.rkt - Racket scripts like "convert.rkt" or comparisions like
          "demo/regexp.rkt". For example, you can run "demo/regexp.rkt"

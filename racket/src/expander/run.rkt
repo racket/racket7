@@ -34,6 +34,8 @@
 (define cache-skip-first? #f)
 (define time-expand? #f)
 (define print-extracted-to #f)
+(define dependencies-target #f)
+(define dependencies-file #f)
 (define extract-to-c? #f)
 (define extract-to-decompiled? #f)
 (define instance-knot-ties (make-hasheq))
@@ -78,6 +80,9 @@
    [("-o" "--output") file "Print extracted bootstrap linklet to <file>"
     (when print-extracted-to (raise-user-error 'run "the `-O` flag implies `-o`, so don't use both"))
     (set! print-extracted-to file)]
+   [("--depends") target file "Record makefile dependency for <target> in <file>"
+    (set! dependencies-target target)
+    (set! dependencies-file file)]
    #:once-any
    [("-C") "Print extracted bootstrap as a C encoding"
     (set! extract-to-c? #t)]
@@ -145,10 +150,14 @@
 (current-library-collection-paths (host:current-library-collection-paths))
 (current-library-collection-links (host:current-library-collection-links))
 
+;; Record all files that contribute to the result
+(define dependencies (make-hash))
+
 ;; Replace the load handler to stash compiled modules in the cache
 ;; and/or load them from the cache
 (define orig-load (current-load))
 (current-load (lambda (path expected-module)
+                (hash-set! dependencies (simplify-path (path->complete-path path)) #t)
                 (cond
                  [expected-module
                   (let loop ()
@@ -262,3 +271,13 @@
 
 (when load-file
   (load load-file))
+
+(when dependencies-file
+  (call-with-output-file*
+   dependencies-file
+   #:exists 'truncate/replace
+   (lambda (o)
+     (fprintf o "~a:" dependencies-target)
+     (for ([dep (in-hash-keys dependencies)])
+       (fprintf o " \\\n  ~a" dep))
+     (newline o))))

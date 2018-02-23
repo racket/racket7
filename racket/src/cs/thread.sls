@@ -97,12 +97,12 @@
         'threaded? rumble:threaded?)]
       [else #f]))
 
-
   ;; Tie knots:
   (define (check-for-break) (1/check-for-break))
   (define (break-enabled) (1/break-enabled))
 
-  (include "compiled/thread.scm")
+  (include "include.ss")
+  (include-generated "thread.scm")
 
   (set-engine-exit-handler!
    (lambda (v)

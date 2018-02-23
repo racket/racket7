@@ -1,3 +1,5 @@
+# This makefile can be used directly or driven by other makefiles.
+# See "../expander/Makefile" for more notes.
 
 RACKET = ../../bin/racket
 RACO = $(RACKET) -N raco -l- raco
@@ -11,13 +13,22 @@ RKTIO_LIBRARY_TARGET = rktio-library
 # around a limitation of the flattener:
 IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
 
-io-src: compiled/rktio.rktl
-	$(RACO) make main.rkt
-	$(RACO) make ../expander/bootstrap-run.rkt
-	$(MAKE) compiled/io.rktl
+# `$(GENERATED_RKTL)` appears as a dependency target in "$(BUILDDIR)expander.d"
+GENERATED_RKTL = $(BUILDDIR)compiled/io.rktl
 
-compiled/io.rktl: compiled/main_rkt.zo ../expander/compiled/bootstrap-run_rkt.zo
-	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt --submod main -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/io.rktl
+io-src: $(BUILDDIR)compiled/rktio.rktl
+	$(RACO) make ../expander/bootstrap-run.rkt
+	$(MAKE) $(GENERATED_RKTL)
+
+DIRECT_DEP = ../expander/compiled/bootstrap-run_rkt.zo compiled/rktio.rktl
+SAVE_DEPS = --depends $(GENERATED_RKTL) $(BUILDDIR)compiled/io.d
+
+$(GENERATED_RKTL): $(DIRECT_DEP)
+	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt --submod main -c $(BUILDDIR)compiled/cache-src -k ../.. $(IGNORE) -s -x $(SAVE_DEPS) -o $(GENERATED_RKTL)
+
+# Dependencies in "expander.d" are created via the "cs" makefile
+-include $(BUILDDIR)expander.d
+-include $(BUILDDIR)compiled/io.d
 
 demo: compiled/rktio.rktl
 	$(RACO) make demo.rkt
@@ -27,11 +38,14 @@ demo-thread: compiled/rktio.rktl
 	$(RACO) make demo-thread.rkt
 	$(RACKET) demo-thread.rkt
 
+GENERATED_RKTIO_RKTL = $(BUILDDIR)compiled/rktio.rktl
 
-compiled/rktio.rktl: ../rktio/parse.rkt ../rktio/rktio.h
+$(GENERATED_RKTIO_RKTL): ../rktio/parse.rkt ../rktio/rktio.h
 	$(MAKE) $(RKTIO_LIBRARY_TARGET)
-	mkdir -p compiled
-	$(RACKET) ../rktio/parse.rkt -o compiled/rktio.rktl ../rktio/rktio.h
+	mkdir -p $(BUILDDIR)compiled
+	$(RACKET) ../rktio/parse.rkt -o $(GENERATED_RKTIO_RKTL) ../rktio/rktio.h
+
+-include $(BUILDDIR)compiled/rktio.d
 
 skip:
 	echo Not building stand-along rktio

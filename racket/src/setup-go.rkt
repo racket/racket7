@@ -15,7 +15,8 @@
 ;; where <mod-file> is the file to load (bootstrapping as needed), and
 ;; the <arg>s are made the command-line argument for <mod-file>. The
 ;; <target-file> is the output file that <mod-file> generates. The
-;; <dep-file/tag> is written as makefile rule for <target-file>.
+;; <dep-file/tag> is written as makefile rule for <target-file>, where
+;; a "$" is added to the front of <target-file> if it's parenthesized.
 ;;
 ;; If <target-file> is `--tag`, then <dep-file/tag> specifies a tag to
 ;; get stripped form <arg>, there the target file is immediately after
@@ -48,7 +49,7 @@
                             (let-values ([(base name dir?) (split-path target-file)])
                               (path-replace-suffix name #".d"))
                             (vector-ref (current-command-line-arguments) 4)))
-  (define mod-file (vector-ref (current-command-line-arguments) 5))
+  (define mod-file (simplify-path (path->complete-path (vector-ref (current-command-line-arguments) 5))))
   (parameterize ([current-command-line-arguments
                   ;; Discard `--boot` through arguments to this
                   ;; module, and also strip `target-tag` (if any).
@@ -92,7 +93,9 @@
       (call-with-output-file make-dep-file
         #:exists 'truncate
         (lambda (o)
-          (fprintf o "~a: " target-file)
+          (fprintf o "~a: " (if (regexp-match? #rx"^[(].*[)]$" target-file)
+                                (string-append "$" target-file)
+                                target-file))
           (for ([dep (in-list deps)])
             (fprintf o " \\\n ~a" dep))
           (newline o))))))

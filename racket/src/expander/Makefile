@@ -1,3 +1,7 @@
+# This makefile can be used directly, in which case it writes to a
+# "compiled" subdirectory, or it can be driven by other makefiles that
+# redirect to a different build dierctory by setting `BUILDDIR` and
+# other variables.
 
 RACKET = ../../bin/racket
 RACO = $(RACKET) -N raco -l- raco
@@ -25,12 +29,25 @@ expander:
 	$(RACO) make bootstrap-run.rkt
 	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) $(DIRECT) $(PURE) -O $(TREE)
 
+# Besides here, `$(GENERATED_RKTL)` appears as a dependency target
+# in "$(BUILDDIR)expander.d" when that file is genererated by
+# the "cs/c" makefile driving this one
+GENERATED_RKTL = $(BUILDDIR)compiled/expander.rktl
+
 expander-src:
 	$(RACO) make bootstrap-run.rkt
-	$(MAKE) compiled/expander.rktl
+	$(MAKE) $(GENERATED_RKTL)
 
-compiled/expander.rktl: compiled/main_rkt.zo
-	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) $(DIRECT) $(PURE) -k $(TREE) -s -x -o compiled/expander.rktl
+DIRECT_DEP = compiled/main_rkt.zo
+
+$(GENERATED_RKTL): $(DIRECT_DEP)
+	$(RACKET) bootstrap-run.rkt -c $(BUILDDIR)compiled/cache-src $(KNOT) $(DIRECT) $(PURE) -k $(TREE) -s -x -o $(BUILDDIR)compiled/expander.rktl
+
+# Dependencies in "expander.d" are created via the "cs" makefile, which
+# sets `RACKET` to be a bootstrapping load; the result doubles as
+# dependencies both for bootstrapping "bootstrap-run.rkt" and for the
+# generated flattened expander
+-include $(BUILDDIR)expander.d
 
 demo:
 	$(RACO) make demo.rkt

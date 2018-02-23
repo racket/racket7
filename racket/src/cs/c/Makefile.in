@@ -1,4 +1,5 @@
 srcdir = @srcdir@
+builddir = @builddir@
 
 SCHEME_SRC = @SCHEME_SRC@
 MACH = @MACH@
@@ -35,7 +36,7 @@ mainsrcdir = @srcdir@/../..
 
 cs:
 	$(MAKE) scheme
-	$(MAKE) racket.so
+	$(MAKE) racket-so
 	cd rktio; $(MAKE)
 	$(MAKE) racketcs
 	$(MAKE) gracketcs
@@ -43,12 +44,62 @@ cs:
 
 ABS_RACKET = "`$(RACKET) $(srcdir)/../absify.rkt --exec $(RACKET)`"
 ABS_SCHEME_SRC = "`$(RACKET) $(srcdir)/../absify.rkt $(SCHEME_SRC)`"
+ABS_SRCDIR = "`$(RACKET) $(srcdir)/../absify.rkt $(srcdir)`"
+ABS_BUILDDIR = "`$(RACKET) $(srcdir)/../absify.rkt $(builddir)`"
 
-racket.so:
-	$(MAKE) build-racket.so RACKET="$(ABS_RACKET)" SCHEME_SRC="$(ABS_SCHEME_SRC)" RKTIO_LIBRARY_TARGET=skip
+SETUP_BOOT = -W 'info@compiler/cm error' -l- setup --boot $(srcdir)/../../setup-go.rkt $(builddir)/compiled
 
-build-racket.so:
-	cd $(srcdir)/.. && @CONFIGURE_RACKET_SO_COMPILE@ $(MAKE) RACKET="$(RACKET)" SCHEME="$(SCHEME)"
+# The "expander", "thread", "io", "regexp", and "schemify" makefiles
+# all use "expander.d", but they set `GENERATED_RKTL` so it refers to
+# the specific generated ".rktl"
+BOOTSTRAP_RACKET = $(RACKET) $(SETUP_BOOT) '(GENERATED_RKTL)' $(builddir)/expander.d
+
+RKTIO_RACKET = $(RACKET) $(SETUP_BOOT) '(GENERATED_RKTIO_RKTL)' $(builddir)/rktio.d
+CONVERT_RACKET = $(RACKET) $(SETUP_BOOT) convert $(builddir)/convert.d
+
+racket-so:
+	$(MAKE) bounce TARGET=build-racket-so RKTIO_LIBRARY_TARGET=skip
+
+RACKET_SO_ENV = @CONFIGURE_RACKET_SO_COMPILE@ env COMPILED_SCM_DIR="$(builddir)/compiled/"
+
+build-racket-so:
+	$(MAKE) expander
+	$(MAKE) thread
+	$(MAKE) io-rktio
+	$(MAKE) io
+	$(MAKE) regexp
+	$(MAKE) schemify
+	$(MAKE) known
+	cd $(srcdir)/.. && $(RACKET_SO_ENV) $(MAKE) "$(builddir)/racket.so" RACKET="$(RACKET)" SCHEME="$(SCHEME)" BUILDDIR="$(builddir)/" CONVERT_RACKET="$(CONVERT_RACKET)"
+
+bounce:
+	$(MAKE) RACKET="$(ABS_RACKET)" SCHEME_SRC="$(ABS_SCHEME_SRC)" srcdir="$(ABS_SRCDIR)" builddir="$(ABS_BUILDDIR)" $(TARGET)
+
+# You can't make `expander`, `thread`, etc., directly, because
+# `builddir` and `srcdir` are not necessarily absolute. But you can
+# `make bounce TARGET=expander`, etc.
+
+expander:
+	cd $(srcdir)/../../expander && $(MAKE) $(builddir)/compiled/expander.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+
+thread:
+	cd $(srcdir)/../../thread && $(MAKE) $(builddir)/compiled/thread.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+
+io-rktio:
+	cd $(srcdir)/../../io && $(MAKE) $(builddir)/compiled/rktio.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP="" RKTIO_LIBRARY_TARGET=skip
+
+RKTIO_ENV = env RKTIO_RKTL_DIR="$(builddir)/compiled/"
+io:
+	cd $(srcdir)/../../io && $(RKTIO_ENV) $(MAKE) $(builddir)/compiled/io.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+
+regexp:
+	cd $(srcdir)/../../regexp && $(MAKE) $(builddir)/compiled/regexp.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+
+schemify:
+	cd $(srcdir)/../../schemify && $(MAKE) $(builddir)/compiled/schemify.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+
+known:
+	cd $(srcdir)/../../schemify && $(MAKE) $(builddir)/compiled/known.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP="" MAIN_RKTL="known.rktl"
 
 scheme:
 	$(MAKE) $(SCHEME_BIN)
@@ -62,11 +113,11 @@ $(SCHEME_BIN):
 
 EMBED_DEPS = $(srcdir)/embed-boot.rkt
 
-racketcs@NOT_OSX@: raw_racketcs $(srcdir)/../racket.so $(EMBED_DEPS)
-	$(RACKET) $(srcdir)/embed-boot.rkt raw_racketcs racketcs $(SCHEME_INC) $(srcdir)/../racket.so
+racketcs@NOT_OSX@: raw_racketcs racket.so $(EMBED_DEPS)
+	$(RACKET) $(srcdir)/embed-boot.rkt raw_racketcs racketcs $(SCHEME_INC) racket.so
 
-gracketcs@NOT_OSX@: raw_gracketcs $(srcdir)/../racket.so $(EMBED_DEPS)
-	$(RACKET) $(srcdir)/embed-boot.rkt raw_gracketcs gracketcs $(SCHEME_INC) $(srcdir)/../racket.so
+gracketcs@NOT_OSX@: raw_gracketcs racket.so $(EMBED_DEPS)
+	$(RACKET) $(srcdir)/embed-boot.rkt raw_gracketcs gracketcs $(SCHEME_INC) racket.so
 
 BOOT_OBJS = boot.o $(SCHEME_INC)/kernel.o rktio/librktio.a
 
@@ -99,7 +150,7 @@ $(GRACKET_BIN): grmain.o $(RKTFW) $(GRAPPSKEL)
 $(GRAPPSKEL): $(srcdir)/../../mac/osx_appl.rkt  $(srcdir)/../../racket/src/schvers.h $(srcdir)/../../mac/icon/GRacket.icns
 	env $(RACKET) $(srcdir)/../../mac/osx_appl.rkt $(srcdir)/../.. "CS"
 
-BOOT_FILES = $(SCHEME_INC)/petite.boot $(SCHEME_INC)/scheme.boot $(srcdir)/../racket.so
+BOOT_FILES = $(SCHEME_INC)/petite.boot $(SCHEME_INC)/scheme.boot racket.so
 
 $(RKTFW): $(BOOT_OBJS) $(BOOT_FILES)
 	mkdir -p  Racket.framework/Versions/$(FWVERSION)_CS
@@ -108,7 +159,7 @@ $(RKTFW): $(BOOT_OBJS) $(BOOT_FILES)
 	ln -s Versions/$(FWVERSION)_CS/Racket Racket.framework/Racket
 	mkdir -p Racket.framework/Versions/$(FWVERSION)_CS/boot
 	cp $(SCHEME_INC)/petite.boot $(SCHEME_INC)/scheme.boot Racket.framework/Versions/$(FWVERSION)_CS/boot
-	cp $(srcdir)/../racket.so Racket.framework/Versions/$(FWVERSION)_CS/boot
+	cp racket.so Racket.framework/Versions/$(FWVERSION)_CS/boot
 
 # ----------------------------------------
 # Common

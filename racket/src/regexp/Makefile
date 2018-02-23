@@ -1,3 +1,5 @@
+# This makefile can be used directly or driven by other makefiles.
+# See "../expander/Makefile" for more notes.
 
 RACKET = ../../bin/racket
 RACO = $(RACKET) -N raco -l- raco
@@ -7,13 +9,22 @@ RACO = $(RACKET) -N raco -l- raco
 # around a limitation of the flattener:
 IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
 
-regexp-src:
-	$(RACO) make main.rkt
-	$(RACO) make ../expander/bootstrap-run.rkt
-	$(MAKE) compiled/regexp.rktl
+# `$(GENERATED_RKTL)` appears as a dependency target in "$(BUILDDIR)expander.d"
+GENERATED_RKTL = $(BUILDDIR)compiled/regexp.rktl
 
-compiled/regexp.rktl: compiled/main_rkt.zo ../expander/compiled/bootstrap-run_rkt.zo
-	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt -c compiled/cache-src -k ../.. $(IGNORE) -s -x -o compiled/regexp.rktl
+regexp-src:
+	$(RACO) make ../expander/bootstrap-run.rkt
+	$(MAKE) $(GENERATED_RKTL)
+
+DIRECT_DEP = ../expander/compiled/bootstrap-run_rkt.zo
+SAVE_DEPS = --depends $(GENERATED_RKTL) $(BUILDDIR)compiled/regexp.d
+
+$(GENERATED_RKTL): $(DIRECT_DEP)
+	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt -c $(BUILDDIR)compiled/cache-src -k ../.. $(IGNORE) -s -x $(SAVE_DEPS) -o $(GENERATED_RKTL)
+
+# Dependencies in "expander.d" are created via the "cs" makefile
+-include $(BUILDDIR)expander.d
+-include $(BUILDDIR)compiled/regexp.d
 
 demo:
 	$(RACO) make demo.rkt

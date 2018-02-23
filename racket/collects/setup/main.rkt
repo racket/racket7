@@ -148,7 +148,7 @@
                         (if (and (pair? (cdr flags))
                                  (pair? (cddr flags)))
                             (begin
-                              (set! go-module (cadr flags))
+                              (set! go-module (list 'file (cadr flags)))
                               (set! print-loading-sources? #t)
                               (let ([root (path->complete-path (caddr flags))])
                                 (current-compiled-file-roots (list root)))

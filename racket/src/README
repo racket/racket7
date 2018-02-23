@@ -27,7 +27,8 @@ To build the experimental variant of Racket that runs on Chez Scheme
 see "cs/c/README.txt".
 
 The rest of the instructions below are about building the traditional
-Racket implementation.
+Racket implementation, but a general "Implementation Organization"
+note at the end applies to both variants.
 
 ========================================================================
  Compiling for Windows
@@ -107,10 +108,10 @@ Quick instructions:
    make
    make install
 
- This will create an in-place installation of Racket and store the
- results of C compilation in a separate "build" subdirectory, which
- is useful if you need to update your sources, delete the build, and
- start from scratch.
+ Those commands will create an in-place installation of Racket and
+ store the results of C compilation in a separate "build"
+ subdirectory, which is useful if you need to update your sources,
+ delete the build, and start from scratch.
 
  You can also run the typical `./configure && make && make install` if
  you don't anticipate updating/rebuilding, but it will be harder to
@@ -479,3 +480,61 @@ of built-in identifiers, be sure to update the version number in
 "racket/src/schvers.h", so that various tools know to rebuild
 bytecode. If you add or remove primitives, you'll also need to adjust
 the counter in "racket/src/schminc.h" .
+
+========================================================================
+ Implementation Organization
+========================================================================
+
+Everything in this "src" directory contributes to the implementation
+of the `racket` executable (and variants), while "../collects"
+contains the additional Racket libraries that are included in a
+minimal Racket distribution.
+
+Directories in "src":
+
+ "racket" --- starting point for the traditional Racket implementation
+
+ "cs" --- starting point for the Racket-on-Chez implementation
+
+ "rktio" --- portability layer for low-level I/O, used by "racket" and
+             "cs"
+
+ "start" --- main-executable wrapper, used by "racket" and "cs"
+
+ "foreign" --- the FFI implementation for "racket", including "libffi"
+               (as needed for some platforms)
+
+ "expander" --- the macro expander's implementation, used by "racket"
+                and "cs"; doubles as the "expander" package
+
+ "thread" --- the thread scheduler's implementation, used by "cs"
+
+ "io" --- the Racket I/O implementation, used by "cs"
+
+ "regexp" --- the regexp matcher's implementation, used by "cs"
+
+ "schemify" --- a Racket-to-Scheme compiler, used by "cs" and "cify"
+
+ "cify" --- a Racket-to-C compiler, used by "racket" when embedding
+            the expander as C code instead of Racket bytecode
+
+ "common" --- Racket libraries used by "thread", "io", etc.
+
+ "gracket" --- implementation of the GRacket layer
+
+ "mzcom" --- implementation of the MzCOM layer (for Windows)
+
+ "mysink" --- `ffi/unsafe/com` helper DLL implementation (for Windows)
+
+ "mac" --- scripts for Mac OS ".app"s, used by "gracket"
+
+ "worksp" --- Windows projects and build scripts for "racket"
+
+ "native-libs" --- build scripts for some native-library packages
+
+ "lt" --- libtool/configure support
+
+ "utils" --- miscellaneous
+ 
+ "setup-go.rkt" --- helper script used by parts of the build that need
+                    to run substantial Racket programs

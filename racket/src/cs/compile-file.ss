@@ -42,6 +42,7 @@
 (define whole-program? #f)
 (generate-inspector-information #f)
 (generate-procedure-source-information #t)
+(define build-dir "")
 
 (define-values (src deps)
   (let loop ([args (command-line-arguments)])
@@ -58,15 +59,35 @@
       => (lambda (args)
            (set! whole-program? #t)
            (loop args))]
+     [(get-opt args "--dest" 1)
+      => (lambda (args)
+           (set! build-dir (car args))
+           (loop (cdr args)))]
      [(null? args)
       (error 'compile-file "missing source file")]
      [else
       (values (car args) (cdr args))])))
 
+(define src-so
+  (letrec ([find-dot (lambda (pos)
+                       (let ([pos (sub1 pos)])
+                         (cond
+                          [(zero? pos) (error 'compile-file "can't find extension in ~s" src)]
+                          [(char=? (string-ref src pos) #\.) pos]
+                          [else (find-dot pos)])))])
+    (string-append (substring src 0 (find-dot (string-length src))) ".so")))
+
+(define dest
+  (if (equal? build-dir "")
+      src-so
+      (string-append build-dir src-so)))
+
 (cond
  [whole-program?
   (unless (= 1 (length deps))
     (error 'compile-file "expected a single dependency for whole-program compilation"))
+  (unless (equal? build-dir "")
+    (library-directories (list (cons "." build-dir))))
   (compile-whole-program (car deps) src #t)]
  [else
   (for-each load deps)
@@ -78,4 +99,4 @@
                              [g (gensym (symbol->string sym) (format "rkt-~a-~a-~a" src s n))])
                         (eq-hashtable-set! counter-ht sym (+ n 1))
                         g)))])
-    (compile-file src))])
+    (compile-file src dest))])
