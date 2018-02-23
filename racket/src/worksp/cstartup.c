@@ -1,11 +1,23 @@
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 /* 65535 characters should be enough for any string --- or so says
    MSVC. Convert "startup.inc" to a character array. */
 
 int main(int argc, char **argv) {
+  struct _stat s1, s2;
   FILE *in, *out;
   int c, col = 0;
+
+  if (_stat(argv[1], &s1) == 0) {
+    if (_stat(argv[2], &s2) == 0) {
+      if (s2.st_mtime > s1.st_mtime) {
+	printf("Generated file is already newer than source\n");
+	return 0;
+      }
+    }
+  }
 
   in = fopen(argv[1], "r");
   out = fopen(argv[2], "w");
