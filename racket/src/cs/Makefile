@@ -140,7 +140,7 @@ regexp-rktl:
 io-demo: $(BUILDDIR)io.so
 	$(SCHEME) $(IO_DEPS) $(BUILDDIR)io.so demo/io.ss
 
-$(BUILDDIR)io.so: $(BUILDDIR)compiled/io.scm io.sls $(IO_DEPS) $(BUILDDIR)compiled/rktio.rktl $(COMPILE_FILE_DEPS)
+$(BUILDDIR)io.so: $(BUILDDIR)compiled/io.scm io.sls $(IO_DEPS) ../rktio/rktio.rktl $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) io.sls $(IO_DEPS)
 
 $(BUILDDIR)compiled/io.scm: $(BUILDDIR)compiled/io.rktl $(CONVERT_DEPS)

@@ -28,10 +28,6 @@
 
   ;; ----------------------------------------
 
-  (include "include.ss")
-
-  ;; ----------------------------------------
-
   (module (|#%rktio-instance| ptr->address)
     (meta define (convert-type t)
           (syntax-case t (ref *ref rktio_bool_t rktio_const_string_t)
@@ -171,7 +167,7 @@
     (define (rktio-lookup name)
       (foreign-entry (symbol->string name)))
 
-    (include-generated "rktio.rktl")
+    (include "../rktio/rktio.rktl")
 
     (define (rktio_filesize_ref fs)
       (ftype-ref rktio_filesize_t () (make-ftype-pointer rktio_filesize_t (ptr->address fs))))
@@ -331,7 +327,7 @@
                                  'rktio_do_install_os_signal_handler rktio_do_install_os_signal_handler
                                  'rktio_get_ctl_c_handler rktio_get_ctl_c_handler]
                                 form ...)]))
-        (include-generated "rktio.rktl"))))
+        (include "../rktio/rktio.rktl"))))
   
   ;; ----------------------------------------
 
@@ -385,6 +381,7 @@
       [(|#%rktio|) |#%rktio-instance|]
       [else #f]))
 
+  (include "include.ss")
   (include-generated "io.scm")
   
   ;; Initialize:

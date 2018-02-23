@@ -38,17 +38,7 @@
 (define-syntax-rule (define-function/errno+step _ _ _ name . _)
   (define-function () #f name))
 
-;; Read "rktio.rktl" from a directory that can be
-;; configured through an environment variable(!)
-(define-syntax (include-rktio stx)
-  (define dir (getenv "RKTIO_RKTL_DIR"))
-  (with-syntax ([path (if dir
-                          (datum->syntax
-                           #'here
-                           `(file ,(string-append dir "rktio.rktl")))
-                          #'"../compiled/rktio.rktl")])
-    #`(include-at/relative-to #,stx #,stx path)))
-(include-rktio)
+(include "../../rktio/rktio.rktl")
 
 (define-function () #f rktio_filesize_ref)
 (define-function () #f rktio_timestamp_ref)

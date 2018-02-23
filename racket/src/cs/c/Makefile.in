@@ -58,14 +58,13 @@ RKTIO_RACKET = $(RACKET) $(SETUP_BOOT) '(GENERATED_RKTIO_RKTL)' $(builddir)/rkti
 CONVERT_RACKET = $(RACKET) $(SETUP_BOOT) convert $(builddir)/convert.d
 
 racket-so:
-	$(MAKE) bounce TARGET=build-racket-so RKTIO_LIBRARY_TARGET=skip
+	$(MAKE) bounce TARGET=build-racket-so
 
 RACKET_SO_ENV = @CONFIGURE_RACKET_SO_COMPILE@ env COMPILED_SCM_DIR="$(builddir)/compiled/"
 
 build-racket-so:
 	$(MAKE) expander
 	$(MAKE) thread
-	$(MAKE) io-rktio
 	$(MAKE) io
 	$(MAKE) regexp
 	$(MAKE) schemify
@@ -85,12 +84,8 @@ expander:
 thread:
 	cd $(srcdir)/../../thread && $(MAKE) $(builddir)/compiled/thread.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
 
-io-rktio:
-	cd $(srcdir)/../../io && $(MAKE) $(builddir)/compiled/rktio.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP="" RKTIO_LIBRARY_TARGET=skip
-
-RKTIO_ENV = env RKTIO_RKTL_DIR="$(builddir)/compiled/"
 io:
-	cd $(srcdir)/../../io && $(RKTIO_ENV) $(MAKE) $(builddir)/compiled/io.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+	cd $(srcdir)/../../io && $(MAKE) $(builddir)/compiled/io.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
 
 regexp:
 	cd $(srcdir)/../../regexp && $(MAKE) $(builddir)/compiled/regexp.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
@@ -176,11 +171,8 @@ main.o: $(MAIN_DEPS)
 grmain.o: $(srcdir)/grmain.c $(MAIN_DEPS) $(srcdir)/../../start/gui_filter.inc
 	$(CC) $(CFLAGS) $(DEF_C_DIRS) -c -o grmain.o $(srcdir)/grmain.c
 
-boot.o: $(srcdir)/boot.c rktio.inc $(srcdir)/boot.h
+boot.o: $(srcdir)/boot.c $(srcdir)/../../rktio/rktio.inc $(srcdir)/boot.h
 	$(CC) $(CFLAGS) -c -o boot.o $(srcdir)/boot.c
-
-rktio.inc: $(srcdir)/../../rktio/parse.rkt $(srcdir)/../../rktio/rktio.h
-	$(RACKET) $(srcdir)/../../rktio/parse.rkt -c -o rktio.inc $(srcdir)/../../rktio/rktio.h
 
 starter: $(srcdir)/../../start/ustart.c
 	$(CC) $(CFLAGS) -o starter $(srcdir)/../../start/ustart.c

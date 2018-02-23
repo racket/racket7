@@ -26,10 +26,13 @@ Requirements
 
    By default, `make` will use the enclosing Racket build. Go back to
    the root of this repository/distribution and build so that at least
-   the "compiler-lib" and "parser-tools-lib" packages are installed,
-   either with just `make` (for a full build) or with
+   the "compiler-lib" package is installed, either with just `make`
+   (for a full build) or with
 
-      make PKGS="compiler-lib parser-tools-lib"
+      make PKGS="compiler-lib"
+
+   Note that if you build as described in "./c/README.txt", then you
+   don't need the "compiler-lib" package.
 
    If you'd like to use an existing installation of Racket, instead,
    you can use `make RACKET=...` to set the command for `racket`.

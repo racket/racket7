@@ -1,8 +1,6 @@
 #lang racket/base
 (require '#%linklet
          racket/pretty
-         compiler/zo-parse
-         compiler/decompile
          "../run/status.rkt")
 
 (provide compile-and-decompile)
@@ -19,8 +17,11 @@
   (write (hash->linklet-bundle (hasheq 0 linklet)) o)
 
   (define i (open-input-bytes (get-output-bytes o)))
-  (define zo (zo-parse i))
-  (define decompiled-expr (decompile zo))
+
+  ;; Dynamically load decompiler, so that it's not otherwise a
+  ;; dependency for running the expander-flattener
+  (define zo ((dynamic-require 'compiler/zo-parse 'zo-parse) i))
+  (define decompiled-expr ((dynamic-require 'compiler/decompile 'decompile) zo))
   
   (call-with-output-file*
    print-extracted-to

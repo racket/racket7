@@ -313,6 +313,12 @@
 (if output-file
     (with-output-to-file output-file
       #:exists 'truncate
-      (lambda () (show-content)))
+      (lambda ()
+        (cond
+          [c-mode?
+           (printf "/* Extracted from rktio.h by rktio/parse.rkt */\n")]
+          [else
+           (printf ";; Extracted from rktio.h by rktio/parse.rkt\n")])
+        (show-content)))
     (show-content))
 
