@@ -267,7 +267,7 @@ static void extract_built_in_arguments(char **_prog, char **_sprog, int *_argc, 
       while ((l > 0) && ((prog[l-1] == ' ') || (prog[l-1] == '.'))) {
 	l--;
       }
-      s  = (char *)scheme_malloc_atomic(l + 1);
+      s  = (char *)malloc(l + 1);
       memcpy(s, prog, l);
       s[l] = 0;
       prog = s;
@@ -278,7 +278,7 @@ static void extract_built_in_arguments(char **_prog, char **_sprog, int *_argc, 
 	|| (tolower(((unsigned char *)prog)[l - 2]) != 'x')
 	|| (tolower(((unsigned char *)prog)[l - 1]) != 'e')) {
       char *s;
-      s  = (char *)scheme_malloc_atomic(l + 4 + 1);
+      s  = (char *)malloc(l + 4 + 1);
       memcpy(s, prog, l);
       memcpy(s + l, ".exe", 5);
       prog = s;

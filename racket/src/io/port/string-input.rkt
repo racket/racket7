@@ -318,7 +318,8 @@
     (cond
       [(and b
             (or (eof-object? b)
-                (b . < . 128)))
+	    	(and (byte? b)
+                     (b . < . 128))))
        ;; Shortcut worked
        (if (eof-object? b) b (integer->char b))]
       [else

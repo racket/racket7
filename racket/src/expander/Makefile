@@ -3,6 +3,8 @@
 # redirect to a different build dierctory by setting `BUILDDIR` and
 # other variables.
 
+# Beware that this makefile is used both for GNU make and for nmake!
+
 RACKET = ../../bin/racket
 RACO = $(RACKET) -N raco -l- raco
 
@@ -43,11 +45,22 @@ DIRECT_DEP = compiled/main_rkt.zo
 $(GENERATED_RKTL): $(DIRECT_DEP)
 	$(RACKET) bootstrap-run.rkt -c $(BUILDDIR)compiled/cache-src $(KNOT) $(DIRECT) $(PURE) -k $(TREE) -s -x -o $(BUILDDIR)compiled/expander.rktl
 
+# The next two lines make both GNU make and nmake happy, and they
+# cause nmake to not see the `-include`. The trick is that nmake
+# doesn't recognize backslash as a comment continuation.
+# \
+!if 0
+
 # Dependencies in "expander.d" are created via the "cs" makefile, which
 # sets `RACKET` to be a bootstrapping load; the result doubles as
 # dependencies both for bootstrapping "bootstrap-run.rkt" and for the
 # generated flattened expander
 -include $(BUILDDIR)expander.d
+
+# \
+!endif
+# \
+!include ..\build\expander.d
 
 demo:
 	$(RACO) make demo.rkt

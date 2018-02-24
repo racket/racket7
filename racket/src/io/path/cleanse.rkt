@@ -12,12 +12,13 @@
 (define/who (cleanse-path p-in)
   (check-path-argument who p-in)
   (define p (->path p-in))
+  (define convention (path-convention p))
   (define (return bstr)
     (if (eq? bstr (path-bytes p))
         p
-        (path bstr 'unix)))
+        (path bstr convention)))
   (define bstr (path-bytes p))
-  (case (path-convention p)
+  (case convention
     [(unix)
      (return (clean-double-slashes bstr 'unix 0))]
     [(windows)
@@ -49,8 +50,8 @@
              (return (clean-double-slashes bstr 'windows drive-len)))]
        [(letter-drive-start? bstr (bytes-length bstr))
         (cond
-          [(and ((bytes-length bstr) . > . 3)
-                (is-sep? (bytes-ref bstr 3) 'windows))
+          [(and ((bytes-length bstr) . > . 2)
+                (is-sep? (bytes-ref bstr 2) 'windows))
            (return (clean-double-slashes bstr 'windows 2))]
           [else
            (return (bytes-append (subbytes bstr 0 2)

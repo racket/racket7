@@ -12,7 +12,9 @@ IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
 # `$(GENERATED_RKTL)` appears as a dependency target in "$(BUILDDIR)expander.d"
 GENERATED_RKTL = $(BUILDDIR)compiled/io.rktl
 
-io-src: ../build/so-rktio/Makefile
+RKTIO_DEP=../build/so-rktio/Makefile
+
+io-src: $(RKTIO_DEP)
 	$(RACO) make ../expander/bootstrap-run.rkt
 	$(MAKE) $(GENERATED_RKTL)
 
@@ -22,9 +24,19 @@ SAVE_DEPS = --depends $(GENERATED_RKTL) $(BUILDDIR)compiled/io.d
 $(GENERATED_RKTL): $(DIRECT_DEP)
 	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt --submod main -c $(BUILDDIR)compiled/cache-src -k ../.. $(IGNORE) -s -x $(SAVE_DEPS) -o $(GENERATED_RKTL)
 
+# \
+!if 0
+
 # Dependencies in "expander.d" are created via the "cs" makefile
 -include $(BUILDDIR)expander.d
 -include $(BUILDDIR)compiled/io.d
+
+# \
+!endif
+# \
+!include ..\build\expander_io.d
+# \
+!include ..\build\compiled\io.d
 
 demo: compiled/rktio.rktl
 	$(RACO) make demo.rkt

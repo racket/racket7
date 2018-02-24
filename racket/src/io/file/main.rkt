@@ -344,7 +344,7 @@
     [(rktio-error? r)
      ;; Errors are not reported, but are treated like non-links
      (define new-path (host-> host-path))
-     ;; If cleansing didn't change p, then return an `eq?`path
+     ;; If cleansing didn't change p, then return an `eq?` path
      (cond
        [(equal? new-path p) p]
        [else new-path])]

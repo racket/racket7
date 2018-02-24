@@ -1,3 +1,6 @@
+# This makefile is used to a limited degree with nmake, but it mostly
+# intended for use as a GNU makefile.
+
 RACKET = ../../bin/racket
 SCHEME = scheme
 
@@ -64,7 +67,7 @@ $(BUILDDIR)main.so: $(MAIN_DEPS) main.sps $(COMPILE_FILE_DEPS)
 	$(COMPILE_FILE) main.sps $(MAIN_DEPS)
 
 strip:
-	${SCHEME} --script strip.ss $(MAIN_DEPS) $(BUILDDIR)racket.so
+	$(SCHEME) --script strip.ss $(MAIN_DEPS) $(BUILDDIR)racket.so
 
 rktl:
 	$(MAKE) thread-rktl

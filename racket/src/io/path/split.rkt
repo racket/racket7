@@ -76,7 +76,7 @@
                                        3]
                                       [else 2])
                          #:explode? explode?)]
-     [(split-after-drive p #:explode? explode?)])]))
+     [else (split-after-drive p #:explode? explode?)])]))
 
 ;; ----------------------------------------
 

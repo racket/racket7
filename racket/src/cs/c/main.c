@@ -1,7 +1,15 @@
-#include <unistd.h>
+#ifndef _MSC_VER
+# include <unistd.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#ifdef _MSC_VER
+# include <Windows.h>
+# define DOS_FILE_SYSTEM
+static int scheme_utf8_encode(unsigned int *path, int zero_offset, int len,
+			      char *dest, int dest_len, int get_utf16);
+#endif
 #include "boot.h"
 
 #define MZ_CHEZ_SCHEME
@@ -60,6 +68,27 @@ static char *get_self_path()
   }
   buf[len] = 0;
   return strdup(buf);
+}
+#endif
+
+#ifdef _MSC_VER
+static char *get_self_path()
+{
+  wchar_t *p = get_self_executable_path();
+  char *r;
+  int len;
+
+  len = WideCharToMultiByte(CP_UTF8, 0, p, -1, NULL, 0, NULL, NULL);
+  r = malloc(len);
+  len = WideCharToMultiByte(CP_UTF8, 0, p, -1, r, len, NULL, NULL);
+
+  return r;
+}
+
+static int scheme_utf8_encode(unsigned int *path, int zero_offset, int len,
+			      char *dest, int dest_len, int get_utf16)
+{
+  return WideCharToMultiByte(CP_UTF8, 0, (wchar_t *)path, len, dest, dest_len, NULL, NULL);
 }
 #endif
 

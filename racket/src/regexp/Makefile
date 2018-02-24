@@ -22,9 +22,19 @@ SAVE_DEPS = --depends $(GENERATED_RKTL) $(BUILDDIR)compiled/regexp.d
 $(GENERATED_RKTL): $(DIRECT_DEP)
 	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt -c $(BUILDDIR)compiled/cache-src -k ../.. $(IGNORE) -s -x $(SAVE_DEPS) -o $(GENERATED_RKTL)
 
+# \
+!if 0
+
 # Dependencies in "expander.d" are created via the "cs" makefile
 -include $(BUILDDIR)expander.d
 -include $(BUILDDIR)compiled/regexp.d
+
+# \
+!endif
+# \
+!include ..\build\expander_regexp.d
+# \
+!include ..\build\compiled\regexp.d
 
 demo:
 	$(RACO) make demo.rkt

@@ -91,14 +91,17 @@
       ;; it mangles parameters)
       (define deps (cons mod-file
                          (module-recorded-dependencies mod-file)))
+      (define (quote-if-space s)
+	;; We're not handling arbitrary paths, but at least support spaces
+	(if (regexp-match? #rx" " s) (format "\"~a\"" s) s))
       (call-with-output-file make-dep-file
         #:exists 'truncate
         (lambda (o)
           (fprintf o "~a: " (if (regexp-match? #rx"^[(].*[)]$" target-file)
                                 (string-append "$" target-file)
-                                target-file))
+                                (quote-if-space target-file)))
           (for ([dep (in-list deps)])
-            (fprintf o " \\\n ~a" dep))
+            (fprintf o " \\\n ~a" (quote-if-space dep)))
           (newline o)))
 
       ;; Now that the lock is released, instantiate:

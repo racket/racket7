@@ -93,9 +93,9 @@
     (hash-update! instance-knot-ties
                   (string->symbol (format "#%~a" sym))
                   (lambda (l) (cons (if (equal? path "-")
-                                   'ignore
-                                   (path->complete-path path))
-                               l))
+					'ignore
+					(path->complete-path (normal-case-path path)))
+				    l))
                   null)]
    [("++direct") primitive-table "Redirect imports from #%<primitive-table> to direct references"
     (hash-set! primitive-table-directs
@@ -273,11 +273,12 @@
   (load load-file))
 
 (when dependencies-file
+  (define (quote-if-space s) (if (regexp-match? #rx" " s) (format "\"~a\"" s) s))
   (call-with-output-file*
    dependencies-file
    #:exists 'truncate/replace
    (lambda (o)
-     (fprintf o "~a:" dependencies-target)
+     (fprintf o "~a:" (quote-if-space dependencies-target))
      (for ([dep (in-hash-keys dependencies)])
-       (fprintf o " \\\n  ~a" dep))
+       (fprintf o " \\\n  ~a" (quote-if-space dep)))
      (newline o))))

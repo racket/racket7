@@ -29,6 +29,7 @@
 
 (define output-file #f)
 (define c-mode? #f)
+(define .def-mode? #f)
 
 (define input-file
   (command-line
@@ -37,6 +38,8 @@
     (set! output-file file)]
    [("-c") "Generate foreign-symbol registration"
     (set! c-mode? #t)]
+   [("-d") "Generate .def file"
+    (set! .def-mode? #t)]
    #:args
    (file)
    file))
@@ -293,22 +296,30 @@
         (filter (lambda (e) (not (or (constant-defn? e) (type-defn? e))))
                 unsorted-content))))
 
+(define (function-definition? e)
+  (and (pair? e)
+       (or (eq? 'define-function (car e))
+           (eq? 'define-function/errno (car e))
+           (eq? 'define-function/errno+step (car e)))))
+
 (define (show-content)
   (cond
-    [(not c-mode?)
+    [c-mode?
+     (for ([e (in-list content)]
+           #:when (function-definition? e))
+       (define n (list-ref e (- (length e) 2)))
+       (printf "Sforeign_symbol(~s, (void *)~a);\n" (symbol->string n) n))]
+    [.def-mode?
+     (for ([e (in-list content)]
+           #:when (function-definition? e))
+       (define n (list-ref e (- (length e) 2)))
+       (printf "~a\n" n))]
+    [else
      (printf "(begin\n")
      (for ([e (in-list content)]
            #:when e)
        (pretty-write e))
-     (printf ")\n")]
-    [else
-     (for ([e (in-list content)]
-           #:when (and (pair? e)
-                       (or (eq? 'define-function (car e))
-                           (eq? 'define-function/errno (car e))
-                           (eq? 'define-function/errno+step (car e)))))
-       (define n (list-ref e (- (length e) 2)))
-       (printf "Sforeign_symbol(~s, (void *)~a);\n" (symbol->string n) n))]))
+     (printf ")\n")]))
 
 (if output-file
     (with-output-to-file output-file
@@ -317,8 +328,9 @@
         (cond
           [c-mode?
            (printf "/* Extracted from rktio.h by rktio/parse.rkt */\n")]
+          [.def-mode?
+           (printf "EXPORTS\n")]
           [else
            (printf ";; Extracted from rktio.h by rktio/parse.rkt\n")])
         (show-content)))
     (show-content))
-

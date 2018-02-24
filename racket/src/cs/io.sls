@@ -161,7 +161,7 @@
 
     (define loaded-librktio
       (or (foreign-entry? "rktio_init")
-          (load-shared-object (string-append "../../lib/librktio"
+          (load-shared-object (string-append (string-append (current-directory) "/../../lib/librktio")
                                              (utf8->string (system-type 'so-suffix))))))
 
     (define (rktio-lookup name)

@@ -1,4 +1,6 @@
-#include <unistd.h>
+#ifndef _MSC_VER
+# include <unistd.h>
+#endif
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
@@ -78,7 +80,7 @@ void racket_boot(int argc, char **argv, char *self, long segment_offset,
   Sregister_boot_file(path_append(fw_path, "petite.boot"));
   Sregister_boot_file(path_append(fw_path, "scheme.boot"));
 #else
-  fd = open(self, O_RDONLY);
+  fd = open(self, O_RDONLY | O_BINARY);
 
   {
     int fd1, fd2;
@@ -87,7 +89,7 @@ void racket_boot(int argc, char **argv, char *self, long segment_offset,
     lseek(fd1, pos1, SEEK_SET);    
     Sregister_boot_file_fd("petite", fd1);
     
-    fd2 = open(self, O_RDONLY);
+    fd2 = open(self, O_RDONLY | O_BINARY);
     lseek(fd2, pos2, SEEK_SET);
     Sregister_boot_file_fd("scheme", fd2);
   }

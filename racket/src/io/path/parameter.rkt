@@ -11,7 +11,9 @@
 ;; wrapped to include security-guard checks.
 
 (define/who current-directory
-  (make-parameter (path #"/" (system-path-convention-type))
+  (make-parameter (case (system-path-convention-type)
+		    [(unix) (path #"/" 'unix)]
+		    [(windows) (path #"C:\\" 'windows)])
                   (lambda (v)
                     (check-directory-path who v))))
 

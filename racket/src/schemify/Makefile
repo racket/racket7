@@ -33,13 +33,36 @@ S_SAVE_DEPS = --depends $(GENERATED_RKTL) $(BUILDDIR)compiled/schemify.d
 $(S_GENERATED_RKTL): $(S_DIRECT_DEP)
 	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt -c $(BUILDDIR)compiled/cache-src -k ../.. $(IGNORE) -s -x $(S_SAVE_DEPS) -o $(S_GENERATED_RKTL)
 
+# \
+!if 0
+
 # Dependencies in "expander.d" are created via the "cs" makefile
 -include $(BUILDDIR)expander.d
 -include $(BUILDDIR)compiled/schemify.d
+
+# \
+!endif
+# \
+!include ..\build\expander_schemify.d
+# \
+!include ..\build\compiled\schemify.d
 
 K_SAVE_DEPS = --depends $(GENERATED_RKTL) $(BUILDDIR)compiled/known.d
 
 $(K_GENERATED_RKTL): $(DIRECT_DEP)
 	$(RACKET) ../expander/bootstrap-run.rkt -t known.rkt -c $(BUILDDIR)compiled/cache-src -k ../.. $(IGNORE) -s -x $(K_SAVE_DEPS) -o $(K_GENERATED_RKTL)
+
+# \
+!if 0
+
+# Dependencies in "expander.d" are created via the "cs" makefile
+-include $(BUILDDIR)compiled/known.d
+
+# \
+!endif
+# \
+!include ..\build\expander_known.d
+# \
+!include ..\build\compiled\known.d
 
 .PHONY: schemify-src known-src
