@@ -155,11 +155,6 @@ Files in this directory:
          For example, "../thread" contains the implementation (in
          Racket) of the thread and event subsystem.
 
-         CAUTION: The makefile here doesn't track dependencies for
-         "*.rktl" files for any target except the default `make`
-         target. Run `make rktl` if you change any of those
-         implementations when using a target other than the default.
-
  compiled/*.scm (generated) - A conversion from a ".rktl" file to be
          `included`d into an ".sls" library.
 

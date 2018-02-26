@@ -270,7 +270,7 @@
 (define-struct file-dependency (path module?) #:prefab)
 (define-struct (file-dependency/options file-dependency) (table) #:prefab)
 
-(define (compile-zo* path->mode roots path src-sha1 read-src-syntax zo-name up-to-date collection-cache)
+(define (compile-zo* path->mode roots path src-sha1 read-src-syntax orig-zo-name up-to-date collection-cache)
   ;; The `path' argument has been converted to .rkt or .ss form,
   ;;  as appropriate.
   ;; External dependencies registered through reader guard and
@@ -341,7 +341,13 @@
                          (lambda (a b) #f) ; extension handler
                          #:source-reader read-src-syntax))))
   (define dest-roots (list (car roots)))
-  (define code-dir (get-compilation-dir path #:modes (list (path->mode path)) #:roots dest-roots))
+  (define-values (code-dir code-name)
+    (get-compilation-dir+name path #:modes (list (path->mode path)) #:roots dest-roots))
+  (define zo-name
+    ;; If we have multiple roots, make sure that compilation uses the first one
+    (if (pair? (cdr roots))
+        (build-path code-dir (path-add-suffix code-name #".zo"))
+        orig-zo-name))
 
   ;; Get all accomplice data:
   (let loop ()

@@ -49,13 +49,12 @@ ABS_BUILDDIR = "`$(RACKET) $(srcdir)/../absify.rkt $(builddir)`"
 
 SETUP_BOOT = -W 'info@compiler/cm error' -l- setup --chain $(srcdir)/../../setup-go.rkt $(builddir)/compiled
 
-# The "expander", "thread", "io", "regexp", and "schemify" makefiles
-# all use "expander.d", but they set `GENERATED_RKTL` so it refers to
-# the specific generated ".rktl"
-BOOTSTRAP_RACKET = $(RACKET) $(SETUP_BOOT) '(GENERATED_RKTL)' $(builddir)/expander.d
+# We don't try to track dependencies through makefiles for things
+# build with the expander extrator, hence "ignored"
+BOOTSTRAP_RACKET = $(RACKET) $(SETUP_BOOT) ignored $(builddir)/ignored.d
 
 RKTIO_RACKET = $(RACKET) $(SETUP_BOOT) '(GENERATED_RKTIO_RKTL)' $(builddir)/rktio.d
-CONVERT_RACKET = $(RACKET) $(SETUP_BOOT) convert $(builddir)/convert.d
+CONVERT_RACKET = $(RACKET) $(SETUP_BOOT)
 
 racket-so:
 	$(MAKE) bounce TARGET=build-racket-so
@@ -78,23 +77,28 @@ bounce:
 # `builddir` and `srcdir` are not necessarily absolute. But you can
 # `make bounce TARGET=expander`, etc.
 
+# This sequence essentially duplicates the handling of layers that is
+# in "../Makefile", but it does so to swap in `BOOTSTRAP_RACKET` in
+# place of `raco make` (to avoid a dependency on a package for `raco
+# make`).
+
 expander:
-	cd $(srcdir)/../../expander && $(MAKE) $(builddir)/compiled/expander.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+	cd $(srcdir)/../../expander && $(MAKE) expander-src-generate RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/"
 
 thread:
-	cd $(srcdir)/../../thread && $(MAKE) $(builddir)/compiled/thread.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+	cd $(srcdir)/../../thread && $(MAKE) thread-src-generate RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/"
 
 io:
-	cd $(srcdir)/../../io && $(MAKE) $(builddir)/compiled/io.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+	cd $(srcdir)/../../io && $(MAKE) io-src-generate RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/"
 
 regexp:
-	cd $(srcdir)/../../regexp && $(MAKE) $(builddir)/compiled/regexp.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+	cd $(srcdir)/../../regexp && $(MAKE) regexp-src-generate RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/"
 
 schemify:
-	cd $(srcdir)/../../schemify && $(MAKE) $(builddir)/compiled/schemify.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP=""
+	cd $(srcdir)/../../schemify && $(MAKE) schemify-src-generate RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/"
 
 known:
-	cd $(srcdir)/../../schemify && $(MAKE) $(builddir)/compiled/known.rktl RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/" DIRECT_DEP="" MAIN_RKTL="known.rktl"
+	cd $(srcdir)/../../schemify && $(MAKE) known-src-generate RACKET="$(BOOTSTRAP_RACKET)" BUILDDIR="$(builddir)/"
 
 scheme:
 	$(MAKE) $(SCHEME_BIN)

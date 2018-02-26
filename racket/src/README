@@ -558,7 +558,7 @@ Directories in "src":
 
  "mac" --- scripts for Mac OS ".app"s, used by "gracket" and "cs"
 
- "worksp" --- Windows projects and build scripts for "racket"
+ "worksp" --- Windows projects and build scripts for "racket" and "cs"
 
  "native-libs" --- build scripts for some native-library packages
 

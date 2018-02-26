@@ -9,35 +9,25 @@ RACO = $(RACKET) -N raco -l- raco
 # around a limitation of the flattener:
 IGNORE = ++knot read - ++direct pthread ++pure ../../collects/racket/private/collect.rkt
 
-# `$(GENERATED_RKTL)` appears as a dependency target in "$(BUILDDIR)expander.d"
-GENERATED_RKTL = $(BUILDDIR)compiled/thread.rktl
-
 thread-src:
 	$(RACO) make ../expander/bootstrap-run.rkt
-	$(MAKE) $(GENERATED_RKTL)
+	$(MAKE) thread-src-generate
 
-DIRECT_DEP = ../expander/compiled/bootstrap-run_rkt.zo
-SAVE_DEPS = --depends $(GENERATED_RKTL) $(BUILDDIR)compiled/thread.d
+GENERATE_ARGS = -t main.rkt --submod main \
+                --check-depends $(BUILDDIR)compiled/thread-dep.rktd \
+                ++depend-module ../expander/bootstrap-run.rkt \
+                --depends $(BUILDDIR)compiled/thread-dep.rktd \
+                --makefile-depends $(DEPENDSDIR)compiled/thread.rktl $(BUILDDIR)compiled/thread.d \
+                -c $(BUILDDIR)compiled/cache-src \
+                -k ../.. $(IGNORE) -s -x \
+                -o $(BUILDDIR)compiled/thread.rktl
 
-$(GENERATED_RKTL): $(DIRECT_DEP)
-	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt --submod main -c $(BUILDDIR)compiled/cache-src -k ../.. $(IGNORE) -s -x $(SAVE_DEPS) -o $(BUILDDIR)compiled/thread.rktl
-
-# \
-!if 0
-
-# Dependencies in "expander.d" are created via the "cs" makefile
--include $(BUILDDIR)expander.d
--include $(BUILDDIR)compiled/thread.d
-
-# \
-!endif
-# \
-!include ..\build\expander_thread.d
-# \
-!include ..\build\compiled\thread.d
+# This target can be used with a `RACKET` that builds via `-l- setup --chain ...`
+thread-src-generate:
+	$(RACKET) ../expander/bootstrap-run.rkt $(GENERATE_ARGS)
 
 demo:
 	$(RACO) make demo.rkt
 	$(RACKET) demo.rkt
 
-.PHONY: thread-src demo
+.PHONY: thread-src thread-src-generate demo

@@ -15,7 +15,7 @@
  #:once-each
  [("--scheme-dir") dir "Select the Chez Scheme build directory"
   (set! scheme-dir dir)]
- [("--machine") mach "Seelct the Chez Scheme machine name"
+ [("--machine") mach "Select the Chez Scheme machine name"
   (set! machine mach)]
  #:args
  ()
@@ -74,30 +74,20 @@
 
 (define (build-layer name
 		     #:dir [dir name]
-		     #:and-expander? [and-expander? #t]
 		     #:skip-make? [skip-make? #f])
   (parameterize ([current-directory (build-path 'up dir)])
     (make-directory* (build-path build-dir "compiled"))
-    (define name.rktl (build-path build-dir "compiled" (format "~a.rktl" name)))
-    (define name.d (build-path build-dir "compiled" (format "~a.d" name)))
-    (define exp-name.d (if and-expander?
-			   (build-path build-dir "compiled" (format "expander_~a.d" name))
-			   name.d))
-    (unless (file-exists? name.d) (call-with-output-file name.d void))
-    (unless (file-exists? exp-name.d) (call-with-output-file exp-name.d void))
     (unless skip-make?
       (system*! "nmake"
-		name.rktl
+		(format "~a-src-generate" name)
 		(format "BUILDDIR=~a" build-dir)
-		(format "RACKET=~a ~a ~a" chain-racket name.rktl exp-name.d)
-		"DIRECT_DEP="))))
+		(format "RACKET=~a ~a ~a" chain-racket "ignored" "ignored.d")))))
 
-(build-layer "expander" #:and-expander? #f)
+(build-layer "expander")
 (build-layer "thread")
 (build-layer "io")
 (build-layer "regexp")
 
-(build-layer "known" #:dir "schemify" #:skip-make? #t) ; to prep dependency files
 (build-layer "schemify")
 (build-layer "known" #:dir "schemify")
 
@@ -113,14 +103,15 @@
 (putenv "COMPILED_SCM_DIR" "../build/compiled/")
 
 (parameterize ([current-directory (build-path 'up "cs")])
-  (define convert.d (build-path build-dir "convert.d"))
+  (define convert.d (build-path build-dir "compiled" "convert.d"))
+  (unless (file-exists? convert.d) (call-with-output-file convert.d void))
   (system*! "nmake"
 	    (build-path "../build/racket.so") ; need forward slashes
 	    (format "RACKET=~a" rel-racket)
 	    (format "SCHEME=~a" rel-scheme)
 	    (format "BUILDDIR=../build/") ; need forward slashes
-	    (format "CONVERT_RACKET=~a convert ~a" chain-racket convert.d)))
-	    
+	    (format "CONVERT_RACKET=~a" chain-racket)))
+
 ;; ----------------------------------------
 
 (system! "rktio.bat")

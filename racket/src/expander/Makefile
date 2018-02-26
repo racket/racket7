@@ -27,40 +27,32 @@ DIRECT = ++direct linklet ++direct kernel
 # we promise that it's pure:
 PURE = ++pure $(TREE)/collects/racket/private/collect.rkt
 
+# Set `BUILDDIR` as a prefix on "compiled" output (defaults to empty).
+# Set `DEPENDSDIR` as the same sort of prefix in the generated
+# makefile-dependency file (also defaults to empty). The `BUILDDIR`
+# and `DEPENDSDIR` settings are different, because `BUILDDIR` is
+# relative to here, while makefile dependencies may be needed relative
+# to makefile driving the one.
+
 expander:
 	$(RACO) make bootstrap-run.rkt
 	$(RACKET) bootstrap-run.rkt -c compiled/cache-src $(KNOT) $(DIRECT) $(PURE) -O $(TREE)
 
-# Besides here, `$(GENERATED_RKTL)` appears as a dependency target
-# in "$(BUILDDIR)expander.d" when that file is genererated by
-# the "cs/c" makefile driving this one
-GENERATED_RKTL = $(BUILDDIR)compiled/expander.rktl
-
 expander-src:
 	$(RACO) make bootstrap-run.rkt
-	$(MAKE) $(GENERATED_RKTL)
+	$(MAKE) expander-src-generate
 
-DIRECT_DEP = compiled/main_rkt.zo
+GENERATE_ARGS = -c $(BUILDDIR)compiled/cache-src \
+                --check-depends $(BUILDDIR)compiled/expander-dep.rktd \
+                ++depend-module bootstrap-run.rkt \
+                --depends $(BUILDDIR)compiled/expander-dep.rktd \
+                --makefile-depends $(DEPENDSDIR)compiled/expander.rktl $(BUILDDIR)compiled/expander.d \
+                $(KNOT) $(DIRECT) $(PURE) -k $(TREE) -s -x \
+                -o $(BUILDDIR)compiled/expander.rktl
 
-$(GENERATED_RKTL): $(DIRECT_DEP)
-	$(RACKET) bootstrap-run.rkt -c $(BUILDDIR)compiled/cache-src $(KNOT) $(DIRECT) $(PURE) -k $(TREE) -s -x -o $(BUILDDIR)compiled/expander.rktl
-
-# The next two lines make both GNU make and nmake happy, and they
-# cause nmake to not see the `-include`. The trick is that nmake
-# doesn't recognize backslash as a comment continuation.
-# \
-!if 0
-
-# Dependencies in "expander.d" are created via the "cs" makefile, which
-# sets `RACKET` to be a bootstrapping load; the result doubles as
-# dependencies both for bootstrapping "bootstrap-run.rkt" and for the
-# generated flattened expander
--include $(BUILDDIR)expander.d
-
-# \
-!endif
-# \
-!include ..\build\expander.d
+# This target can be used with a `RACKET` that builds via `-l- setup --chain ...`
+expander-src-generate:
+	$(RACKET) bootstrap-run.rkt $(GENERATE_ARGS)
 
 demo:
 	$(RACO) make demo.rkt
@@ -85,4 +77,4 @@ decompile:
 	$(RACO) make bootstrap-run.rkt
 	$(RACKET) $(RKT_ARGS) bootstrap-run.rkt -c compiled/cache-src $(KNOT) -s -x -D -o compiled/exp.rkt
 
-.PHONY: expander demo run run-no-cache
+.PHONY: expander expander-src expander-src-generate demo run run-no-cache

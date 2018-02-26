@@ -7,6 +7,7 @@
                   [namespace-require host:namespace-require]
                   [current-library-collection-paths host:current-library-collection-paths]
                   [current-library-collection-links host:current-library-collection-links])
+         compiler/depend
          "common/set.rkt"
          "main.rkt"
          "namespace/namespace.rkt"
@@ -24,6 +25,10 @@
 
 (define-runtime-path main.rkt "main.rkt")
 
+;; Record all files that contribute to the result
+(define dependencies (make-hash))
+(define extra-module-dependencies null)
+
 (define extract? #f)
 (define expand? #f)
 (define linklets? #f)
@@ -34,8 +39,10 @@
 (define cache-skip-first? #f)
 (define time-expand? #f)
 (define print-extracted-to #f)
-(define dependencies-target #f)
+(define check-dependencies #f)
 (define dependencies-file #f)
+(define makefile-dependencies-target #f)
+(define makefile-dependencies-file #f)
 (define extract-to-c? #f)
 (define extract-to-decompiled? #f)
 (define instance-knot-ties (make-hasheq))
@@ -80,9 +87,18 @@
    [("-o" "--output") file "Print extracted bootstrap linklet to <file>"
     (when print-extracted-to (raise-user-error 'run "the `-O` flag implies `-o`, so don't use both"))
     (set! print-extracted-to file)]
-   [("--depends") target file "Record makefile dependency for <target> in <file>"
-    (set! dependencies-target target)
+   [("--check-depends") file "Skip if dependencies in <file> unchanged"
+    (set! check-dependencies file)]
+   [("--depends") file "Record dependencies in <file>"
     (set! dependencies-file file)]
+   [("--makefile-depends") target file "Record makefile dependencies for <target> in <file>"
+    (set! makefile-dependencies-target target)
+    (set! makefile-dependencies-file file)]
+   #:multi
+   [("++depend") file "Record <file> as a dependency"
+    (hash-set! dependencies (simplify-path (path->complete-path file)) #t)]
+   [("++depend-module") mod-file "Add <mod-file> and transitive as dependencies"
+    (set! extra-module-dependencies (cons mod-file extra-module-dependencies))]
    #:once-any
    [("-C") "Print extracted bootstrap as a C encoding"
     (set! extract-to-c? #t)]
@@ -120,6 +136,37 @@
     (set! submod-name (string->symbol name))]
    #:args args args))
 
+;; ----------------------------------------
+
+;; If any `--check-depends` is specified, exit as soon as possible if
+;; nothing's newer
+
+(define (read-dependencies-from-file file)
+  (and (file-exists? file)
+       (with-handlers ([exn:fail:filesystem? (lambda (exn)
+                                               (log-error (exn-message exn))
+                                               #f)])
+         (let ([l (call-with-input-file file read)])
+           (and (list? l)
+                (andmap bytes? l)
+                (map bytes->path l))))))
+
+(when check-dependencies
+  (unless print-extracted-to
+    (raise-user-error 'run "cannot check dependencies without a specific output file"))
+  (define ts (file-or-directory-modify-seconds print-extracted-to #f (lambda () #f)))
+  (when (and
+         ts
+         (let ([l (read-dependencies-from-file check-dependencies)])
+           (and l
+                (for/and ([dep (in-list l)])
+                  (<= (file-or-directory-modify-seconds dep #f (lambda () +inf.0))
+                      ts)))))
+    (log-status "No dependencies are newer")
+    (exit 0)))
+
+;; ----------------------------------------
+
 (define cache
   (and (or cache-dir extract?)
        (make-cache cache-dir (lambda (path)
@@ -150,14 +197,10 @@
 (current-library-collection-paths (host:current-library-collection-paths))
 (current-library-collection-links (host:current-library-collection-links))
 
-;; Record all files that contribute to the result
-(define dependencies (make-hash))
-
 ;; Replace the load handler to stash compiled modules in the cache
 ;; and/or load them from the cache
 (define orig-load (current-load))
 (current-load (lambda (path expected-module)
-                (hash-set! dependencies (simplify-path (path->complete-path path)) #t)
                 (cond
                  [expected-module
                   (let loop ()
@@ -272,13 +315,36 @@
 (when load-file
   (load load-file))
 
+;; ----------------------------------------
+
+(when (or dependencies-file
+          makefile-dependencies-file)
+  (for ([mod-file (in-list extra-module-dependencies)])
+    (define deps (cons mod-file
+                       (module-recorded-dependencies mod-file)))
+    (for ([dep (in-list deps)])
+      (hash-set! dependencies (simplify-path (path->complete-path dep)) #t)))
+  ;; Note: `cache` currently misses external dependencies, such as
+  ;; `include`d files.
+  (for ([dep (in-list (cache->used-paths cache))])
+    (hash-set! dependencies (simplify-path dep) #t)))
+
 (when dependencies-file
-  (define (quote-if-space s) (if (regexp-match? #rx" " s) (format "\"~a\"" s) s))
   (call-with-output-file*
    dependencies-file
    #:exists 'truncate/replace
    (lambda (o)
-     (fprintf o "~a:" (quote-if-space dependencies-target))
+     (writeln (for/list ([dep (in-hash-keys dependencies)])
+                (path->bytes dep))
+              o))))
+
+(when makefile-dependencies-file
+  (define (quote-if-space s) (if (regexp-match? #rx" " s) (format "\"~a\"" s) s))
+  (call-with-output-file*
+   makefile-dependencies-file
+   #:exists 'truncate/replace
+   (lambda (o)
+     (fprintf o "~a:" (quote-if-space makefile-dependencies-target))
      (for ([dep (in-hash-keys dependencies)])
        (fprintf o " \\\n  ~a" (quote-if-space dep)))
      (newline o))))

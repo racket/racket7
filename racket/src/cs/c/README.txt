@@ -58,3 +58,16 @@ delete the build, and start from scratch.
 You can also run the typical `./configure && make && make install` if
 you don't anticipate updating/rebuilding, but it will be harder to
 restart from scratch should you need to.
+
+========================================================================
+ Compiling for Windows
+========================================================================
+
+Compilation for Windows on Windows requires building the traditional
+Racket implementation. Then, from the directory "..\..\worksp", run
+
+ ..\..\racket csbuild.rkt
+
+Many intermediate files will be put in "../../build", including a Chez
+Scheme checkout if it's not already present (in whcih case `git` must
+be available).

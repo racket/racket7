@@ -12,7 +12,7 @@ LIBS = $(RKTIO_LIB) \
 DEST = ..\..\build\raw_racketcs.exe
 CSDIR = ..\..\cs\c
 
-$(DEST):$(CSDIR).\main.c $(CSDIR)\boot.c $(RKTIO_LIB)
+$(DEST): $(CSDIR).\main.c $(CSDIR)\boot.c $(RKTIO_LIB)
 	cl /Fe$(DEST) /Ox /MT $(INCS) $(CSDIR)\main.c $(CSDIR)\boot.c $(LIBS)
 
 

@@ -8,10 +8,13 @@
          register-dependency!
          
          current-cache-layer
-         make-cache-layer)
+         make-cache-layer
+
+         cache->used-paths)
 
 (struct cache (dir 
                [table #:mutable] ; filename -> entry [used for a cache file]
+               used              ; to track dependencies
                in-memory))       ; key -> code       [when no cache filed is in use]
 
 (struct entry (key               ; sha1 of filename
@@ -38,7 +41,7 @@
                          cache-dir
                          out-of-date-callback)
         #hash()))
-  (cache cache-dir table (make-hash)))
+  (cache cache-dir table (make-hash) (make-hash)))
 
 (define (only-up-to-date table cache-dir out-of-date-callback)
   ;; Build a new table imperatively (as a kind of memoization)
@@ -69,6 +72,7 @@
     (values k e)))
 
 (define (get-cached-compiled cache path [notify-success void])
+  (hash-set! (cache-used cache) path #t)
   (define e (hash-ref (cache-table cache)
                       (path->string path)
                       #f))
@@ -118,3 +122,7 @@
      (lambda (o path) (writeln new-table o)))]
    [else
     (hash-set! (cache-in-memory cache) key c)]))
+
+
+(define (cache->used-paths cache)
+  (hash-keys (cache-used cache)))

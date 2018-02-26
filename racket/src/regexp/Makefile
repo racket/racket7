@@ -9,32 +9,22 @@ RACO = $(RACKET) -N raco -l- raco
 # around a limitation of the flattener:
 IGNORE = ++knot read - ++pure ../../collects/racket/private/collect.rkt
 
-# `$(GENERATED_RKTL)` appears as a dependency target in "$(BUILDDIR)expander.d"
-GENERATED_RKTL = $(BUILDDIR)compiled/regexp.rktl
-
 regexp-src:
 	$(RACO) make ../expander/bootstrap-run.rkt
-	$(MAKE) $(GENERATED_RKTL)
+	$(MAKE) regexp-src-generate
 
-DIRECT_DEP = ../expander/compiled/bootstrap-run_rkt.zo
-SAVE_DEPS = --depends $(GENERATED_RKTL) $(BUILDDIR)compiled/regexp.d
+GENERATE_ARGS = -t main.rkt \
+                --check-depends $(BUILDDIR)compiled/regexp-dep.rktd \
+                ++depend-module ../expander/bootstrap-run.rkt \
+                --depends $(BUILDDIR)compiled/regexp-dep.rktd \
+                --makefile-depends $(DEPENDSDIR)compiled/regexp.rktl $(BUILDDIR)compiled/regexp.d \
+                -c $(BUILDDIR)compiled/cache-src \
+                -k ../.. $(IGNORE) -s -x \
+                -o $(BUILDDIR)compiled/regexp.rktl
 
-$(GENERATED_RKTL): $(DIRECT_DEP)
-	$(RACKET) ../expander/bootstrap-run.rkt -t main.rkt -c $(BUILDDIR)compiled/cache-src -k ../.. $(IGNORE) -s -x $(SAVE_DEPS) -o $(GENERATED_RKTL)
-
-# \
-!if 0
-
-# Dependencies in "expander.d" are created via the "cs" makefile
--include $(BUILDDIR)expander.d
--include $(BUILDDIR)compiled/regexp.d
-
-# \
-!endif
-# \
-!include ..\build\expander_regexp.d
-# \
-!include ..\build\compiled\regexp.d
+# This target can be used with a `RACKET` that builds via `-l- setup --chain ...`
+regexp-src-generate:
+	$(RACKET) ../expander/bootstrap-run.rkt $(GENERATE_ARGS)
 
 demo:
 	$(RACO) make demo.rkt
@@ -45,4 +35,4 @@ decompile:
 	$(RACO) make ../expander/bootstrap-run.rkt
 	$(RACKET) $(RKT_ARGS) ../expander/bootstrap-run.rkt -t main.rkt -c compiled/cache-src $(IGNORE) -s -x -D -o compiled/regexp.rkt
 
-.PHONY: regexp-src demo decompile
+.PHONY: regexp-src regexp-src-generate demo decompile
