@@ -1,22 +1,37 @@
 #lang racket/base
-(require compiler/zo-parse
+(require racket/linklet
+         compiler/zo-parse
+         compiler/zo-marshal
          syntax/modcollapse
          racket/port
          racket/match
          racket/list
          racket/set
          racket/path
-         (only-in '#%linklet compiled-position->primitive))
+         (only-in '#%linklet compiled-position->primitive)
+         "private/deserialize.rkt")
 
 (provide decompile)
 
 ;; ----------------------------------------
 
 (define primitive-table
-  (for/hash ([i (in-naturals)]
-             #:break (not (compiled-position->primitive i)))
-    (define v (compiled-position->primitive i))
-    (values i (or (object-name v) v))))
+  (let ([value-names (let ([ns (make-base-empty-namespace)])
+                       (parameterize ([current-namespace ns])
+                         (namespace-require ''#%kernel)
+                         (namespace-require ''#%unsafe)
+                         (namespace-require ''#%flfxnum)
+                         (namespace-require ''#%extfl)
+                         (namespace-require ''#%futures)
+                         (namespace-require ''#%foreign)
+                         (namespace-require ''#%paramz)
+                         (for/hasheq ([name (in-list (namespace-mapped-symbols))])
+                           (values (namespace-variable-value name #t (lambda () #f))
+                                   name))))])
+    (for/hash ([i (in-naturals)]
+               #:break (not (compiled-position->primitive i)))
+      (define v (compiled-position->primitive i))
+      (values i (or (hash-ref value-names v #f) `',v)))))
 
 (define (list-ref/protect l pos who)
   (list-ref l pos)
@@ -32,29 +47,137 @@
 ;; Main entry:
 (define (decompile top #:to-linklets? [to-linklets? #f])
   (cond
-   [(linkl-directory? top)
-    (cons
-     'linklet-directory
-     (apply
-      append
-      (for/list ([(k v) (in-hash (linkl-directory-table top))])
-        (list '#:name k '#:bundle (decompile v #:to-linklets? to-linklets?)))))]
-   [(linkl-bundle? top)
-    (cons
-     'linklet-bundle
-     (apply
-      append
-      (for/list ([(k v) (in-hash (linkl-bundle-table top))])
-        (case (and (not to-linklets?) k)
-          [(stx-data)
-           (list '#:stx-data (decompile-data-linklet v))]
-          [else
-           (list '#:key k '#:value (decompile v #:to-linklets? to-linklets?))]))))]
-   [(linkl? top)
-    (decompile-linklet top)]
-   [else `(quote ,top)]))
+    [(linkl-directory? top)
+     (cond
+       [to-linklets?
+        (cons
+         'linklet-directory
+         (apply
+          append
+          (for/list ([(k v) (in-hash (linkl-directory-table top))])
+            (list '#:name k '#:bundle (decompile v #:to-linklets? to-linklets?)))))]
+       [else
+        (define main (hash-ref (linkl-directory-table top) '() #f))
+        (unless main (error 'decompile "cannot find main module"))
+        (decompile-module-with-submodules top '() main)])]
+    [(linkl-bundle? top)
+     (cond
+       [to-linklets?
+        (cons
+         'linklet-bundle
+         (apply
+          append
+          (for/list ([(k v) (in-hash (linkl-bundle-table top))])
+            (case (and (not to-linklets?) k)
+              [(stx-data)
+               (list '#:stx-data (decompile-data-linklet v))]
+              [else
+               (list '#:key k '#:value (decompile v #:to-linklets? to-linklets?))]))))]
+       [else
+        (decompile-module top)])]
+    [(linkl? top)
+     (decompile-linklet top)]
+    [else `(quote ,top)]))
 
-(define (decompile-linklet l)
+(define (decompile-module-with-submodules l-dir name-list main-l)
+  (decompile-module main-l
+                    (lambda ()
+                      (for/list ([(k l) (in-hash (linkl-directory-table l-dir))]
+                                 #:when  (and (list? k)
+                                              (= (length k) (add1 (length name-list)))
+                                              (for/and ([s1 (in-list name-list)]
+                                                        [s2 (in-list k)])
+                                                (eq? s1 s2))))
+                        (decompile-module-with-submodules l-dir k l)))))
+
+(define (decompile-module l [get-nested (lambda () '())])
+  (define ht (linkl-bundle-table l))
+  (define phases (sort (for/list ([k (in-hash-keys ht)]
+                                  #:when (exact-integer? k))
+                         k)
+                       <))
+  (define-values (mpi-vector requires provides)
+    (let ([data-l (hash-ref ht 'data #f)]
+          [decl-l (hash-ref ht 'decl #f)])
+      (define (zo->linklet l)
+        (let ([o (open-output-bytes)])
+          (zo-marshal-to (linkl-bundle (hasheq 'data l)) o)
+          (parameterize ([read-accept-compiled #t])
+            (define b (read (open-input-bytes (get-output-bytes o))))
+            (hash-ref (linklet-bundle->hash b) 'data))))
+      (cond
+        [(and data-l
+              decl-l)
+         (define data-i (instantiate-linklet (zo->linklet data-l)
+                                             (list deserialize-instance)))
+         (define decl-i (instantiate-linklet (zo->linklet decl-l)
+                                             (list deserialize-instance
+                                                   data-i)))
+         (values (instance-variable-value data-i '.mpi-vector)
+                 (instance-variable-value decl-i 'requires)
+                 (instance-variable-value decl-i 'provides))]
+        [else (values '#() '() '())])))
+  (define (phase-wrap phase l)
+    (case phase
+      [(0) l]
+      [(1) `((for-syntax ,@l))]
+      [(-1) `((for-template ,@l))]
+      [(#f) `((for-label ,@l))]
+      [else `((for-meta ,phase ,@l))]))
+  `(module ,(hash-ref ht 'name 'unknown) ....
+     (require ,@(apply
+                 append
+                 (for/list ([phase+mpis (in-list requires)])
+                   (phase-wrap (car phase+mpis)
+                               (map collapse-module-path-index (cdr phase+mpis))))))
+     (provide ,@(apply
+                 append
+                 (for/list ([(phase ht) (in-hash provides)])
+                   (phase-wrap phase (hash-keys ht)))))
+     ,@(let loop ([phases phases] [depth 0])
+         (cond
+           [(null? phases) '()]
+           [(= depth (car phases))
+            (append
+             (decompile-linklet (hash-ref ht (car phases)) #:just-body? #t)
+             (loop (cdr phases) depth))]
+           [else
+            (define l (loop phases (add1 depth)))
+            (define (convert-syntax-definition s wrap)
+              (match s
+                [`(let ,bindings ,body)
+                 (convert-syntax-definition body
+                                            (lambda (rhs)
+                                              `(let ,bindings
+                                                 ,rhs)))]
+                [`(begin (.set-transformer! ',id ,rhs) ',(? void?))
+                 `(define-syntaxes ,id ,(wrap rhs))]
+                [`(begin (.set-transformer! ',ids ,rhss) ... ',(? void?))
+                 `(define-syntaxes ,ids ,(wrap `(values . ,rhss)))]
+                [_ #f]))
+            (let loop ([l l] [accum '()])
+              (cond
+                [(null? l) (if (null? accum)
+                               '()
+                               `((begin-for-syntax ,@(reverse accum))))]
+                [(convert-syntax-definition (car l) values)
+                 => (lambda (s)
+                      (append (loop null accum)
+                              (cons s (loop (cdr l) null))))]
+                [else
+                 (loop (cdr l) (cons (car l) accum))]))]))
+     ,@(get-nested)
+     ,@(let ([l (hash-ref ht 'stx-data #f)])
+         (if l
+             `((begin-for-all
+                 (define (.get-syntax-literal! pos)
+                   ....
+                   ,(decompile-data-linklet l)
+                   ....)))
+             null))))
+
+
+(define (decompile-linklet l #:just-body? [just-body? #f])
   (match l
     [(struct linkl (name importss import-shapess exports internals lifts source-names body max-let-depth needs-instance?))
      (define closed (make-hasheq))
@@ -65,18 +188,22 @@
                      exports
                      internals
                      lifts)))
-     `(linklet
-       ,importss
-       ,exports
-       '(import-shapes: ,@(for/list ([imports (in-list importss)]
-                                     [import-shapes (in-list import-shapess)]
-                                     #:when #t
-                                     [import (in-list imports)]
-                                     [import-shape (in-list import-shapes)]
-                                     #:when import-shape)
-                            `[,import ,import-shape]))
-       ,@(for/list ([form (in-list body)])
-           (decompile-form form globs '(#%globals) closed)))]))
+     (define body-l
+       (for/list ([form (in-list body)])
+         (decompile-form form globs '(#%globals) closed)))
+     (if just-body?
+         body-l
+         `(linklet
+           ,importss
+           ,exports
+           '(import-shapes: ,@(for/list ([imports (in-list importss)]
+                                         [import-shapes (in-list import-shapess)]
+                                         #:when #t
+                                         [import (in-list imports)]
+                                         [import-shape (in-list import-shapes)]
+                                         #:when import-shape)
+                                `[,import ,import-shape]))
+           ,@body-l))]))
 
 (define (decompile-data-linklet l)
   (match l

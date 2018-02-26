@@ -3273,7 +3273,7 @@ print(Scheme_Object *obj, int notdisplay, int compact, Scheme_Hash_Table *ht,
                           SCHEME_BYTE_STRLEN_VAL(SCHEME_CDR(a[i].bundle)));
       }
     }
-  else if (SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_type)
+  else if ((compact && SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_type))
            || SAME_TYPE(SCHEME_TYPE(obj), scheme_linklet_bundle_type))
     {
       if (compact) {

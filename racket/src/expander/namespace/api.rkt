@@ -20,6 +20,7 @@
          "../common/contract.rkt"
          "../expand/protect.rkt"
          "../expand/env.rkt"
+         "../expand/binding-to-module.rkt"
          "../host/linklet.rkt")
 
 (provide make-empty-namespace
@@ -196,11 +197,7 @@
          (if (module-binding? b)
              (values (if (top-level-module-path-index? (module-binding-module b))
                          ns
-                         (namespace->module-namespace ns
-                                                      (module-binding-module b)
-                                                      (phase- (namespace-phase ns)
-                                                              (module-binding-phase b))
-                                                      #:complain-on-failure? #t))
+                         (module-instance-namespace (binding->module-instance b ns (namespace-phase ns) id)))
                      (module-binding-phase b)
                      (module-binding-sym b))
              (values ns (namespace-phase ns) sym))]

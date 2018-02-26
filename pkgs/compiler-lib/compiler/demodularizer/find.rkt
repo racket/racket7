@@ -3,7 +3,7 @@
          compiler/zo-parse
          syntax/modcode
          racket/linklet
-         "deserialize.rkt"
+         "../private/deserialize.rkt"
          "module-path.rkt"
          "run.rkt")
 
