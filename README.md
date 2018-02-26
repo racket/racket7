@@ -1,3 +1,15 @@
+The repository contains the commit history for
+
+ * Racket's switch from a C-implemented expander and module system to
+   a Racket-implemented expander and module system; and
+
+ * the initial implementation of Racket to run on Chez Scheme.
+
+The changes have been merged (as a single commit) to the main Racket
+repository, and this repository is no longer modified.
+
+----------------------------------------
+
 This is the source code for the core of Racket. See "INSTALL.txt" for
 full information on building Racket.
 
